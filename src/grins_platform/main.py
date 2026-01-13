@@ -1,309 +1,401 @@
 #!/usr/bin/env python3
 """
-Main script to demonstrate Ruff configuration optimized for AI self-correction.
+MyPy Configuration Test Script
 
-This script intentionally contains various code patterns that Ruff will analyze
-and potentially fix, demonstrating the comprehensive rule set configured for
-AI-generated code improvement.
+This script demonstrates and tests various MyPy type checking features
+optimized for AI-generated code patterns. It includes examples of:
+- Strict type checking
+- Generic types and type variables
+- Protocol definitions
+- Union types and Optional handling
+- Class inheritance and method overriding
+- Error handling patterns
+- AI-friendly type patterns
 """
 
 import json
 import logging
-import os
-import subprocess
-import sys
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Protocol,
+    TypeVar,
+    Union,
+    cast,
+    overload,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Type variables for generic programming
+T = TypeVar("T")
+K = TypeVar("K")
+V = TypeVar("V")
 
-class DataProcessor:
-    """Example class demonstrating various code patterns for Ruff analysis."""
 
-    def __init__(self, config_path: str, debug: bool = False):
-        """Initialize the data processor.
+class ProcessingStatus(Enum):
+    """Status enumeration for processing operations."""
+    
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
+
+@dataclass
+class ProcessingResult(Generic[T]):
+    """Generic result container for processing operations."""
+    
+    status: ProcessingStatus
+    data: Optional[T]
+    error_message: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    
+    def __post_init__(self) -> None:
+        """Initialize default metadata if not provided."""
+        if self.metadata is None:
+            self.metadata = {}
+
+
+class Serializable(Protocol):
+    """Protocol for objects that can be serialized to JSON."""
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert object to dictionary representation."""
+        ...
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Serializable":
+        """Create object from dictionary representation."""
+        ...
+
+
+class DataProcessor(ABC, Generic[T]):
+    """Abstract base class for data processors with generic type support."""
+    
+    def __init__(self, name: str, config: Dict[str, Any]) -> None:
+        """Initialize the processor with name and configuration.
+        
         Args:
-            config_path: Path to configuration file
-            debug: Enable debug mode
+            name: Processor name for identification
+            config: Configuration dictionary
         """
-        self.config_path = Path(config_path)
-        self.debug = debug
-        self.data: List[Dict[str, Union[str, int, float]]] = []
-
-    def load_config(self) -> Dict[str, str]:
-        """Load configuration from file.
-
+        self.name = name
+        self.config = config
+        self._processed_count = 0
+    
+    @property
+    def processed_count(self) -> int:
+        """Get the number of processed items."""
+        return self._processed_count
+    
+    @abstractmethod
+    def process_item(self, item: T) -> ProcessingResult[T]:
+        """Process a single item.
+        
+        Args:
+            item: Item to process
+            
         Returns:
-            Configuration dictionary
-
-        Raises:
-            FileNotFoundError: If config file doesn't exist
-            json.JSONDecodeError: If config file is invalid JSON
+            Processing result with status and data
         """
-        if not self.config_path.exists():
-            raise FileNotFoundError(f"Config file not found: {self.config_path}")
-
-        try:
-            with self.config_path.open("r", encoding="utf-8") as f:
-                config = json.load(f)
-            return config
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in config file: {e}")
-            raise
-
-    def process_data(self, input_data: List[Dict[str, str]]) -> List[Dict[str, str]]:
-        """Process input data with various transformations.
-
+        ...
+    
+    def process_batch(self, items: List[T]) -> List[ProcessingResult[T]]:
+        """Process a batch of items.
+        
         Args:
-            input_data: List of data dictionaries to process
-
+            items: List of items to process
+            
         Returns:
-            Processed data list
+            List of processing results
         """
-        processed = []
+        results: List[ProcessingResult[T]] = []
+        
+        for item in items:
+            try:
+                result = self.process_item(item)
+                results.append(result)
+                if result.status == ProcessingStatus.COMPLETED:
+                    self._processed_count += 1
+            except Exception as e:
+                error_result = ProcessingResult[T](
+                    status=ProcessingStatus.FAILED,
+                    data=None,
+                    error_message=str(e),
+                )
+                results.append(error_result)
+        
+        return results
 
-        for item in input_data:
-            # Demonstrate various code patterns
-            if item.get("name"):
-                # String processing
-                name = item["name"].strip().lower()
 
-                # Conditional logic
-                if len(name) > 0:
-                    processed_item = {
-                        "name": name.title(),
-                        "processed": True,
-                        "length": len(name),
-                    }
-
-                    # Add optional fields
-                    if "category" in item:
-                        processed_item["category"] = item["category"]
-
-                    processed.append(processed_item)
-
-        return processed
-
-    def save_results(self, data: List[Dict[str, str]], output_path: str) -> bool:
-        """Save processed results to file.
-
+class StringProcessor(DataProcessor[str]):
+    """Concrete implementation of DataProcessor for string processing."""
+    
+    def __init__(self, name: str, config: Dict[str, Any]) -> None:
+        """Initialize string processor."""
+        super().__init__(name, config)
+        self.min_length: int = config.get("min_length", 1)
+        self.max_length: int = config.get("max_length", 1000)
+    
+    def process_item(self, item: str) -> ProcessingResult[str]:
+        """Process a single string item.
+        
         Args:
-            data: Data to save
-            output_path: Output file path
+            item: String to process
+            
+        Returns:
+            Processing result with processed string
+        """
+        # Validate length constraints
+        if len(item) < self.min_length:
+            return ProcessingResult[str](
+                status=ProcessingStatus.FAILED,
+                data=None,
+                error_message=f"String too short: {len(item)} < {self.min_length}",
+            )
+        elif len(item) > self.max_length:
+            return ProcessingResult[str](
+                status=ProcessingStatus.FAILED,
+                data=None,
+                error_message=f"String too long: {len(item)} > {self.max_length}",
+            )
+        
+        # Process the string (normalize and clean)
+        processed = item.strip().lower().title()
+        
+        return ProcessingResult[str](
+            status=ProcessingStatus.COMPLETED,
+            data=processed,
+            metadata={"original_length": len(item), "processed_length": len(processed)},
+        )
 
+
+@dataclass
+class User(Serializable):
+    """User data class implementing Serializable protocol."""
+    
+    id: int
+    name: str
+    email: str
+    active: bool = True
+    metadata: Optional[Dict[str, Any]] = None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert user to dictionary representation."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "email": self.email,
+            "active": self.active,
+            "metadata": self.metadata or {},
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "User":
+        """Create user from dictionary representation."""
+        return cls(
+            id=data["id"],
+            name=data["name"],
+            email=data["email"],
+            active=data.get("active", True),
+            metadata=data.get("metadata"),
+        )
+
+
+class FileManager(Generic[T]):
+    """Generic file manager for serializable objects."""
+    
+    def __init__(self, file_path: Path) -> None:
+        """Initialize file manager with path."""
+        self.file_path = file_path
+    
+    @overload
+    def save_data(self, data: List[Serializable]) -> bool:
+        ...
+    
+    @overload
+    def save_data(self, data: Serializable) -> bool:
+        ...
+    
+    def save_data(self, data: Union[Serializable, List[Serializable]]) -> bool:
+        """Save serializable data to file.
+        
+        Args:
+            data: Single object or list of objects to save
+            
         Returns:
             True if successful, False otherwise
         """
         try:
-            output_file = Path(output_path)
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-
-            with output_file.open("w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-
-            logger.info(f"Results saved to {output_path}")
+            self.file_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            if isinstance(data, list):
+                json_data: Union[Dict[str, Any], List[Dict[str, Any]]] = [item.to_dict() for item in data]
+            else:
+                json_data = data.to_dict()
+            
+            with self.file_path.open("w", encoding="utf-8") as f:
+                json.dump(json_data, f, indent=2, ensure_ascii=False)
+            
             return True
-
+        
         except Exception as e:
-            logger.error(f"Failed to save results: {e}")
+            logger.error("Failed to save data: %s", e)
             return False
-
-    def run_analysis(self) -> Optional[Dict[str, int]]:
-        """Run data analysis and return statistics.
-
+    
+    def load_data(self, data_class: Callable[[Dict[str, Any]], T]) -> Optional[List[T]]:
+        """Load data from file.
+        
+        Args:
+            data_class: Class constructor for creating objects from dict
+            
         Returns:
-            Analysis statistics or None if no data
+            List of loaded objects or None if failed
         """
-        if not self.data:
-            logger.warning("No data available for analysis")
+        try:
+            if not self.file_path.exists():
+                return None
+            
+            with self.file_path.open("r", encoding="utf-8") as f:
+                json_data = json.load(f)
+            
+            if isinstance(json_data, list):
+                return [data_class(item) for item in json_data]
+            else:
+                return [data_class(json_data)]
+        
+        except Exception as e:
+            logger.error("Failed to load data: %s", e)
             return None
 
-        stats = {
-            "total_items": len(self.data),
-            "processed_items": sum(
-                1 for item in self.data if item.get("processed", False)
-            ),
-            "average_length": sum(item.get("length", 0) for item in self.data)
-            / len(self.data),
-        }
 
-        return stats
-
-
-def validate_environment() -> bool:
-    """Validate that the environment is properly configured.
-
+def process_users_with_validation(
+    users: List[User],
+    processor: DataProcessor[str],
+) -> Dict[str, Union[int, float, List[str]]]:
+    """Process user names with validation and return statistics.
+    
+    Args:
+        users: List of users to process
+        processor: String processor for name validation
+        
     Returns:
-        True if environment is valid, False otherwise
+        Dictionary with processing statistics and results
     """
-    required_vars = ["HOME", "PATH"]
+    names = [user.name for user in users]
+    results = processor.process_batch(names)
+    
+    successful_results: List[str] = []
+    failed_results: List[str] = []
+    
+    for result in results:
+        if result.status == ProcessingStatus.COMPLETED and result.data is not None:
+            successful_results.append(result.data)
+        else:
+            failed_results.append(result.error_message or "Unknown error")
+    
+    return {
+        "total_processed": len(results),
+        "successful": len(successful_results),
+        "failed": len(failed_results),
+        "success_rate": len(successful_results) / len(results) if results else 0.0,
+        "successful_names": successful_results,
+        "error_messages": failed_results,
+    }
 
-    for var in required_vars:
-        if var not in os.environ:
-            logger.error(f"Required environment variable missing: {var}")
-            return False
 
-    return True
-
-
-def run_ruff_check() -> bool:
-    """Run Ruff check on the current file to demonstrate self-correction.
-
+def demonstrate_type_narrowing(value: Union[str, int, None]) -> str:
+    """Demonstrate type narrowing with Union types.
+    
+    Args:
+        value: Value that could be string, int, or None
+        
     Returns:
-        True if Ruff check passes, False otherwise
+        String representation of the value
     """
-    try:
-        # Run Ruff check
-        result = subprocess.run(
-            ["ruff", "check", "main.py", "--output-format=json"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if result.returncode == 0:
-            logger.info("Ruff check passed - no issues found!")
-            return True
-        # Parse and display issues
-        if result.stdout:
-            try:
-                issues = json.loads(result.stdout)
-                logger.warning(f"Ruff found {len(issues)} issues:")
-                for issue in issues[:5]:  # Show first 5 issues
-                    logger.warning(
-                        f"  {issue.get('code', 'Unknown')}: {issue.get('message', 'No message')}",
-                    )
-            except json.JSONDecodeError:
-                logger.warning(f"Ruff output: {result.stdout}")
-        return False
-
-    except subprocess.TimeoutExpired:
-        logger.error("Ruff check timed out")
-        return False
-    except FileNotFoundError:
-        logger.error("Ruff not found - please install ruff")
-        return False
-    except Exception as e:
-        logger.error(f"Error running Ruff check: {e}")
-        return False
-
-
-def run_ruff_format() -> bool:
-    """Run Ruff format on the current file to demonstrate auto-formatting.
-
-    Returns:
-        True if formatting succeeds, False otherwise
-    """
-    try:
-        result = subprocess.run(
-            ["ruff", "format", "main.py", "--check"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if result.returncode == 0:
-            logger.info("File is properly formatted!")
-            return True
-        logger.info("File needs formatting - run 'ruff format main.py' to fix")
-        return False
-
-    except Exception as e:
-        logger.error(f"Error running Ruff format: {e}")
-        return False
+    if value is None:
+        return "None"
+    elif isinstance(value, str):
+        # MyPy knows value is str here
+        return f"String: {value.upper()}"
+    else:
+        # MyPy knows value is int here (only remaining type)
+        return f"Integer: {value * 2}"
 
 
 def main() -> int:
-    """Main function demonstrating Ruff configuration.
-
+    """Main function demonstrating MyPy type checking features.
+    
     Returns:
         Exit code (0 for success, 1 for failure)
     """
-    print("🔍 Testing Ruff Configuration for AI Self-Correction")
+    print("🔍 Testing MyPy Configuration for AI-Generated Code")
     print("=" * 60)
-
-    # Validate environment
-    if not validate_environment():
-        print("❌ Environment validation failed")
-        return 1
-
-    # Create sample data
-    sample_data = [
-        {"name": "  Alice Smith  ", "category": "user"},
-        {"name": "bob jones", "category": "admin"},
-        {"name": "", "category": "guest"},  # This will be filtered out
-        {"name": "Charlie Brown", "category": "user"},
+    
+    # Test generic data processing
+    config = {"min_length": 2, "max_length": 50}
+    processor = StringProcessor("name_processor", config)
+    
+    # Create test users
+    users = [
+        User(1, "Alice Smith", "alice@example.com"),
+        User(2, "Bob Jones", "bob@example.com"),
+        User(3, "", "invalid@example.com"),  # Invalid name (too short)
+        User(4, "Charlie Brown", "charlie@example.com"),
     ]
-
-    # Initialize processor
-    try:
-        # Create a temporary config file
-        config_path = Path("temp_config.json")
-        config_data = {
-            "debug": True,
-            "output_format": "json",
-            "max_items": 100,
-        }
-
-        with config_path.open("w", encoding="utf-8") as f:
-            json.dump(config_data, f, indent=2)
-
-        processor = DataProcessor(str(config_path), debug=True)
-
-        # Process data
-        processed_data = processor.process_data(sample_data)
-        processor.data = processed_data
-
-        # Run analysis
-        stats = processor.run_analysis()
-        if stats:
-            print("📊 Analysis Results:")
-            print(f"   Total items: {stats['total_items']}")
-            print(f"   Processed items: {stats['processed_items']}")
-            print(f"   Average length: {stats['average_length']:.1f}")
-
-        # Save results
-        output_path = "output/results.json"
-        success = processor.save_results(processed_data, output_path)
-
-        if success:
-            print(f"✅ Results saved to {output_path}")
-        else:
-            print("❌ Failed to save results")
-
-        # Clean up
-        config_path.unlink(missing_ok=True)
-
-    except Exception as e:
-        logger.error(f"Processing failed: {e}")
-        return 1
-
-    print("\n🔧 Running Ruff Analysis:")
-    print("-" * 30)
-
-    # Test Ruff check
-    check_passed = run_ruff_check()
-    format_ok = run_ruff_format()
-
-    if check_passed and format_ok:
-        print("✅ All Ruff checks passed!")
+    
+    # Process users
+    stats = process_users_with_validation(users, processor)
+    
+    print("📊 Processing Results:")
+    print(f"   Total processed: {stats['total_processed']}")
+    print(f"   Successful: {stats['successful']}")
+    print(f"   Failed: {stats['failed']}")
+    print(f"   Success rate: {stats['success_rate']:.1%}")
+    
+    # Test file operations
+    file_manager: FileManager[User] = FileManager(Path("output/users.json"))
+    
+    # Use cast to handle the variance issue with List[User] -> List[Serializable]
+    if file_manager.save_data(cast(List[Serializable], users)):
+        print("✅ Users saved to file successfully")
     else:
-        print(
-            "⚠️  Some Ruff issues found - this demonstrates the self-correction capabilities",
-        )
-
-    print("\n📝 Ruff Configuration Summary:")
-    print("   • Comprehensive rule set for AI-generated code")
-    print("   • Automatic fixing enabled for most rules")
-    print("   • Optimized for code quality and consistency")
-    print("   • Security and performance checks included")
-
+        print("❌ Failed to save users to file")
+    
+    # Test type narrowing
+    test_values: List[Union[str, int, None]] = ["hello", 42, None]
+    
+    print("\n🔧 Type Narrowing Examples:")
+    for value in test_values:
+        result = demonstrate_type_narrowing(value)
+        print(f"   {result}")
+    
+    # Test explicit Any usage (allowed in our config)
+    dynamic_data: Any = {"key": "value", "number": 123}
+    processed_dynamic = cast(Dict[str, Union[str, int]], dynamic_data)
+    
+    print(f"\n📝 Dynamic data processing: {processed_dynamic}")
+    
+    print("\n✅ MyPy type checking demonstration completed!")
+    print("   • Strict type checking enabled")
+    print("   • Generic types and protocols working")
+    print("   • Union type narrowing functional")
+    print("   • Error handling patterns validated")
+    print("   • AI-friendly patterns supported")
+    
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    exit(main())
