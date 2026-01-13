@@ -20,6 +20,7 @@ This registry catalogs all custom prompts available in this project. Each prompt
 | `list-prompts` | Prompt Management | Display all available prompts by category | `@list-prompts [category]` | list, overview, catalog |
 | `prompt-help` | Prompt Management | Get detailed help for specific prompts | `@prompt-help "prompt-name"` | help, usage, instructions |
 | `related-prompts` | Prompt Management | Find prompts related to a specific prompt | `@related-prompts "prompt-name"` | related, similar, workflow |
+| `git-commit-push` | Development Workflow | Complete git workflow: add, commit, and push | `@git-commit-push` | git, commit, push, workflow, version-control |
 
 ## Categories
 
@@ -35,6 +36,10 @@ Prompts for discovering, managing, and getting help with the prompt system itsel
 - **list-prompts**: Browse all available prompts
 - **prompt-help**: Get detailed usage instructions
 - **related-prompts**: Find connected and workflow-related prompts
+
+### Development Workflow
+Prompts for common development tasks and version control operations.
+- **git-commit-push**: Complete git workflow with structured commit messages
 
 ## Usage Patterns
 
@@ -74,8 +79,8 @@ All prompts should include:
 - `related`: Related prompt names
 
 ## Statistics
-- **Total Prompts**: 7
-- **Categories**: 2 (Documentation, Prompt Management)
+- **Total Prompts**: 8
+- **Categories**: 3 (Documentation, Prompt Management, Development Workflow)
 - **Last Updated**: 2024-01-12
 
 ---

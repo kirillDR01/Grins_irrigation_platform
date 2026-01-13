@@ -13,6 +13,67 @@ This repository contains documentation and examples for Kiro development workflo
 
 ## Recent Activity
 
+## [2024-01-12 20:45] - CONFIG: Created Git Workflow Prompt for Automated Version Control
+
+### What Was Accomplished
+- Created comprehensive git workflow prompt (`@git-commit-push`) based on successful git operations from this session
+- Documented structured commit message format that avoids shell parsing issues
+- Implemented error handling strategies for common git workflow problems
+- Added prompt to the existing prompt infrastructure with proper metadata and categorization
+- Updated PROMPT-REGISTRY.md with new Development Workflow category
+- Established reusable workflow for future git operations with consistent commit message structure
+
+### Technical Details
+- **Prompt File**: `.kiro/prompts/git-commit-push.md` with comprehensive YAML frontmatter metadata
+- **Workflow Structure**: Three-step process (git add → git commit → git push origin main)
+- **Commit Message Format**: Conventional commits with type prefix and 4-6 bullet point details
+- **Message Length**: Moderate length (50-72 char title, 4-6 bullet points) to avoid shell issues
+- **Error Prevention**: Specific handling for text misinterpretation (e.g., "docker-compose" being parsed as command)
+- **Integration**: Full integration with existing prompt management system and registry
+
+### Decision Rationale
+- **Structured Format**: Used conventional commit format for consistency and clarity
+- **Moderate Length**: Balanced comprehensive information with shell command limitations
+- **Error Handling**: Included specific solutions for issues encountered during this session
+- **Reusability**: Created as prompt to standardize git workflow across future sessions
+- **Integration**: Added to existing prompt infrastructure for discoverability and management
+- **Documentation**: Captured exact approach that worked successfully in this session
+
+### Challenges and Solutions
+- **Shell Command Parsing**: Git commit messages containing certain text (like "docker-compose") were misinterpreted
+  - **Solution**: Documented text patterns to avoid and provided alternative phrasing strategies
+- **Message Length Issues**: Very long commit messages caused shell parsing problems
+  - **Solution**: Established moderate length guidelines with 4-6 bullet points maximum
+- **Workflow Consistency**: Need for repeatable git workflow across sessions
+  - **Solution**: Created structured prompt with step-by-step instructions and error handling
+- **Error Recovery**: Git operations sometimes failed requiring retry with different approach
+  - **Solution**: Documented fallback strategies and troubleshooting steps
+
+### Impact and Dependencies
+- **Workflow Standardization**: Provides consistent git workflow for all future development sessions
+- **Error Prevention**: Reduces git operation failures through documented best practices
+- **Time Efficiency**: Eliminates need to recreate commit message structure each time
+- **Team Collaboration**: Standardized commit format improves project history readability
+- **Prompt Infrastructure**: Expands prompt system with new Development Workflow category
+- **Knowledge Capture**: Preserves successful git workflow patterns for future reference
+
+### Next Steps
+- Test the new prompt in future development sessions
+- Refine commit message templates based on usage patterns
+- Consider adding branch-specific variations (feature branches, hotfixes)
+- Explore integration with automated devlog updates after commits
+- Add git workflow documentation to README.md
+- Consider creating additional development workflow prompts (code review, testing, deployment)
+
+### Resources and References
+- Conventional Commits specification for commit message format
+- Git documentation for command reference and best practices
+- Shell command parsing guidelines for avoiding interpretation issues
+- Prompt management system documentation and metadata standards
+- Successfully tested git workflow from this session as reference implementation
+
+---
+
 ## [2024-01-12 20:15] - CONFIG: Implemented Comprehensive MyPy Type Checking for AI-Generated Code
 
 ### What Was Accomplished
