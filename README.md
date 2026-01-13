@@ -1,184 +1,330 @@
-# Dynamous Kiro Hackathon Quickstart Template
+# Grins Irrigation Platform
 
-🚀 **Your starting point for the Dynamous and Kiro Hackathon** - A comprehensive template with pre-configured Kiro CLI setup, development workflows, and submission guidelines.
+A comprehensive business optimization platform for Grins Irrigations, featuring AI-powered development tools, automated workflows, and modern Python development practices.
 
-> **📖 New to Kiro?** Check out [kiro-guide.md](kiro-guide.md) to quickly get accustomed to how Kiro works and understand its unique features for the hackathon.
+## 🚀 Quick Start
 
-## About the Hackathon
+### Prerequisites
 
-The **Kiro Hackathon** is a coding competition where developers build real-world applications using the Kiro CLI. Show off your AI-powered development skills and compete for **$17,000 in prizes**.
+- **Python 3.9+** (3.11+ recommended)
+- **Docker & Docker Compose** (for containerized development)
+- **Git** (for version control)
 
-- **📅 Dates**: January 5-23, 2026
-- **💰 Prize Pool**: $17,000 across 10 winners
-- **🎯 Theme**: Open - build anything that solves a real problem
-- **🔗 More Info**: [dynamous.ai/kiro-hackathon](https://dynamous.ai/kiro-hackathon)
+### Option 1: Local Development with uv (Recommended)
 
-## What's Included
-
-This template provides everything you need to get started:
-
-- **📋 Steering Documents**: Pre-configured project templates (product.md, tech.md, structure.md)
-- **⚡ Custom Prompts**: 11 powerful development workflow prompts
-- **📖 Examples**: Sample README and DEVLOG showing best practices
-- **🏆 Hackathon Tools**: Specialized code review prompt for submission evaluation
-
-## Quick Start
-
-### 1. Clone This Template
 ```bash
-git clone https://github.com/coleam00/dynamous-kiro-hackathon
-cd dynamous-kiro-hackathon
+# Clone the repository
+git clone https://github.com/kirillDR01/Grins_irrigation_platform.git
+cd Grins_irrigation_platform
+
+# Run the setup script
+./scripts/setup.sh
+
+# Start the application
+uv run python src/grins_platform/main.py
 ```
 
-### 2. Run the Setup Wizard
+### Option 2: Docker Development
+
 ```bash
-@quickstart
+# Clone the repository
+git clone https://github.com/kirillDR01/Grins_irrigation_platform.git
+cd Grins_irrigation_platform
+
+# Start the development environment
+docker-compose up --build
+
+# Or run in background
+docker-compose up -d --build
 ```
 
-This assumes you already have Kiro CLI installed and that you started with the `kiro-cli` command in your terminal.
+## 🏗️ Project Structure
 
-This interactive wizard will:
-- ✅ Fill out your steering documents with project details
-- ✅ Configure your development workflow
-- ✅ Set up Kiro CLI for your specific project
-- ✅ Explain all available prompts and features
+```
+grins-irrigation-platform/
+├── src/grins_platform/          # Main application code
+│   ├── __init__.py
+│   └── main.py                   # Application entry point
+├── tests/                        # Test suite
+├── scripts/                      # Development and deployment scripts
+│   ├── setup.sh                  # Project setup script
+│   ├── dev.sh                    # Development workflow script
+│   └── init-db.sql              # Database initialization
+├── docs/                         # Documentation
+├── .kiro/                        # Kiro AI development tools
+│   ├── agents/                   # AI agents for development
+│   ├── prompts/                  # Custom prompts
+│   └── steering/                 # Development guidelines
+├── pyproject.toml               # Project configuration and dependencies
+├── Dockerfile                   # Container definition
+├── docker-compose.yml           # Development environment
+├── uv.lock                      # Locked dependencies (auto-generated)
+└── README.md                    # This file
+```
 
-### 3. Start Building
-Your project is now configured! Use these core prompts:
-- **`@prime`** - Load project context
-- **`@plan-feature`** - Plan new features
-- **`@execute`** - Implement plans systematically
-- **`@code-review`** - Review code quality
+## 🛠️ Development Workflow
 
-**Note:** Your typical workflow will be `@prime` → `@plan-feature` → `@execute` → `@code-review`, but feel free to change it however you want. These commands may require additional details (like what feature to plan or which plan file to execute), but Kiro will ask for these parameters after you invoke the command.
+### Using the Development Script
 
-## Development Workflow (Customize this However You Want!)
+The `./scripts/dev.sh` script provides convenient commands for common development tasks:
 
-### Initial Setup (One-Time)
-1. **Complete setup**: Run `@quickstart` to configure your project
+```bash
+# Setup project
+./scripts/dev.sh setup
 
-### Core Development Cycle (Every Feature/Session)
+# Run application
+./scripts/dev.sh run
 
-### Phase 1: Setup & Planning
-1. **Load context**: Use `@prime` to understand your codebase
-2. **Plan features**: Use `@plan-feature` for comprehensive planning
+# Run tests with coverage
+./scripts/dev.sh test
 
-### Phase 2: Build & Iterate
-1. **Implement**: Use `@execute` to build features systematically
-2. **Review**: Use `@code-review` to maintain code quality
-3. **Document**: Update your DEVLOG.md as you work
-4. **Optimize**: Customize your `.kiro/` configuration for your workflow
+# Code quality checks
+./scripts/dev.sh lint
 
-### Phase 3: Submission Preparation
-1. **Final review**: Run `@code-review-hackathon` for submission evaluation
-2. **Polish documentation**: Ensure README.md and DEVLOG.md are complete
-3. **Verify requirements**: Check all submission criteria are met
+# Auto-fix code issues
+./scripts/dev.sh fix
 
-## Submission Requirements
+# Clean up artifacts
+./scripts/dev.sh clean
 
-Your submission will be judged on these criteria (100 points total):
+# Docker commands
+./scripts/dev.sh docker-dev        # Start development environment
+./scripts/dev.sh docker-dev-bg     # Start in background
+./scripts/dev.sh docker-stop       # Stop services
 
-### Application Quality (40 points)
-- **Functionality & Completeness** (15 pts): Does it work as intended?
-- **Real-World Value** (15 pts): Does it solve a genuine problem?
-- **Code Quality** (10 pts): Is the code well-structured and maintainable?
+# Package management
+./scripts/dev.sh install <package>     # Install package
+./scripts/dev.sh install-dev <package> # Install dev package
+./scripts/dev.sh update                # Update all dependencies
+```
 
-### Kiro CLI Usage (20 points)
-- **Effective Use of Features** (10 pts): How well did you leverage Kiro CLI?
-- **Custom Commands Quality** (7 pts): Quality of your custom prompts
-- **Workflow Innovation** (3 pts): Creative use of Kiro CLI features
+### Manual Commands
 
-### Documentation (20 points)
-- **Completeness** (9 pts): All required documentation present
-- **Clarity** (7 pts): Easy to understand and follow
-- **Process Transparency** (4 pts): Clear development process documentation
+```bash
+# Install dependencies
+uv sync
 
-### Innovation (15 points)
-- **Uniqueness** (8 pts): Original approach or solution
-- **Creative Problem-Solving** (7 pts): Novel technical solutions
+# Run the application
+uv run python src/grins_platform/main.py
 
-### Presentation (5 points)
-- **Demo Video** (3 pts): Clear demonstration of your project
-- **README** (2 pts): Professional project overview
+# Run tests
+uv run pytest
 
-## Required Documentation
+# Code formatting and linting
+uv run ruff check src/ --fix
+uv run ruff format src/
 
-Ensure these files are complete and high-quality:
+# Type checking
+uv run mypy src/
 
-### README.md
-- Clear project description and value proposition
-- Prerequisites and setup instructions
-- Architecture overview and key components
-- Usage examples and troubleshooting
+# Security scanning
+uv run bandit -r src/
+```
 
-*There's a lot of freedom for how you can structure this. Just make sure that it's easy for someone viewing this to know exactly what your project is about and how to run it themselves. This is the main criteria that explains the project clearly and how to test it in a local environment.*
+## 🐳 Docker Development
 
-### DEVLOG.md
-- Development timeline with key milestones
-- Technical decisions and rationale
-- Challenges faced and solutions implemented
-- Time tracking and Kiro CLI usage statistics
+### Services
 
-*There's a lot of freedom in how you structure this too. It's up to you how you want to document your timeline, milestones, decisions made, challenges you encounter, and all those kinds of things. Feel free to use Kiro to help you maintain your devlog as you're working on the project. Hint: create a Kiro prompt to help you update your log based on what's happening.*
+The Docker Compose setup includes:
 
-### .kiro/ Directory
-- **Steering documents**: Customized for your project
-- **Custom prompts**: Workflow-specific commands
-- **Configuration**: Optimized for your development process
+- **app**: Main application container
+- **postgres**: PostgreSQL database
+- **redis**: Redis cache/session store
 
-*This template provides a good starting point with prompts, and the wizard helps you set up your initial steering documents. However, it's encouraged for you to continue to customize things and refine it as you're working on your project.*
+### Commands
 
-## Available Prompts
+```bash
+# Start all services
+docker-compose up --build
 
-This template includes 11 powerful development prompts:
+# Start in background
+docker-compose up -d --build
 
-### Core Development
-- **`@prime`** - Load comprehensive project context
-- **`@plan-feature`** - Create detailed implementation plans
-- **`@execute`** - Execute plans with systematic task management
-- **`@quickstart`** - Interactive project setup wizard
+# View logs
+docker-compose logs -f app
 
-### Quality Assurance
-- **`@code-review`** - Technical code review for quality and bugs
-- **`@code-review-hackathon`** - Hackathon submission evaluation
-- **`@code-review-fix`** - Fix issues found in code reviews
-- **`@system-review`** - Analyze implementation vs plan
+# Execute commands in container
+docker-compose exec app uv run python src/grins_platform/main.py
 
-### Documentation & Planning
-- **`@create-prd`** - Generate Product Requirements Documents
-- **`@execution-report`** - Generate implementation reports
-- **`@rca`** - Root cause analysis for issues
-- **`@implement-fix`** - Implement fixes based on analysis
+# Stop services
+docker-compose down
 
-## Examples
+# Rebuild and restart
+docker-compose up --build --force-recreate
+```
 
-Check the `examples/` folder for:
-- **README.md**: Professional project documentation example
-- **DEVLOG.md**: Comprehensive development log example
+## 📦 Dependencies
 
-These examples show the level of detail and professionalism expected for hackathon submissions.
+### Core Dependencies
+- **FastAPI**: Modern web framework for APIs
+- **Pydantic**: Data validation and settings management
+- **SQLAlchemy**: SQL toolkit and ORM
+- **Uvicorn**: ASGI server
+- **Ruff**: Fast Python linter and formatter
 
-## Tips for Success
+### Development Dependencies
+- **pytest**: Testing framework
+- **mypy**: Static type checker
+- **pre-commit**: Git hooks for code quality
+- **bandit**: Security linter
 
-### Maximize Your Score
-1. **Use Kiro CLI extensively** - It's 20% of your score
-2. **Document everything** - Process documentation is 20% of your score
-3. **Build something useful** - Real-world value is heavily weighted
-4. **Optimize your workflow** - Custom prompts and steering documents matter
+## 🧪 Testing
 
-### Development Best Practices
-- **Start with `@quickstart`** to set up your foundation properly
-- **Use `@prime`** at the start of every new conversation to quickly catch the coding assistant up to speed on what has been built in the project already
-- **Update your DEVLOG.md** continuously, not just at the end
-- **Customize your `.kiro/` configuration** as you learn your workflow
-- **Run `@code-review-hackathon`** periodically to compare your project against the judging rubric and before submitting
+```bash
+# Run all tests
+uv run pytest
 
-## Getting Help
+# Run with coverage
+uv run pytest --cov=src/grins_platform --cov-report=html
 
-- **Kiro CLI Documentation**: [kiro.dev/docs/cli](https://kiro.dev/docs/cli)
-- **Hackathon Community**: Join the Dynamous community for support
-- **Built-in Help**: Use `/help` in Kiro CLI for command assistance
+# Run specific test file
+uv run pytest tests/test_main.py
+
+# Run with verbose output
+uv run pytest -v
+```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and configure:
+
+```bash
+# Environment
+ENVIRONMENT=development
+LOG_LEVEL=INFO
+DEBUG=true
+
+# Database
+DATABASE_URL=postgresql://grins_user:grins_password@localhost:5432/grins_platform
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
+
+# Security
+SECRET_KEY=your-secret-key-change-in-production
+JWT_SECRET_KEY=your-jwt-secret-key-change-in-production
+
+# API
+API_HOST=0.0.0.0
+API_PORT=8000
+```
+
+### Database Setup
+
+The database is automatically initialized with:
+- User management tables
+- Customer management
+- Service definitions
+- Job/appointment scheduling
+- Sample data for development
+
+## 🤖 AI Development Tools
+
+This project includes Kiro AI development tools:
+
+### Available Prompts
+- `@devlog-entry`: Create comprehensive development log entries
+- `@devlog-summary`: Generate session summaries
+- `@devlog-quick`: Quick progress updates
+- `@find-prompts`: Search for available prompts
+- `@list-prompts`: Browse all prompts
+- `@prompt-help`: Get help for specific prompts
+
+### Development Agents
+- **devlog-agent**: Specialized for maintaining development logs
+- **prompt-manager-agent**: Manages and discovers prompts
+
+### Usage
+```bash
+# List available prompts
+@list-prompts
+
+# Create a development log entry
+@devlog-entry "Implemented user authentication system"
+
+# Generate session summary
+@devlog-summary
+```
+
+## 🚀 Deployment
+
+### Production Docker Build
+
+```bash
+# Build production image
+docker build -t grins-platform:latest .
+
+# Run production container
+docker run -p 8000:8000 grins-platform:latest
+```
+
+### Environment-Specific Deployment
+
+1. **Development**: Use `docker-compose.yml`
+2. **Staging**: Use `docker-compose.staging.yml` (create as needed)
+3. **Production**: Use orchestration tools like Kubernetes or Docker Swarm
+
+## 📊 Code Quality
+
+This project maintains high code quality standards:
+
+- **Ruff**: Fast linting and formatting (800+ rules)
+- **MyPy**: Static type checking
+- **Bandit**: Security vulnerability scanning
+- **Pytest**: Comprehensive test coverage
+- **Pre-commit**: Automated quality checks
+
+### Quality Metrics
+- Code coverage target: >90%
+- Type coverage target: >95%
+- Security scan: No high/medium vulnerabilities
+- Linting: Zero violations in production code
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make your changes
+4. Run quality checks: `./scripts/dev.sh lint`
+5. Run tests: `./scripts/dev.sh test`
+6. Commit changes: `git commit -m 'Add amazing feature'`
+7. Push to branch: `git push origin feature/amazing-feature`
+8. Open a Pull Request
+
+## 📝 Development Log
+
+See [DEVLOG.md](DEVLOG.md) for detailed development progress and decisions.
+
+## 🔗 Links
+
+- **Repository**: https://github.com/kirillDR01/Grins_irrigation_platform
+- **Issues**: https://github.com/kirillDR01/Grins_irrigation_platform/issues
+- **Documentation**: [docs/](docs/)
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+If you encounter any issues:
+
+1. Check the [troubleshooting guide](docs/troubleshooting.md)
+2. Search existing [issues](https://github.com/kirillDR01/Grins_irrigation_platform/issues)
+3. Create a new issue with detailed information
+
+## 🎯 Roadmap
+
+- [ ] Web-based dashboard
+- [ ] Mobile application
+- [ ] Advanced scheduling algorithms
+- [ ] Customer portal
+- [ ] Integration with accounting software
+- [ ] Weather-based irrigation recommendations
+- [ ] IoT sensor integration
 
 ---
 
-**Ready to build something amazing?** Run `@quickstart` and let's get started! 🚀
+**Built with ❤️ for Grins Irrigations**

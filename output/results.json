@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Alice Smith",
+    "processed": true,
+    "length": 11,
+    "category": "user"
+  },
+  {
+    "name": "Bob Jones",
+    "processed": true,
+    "length": 9,
+    "category": "admin"
+  },
+  {
+    "name": "Charlie Brown",
+    "processed": true,
+    "length": 13,
+    "category": "user"
+  }
+]

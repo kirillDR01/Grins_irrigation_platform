@@ -13,6 +13,140 @@ This repository contains documentation and examples for Kiro development workflo
 
 ## Recent Activity
 
+## [2024-01-12 19:52] - DEPLOYMENT: Completed uv + Docker Production Deployment Setup
+
+### What Was Accomplished
+- Successfully implemented comprehensive uv + Docker deployment solution for production-ready application deployment
+- Fixed and tested complete setup script (./scripts/setup.sh) with automated environment configuration
+- Resolved Docker build issues and achieved successful multi-service containerized deployment
+- Created production-ready multi-stage Dockerfile with security best practices and optimization
+- Implemented docker-compose.yml with PostgreSQL, Redis, and application services
+- Established complete development workflow with automated dependency management
+- Successfully tested end-to-end deployment on separate machine simulation
+- Fixed pyproject.toml configuration issues for proper package building
+- Validated complete uv package management integration with Docker containerization
+
+### Technical Details
+- **Package Manager**: uv (10-100x faster than pip) with comprehensive dependency management
+- **Container Strategy**: Multi-stage Docker build with Python 3.11-slim base image
+- **Services Architecture**: 
+  - Main application container with health checks
+  - PostgreSQL 15-alpine database with initialization scripts
+  - Redis 7-alpine for caching and session management
+- **Build System**: Hatchling with proper package configuration and wheel building
+- **Security**: Non-root user execution, minimal attack surface, proper file permissions
+- **Performance**: Multi-stage builds, cached layers, optimized dependency installation
+- **Development Tools**: Comprehensive setup script with environment validation and error handling
+
+### Decision Rationale
+- **uv Selection**: Chosen for 10-100x performance improvement over pip and modern Python packaging standards
+- **Multi-stage Docker**: Implemented to minimize production image size while maintaining build capabilities
+- **Service Separation**: Used docker-compose for clear service boundaries and development/production parity
+- **Industry Standards**: Followed Docker and Python packaging best practices for enterprise deployment
+- **Automated Setup**: Created comprehensive setup script to ensure consistent deployment across machines
+- **Security First**: Implemented non-root execution, minimal base images, and proper permission management
+
+### Challenges and Solutions
+- **Package Build Failure**: Docker build failed due to missing README.md in build context
+  - **Solution**: Modified Dockerfile to copy README.md before dependency installation
+- **Deprecated uv Configuration**: pyproject.toml used deprecated `tool.uv.dev-dependencies`
+  - **Solution**: Updated to modern `dependency-groups.dev` configuration format
+- **Package Discovery**: Hatchling couldn't find package files due to naming mismatch
+  - **Solution**: Added explicit `tool.hatch.build.targets.wheel.packages` configuration
+- **Service Coordination**: Ensuring proper startup order and health checks for multi-service deployment
+  - **Solution**: Implemented health checks and dependency management in docker-compose.yml
+- **Environment Consistency**: Ensuring identical behavior across development and production
+  - **Solution**: Comprehensive setup script with environment validation and automated configuration
+
+### Impact and Dependencies
+- **Deployment Readiness**: Project can now be deployed on any machine with Docker support
+- **Development Efficiency**: uv provides 10-100x faster dependency resolution and installation
+- **Production Scalability**: Multi-stage Docker builds and service separation enable horizontal scaling
+- **Team Onboarding**: Automated setup script eliminates environment configuration complexity
+- **CI/CD Integration**: Docker-based deployment enables seamless integration with container orchestration
+- **Security Posture**: Non-root execution and minimal attack surface improve production security
+- **Performance**: Optimized builds and caching reduce deployment time and resource usage
+
+### Next Steps
+- Test deployment on actual production infrastructure (AWS, GCP, or Azure)
+- Implement CI/CD pipeline integration with Docker builds
+- Add monitoring and logging configuration for production deployment
+- Create environment-specific configurations (staging, production)
+- Implement database migration strategies and backup procedures
+- Add SSL/TLS configuration and reverse proxy setup
+- Consider Kubernetes deployment manifests for container orchestration
+- Implement automated testing in containerized environment
+
+### Resources and References
+- uv documentation: https://docs.astral.sh/uv/
+- Docker multi-stage build best practices
+- pyproject.toml configuration with hatchling build system
+- docker-compose.yml with PostgreSQL and Redis services
+- Comprehensive setup script with error handling and validation
+- Production-ready Dockerfile with security and performance optimizations
+- Successfully tested deployment with all services operational
+
+---
+
+## [2024-01-12 19:00] - CONFIG: Implemented Comprehensive Ruff Setup for AI Self-Correction
+
+### What Was Accomplished
+- Successfully set up Ruff (Python linter and formatter) optimized specifically for AI self-correction workflows
+- Created comprehensive pyproject.toml configuration with 800+ lint rules across 25+ rule categories
+- Implemented main.py test script demonstrating various code patterns that AI commonly generates
+- Configured automatic fixing capabilities for maximum AI code improvement efficiency
+- Tested the complete setup with real code analysis and demonstrated self-correction capabilities
+- Installed Ruff via Homebrew and validated functionality with comprehensive rule detection
+
+### Technical Details
+- **Ruff Version**: 0.14.11 installed via Homebrew on macOS
+- **Configuration File**: pyproject.toml with comprehensive rule selection optimized for AI workflows
+- **Rule Categories Enabled**: 25+ categories including Pyflakes (F), pycodestyle (E/W), isort (I), pep8-naming (N), pyupgrade (UP), flake8-bugbear (B), Pylint (PL), security checks (S), performance (PERF), and many more
+- **Target Python Version**: 3.9+ for modern Python features
+- **Line Length**: 88 characters (Black-compatible)
+- **Auto-fixing**: Enabled for ALL fixable rules with comprehensive fixable rule set
+- **Test Results**: Successfully detected 103+ issues in test script, automatically fixed 49 issues
+
+### Decision Rationale
+- **Comprehensive Rule Set**: Selected extensive rule categories to catch maximum issues that AI-generated code commonly has
+- **AI-Optimized Ignores**: Strategically ignored rules that conflict with AI code generation patterns (print statements, TODO comments, magic values in examples)
+- **Automatic Fixing Priority**: Enabled all possible auto-fixes to maximize AI self-correction capabilities
+- **Per-File Flexibility**: Configured different rule sets for test files, examples, and main scripts
+- **Security Focus**: Included bandit security rules while allowing common development patterns
+- **Modern Python**: Emphasized pyupgrade rules to ensure AI generates modern Python syntax
+
+### Challenges and Solutions
+- **Package Installation**: Resolved externally-managed Python environment by using Homebrew installation
+- **Rule Conflicts**: Addressed formatter conflicts (COM812) by noting the warning and providing guidance
+- **AI-Specific Patterns**: Balanced comprehensive linting with practical AI code generation needs
+- **Performance vs Completeness**: Chose comprehensive rule set over minimal configuration for maximum code quality
+- **Configuration Complexity**: Created well-documented configuration with clear sections and explanations
+
+### Impact and Dependencies
+- **AI Development Workflow**: Provides immediate feedback and automatic correction for AI-generated Python code
+- **Code Quality**: Ensures consistent, secure, and performant code output from AI systems
+- **Self-Correction Capability**: Enables AI to automatically improve its own code through Ruff's fix capabilities
+- **Development Efficiency**: Reduces manual code review time by catching issues automatically
+- **Standards Compliance**: Enforces Python best practices, PEP standards, and security guidelines
+- **Scalability**: Configuration can be adapted for different project types and team requirements
+
+### Next Steps
+- Apply Ruff configuration to other Python projects in the repository
+- Integrate Ruff checks into development workflows and CI/CD pipelines
+- Explore advanced Ruff features like custom rule development
+- Consider integrating with pre-commit hooks for automatic code quality enforcement
+- Evaluate performance impact on large codebases and optimize configuration as needed
+- Document best practices for AI code generation with Ruff integration
+
+### Resources and References
+- Official Ruff documentation: https://docs.astral.sh/ruff/
+- Comprehensive rule reference with 800+ available rules
+- pyproject.toml configuration with detailed comments and explanations
+- main.py test script demonstrating AI code patterns and Ruff analysis
+- Successfully tested automatic fixing and formatting capabilities
+
+---
+
 ## [2024-01-11 17:00] - RESEARCH: Completed Business Requirements Analysis for Grins Irrigations
 
 ### What Was Accomplished

@@ -1,0 +1,301 @@
+[project]
+name = "grins-irrigation-platform"
+version = "0.1.0"
+description = "Business optimization platform for Grins Irrigations with AI-powered development tools"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+    {name = "Grins Irrigations Development Team"}
+]
+keywords = ["irrigation", "business-optimization", "ai-development", "platform"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "ruff>=0.1.0",
+    "fastapi>=0.100.0",
+    "pydantic>=2.0.0",
+    "sqlalchemy>=2.0.0",
+    "uvicorn>=0.20.0",
+    "python-multipart>=0.0.6",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-dotenv>=1.0.0",
+    "httpx>=0.24.0",
+    "jinja2>=3.1.0",
+    "aiofiles>=23.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "bandit>=1.7.0",
+    "safety>=2.3.0",
+]
+
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0",
+    "httpx>=0.24.0",
+    "faker>=19.0.0",
+]
+
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.0.0",
+    "mkdocstrings[python]>=0.22.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/kirillDR01/Grins_irrigation_platform"
+Repository = "https://github.com/kirillDR01/Grins_irrigation_platform"
+Documentation = "https://github.com/kirillDR01/Grins_irrigation_platform#readme"
+"Bug Tracker" = "https://github.com/kirillDR01/Grins_irrigation_platform/issues"
+
+[project.scripts]
+grins-platform = "grins_platform.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/grins_platform"]
+
+[tool.uv]
+# uv-specific configuration
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "bandit>=1.7.0",
+    "safety>=2.3.0",
+    "faker>=19.0.0",
+]
+
+[tool.ruff]
+# Target Python 3.9+ for modern features
+target-version = "py39"
+
+# Line length optimized for readability and AI analysis
+line-length = 88
+indent-width = 4
+
+# Include common directories but exclude build artifacts
+exclude = [
+    ".bzr",
+    ".direnv", 
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+
+[tool.ruff.lint]
+# Comprehensive rule selection optimized for AI self-correction
+select = [
+    # Pyflakes (F) - Essential error detection
+    "F",
+    # pycodestyle errors (E) - Code style consistency  
+    "E",
+    # pycodestyle warnings (W) - Additional style issues
+    "W", 
+    # isort (I) - Import organization
+    "I",
+    # pep8-naming (N) - Naming conventions
+    "N",
+    # pyupgrade (UP) - Modern Python syntax
+    "UP",
+    # flake8-bugbear (B) - Bug detection
+    "B",
+    # flake8-simplify (SIM) - Code simplification
+    "SIM",
+    # flake8-comprehensions (C4) - List/dict comprehension improvements
+    "C4",
+    # Pylint (PL) - Comprehensive code analysis
+    "PL",
+    # flake8-pie (PIE) - Miscellaneous improvements
+    "PIE",
+    # flake8-return (RET) - Return statement improvements
+    "RET",
+    # flake8-unused-arguments (ARG) - Unused argument detection
+    "ARG",
+    # flake8-use-pathlib (PTH) - Modern path handling
+    "PTH",
+    # Ruff-specific rules (RUF) - Ruff's own optimizations
+    "RUF",
+    # flake8-annotations (ANN) - Type annotation enforcement
+    "ANN",
+    # flake8-bandit (S) - Security issue detection
+    "S",
+    # flake8-boolean-trap (FBT) - Boolean parameter issues
+    "FBT",
+    # flake8-builtins (A) - Builtin shadowing detection
+    "A",
+    # flake8-commas (COM) - Trailing comma consistency
+    "COM",
+    # flake8-errmsg (EM) - Exception message best practices
+    "EM",
+    # flake8-logging-format (G) - Logging best practices
+    "G",
+    # flake8-implicit-str-concat (ISC) - String concatenation issues
+    "ISC",
+    # flake8-print (T20) - Print statement detection
+    "T20",
+    # flake8-quotes (Q) - Quote consistency
+    "Q",
+    # flake8-self (SLF) - Private member access
+    "SLF",
+    # flake8-type-checking (TC) - Type checking optimization
+    "TC",
+    # tryceratops (TRY) - Exception handling best practices
+    "TRY",
+    # Perflint (PERF) - Performance improvements
+    "PERF",
+    # refurb (FURB) - Code modernization
+    "FURB",
+]
+
+# Ignore specific rules that may conflict with AI-generated code patterns
+ignore = [
+    # Allow print statements for debugging and examples
+    "T201",
+    # Allow TODO comments
+    "FIX002", 
+    # Allow assert statements (useful for testing)
+    "S101",
+    # Allow hardcoded passwords in examples/tests
+    "S105", "S106", "S107",
+    # Allow subprocess usage (may be needed for system integration)
+    "S602", "S603", "S604", "S605", "S606", "S607",
+    # Allow magic value comparisons (common in configuration)
+    "PLR2004",
+    # Allow too many arguments (AI may generate complex functions)
+    "PLR0913",
+    # Allow too many branches (AI may generate complex logic)
+    "PLR0912",
+    # Allow too many statements (AI may generate comprehensive functions)
+    "PLR0915",
+    # Allow missing type annotations for *args and **kwargs
+    "ANN002", "ANN003",
+    # Allow missing return type annotations for private functions
+    "ANN202",
+    # Allow boolean positional arguments (common in APIs)
+    "FBT001", "FBT002", "FBT003",
+]
+
+# Enable automatic fixing for all fixable rules
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.per-file-ignores]
+# Test files can have additional flexibility
+"test_*.py" = [
+    "S101",    # Allow assert statements in tests
+    "PLR2004", # Allow magic values in tests
+    "ANN",     # Don't require type annotations in tests
+    "SLF001",  # Allow private member access in tests
+]
+"tests/*.py" = [
+    "S101",    # Allow assert statements in tests
+    "PLR2004", # Allow magic values in tests  
+    "ANN",     # Don't require type annotations in tests
+    "SLF001",  # Allow private member access in tests
+]
+# Example/demo files can be more relaxed
+"examples/*.py" = [
+    "T201",    # Allow print statements in examples
+    "S101",    # Allow assert statements in examples
+    "PLR2004", # Allow magic values in examples
+    "ANN",     # Don't require type annotations in examples
+]
+# Main script can have print statements
+"main.py" = [
+    "T201",    # Allow print statements in main
+]
+
+[tool.ruff.lint.flake8-annotations]
+# Require type annotations for public functions but be flexible for private ones
+allow-star-arg-any = true
+ignore-fully-untyped = true
+
+[tool.ruff.lint.flake8-bandit]
+# Security checks but allow common development patterns
+check-typed-exception = true
+
+[tool.ruff.lint.flake8-bugbear]
+# Enable additional bugbear checks
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
+
+[tool.ruff.lint.flake8-quotes]
+# Prefer double quotes for consistency
+inline-quotes = "double"
+multiline-quotes = "double"
+docstring-quotes = "double"
+avoid-escape = true
+
+[tool.ruff.lint.isort]
+# Import organization optimized for AI readability
+combine-as-imports = true
+force-wrap-aliases = true
+known-first-party = ["app", "src"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+[tool.ruff.lint.pylint]
+# Pylint configuration for comprehensive analysis
+max-args = 8
+max-branches = 15
+max-returns = 8
+max-statements = 60
+
+[tool.ruff.format]
+# Formatting configuration
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
