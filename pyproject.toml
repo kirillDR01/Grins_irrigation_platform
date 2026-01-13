@@ -92,6 +92,7 @@ dev = [
     "bandit>=1.7.0",
     "safety>=2.3.0",
     "faker>=19.0.0",
+    "pyright>=1.1.408",
 ]
 
 [tool.ruff]
@@ -391,3 +392,100 @@ module = [
     "uvicorn.*",
 ]
 ignore_missing_imports = true
+
+[tool.pyright]
+# Pyright configuration for comprehensive type checking alongside MyPy
+
+# Basic settings
+pythonVersion = "3.9"
+pythonPlatform = "All"
+include = ["src"]
+exclude = [
+    "**/__pycache__",
+    "**/.pytest_cache",
+    "**/.mypy_cache",
+    "**/node_modules",
+    "**/.venv",
+    "**/venv",
+    "build",
+    "dist",
+]
+
+# Type checking mode - strict for maximum safety
+typeCheckingMode = "strict"
+
+# Strict mode settings - enable all safety checks
+strictListInference = true
+strictDictionaryInference = true
+strictSetInference = true
+strictParameterNoneValue = true
+
+# Diagnostic rule overrides - comprehensive checking
+reportMissingImports = "error"
+reportMissingTypeStubs = "warning"
+reportImportCycles = "error"
+reportUnusedImport = "warning"
+reportUnusedClass = "warning"
+reportUnusedFunction = "warning"
+reportUnusedVariable = "warning"
+reportDuplicateImport = "warning"
+reportWildcardImportFromLibrary = "warning"
+reportOptionalSubscript = "error"
+reportOptionalMemberAccess = "error"
+reportOptionalCall = "error"
+reportOptionalIterable = "error"
+reportOptionalContextManager = "error"
+reportOptionalOperand = "error"
+reportTypedDictNotRequiredAccess = "error"
+reportPrivateImportUsage = "warning"
+reportConstantRedefinition = "error"
+reportIncompatibleMethodOverride = "error"
+reportIncompatibleVariableOverride = "error"
+reportInconsistentConstructor = "error"
+reportOverlappingOverload = "error"
+reportMissingSuperCall = "warning"
+reportUninitializedInstanceVariable = "error"
+reportInvalidStringEscapeSequence = "error"
+reportUnknownParameterType = "error"
+reportUnknownArgumentType = "error"
+reportUnknownLambdaType = "error"
+reportUnknownVariableType = "error"
+reportUnknownMemberType = "error"
+reportMissingParameterType = "error"
+reportMissingTypeArgument = "error"
+reportInvalidTypeVarUse = "error"
+reportCallInDefaultInitializer = "warning"
+reportUnnecessaryIsInstance = "warning"
+reportUnnecessaryCast = "warning"
+reportUnnecessaryComparison = "warning"
+reportUnnecessaryContains = "warning"
+reportAssertAlwaysTrue = "warning"
+reportSelfClsParameterName = "warning"
+reportImplicitStringConcatenation = "warning"
+reportUndefinedVariable = "error"
+reportUnboundVariable = "error"
+reportInvalidStubStatement = "error"
+reportIncompleteStub = "error"
+reportUnsupportedDunderAll = "warning"
+reportUnusedCallResult = "warning"
+reportUnusedCoroutine = "error"
+reportUnusedExpression = "warning"
+reportUnnecessaryTypeIgnoreComment = "warning"
+reportMatchNotExhaustive = "warning"
+
+# Additional strict checks
+reportPropertyTypeMismatch = "error"
+reportFunctionMemberAccess = "error"
+
+# Performance and analysis settings
+autoImportCompletions = true
+indexing = true
+useLibraryCodeForTypes = true
+
+# Stub path configuration
+stubPath = "typings"
+
+# Execution environments for different Python versions
+executionEnvironments = [
+    { root = "src", pythonVersion = "3.9", pythonPlatform = "All" },
+]

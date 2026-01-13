@@ -21,7 +21,6 @@ from enum import Enum
 from pathlib import Path
 from typing import (
     Any,
-    Callable,
     Dict,
     Generic,
     List,
@@ -41,6 +40,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 K = TypeVar("K")
 V = TypeVar("V")
+SerializableT = TypeVar("SerializableT", bound="Serializable")
 
 
 class ProcessingStatus(Enum):
@@ -90,6 +90,7 @@ class DataProcessor(ABC, Generic[T]):
             name: Processor name for identification
             config: Configuration dictionary
         """
+        super().__init__()
         self.name = name
         self.config = config
         self._processed_count = 0
@@ -213,11 +214,12 @@ class User(Serializable):
         )
 
 
-class FileManager(Generic[T]):
+class FileManager(Generic[SerializableT]):
     """Generic file manager for serializable objects."""
     
     def __init__(self, file_path: Path) -> None:
         """Initialize file manager with path."""
+        super().__init__()
         self.file_path = file_path
     
     @overload
@@ -254,7 +256,7 @@ class FileManager(Generic[T]):
             logger.error("Failed to save data: %s", e)
             return False
     
-    def load_data(self, data_class: Callable[[Dict[str, Any]], T]) -> Optional[List[T]]:
+    def load_data(self, data_class: type[SerializableT]) -> Optional[List[SerializableT]]:
         """Load data from file.
         
         Args:
@@ -268,12 +270,12 @@ class FileManager(Generic[T]):
                 return None
             
             with self.file_path.open("r", encoding="utf-8") as f:
-                json_data = json.load(f)
+                json_data: Union[Dict[str, Any], List[Dict[str, Any]]] = json.load(f)
             
             if isinstance(json_data, list):
-                return [data_class(item) for item in json_data]
+                return [cast(SerializableT, data_class.from_dict(item)) for item in json_data]
             else:
-                return [data_class(json_data)]
+                return [cast(SerializableT, data_class.from_dict(json_data))]
         
         except Exception as e:
             logger.error("Failed to load data: %s", e)
