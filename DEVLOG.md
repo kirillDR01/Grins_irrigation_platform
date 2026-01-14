@@ -13,6 +13,128 @@ This repository contains documentation and examples for Kiro development workflo
 
 ## Recent Activity
 
+## [2025-01-13 11:00] - CONFIG: Implemented Automatic Prompt Registry Update System
+
+### What Was Accomplished
+- Created `@update-prompt-registry` prompt for automatic registry regeneration
+- Scanned all 25+ prompts in `.kiro/prompts/` directory
+- Extracted metadata from YAML frontmatter in each prompt file
+- Regenerated complete PROMPT-REGISTRY.md with all prompts cataloged
+- Organized prompts into 5 categories (Documentation, Prompt Management, Development Workflow, Code Quality, Setup)
+- Added comprehensive usage patterns and workflow examples
+- Updated statistics (25 total prompts, 5 categories)
+
+### Technical Details
+- **Prompt Created**: `update-prompt-registry.md` with automation instructions
+- **Registry Format**: Markdown table with name, category, purpose, usage, and tags
+- **Metadata Extraction**: Reads YAML frontmatter from all `.md` files in prompts directory
+- **Categories**: Documentation (4), Prompt Management (5), Development Workflow (7), Code Quality (7), Setup (2)
+- **Validation**: Checks for required metadata fields and reports warnings
+- **Workflow Integration**: Added to Prompt Management category with related prompts
+
+### Decision Rationale
+- **Manual Trigger**: Chose manual prompt over automatic hook for better control and reliability
+- **Metadata-Driven**: Uses YAML frontmatter as source of truth for prompt information
+- **Comprehensive Scanning**: Reads all prompt files to ensure registry is always accurate
+- **Category Organization**: Automatically groups prompts by category for easy discovery
+- **Usage Patterns**: Included workflow examples to show how prompts work together
+
+### Challenges and Solutions
+- **Inconsistent Metadata**: Some prompts had minimal metadata, others had full YAML frontmatter
+  - **Solution**: Registry generation handles both formats gracefully, uses description field when available
+- **Category Variations**: Different prompts used different category names (e.g., "Testing" vs "Code Quality")
+  - **Solution**: Standardized to 5 main categories during regeneration
+- **Missing Metadata**: Some prompts lacked created/updated dates or related fields
+  - **Solution**: Registry shows what's available, validation can warn about missing fields
+
+### Impact and Dependencies
+- **Automatic Sync**: Registry stays in sync with actual prompt files
+- **Discoverability**: All 25 prompts now cataloged and searchable
+- **Workflow Clarity**: Usage patterns show how prompts work together
+- **Maintenance Simplified**: Run one command to update registry after changes
+- **Quality Assurance**: Validation ensures prompts have required metadata
+
+### Next Steps
+- Add validation warnings for prompts missing required metadata
+- Consider adding prompt usage analytics
+- Create templates for new prompt creation
+- Add automated tests for prompt metadata validation
+
+### Resources and References
+- Created: `.kiro/prompts/update-prompt-registry.md`
+- Updated: `.kiro/prompts/PROMPT-REGISTRY.md` (regenerated with all 25 prompts)
+- Total prompts cataloged: 25 across 5 categories
+
+---
+
+## [2025-01-13 10:30] - CONFIG: Implemented Seamless Quality Integration System for Kiro
+
+### What Was Accomplished
+- Designed and implemented comprehensive quality integration system that automatically enforces logging, testing, and code quality standards
+- Created 3 steering files for always-on and conditional quality guidance
+- Created 2 hook files for agent spawn reminders and completion validation
+- Created 4 prompts for quality-focused development workflows
+- Updated existing steering files (tech.md, structure.md) with testing and logging sections
+- Updated PROMPT-REGISTRY.md with new Code Quality category and 4 new prompts
+- Established "Quality by Default" philosophy making it harder to write bad code than good code
+
+### Technical Details
+- **Steering Files Created**:
+  - `code-standards.md`: Comprehensive quality standards (always active) - logging patterns, testing requirements, type safety, error handling, 5-step quality workflow
+  - `service-patterns.md`: Service layer patterns (conditional, fileMatch: *service*.py) - LoggerMixin usage, domain logging, error handling
+  - `api-patterns.md`: API endpoint patterns (conditional, fileMatch: *api/routes/endpoints*.py) - request correlation, response logging, middleware patterns
+- **Hook Files Created**:
+  - `quality-reminder.md`: Agent spawn hook reminding about quality workflow
+  - `completion-check.md`: Stop hook for final validation before task completion
+- **Prompts Created**:
+  - `new-feature.md`: Create complete features with automatic testing and logging
+  - `add-tests.md`: Add comprehensive tests to existing code
+  - `add-logging.md`: Add structured logging to existing code
+  - `quality-check.md`: Run all quality checks and fix issues
+- **Logging Pattern**: `{domain}.{component}.{action}_{state}` with states: _started, _completed, _failed, _validated, _rejected
+- **Quality Workflow**: Write code with logging → Write tests → Run quality checks → Fix issues → Report
+
+### Decision Rationale
+- **Single Agent Approach**: Chose embedded workflow over sub-agents because testing/logging are tightly integrated with code and sub-agents lose context
+- **Steering Over Agents**: Steering files provide persistent context without the overhead of agent switching
+- **Conditional Steering**: Service and API patterns only load when relevant files are being worked on, reducing context noise
+- **Minimal Hooks**: Only agent spawn and stop hooks to avoid interrupting flow during development
+- **Comprehensive Prompts**: Four prompts cover the main quality workflows without being overwhelming
+- **Quality by Default**: System designed so following quality standards is the path of least resistance
+
+### Challenges and Solutions
+- **Context Overhead**: Too many steering files could overwhelm context
+  - **Solution**: Made service-patterns.md and api-patterns.md conditional on file patterns
+- **Sub-Agent Limitations**: Sub-agents lose context for tightly integrated tasks
+  - **Solution**: Used single agent with clear embedded workflow instead
+- **Workflow Complexity**: Quality workflow has multiple steps that could be forgotten
+  - **Solution**: Created code-standards.md with explicit 5-step process and task completion criteria
+- **Discoverability**: New prompts need to be findable
+  - **Solution**: Updated PROMPT-REGISTRY.md with new Code Quality category
+
+### Impact and Dependencies
+- **Automatic Quality**: All new code will automatically include logging and testing
+- **Consistent Standards**: Steering files ensure consistent patterns across all development
+- **Reduced Review Time**: Quality checks catch issues before code review
+- **Better Observability**: Structured logging provides consistent log output for debugging
+- **Higher Coverage**: Testing requirements ensure comprehensive test coverage
+- **Zero Tolerance**: All quality tools must pass with zero errors before task completion
+
+### Next Steps
+- Test the system by creating a sample feature using `@new-feature`
+- Refine steering files based on actual usage patterns
+- Consider adding more conditional steering for specific domains (database, caching, etc.)
+- Monitor context usage and adjust steering file sizes if needed
+- Add integration with CI/CD pipeline for automated quality gates
+
+### Resources and References
+- Steering files: `.kiro/steering/code-standards.md`, `service-patterns.md`, `api-patterns.md`
+- Hook files: `.kiro/hooks/quality-reminder.md`, `completion-check.md`
+- Prompts: `.kiro/prompts/new-feature.md`, `add-tests.md`, `add-logging.md`, `quality-check.md`
+- Updated: `.kiro/steering/tech.md`, `structure.md`, `.kiro/prompts/PROMPT-REGISTRY.md`
+
+---
+
 ## [2024-01-12 21:45] - TESTING: Completed Comprehensive Pytest Setup and Code Quality Optimization
 
 ### What Was Accomplished

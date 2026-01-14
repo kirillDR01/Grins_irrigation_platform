@@ -1,88 +1,204 @@
 # Prompt Registry
 
+**Last Updated**: 2026-01-14  
+**Total Prompts**: 25  
+**Categories**: 7
+
 ## Overview
-This registry catalogs all custom prompts available in this project. Each prompt includes metadata for easy discovery and usage guidance.
 
-## Quick Reference Commands
-- `@find-prompts "keyword"` - Search for prompts by keyword or category
-- `@prompt-help "prompt-name"` - Get detailed help for a specific prompt
-- `@list-prompts` - List all available prompts with descriptions
-- `@related-prompts "prompt-name"` - Find prompts related to a specific one
+This registry catalogs all available prompts in the Kiro CLI environment. Prompts are organized by category and include metadata for easy discovery and usage.
 
-## Available Prompts
+## Quick Reference
 
-| Name | Category | Purpose | Usage | Tags |
-|------|----------|---------|-------|------|
-| `devlog-entry` | Documentation | Create comprehensive manual devlog entries | `@devlog-entry [description]` | devlog, manual, comprehensive |
-| `devlog-summary` | Documentation | Generate complete session analysis and summary | `@devlog-summary` | devlog, automatic, session, analysis |
-| `devlog-quick` | Documentation | Create streamlined devlog updates | `@devlog-quick "brief description"` | devlog, quick, update |
-| `find-prompts` | Prompt Management | Search for prompts by keyword or category | `@find-prompts "keyword"` | search, discovery, find |
-| `list-prompts` | Prompt Management | Display all available prompts by category | `@list-prompts [category]` | list, overview, catalog |
-| `prompt-help` | Prompt Management | Get detailed help for specific prompts | `@prompt-help "prompt-name"` | help, usage, instructions |
-| `related-prompts` | Prompt Management | Find prompts related to a specific prompt | `@related-prompts "prompt-name"` | related, similar, workflow |
-| `git-commit-push` | Development Workflow | Complete git workflow: add, commit, and push | `@git-commit-push` | git, commit, push, workflow, version-control |
-
-## Categories
-
-### Documentation
-Prompts for creating, updating, and managing project documentation.
-- **devlog-entry**: Detailed manual documentation entries
-- **devlog-summary**: Comprehensive session summaries
-- **devlog-quick**: Quick progress updates
-
-### Prompt Management
-Prompts for discovering, managing, and getting help with the prompt system itself.
-- **find-prompts**: Search and discover prompts by criteria
-- **list-prompts**: Browse all available prompts
-- **prompt-help**: Get detailed usage instructions
-- **related-prompts**: Find connected and workflow-related prompts
-
-### Development Workflow
-Prompts for common development tasks and version control operations.
-- **git-commit-push**: Complete git workflow with structured commit messages
-
-## Usage Patterns
-
-### Devlog Workflow
-1. **During development**: Use `@devlog-quick` for brief updates
-2. **After major work**: Use `@devlog-entry` for comprehensive documentation
-3. **End of session**: Use `@devlog-summary` for complete analysis
-
-### Discovery Workflow
-1. **Find prompts**: `@find-prompts "documentation"` to find all doc-related prompts
-2. **Get help**: `@prompt-help "devlog-entry"` for detailed usage instructions
-3. **Explore related**: `@related-prompts "devlog-entry"` to find similar prompts
-4. **Browse all**: `@list-prompts` to see complete catalog
-
-### Prompt Management Workflow
-1. **Discover**: Use `@find-prompts` to search by keyword or category
-2. **Learn**: Use `@prompt-help` to understand specific prompts
-3. **Connect**: Use `@related-prompts` to find workflow connections
-4. **Browse**: Use `@list-prompts` for comprehensive overview
-
-## Maintenance
-
-### Adding New Prompts
-1. Create prompt file with standardized metadata header
-2. Update this registry with new entry
-3. Test prompt functionality
-4. Document in devlog
-
-### Metadata Standards
-All prompts should include:
-- `name`: Prompt identifier
-- `category`: Logical grouping
-- `tags`: Searchable keywords
-- `created`: Creation date
-- `updated`: Last modification date
-- `usage`: Example usage syntax
-- `related`: Related prompt names
-
-## Statistics
-- **Total Prompts**: 8
-- **Categories**: 3 (Documentation, Prompt Management, Development Workflow)
-- **Last Updated**: 2024-01-12
+| Command | Purpose |
+|---------|---------|
+| `@list-prompts` | Browse all prompts by category |
+| `@find-prompts "keyword"` | Search for prompts by keyword or category |
+| `@prompt-help "name"` | Get detailed help for a specific prompt |
+| `@related-prompts "name"` | Find related prompts |
+| `@update-prompt-registry` | Regenerate this registry |
 
 ---
 
-*This registry is maintained automatically and manually. Use the prompt-manager agent for interactive discovery and management.*
+## All Prompts
+
+| Name | Category | Description | Usage |
+|------|----------|-------------|-------|
+| add-logging | Logging | Add structured logging to existing code | `@add-logging [file or module]` |
+| add-tests | Testing | Generate comprehensive test suite for existing code | `@add-tests [file or module to test]` |
+| code-review | Code Review | Technical code review for quality and bugs that runs pre-commit | `@code-review` |
+| code-review-fix | Code Review | Process to fix bugs found in manual/AI code review | `@code-review-fix` |
+| code-review-hackathon | Code Review | Comprehensive hackathon submission review based on official judging criteria | `@code-review-hackathon` |
+| create-prd | Documentation | Create a Product Requirements Document from conversation | `@create-prd [output-filename]` |
+| devlog-entry | Documentation | Create comprehensive devlog entries with detailed technical information, decision rationale, and impact analysis | `@devlog-entry [optional description]` |
+| devlog-quick | Documentation | Create streamlined devlog entries for quick progress updates while maintaining documentation standards | `@devlog-quick "brief description"` |
+| devlog-summary | Documentation | Analyze entire conversation and create comprehensive session summary with all progress, decisions, and insights | `@devlog-summary` |
+| execute | Development Workflow | Execute an implementation plan | `@execute [path-to-plan]` |
+| execution-report | Development Workflow | Generate implementation report for system review | `@execution-report` |
+| find-prompts | Prompt Management | Search for prompts by keyword, category, or purpose with intelligent matching | `@find-prompts "keyword or category"` |
+| git-commit-push | Development Workflow | Comprehensive git workflow prompt that handles staging, committing with structured messages, and pushing to origin with error handling | `@git-commit-push` |
+| implement-fix | Development Workflow | Implement fix from RCA document for GitHub issue | `@implement-fix [github-issue-id]` |
+| list-prompts | Prompt Management | Display all available prompts organized by category with descriptions and usage examples | `@list-prompts [optional category]` |
+| new-feature | Development | Create a complete feature with automatic testing and logging | `@new-feature [feature description]` |
+| plan-feature | Planning | Create comprehensive feature plan with deep codebase analysis and research | `@plan-feature [feature description]` |
+| prime | Setup | Load Project Context | `@prime` |
+| prompt-help | Prompt Management | Get detailed help and usage instructions for a specific prompt | `@prompt-help "prompt-name"` |
+| quality-check | Development | Run all quality checks and fix any issues found | `@quality-check [optional: specific file or directory]` |
+| quickstart | Setup | Kiro CLI Quick Start Wizard | `@quickstart` |
+| rca | Analysis | Analyze and document root cause for a GitHub issue | `@rca [github-issue-id]` |
+| related-prompts | Prompt Management | Find prompts related to or work well with a specific prompt | `@related-prompts "prompt-name"` |
+| system-review | Analysis | Analyze implementation against plan for process improvements | `@system-review` |
+| update-prompt-registry | Prompt Management | Automatically scan prompts directory and regenerate PROMPT-REGISTRY.md | `@update-prompt-registry` |
+
+---
+
+## Categories
+
+### Analysis (2 prompts)
+Prompts for analyzing code, processes, and issues.
+
+- **rca**: Analyze and document root cause for a GitHub issue
+- **system-review**: Analyze implementation against plan for process improvements
+
+### Code Review (3 prompts)
+Prompts for reviewing code quality, bugs, and standards.
+
+- **code-review**: Technical code review for quality and bugs that runs pre-commit
+- **code-review-fix**: Process to fix bugs found in manual/AI code review
+- **code-review-hackathon**: Comprehensive hackathon submission review based on official judging criteria
+
+### Development (3 prompts)
+Prompts for feature development and quality assurance.
+
+- **new-feature**: Create a complete feature with automatic testing and logging
+- **quality-check**: Run all quality checks and fix any issues found
+- **add-tests**: Generate comprehensive test suite for existing code
+
+### Development Workflow (4 prompts)
+Prompts for managing development workflows and git operations.
+
+- **execute**: Execute an implementation plan
+- **execution-report**: Generate implementation report for system review
+- **git-commit-push**: Comprehensive git workflow prompt that handles staging, committing with structured messages, and pushing to origin with error handling
+- **implement-fix**: Implement fix from RCA document for GitHub issue
+
+### Documentation (4 prompts)
+Prompts for creating and maintaining project documentation.
+
+- **create-prd**: Create a Product Requirements Document from conversation
+- **devlog-entry**: Create comprehensive devlog entries with detailed technical information, decision rationale, and impact analysis
+- **devlog-quick**: Create streamlined devlog entries for quick progress updates while maintaining documentation standards
+- **devlog-summary**: Analyze entire conversation and create comprehensive session summary with all progress, decisions, and insights
+
+### Logging (1 prompt)
+Prompts for adding structured logging to code.
+
+- **add-logging**: Add structured logging to existing code
+
+### Planning (1 prompt)
+Prompts for planning features and implementations.
+
+- **plan-feature**: Create comprehensive feature plan with deep codebase analysis and research
+
+### Prompt Management (5 prompts)
+Prompts for discovering and managing other prompts.
+
+- **find-prompts**: Search for prompts by keyword, category, or purpose with intelligent matching
+- **list-prompts**: Display all available prompts organized by category with descriptions and usage examples
+- **prompt-help**: Get detailed help and usage instructions for a specific prompt
+- **related-prompts**: Find prompts related to or work well with a specific prompt
+- **update-prompt-registry**: Automatically scan prompts directory and regenerate PROMPT-REGISTRY.md
+
+### Setup (2 prompts)
+Prompts for initial project setup and configuration.
+
+- **prime**: Load Project Context
+- **quickstart**: Kiro CLI Quick Start Wizard
+
+### Testing (1 prompt)
+Prompts for creating and managing tests.
+
+- **add-tests**: Generate comprehensive test suite for existing code
+
+---
+
+## Usage Patterns
+
+### Discovery Workflow
+1. `@list-prompts` - Browse all available prompts
+2. `@find-prompts "keyword"` - Search for specific functionality
+3. `@prompt-help "name"` - Get detailed usage instructions
+4. `@related-prompts "name"` - Find complementary prompts
+
+### Development Workflow
+1. `@plan-feature` - Plan new feature implementation
+2. `@execute` - Execute the implementation plan
+3. `@quality-check` - Validate code quality
+4. `@git-commit-push` - Commit and push changes
+5. `@devlog-entry` - Document the work
+
+### Quality Workflow
+1. `@new-feature` - Create feature with built-in quality
+2. `@add-tests` - Add comprehensive tests
+3. `@add-logging` - Add structured logging
+4. `@quality-check` - Run all quality checks
+
+### Issue Resolution Workflow
+1. `@rca` - Analyze root cause of issue
+2. `@implement-fix` - Implement the fix
+3. `@execution-report` - Document implementation
+4. `@system-review` - Review process improvements
+
+---
+
+## Maintenance
+
+### Updating This Registry
+
+Run `@update-prompt-registry` to automatically:
+- Scan all prompt files in `.kiro/prompts/`
+- Extract metadata from YAML frontmatter
+- Organize prompts by category
+- Regenerate this file with current information
+
+### Adding New Prompts
+
+1. Create new `.md` file in `.kiro/prompts/`
+2. Include YAML frontmatter with required metadata:
+   ```yaml
+   ---
+   name: prompt-name
+   category: Category Name
+   tags: [tag1, tag2, tag3]
+   description: Brief description
+   created: YYYY-MM-DD
+   updated: YYYY-MM-DD
+   usage: "@prompt-name [arguments]"
+   related: [other-prompt, another-prompt]
+   ---
+   ```
+3. Run `@update-prompt-registry` to update this file
+
+### Required Metadata Fields
+
+- **name**: Unique identifier for the prompt
+- **category**: Logical grouping (e.g., Documentation, Development, Testing)
+- **tags**: Searchable keywords
+- **description**: Brief purpose statement
+- **usage**: How to invoke the prompt
+- **created**: Creation date (YYYY-MM-DD)
+- **updated**: Last modification date (YYYY-MM-DD)
+- **related**: Array of related prompt names
+
+---
+
+## Statistics
+
+- **Total Prompts**: 25
+- **Categories**: 7
+- **Most Common Category**: Prompt Management (5 prompts)
+- **Last Registry Update**: 2026-01-14
+
+---
+
+*This registry is automatically generated. Do not edit manually. Use `@update-prompt-registry` to update.*
