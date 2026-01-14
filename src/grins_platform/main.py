@@ -410,3 +410,278 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# ============================================================================
+# STRUCTURED LOGGING DEMONSTRATION
+# ============================================================================
+# The following section demonstrates structured logging with hybrid dotted
+# namespace pattern, added to showcase logging capabilities without modifying
+# the existing MyPy demonstration code above.
+# ============================================================================
+
+# ruff: noqa: TRY301, E402
+"""
+Structured Logging Examples
+
+This section demonstrates:
+- Request ID correlation
+- Domain-specific event logging
+- Exception handling with stack traces
+- LoggerMixin for class-based logging
+"""
+
+import time as time_module
+
+from grins_platform.logging import (
+    DomainLogger,
+    LoggerMixin,
+    clear_request_id,
+    get_logger,
+    set_request_id,
+)
+
+# Get structured logger
+structured_logger = get_logger(__name__)
+
+
+class UserRegistrationService(LoggerMixin):
+    """Example service demonstrating LoggerMixin for structured logging."""
+
+    DOMAIN = "user"  # Domain for this service
+
+    def register_user(self, email: str, source: str = "api") -> dict[str, str]:
+        """
+        Register a new user with structured logging.
+
+        Args:
+            email: User email address
+            source: Registration source
+
+        Returns:
+            User registration result
+        """
+        # Log registration started
+        self.log_started("registration", email=email, source=source)
+
+        try:
+            # Simulate registration process
+            time_module.sleep(0.01)  # Simulate processing time
+
+            # Validate email format (simple example)
+            if "@" not in email:
+                self.log_rejected(
+                    "registration", reason="invalid_email_format", email=email,
+                )
+                msg = "Invalid email format"
+                raise ValueError(msg)
+
+            # Log validation success
+            self.log_validated("email_format", email=email)
+
+            # Simulate user creation
+            user_id = f"user_{hash(email) % 10000}"
+
+            # Log successful completion
+            self.log_completed("registration", user_id=user_id, email=email)
+
+        except Exception as error:
+            # Log failure with exception details
+            self.log_failed("registration", error=error, email=email)
+            raise
+        else:
+            return {"user_id": user_id, "email": email, "status": "registered"}
+
+
+class DatabaseConnectionService(LoggerMixin):
+    """Example database service with structured logging."""
+
+    DOMAIN = "database"
+
+    def connect(self, host: str = "localhost", port: int = 5432) -> bool:
+        """
+        Connect to database with logging.
+
+        Args:
+            host: Database host
+            port: Database port
+
+        Returns:
+            Connection success status
+        """
+        self.log_started("connection", host=host, port=port)
+
+        try:
+            # Simulate connection attempt
+            time_module.sleep(0.01)
+
+            # Simulate connection success
+            self.log_completed("connection", host=host, port=port, duration_ms=10)
+
+        except Exception as error:
+            self.log_failed("connection", error=error, host=host, port=port)
+            raise
+        else:
+            return True
+
+
+def demonstrate_api_logging(endpoint: str, method: str = "GET") -> dict[str, str]:
+    """
+    Demonstrate API request logging using domain helpers.
+
+    Args:
+        endpoint: API endpoint
+        method: HTTP method
+
+    Returns:
+        API response simulation
+    """
+    # Set request ID for correlation
+    request_id = set_request_id()
+
+    try:
+        # Log API request started
+        DomainLogger.api_event(
+            structured_logger, "processing", "started",
+            endpoint=endpoint, method=method, request_id=request_id,
+        )
+
+        # Simulate request processing
+        time_module.sleep(0.01)
+
+        # Log successful completion
+        DomainLogger.api_event(
+            structured_logger,
+            "processing",
+            "completed",
+            endpoint=endpoint,
+            method=method,
+            status_code=200,
+            duration_ms=10,
+        )
+
+    except Exception as error:
+        # Log API failure
+        DomainLogger.api_event(
+            structured_logger,
+            "processing",
+            "failed",
+            endpoint=endpoint,
+            method=method,
+            error=str(error),
+        )
+        raise
+    else:
+        return {"status": "success", "endpoint": endpoint, "request_id": request_id}
+    finally:
+        # Clear request ID
+        clear_request_id()
+
+
+def demonstrate_validation_logging(data: dict[str, str]) -> bool:
+    """
+    Demonstrate validation logging patterns.
+
+    Args:
+        data: Data to validate
+
+    Returns:
+        Validation result
+    """
+    try:
+        # Log validation started
+        DomainLogger.validation_event(
+            structured_logger, "user_data", "started",
+            fields=list(data.keys()),
+        )
+
+        # Validate required fields
+        required_fields = ["name", "email"]
+        missing_fields = [field for field in required_fields if field not in data]
+
+        if missing_fields:
+            # Log validation rejection
+            DomainLogger.validation_event(
+                structured_logger, "user_data", "rejected",
+                reason="missing_required_fields",
+                missing_fields=missing_fields,
+            )
+            return False
+
+        # Log validation success
+        DomainLogger.validation_event(
+            structured_logger, "user_data", "validated", fields=list(data.keys()),
+        )
+
+    except Exception as error:
+        # Log validation failure
+        DomainLogger.validation_event(
+            structured_logger, "user_data", "failed", error=str(error),
+        )
+        raise
+    else:
+        return True
+
+
+def demonstrate_structured_logging() -> None:
+    """Demonstrate structured logging patterns."""
+    structured_logger.info("logging_demo.startup_started", version="1.0.0")
+
+    try:
+        # Initialize services
+        user_service = UserRegistrationService()
+        db_service = DatabaseConnectionService()
+
+        # Demonstrate database connection logging
+        structured_logger.info("logging_demo.database_initialization_started")
+        _ = db_service.connect()
+        structured_logger.info("logging_demo.database_initialization_completed")
+
+        # Demonstrate user registration logging
+        structured_logger.info("logging_demo.user_operations_started")
+
+        # Successful registration
+        result = user_service.register_user("alice@example.com", source="web")
+        structured_logger.info("logging_demo.user_created", **result)
+
+        # Failed registration (invalid email)
+        try:
+            _ = user_service.register_user("invalid-email", source="api")
+        except ValueError:
+            structured_logger.info("logging_demo.invalid_registration_handled")
+
+        # Demonstrate API request logging
+        structured_logger.info("logging_demo.api_demo_started")
+        api_result = demonstrate_api_logging("/users", "POST")
+        structured_logger.info("logging_demo.api_demo_completed", **api_result)
+
+        # Demonstrate validation logging
+        structured_logger.info("logging_demo.validation_demo_started")
+
+        # Valid data
+        valid_data = {"name": "Bob", "email": "bob@example.com"}
+        is_valid = demonstrate_validation_logging(valid_data)
+        structured_logger.info(
+            "logging_demo.validation_result",
+            is_valid=is_valid,
+            data_type="valid",
+        )
+
+        # Invalid data
+        invalid_data = {"name": "Charlie"}  # Missing email
+        is_valid = demonstrate_validation_logging(invalid_data)
+        structured_logger.info(
+            "logging_demo.validation_result",
+            is_valid=is_valid,
+            data_type="invalid",
+        )
+
+        structured_logger.info("logging_demo.startup_completed", status="success")
+
+    except Exception as error:
+        structured_logger.exception(
+            "logging_demo.startup_failed",
+            error=str(error),
+            error_type=error.__class__.__name__,
+        )
+        raise

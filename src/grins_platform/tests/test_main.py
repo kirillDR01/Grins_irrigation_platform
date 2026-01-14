@@ -8,6 +8,7 @@ This test suite covers:
 - Async testing capabilities with pytest-asyncio
 - Error handling and edge cases
 - Type safety validation
+- Structured logging functionality
 """
 
 import json
@@ -16,15 +17,21 @@ from typing import cast
 from unittest.mock import Mock, patch
 
 import pytest
+from _pytest.logging import LogCaptureFixture
 
 from grins_platform.main import (
+    DatabaseConnectionService,
     FileManager,
     ProcessingResult,
     ProcessingStatus,
     Serializable,
     StringProcessor,
     User,
+    UserRegistrationService,
+    demonstrate_api_logging,
+    demonstrate_structured_logging,
     demonstrate_type_narrowing,
+    demonstrate_validation_logging,
     main,
     process_users_with_validation,
 )
@@ -567,6 +574,101 @@ class TestIntegration:
             assert loaded_user.id == original_user.id
             assert loaded_user.name == original_user.name
             assert loaded_user.email == original_user.email
+
+
+# ============================================================================
+# STRUCTURED LOGGING TESTS
+# ============================================================================
+# Tests for the structured logging demonstration added to main.py
+# ============================================================================
+
+
+class TestUserRegistrationService:
+    """Test UserRegistrationService with structured logging."""
+
+    def test_successful_registration(self, caplog: LogCaptureFixture) -> None:
+        """Test successful user registration logs correctly."""
+        service = UserRegistrationService()
+        result = service.register_user("test@example.com", source="web")
+
+        assert result["email"] == "test@example.com"
+        assert result["status"] == "registered"
+        assert "user_id" in result
+
+        # Verify logging occurred
+        assert len(caplog.records) > 0
+
+    def test_failed_registration_invalid_email(
+        self, caplog: LogCaptureFixture,
+    ) -> None:
+        """Test failed registration with invalid email logs correctly."""
+        service = UserRegistrationService()
+
+        with pytest.raises(ValueError, match="Invalid email format"):
+            service.register_user("invalid-email", source="api")
+
+        # Verify error logging occurred
+        assert len(caplog.records) > 0
+
+
+class TestDatabaseConnectionService:
+    """Test DatabaseConnectionService with structured logging."""
+
+    def test_successful_connection(self, caplog: LogCaptureFixture) -> None:
+        """Test successful database connection logs correctly."""
+        service = DatabaseConnectionService()
+        result = service.connect(host="localhost", port=5432)
+
+        assert result is True
+
+        # Verify logging occurred
+        assert len(caplog.records) > 0
+
+
+class TestLoggingDemonstrations:
+    """Test logging demonstration functions."""
+
+    def test_demonstrate_api_logging(self, caplog: LogCaptureFixture) -> None:
+        """Test API logging demonstration."""
+        result = demonstrate_api_logging("/test", "GET")
+
+        assert result["status"] == "success"
+        assert result["endpoint"] == "/test"
+        assert "request_id" in result
+
+        # Verify logging occurred
+        assert len(caplog.records) > 0
+
+    def test_demonstrate_validation_logging_valid(
+        self, caplog: LogCaptureFixture,
+    ) -> None:
+        """Test validation logging with valid data."""
+        data = {"name": "Test", "email": "test@example.com"}
+        result = demonstrate_validation_logging(data)
+
+        assert result is True
+
+        # Verify logging occurred
+        assert len(caplog.records) > 0
+
+    def test_demonstrate_validation_logging_invalid(
+        self, caplog: LogCaptureFixture,
+    ) -> None:
+        """Test validation logging with invalid data."""
+        data = {"name": "Test"}  # Missing email
+        result = demonstrate_validation_logging(data)
+
+        assert result is False
+
+        # Verify logging occurred
+        assert len(caplog.records) > 0
+
+    def test_demonstrate_structured_logging(self, caplog: LogCaptureFixture) -> None:
+        """Test complete structured logging demonstration."""
+        demonstrate_structured_logging()
+
+        # Verify logging occurred throughout the demonstration
+        assert len(caplog.records) > 0
 
 
 if __name__ == "__main__":

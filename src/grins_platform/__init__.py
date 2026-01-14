@@ -1,5 +1,6 @@
 """
-Grins Irrigation Platform - Business optimization platform with AI-powered development tools.
+Grins Irrigation Platform - Business optimization platform with AI-powered
+development tools.
 
 This package provides tools and utilities for optimizing irrigation business operations,
 including customer management, scheduling, billing, and operational workflows.
