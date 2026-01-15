@@ -17,7 +17,7 @@ import uuid
 import pytest
 from _pytest.logging import LogCaptureFixture
 
-from grins_platform.logging import (
+from grins_platform.log_config import (
     DomainLogger,
     LoggerMixin,
     clear_request_id,

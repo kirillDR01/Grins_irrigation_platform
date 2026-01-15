@@ -433,7 +433,7 @@ This section demonstrates:
 
 import time as time_module
 
-from grins_platform.logging import (
+from grins_platform.log_config import (
     DomainLogger,
     LoggerMixin,
     clear_request_id,

@@ -123,35 +123,48 @@ uv run bandit -r src/
 
 ## 🐳 Docker Development
 
-### Services
+This project uses an **optimized Docker setup** following uv best practices for maximum performance:
 
-The Docker Compose setup includes:
+- ✅ Official uv images (pre-optimized by Astral)
+- ✅ Cache mounts (3-10x faster rebuilds)
+- ✅ Bytecode compilation (5-15% faster startup)
+- ✅ Multi-stage builds (smaller images)
+- ✅ Non-root user (security)
+- ✅ Database-ready (PostgreSQL/Redis configs included)
 
-- **app**: Main application container
-- **postgres**: PostgreSQL database
-- **redis**: Redis cache/session store
-
-### Commands
+### Quick Start
 
 ```bash
-# Start all services
-docker-compose up --build
+# Build and run
+docker-compose up
 
-# Start in background
-docker-compose up -d --build
+# Run in background
+docker-compose up -d
 
 # View logs
 docker-compose logs -f app
 
-# Execute commands in container
-docker-compose exec app uv run python src/grins_platform/main.py
-
 # Stop services
 docker-compose down
-
-# Rebuild and restart
-docker-compose up --build --force-recreate
 ```
+
+### Development Mode
+
+```bash
+# Run with hot reload and debug logging
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+### Adding Databases
+
+PostgreSQL and Redis configurations are included but commented out. To enable:
+
+1. Open `docker-compose.yml`
+2. Uncomment the `postgres` and/or `redis` service blocks
+3. Uncomment the corresponding volume definitions
+4. Run `docker-compose up`
+
+**For detailed Docker documentation, see [DOCKER.md](DOCKER.md)**
 
 ## 📦 Dependencies
 

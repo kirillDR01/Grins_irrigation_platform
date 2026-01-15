@@ -1,5 +1,17 @@
 -- Initialize Grins Irrigation Platform Database
 -- This script sets up the initial database structure
+--
+-- USAGE:
+-- This script is automatically executed when PostgreSQL is enabled in docker-compose.yml
+-- It runs on first container startup via the docker-entrypoint-initdb.d mechanism
+--
+-- TO ENABLE:
+-- 1. Uncomment the 'postgres' service in docker-compose.yml
+-- 2. Uncomment the 'postgres_data' volume
+-- 3. Run: docker-compose up
+-- 4. This script will initialize the database automatically
+--
+-- NOTE: Currently PostgreSQL is commented out in docker-compose.yml (not in use)
 
 -- Create extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

@@ -108,24 +108,25 @@ ENVIRONMENT=development
 LOG_LEVEL=INFO
 DEBUG=true
 
-# Database Configuration
-DATABASE_URL=postgresql://grins_user:grins_password@localhost:5432/grins_platform
+# Application Configuration
+API_HOST=0.0.0.0
+API_PORT=8000
 
-# Redis Configuration
-REDIS_URL=redis://localhost:6379/0
-
-# Security
+# Security (CHANGE IN PRODUCTION!)
 SECRET_KEY=your-secret-key-change-in-production
 JWT_SECRET_KEY=your-jwt-secret-key-change-in-production
 
-# API Configuration
-API_HOST=0.0.0.0
-API_PORT=8000
+# Database Configuration (Uncomment when enabling PostgreSQL in docker-compose.yml)
+# DATABASE_URL=postgresql://grins_user:grins_password@postgres:5432/grins_platform
+
+# Redis Configuration (Uncomment when enabling Redis in docker-compose.yml)
+# REDIS_URL=redis://redis:6379/0
 
 # External Services
 # Add your external service configurations here
 EOF
     print_success ".env file created"
+    print_warning "Database and Redis configs are commented out (not in use yet)"
 else
     print_warning ".env file already exists, skipping creation"
 fi
@@ -153,11 +154,22 @@ echo "Next steps:"
 echo "  1. Review and update the .env file with your configuration"
 echo "  2. Run the application: uv run python src/grins_platform/main.py"
 echo "  3. Run tests: uv run pytest"
-echo "  4. Start development server: uv run uvicorn grins_platform.main:app --reload"
+echo "  4. Use dev script: ./scripts/dev.sh <command>"
 echo ""
-echo "For Docker development:"
-echo "  1. Build and start services: docker-compose up --build"
-echo "  2. Run in background: docker-compose up -d"
-echo "  3. View logs: docker-compose logs -f app"
+echo "For Docker development (optimized with uv best practices):"
+echo "  1. Build image: ./scripts/dev.sh docker-build"
+echo "  2. Start services: ./scripts/dev.sh docker-dev"
+echo "  3. Start in background: ./scripts/dev.sh docker-dev-bg"
+echo "  4. View logs: ./scripts/dev.sh docker-logs"
+echo "  5. Stop services: ./scripts/dev.sh docker-stop"
+echo ""
+echo "Docker features:"
+echo "  • Official uv images (Python 3.12)"
+echo "  • Cache mounts (3-10x faster rebuilds)"
+echo "  • Bytecode compilation (faster startup)"
+echo "  • Multi-stage builds (smaller images)"
+echo "  • Non-root user (security)"
+echo ""
+echo "See DOCKER.md for comprehensive Docker documentation"
 echo ""
 echo "Happy coding! 🚀"

@@ -2,92 +2,78 @@ version: '3.8'
 
 services:
   app:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
+      cache_from:
+        - grins-platform:latest
+    image: grins-platform:latest
     container_name: grins-platform-app
     ports:
       - "8000:8000"
     volumes:
-      - .:/app
-      - /app/.venv  # Exclude venv from volume mount for performance
+      # Mount source code for development (hot reload)
+      - ./src:/app/src:ro
+      - ./config:/app/config:ro
+      # Preserve container's virtual environment
+      - /app/.venv
+      # Persistent output and logs
       - app_output:/app/output
+      - app_logs:/app/logs
     environment:
       - PYTHONPATH=/app/src
       - ENVIRONMENT=development
       - LOG_LEVEL=INFO
-    command: python src/grins_platform/main.py
-    depends_on:
-      - postgres
-      - redis
-    networks:
-      - grins-network
     restart: unless-stopped
+    # Uncomment when adding databases:
+    # depends_on:
+    #   - postgres
+    #   - redis
 
-  postgres:
-    image: postgres:15-alpine
-    container_name: grins-platform-db
-    environment:
-      POSTGRES_DB: grins_platform
-      POSTGRES_USER: grins_user
-      POSTGRES_PASSWORD: grins_password
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
-    networks:
-      - grins-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U grins_user -d grins_platform"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # =========================================================================
+  # Database Services (Commented - Uncomment when needed)
+  # =========================================================================
+  
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: grins-platform-db
+  #   environment:
+  #     POSTGRES_DB: grins_platform
+  #     POSTGRES_USER: grins_user
+  #     POSTGRES_PASSWORD: grins_password
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #     - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U grins_user -d grins_platform"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
-  redis:
-    image: redis:7-alpine
-    container_name: grins-platform-cache
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - grins-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Development tools container
-  dev-tools:
-    build: 
-      context: .
-      dockerfile: Dockerfile
-    container_name: grins-platform-dev
-    volumes:
-      - .:/app
-      - /app/.venv
-    environment:
-      - PYTHONPATH=/app/src
-      - ENVIRONMENT=development
-    command: tail -f /dev/null  # Keep container running
-    networks:
-      - grins-network
-    profiles:
-      - dev
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: grins-platform-cache
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
 volumes:
-  postgres_data:
-    driver: local
-  redis_data:
-    driver: local
   app_output:
     driver: local
-
-networks:
-  grins-network:
-    driver: bridge
+  app_logs:
+    driver: local
+  # Uncomment when adding databases:
+  # postgres_data:
+  #   driver: local
+  # redis_data:
+  #   driver: local

@@ -1,0 +1,24 @@
+version: '3.8'
+
+# Development override for docker-compose.yml
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder  # Use builder stage for dev tools
+    volumes:
+      # Mount entire project for development
+      - .:/app
+      # Preserve container's virtual environment
+      - /app/.venv
+    environment:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - PYTHONDONTWRITEBYTECODE=1  # Don't write .pyc files
+    # Default command - can be overridden
+    command: python src/grins_platform/main.py
+    # Uncomment for auto-reload with uvicorn:
+    # command: uvicorn grins_platform.main:app --host 0.0.0.0 --port 8000 --reload

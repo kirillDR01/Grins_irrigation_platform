@@ -69,9 +69,10 @@ case "$1" in
         ;;
     
     "docker-build")
-        print_status "Building Docker image..."
-        docker build -t grins-platform:latest .
+        print_status "Building optimized Docker image with BuildKit..."
+        DOCKER_BUILDKIT=1 docker build -t grins-platform:latest .
         print_success "Docker image built successfully"
+        docker images grins-platform:latest --format "Size: {{.Size}}"
         ;;
     
     "docker-run")
@@ -81,21 +82,43 @@ case "$1" in
     
     "docker-dev")
         print_status "Starting development environment with Docker Compose..."
-        docker-compose up --build
+        docker-compose up
+        ;;
+    
+    "docker-dev-enhanced")
+        print_status "Starting enhanced development environment with hot reload..."
+        docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
         ;;
     
     "docker-dev-bg")
         print_status "Starting development environment in background..."
-        docker-compose up -d --build
+        docker-compose up -d
         print_success "Services started in background"
-        print_warning "View logs with: docker-compose logs -f"
-        print_warning "Stop services with: docker-compose down"
+        print_warning "View logs: docker-compose logs -f app"
+        print_warning "Stop services: ./scripts/dev.sh docker-stop"
         ;;
     
     "docker-stop")
         print_status "Stopping Docker services..."
         docker-compose down
         print_success "Services stopped"
+        ;;
+    
+    "docker-logs")
+        print_status "Showing Docker logs..."
+        docker-compose logs -f app
+        ;;
+    
+    "docker-shell")
+        print_status "Opening shell in Docker container..."
+        docker-compose exec app /bin/bash
+        ;;
+    
+    "docker-clean")
+        print_status "Cleaning Docker resources..."
+        docker-compose down -v
+        docker system prune -f
+        print_success "Docker cleanup completed"
         ;;
     
     "install")
@@ -153,11 +176,15 @@ case "$1" in
         echo "  clean          - Clean up development artifacts"
         echo ""
         echo "Docker commands:"
-        echo "  docker-build   - Build Docker image"
-        echo "  docker-run     - Run application in Docker"
-        echo "  docker-dev     - Start development environment"
-        echo "  docker-dev-bg  - Start development environment in background"
-        echo "  docker-stop    - Stop Docker services"
+        echo "  docker-build       - Build optimized Docker image (with BuildKit)"
+        echo "  docker-run         - Run application in Docker"
+        echo "  docker-dev         - Start development environment"
+        echo "  docker-dev-enhanced - Start with hot reload (dev mode)"
+        echo "  docker-dev-bg      - Start development environment in background"
+        echo "  docker-stop        - Stop Docker services"
+        echo "  docker-logs        - View Docker logs"
+        echo "  docker-shell       - Open shell in Docker container"
+        echo "  docker-clean       - Clean Docker resources"
         echo ""
         echo "Package management:"
         echo "  install <pkg>     - Install a new package"
