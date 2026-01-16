@@ -164,23 +164,28 @@ uv run ruff check src/ && uv run mypy src/ && uv run pyright src/ && uv run pyte
 
 ## Deployment Process
 
-### Containerization
-- Multi-stage Docker builds
-- Non-root user execution
-- Health checks enabled
-
-### Services
+### Development Environment
+- Docker Compose for local development
 - PostgreSQL 15-alpine
 - Redis 7-alpine
-- Application container
+- Hot-reload enabled
+
+### Production Deployment (Railway + Vercel)
+- **Backend**: Railway (FastAPI, PostgreSQL, Redis, Celery)
+- **Frontend**: Vercel (React/Next.js)
+- **External Services**: Twilio, Stripe, Google Maps, SendGrid
+- **Deployment Time**: 15-30 minutes (after code is ready)
+- **Cost**: $50-100/month for full production system
+
+See `DEPLOYMENT_GUIDE.md` for comprehensive deployment instructions.
 
 ### Commands
 ```bash
-# Build and run
+# Local development
 docker-compose up --build
 
-# Production build
-docker build -t grins-platform:latest .
+# Production deployment
+# See DEPLOYMENT_GUIDE.md for Railway + Vercel setup
 ```
 
 ## Performance Requirements
