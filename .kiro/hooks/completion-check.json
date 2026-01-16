@@ -1,0 +1,12 @@
+{
+  "name": "Quality Completion Check",
+  "version": "1.0.0",
+  "description": "Validates code quality before marking a task as complete - the final safety net in the quality workflow",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "echo '🔍 Running Quality Checks...' && echo '' && echo '📋 Ruff Check...' && uv run ruff check src/ && echo '' && echo '🔷 MyPy Check...' && uv run mypy src/ && echo '' && echo '🔶 Pyright Check...' && uv run pyright src/ && echo '' && echo '🧪 Running Tests...' && uv run pytest -v && echo '' && echo '═══════════════════════════════════════' && echo '✅ All quality checks passed!' && echo '═══════════════════════════════════════' || (echo '' && echo '═══════════════════════════════════════' && echo '❌ Quality checks failed. Please fix issues before completing.' && echo '═══════════════════════════════════════' && exit 1)"
+  }
+}

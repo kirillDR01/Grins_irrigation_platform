@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Quality Standards Reminder",
+  "description": "Displays quality standards at the start of each agent session to reinforce the 'Quality by Default' philosophy",
+  "version": "1",
+  "when": {
+    "type": "agentSpawn"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "╔══════════════════════════════════════════════════════════════╗\n║                    QUALITY STANDARDS                         ║\n╠══════════════════════════════════════════════════════════════╣\n║  Every task MUST include:                                    ║\n║                                                              ║\n║  1. LOGGING                                                  ║\n║     • LoggerMixin for classes                                ║\n║     • log_started, log_completed, log_failed                 ║\n║     • Pattern: {domain}.{component}.{action}_{state}         ║\n║                                                              ║\n║  2. TESTING                                                  ║\n║     • Unit tests for public methods                          ║\n║     • Integration tests for workflows                        ║\n║     • Tests in tests/test_{module}.py                        ║\n║                                                              ║\n║  3. QUALITY CHECKS                                           ║\n║     • uv run ruff check --fix src/                           ║\n║     • uv run mypy src/                                       ║\n║     • uv run pyright src/                                    ║\n║     • uv run pytest -v                                       ║\n║                                                              ║\n║  Task is NOT complete until all checks pass with zero errors ║\n╚══════════════════════════════════════════════════════════════╝\n\nThis reminder ensures that quality standards are top-of-mind at the start of every development session. Remember: this is a passive reminder to follow best practices. The actual enforcement comes from the steering files and workflow."
+  }
+}
