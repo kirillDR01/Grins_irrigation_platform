@@ -2,8 +2,12 @@
 
 ## CRITICAL: Quality by Default
 
-Every code change MUST include logging, testing, and pass quality checks.
+Every code change MUST include logging, testing, pass quality checks, AND be validated end-to-end.
 This is not optional. These are requirements for task completion.
+
+**Fundamental Principle: If you can't demonstrate it working, it's not done.**
+
+Unit tests prove code correctness. End-to-end validation proves the feature works as users experience it.
 
 ---
 
@@ -82,58 +86,300 @@ def process_data(data: dict) -> Result:
 
 ---
 
-## 2. Comprehensive Testing (MANDATORY)
+## 2. Three-Tier Testing Strategy (MANDATORY)
+
+Every task MUST include all three tiers of testing. This is not optional.
+
+### The Three Tiers
+
+| Tier | Test Type | Purpose | Dependencies | Marker |
+|------|-----------|---------|--------------|--------|
+| 1 | **Unit Tests** | Code correctness in isolation | Mocked | `@pytest.mark.unit` |
+| 2 | **Functional Tests** | Feature works as user expects | Real infrastructure | `@pytest.mark.functional` |
+| 3 | **Integration Tests** | New code works with existing system | Real system | `@pytest.mark.integration` |
 
 ### Framework
 - Use `pytest` with `pytest-cov`, `pytest-asyncio`
-- Run tests: `uv run pytest -v`
+- Run all tests: `uv run pytest -v`
+- Run by tier: `uv run pytest -m unit`, `uv run pytest -m functional`, `uv run pytest -m integration`
 - Run with coverage: `uv run pytest --cov=src/grins_platform`
 
-### Test File Location
-- Tests live in `tests/` subdirectory within each module
-- Test files mirror source: `module.py` → `tests/test_module.py`
-- Shared fixtures in `tests/conftest.py`
+### Test File Organization
+```
+src/grins_platform/tests/
+├── __init__.py
+├── conftest.py              # Shared fixtures for all test types
+├── unit/                    # Tier 1: Isolated tests with mocks
+│   ├── __init__.py
+│   ├── test_customer_service.py
+│   └── test_property_service.py
+├── functional/              # Tier 2: Real infrastructure tests
+│   ├── __init__.py
+│   ├── test_customer_workflows.py
+│   └── test_property_workflows.py
+└── integration/             # Tier 3: Cross-component tests
+    ├── __init__.py
+    ├── test_customer_api_integration.py
+    └── test_full_lifecycle.py
+```
 
-### Test Types Required
+---
 
-**Unit Tests** (Always required):
-- Test each public method individually
-- Test with valid inputs
-- Test with invalid inputs
-- Test edge cases
+### Tier 1: Unit Tests (MANDATORY)
 
-**Integration Tests** (For workflows):
-- Test complete workflows
-- Test component interactions
-- Test with real dependencies when possible
+**Purpose**: Test individual functions/methods in isolation with mocked dependencies.
 
-**Property-Based Tests** (For data transformations):
-- Use `pytest.mark.parametrize` for multiple inputs
-- Test serialization round-trips
-- Test invariants across input ranges
+**Characteristics**:
+- Fast execution (milliseconds)
+- No external dependencies (database, network, filesystem)
+- All dependencies are mocked
+- Test one thing at a time
 
-**Mock Tests** (For external dependencies):
-- Mock external APIs
-- Mock database connections
-- Mock file system operations
+**When to Write**: For every public method in services, repositories, and utilities.
+
+**Example**:
+```python
+@pytest.mark.unit
+class TestCustomerService:
+    """Unit tests for CustomerService with mocked repository."""
+    
+    @pytest.fixture
+    def mock_repository(self) -> Mock:
+        return Mock(spec=CustomerRepository)
+    
+    @pytest.fixture
+    def service(self, mock_repository: Mock) -> CustomerService:
+        return CustomerService(mock_repository)
+    
+    async def test_create_customer_calls_repository(
+        self, service: CustomerService, mock_repository: Mock
+    ) -> None:
+        """Test that create_customer calls repository.create."""
+        mock_repository.find_by_phone.return_value = None
+        mock_repository.create.return_value = Mock(id=uuid4())
+        
+        data = CustomerCreate(first_name="John", last_name="Doe", phone="6125551234")
+        await service.create_customer(data)
+        
+        mock_repository.create.assert_called_once()
+    
+    async def test_create_customer_rejects_duplicate_phone(
+        self, service: CustomerService, mock_repository: Mock
+    ) -> None:
+        """Test that duplicate phone raises DuplicateCustomerError."""
+        mock_repository.find_by_phone.return_value = Mock(id=uuid4())
+        
+        data = CustomerCreate(first_name="John", last_name="Doe", phone="6125551234")
+        
+        with pytest.raises(DuplicateCustomerError):
+            await service.create_customer(data)
+```
+
+---
+
+### Tier 2: Functional Tests (MANDATORY)
+
+**Purpose**: Test features as a user would experience them, with real infrastructure.
+
+**Characteristics**:
+- Uses real database (PostgreSQL)
+- Uses real services (not mocked)
+- Tests complete user workflows
+- Verifies data persists correctly
+
+**When to Write**: For every feature that a user would interact with.
+
+**Example**:
+```python
+@pytest.mark.functional
+class TestCustomerWorkflows:
+    """Functional tests for customer workflows with real database."""
+    
+    @pytest.fixture
+    async def db_session(self) -> AsyncGenerator[AsyncSession, None]:
+        """Get real database session."""
+        async for session in get_db_session():
+            yield session
+    
+    async def test_create_customer_workflow(self, db_session: AsyncSession) -> None:
+        """Test complete customer creation as user would experience it."""
+        # Arrange
+        repo = CustomerRepository(db_session)
+        service = CustomerService(repo)
+        unique_phone = f"612555{uuid4().int % 10000:04d}"
+        
+        # Act - Create customer
+        data = CustomerCreate(
+            first_name="Functional",
+            last_name="Test",
+            phone=unique_phone,
+            email="functional@test.com",
+        )
+        result = await service.create_customer(data)
+        
+        # Assert - Customer created with correct data
+        assert result.id is not None
+        assert result.first_name == "Functional"
+        assert result.phone == unique_phone
+        
+        # Assert - Customer persisted in database
+        fetched = await repo.get_by_id(result.id)
+        assert fetched is not None
+        assert fetched.first_name == "Functional"
+        
+        # Assert - Defaults applied correctly (Property 5)
+        assert result.sms_opt_in is False
+        assert result.email_opt_in is False
+    
+    async def test_duplicate_phone_rejected(self, db_session: AsyncSession) -> None:
+        """Test that duplicate phone is rejected as user would experience."""
+        repo = CustomerRepository(db_session)
+        service = CustomerService(repo)
+        unique_phone = f"612555{uuid4().int % 10000:04d}"
+        
+        # Create first customer
+        data1 = CustomerCreate(first_name="First", last_name="User", phone=unique_phone)
+        await service.create_customer(data1)
+        
+        # Try to create second customer with same phone
+        data2 = CustomerCreate(first_name="Second", last_name="User", phone=unique_phone)
+        
+        with pytest.raises(DuplicateCustomerError):
+            await service.create_customer(data2)
+```
+
+---
+
+### Tier 3: Integration Tests (MANDATORY)
+
+**Purpose**: Verify new code works correctly with existing system components.
+
+**Characteristics**:
+- Tests interactions between multiple components
+- Uses real database with seeded test data
+- Verifies new features don't break existing functionality
+- Tests complete API flows end-to-end
+
+**When to Write**: For every task that adds or modifies functionality.
+
+**Example**:
+```python
+@pytest.mark.integration
+class TestCustomerAPIIntegration:
+    """Integration tests for customer API with existing system."""
+    
+    @pytest.fixture
+    async def seeded_database(self, db_session: AsyncSession) -> list[Customer]:
+        """Seed database with existing customers."""
+        repo = CustomerRepository(db_session)
+        customers = []
+        for i in range(5):
+            customer = await repo.create(
+                first_name=f"Existing{i}",
+                last_name="Customer",
+                phone=f"612555{1000 + i}",
+            )
+            customers.append(customer)
+        await db_session.commit()
+        return customers
+    
+    async def test_new_customer_works_with_existing(
+        self, client: AsyncClient, seeded_database: list[Customer]
+    ) -> None:
+        """Test creating new customer doesn't affect existing customers."""
+        # Create new customer via API
+        response = await client.post("/api/v1/customers", json={
+            "first_name": "New",
+            "last_name": "Customer",
+            "phone": "6125559999",
+        })
+        assert response.status_code == 201
+        
+        # Verify existing customers still accessible
+        for existing in seeded_database:
+            response = await client.get(f"/api/v1/customers/{existing.id}")
+            assert response.status_code == 200
+            assert response.json()["first_name"] == existing.first_name
+    
+    async def test_list_includes_new_and_existing(
+        self, client: AsyncClient, seeded_database: list[Customer]
+    ) -> None:
+        """Test list endpoint returns both new and existing customers."""
+        # Create new customer
+        await client.post("/api/v1/customers", json={
+            "first_name": "New",
+            "last_name": "Customer", 
+            "phone": "6125559999",
+        })
+        
+        # List all customers
+        response = await client.get("/api/v1/customers")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert data["total"] == len(seeded_database) + 1
+```
+
+---
+
+### Task Testing Sub-Task Pattern
+
+Every major implementation task MUST include a dedicated testing sub-task that covers all three tiers:
+
+```markdown
+## Task X: [Feature Name]
+
+- [ ] X.1 Implement [component A]
+- [ ] X.2 Implement [component B]
+- [ ] X.3 Implement [component C]
+- [ ] X.4 Write tests (unit, functional, integration)
+      - Unit tests: Test each method in isolation with mocks
+      - Functional tests: Test feature workflows with real database
+      - Integration tests: Verify works with existing system
+```
+
+---
 
 ### Coverage Targets
-- Services: 85%+
-- API endpoints: 80%+
-- Utilities: 70%+
-- Models: 60%+
 
-### Test Naming
+| Component | Unit | Functional | Integration |
+|-----------|------|------------|-------------|
+| Services | 85%+ | 80%+ | 70%+ |
+| API endpoints | 80%+ | 85%+ | 80%+ |
+| Repositories | 80%+ | 70%+ | 60%+ |
+| Models | 60%+ | N/A | N/A |
+
+### Test Naming Convention
 ```python
-class TestMyService:
-    def test_operation_with_valid_input_returns_result(self):
-        """Test that operation returns expected result with valid input."""
-        
-    def test_operation_with_invalid_input_raises_validation_error(self):
-        """Test that operation raises ValidationError with invalid input."""
-        
-    def test_operation_logs_started_and_completed_events(self):
-        """Test that operation logs appropriate events."""
+# Unit tests
+def test_{method}_with_{condition}_returns_{expected}():
+def test_{method}_with_{condition}_raises_{exception}():
+
+# Functional tests  
+def test_{workflow}_as_user_would_experience():
+def test_{feature}_with_real_database():
+
+# Integration tests
+def test_{feature}_works_with_existing_{component}():
+def test_{new_feature}_does_not_break_{existing_feature}():
+```
+
+### Running Tests by Tier
+```bash
+# All tests
+uv run pytest -v
+
+# Unit tests only (fast)
+uv run pytest -m unit -v
+
+# Functional tests only (requires database)
+uv run pytest -m functional -v
+
+# Integration tests only (requires full system)
+uv run pytest -m integration -v
+
+# With coverage
+uv run pytest --cov=src/grins_platform --cov-report=term-missing
 ```
 
 ---
@@ -256,7 +502,11 @@ def process_payment(amount: Decimal, currency: str) -> PaymentResult:
 
 ## 6. Quality Workflow (MANDATORY)
 
-### The 5-Step Process
+### FUNDAMENTAL PRINCIPLE: If You Can't Demonstrate It Working, It's Not Done
+
+Unit tests verify code correctness in isolation. End-to-end validation proves the feature works as a user would experience it. Both are required.
+
+### The 6-Step Process
 
 Every task follows this workflow:
 
@@ -285,12 +535,63 @@ Every task follows this workflow:
    ├── Fix all test failures
    └── Iterate until zero errors
 
-5. REPORT COMPLETION
+5. VALIDATE END-TO-END
+   ├── Start required infrastructure (database, services)
+   ├── Test the feature as a user would use it
+   ├── Verify real data flows through the system
+   └── Document validation steps performed
+
+6. REPORT COMPLETION
    ├── Summary of what was created
    ├── Test results (X/X passing)
    ├── Quality check results (zero violations)
+   ├── End-to-end validation results
    └── Ready for use
 ```
+
+### End-to-End Validation Strategies
+
+Choose the appropriate validation strategy based on what you're implementing:
+
+| Change Type | Validation Strategy | Example Commands |
+|-------------|---------------------|------------------|
+| **API Endpoints** | Start server + database, test via curl/httpie | `docker-compose up -d db` → `uv run uvicorn` → `curl localhost:8000/api/v1/...` |
+| **Database/Migrations** | Run migrations, verify tables exist, test queries | `alembic upgrade head` → verify schema → test CRUD |
+| **Services/Business Logic** | Integration tests with real dependencies | Start database, run service methods, verify results |
+| **CLI Tools/Scripts** | Run command, verify output and side effects | Execute script, check output, verify files/data created |
+| **Configuration Changes** | Start application, verify config loaded correctly | Start app, check logs for config values, test affected features |
+| **Background Jobs/Workers** | Start worker, trigger job, verify completion | Start Celery worker, enqueue task, check results |
+| **External Integrations** | Test with sandbox/staging APIs | Configure test credentials, make real API calls |
+
+### Validation Checklist by Component
+
+**API Endpoints:**
+- [ ] Server starts without errors
+- [ ] Endpoint responds to requests
+- [ ] Request validation works (reject bad input)
+- [ ] Response format matches schema
+- [ ] Database operations persist correctly
+- [ ] Error responses are appropriate
+
+**Database Changes:**
+- [ ] Migrations run successfully
+- [ ] Tables/columns created correctly
+- [ ] Constraints enforced (unique, foreign keys)
+- [ ] Indexes created for performance
+- [ ] Rollback works if needed
+
+**Services:**
+- [ ] Service instantiates correctly
+- [ ] Methods execute with real data
+- [ ] Errors handled appropriately
+- [ ] Logging captures key events
+- [ ] Side effects occur as expected
+
+**Configuration:**
+- [ ] Application starts with new config
+- [ ] Config values loaded correctly
+- [ ] Invalid config rejected with clear error
+- [ ] Defaults work when config omitted
 
 ### Task Completion Criteria
 
@@ -301,6 +602,8 @@ A task is NOT complete until:
 - ✅ MyPy reports zero errors
 - ✅ Pyright reports zero errors
 - ✅ All tests pass
+- ✅ End-to-end validation performed
+- ✅ Feature tested as a user would use it
 
 ---
 
@@ -325,8 +628,19 @@ uv run mypy src/
 uv run pyright src/
 uv run pytest -v
 
-# Full validation
+# Full validation (tests only)
 uv run ruff check src/ && uv run mypy src/ && uv run pyright src/ && uv run pytest -v
+
+# End-to-end validation (API)
+docker-compose up -d db                    # Start database
+uv run alembic upgrade head                # Run migrations
+uv run uvicorn grins_platform.main:app     # Start server
+curl http://localhost:8000/api/v1/...      # Test endpoints
+
+# End-to-end validation (Database)
+docker-compose up -d db                    # Start database
+uv run alembic upgrade head                # Run migrations
+docker exec -it grins-db psql -U grins -d grins_platform -c "\\dt"  # Verify tables
 ```
 
 ### File Structure

@@ -92,24 +92,42 @@ source .venv/bin/activate
 - **pytest-asyncio**: Async test support
 - **pytest-Faker**: Test data generation
 
-### Test Types
-| Type | Purpose | Location |
-|------|---------|----------|
-| Unit | Individual functions/methods | `tests/test_*.py` |
-| Integration | Component interactions | `tests/integration/` |
-| Property | Data transformations | `tests/test_*.py` |
-| API | Endpoint testing | `tests/test_*_api.py` |
+### Three-Tier Testing (MANDATORY)
+
+Every task MUST include all three tiers of testing:
+
+| Tier | Type | Purpose | Marker | Dependencies |
+|------|------|---------|--------|--------------|
+| 1 | **Unit** | Code correctness in isolation | `@pytest.mark.unit` | Mocked |
+| 2 | **Functional** | Feature works as user expects | `@pytest.mark.functional` | Real infrastructure |
+| 3 | **Integration** | New code works with existing system | `@pytest.mark.integration` | Real system |
+
+### Test Organization
+```
+tests/
+├── unit/           # Tier 1: Fast, isolated, mocked
+├── functional/     # Tier 2: Real database, user workflows
+└── integration/    # Tier 3: Cross-component, full system
+```
 
 ### Coverage Targets
-- Services: 85%+
-- API endpoints: 80%+
-- Utilities: 70%+
-- Models: 60%+
+
+| Component | Unit | Functional | Integration |
+|-----------|------|------------|-------------|
+| Services | 85%+ | 80%+ | 70%+ |
+| API endpoints | 80%+ | 85%+ | 80%+ |
+| Repositories | 80%+ | 70%+ | 60%+ |
+| Models | 60%+ | N/A | N/A |
 
 ### Running Tests
 ```bash
 # All tests
 uv run pytest -v
+
+# By tier
+uv run pytest -m unit -v           # Fast, no dependencies
+uv run pytest -m functional -v     # Requires database
+uv run pytest -m integration -v    # Requires full system
 
 # With coverage
 uv run pytest --cov=src/grins_platform --cov-report=term-missing
@@ -117,6 +135,9 @@ uv run pytest --cov=src/grins_platform --cov-report=term-missing
 # Specific file
 uv run pytest tests/test_my_module.py -v
 ```
+
+### Reference
+See `code-standards.md` for detailed testing patterns and examples.
 
 ## Logging Strategy
 

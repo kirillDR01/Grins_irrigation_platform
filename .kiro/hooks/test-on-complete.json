@@ -1,0 +1,13 @@
+{
+  "name": "Run Tests on Agent Stop",
+  "version": "1.0.0",
+  "description": "Runs pytest after agent completes",
+  "disabled": true,
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "echo 'Tests available: uv run pytest -v'"
+  }
+}

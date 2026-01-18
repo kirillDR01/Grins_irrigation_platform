@@ -1,0 +1,13 @@
+{
+  "name": "Quality Check on Submit",
+  "version": "1.0.0",
+  "description": "Quick lint check when user submits a prompt",
+  "disabled": true,
+  "when": {
+    "type": "promptSubmit"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "echo 'Prompt received'"
+  }
+}

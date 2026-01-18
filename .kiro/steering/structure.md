@@ -29,11 +29,12 @@ grins-irrigation-platform/
 │       ├── repositories/       # Data access
 │       │   ├── __init__.py
 │       │   └── user_repository.py
-│       └── tests/              # Test files
+│       └── tests/              # Test files (three-tier structure)
 │           ├── __init__.py
 │           ├── conftest.py     # Shared fixtures
-│           ├── test_logging.py
-│           └── test_main.py
+│           ├── unit/           # Tier 1: Isolated tests with mocks
+│           ├── functional/     # Tier 2: Real infrastructure tests
+│           └── integration/    # Tier 3: Cross-component tests
 │
 ├── app/                        # Legacy/reference code
 │   └── core/                   # Core utilities
@@ -123,14 +124,34 @@ from grins_platform.repositories.user_repository import UserRepository
 
 ## Test File Structure
 
-### Location
-Tests live in `tests/` subdirectory within each package:
+### Three-Tier Test Organization
+Tests are organized into three tiers based on their purpose and dependencies:
+
 ```
-src/grins_platform/
-├── user_service.py
-└── tests/
-    └── test_user_service.py
+src/grins_platform/tests/
+├── __init__.py
+├── conftest.py              # Shared fixtures for all test types
+├── unit/                    # Tier 1: Isolated tests with mocks
+│   ├── __init__.py
+│   ├── test_customer_service.py
+│   └── test_property_service.py
+├── functional/              # Tier 2: Real infrastructure tests
+│   ├── __init__.py
+│   ├── test_customer_workflows.py
+│   └── test_property_workflows.py
+└── integration/             # Tier 3: Cross-component tests
+    ├── __init__.py
+    ├── test_customer_api_integration.py
+    └── test_full_lifecycle.py
 ```
+
+### Test Tiers
+
+| Tier | Directory | Purpose | Marker |
+|------|-----------|---------|--------|
+| 1 | `tests/unit/` | Isolated tests with mocked dependencies | `@pytest.mark.unit` |
+| 2 | `tests/functional/` | Real infrastructure, user workflows | `@pytest.mark.functional` |
+| 3 | `tests/integration/` | Cross-component, existing system | `@pytest.mark.integration` |
 
 ### Test File Template
 ```python
@@ -142,6 +163,7 @@ from unittest.mock import Mock, patch
 from grins_platform.{module} import {Class}
 
 
+@pytest.mark.unit  # or @pytest.mark.functional or @pytest.mark.integration
 class Test{Class}:
     """Test suite for {Class}."""
     
@@ -177,6 +199,21 @@ def sample_user_data() -> dict:
         "name": "Test User",
         "email": "test@example.com",
     }
+```
+
+### Running Tests by Tier
+```bash
+# All tests
+uv run pytest -v
+
+# Unit tests only (fast, no dependencies)
+uv run pytest -m unit -v
+
+# Functional tests (requires database)
+uv run pytest -m functional -v
+
+# Integration tests (requires full system)
+uv run pytest -m integration -v
 ```
 
 ## Configuration Files

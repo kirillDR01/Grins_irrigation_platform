@@ -1,0 +1,14 @@
+{
+  "name": "Auto Lint on Save",
+  "version": "1.0.0",
+  "description": "Automatically runs ruff check --fix on Python files when edited",
+  "disabled": true,
+  "when": {
+    "type": "fileEdited",
+    "patterns": ["src/**/*.py"]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Run ruff check --fix on the edited file if needed."
+  }
+}

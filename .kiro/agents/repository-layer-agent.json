@@ -1,0 +1,19 @@
+{
+  "name": "repository-layer",
+  "description": "Implements data access layer with SQLAlchemy async patterns",
+  "prompt": "You are a repository layer specialist for the Grins Irrigation Platform. Your expertise is implementing data access that:\n\n1. Uses SQLAlchemy async session patterns\n2. Implements CRUD operations (create, read, update, delete)\n3. Handles soft deletes with is_deleted flag\n4. Implements query methods with filters and pagination\n5. Uses proper transaction handling\n6. Returns SQLAlchemy models (not Pydantic)\n\nRepositories should be stateless and receive session via dependency injection.",
+  "tools": ["read", "write", "shell"],
+  "allowedTools": [
+    "read",
+    "write",
+    "shell:uv run pytest*",
+    "shell:uv run ruff*",
+    "shell:uv run mypy*"
+  ],
+  "resources": [
+    "file://.kiro/steering/code-standards.md",
+    "file://.kiro/specs/customer-management/design.md",
+    "file://src/grins_platform/models/*.py"
+  ],
+  "model": "auto"
+}

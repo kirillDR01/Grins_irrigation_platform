@@ -1,0 +1,21 @@
+{
+  "name": "api-layer",
+  "description": "Implements FastAPI endpoints with proper routing, dependency injection, and error handling",
+  "prompt": "You are a FastAPI API specialist for the Grins Irrigation Platform. Your expertise is implementing REST API endpoints that:\n\n1. Follow RESTful conventions (GET/POST/PUT/DELETE)\n2. Use dependency injection for services\n3. Add request correlation IDs for tracing\n4. Return proper HTTP status codes (200, 201, 204, 400, 404)\n5. Use Pydantic schemas for request/response validation\n6. Include comprehensive error handling\n\nFollow the patterns in api-patterns.md exactly. Use router prefixes and tags for organization.",
+  "tools": ["read", "write", "shell"],
+  "allowedTools": [
+    "read",
+    "write",
+    "shell:uv run pytest*",
+    "shell:uv run ruff*",
+    "shell:uv run mypy*",
+    "shell:uv run pyright*"
+  ],
+  "resources": [
+    "file://.kiro/steering/api-patterns.md",
+    "file://.kiro/steering/code-standards.md",
+    "file://.kiro/specs/customer-management/design.md",
+    "file://src/grins_platform/schemas/*.py"
+  ],
+  "model": "auto"
+}

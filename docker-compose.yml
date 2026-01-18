@@ -24,34 +24,34 @@ services:
       - PYTHONPATH=/app/src
       - ENVIRONMENT=development
       - LOG_LEVEL=INFO
+      - DATABASE_URL=postgresql+asyncpg://grins_user:grins_password@postgres:5432/grins_platform
     restart: unless-stopped
-    # Uncomment when adding databases:
-    # depends_on:
-    #   - postgres
-    #   - redis
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   # =========================================================================
-  # Database Services (Commented - Uncomment when needed)
+  # Database Services
   # =========================================================================
   
-  # postgres:
-  #   image: postgres:15-alpine
-  #   container_name: grins-platform-db
-  #   environment:
-  #     POSTGRES_DB: grins_platform
-  #     POSTGRES_USER: grins_user
-  #     POSTGRES_PASSWORD: grins_password
-  #   ports:
-  #     - "5432:5432"
-  #   volumes:
-  #     - postgres_data:/var/lib/postgresql/data
-  #     - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "pg_isready -U grins_user -d grins_platform"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
+  postgres:
+    image: postgres:15-alpine
+    container_name: grins-platform-db
+    environment:
+      POSTGRES_DB: grins_platform
+      POSTGRES_USER: grins_user
+      POSTGRES_PASSWORD: grins_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grins_user -d grins_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # redis:
   #   image: redis:7-alpine
@@ -72,8 +72,7 @@ volumes:
     driver: local
   app_logs:
     driver: local
-  # Uncomment when adding databases:
-  # postgres_data:
-  #   driver: local
+  postgres_data:
+    driver: local
   # redis_data:
   #   driver: local
