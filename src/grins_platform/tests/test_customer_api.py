@@ -629,3 +629,420 @@ class TestUpdateCustomerFlags:
         assert data["is_red_flag"] is True
         assert data["is_slow_payer"] is True
         assert data["is_new_customer"] is False
+
+
+# =============================================================================
+# Task 8.2 Tests: GET /api/v1/customers/lookup/phone/{phone}
+# =============================================================================
+
+
+class TestLookupByPhone:
+    """Tests for GET /api/v1/customers/lookup/phone/{phone} endpoint."""
+
+    def test_lookup_by_phone_success(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+        sample_customer_response: CustomerResponse,
+    ) -> None:
+        """Test successful phone lookup returns 200."""
+        mock_service.lookup_by_phone.return_value = [sample_customer_response]
+
+        response = client.get("/api/v1/customers/lookup/phone/6125551234")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["phone"] == "6125551234"
+
+    def test_lookup_by_phone_not_found_returns_empty_array(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+    ) -> None:
+        """Test phone lookup with no results returns empty array."""
+        mock_service.lookup_by_phone.return_value = []
+
+        response = client.get("/api/v1/customers/lookup/phone/9999999999")
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_lookup_by_phone_partial_match(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+        sample_customer_response: CustomerResponse,
+    ) -> None:
+        """Test phone lookup with partial matching enabled."""
+        mock_service.lookup_by_phone.return_value = [sample_customer_response]
+
+        response = client.get(
+            "/api/v1/customers/lookup/phone/1234",
+            params={"partial": True},
+        )
+
+        assert response.status_code == 200
+        mock_service.lookup_by_phone.assert_called_once()
+        call_kwargs = mock_service.lookup_by_phone.call_args.kwargs
+        assert call_kwargs["partial_match"] is True
+
+    def test_lookup_by_phone_multiple_results(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+        sample_customer_response: CustomerResponse,
+    ) -> None:
+        """Test phone lookup returning multiple customers."""
+        customer2 = CustomerResponse(
+            id=uuid.uuid4(),
+            first_name="Jane",
+            last_name="Smith",
+            phone="6125551235",
+            email="jane@example.com",
+            status=CustomerStatus.ACTIVE,
+            is_priority=False,
+            is_red_flag=False,
+            is_slow_payer=False,
+            is_new_customer=True,
+            sms_opt_in=False,
+            email_opt_in=False,
+            lead_source=None,
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        )
+        mock_service.lookup_by_phone.return_value = [
+            sample_customer_response,
+            customer2,
+        ]
+
+        response = client.get(
+            "/api/v1/customers/lookup/phone/612555",
+            params={"partial": True},
+        )
+
+        assert response.status_code == 200
+        assert len(response.json()) == 2
+
+
+# =============================================================================
+# Task 8.3 Tests: GET /api/v1/customers/lookup/email/{email}
+# =============================================================================
+
+
+class TestLookupByEmail:
+    """Tests for GET /api/v1/customers/lookup/email/{email} endpoint."""
+
+    def test_lookup_by_email_success(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+        sample_customer_response: CustomerResponse,
+    ) -> None:
+        """Test successful email lookup returns 200."""
+        mock_service.lookup_by_email.return_value = [sample_customer_response]
+
+        response = client.get("/api/v1/customers/lookup/email/john.doe@example.com")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["email"] == "john.doe@example.com"
+
+    def test_lookup_by_email_not_found_returns_empty_array(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+    ) -> None:
+        """Test email lookup with no results returns empty array."""
+        mock_service.lookup_by_email.return_value = []
+
+        response = client.get("/api/v1/customers/lookup/email/notfound@example.com")
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_lookup_by_email_case_insensitive(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+        sample_customer_response: CustomerResponse,
+    ) -> None:
+        """Test email lookup is case-insensitive."""
+        mock_service.lookup_by_email.return_value = [sample_customer_response]
+
+        response = client.get("/api/v1/customers/lookup/email/JOHN.DOE@EXAMPLE.COM")
+
+        assert response.status_code == 200
+        mock_service.lookup_by_email.assert_called_once_with("JOHN.DOE@EXAMPLE.COM")
+
+
+# =============================================================================
+# Task 8.4 Tests: GET /api/v1/customers/{id}/service-history
+# =============================================================================
+
+
+class TestGetServiceHistory:
+    """Tests for GET /api/v1/customers/{id}/service-history endpoint."""
+
+    def test_get_service_history_success(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+        sample_customer_response: CustomerResponse,
+    ) -> None:
+        """Test successful service history retrieval returns 200."""
+        mock_service.get_service_history.return_value = ServiceHistorySummary(
+            total_jobs=10,
+            last_service_date=datetime.now(),
+            total_revenue=2500.0,
+        )
+
+        response = client.get(
+            f"/api/v1/customers/{sample_customer_response.id}/service-history",
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_jobs"] == 10
+        assert data["total_revenue"] == 2500.0
+        assert "last_service_date" in data
+
+    def test_get_service_history_not_found_returns_404(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+    ) -> None:
+        """Test service history for non-existent customer returns 404."""
+        customer_id = uuid.uuid4()
+        mock_service.get_service_history.side_effect = CustomerNotFoundError(
+            customer_id,
+        )
+
+        response = client.get(f"/api/v1/customers/{customer_id}/service-history")
+
+        assert response.status_code == 404
+
+    def test_get_service_history_no_jobs(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+        sample_customer_response: CustomerResponse,
+    ) -> None:
+        """Test service history for customer with no jobs."""
+        mock_service.get_service_history.return_value = ServiceHistorySummary(
+            total_jobs=0,
+            last_service_date=None,
+            total_revenue=0.0,
+        )
+
+        response = client.get(
+            f"/api/v1/customers/{sample_customer_response.id}/service-history",
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_jobs"] == 0
+        assert data["last_service_date"] is None
+        assert data["total_revenue"] == 0.0
+
+
+# =============================================================================
+# Task 8.5 Tests: POST /api/v1/customers/export
+# =============================================================================
+
+
+class TestExportCustomers:
+    """Tests for POST /api/v1/customers/export endpoint."""
+
+    def test_export_customers_success(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+    ) -> None:
+        """Test successful customer export returns CSV."""
+        csv_content = (
+            "id,first_name,last_name,phone,email,status,is_priority,"
+            "is_red_flag,is_slow_payer,is_new_customer,sms_opt_in,"
+            "email_opt_in,lead_source,created_at\n"
+            "123,John,Doe,6125551234,john@example.com,active,False,"
+            "False,False,True,False,False,website,2024-01-01T00:00:00\n"
+        )
+        mock_service.export_customers_csv.return_value = csv_content
+
+        response = client.post("/api/v1/customers/export")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "text/csv; charset=utf-8"
+        assert "attachment" in response.headers["content-disposition"]
+        assert "customers.csv" in response.headers["content-disposition"]
+
+    def test_export_customers_with_city_filter(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+    ) -> None:
+        """Test customer export with city filter."""
+        mock_service.export_customers_csv.return_value = "id,first_name\n"
+
+        response = client.post(
+            "/api/v1/customers/export",
+            params={"city": "Eden Prairie"},
+        )
+
+        assert response.status_code == 200
+        mock_service.export_customers_csv.assert_called_once()
+        call_kwargs = mock_service.export_customers_csv.call_args.kwargs
+        assert call_kwargs["city"] == "Eden Prairie"
+
+    def test_export_customers_with_limit(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+    ) -> None:
+        """Test customer export with custom limit."""
+        mock_service.export_customers_csv.return_value = "id,first_name\n"
+
+        response = client.post(
+            "/api/v1/customers/export",
+            params={"limit": 500},
+        )
+
+        assert response.status_code == 200
+        call_kwargs = mock_service.export_customers_csv.call_args.kwargs
+        assert call_kwargs["limit"] == 500
+
+    def test_export_customers_limit_exceeds_max_returns_422(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+    ) -> None:
+        """Test export with limit > 1000 returns 422."""
+        response = client.post(
+            "/api/v1/customers/export",
+            params={"limit": 2000},
+        )
+
+        assert response.status_code == 422
+
+
+# =============================================================================
+# Task 8.6 Tests: PUT /api/v1/customers/bulk/preferences
+# =============================================================================
+
+
+class TestBulkUpdatePreferences:
+    """Tests for PUT /api/v1/customers/bulk/preferences endpoint."""
+
+    def test_bulk_update_preferences_success(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+    ) -> None:
+        """Test successful bulk preference update returns 200."""
+        mock_service.bulk_update_preferences.return_value = {
+            "updated_count": 5,
+            "failed_count": 0,
+            "errors": [],
+        }
+
+        response = client.put(
+            "/api/v1/customers/bulk/preferences",
+            json={
+                "customer_ids": [str(uuid.uuid4()) for _ in range(5)],
+                "sms_opt_in": True,
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["updated_count"] == 5
+        assert data["failed_count"] == 0
+        assert data["errors"] == []
+
+    def test_bulk_update_preferences_partial_success(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+    ) -> None:
+        """Test bulk update with some failures."""
+        mock_service.bulk_update_preferences.return_value = {
+            "updated_count": 3,
+            "failed_count": 2,
+            "errors": [
+                {"customer_id": "123", "error": "Not found"},
+                {"customer_id": "456", "error": "Not found"},
+            ],
+        }
+
+        response = client.put(
+            "/api/v1/customers/bulk/preferences",
+            json={
+                "customer_ids": [str(uuid.uuid4()) for _ in range(5)],
+                "email_opt_in": True,
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["updated_count"] == 3
+        assert data["failed_count"] == 2
+        assert len(data["errors"]) == 2
+
+    def test_bulk_update_preferences_both_options(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+    ) -> None:
+        """Test bulk update with both SMS and email preferences."""
+        mock_service.bulk_update_preferences.return_value = {
+            "updated_count": 10,
+            "failed_count": 0,
+            "errors": [],
+        }
+
+        response = client.put(
+            "/api/v1/customers/bulk/preferences",
+            json={
+                "customer_ids": [str(uuid.uuid4()) for _ in range(10)],
+                "sms_opt_in": True,
+                "email_opt_in": False,
+            },
+        )
+
+        assert response.status_code == 200
+        call_kwargs = mock_service.bulk_update_preferences.call_args.kwargs
+        assert call_kwargs["sms_opt_in"] is True
+        assert call_kwargs["email_opt_in"] is False
+
+    def test_bulk_update_preferences_empty_ids_returns_422(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+    ) -> None:
+        """Test bulk update with empty customer_ids returns 422."""
+        response = client.put(
+            "/api/v1/customers/bulk/preferences",
+            json={
+                "customer_ids": [],
+                "sms_opt_in": True,
+            },
+        )
+
+        assert response.status_code == 422
+
+    def test_bulk_update_preferences_too_many_ids_returns_422(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+    ) -> None:
+        """Test bulk update with > 1000 customer_ids returns 422."""
+        response = client.put(
+            "/api/v1/customers/bulk/preferences",
+            json={
+                "customer_ids": [str(uuid.uuid4()) for _ in range(1001)],
+                "sms_opt_in": True,
+            },
+        )
+
+        assert response.status_code == 422

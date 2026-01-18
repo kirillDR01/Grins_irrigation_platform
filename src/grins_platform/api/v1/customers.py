@@ -12,10 +12,11 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID  # noqa: TC003 - Required at runtime for FastAPI path params
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from grins_platform.api.v1.dependencies import get_customer_service
 from grins_platform.exceptions import (
+    BulkOperationError,
     CustomerNotFoundError,
     DuplicateCustomerError,
 )
@@ -24,6 +25,8 @@ from grins_platform.models.enums import (
     CustomerStatus,  # noqa: TC001 - Required at runtime for FastAPI query params
 )
 from grins_platform.schemas.customer import (
+    BulkPreferencesUpdate,
+    BulkUpdateResponse,
     CustomerCreate,
     CustomerDetailResponse,
     CustomerFlagsUpdate,
@@ -31,6 +34,7 @@ from grins_platform.schemas.customer import (
     CustomerResponse,
     CustomerUpdate,
     PaginatedCustomerResponse,
+    ServiceHistorySummary,
 )
 from grins_platform.services.customer_service import (
     CustomerService,  # noqa: TC001 - Required at runtime for FastAPI DI
@@ -405,3 +409,233 @@ async def update_customer_flags(
     else:
         _endpoints.log_completed("update_flags", customer_id=str(customer_id))
         return result
+
+
+# =============================================================================
+# Task 8.2: GET /api/v1/customers/lookup/phone/{phone} - Lookup by Phone
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/lookup/phone/{phone}",
+    response_model=list[CustomerResponse],
+    summary="Lookup customers by phone",
+    description="Lookup customers by phone number with optional partial matching.",
+)
+async def lookup_by_phone(
+    phone: str,
+    service: Annotated[CustomerService, Depends(get_customer_service)],
+    partial: bool = Query(
+        default=False,
+        description="Enable partial phone number matching",
+    ),
+) -> list[CustomerResponse]:
+    """Lookup customers by phone number.
+
+    Args:
+        phone: Phone number to search for
+        service: Injected CustomerService
+        partial: If True, search for partial matches
+
+    Returns:
+        List of matching CustomerResponse objects (empty if none found)
+
+    Validates: Requirement 11.1, 11.3-11.5
+    """
+    phone_suffix = phone[-4:] if len(phone) >= 4 else phone
+    _endpoints.log_started("lookup_by_phone", phone=phone_suffix, partial=partial)
+
+    result = await service.lookup_by_phone(phone, partial_match=partial)
+
+    _endpoints.log_completed("lookup_by_phone", count=len(result))
+    return result
+
+
+# =============================================================================
+# Task 8.3: GET /api/v1/customers/lookup/email/{email} - Lookup by Email
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/lookup/email/{email}",
+    response_model=list[CustomerResponse],
+    summary="Lookup customers by email",
+    description="Lookup customers by email address (case-insensitive).",
+)
+async def lookup_by_email(
+    email: str,
+    service: Annotated[CustomerService, Depends(get_customer_service)],
+) -> list[CustomerResponse]:
+    """Lookup customers by email address.
+
+    Args:
+        email: Email address to search for
+        service: Injected CustomerService
+
+    Returns:
+        List of matching CustomerResponse objects (empty if none found)
+
+    Validates: Requirement 11.2, 11.3
+    """
+    _endpoints.log_started("lookup_by_email", email=email)
+
+    result = await service.lookup_by_email(email)
+
+    _endpoints.log_completed("lookup_by_email", count=len(result))
+    return result
+
+
+# =============================================================================
+# Task 8.4: GET /api/v1/customers/{id}/service-history - Get Service History
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/{customer_id}/service-history",
+    response_model=ServiceHistorySummary,
+    summary="Get customer service history",
+    description="Get service history summary for a customer.",
+)
+async def get_service_history(
+    customer_id: UUID,
+    service: Annotated[CustomerService, Depends(get_customer_service)],
+) -> ServiceHistorySummary:
+    """Get service history for a customer.
+
+    Args:
+        customer_id: UUID of the customer
+        service: Injected CustomerService
+
+    Returns:
+        ServiceHistorySummary with job count, last service date, and revenue
+
+    Raises:
+        HTTPException: 404 if customer not found
+
+    Validates: Requirement 7.1-7.8
+    """
+    _endpoints.log_started("get_service_history", customer_id=str(customer_id))
+
+    try:
+        result = await service.get_service_history(customer_id)
+    except CustomerNotFoundError as e:
+        _endpoints.log_rejected("get_service_history", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer not found: {e.customer_id}",
+        ) from e
+    else:
+        _endpoints.log_completed("get_service_history", customer_id=str(customer_id))
+        return result
+
+
+# =============================================================================
+# Task 8.5: POST /api/v1/customers/export - Export Customers CSV
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/export",
+    summary="Export customers to CSV",
+    description="Export customers to CSV format with optional city filter.",
+)
+async def export_customers(
+    service: Annotated[CustomerService, Depends(get_customer_service)],
+    city: str | None = Query(
+        default=None,
+        description="Filter by city",
+    ),
+    limit: int = Query(
+        default=1000,
+        ge=1,
+        le=1000,
+        description="Maximum records to export (max 1000)",
+    ),
+) -> Response:
+    """Export customers to CSV.
+
+    Args:
+        service: Injected CustomerService
+        city: Optional city filter
+        limit: Maximum records to export
+
+    Returns:
+        CSV file response
+
+    Validates: Requirement 12.1-12.2, 12.4
+    """
+    _endpoints.log_started("export_customers", city=city, limit=limit)
+
+    try:
+        csv_content = await service.export_customers_csv(city=city, limit=limit)
+    except BulkOperationError as e:
+        _endpoints.log_rejected("export_customers", reason="exceeds_limit")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    else:
+        _endpoints.log_completed("export_customers")
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": "attachment; filename=customers.csv",
+            },
+        )
+
+
+# =============================================================================
+# Task 8.6: PUT /api/v1/customers/bulk/preferences - Bulk Update Preferences
+# =============================================================================
+
+
+@router.put(  # type: ignore[untyped-decorator]
+    "/bulk/preferences",
+    response_model=BulkUpdateResponse,
+    summary="Bulk update communication preferences",
+    description="Update communication preferences for multiple customers at once.",
+)
+async def bulk_update_preferences(
+    data: BulkPreferencesUpdate,
+    service: Annotated[CustomerService, Depends(get_customer_service)],
+) -> BulkUpdateResponse:
+    """Bulk update communication preferences.
+
+    Args:
+        data: BulkPreferencesUpdate with customer IDs and preference values
+        service: Injected CustomerService
+
+    Returns:
+        BulkUpdateResponse with success/failure counts
+
+    Raises:
+        HTTPException: 400 if record count exceeds limit
+
+    Validates: Requirement 12.3-12.5
+    """
+    _endpoints.log_started("bulk_update_preferences", count=len(data.customer_ids))
+
+    try:
+        result = await service.bulk_update_preferences(
+            customer_ids=data.customer_ids,
+            sms_opt_in=data.sms_opt_in,
+            email_opt_in=data.email_opt_in,
+        )
+    except BulkOperationError as e:
+        _endpoints.log_rejected("bulk_update_preferences", reason="exceeds_limit")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    else:
+        _endpoints.log_completed(
+            "bulk_update_preferences",
+            updated_count=result["updated_count"],
+            failed_count=result["failed_count"],
+        )
+        return BulkUpdateResponse(
+            updated_count=result["updated_count"],
+            failed_count=result["failed_count"],
+            errors=result["errors"],
+        )

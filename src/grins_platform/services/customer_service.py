@@ -374,6 +374,49 @@ class CustomerService(LoggerMixin):
         self.log_completed("lookup_by_email", count=len(customers))
         return [CustomerResponse.model_validate(c) for c in customers]
 
+    async def get_service_history(
+        self,
+        customer_id: UUID,
+    ) -> ServiceHistorySummary:
+        """Get service history summary for a customer.
+
+        Args:
+            customer_id: UUID of the customer
+
+        Returns:
+            ServiceHistorySummary with job count, last service date, and revenue
+
+        Raises:
+            CustomerNotFoundError: If customer not found
+
+        Validates: Requirement 7.1-7.8, 8.1-8.4
+        """
+        self.log_started("get_service_history", customer_id=str(customer_id))
+
+        # Check customer exists
+        customer = await self.repository.get_by_id(customer_id)
+        if not customer:
+            self.log_rejected("get_service_history", reason="not_found")
+            raise CustomerNotFoundError(customer_id)
+
+        # Get service history summary from repository
+        summary = await self.repository.get_service_summary(customer_id)
+
+        self.log_completed(
+            "get_service_history",
+            customer_id=str(customer_id),
+            total_jobs=summary.total_jobs if summary else 0,
+        )
+
+        # Return summary or default empty summary
+        if summary:
+            return summary
+        return ServiceHistorySummary(
+            total_jobs=0,
+            last_service_date=None,
+            total_revenue=0.0,
+        )
+
     # =========================================================================
     # Task 5.3: Flag Management
     # =========================================================================

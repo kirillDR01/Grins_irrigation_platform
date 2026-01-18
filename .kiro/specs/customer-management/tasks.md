@@ -234,42 +234,42 @@
 
 ## Task 8: API Endpoints - Customer Operations
 
-- [ ] 8.1 Implement PUT /api/v1/customers/{id}/flags
+- [x] 8.1 Implement PUT /api/v1/customers/{id}/flags
   - Update customer flags
   - Return updated customer
   - Log flag changes
   - **Validates: Requirement 3.1-3.6**
 
-- [ ] 8.2 Implement GET /api/v1/customers/lookup/phone/{phone}
+- [x] 8.2 Implement GET /api/v1/customers/lookup/phone/{phone}
   - Lookup by phone with normalization
   - Support partial matching
   - Return empty array if not found
   - **Validates: Requirement 11.1, 11.3-11.5**
 
-- [ ] 8.3 Implement GET /api/v1/customers/lookup/email/{email}
+- [x] 8.3 Implement GET /api/v1/customers/lookup/email/{email}
   - Lookup by email case-insensitive
   - Return empty array if not found
   - **Validates: Requirement 11.2, 11.3**
 
-- [ ] 8.4 Implement GET /api/v1/customers/{id}/service-history
+- [x] 8.4 Implement GET /api/v1/customers/{id}/service-history
   - Get service history for customer
   - Support date range filtering
   - Support service type filtering
   - **Validates: Requirement 7.1-7.8**
 
-- [ ] 8.5 Implement POST /api/v1/customers/export
+- [x] 8.5 Implement POST /api/v1/customers/export
   - Export customers to CSV
   - Support city filter
   - Limit to 1000 records
   - **Validates: Requirement 12.1-12.2, 12.4**
 
-- [ ] 8.6 Implement PUT /api/v1/customers/bulk/preferences
+- [x] 8.6 Implement PUT /api/v1/customers/bulk/preferences
   - Bulk update communication preferences
   - Limit to 1000 customer IDs
   - Return success/failure counts
   - **Validates: Requirement 12.3-12.5**
 
-- [ ] 8.7 Write customer operations API tests
+- [x] 8.7 Write customer operations API tests
   - Test lookup endpoints
   - Test service history
   - Test bulk operations
@@ -277,38 +277,38 @@
 
 ## Task 9: API Endpoints - Properties
 
-- [ ] 9.1 Implement POST /api/v1/customers/{customer_id}/properties
+- [x] 9.1 Implement POST /api/v1/customers/{customer_id}/properties
   - Add property to customer
   - Handle primary flag
   - Validate all fields
   - **Validates: Requirement 2.1, 2.7-2.11**
 
-- [ ] 9.2 Implement GET /api/v1/customers/{customer_id}/properties
+- [x] 9.2 Implement GET /api/v1/customers/{customer_id}/properties
   - List all properties for customer
   - Include all property details
   - **Validates: Requirement 2.5**
 
-- [ ] 9.3 Implement GET /api/v1/properties/{id}
+- [x] 9.3 Implement GET /api/v1/properties/{id}
   - Get property by ID
   - Return 404 if not found
   - **Validates: Requirement 2.5**
 
-- [ ] 9.4 Implement PUT /api/v1/properties/{id}
+- [x] 9.4 Implement PUT /api/v1/properties/{id}
   - Update property
   - Validate all fields
   - **Validates: Requirement 2.2-2.4, 2.8-2.11**
 
-- [ ] 9.5 Implement DELETE /api/v1/properties/{id}
+- [x] 9.5 Implement DELETE /api/v1/properties/{id}
   - Delete property
   - Return 204 on success
   - **Validates: Requirement 2.6**
 
-- [ ] 9.6 Implement PUT /api/v1/properties/{id}/primary
+- [x] 9.6 Implement PUT /api/v1/properties/{id}/primary
   - Set property as primary
   - Clear other primary flags
   - **Validates: Requirement 2.7**
 
-- [ ] 9.7 Write property API tests
+- [x] 9.7 Write property API tests
   - Test all property endpoints
   - Test primary flag behavior
   - Test validation errors
@@ -316,31 +316,31 @@
 
 ## Task 10: Integration Testing
 
-- [ ] 10.1 Create test fixtures
+- [x] 10.1 Create test fixtures
   - Database fixtures for customers
   - Database fixtures for properties
   - Test client setup
   - **Validates: Requirement 9.5**
 
-- [ ] 10.2 Write customer workflow integration tests
+- [x] 10.2 Write customer workflow integration tests
   - Test complete customer lifecycle
   - Test customer with multiple properties
   - Test soft delete behavior
   - **Validates: Requirement 1.1-1.12**
 
-- [ ] 10.3 Write property workflow integration tests
+- [x] 10.3 Write property workflow integration tests
   - Test property CRUD workflow
   - Test primary property switching
   - Test cascade behavior
   - **Validates: Requirement 2.1-2.11**
 
-- [ ] 10.4 Write search and filter integration tests
+- [x] 10.4 Write search and filter integration tests
   - Test pagination with large datasets
   - Test all filter combinations
   - Test sorting options
   - **Validates: Requirement 4.1-4.7**
 
-- [ ] 10.5 Write performance tests
+- [ ]* 10.5 Write performance tests
   - Test customer lookup under 50ms
   - Test list operation under 200ms
   - Test concurrent operations
@@ -348,52 +348,52 @@
 
 ## Task 11: Property-Based Tests
 
-- [ ] 11.1 Write phone normalization property tests
+- [x] 11.1 Write phone normalization property tests
   - Test idempotence: normalize(normalize(x)) == normalize(x)
   - Test various input formats
   - **PBT: Property 6**
 
-- [ ] 11.2 Write zone count bounds property tests
+- [x] 11.2 Write zone count bounds property tests
   - Test all values in valid range accepted
   - Test values outside range rejected
   - **PBT: Property 4**
 
-- [ ] 11.3 Write phone uniqueness property tests
+- [x] 11.3 Write phone uniqueness property tests
   - Test no two active customers share phone
   - Test after normalization
   - **PBT: Property 1**
 
-- [ ] 11.4 Write primary property uniqueness tests
+- [x] 11.4 Write primary property uniqueness tests
   - Test at most one primary per customer
   - Test setting new primary clears old
   - **PBT: Property 3**
 
-- [ ] 11.5 Write communication opt-in default tests
+- [x] 11.5 Write communication opt-in default tests
   - Test new customers default to opted-out
   - Test both SMS and email
   - **PBT: Property 5**
 
 ## Task 12: Documentation and Quality
 
-- [ ] 12.1 Run quality checks
+- [x] 12.1 Run quality checks
   - Run ruff check and fix all issues
   - Run mypy and fix all type errors
   - Run pyright and fix all errors
   - **Validates: Code Standards**
 
-- [ ] 12.2 Verify test coverage
+- [x] 12.2 Verify test coverage
   - Run pytest with coverage
   - Ensure 85%+ coverage on services
   - Ensure 80%+ coverage on API
   - **Validates: Code Standards**
 
-- [ ] 12.3 Update API documentation
+- [x] 12.3 Update API documentation
   - Verify OpenAPI spec is complete
   - Add example requests/responses
   - Document error codes
   - **Validates: Requirement 10.5**
 
-- [ ] 12.4 Update DEVLOG
+- [x] 12.4 Update DEVLOG
   - Document implementation progress
   - Document decisions made
   - Document any deviations from design
