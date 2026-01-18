@@ -41,6 +41,7 @@ Update the devlog automatically when you have completed:
 2. **Follow the comprehensive format** specified in devlog-rules.md
 3. **Be thorough and detailed** - include technical details, decisions, and context
 4. **Focus on value** - document information that will be useful for future reference
+5. **INSERT AT TOP** - New entries MUST be added at the top of the file, immediately after the "## Recent Activity" header (newest first, oldest last)
 
 ## Automatic Trigger Reminder
 

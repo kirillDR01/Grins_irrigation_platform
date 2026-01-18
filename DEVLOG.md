@@ -13,6 +13,152 @@ This repository contains documentation and examples for Kiro development workflo
 
 ## Recent Activity
 
+## [2025-01-17 19:30] - CONFIG: Updated DEVLOG Steering Rules for Newest-First Entry Ordering
+
+### What Was Accomplished
+- Updated `.kiro/steering/devlog-rules.md` with new "Entry Ordering (CRITICAL)" section
+- Updated `.kiro/steering/auto-devlog.md` with step 5 for top-insertion rule
+- Established rule that new entries MUST be added at the TOP of DEVLOG.md
+- Reorganized existing DEVLOG entries to follow newest-first, oldest-last ordering
+
+### Technical Details
+- **devlog-rules.md**: Added dedicated section explaining insertion point after "## Recent Activity"
+- **auto-devlog.md**: Added step 5: "INSERT AT TOP - New entries MUST be added at the top"
+- **Entry Order**: Newest entries first, oldest entries last (reverse chronological)
+- **Insertion Point**: Immediately after the "## Recent Activity" header
+
+### Decision Rationale
+- **Visibility**: Most recent work should be immediately visible when opening the file
+- **Usability**: Developers and stakeholders want to see latest progress first
+- **Consistency**: Enforced through steering rules for all future updates
+
+### Resources and References
+- Updated: `.kiro/steering/devlog-rules.md`
+- Updated: `.kiro/steering/auto-devlog.md`
+
+---
+
+## [2025-01-17 18:00] - PLANNING: Created Phase 2 Implementation Plan and Project Completion Analysis
+
+### What Was Accomplished
+- Created comprehensive `PHASE-2-PLANNING.md` document outlining next development phase
+- Analyzed full project scope from Platform_Architecture_Ideas.md (7 phases, 393 requirements)
+- Calculated project completion percentages: Phase 1 = ~15%, Phase 2 = ~30% of total project
+- Identified three features for Phase 2: Service Catalog, Job Request Management, Staff Management
+- Designed database schemas for jobs, service_offerings, and staff tables
+- Planned 26 new API endpoints across three features
+- Created 31-task implementation roadmap for Days 8-14 (Jan 17-23)
+
+### Technical Details
+- **Phase 2 Features**:
+  - Service Catalog: 6 endpoints, pricing models (flat, zone_based, hourly, custom)
+  - Job Request Management: 12 endpoints, status workflow, auto-categorization
+  - Staff Management: 8 endpoints, availability tracking, role management
+- **Database Design**:
+  - `service_offerings` table with pricing models and equipment requirements
+  - `jobs` table with status workflow and customer/property relationships
+  - `staff` table with roles, skills, certifications, and availability
+- **Project Completion Analysis**:
+  - Total project: 7 phases, 393 requirements, 6 dashboards
+  - Phase 1 complete: ~15% (Customer Management foundation)
+  - Phase 2 complete: ~30% (adds Job/Service/Staff management)
+  - Remaining 70%: Scheduling, Communications, Payments, Accounting, Marketing
+
+### Decision Rationale
+- **Job Request Management First**: Natural progression from Customer Management, core business value
+- **Service Catalog**: Required for job pricing and duration estimation
+- **Staff Management**: Foundation for scheduling in Phase 3
+- **No UI Phase Planned**: Current focus is backend API; UI would be separate effort
+
+### Impact and Dependencies
+- **Clear Roadmap**: Day-by-day plan for Phase 2 implementation
+- **Foundation for Phase 3**: Jobs + Staff enable scheduling features
+- **Target Metrics**: 42 total endpoints, 700+ tests after Phase 2
+
+### Resources and References
+- Created: `PHASE-2-PLANNING.md` (comprehensive planning document)
+- Analyzed: `Platform_Architecture_Ideas.md` (full project scope)
+- Reference: `PHASE-1-PLANNING.md` (Phase 1 structure)
+
+**Status: PHASE 2 PLANNING COMPLETE** 🎯
+
+---
+
+## [2025-01-17 16:00] - FEATURE: Completed Customer Management Spec - All 12 Tasks Done
+
+### What Was Accomplished
+- Completed all 12 tasks in the customer-management spec
+- Implemented full Customer and Property API with CRUD operations
+- Created comprehensive test suite with 482 passing tests
+- Achieved 95% overall code coverage
+- All quality checks passing (Ruff, MyPy)
+- Performed end-to-end functional testing with real database and API server
+
+### Technical Details
+- **Tasks Completed**: 12/12 (Task 10.5 performance tests marked optional)
+- **Test Count**: 482 unit/integration tests passing in ~4 seconds
+- **Functional Tests**: 22 end-to-end API tests passing
+- **Coverage**: 95% overall
+  - Services: 93-94% coverage
+  - API endpoints: 95-100% coverage
+  - Repositories: 93% coverage
+  - Models: 100% coverage
+- **Quality Checks**: Zero Ruff violations, zero MyPy errors
+
+### Functional Testing Validated
+All features tested as a user would experience them:
+1. Customer CRUD (create, read, update, delete)
+2. Customer flags management (priority, red flag, slow payer)
+3. Phone and email lookup with normalization
+4. Property CRUD with zone count validation
+5. Primary property switching (uniqueness enforced)
+6. Duplicate phone rejection
+7. Invalid zone count rejection (must be 1-50)
+8. 404 handling for non-existent resources
+9. Service history retrieval
+10. Bulk preference updates
+11. Soft delete with data preservation
+
+### Implementation Summary
+- **Task 1-4**: Database setup, models, schemas, repositories (foundation)
+- **Task 5-6**: Service layer with business logic, custom exceptions
+- **Task 7-9**: API endpoints for customers and properties
+- **Task 10**: Integration tests (87 tests across 3 test files)
+- **Task 11**: Property-based tests (26 PBT tests validating correctness properties)
+- **Task 12**: Quality checks and documentation
+
+### Property-Based Tests Validated
+- Property 1: Phone uniqueness (no two active customers share phone)
+- Property 3: Primary property uniqueness (at most one per customer)
+- Property 4: Zone count bounds (1-50 inclusive)
+- Property 5: Communication opt-in defaults (false by default)
+- Property 6: Phone normalization idempotence
+
+### Bug Fix During Functional Testing
+- Fixed TYPE_CHECKING import issue in `api/v1/dependencies.py`
+- `AsyncSession` and `AsyncGenerator` must be imported at runtime for FastAPI dependency injection
+- Added `noqa: TC002/TC003` comments to suppress Ruff warnings
+
+### Files Created/Modified
+- `src/grins_platform/api/v1/properties.py` - Property API endpoints
+- `src/grins_platform/api/v1/dependencies.py` - Fixed runtime imports
+- `src/grins_platform/tests/test_property_api.py` - 21 property API tests
+- `src/grins_platform/tests/integration/test_customer_workflows.py` - 26 integration tests
+- `src/grins_platform/tests/integration/test_property_workflows.py` - 21 integration tests
+- `src/grins_platform/tests/integration/test_search_filter.py` - 40 integration tests
+- `src/grins_platform/tests/test_pbt_*.py` - Property-based tests
+- `src/grins_platform/tests/conftest.py` - Shared test fixtures
+- `scripts/functional_test_api.sh` - End-to-end functional test script
+
+### Next Steps
+- Deploy to Railway for production testing
+- Implement Phase 2 features (Job Management, Service Catalog, Staff Management)
+- Add performance tests when real infrastructure available
+
+**Status: PHASE 1 COMPLETE** ✅
+
+---
+
 ## [2025-01-15 17:45] - DOCS: Updated ARCHITECTURE.md to Reflect Railway + Vercel Deployment Strategy
 
 ### What Was Accomplished

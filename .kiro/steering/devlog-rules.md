@@ -105,6 +105,33 @@ Use these categories to organize entries:
 - **SECURITY**: Security implementation and improvements
 - **DEPLOYMENT**: Release and deployment activities
 
+## Entry Ordering (CRITICAL)
+
+**New entries MUST be added at the TOP of the DEVLOG.md file, immediately after the "## Recent Activity" header.**
+
+- The DEVLOG is organized with newest entries first, oldest entries last
+- When adding a new entry, insert it directly below the "## Recent Activity" line
+- Do NOT append entries to the bottom of the file
+- This ensures the most recent work is always visible first when opening the file
+
+### Insertion Point
+```markdown
+# Development Log
+
+## Project Overview
+[Header content...]
+
+## Recent Activity
+
+## [NEW ENTRY GOES HERE] - [CATEGORY]: [Title]
+...
+
+## [Previous Entry] - [CATEGORY]: [Title]
+...
+```
+
+---
+
 ## Quality Standards
 
 ### Comprehensive Coverage
