@@ -22,6 +22,7 @@ from grins_platform.database import Base
 from grins_platform.models.enums import CustomerStatus, LeadSource
 
 if TYPE_CHECKING:
+    from grins_platform.models.job import Job
     from grins_platform.models.property import Property
 
 
@@ -83,7 +84,9 @@ class Customer(Base):
     is_red_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_slow_payer: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_new_customer: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True,
+        Boolean,
+        nullable=False,
+        default=True,
     )  # Requirement 1.11
 
     # Communication Preferences (Requirement 5.1, 5.2)
@@ -126,6 +129,11 @@ class Customer(Base):
         "Property",
         back_populates="customer",
         cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    jobs: Mapped[list["Job"]] = relationship(
+        "Job",
+        back_populates="customer",
         lazy="selectin",
     )
 

@@ -485,6 +485,80 @@ DEFAULT_STAFF = [
 
 ---
 
+## Pre-Implementation: Tooling & Efficiency Analysis
+
+**CRITICAL: Before starting any implementation tasks, the agent MUST complete this analysis step.**
+
+### Purpose
+Analyze the planned work to determine the most efficient execution strategy using available Kiro tooling.
+
+### Analysis Checklist
+
+#### 1. MCP Servers Assessment
+- [ ] Review available MCP servers that could assist with implementation
+- [ ] Identify if any external documentation servers would help (AWS docs, library docs, etc.)
+- [ ] Determine if database or API testing MCP servers would be beneficial
+- [ ] Document which MCP servers to activate and why
+
+#### 2. Powers Assessment
+- [ ] List any installed Kiro Powers that could accelerate development
+- [ ] Identify if any new Powers should be installed for this phase
+- [ ] Document which Powers to use and for what purpose
+
+#### 3. Parallel Execution Opportunities
+- [ ] Analyze task dependencies to identify independent work streams
+- [ ] Determine which tasks can be executed in parallel by subagents
+- [ ] Create dependency graph showing parallelization opportunities
+- [ ] Estimate time savings from parallel execution
+
+#### 4. Subagent Strategy
+- [ ] Identify specialized subagents needed (e.g., database-agent, api-agent, test-agent)
+- [ ] Define clear boundaries for each subagent's responsibilities
+- [ ] Plan handoff points between subagents
+- [ ] Document subagent invocation order
+
+#### 5. Custom Agents Assessment
+- [ ] Review existing custom agents in `.kiro/agents/`
+- [ ] Determine if new specialized agents should be created
+- [ ] Document agent configurations needed
+
+### Parallelization Analysis for Phase 2
+
+Based on the task dependencies:
+
+```
+Service Catalog (Day 8)     Staff Management (Day 11)
+        ↓                           ↓
+Job Request Management (Days 9-10)  ←──────┘
+        ↓
+Integration & Polish (Day 12)
+```
+
+**Parallel Execution Opportunities:**
+- Service Catalog and Staff Management have NO dependencies on each other
+- Both can be implemented in parallel by separate subagents
+- Job Request Management depends on Service Catalog (for service_offering_id)
+- Estimated time savings: 30-40% with parallel execution
+
+### Recommended Tooling Configuration
+
+| Tool Type | Recommendation | Rationale |
+|-----------|----------------|-----------|
+| **Subagents** | Use `spec-task-execution` for independent features | Parallel implementation of Service Catalog + Staff Management |
+| **MCP Servers** | None required for Phase 2 | All work is internal Python/FastAPI development |
+| **Powers** | None required | Standard development patterns sufficient |
+| **Custom Agents** | Use existing patterns | Established patterns from Phase 1 work well |
+
+### Questions for User Before Implementation
+
+Before proceeding, confirm:
+1. Should Service Catalog and Staff Management be implemented in parallel?
+2. Are there any MCP servers you'd like to use for documentation or testing?
+3. Do you want to create any new custom agents for Phase 2?
+4. Any preference on subagent delegation strategy?
+
+---
+
 ## Implementation Timeline
 
 ### Day 8 (Jan 17) - Service Catalog [4-5 hours]
@@ -667,6 +741,46 @@ DEFAULT_STAFF = [
 - [ ] All tests passing (target: 600+ tests)
 - [ ] Functional tests passing
 - [ ] API documentation complete (OpenAPI)
+
+---
+
+## Definition of Done
+
+**A feature is considered COMPLETE when ALL of the following are true:**
+
+### Required Criteria (ALL must pass)
+
+1. **All Tasks Completed**
+   - Every task and subtask in the feature's task list is marked as `[x]` complete
+   - No tasks are left in progress `[-]` or not started `[ ]`
+
+2. **All Tests Passing**
+   - Unit tests: All pass (`uv run pytest -m unit`)
+   - Functional tests: All pass (`uv run pytest -m functional`)
+   - Integration tests: All pass (`uv run pytest -m integration`)
+   - Property-based tests: All pass (if applicable)
+   - Full test suite: `uv run pytest -v` shows 0 failures
+
+3. **Quality Checks Passing**
+   - Ruff: `uv run ruff check src/` returns 0 violations
+   - MyPy: `uv run mypy src/` returns 0 errors
+
+### Verification Command
+
+Run this single command to verify a feature is complete:
+
+```bash
+uv run ruff check src/ && uv run mypy src/ && uv run pytest -v
+```
+
+**If this command passes with 0 errors and all tasks are marked complete, the feature is DONE.**
+
+### NOT Complete If:
+- ❌ Any task is still `[ ]` or `[-]`
+- ❌ Any test is failing
+- ❌ Ruff reports any violations
+- ❌ MyPy reports any errors
+- ❌ Functional tests haven't been run against real database
 
 ---
 

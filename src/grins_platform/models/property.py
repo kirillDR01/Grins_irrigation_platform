@@ -30,6 +30,7 @@ from grins_platform.models.enums import PropertyType, SystemType
 
 if TYPE_CHECKING:
     from grins_platform.models.customer import Customer
+    from grins_platform.models.job import Job
 
 
 class Property(Base):
@@ -129,6 +130,11 @@ class Property(Base):
     customer: Mapped["Customer"] = relationship(
         "Customer",
         back_populates="properties",
+    )
+    jobs: Mapped[list["Job"]] = relationship(
+        "Job",
+        back_populates="job_property",
+        lazy="selectin",
     )
 
     @property

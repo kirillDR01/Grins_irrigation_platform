@@ -1,8 +1,8 @@
 # Prompt Registry
 
-**Last Updated**: 2026-01-14  
-**Total Prompts**: 25  
-**Categories**: 7
+**Last Updated**: 2026-01-17  
+**Total Prompts**: 30  
+**Categories**: 8
 
 ## Overview
 
@@ -26,6 +26,7 @@ This registry catalogs all available prompts in the Kiro CLI environment. Prompt
 |------|----------|-------------|-------|
 | add-logging | Logging | Add structured logging to existing code | `@add-logging [file or module]` |
 | add-tests | Testing | Generate comprehensive test suite for existing code | `@add-tests [file or module to test]` |
+| checkpoint | Workflow Automation | Save progress: run quality checks, update devlog, and commit | `@checkpoint [optional description]` |
 | code-review | Code Review | Technical code review for quality and bugs that runs pre-commit | `@code-review` |
 | code-review-fix | Code Review | Process to fix bugs found in manual/AI code review | `@code-review-fix` |
 | code-review-hackathon | Code Review | Comprehensive hackathon submission review based on official judging criteria | `@code-review-hackathon` |
@@ -35,11 +36,15 @@ This registry catalogs all available prompts in the Kiro CLI environment. Prompt
 | devlog-summary | Documentation | Analyze entire conversation and create comprehensive session summary with all progress, decisions, and insights | `@devlog-summary` |
 | execute | Development Workflow | Execute an implementation plan | `@execute [path-to-plan]` |
 | execution-report | Development Workflow | Generate implementation report for system review | `@execution-report` |
+| feature-complete-check | Workflow Automation | Verify a feature meets Definition of Done before marking complete | `@feature-complete-check [feature-name]` |
 | find-prompts | Prompt Management | Search for prompts by keyword, category, or purpose with intelligent matching | `@find-prompts "keyword or category"` |
 | git-commit-push | Development Workflow | Comprehensive git workflow prompt that handles staging, committing with structured messages, and pushing to origin with error handling | `@git-commit-push` |
+| hackathon-status | Hackathon | Generate comprehensive status report for hackathon submission | `@hackathon-status` |
 | implement-fix | Development Workflow | Implement fix from RCA document for GitHub issue | `@implement-fix [github-issue-id]` |
+| implement-migration | Spec Implementation | Generate Alembic migration from design document schema | `@implement-migration [table-name]` |
 | list-prompts | Prompt Management | Display all available prompts organized by category with descriptions and usage examples | `@list-prompts [optional category]` |
 | new-feature | Development | Create a complete feature with automatic testing and logging | `@new-feature [feature description]` |
+| next-task | Workflow Automation | Find and execute the next incomplete task from the active spec | `@next-task [optional spec-name]` |
 | plan-feature | Planning | Create comprehensive feature plan with deep codebase analysis and research | `@plan-feature [feature description]` |
 | prime | Setup | Load Project Context | `@prime` |
 | prompt-help | Prompt Management | Get detailed help and usage instructions for a specific prompt | `@prompt-help "prompt-name"` |
@@ -90,6 +95,11 @@ Prompts for creating and maintaining project documentation.
 - **devlog-quick**: Create streamlined devlog entries for quick progress updates while maintaining documentation standards
 - **devlog-summary**: Analyze entire conversation and create comprehensive session summary with all progress, decisions, and insights
 
+### Hackathon (1 prompt)
+Prompts for hackathon-specific workflows and status tracking.
+
+- **hackathon-status**: Generate comprehensive status report for hackathon submission
+
 ### Logging (1 prompt)
 Prompts for adding structured logging to code.
 
@@ -115,10 +125,22 @@ Prompts for initial project setup and configuration.
 - **prime**: Load Project Context
 - **quickstart**: Kiro CLI Quick Start Wizard
 
+### Spec Implementation (1 prompt)
+Prompts for implementing code from spec documents.
+
+- **implement-migration**: Generate Alembic migration from design document schema
+
 ### Testing (1 prompt)
 Prompts for creating and managing tests.
 
 - **add-tests**: Generate comprehensive test suite for existing code
+
+### Workflow Automation (3 prompts)
+Prompts for automating development workflows and task management.
+
+- **checkpoint**: Save progress: run quality checks, update devlog, and commit
+- **feature-complete-check**: Verify a feature meets Definition of Done before marking complete
+- **next-task**: Find and execute the next incomplete task from the active spec
 
 ---
 
@@ -137,6 +159,13 @@ Prompts for creating and managing tests.
 4. `@git-commit-push` - Commit and push changes
 5. `@devlog-entry` - Document the work
 
+### Spec-Driven Workflow (NEW)
+1. `@next-task` - Find and start the next task from tasks.md
+2. `@implement-migration` - Generate migration from design doc
+3. `@checkpoint` - Save progress (quality + devlog + commit)
+4. `@feature-complete-check` - Verify feature is done
+5. `@hackathon-status` - Check overall progress
+
 ### Quality Workflow
 1. `@new-feature` - Create feature with built-in quality
 2. `@add-tests` - Add comprehensive tests
@@ -148,6 +177,13 @@ Prompts for creating and managing tests.
 2. `@implement-fix` - Implement the fix
 3. `@execution-report` - Document implementation
 4. `@system-review` - Review process improvements
+
+### Hackathon Workflow (NEW)
+1. `@hackathon-status` - Check progress against criteria
+2. `@next-task` - Continue implementation
+3. `@checkpoint` - Save progress regularly
+4. `@feature-complete-check` - Verify features are done
+5. `@code-review-hackathon` - Final submission review
 
 ---
 
@@ -194,10 +230,11 @@ Run `@update-prompt-registry` to automatically:
 
 ## Statistics
 
-- **Total Prompts**: 25
-- **Categories**: 7
+- **Total Prompts**: 30
+- **Categories**: 12
+- **New Prompts Added**: 5 (checkpoint, feature-complete-check, hackathon-status, implement-migration, next-task)
 - **Most Common Category**: Prompt Management (5 prompts)
-- **Last Registry Update**: 2026-01-14
+- **Last Registry Update**: 2026-01-17
 
 ---
 
