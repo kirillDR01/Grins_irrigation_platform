@@ -21,12 +21,14 @@ from sqlalchemy.ext.asyncio import (
 
 from grins_platform.database import get_db_session as db_session_generator
 from grins_platform.repositories.customer_repository import CustomerRepository
+from grins_platform.repositories.job_repository import JobRepository
 from grins_platform.repositories.property_repository import PropertyRepository
 from grins_platform.repositories.service_offering_repository import (
     ServiceOfferingRepository,
 )
 from grins_platform.repositories.staff_repository import StaffRepository
 from grins_platform.services.customer_service import CustomerService
+from grins_platform.services.job_service import JobService
 from grins_platform.services.property_service import PropertyService
 from grins_platform.services.service_offering_service import ServiceOfferingService
 from grins_platform.services.staff_service import StaffService
@@ -114,9 +116,36 @@ async def get_staff_service(
     return StaffService(repository=repository)
 
 
+async def get_job_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> JobService:
+    """Get JobService dependency.
+
+    This creates a JobService with all required repositories using
+    the injected database session.
+
+    Args:
+        session: Database session from dependency injection
+
+    Returns:
+        JobService instance
+    """
+    job_repository = JobRepository(session=session)
+    customer_repository = CustomerRepository(session=session)
+    property_repository = PropertyRepository(session=session)
+    service_repository = ServiceOfferingRepository(session=session)
+    return JobService(
+        job_repository=job_repository,
+        customer_repository=customer_repository,
+        property_repository=property_repository,
+        service_repository=service_repository,
+    )
+
+
 __all__ = [
     "get_customer_service",
     "get_db_session",
+    "get_job_service",
     "get_property_service",
     "get_service_offering_service",
     "get_staff_service",

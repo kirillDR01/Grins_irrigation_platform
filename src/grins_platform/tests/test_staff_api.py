@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
@@ -28,7 +29,7 @@ def mock_staff_service() -> AsyncMock:
 
 
 @pytest.fixture
-def sample_staff_data() -> dict:
+def sample_staff_data() -> dict[str, Any]:
     """Create sample staff data for testing."""
     return {
         "name": "John Technician",
@@ -84,7 +85,7 @@ class TestCreateStaff:
 
     def test_create_staff_success(
         self, client: TestClient, mock_staff_service: AsyncMock,
-        mock_staff_model: Mock, sample_staff_data: dict,
+        mock_staff_model: Mock, sample_staff_data: dict[str, Any],
     ) -> None:
         """Test successful staff creation returns 201."""
         mock_staff_service.create_staff.return_value = mock_staff_model

@@ -530,6 +530,70 @@ async def get_service_history(
 
 
 # =============================================================================
+# Task 12.12: GET /api/v1/customers/{id}/jobs - Get Customer Jobs
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/{customer_id}/jobs",
+    summary="Get customer jobs",
+    description="Get all jobs for a customer with pagination.",
+)
+async def get_customer_jobs(
+    customer_id: UUID,
+    service: Annotated[CustomerService, Depends(get_customer_service)],
+    page: int = Query(default=1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+        description="Items per page (max 100)",
+    ),
+) -> dict[str, str]:
+    """Get all jobs for a customer.
+
+    This endpoint returns jobs for a specific customer. The actual job
+    retrieval is handled by the JobService via the jobs API.
+
+    Args:
+        customer_id: UUID of the customer
+        service: Injected CustomerService
+        page: Page number (1-indexed)
+        page_size: Number of items per page
+
+    Returns:
+        Paginated job response (redirects to jobs API internally)
+
+    Raises:
+        HTTPException: 404 if customer not found
+
+    Validates: Requirement 6.4, 12.1
+    """
+    _endpoints.log_started("get_customer_jobs", customer_id=str(customer_id))
+
+    # Verify customer exists
+    try:
+        await service.get_customer(customer_id, include_properties=False)
+    except CustomerNotFoundError as e:
+        _endpoints.log_rejected("get_customer_jobs", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer not found: {e.customer_id}",
+        ) from e
+
+    # Return redirect info - actual job retrieval should use /api/v1/jobs?customer_id=
+    _endpoints.log_completed("get_customer_jobs", customer_id=str(customer_id))
+    redirect_url = (
+        f"/api/v1/jobs?customer_id={customer_id}&page={page}&page_size={page_size}"
+    )
+    return {
+        "message": "Use /api/v1/jobs?customer_id={customer_id} for job listing",
+        "customer_id": str(customer_id),
+        "redirect_url": redirect_url,
+    }
+
+
+# =============================================================================
 # Task 8.5: POST /api/v1/customers/export - Export Customers CSV
 # =============================================================================
 

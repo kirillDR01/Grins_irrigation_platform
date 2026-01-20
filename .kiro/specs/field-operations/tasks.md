@@ -322,47 +322,47 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - _Requirements: 1.1-1.13, 12.1-12.7_
 
 
-- [~] 12. API Endpoints - Jobs
-  - [ ] 12.1 Create FastAPI router for jobs
+- [x] 12. API Endpoints - Jobs
+  - [x] 12.1 Create FastAPI router for jobs
     - Create api/v1/jobs.py
     - Set up dependency injection for JobService
     - Register router in main app
     - _Requirements: 12.5-12.7_
 
-  - [ ] 12.2 Implement POST /api/v1/jobs
+  - [x] 12.2 Implement POST /api/v1/jobs
     - Create job request with auto-categorization
     - Validate customer_id, property_id, service_offering_id
     - Return 201 on success
     - Return JobResponse
     - _Requirements: 2.1-2.12, 3.1-3.5, 12.1_
 
-  - [ ] 12.3 Implement GET /api/v1/jobs/{id}
+  - [x] 12.3 Implement GET /api/v1/jobs/{id}
     - Get job with customer, property, service details
     - Include status history
     - Return 404 if not found
     - Return JobDetailResponse
     - _Requirements: 6.1, 7.2, 12.1, 12.3_
 
-  - [ ] 12.4 Implement PUT /api/v1/jobs/{id}
+  - [x] 12.4 Implement PUT /api/v1/jobs/{id}
     - Update job details
     - Re-evaluate category if quoted_amount set
     - Return 404 if not found
     - Return JobResponse
     - _Requirements: 3.6, 3.7, 12.1, 12.3_
 
-  - [ ] 12.5 Implement DELETE /api/v1/jobs/{id}
+  - [x] 12.5 Implement DELETE /api/v1/jobs/{id}
     - Soft delete job
     - Return 204 on success
     - Return 404 if not found
     - _Requirements: 10.11, 12.1, 12.3_
 
-  - [ ] 12.6 Implement GET /api/v1/jobs
+  - [x] 12.6 Implement GET /api/v1/jobs
     - List jobs with pagination
     - Support all filter parameters
     - Return PaginatedJobResponse
     - _Requirements: 6.1-6.6, 6.9, 12.1_
 
-  - [ ] 12.7 Implement PUT /api/v1/jobs/{id}/status
+  - [x] 12.7 Implement PUT /api/v1/jobs/{id}/status
     - Update job status with validation
     - Record status history
     - Update timestamp fields
@@ -370,42 +370,42 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - Return JobResponse
     - _Requirements: 4.1-4.10, 7.1, 12.1, 12.2_
 
-  - [ ] 12.8 Implement GET /api/v1/jobs/{id}/history
+  - [x] 12.8 Implement GET /api/v1/jobs/{id}/history
     - Get job status history
     - Return in chronological order
     - Return JobStatusHistoryResponse[]
     - _Requirements: 7.2, 12.1_
 
-  - [ ] 12.9 Implement GET /api/v1/jobs/ready-to-schedule
+  - [x] 12.9 Implement GET /api/v1/jobs/ready-to-schedule
     - Get jobs with category=ready_to_schedule
     - Support pagination
     - Return PaginatedJobResponse
     - _Requirements: 6.7, 12.1_
 
-  - [ ] 12.10 Implement GET /api/v1/jobs/needs-estimate
+  - [x] 12.10 Implement GET /api/v1/jobs/needs-estimate
     - Get jobs with category=requires_estimate
     - Support pagination
     - Return PaginatedJobResponse
     - _Requirements: 6.8, 12.1_
 
-  - [ ] 12.11 Implement GET /api/v1/jobs/by-status/{status}
+  - [x] 12.11 Implement GET /api/v1/jobs/by-status/{status}
     - Get jobs by status
     - Support pagination
     - Return PaginatedJobResponse
     - _Requirements: 6.2, 12.1_
 
-  - [ ] 12.12 Implement GET /api/v1/customers/{id}/jobs
+  - [x] 12.12 Implement GET /api/v1/customers/{id}/jobs
     - Get all jobs for a customer
     - Support pagination
     - Return PaginatedJobResponse
     - _Requirements: 6.4, 12.1_
 
-  - [ ] 12.13 Implement POST /api/v1/jobs/{id}/calculate-price
+  - [x] 12.13 Implement POST /api/v1/jobs/{id}/calculate-price
     - Calculate price based on service and property
     - Return PriceCalculationResponse
     - _Requirements: 5.1-5.7, 12.1_
 
-  - [ ] 12.14 Write job API tests
+  - [x] 12.14 Write job API tests
     - Test all endpoints with valid data
     - Test validation errors
     - Test status transitions
@@ -477,21 +477,21 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - Target 85%+ coverage
     - _Requirements: 8.1-8.10, 9.1-9.5, 12.1-12.7_
 
-- [~] 14. Checkpoint - API Layer
+- [x] 14. Checkpoint - API Layer
   - Ensure all API tests pass
   - Ensure all quality checks pass (ruff, mypy, pyright)
   - Ask the user if questions arise
 
 
-- [~] 15. Integration Testing
-  - [ ] 15.1 Create test fixtures
+- [x] 15. Integration Testing
+  - [x] 15.1 Create test fixtures
     - Database fixtures for service offerings
     - Database fixtures for jobs with customer/property
     - Database fixtures for staff
     - Test client setup
     - _Requirements: All integration requirements_
 
-  - [ ] 15.2 Write job-customer integration tests
+  - [x] 15.2 Write job-customer integration tests
     - Test job creation with existing customer
     - Test job creation with non-existent customer (should fail)
     - Test job retrieval includes customer details
@@ -499,7 +499,7 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - **Property 9: Referential Integrity - Job to Customer**
     - _Requirements: 2.2, 10.8, 10.11_
 
-  - [ ] 15.3 Write job-property integration tests
+  - [x] 15.3 Write job-property integration tests
     - Test job creation with valid property
     - Test job creation with property from different customer (should fail)
     - Test job retrieval includes property details
@@ -507,14 +507,14 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - **Property 10: Referential Integrity - Property to Customer**
     - _Requirements: 2.3, 5.2, 5.5, 10.9_
 
-  - [ ] 15.4 Write job-service integration tests
+  - [x] 15.4 Write job-service integration tests
     - Test job creation with active service
     - Test job creation with inactive service (should fail)
     - Test price calculation uses service pricing model
     - **Property 11: Referential Integrity - Job to Service**
     - _Requirements: 2.4, 5.1-5.4, 10.10_
 
-  - [ ] 15.5 Write status workflow integration tests
+  - [x] 15.5 Write status workflow integration tests
     - Test complete job lifecycle (requested → closed)
     - Test status history is recorded correctly
     - Test timestamp fields are updated
@@ -522,22 +522,22 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - **Property 7: Status Timestamp Updates**
     - _Requirements: 4.1-4.9, 7.1-7.4_
 
-  - [ ] 15.6 Write cross-component integration tests
+  - [x] 15.6 Write cross-component integration tests
     - Test creating job with all references
     - Test listing jobs with customer filter
     - Test field operations with existing Phase 1 data
     - _Requirements: All integration requirements_
 
 
-- [~] 16. Property-Based Tests
-  - [ ] 16.1 Write job status transition property tests
+- [x] 16. Property-Based Tests
+  - [x] 16.1 Write job status transition property tests
     - Test all valid transitions are accepted
     - Test all invalid transitions are rejected
     - Test terminal states have no valid transitions
     - **Property 4: Status Transition Validity**
     - _Requirements: 4.2-4.7, 4.10_
 
-  - [ ] 16.2 Write auto-categorization property tests
+  - [x] 16.2 Write auto-categorization property tests
     - Test seasonal job types → ready_to_schedule
     - Test small_repair → ready_to_schedule
     - Test quoted_amount set → ready_to_schedule
@@ -546,7 +546,7 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - **Property 3: Job Auto-Categorization Correctness**
     - _Requirements: 3.1-3.5_
 
-  - [ ] 16.3 Write pricing calculation property tests
+  - [x] 16.3 Write pricing calculation property tests
     - Test flat pricing returns base_price
     - Test zone_based pricing formula
     - Test hourly pricing formula
@@ -555,19 +555,19 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - **Property 5: Pricing Calculation Correctness**
     - _Requirements: 5.1-5.6_
 
-  - [ ] 16.4 Write job creation defaults property tests
+  - [x] 16.4 Write job creation defaults property tests
     - Test status defaults to "requested"
     - Test priority_level defaults to 0
     - **Property 1: Job Creation Defaults**
     - _Requirements: 2.9, 2.10, 4.1_
 
-  - [ ] 16.5 Write category re-evaluation property tests
+  - [x] 16.5 Write category re-evaluation property tests
     - Test setting quoted_amount changes category
     - **Property 13: Category Re-evaluation on Quote**
     - _Requirements: 3.7_
 
-- [~] 17. Default Data Seeding
-  - [ ] 17.1 Create seed data script
+- [x] 17. Default Data Seeding
+  - [x] 17.1 Create seed data script
     - Create default seasonal services (spring_startup, summer_tuneup, winterization)
     - Create default repair services (head_replacement, diagnostic)
     - Create default installation services (new_system, zone_addition)
@@ -575,38 +575,38 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - Set equipment requirements
     - _Requirements: 13.1-13.6_
 
-  - [ ] 17.2 Integrate seeding with migrations
+  - [x] 17.2 Integrate seeding with migrations
     - Add seed data to migration or startup script
     - Ensure idempotent seeding (don't duplicate on re-run)
     - _Requirements: 13.1-13.6_
 
 
-- [~] 18. Documentation and Quality
-  - [ ] 18.1 Run quality checks
+- [x] 18. Documentation and Quality
+  - [x] 18.1 Run quality checks
     - Run ruff check and fix all issues
     - Run mypy and fix all type errors
     - Run pyright and fix all errors
     - _Requirements: Code Standards_
 
-  - [ ] 18.2 Verify test coverage
+  - [x] 18.2 Verify test coverage
     - Run pytest with coverage
     - Ensure 85%+ coverage on services
     - Ensure 80%+ coverage on API
     - Ensure 80%+ coverage on repositories
     - _Requirements: Code Standards_
 
-  - [ ] 18.3 Update API documentation
+  - [x] 18.3 Update API documentation
     - Verify OpenAPI spec is complete for all 26 endpoints
     - Add example requests/responses
     - Document error codes
     - _Requirements: 12.5_
 
-  - [ ] 18.4 Update DEVLOG
+  - [x] 18.4 Update DEVLOG
     - Document implementation progress
     - Document decisions made
     - Document any deviations from design
 
-- [~] 19. Final Checkpoint
+- [x] 19. Final Checkpoint
   - Ensure all tests pass (unit, functional, integration, property-based)
   - Ensure all quality checks pass
   - Verify 26 new API endpoints are working

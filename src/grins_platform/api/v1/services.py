@@ -174,8 +174,7 @@ async def get_service(
         ) from e
     else:
         _endpoints.log_completed("get_service", service_id=str(service_id))
-        response = ServiceOfferingResponse.model_validate(result)
-        return response  # type: ignore[no-any-return]
+        return ServiceOfferingResponse.model_validate(result)  # type: ignore[no-any-return]
 
 
 # =============================================================================
@@ -248,8 +247,7 @@ async def create_service(
     result = await service.create_service(data)
 
     _endpoints.log_completed("create_service", service_id=str(result.id))
-    response = ServiceOfferingResponse.model_validate(result)
-    return response  # type: ignore[no-any-return]
+    return ServiceOfferingResponse.model_validate(result)  # type: ignore[no-any-return]
 
 
 # =============================================================================
@@ -295,8 +293,7 @@ async def update_service(
         ) from e
     else:
         _endpoints.log_completed("update_service", service_id=str(service_id))
-        response = ServiceOfferingResponse.model_validate(result)
-        return response  # type: ignore[no-any-return]
+        return ServiceOfferingResponse.model_validate(result)  # type: ignore[no-any-return]
 
 
 # =============================================================================
