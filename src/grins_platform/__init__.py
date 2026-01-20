@@ -10,6 +10,6 @@ __version__ = "0.1.0"
 __author__ = "Grins Irrigations Development Team"
 __email__ = "dev@grins-irrigations.com"
 
-from .main import main
+from .app import app
 
-__all__ = ["main"]
+__all__ = ["app"]

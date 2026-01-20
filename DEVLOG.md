@@ -13,6 +13,101 @@ This repository contains documentation and examples for Kiro development workflo
 
 ## Recent Activity
 
+## [2025-01-19 20:50] - TESTING: End-to-End Functional Testing and Documentation
+
+### What Was Accomplished
+
+**Fixed Critical Bug: main.py Overwritten**
+- Discovered `main.py` had been overwritten with a MyPy test script
+- This caused Phase 2 routes (services, staff, jobs) to not be registered
+- Fixed by restoring proper FastAPI app import
+- Also fixed `__init__.py` import error
+
+**Functional Testing Performed**
+- Tested 11 API endpoints manually against live server
+- Created comprehensive test documentation in `FUNCTIONAL-TEST-GUIDE.md`
+- Documented all 29 endpoints with curl examples
+- Identified 1 bug: `POST /api/v1/jobs/{id}/calculate-price` returns 500 error
+
+**Tests Completed Successfully:**
+| Feature | Endpoint | Status |
+|---------|----------|--------|
+| Health Check | `GET /health` | ✅ Pass |
+| Create Customer | `POST /api/v1/customers` | ✅ Pass |
+| Get Customer | `GET /api/v1/customers/{id}` | ✅ Pass |
+| List Customers | `GET /api/v1/customers` | ✅ Pass |
+| Create Property | `POST /api/v1/customers/{id}/properties` | ✅ Pass |
+| Create Service | `POST /api/v1/services` | ✅ Pass |
+| List Services | `GET /api/v1/services` | ✅ Pass |
+| Create Staff | `POST /api/v1/staff` | ✅ Pass |
+| Create Job | `POST /api/v1/jobs` | ✅ Pass |
+| Get Job | `GET /api/v1/jobs/{id}` | ✅ Pass |
+| Update Job Status | `PUT /api/v1/jobs/{id}/status` | ✅ Pass |
+
+**Test Data Created:**
+- Customer: Mike Johnson (ID: 2ac9f7a8-aa7d-4f0f-8d57-38eb7c40728d)
+- Property: 789 Pine Street, 10 zones (ID: 43d8b48e-8e5c-4eba-b160-aa19a6d85f52)
+- Service: Spring Startup Test (ID: d8fad66c-f9af-4c40-a295-c2d38731923f)
+- Staff: Vas Tech (ID: d73da633-2ce8-40fc-8350-06135193d0b4)
+- Job: Spring startup job (ID: 6b7cda5d-b5b5-46ee-b52f-58398217b01e)
+
+### Technical Details
+
+**Files Fixed:**
+- `src/grins_platform/main.py` - Restored proper app import
+- `src/grins_platform/__init__.py` - Fixed import from `main` to `app`
+
+**Documentation Created:**
+- `FUNCTIONAL-TEST-GUIDE.md` - Comprehensive 400+ line testing guide with:
+  - Prerequisites and setup instructions
+  - All 29 endpoints documented with curl examples
+  - Expected responses and notes
+  - Test summary with pass/fail status
+  - Complete end-to-end workflow test script
+  - Bug report for calculate-price endpoint
+
+### Decision Rationale
+- Created standalone test guide for easy reference during demos and future testing
+- Documented all endpoints even if not yet tested to provide complete reference
+- Included test data IDs for reproducibility
+
+### Challenges and Solutions
+
+**Challenge 1: Server Not Starting**
+- **Problem**: uvicorn failed to start with import error
+- **Root Cause**: `main.py` was overwritten, `__init__.py` tried to import non-existent `main` function
+- **Solution**: Restored `main.py` to simple app import, updated `__init__.py`
+
+**Challenge 2: Staff Schema Mismatch**
+- **Problem**: Staff creation failed with "name field required"
+- **Root Cause**: Staff schema uses `name` not `first_name/last_name`
+- **Solution**: Updated test to use correct field name
+
+### Impact and Dependencies
+- All 29 API endpoints now accessible
+- Functional test guide enables quick manual testing
+- Bug identified in calculate-price endpoint needs fixing
+
+### Next Steps
+- Fix calculate-price endpoint bug
+- Complete remaining 29 endpoint tests
+- Run full end-to-end workflow test
+
+### Files Created/Modified
+```
+FUNCTIONAL-TEST-GUIDE.md          # NEW - Comprehensive testing guide
+src/grins_platform/main.py        # FIXED - Restored app import
+src/grins_platform/__init__.py    # FIXED - Updated import
+```
+
+### Resources and References
+- API Documentation: http://localhost:8000/docs
+- OpenAPI Spec: http://localhost:8000/openapi.json
+
+**Status: FUNCTIONAL TESTING IN PROGRESS** 🧪
+
+---
+
 ## [2025-01-19 17:30] - FEATURE: Completed Field Operations Phase 2 (Tasks 15-19) - FINAL MILESTONE
 
 ### What Was Accomplished
