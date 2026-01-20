@@ -4,7 +4,8 @@ Tests for Field Operations Pydantic schemas.
 This module tests all Pydantic schemas for Phase 2 Field Operations,
 including service offerings, jobs, and staff schemas.
 
-Validates: Requirements 1.1-1.13, 2.1-2.12, 4.1-4.10, 5.1-5.7, 6.1-6.9, 8.1-8.10, 9.1-9.5
+Validates: Requirements 1.1-1.13, 2.1-2.12, 4.1-4.10, 5.1-5.7, 6.1-6.9,
+8.1-8.10, 9.1-9.5
 """
 
 from datetime import datetime
@@ -25,7 +26,6 @@ from grins_platform.models.enums import (
 )
 from grins_platform.schemas.job import (
     JobCreate,
-    JobDetailResponse,
     JobListParams,
     JobResponse,
     JobStatusHistoryResponse,
@@ -49,7 +49,6 @@ from grins_platform.schemas.staff import (
     StaffResponse,
     StaffUpdate,
 )
-
 
 # =============================================================================
 # Service Offering Schema Tests

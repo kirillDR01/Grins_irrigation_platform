@@ -10,6 +10,8 @@ from fastapi import APIRouter
 
 from grins_platform.api.v1.customers import router as customers_router
 from grins_platform.api.v1.properties import router as properties_router
+from grins_platform.api.v1.services import router as services_router
+from grins_platform.api.v1.staff import router as staff_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -24,6 +26,20 @@ api_router.include_router(
 api_router.include_router(
     properties_router,
     tags=["properties"],
+)
+
+# Include service offering endpoints
+api_router.include_router(
+    services_router,
+    prefix="/services",
+    tags=["services"],
+)
+
+# Include staff endpoints
+api_router.include_router(
+    staff_router,
+    prefix="/staff",
+    tags=["staff"],
 )
 
 __all__ = ["api_router"]

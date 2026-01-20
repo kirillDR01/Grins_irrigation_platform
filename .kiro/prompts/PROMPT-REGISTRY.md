@@ -1,8 +1,8 @@
 # Prompt Registry
 
-**Last Updated**: 2026-01-17  
-**Total Prompts**: 30  
-**Categories**: 8
+**Last Updated**: 2025-01-19  
+**Total Prompts**: 37  
+**Categories**: 10
 
 ## Overview
 
@@ -24,46 +24,61 @@ This registry catalogs all available prompts in the Kiro CLI environment. Prompt
 
 | Name | Category | Description | Usage |
 |------|----------|-------------|-------|
-| add-logging | Logging | Add structured logging to existing code | `@add-logging [file or module]` |
-| add-tests | Testing | Generate comprehensive test suite for existing code | `@add-tests [file or module to test]` |
+| add-logging | Code Quality | Add structured logging to existing code | `@add-logging [file or module]` |
+| add-tests | Code Quality | Generate comprehensive test suite for existing code | `@add-tests [file or module to test]` |
 | checkpoint | Workflow Automation | Save progress: run quality checks, update devlog, and commit | `@checkpoint [optional description]` |
 | code-review | Code Review | Technical code review for quality and bugs that runs pre-commit | `@code-review` |
 | code-review-fix | Code Review | Process to fix bugs found in manual/AI code review | `@code-review-fix` |
 | code-review-hackathon | Code Review | Comprehensive hackathon submission review based on official judging criteria | `@code-review-hackathon` |
 | create-prd | Documentation | Create a Product Requirements Document from conversation | `@create-prd [output-filename]` |
-| devlog-entry | Documentation | Create comprehensive devlog entries with detailed technical information, decision rationale, and impact analysis | `@devlog-entry [optional description]` |
-| devlog-quick | Documentation | Create streamlined devlog entries for quick progress updates while maintaining documentation standards | `@devlog-quick "brief description"` |
-| devlog-summary | Documentation | Analyze entire conversation and create comprehensive session summary with all progress, decisions, and insights | `@devlog-summary` |
+| devlog-entry | Documentation | Create comprehensive devlog entries with detailed technical information | `@devlog-entry [optional description]` |
+| devlog-quick | Documentation | Create streamlined devlog entries for quick progress updates | `@devlog-quick "brief description"` |
+| devlog-summary | Documentation | Analyze entire conversation and create comprehensive session summary | `@devlog-summary` |
 | execute | Development Workflow | Execute an implementation plan | `@execute [path-to-plan]` |
 | execution-report | Development Workflow | Generate implementation report for system review | `@execution-report` |
 | feature-complete-check | Workflow Automation | Verify a feature meets Definition of Done before marking complete | `@feature-complete-check [feature-name]` |
-| find-prompts | Prompt Management | Search for prompts by keyword, category, or purpose with intelligent matching | `@find-prompts "keyword or category"` |
-| git-commit-push | Development Workflow | Comprehensive git workflow prompt that handles staging, committing with structured messages, and pushing to origin with error handling | `@git-commit-push` |
+| find-prompts | Prompt Management | Search for prompts by keyword, category, or purpose | `@find-prompts "keyword or category"` |
+| git-commit-push | Development Workflow | Git workflow: staging, committing with structured messages, and pushing | `@git-commit-push` |
 | hackathon-status | Hackathon | Generate comprehensive status report for hackathon submission | `@hackathon-status` |
+| implement-api | Spec Implementation | Implement FastAPI endpoint following Grins Platform patterns | `@implement-api` |
+| implement-exception | Spec Implementation | Implement custom exceptions following Grins Platform patterns | `@implement-exception` |
 | implement-fix | Development Workflow | Implement fix from RCA document for GitHub issue | `@implement-fix [github-issue-id]` |
 | implement-migration | Spec Implementation | Generate Alembic migration from design document schema | `@implement-migration [table-name]` |
-| list-prompts | Prompt Management | Display all available prompts organized by category with descriptions and usage examples | `@list-prompts [optional category]` |
+| implement-pbt | Spec Implementation | Implement property-based test following Grins Platform patterns | `@implement-pbt` |
+| implement-service | Spec Implementation | Implement service layer method following Grins Platform patterns | `@implement-service` |
+| list-prompts | Prompt Management | Display all available prompts organized by category | `@list-prompts [optional category]` |
 | new-feature | Development | Create a complete feature with automatic testing and logging | `@new-feature [feature description]` |
 | next-task | Workflow Automation | Find and execute the next incomplete task from the active spec | `@next-task [optional spec-name]` |
-| plan-feature | Planning | Create comprehensive feature plan with deep codebase analysis and research | `@plan-feature [feature description]` |
-| prime | Setup | Load Project Context | `@prime` |
+| parallel-tasks | Analysis | Identify parallel task opportunities and dependencies | `@parallel-tasks` |
+| plan-feature | Planning | Create comprehensive feature plan with deep codebase analysis | `@plan-feature [feature description]` |
+| prime | Setup | Load Project Context and understand codebase | `@prime` |
 | prompt-help | Prompt Management | Get detailed help and usage instructions for a specific prompt | `@prompt-help "prompt-name"` |
-| quality-check | Development | Run all quality checks and fix any issues found | `@quality-check [optional: specific file or directory]` |
+| quality-check | Code Quality | Run all quality checks and fix any issues found | `@quality-check [optional: specific file or directory]` |
 | quickstart | Setup | Kiro CLI Quick Start Wizard | `@quickstart` |
 | rca | Analysis | Analyze and document root cause for a GitHub issue | `@rca [github-issue-id]` |
 | related-prompts | Prompt Management | Find prompts related to or work well with a specific prompt | `@related-prompts "prompt-name"` |
 | system-review | Analysis | Analyze implementation against plan for process improvements | `@system-review` |
+| task-progress | Analysis | Analyze current task progress and provide recommendations | `@task-progress` |
 | update-prompt-registry | Prompt Management | Automatically scan prompts directory and regenerate PROMPT-REGISTRY.md | `@update-prompt-registry` |
 
 ---
 
 ## Categories
 
-### Analysis (2 prompts)
-Prompts for analyzing code, processes, and issues.
+### Analysis (4 prompts)
+Prompts for analyzing code, processes, tasks, and issues.
 
+- **parallel-tasks**: Identify parallel task opportunities and dependencies
 - **rca**: Analyze and document root cause for a GitHub issue
 - **system-review**: Analyze implementation against plan for process improvements
+- **task-progress**: Analyze current task progress and provide recommendations
+
+### Code Quality (3 prompts)
+Prompts for code quality, testing, and logging.
+
+- **add-logging**: Add structured logging to existing code
+- **add-tests**: Generate comprehensive test suite for existing code
+- **quality-check**: Run all quality checks and fix any issues found
 
 ### Code Review (3 prompts)
 Prompts for reviewing code quality, bugs, and standards.
@@ -72,49 +87,42 @@ Prompts for reviewing code quality, bugs, and standards.
 - **code-review-fix**: Process to fix bugs found in manual/AI code review
 - **code-review-hackathon**: Comprehensive hackathon submission review based on official judging criteria
 
-### Development (3 prompts)
-Prompts for feature development and quality assurance.
+### Development (1 prompt)
+Prompts for feature development.
 
 - **new-feature**: Create a complete feature with automatic testing and logging
-- **quality-check**: Run all quality checks and fix any issues found
-- **add-tests**: Generate comprehensive test suite for existing code
 
 ### Development Workflow (4 prompts)
 Prompts for managing development workflows and git operations.
 
 - **execute**: Execute an implementation plan
 - **execution-report**: Generate implementation report for system review
-- **git-commit-push**: Comprehensive git workflow prompt that handles staging, committing with structured messages, and pushing to origin with error handling
+- **git-commit-push**: Git workflow: staging, committing with structured messages, and pushing
 - **implement-fix**: Implement fix from RCA document for GitHub issue
 
 ### Documentation (4 prompts)
 Prompts for creating and maintaining project documentation.
 
 - **create-prd**: Create a Product Requirements Document from conversation
-- **devlog-entry**: Create comprehensive devlog entries with detailed technical information, decision rationale, and impact analysis
-- **devlog-quick**: Create streamlined devlog entries for quick progress updates while maintaining documentation standards
-- **devlog-summary**: Analyze entire conversation and create comprehensive session summary with all progress, decisions, and insights
+- **devlog-entry**: Create comprehensive devlog entries with detailed technical information
+- **devlog-quick**: Create streamlined devlog entries for quick progress updates
+- **devlog-summary**: Analyze entire conversation and create comprehensive session summary
 
 ### Hackathon (1 prompt)
 Prompts for hackathon-specific workflows and status tracking.
 
 - **hackathon-status**: Generate comprehensive status report for hackathon submission
 
-### Logging (1 prompt)
-Prompts for adding structured logging to code.
-
-- **add-logging**: Add structured logging to existing code
-
 ### Planning (1 prompt)
 Prompts for planning features and implementations.
 
-- **plan-feature**: Create comprehensive feature plan with deep codebase analysis and research
+- **plan-feature**: Create comprehensive feature plan with deep codebase analysis
 
 ### Prompt Management (5 prompts)
 Prompts for discovering and managing other prompts.
 
-- **find-prompts**: Search for prompts by keyword, category, or purpose with intelligent matching
-- **list-prompts**: Display all available prompts organized by category with descriptions and usage examples
+- **find-prompts**: Search for prompts by keyword, category, or purpose
+- **list-prompts**: Display all available prompts organized by category
 - **prompt-help**: Get detailed help and usage instructions for a specific prompt
 - **related-prompts**: Find prompts related to or work well with a specific prompt
 - **update-prompt-registry**: Automatically scan prompts directory and regenerate PROMPT-REGISTRY.md
@@ -122,18 +130,17 @@ Prompts for discovering and managing other prompts.
 ### Setup (2 prompts)
 Prompts for initial project setup and configuration.
 
-- **prime**: Load Project Context
+- **prime**: Load Project Context and understand codebase
 - **quickstart**: Kiro CLI Quick Start Wizard
 
-### Spec Implementation (1 prompt)
+### Spec Implementation (5 prompts)
 Prompts for implementing code from spec documents.
 
+- **implement-api**: Implement FastAPI endpoint following Grins Platform patterns
+- **implement-exception**: Implement custom exceptions following Grins Platform patterns
 - **implement-migration**: Generate Alembic migration from design document schema
-
-### Testing (1 prompt)
-Prompts for creating and managing tests.
-
-- **add-tests**: Generate comprehensive test suite for existing code
+- **implement-pbt**: Implement property-based test following Grins Platform patterns
+- **implement-service**: Implement service layer method following Grins Platform patterns
 
 ### Workflow Automation (3 prompts)
 Prompts for automating development workflows and task management.
@@ -159,12 +166,14 @@ Prompts for automating development workflows and task management.
 4. `@git-commit-push` - Commit and push changes
 5. `@devlog-entry` - Document the work
 
-### Spec-Driven Workflow (NEW)
+### Spec-Driven Workflow
 1. `@next-task` - Find and start the next task from tasks.md
 2. `@implement-migration` - Generate migration from design doc
-3. `@checkpoint` - Save progress (quality + devlog + commit)
-4. `@feature-complete-check` - Verify feature is done
-5. `@hackathon-status` - Check overall progress
+3. `@implement-service` - Implement service layer
+4. `@implement-api` - Implement API endpoints
+5. `@implement-pbt` - Add property-based tests
+6. `@checkpoint` - Save progress (quality + devlog + commit)
+7. `@feature-complete-check` - Verify feature is done
 
 ### Quality Workflow
 1. `@new-feature` - Create feature with built-in quality
@@ -178,7 +187,7 @@ Prompts for automating development workflows and task management.
 3. `@execution-report` - Document implementation
 4. `@system-review` - Review process improvements
 
-### Hackathon Workflow (NEW)
+### Hackathon Workflow
 1. `@hackathon-status` - Check progress against criteria
 2. `@next-task` - Continue implementation
 3. `@checkpoint` - Save progress regularly
@@ -215,26 +224,14 @@ Run `@update-prompt-registry` to automatically:
    ```
 3. Run `@update-prompt-registry` to update this file
 
-### Required Metadata Fields
-
-- **name**: Unique identifier for the prompt
-- **category**: Logical grouping (e.g., Documentation, Development, Testing)
-- **tags**: Searchable keywords
-- **description**: Brief purpose statement
-- **usage**: How to invoke the prompt
-- **created**: Creation date (YYYY-MM-DD)
-- **updated**: Last modification date (YYYY-MM-DD)
-- **related**: Array of related prompt names
-
 ---
 
 ## Statistics
 
-- **Total Prompts**: 30
-- **Categories**: 12
-- **New Prompts Added**: 5 (checkpoint, feature-complete-check, hackathon-status, implement-migration, next-task)
-- **Most Common Category**: Prompt Management (5 prompts)
-- **Last Registry Update**: 2026-01-17
+- **Total Prompts**: 37
+- **Categories**: 10
+- **Most Common Category**: Prompt Management, Spec Implementation (5 prompts each)
+- **Last Registry Update**: 2025-01-19
 
 ---
 

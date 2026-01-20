@@ -9,7 +9,7 @@ Validates: Requirements 8.1-8.10
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Optional
 from uuid import UUID
 
 from sqlalchemy import JSON, Boolean, Numeric, String, Text
@@ -90,7 +90,7 @@ class Staff(Base):
         return StaffRole(self.role)
 
     @property
-    def skill_level_enum(self) -> SkillLevel | None:
+    def skill_level_enum(self) -> Optional[SkillLevel]:
         """Get the skill level as an enum value."""
         return SkillLevel(self.skill_level) if self.skill_level else None
 

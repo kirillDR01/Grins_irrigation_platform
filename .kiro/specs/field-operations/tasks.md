@@ -115,8 +115,8 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - _Requirements: 10.1-10.7_
 
 
-- [ ] 4. Repository Layer
-  - [ ] 4.1 Create ServiceOfferingRepository
+- [x] 4. Repository Layer
+  - [x] 4.1 Create ServiceOfferingRepository
     - Implement create method
     - Implement get_by_id method
     - Implement update method
@@ -124,7 +124,7 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - Implement find_by_category method
     - _Requirements: 1.1, 1.4-1.6, 1.11_
 
-  - [ ] 4.2 Create JobRepository
+  - [x] 4.2 Create JobRepository
     - Implement create method
     - Implement get_by_id method
     - Implement update method
@@ -135,12 +135,12 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - Implement find_by_customer method
     - _Requirements: 2.1-2.12, 6.1-6.9_
 
-  - [ ] 4.3 Implement job status history methods
+  - [x] 4.3 Implement job status history methods
     - Implement add_status_history method
     - Implement get_status_history method
     - _Requirements: 7.1-7.4_
 
-  - [ ] 4.4 Create StaffRepository
+  - [x] 4.4 Create StaffRepository
     - Implement create method
     - Implement get_by_id method
     - Implement update method
@@ -149,21 +149,21 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - Implement find_by_role method
     - _Requirements: 8.1-8.6, 9.1-9.5_
 
-  - [ ] 4.5 Write repository tests
+  - [x] 4.5 Write repository tests
     - Test CRUD operations for all repositories
     - Test query methods with various filters
     - Test soft delete behavior
     - Test status history recording
     - _Requirements: All repository requirements_
 
-- [ ] 5. Checkpoint - Database and Repository Layer
+- [x] 5. Checkpoint - Database and Repository Layer
   - Ensure all migrations run successfully
   - Ensure all repository tests pass
   - Ask the user if questions arise
 
 
-- [ ] 6. Service Layer - Service Offerings
-  - [ ] 6.1 Create ServiceOfferingService with LoggerMixin
+- [x] 6. Service Layer - Service Offerings
+  - [x] 6.1 Create ServiceOfferingService with LoggerMixin
     - Implement create_service method
     - Implement get_service method
     - Implement update_service method
@@ -172,7 +172,7 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - Implement get_by_category method
     - _Requirements: 1.1-1.13, 11.1, 11.4-11.9_
 
-  - [ ] 6.2 Write ServiceOfferingService unit tests
+  - [x] 6.2 Write ServiceOfferingService unit tests
     - Test CRUD operations with mocked repository
     - Test deactivation preserves record
     - Test category filtering
@@ -180,8 +180,8 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - **Property 14: CRUD Round-Trip Consistency**
     - _Requirements: 1.1-1.13_
 
-- [ ] 7. Service Layer - Jobs
-  - [ ] 7.1 Create JobService with LoggerMixin
+- [x] 7. Service Layer - Jobs
+  - [x] 7.1 Create JobService with LoggerMixin
     - Implement create_job with auto-categorization
     - Implement get_job method
     - Implement update_job method
@@ -189,7 +189,7 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - Implement list_jobs with filters
     - _Requirements: 2.1-2.12, 3.1-3.7, 6.1-6.9, 11.2, 11.4-11.9_
 
-  - [ ] 7.2 Implement auto-categorization logic
+  - [x] 7.2 Implement auto-categorization logic
     - Implement _determine_category method
     - Handle seasonal job types
     - Handle small repairs
@@ -197,7 +197,7 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - Handle partner source
     - _Requirements: 3.1-3.7_
 
-  - [ ] 7.3 Implement status transition logic
+  - [x] 7.3 Implement status transition logic
     - Define VALID_TRANSITIONS mapping
     - Implement update_status method
     - Implement _validate_transition method
@@ -205,7 +205,7 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - Record status history on change
     - _Requirements: 4.1-4.10, 7.1-7.4_
 
-  - [ ] 7.4 Implement price calculation
+  - [x] 7.4 Implement price calculation
     - Implement calculate_price method
     - Implement _calculate_by_model for flat pricing
     - Implement _calculate_by_model for zone_based pricing
@@ -214,7 +214,7 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - Round to 2 decimal places
     - _Requirements: 5.1-5.7_
 
-  - [ ] 7.5 Write JobService unit tests
+  - [x] 7.5 Write JobService unit tests
     - Test job creation with mocked repositories
     - Test auto-categorization logic
     - Test status transitions (valid and invalid)
@@ -226,8 +226,8 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - _Requirements: 2.1-2.12, 3.1-3.7, 4.1-4.10, 5.1-5.7_
 
 
-- [ ] 8. Service Layer - Staff
-  - [ ] 8.1 Create StaffService with LoggerMixin
+- [x] 8. Service Layer - Staff
+  - [x] 8.1 Create StaffService with LoggerMixin
     - Implement create_staff with phone normalization
     - Implement get_staff method
     - Implement update_staff method
@@ -238,7 +238,7 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - Implement get_by_role method
     - _Requirements: 8.1-8.10, 9.1-9.5, 11.3-11.9_
 
-  - [ ] 8.2 Write StaffService unit tests
+  - [x] 8.2 Write StaffService unit tests
     - Test CRUD operations with mocked repository
     - Test phone normalization
     - Test availability filtering
@@ -247,8 +247,8 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - **Property 12: Available Staff Filter Correctness**
     - _Requirements: 8.1-8.10, 9.1-9.5_
 
-- [ ] 9. Custom Exceptions
-  - [ ] 9.1 Create field operations exceptions
+- [x] 9. Custom Exceptions
+  - [x] 9.1 Create field operations exceptions
     - FieldOperationsError base class
     - ServiceOfferingNotFoundError
     - JobNotFoundError
@@ -257,7 +257,7 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - PropertyCustomerMismatchError
     - _Requirements: 10.1-10.5, 12.2-12.4_
 
-  - [ ] 9.2 Create exception handlers
+  - [x] 9.2 Create exception handlers
     - Handler for ServiceOfferingNotFoundError (404)
     - Handler for JobNotFoundError (404)
     - Handler for InvalidStatusTransitionError (400)
@@ -265,56 +265,56 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - Handler for PropertyCustomerMismatchError (400)
     - _Requirements: 12.1-12.7_
 
-- [ ] 10. Checkpoint - Service Layer
+- [x] 10. Checkpoint - Service Layer
   - Ensure all service tests pass
   - Ensure all quality checks pass (ruff, mypy, pyright)
   - Ask the user if questions arise
 
 
-- [ ] 11. API Endpoints - Service Offerings
-  - [ ] 11.1 Create FastAPI router for services
+- [x] 11. API Endpoints - Service Offerings
+  - [x] 11.1 Create FastAPI router for services
     - Create api/v1/services.py
     - Set up dependency injection for ServiceOfferingService
     - Register router in main app
     - _Requirements: 12.5-12.7_
 
-  - [ ] 11.2 Implement GET /api/v1/services
+  - [x] 11.2 Implement GET /api/v1/services
     - List all services with pagination
     - Support filtering by category, is_active
     - Return PaginatedServiceResponse
     - _Requirements: 1.11, 12.1, 12.5_
 
-  - [ ] 11.3 Implement GET /api/v1/services/{id}
+  - [x] 11.3 Implement GET /api/v1/services/{id}
     - Get service by ID
     - Return 404 if not found
     - Return ServiceOfferingResponse
     - _Requirements: 1.4, 12.1, 12.3_
 
-  - [ ] 11.4 Implement GET /api/v1/services/category/{category}
+  - [x] 11.4 Implement GET /api/v1/services/category/{category}
     - Get services by category
     - Return only active services
     - Return ServiceOfferingResponse[]
     - _Requirements: 1.11, 12.1_
 
-  - [ ] 11.5 Implement POST /api/v1/services
+  - [x] 11.5 Implement POST /api/v1/services
     - Create service offering
     - Return 201 on success
     - Return ServiceOfferingResponse
     - _Requirements: 1.1-1.3, 12.1_
 
-  - [ ] 11.6 Implement PUT /api/v1/services/{id}
+  - [x] 11.6 Implement PUT /api/v1/services/{id}
     - Update service offering
     - Return 404 if not found
     - Return ServiceOfferingResponse
     - _Requirements: 1.5, 12.1, 12.3_
 
-  - [ ] 11.7 Implement DELETE /api/v1/services/{id}
+  - [x] 11.7 Implement DELETE /api/v1/services/{id}
     - Deactivate service (soft delete)
     - Return 204 on success
     - Return 404 if not found
     - _Requirements: 1.6, 12.1, 12.3_
 
-  - [ ] 11.8 Write service offering API tests
+  - [x] 11.8 Write service offering API tests
     - Test all endpoints with valid data
     - Test validation errors
     - Test not found scenarios
@@ -322,7 +322,7 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - _Requirements: 1.1-1.13, 12.1-12.7_
 
 
-- [ ] 12. API Endpoints - Jobs
+- [~] 12. API Endpoints - Jobs
   - [ ] 12.1 Create FastAPI router for jobs
     - Create api/v1/jobs.py
     - Set up dependency injection for JobService
@@ -414,62 +414,62 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - _Requirements: 2.1-2.12, 3.1-3.7, 4.1-4.10, 5.1-5.7, 6.1-6.9, 7.1-7.4, 12.1-12.7_
 
 
-- [ ] 13. API Endpoints - Staff
-  - [ ] 13.1 Create FastAPI router for staff
+- [x] 13. API Endpoints - Staff
+  - [x] 13.1 Create FastAPI router for staff
     - Create api/v1/staff.py
     - Set up dependency injection for StaffService
     - Register router in main app
     - _Requirements: 12.5-12.7_
 
-  - [ ] 13.2 Implement POST /api/v1/staff
+  - [x] 13.2 Implement POST /api/v1/staff
     - Create staff member
     - Normalize phone number
     - Return 201 on success
     - Return StaffResponse
     - _Requirements: 8.1-8.10, 12.1_
 
-  - [ ] 13.3 Implement GET /api/v1/staff/{id}
+  - [x] 13.3 Implement GET /api/v1/staff/{id}
     - Get staff by ID
     - Return 404 if not found
     - Return StaffResponse
     - _Requirements: 8.4, 12.1, 12.3_
 
-  - [ ] 13.4 Implement PUT /api/v1/staff/{id}
+  - [x] 13.4 Implement PUT /api/v1/staff/{id}
     - Update staff member
     - Return 404 if not found
     - Return StaffResponse
     - _Requirements: 8.5, 12.1, 12.3_
 
-  - [ ] 13.5 Implement DELETE /api/v1/staff/{id}
+  - [x] 13.5 Implement DELETE /api/v1/staff/{id}
     - Deactivate staff (soft delete)
     - Return 204 on success
     - Return 404 if not found
     - _Requirements: 8.6, 12.1, 12.3_
 
-  - [ ] 13.6 Implement GET /api/v1/staff
+  - [x] 13.6 Implement GET /api/v1/staff
     - List staff with pagination
     - Support filtering by role, skill_level, is_available, is_active
     - Return PaginatedStaffResponse
     - _Requirements: 9.4, 9.5, 12.1_
 
-  - [ ] 13.7 Implement GET /api/v1/staff/available
+  - [x] 13.7 Implement GET /api/v1/staff/available
     - Get available and active staff
     - Return StaffResponse[]
     - _Requirements: 9.3, 12.1_
 
-  - [ ] 13.8 Implement GET /api/v1/staff/by-role/{role}
+  - [x] 13.8 Implement GET /api/v1/staff/by-role/{role}
     - Get staff by role
     - Return only active staff
     - Return StaffResponse[]
     - _Requirements: 9.4, 12.1_
 
-  - [ ] 13.9 Implement PUT /api/v1/staff/{id}/availability
+  - [x] 13.9 Implement PUT /api/v1/staff/{id}/availability
     - Update staff availability
     - Return 404 if not found
     - Return StaffResponse
     - _Requirements: 9.1, 9.2, 12.1, 12.3_
 
-  - [ ] 13.10 Write staff API tests
+  - [x] 13.10 Write staff API tests
     - Test all endpoints with valid data
     - Test validation errors
     - Test availability filtering
@@ -477,13 +477,13 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - Target 85%+ coverage
     - _Requirements: 8.1-8.10, 9.1-9.5, 12.1-12.7_
 
-- [ ] 14. Checkpoint - API Layer
+- [~] 14. Checkpoint - API Layer
   - Ensure all API tests pass
   - Ensure all quality checks pass (ruff, mypy, pyright)
   - Ask the user if questions arise
 
 
-- [ ] 15. Integration Testing
+- [~] 15. Integration Testing
   - [ ] 15.1 Create test fixtures
     - Database fixtures for service offerings
     - Database fixtures for jobs with customer/property
@@ -529,7 +529,7 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - _Requirements: All integration requirements_
 
 
-- [ ] 16. Property-Based Tests
+- [~] 16. Property-Based Tests
   - [ ] 16.1 Write job status transition property tests
     - Test all valid transitions are accepted
     - Test all invalid transitions are rejected
@@ -566,7 +566,7 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - **Property 13: Category Re-evaluation on Quote**
     - _Requirements: 3.7_
 
-- [ ] 17. Default Data Seeding
+- [~] 17. Default Data Seeding
   - [ ] 17.1 Create seed data script
     - Create default seasonal services (spring_startup, summer_tuneup, winterization)
     - Create default repair services (head_replacement, diagnostic)
@@ -581,7 +581,7 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - _Requirements: 13.1-13.6_
 
 
-- [ ] 18. Documentation and Quality
+- [~] 18. Documentation and Quality
   - [ ] 18.1 Run quality checks
     - Run ruff check and fix all issues
     - Run mypy and fix all type errors
@@ -606,7 +606,7 @@ This implementation plan breaks down the Field Operations feature into discrete 
     - Document decisions made
     - Document any deviations from design
 
-- [ ] 19. Final Checkpoint
+- [~] 19. Final Checkpoint
   - Ensure all tests pass (unit, functional, integration, property-based)
   - Ensure all quality checks pass
   - Verify 26 new API endpoints are working

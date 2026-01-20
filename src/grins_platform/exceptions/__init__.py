@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from uuid import UUID
 
+    from grins_platform.models.enums import JobStatus
+
 
 class CustomerError(Exception):
     """Base exception for customer operations.
@@ -122,11 +124,138 @@ class BulkOperationError(CustomerError):
         super().__init__(message)
 
 
+# ============================================================================
+# Field Operations Exceptions (Phase 2)
+# ============================================================================
+
+
+class FieldOperationsError(Exception):
+    """Base exception for field operations.
+
+    All field operations-related exceptions inherit from this class.
+
+    Validates: Requirement 10.1-10.5
+    """
+
+
+
+class ServiceOfferingNotFoundError(FieldOperationsError):
+    """Raised when a service offering is not found.
+
+    Validates: Requirement 10.10
+    """
+
+    def __init__(self, service_id: UUID) -> None:
+        """Initialize with service offering ID.
+
+        Args:
+            service_id: UUID of the service offering that was not found
+        """
+        self.service_id = service_id
+        super().__init__(f"Service offering not found: {service_id}")
+
+
+class JobNotFoundError(FieldOperationsError):
+    """Raised when a job is not found.
+
+    Validates: Requirement 10.8
+    """
+
+    def __init__(self, job_id: UUID) -> None:
+        """Initialize with job ID.
+
+        Args:
+            job_id: UUID of the job that was not found
+        """
+        self.job_id = job_id
+        super().__init__(f"Job not found: {job_id}")
+
+
+class InvalidStatusTransitionError(FieldOperationsError):
+    """Raised when an invalid job status transition is attempted.
+
+    Validates: Requirement 4.10
+    """
+
+    def __init__(self, current_status: JobStatus, requested_status: JobStatus) -> None:
+        """Initialize with status transition details.
+
+        Args:
+            current_status: The current job status
+            requested_status: The requested new status
+        """
+        self.current_status = current_status
+        self.requested_status = requested_status
+        super().__init__(
+            f"Invalid status transition from {current_status.value} "
+            f"to {requested_status.value}",
+        )
+
+
+class StaffNotFoundError(FieldOperationsError):
+    """Raised when a staff member is not found.
+
+    Validates: Requirement 8.4
+    """
+
+    def __init__(self, staff_id: UUID) -> None:
+        """Initialize with staff ID.
+
+        Args:
+            staff_id: UUID of the staff member that was not found
+        """
+        self.staff_id = staff_id
+        super().__init__(f"Staff member not found: {staff_id}")
+
+
+class PropertyCustomerMismatchError(FieldOperationsError):
+    """Raised when a property does not belong to the specified customer.
+
+    Validates: Requirement 10.9
+    """
+
+    def __init__(self, property_id: UUID, customer_id: UUID) -> None:
+        """Initialize with property and customer IDs.
+
+        Args:
+            property_id: UUID of the property
+            customer_id: UUID of the customer
+        """
+        self.property_id = property_id
+        self.customer_id = customer_id
+        super().__init__(
+            f"Property {property_id} does not belong to customer {customer_id}",
+        )
+
+
+class ServiceOfferingInactiveError(FieldOperationsError):
+    """Raised when attempting to use an inactive service offering.
+
+    Validates: Requirement 10.10
+    """
+
+    def __init__(self, service_id: UUID) -> None:
+        """Initialize with service offering ID.
+
+        Args:
+            service_id: UUID of the inactive service offering
+        """
+        self.service_id = service_id
+        super().__init__(f"Service offering is inactive: {service_id}")
+
+
 __all__ = [
     "BulkOperationError",
     "CustomerError",
     "CustomerNotFoundError",
     "DuplicateCustomerError",
+    "FieldOperationsError",
+    "InvalidStatusTransitionError",
+    "JobNotFoundError",
+    "PropertyCustomerMismatchError",
     "PropertyNotFoundError",
+    "ServiceOfferingInactiveError",
+    "ServiceOfferingNotFoundError",
+    "StaffNotFoundError",
     "ValidationError",
 ]

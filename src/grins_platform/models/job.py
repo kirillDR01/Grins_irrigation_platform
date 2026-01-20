@@ -9,7 +9,7 @@ Validates: Requirements 2.1-2.12, 4.1-4.9
 
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
 from sqlalchemy import JSON, Boolean, ForeignKey, Integer, Numeric, String, Text
@@ -178,7 +178,7 @@ class Job(Base):
         return JobCategory(self.category)
 
     @property
-    def source_enum(self) -> JobSource | None:
+    def source_enum(self) -> Optional[JobSource]:
         """Get the source as an enum value."""
         return JobSource(self.source) if self.source else None
 

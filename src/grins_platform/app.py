@@ -21,7 +21,13 @@ from grins_platform.database import get_database_manager
 from grins_platform.exceptions import (
     CustomerNotFoundError,
     DuplicateCustomerError,
+    InvalidStatusTransitionError,
+    JobNotFoundError,
+    PropertyCustomerMismatchError,
     PropertyNotFoundError,
+    ServiceOfferingInactiveError,
+    ServiceOfferingNotFoundError,
+    StaffNotFoundError,
     ValidationError,
 )
 from grins_platform.log_config import get_logger
@@ -224,6 +230,152 @@ def _register_exception_handlers(app: FastAPI) -> None:
                     "code": "VALIDATION_ERROR",
                     "message": "Request validation failed",
                     "details": exc.errors(),
+                },
+            },
+        )
+
+    # =========================================================================
+    # Field Operations Exception Handlers (Phase 2)
+    # =========================================================================
+
+    @app.exception_handler(ServiceOfferingNotFoundError)  # type: ignore[untyped-decorator]
+    async def service_offering_not_found_handler(
+        request: Request,
+        exc: ServiceOfferingNotFoundError,
+    ) -> JSONResponse:
+        """Handle ServiceOfferingNotFoundError exceptions."""
+        logger.warning(
+            "api.exception.service_offering_not_found",
+            service_id=str(exc.service_id),
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "success": False,
+                "error": {
+                    "code": "SERVICE_OFFERING_NOT_FOUND",
+                    "message": str(exc),
+                    "service_id": str(exc.service_id),
+                },
+            },
+        )
+
+    @app.exception_handler(JobNotFoundError)  # type: ignore[untyped-decorator]
+    async def job_not_found_handler(
+        request: Request,
+        exc: JobNotFoundError,
+    ) -> JSONResponse:
+        """Handle JobNotFoundError exceptions."""
+        logger.warning(
+            "api.exception.job_not_found",
+            job_id=str(exc.job_id),
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "success": False,
+                "error": {
+                    "code": "JOB_NOT_FOUND",
+                    "message": str(exc),
+                    "job_id": str(exc.job_id),
+                },
+            },
+        )
+
+    @app.exception_handler(InvalidStatusTransitionError)  # type: ignore[untyped-decorator]
+    async def invalid_status_transition_handler(
+        request: Request,
+        exc: InvalidStatusTransitionError,
+    ) -> JSONResponse:
+        """Handle InvalidStatusTransitionError exceptions."""
+        logger.warning(
+            "api.exception.invalid_status_transition",
+            current_status=exc.current_status.value,
+            requested_status=exc.requested_status.value,
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "success": False,
+                "error": {
+                    "code": "INVALID_STATUS_TRANSITION",
+                    "message": str(exc),
+                    "current_status": exc.current_status.value,
+                    "requested_status": exc.requested_status.value,
+                },
+            },
+        )
+
+    @app.exception_handler(StaffNotFoundError)  # type: ignore[untyped-decorator]
+    async def staff_not_found_handler(
+        request: Request,
+        exc: StaffNotFoundError,
+    ) -> JSONResponse:
+        """Handle StaffNotFoundError exceptions."""
+        logger.warning(
+            "api.exception.staff_not_found",
+            staff_id=str(exc.staff_id),
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "success": False,
+                "error": {
+                    "code": "STAFF_NOT_FOUND",
+                    "message": str(exc),
+                    "staff_id": str(exc.staff_id),
+                },
+            },
+        )
+
+    @app.exception_handler(PropertyCustomerMismatchError)  # type: ignore[untyped-decorator]
+    async def property_customer_mismatch_handler(
+        request: Request,
+        exc: PropertyCustomerMismatchError,
+    ) -> JSONResponse:
+        """Handle PropertyCustomerMismatchError exceptions."""
+        logger.warning(
+            "api.exception.property_customer_mismatch",
+            property_id=str(exc.property_id),
+            customer_id=str(exc.customer_id),
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "success": False,
+                "error": {
+                    "code": "PROPERTY_CUSTOMER_MISMATCH",
+                    "message": str(exc),
+                    "property_id": str(exc.property_id),
+                    "customer_id": str(exc.customer_id),
+                },
+            },
+        )
+
+    @app.exception_handler(ServiceOfferingInactiveError)  # type: ignore[untyped-decorator]
+    async def service_offering_inactive_handler(
+        request: Request,
+        exc: ServiceOfferingInactiveError,
+    ) -> JSONResponse:
+        """Handle ServiceOfferingInactiveError exceptions."""
+        logger.warning(
+            "api.exception.service_offering_inactive",
+            service_id=str(exc.service_id),
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "success": False,
+                "error": {
+                    "code": "SERVICE_OFFERING_INACTIVE",
+                    "message": str(exc),
+                    "service_id": str(exc.service_id),
                 },
             },
         )

@@ -8,7 +8,7 @@ Validates: Requirements 7.1-7.4
 """
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
 from sqlalchemy import ForeignKey, String, Text
@@ -74,7 +74,7 @@ class JobStatusHistory(Base):
         )
 
     @property
-    def previous_status_enum(self) -> JobStatus | None:
+    def previous_status_enum(self) -> Optional[JobStatus]:
         """Get the previous status as an enum value."""
         return JobStatus(self.previous_status) if self.previous_status else None
 
