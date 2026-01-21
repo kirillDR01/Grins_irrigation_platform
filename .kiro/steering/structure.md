@@ -12,7 +12,17 @@ grins-irrigation-platform/
 │   ├── specs/                  # Feature specifications
 │   └── steering/               # Steering documents
 │
-├── src/                        # Source code
+├── frontend/                   # React Admin Dashboard (Phase 3+)
+│   ├── public/                 # Static assets, PWA manifest
+│   ├── src/
+│   │   ├── core/               # Foundation (API client, providers, router)
+│   │   ├── shared/             # Cross-feature components and utilities
+│   │   └── features/           # Feature slices (customers, jobs, schedule)
+│   ├── package.json
+│   ├── vite.config.ts
+│   └── tsconfig.json
+│
+├── src/                        # Backend source code (Python)
 │   └── grins_platform/         # Main package
 │       ├── __init__.py
 │       ├── logging.py          # Logging infrastructure
@@ -122,6 +132,104 @@ from grins_platform.models.user import User, UserCreate
 from grins_platform.repositories.user_repository import UserRepository
 ```
 
+## Frontend Structure (Phase 3+)
+
+The frontend uses Vertical Slice Architecture (VSA) with React + TypeScript.
+
+### Frontend Directory Layout
+```
+frontend/
+├── public/
+│   ├── manifest.json           # PWA manifest
+│   └── icons/                  # App icons
+├── src/
+│   ├── main.tsx                # Entry point
+│   ├── App.tsx                 # Root component with providers
+│   │
+│   ├── core/                   # Foundation (exists before features)
+│   │   ├── api/
+│   │   │   ├── client.ts       # Axios instance with interceptors
+│   │   │   └── types.ts        # API response types
+│   │   ├── config/
+│   │   │   └── index.ts        # Environment configuration
+│   │   ├── providers/
+│   │   │   ├── QueryProvider.tsx    # TanStack Query setup
+│   │   │   └── ThemeProvider.tsx    # Theme context
+│   │   └── router/
+│   │       └── index.tsx       # Route definitions
+│   │
+│   ├── shared/                 # Cross-feature utilities (3+ features)
+│   │   ├── components/
+│   │   │   ├── ui/             # shadcn/ui components
+│   │   │   ├── Layout.tsx      # Main layout with sidebar
+│   │   │   ├── PageHeader.tsx  # Consistent page headers
+│   │   │   └── StatusBadge.tsx # Status indicators
+│   │   ├── hooks/
+│   │   │   ├── useDebounce.ts
+│   │   │   └── usePagination.ts
+│   │   └── utils/
+│   │       ├── formatters.ts   # Date, currency formatting
+│   │       └── validators.ts   # Zod schemas
+│   │
+│   └── features/               # Feature slices (self-contained)
+│       ├── dashboard/
+│       │   ├── components/
+│       │   ├── hooks/
+│       │   └── index.ts        # Public exports
+│       ├── customers/
+│       │   ├── components/
+│       │   ├── hooks/
+│       │   ├── api/
+│       │   ├── types/
+│       │   └── index.ts
+│       ├── jobs/
+│       │   └── ...
+│       ├── staff/
+│       │   └── ...
+│       └── schedule/
+│           └── ...
+│
+├── index.html
+├── vite.config.ts
+├── tailwind.config.js
+├── tsconfig.json
+└── package.json
+```
+
+### Frontend File Naming Conventions
+
+| Type | Convention | Example |
+|------|------------|---------|
+| Components | PascalCase.tsx | `CustomerList.tsx` |
+| Hooks | camelCase with `use` prefix | `useCustomers.ts` |
+| API files | camelCase with `Api` suffix | `customerApi.ts` |
+| Types | camelCase or PascalCase | `types/index.ts` |
+| Utils | camelCase | `formatters.ts` |
+
+### Frontend Import Patterns
+```typescript
+// Core imports
+import { apiClient } from '@/core/api/client';
+import { QueryProvider } from '@/core/providers/QueryProvider';
+
+// Shared imports
+import { Button, Card } from '@/shared/components/ui';
+import { Layout } from '@/shared/components/Layout';
+import { useDebounce } from '@/shared/hooks/useDebounce';
+
+// Feature imports (from public index.ts)
+import { CustomerList, useCustomers } from '@/features/customers';
+import { JobDetail, useJob } from '@/features/jobs';
+```
+
+### VSA Principles for Frontend
+
+1. **Feature Isolation**: Each feature (customers, jobs, staff, schedule) is self-contained
+2. **Core Foundation**: API client, providers, router exist before features
+3. **Shared Components**: UI components used by 3+ features go in `shared/`
+4. **Duplication Until Proven Shared**: Start with feature-specific code, extract when pattern emerges
+5. **Clear Dependencies**: Features can import from `core/` and `shared/`, not from each other
+
 ## Test File Structure
 
 ### Three-Tier Test Organization
@@ -220,7 +328,11 @@ uv run pytest -m integration -v
 
 | File | Purpose |
 |------|---------|
-| `pyproject.toml` | Project metadata, dependencies, tool config |
+| `pyproject.toml` | Backend: Project metadata, dependencies, tool config |
+| `frontend/package.json` | Frontend: Dependencies and scripts |
+| `frontend/vite.config.ts` | Frontend: Vite build configuration |
+| `frontend/tsconfig.json` | Frontend: TypeScript configuration |
+| `frontend/tailwind.config.js` | Frontend: Tailwind CSS configuration |
 | `.env` | Environment variables (not committed) |
 | `.env.example` | Environment variable template |
 | `docker-compose.yml` | Docker service definitions |
@@ -239,6 +351,7 @@ uv run pytest -m integration -v
 
 ### Ignored Directories
 ```
+# Backend
 .venv/              # Virtual environment
 .mypy_cache/        # MyPy cache
 .pytest_cache/      # Pytest cache
@@ -247,6 +360,11 @@ __pycache__/        # Python bytecode
 *.egg-info/         # Package metadata
 dist/               # Built packages
 build/              # Build output
+
+# Frontend
+frontend/node_modules/   # Node dependencies
+frontend/dist/           # Production build output
+frontend/.vite/          # Vite cache
 ```
 
 ### Output Directories

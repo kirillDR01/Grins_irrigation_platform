@@ -239,6 +239,7 @@ class TestAutoCategorization:
         # If quoted_amount is set (which it always is in this test),
         # category should be ready_to_schedule
         # The strategy always generates a value, so quoted_amount is never None
+        assert quoted_amount > 0  # Verify we have a valid quoted amount
         expected = JobCategory.READY_TO_SCHEDULE
         assert expected == JobCategory.READY_TO_SCHEDULE
 

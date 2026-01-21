@@ -1,0 +1,13 @@
+{
+  "name": "Validate UI on Feature Complete",
+  "version": "1.0.0",
+  "description": "Runs agent-browser validation when a frontend feature is marked complete",
+  "disabled": true,
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Run the appropriate agent-browser validation script for the completed feature. Check if the frontend is running at localhost:5173, then run the validation script (e.g., scripts/validate-customers.sh for customer feature). Report any failures."
+  }
+}

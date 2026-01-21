@@ -1,0 +1,14 @@
+{
+  "name": "Frontend TypeScript Check",
+  "version": "1.0.0",
+  "description": "Runs TypeScript compiler to check for type errors on frontend files",
+  "disabled": true,
+  "when": {
+    "type": "fileEdited",
+    "patterns": ["frontend/src/**/*.ts", "frontend/src/**/*.tsx"]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Run TypeScript check: cd frontend && npx tsc --noEmit"
+  }
+}

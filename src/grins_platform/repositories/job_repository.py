@@ -147,7 +147,7 @@ class JobRepository(LoggerMixin):
         if include_relationships:
             stmt = stmt.options(
                 selectinload(Job.customer),
-                selectinload(Job.property),
+                selectinload(Job.job_property),
                 selectinload(Job.service_offering),
                 selectinload(Job.status_history),
             )

@@ -1,0 +1,14 @@
+{
+  "name": "Frontend Lint on Save",
+  "version": "1.0.0",
+  "description": "Automatically runs ESLint on TypeScript/React files when edited",
+  "disabled": true,
+  "when": {
+    "type": "fileEdited",
+    "patterns": ["frontend/src/**/*.ts", "frontend/src/**/*.tsx"]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Run ESLint on the edited file: cd frontend && npx eslint --fix {file}"
+  }
+}
