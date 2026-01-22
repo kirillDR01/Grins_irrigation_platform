@@ -1,0 +1,19 @@
+{
+  "enabled": true,
+  "name": "API Postman Testing",
+  "description": "Monitors API source code changes and automatically runs Postman collection tests to validate functionality",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/grins_platform/api/**/*.py",
+      "src/grins_platform/services/**/*.py",
+      "src/grins_platform/schemas/**/*.py",
+      "src/grins_platform/repositories/**/*.py"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "API source code has been modified. Please retrieve the contents of the .postman.json file. If the file exists, get the collection ID and run the collection using the Postman Power, showing me the results and propose fixes for any errors found."
+  }
+}

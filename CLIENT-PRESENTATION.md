@@ -339,20 +339,6 @@ We've designed a comprehensive database schema with 20+ tables covering:
 - Comprehensive training materials
 - Gradual rollout starting with one technician
 
-### Support Strategy
-
-**Development Support**: Direct access to development team during hackathon and beyond
-**Documentation**: Comprehensive user guides and video tutorials
-**Training**: Hands-on training sessions for you and your staff
-**Maintenance**: Ongoing support and feature development
-
-### Migration Plan
-
-1. **Week 1**: Set up system with your existing customer data
-2. **Week 2**: Train one technician on mobile app
-3. **Week 3**: Run parallel with spreadsheets for validation
-4. **Week 4**: Full cutover with all staff
-5. **Ongoing**: Continuous improvement based on usage
 
 ---
 

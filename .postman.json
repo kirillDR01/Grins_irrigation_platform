@@ -1,0 +1,26 @@
+{
+  "workspace": {
+    "id": "1b9f7a2b-5e92-42e0-abee-0be520dce654",
+    "name": "Grins Irrigation Platform"
+  },
+  "collection": {
+    "id": "8365c246-9686-4b49-9411-a7ea4e7383a4",
+    "uid": "51717366-8365c246-9686-4b49-9411-a7ea4e7383a4",
+    "name": "Grins Irrigation API"
+  },
+  "environment": {
+    "id": "3515efac-a8af-4dd9-bbfc-d15b63d78777",
+    "uid": "51717366-3515efac-a8af-4dd9-bbfc-d15b63d78777",
+    "name": "Local Development"
+  },
+  "requests": {
+    "health_check": "Health Check",
+    "list_customers": "7b23c668-47be-e50c-601c-118784e0cd16",
+    "create_customer": "5dc14ba4-3139-89f8-2902-d9c51fc50bac",
+    "list_jobs": "03fa1105-2fca-9d57-264b-c29bb612ec29",
+    "list_staff": "2ce71865-aa3b-c48b-7dd4-8704e1bab715",
+    "list_services": "851c793c-0d8c-1b3b-977a-aa8ae11b8f6b"
+  },
+  "created_at": "2026-01-22T00:48:00Z",
+  "description": "Postman configuration for Grin's Irrigation Platform API testing"
+}
