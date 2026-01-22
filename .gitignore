@@ -82,3 +82,5 @@ logs/
 output/
 temp/
 tmp/
+# Local Netlify folder
+.netlify

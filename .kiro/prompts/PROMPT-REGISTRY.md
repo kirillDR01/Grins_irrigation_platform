@@ -1,8 +1,8 @@
 # Prompt Registry
 
-**Last Updated**: 2025-01-19  
-**Total Prompts**: 37  
-**Categories**: 10
+**Last Updated**: 2026-01-21  
+**Total Prompts**: 40  
+**Categories**: 11
 
 ## Overview
 
@@ -41,11 +41,14 @@ This registry catalogs all available prompts in the Kiro CLI environment. Prompt
 | git-commit-push | Development Workflow | Git workflow: staging, committing with structured messages, and pushing | `@git-commit-push` |
 | hackathon-status | Hackathon | Generate comprehensive status report for hackathon submission | `@hackathon-status` |
 | implement-api | Spec Implementation | Implement FastAPI endpoint following Grins Platform patterns | `@implement-api` |
+| implement-api-client | Frontend Implementation | Create type-safe API client for a feature using Axios | `@implement-api-client` |
 | implement-exception | Spec Implementation | Implement custom exceptions following Grins Platform patterns | `@implement-exception` |
+| implement-feature-slice | Frontend Implementation | Create complete feature slice following Vertical Slice Architecture | `@implement-feature-slice` |
 | implement-fix | Development Workflow | Implement fix from RCA document for GitHub issue | `@implement-fix [github-issue-id]` |
 | implement-migration | Spec Implementation | Generate Alembic migration from design document schema | `@implement-migration [table-name]` |
 | implement-pbt | Spec Implementation | Implement property-based test following Grins Platform patterns | `@implement-pbt` |
 | implement-service | Spec Implementation | Implement service layer method following Grins Platform patterns | `@implement-service` |
+| implement-tanstack-hook | Frontend Implementation | Create TanStack Query hooks for data fetching and mutations | `@implement-tanstack-hook` |
 | list-prompts | Prompt Management | Display all available prompts organized by category | `@list-prompts [optional category]` |
 | new-feature | Development | Create a complete feature with automatic testing and logging | `@new-feature [feature description]` |
 | next-task | Workflow Automation | Find and execute the next incomplete task from the active spec | `@next-task [optional spec-name]` |
@@ -107,6 +110,13 @@ Prompts for creating and maintaining project documentation.
 - **devlog-entry**: Create comprehensive devlog entries with detailed technical information
 - **devlog-quick**: Create streamlined devlog entries for quick progress updates
 - **devlog-summary**: Analyze entire conversation and create comprehensive session summary
+
+### Frontend Implementation (3 prompts)
+Prompts for implementing React frontend features following VSA patterns.
+
+- **implement-api-client**: Create type-safe API client for a feature using Axios
+- **implement-feature-slice**: Create complete feature slice following Vertical Slice Architecture
+- **implement-tanstack-hook**: Create TanStack Query hooks for data fetching and mutations
 
 ### Hackathon (1 prompt)
 Prompts for hackathon-specific workflows and status tracking.
@@ -175,6 +185,13 @@ Prompts for automating development workflows and task management.
 6. `@checkpoint` - Save progress (quality + devlog + commit)
 7. `@feature-complete-check` - Verify feature is done
 
+### Frontend Development Workflow
+1. `@implement-feature-slice` - Create complete feature slice structure
+2. `@implement-api-client` - Generate API client with Axios
+3. `@implement-tanstack-hook` - Create query and mutation hooks
+4. `@quality-check` - Run ESLint and TypeScript checks
+5. `@checkpoint` - Save progress
+
 ### Quality Workflow
 1. `@new-feature` - Create feature with built-in quality
 2. `@add-tests` - Add comprehensive tests
@@ -228,10 +245,11 @@ Run `@update-prompt-registry` to automatically:
 
 ## Statistics
 
-- **Total Prompts**: 37
-- **Categories**: 10
+- **Total Prompts**: 40
+- **Categories**: 11
 - **Most Common Category**: Prompt Management, Spec Implementation (5 prompts each)
-- **Last Registry Update**: 2025-01-19
+- **Newest Category**: Frontend Implementation (3 prompts)
+- **Last Registry Update**: 2026-01-21
 
 ---
 
