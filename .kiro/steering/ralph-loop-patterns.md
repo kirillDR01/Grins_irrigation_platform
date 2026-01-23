@@ -1,0 +1,493 @@
+# Ralph Wiggum Loop Patterns
+
+## Purpose
+
+This steering document defines the behavior rules for the Ralph Wiggum autonomous execution loop. It ensures consistent, safe, and effective task execution across all specs.
+
+## Core Principles
+
+### 1. Single Task Focus
+**ONLY WORK ON A SINGLE TASK AT A TIME.**
+
+- Execute one task completely before moving to the next
+- Do not batch multiple tasks together
+- Do not skip ahead to "easier" tasks
+- Complete sub-tasks before marking parent complete
+
+### 2. Quality First
+**ALL QUALITY CHECKS MUST PASS BEFORE MARKING COMPLETE.**
+
+No exceptions. If quality checks fail:
+1. Fix the issues
+2. Re-run quality checks
+3. Only mark complete when all pass
+
+### 3. Checkpoint Respect
+**ALWAYS PAUSE AT CHECKPOINT TASKS.**
+
+Checkpoints are natural review points. When you reach a task containing "Checkpoint" in its name:
+1. Stop execution
+2. Output `CHECKPOINT REACHED`
+3. Wait for user to review and continue
+
+### 4. Activity Logging
+**LOG EVERY ACTION IN ACTIVITY.MD.**
+
+Every task execution must be logged with:
+- Timestamp
+- What was done
+- Files modified
+- Quality check results
+- Any issues or notes
+
+### 5. Workspace Safety
+**FOLLOW WORKSPACE-SAFETY.MD AT ALL TIMES.**
+
+- Only modify files within workspace
+- Use relative paths
+- Never execute destructive commands
+- All changes must be reversible via git
+
+---
+
+## Task State Detection
+
+### Checkbox Patterns
+
+Parse `tasks.md` for these patterns:
+
+| Pattern | State | Action |
+|---------|-------|--------|
+| `- [ ]` | Not started | Execute this task |
+| `- [x]` | Completed | Skip |
+| `- [-]` | In progress | Continue this task |
+| `- [~]` | Queued | Skip for now |
+| `- [S]` | Skipped | Skip (user requested) |
+
+### Task Hierarchy
+
+Tasks can have sub-tasks (indented):
+
+```markdown
+- [ ] 2. Backend - Appointments
+  - [ ] 2.1 Create appointments table migration
+  - [ ] 2.2 Create Appointment SQLAlchemy model
+```
+
+Rules:
+- Execute sub-tasks before parent
+- Parent is complete only when ALL sub-tasks are complete
+- Find the deepest incomplete task first
+
+### Checkpoint Detection
+
+A task is a checkpoint if its name contains "Checkpoint" (case-insensitive):
+
+```markdown
+- [ ] 4. Checkpoint - Backend Complete
+- [ ] 6. Checkpoint - Frontend Foundation
+```
+
+---
+
+## Quality Requirements
+
+### Backend Tasks
+
+Before marking ANY backend task complete, run:
+
+```bash
+uv run ruff check src/
+uv run mypy src/
+uv run pyright src/
+uv run pytest -v
+```
+
+**ALL must pass with zero errors.**
+
+### Frontend Tasks
+
+Before marking ANY frontend task complete, run:
+
+```bash
+cd frontend && npm run lint
+cd frontend && npm run typecheck
+cd frontend && npm test
+```
+
+**ALL must pass with zero errors.**
+
+### Visual Validation
+
+For frontend UI tasks, also validate visually:
+
+```bash
+agent-browser open http://localhost:5173
+agent-browser snapshot -i
+agent-browser is visible "[data-testid='expected-element']"
+```
+
+---
+
+## Activity Log Format
+
+### File Location
+
+Each spec has its own activity log:
+```
+.kiro/specs/{spec-name}/activity.md
+```
+
+### Entry Format
+
+```markdown
+## [{YYYY-MM-DD HH:MM}] Task {task-id}: {task-name}
+
+### What Was Done
+- {bullet point description of changes}
+- {another change}
+
+### Files Modified
+- `path/to/file1.py` - {brief description}
+- `path/to/file2.py` - {brief description}
+
+### Quality Check Results
+- Ruff: ✅ Pass
+- MyPy: ✅ Pass
+- Pyright: ✅ Pass
+- Tests: ✅ 127/127 passing
+
+### Notes
+- {any issues encountered}
+- {decisions made}
+- {things to revisit}
+```
+
+### Status Update
+
+Update the "Current Status" section at the top of activity.md after each task:
+
+```markdown
+## Current Status
+**Last Updated:** {timestamp}
+**Tasks Completed:** {completed} / {total}
+**Current Task:** {task-id} - {task-name}
+**Loop Status:** Running / Paused at Checkpoint / Complete
+```
+
+---
+
+## Failure Handling
+
+### Graduated Response
+
+```
+Task Fails
+    │
+    ▼
+┌─────────────────┐
+│  Retry 1/3      │──► Success? → Continue
+└─────────────────┘
+    │ Fail
+    ▼
+┌─────────────────┐
+│  Retry 2/3      │──► Success? → Continue
+│  (try different │
+│   approach)     │
+└─────────────────┘
+    │ Fail
+    ▼
+┌─────────────────┐
+│  Retry 3/3      │──► Success? → Continue
+│  (simplify if   │
+│   possible)     │
+└─────────────────┘
+    │ Fail
+    ▼
+┌─────────────────┐
+│  USER INPUT     │
+│  REQUIRED       │
+└─────────────────┘
+```
+
+### Retry Strategies
+
+1. **First retry:** Same approach, check for typos/errors
+2. **Second retry:** Try alternative implementation
+3. **Third retry:** Simplify scope if possible
+
+### Logging Failures
+
+Log each retry attempt:
+
+```markdown
+## [{timestamp}] Task {task-id}: RETRY {n}/3
+
+### Issue
+{description of what failed}
+
+### Approach
+{what will be tried differently}
+```
+
+### User Input Required
+
+When all retries fail:
+
+```markdown
+## [{timestamp}] Task {task-id}: USER INPUT REQUIRED
+
+### Issue
+{detailed description of the problem}
+
+### Attempts Made
+1. {first approach and result}
+2. {second approach and result}
+3. {third approach and result}
+
+### Suggested Actions
+- {option 1}
+- {option 2}
+- {option 3}
+
+### To Continue
+Run `@ralph-loop {spec-name}` after resolving the issue.
+```
+
+---
+
+## Loop Control
+
+### Starting the Loop
+
+```
+@ralph-loop {spec-name}
+```
+
+Starts from the first incomplete task and continues until checkpoint or completion.
+
+### Single Task Execution
+
+```
+@ralph-next {spec-name}
+```
+
+Executes only the next task, then stops.
+
+### Checking Status
+
+```
+@ralph-status {spec-name}
+```
+
+Shows progress without executing anything.
+
+### Skipping Tasks
+
+```
+@ralph-skip {spec-name} {task-id} "{reason}"
+```
+
+Marks a task as skipped and moves to the next.
+
+### Stopping the Loop
+
+The loop stops automatically when:
+1. A checkpoint is reached
+2. All tasks are complete
+3. User input is required (after 3 retries)
+4. Max iterations (50) is reached
+
+---
+
+## Integration with Kiro Tools
+
+### taskStatus Tool
+
+Use the `taskStatus` tool to update task states:
+
+```
+taskStatus(
+  taskFilePath=".kiro/specs/{spec-name}/tasks.md",
+  task="{exact task text}",
+  status="in_progress" | "completed"
+)
+```
+
+### agent-browser Tool
+
+Use for visual validation:
+
+```bash
+agent-browser open {url}
+agent-browser snapshot -i
+agent-browser click "[data-testid='button']"
+agent-browser fill "[data-testid='input']" "value"
+agent-browser is visible "[data-testid='element']"
+```
+
+### getDiagnostics Tool
+
+Use to check for code issues:
+
+```
+getDiagnostics(paths=["src/grins_platform/new_file.py"])
+```
+
+---
+
+## Best Practices
+
+### Before Starting
+
+1. Read the full spec (requirements, design, tasks)
+2. Understand the current state
+3. Identify any blockers or dependencies
+
+### During Execution
+
+1. Focus on one task at a time
+2. Write tests alongside implementation
+3. Run quality checks frequently
+4. Log progress in activity.md
+
+### At Checkpoints
+
+1. Review all completed work
+2. Run full test suite
+3. Check for any skipped tasks
+4. Verify integration with existing code
+
+### After Completion
+
+1. Update DEVLOG.md with summary
+2. Run final quality checks
+3. Verify all tests pass
+4. Document any deviations from design
+
+---
+
+## Troubleshooting
+
+### Loop Not Progressing
+
+1. Check if task is actually incomplete (`- [ ]`)
+2. Check if there's a blocking dependency
+3. Check activity.md for error messages
+4. Run `@ralph-status {spec-name}` to see current state
+
+### Quality Checks Failing
+
+1. Read the error messages carefully
+2. Fix issues one at a time
+3. Re-run specific check after each fix
+4. Don't skip quality checks
+
+### Tests Failing
+
+1. Check if test is testing the right thing
+2. Check if implementation matches design
+3. Check for missing dependencies
+4. Run single test to isolate issue
+
+### Stuck at Checkpoint
+
+1. Review completed work
+2. Run `@ralph-loop {spec-name}` to continue
+3. Or run `@ralph-next {spec-name}` for single task
+
+---
+
+## Stagnation Recovery (CRITICAL FOR AUTONOMOUS EXECUTION)
+
+### Command Timeout Recovery
+
+When a command times out, DO NOT wait for user input. Immediately try an alternative:
+
+| Scenario | Recovery Strategy |
+|----------|-------------------|
+| `npm install` timeout | Install packages one at a time, or use `--legacy-peer-deps` |
+| `npx shadcn` timeout | Manually create component files from shadcn/ui source |
+| `npx` init commands | Create config files manually |
+| Build/compile timeout | Check for infinite loops, reduce scope |
+| Test timeout | Run specific test file instead of full suite |
+
+### Manual Component Creation (shadcn/ui)
+
+If shadcn CLI times out, create components manually:
+
+1. Check https://ui.shadcn.com/docs/components/{component}
+2. Copy the component source code
+3. Create file at `src/components/ui/{component}.tsx`
+4. Install any missing dependencies individually
+
+### NPM Timeout Recovery
+
+```bash
+# Instead of bulk install:
+npm install pkg1 pkg2 pkg3  # May timeout
+
+# Do one at a time:
+npm install pkg1
+npm install pkg2
+npm install pkg3
+```
+
+### Stagnation Detection Rules
+
+If you notice:
+- Command running > 60 seconds with no output
+- Same error appearing 3+ times
+- No progress for 2+ minutes
+
+Then IMMEDIATELY:
+1. Cancel/abandon the current approach
+2. Log the issue in activity.md
+3. Try an alternative approach
+4. If no alternative works after 3 attempts, mark task as blocked and continue to next task
+
+### Never Wait for User Input During Autonomous Execution
+
+The Ralph loop is designed for overnight/unattended execution. When stuck:
+- DO try alternative approaches
+- DO skip and document blockers
+- DO continue with next tasks
+- DO NOT wait for user confirmation
+- DO NOT ask clarifying questions
+
+---
+
+## Configuration Reference
+
+```yaml
+# Default configuration for Ralph Wiggum Loop
+
+context_mode: continuous_with_checkpoint_reset
+continue_mode: auto_until_checkpoint
+task_execution: single_task
+
+state_storage:
+  task_status: .kiro/specs/{feature}/tasks.md
+  activity_log: .kiro/specs/{feature}/activity.md
+
+failure_handling: graduated_response
+max_iterations: 50
+retry_limit: 3
+checkpoint_detection: true
+
+quality_checks:
+  backend:
+    - uv run ruff check src/
+    - uv run mypy src/
+    - uv run pyright src/
+    - uv run pytest -v
+  frontend:
+    - cd frontend && npm run lint
+    - cd frontend && npm run typecheck
+    - cd frontend && npm test
+
+visual_validation:
+  enabled: true
+  tool: agent-browser
+  screenshot_dir: screenshots/{feature}/
+```

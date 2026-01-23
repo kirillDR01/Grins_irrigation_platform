@@ -9,15 +9,18 @@ Validates: Requirements 8.1-8.10
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
 from sqlalchemy import JSON, Boolean, Numeric, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from grins_platform.database import Base
 from grins_platform.models.enums import SkillLevel, StaffRole
+
+if TYPE_CHECKING:
+    from grins_platform.models.appointment import Appointment
 
 
 class Staff(Base):
@@ -78,6 +81,12 @@ class Staff(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         server_default=func.now(), onupdate=func.now(),
+    )
+
+    # Relationships
+    appointments: Mapped[list["Appointment"]] = relationship(
+        "Appointment",
+        back_populates="staff",
     )
 
     def __repr__(self) -> str:

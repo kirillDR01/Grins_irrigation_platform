@@ -5,10 +5,13 @@ This package contains all database models used by the platform.
 
 Phase 1 (Customer Management): Customer, Property
 Phase 2 (Field Operations): ServiceOffering, Job, JobStatusHistory, Staff
+Phase 3 (Admin Dashboard): Appointment
 """
 
+from grins_platform.models.appointment import Appointment
 from grins_platform.models.customer import Customer
 from grins_platform.models.enums import (
+    AppointmentStatus,
     CustomerStatus,
     JobCategory,
     JobSource,
@@ -28,6 +31,9 @@ from grins_platform.models.service_offering import ServiceOffering
 from grins_platform.models.staff import Staff
 
 __all__ = [
+    # Phase 3: Admin Dashboard
+    "Appointment",
+    "AppointmentStatus",
     # Phase 1: Customer Management
     "Customer",
     "CustomerStatus",

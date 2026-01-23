@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from uuid import UUID
 
-    from grins_platform.models.enums import JobStatus
+    from grins_platform.models.enums import AppointmentStatus, JobStatus
 
 
 class CustomerError(Exception):
@@ -172,16 +172,20 @@ class JobNotFoundError(FieldOperationsError):
 
 
 class InvalidStatusTransitionError(FieldOperationsError):
-    """Raised when an invalid job status transition is attempted.
+    """Raised when an invalid job/appointment status transition is attempted.
 
-    Validates: Requirement 4.10
+    Validates: Requirement 4.10, Admin Dashboard Requirement 1.2
     """
 
-    def __init__(self, current_status: JobStatus, requested_status: JobStatus) -> None:
+    def __init__(
+        self,
+        current_status: JobStatus | AppointmentStatus,
+        requested_status: JobStatus | AppointmentStatus,
+    ) -> None:
         """Initialize with status transition details.
 
         Args:
-            current_status: The current job status
+            current_status: The current status
             requested_status: The requested new status
         """
         self.current_status = current_status
@@ -206,6 +210,22 @@ class StaffNotFoundError(FieldOperationsError):
         """
         self.staff_id = staff_id
         super().__init__(f"Staff member not found: {staff_id}")
+
+
+class AppointmentNotFoundError(FieldOperationsError):
+    """Raised when an appointment is not found.
+
+    Validates: Admin Dashboard Requirement 1.3
+    """
+
+    def __init__(self, appointment_id: UUID) -> None:
+        """Initialize with appointment ID.
+
+        Args:
+            appointment_id: UUID of the appointment that was not found
+        """
+        self.appointment_id = appointment_id
+        super().__init__(f"Appointment not found: {appointment_id}")
 
 
 class PropertyCustomerMismatchError(FieldOperationsError):
@@ -245,6 +265,7 @@ class ServiceOfferingInactiveError(FieldOperationsError):
 
 
 __all__ = [
+    "AppointmentNotFoundError",
     "BulkOperationError",
     "CustomerError",
     "CustomerNotFoundError",

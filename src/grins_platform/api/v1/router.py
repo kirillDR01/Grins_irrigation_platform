@@ -8,7 +8,9 @@ Validates: Requirement 10.5-10.7
 
 from fastapi import APIRouter
 
+from grins_platform.api.v1.appointments import router as appointments_router
 from grins_platform.api.v1.customers import router as customers_router
+from grins_platform.api.v1.dashboard import router as dashboard_router
 from grins_platform.api.v1.jobs import router as jobs_router
 from grins_platform.api.v1.properties import router as properties_router
 from grins_platform.api.v1.services import router as services_router
@@ -48,6 +50,20 @@ api_router.include_router(
     jobs_router,
     prefix="/jobs",
     tags=["jobs"],
+)
+
+# Include appointment endpoints
+api_router.include_router(
+    appointments_router,
+    prefix="/appointments",
+    tags=["appointments"],
+)
+
+# Include dashboard endpoints
+api_router.include_router(
+    dashboard_router,
+    prefix="/dashboard",
+    tags=["dashboard"],
 )
 
 __all__ = ["api_router"]

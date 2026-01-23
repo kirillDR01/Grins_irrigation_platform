@@ -388,3 +388,48 @@ class StaffRepository(LoggerMixin):
 
         self.log_completed("list_with_filters", count=len(staff), total=total)
         return staff, total
+
+    async def count_active(self) -> int:
+        """Count active staff members.
+
+        Returns:
+            Count of active staff members
+
+        Validates: Admin Dashboard Requirement 1.6
+        """
+        self.log_started("count_active")
+
+        stmt = (
+            select(func.count())
+            .select_from(Staff)
+            .where(Staff.is_active == True)  # noqa: E712
+        )
+
+        result = await self.session.execute(stmt)
+        count = result.scalar() or 0
+
+        self.log_completed("count_active", count=count)
+        return count
+
+    async def count_available(self) -> int:
+        """Count available staff members (active and available).
+
+        Returns:
+            Count of available staff members
+
+        Validates: Admin Dashboard Requirement 1.6
+        """
+        self.log_started("count_available")
+
+        stmt = (
+            select(func.count())
+            .select_from(Staff)
+            .where(Staff.is_active == True)  # noqa: E712
+            .where(Staff.is_available == True)  # noqa: E712
+        )
+
+        result = await self.session.execute(stmt)
+        count = result.scalar() or 0
+
+        self.log_completed("count_available", count=count)
+        return count

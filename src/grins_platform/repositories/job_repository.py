@@ -9,7 +9,7 @@ Validates: Requirement 2.1-2.12, 6.1-6.9, 7.1-7.4
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, select, update
@@ -500,3 +500,161 @@ class JobRepository(LoggerMixin):
 
         self.log_completed("get_status_history", count=len(history))
         return history
+
+    async def count_by_status(self) -> dict[str, int]:
+        """Count jobs grouped by status.
+
+        Returns:
+            Dictionary mapping status string to count
+
+        Validates: Admin Dashboard Requirement 1.6
+        """
+        self.log_started("count_by_status")
+
+        stmt = (
+            select(Job.status, func.count())
+            .where(Job.is_deleted == False)  # noqa: E712
+            .group_by(Job.status)
+        )
+
+        result = await self.session.execute(stmt)
+        rows = result.all()
+
+        # Convert to dict with proper types
+        counts: dict[str, int] = {}
+        for row in rows:
+            status_val: str = str(row[0]) if row[0] else ""
+            count_val: int = int(row[1]) if row[1] else 0
+            if status_val:
+                counts[status_val] = count_val
+
+        self.log_completed("count_by_status", statuses=len(counts))
+        return counts
+
+    async def count_by_day(
+        self,
+        start_date: date,
+        end_date: date,
+    ) -> dict[date, int]:
+        """Count jobs created per day within a date range.
+
+        Args:
+            start_date: Start of the date range
+            end_date: End of the date range
+
+        Returns:
+            Dictionary mapping date to count of jobs created
+
+        Validates: Admin Dashboard Requirement 1.6
+        """
+        self.log_started(
+            "count_by_day",
+            start_date=str(start_date),
+            end_date=str(end_date),
+        )
+
+        # Cast created_at to date for grouping
+        stmt = (
+            select(
+                func.date(Job.created_at).label("job_date"),
+                func.count().label("count"),
+            )
+            .where(Job.is_deleted == False)  # noqa: E712
+            .where(func.date(Job.created_at) >= start_date)
+            .where(func.date(Job.created_at) <= end_date)
+            .group_by(func.date(Job.created_at))
+            .order_by(func.date(Job.created_at))
+        )
+
+        result = await self.session.execute(stmt)
+        rows = result.all()
+
+        counts: dict[date, int] = {
+            job_date: count
+            for job_date, count in rows
+            if isinstance(job_date, date)
+        }
+
+        self.log_completed("count_by_day", days=len(counts))
+        return counts
+
+    async def count_by_category(
+        self,
+        start_date: date,
+        end_date: date,
+    ) -> dict[str, int]:
+        """Count jobs by category within a date range.
+
+        Args:
+            start_date: Start of the date range
+            end_date: End of the date range
+
+        Returns:
+            Dictionary mapping category string to count
+
+        Validates: Admin Dashboard Requirement 1.6
+        """
+        self.log_started(
+            "count_by_category",
+            start_date=str(start_date),
+            end_date=str(end_date),
+        )
+
+        stmt = (
+            select(Job.category, func.count())
+            .where(Job.is_deleted == False)  # noqa: E712
+            .where(func.date(Job.created_at) >= start_date)
+            .where(func.date(Job.created_at) <= end_date)
+            .group_by(Job.category)
+        )
+
+        result = await self.session.execute(stmt)
+        rows = result.all()
+
+        counts: dict[str, int] = {
+            category: count for category, count in rows if category
+        }
+
+        self.log_completed("count_by_category", categories=len(counts))
+        return counts
+
+    async def count_by_source(
+        self,
+        start_date: date,
+        end_date: date,
+    ) -> dict[str, int]:
+        """Count jobs by source within a date range.
+
+        Args:
+            start_date: Start of the date range
+            end_date: End of the date range
+
+        Returns:
+            Dictionary mapping source string to count
+
+        Validates: Admin Dashboard Requirement 1.6
+        """
+        self.log_started(
+            "count_by_source",
+            start_date=str(start_date),
+            end_date=str(end_date),
+        )
+
+        stmt = (
+            select(Job.source, func.count())
+            .where(Job.is_deleted == False)  # noqa: E712
+            .where(func.date(Job.created_at) >= start_date)
+            .where(func.date(Job.created_at) <= end_date)
+            .group_by(Job.source)
+        )
+
+        result = await self.session.execute(stmt)
+        rows = result.all()
+
+        counts: dict[str, int] = {}
+        for source, count in rows:
+            source_key = source if source else "unknown"
+            counts[source_key] = count
+
+        self.log_completed("count_by_source", sources=len(counts))
+        return counts

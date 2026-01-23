@@ -20,6 +20,7 @@ from grins_platform.database import Base
 from grins_platform.models.enums import JobCategory, JobSource, JobStatus
 
 if TYPE_CHECKING:
+    from grins_platform.models.appointment import Appointment
     from grins_platform.models.customer import Customer
     from grins_platform.models.job_status_history import JobStatusHistory
     from grins_platform.models.property import Property
@@ -157,6 +158,11 @@ class Job(Base):
     service_offering: Mapped["ServiceOffering | None"] = relationship("ServiceOffering")
     status_history: Mapped[list["JobStatusHistory"]] = relationship(
         "JobStatusHistory",
+        back_populates="job",
+        cascade="all, delete-orphan",
+    )
+    appointments: Mapped[list["Appointment"]] = relationship(
+        "Appointment",
         back_populates="job",
         cascade="all, delete-orphan",
     )

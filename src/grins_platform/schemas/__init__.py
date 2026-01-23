@@ -6,8 +6,19 @@ and serialization in the API layer.
 
 Phase 1: Customer Management schemas
 Phase 2: Field Operations schemas (Service Offerings, Jobs, Staff)
+Phase 3: Admin Dashboard schemas (Appointments, Dashboard Metrics)
 """
 
+from grins_platform.schemas.appointment import (
+    AppointmentCreate,
+    AppointmentListParams,
+    AppointmentPaginatedResponse,
+    AppointmentResponse,
+    AppointmentUpdate,
+    DailyScheduleResponse,
+    StaffDailyScheduleResponse,
+    WeeklyScheduleResponse,
+)
 from grins_platform.schemas.customer import (
     BulkPreferencesUpdate,
     BulkUpdateResponse,
@@ -19,6 +30,16 @@ from grins_platform.schemas.customer import (
     CustomerUpdate,
     PaginatedCustomerResponse,
     ServiceHistorySummary,
+)
+from grins_platform.schemas.dashboard import (
+    DashboardMetrics,
+    JobsByStatusResponse,
+    PaymentStatusOverview,
+    RecentActivityItem,
+    RecentActivityResponse,
+    RequestVolumeMetrics,
+    ScheduleOverview,
+    TodayScheduleResponse,
 )
 from grins_platform.schemas.job import (
     JobCreate,
@@ -53,6 +74,11 @@ from grins_platform.schemas.staff import (
 )
 
 __all__ = [
+    "AppointmentCreate",
+    "AppointmentListParams",
+    "AppointmentPaginatedResponse",
+    "AppointmentResponse",
+    "AppointmentUpdate",
     "BulkPreferencesUpdate",
     "BulkUpdateResponse",
     "CustomerCreate",
@@ -61,6 +87,8 @@ __all__ = [
     "CustomerListParams",
     "CustomerResponse",
     "CustomerUpdate",
+    "DailyScheduleResponse",
+    "DashboardMetrics",
     "JobCreate",
     "JobDetailResponse",
     "JobListParams",
@@ -68,14 +96,20 @@ __all__ = [
     "JobStatusHistoryResponse",
     "JobStatusUpdate",
     "JobUpdate",
+    "JobsByStatusResponse",
     "PaginatedCustomerResponse",
     "PaginatedJobResponse",
     "PaginatedServiceResponse",
     "PaginatedStaffResponse",
+    "PaymentStatusOverview",
     "PriceCalculationResponse",
     "PropertyCreate",
     "PropertyResponse",
     "PropertyUpdate",
+    "RecentActivityItem",
+    "RecentActivityResponse",
+    "RequestVolumeMetrics",
+    "ScheduleOverview",
     "ServiceHistorySummary",
     "ServiceListParams",
     "ServiceOfferingCreate",
@@ -83,7 +117,10 @@ __all__ = [
     "ServiceOfferingUpdate",
     "StaffAvailabilityUpdate",
     "StaffCreate",
+    "StaffDailyScheduleResponse",
     "StaffListParams",
     "StaffResponse",
     "StaffUpdate",
+    "TodayScheduleResponse",
+    "WeeklyScheduleResponse",
 ]

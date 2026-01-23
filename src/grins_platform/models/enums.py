@@ -150,3 +150,21 @@ class SkillLevel(str, Enum):
     JUNIOR = "junior"
     SENIOR = "senior"
     LEAD = "lead"
+
+
+# =============================================================================
+# Phase 3: Admin Dashboard Enums
+# =============================================================================
+
+
+class AppointmentStatus(str, Enum):
+    """Appointment status enumeration.
+
+    Validates: Admin Dashboard Requirement 1.3
+    """
+
+    SCHEDULED = "scheduled"
+    CONFIRMED = "confirmed"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"

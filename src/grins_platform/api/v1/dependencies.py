@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from grins_platform.database import get_db_session as db_session_generator
+from grins_platform.repositories.appointment_repository import AppointmentRepository
 from grins_platform.repositories.customer_repository import CustomerRepository
 from grins_platform.repositories.job_repository import JobRepository
 from grins_platform.repositories.property_repository import PropertyRepository
@@ -27,7 +28,9 @@ from grins_platform.repositories.service_offering_repository import (
     ServiceOfferingRepository,
 )
 from grins_platform.repositories.staff_repository import StaffRepository
+from grins_platform.services.appointment_service import AppointmentService
 from grins_platform.services.customer_service import CustomerService
+from grins_platform.services.dashboard_service import DashboardService
 from grins_platform.services.job_service import JobService
 from grins_platform.services.property_service import PropertyService
 from grins_platform.services.service_offering_service import ServiceOfferingService
@@ -142,8 +145,60 @@ async def get_job_service(
     )
 
 
+async def get_appointment_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> AppointmentService:
+    """Get AppointmentService dependency.
+
+    This creates an AppointmentService with all required repositories using
+    the injected database session.
+
+    Args:
+        session: Database session from dependency injection
+
+    Returns:
+        AppointmentService instance
+    """
+    appointment_repository = AppointmentRepository(session=session)
+    job_repository = JobRepository(session=session)
+    staff_repository = StaffRepository(session=session)
+    return AppointmentService(
+        appointment_repository=appointment_repository,
+        job_repository=job_repository,
+        staff_repository=staff_repository,
+    )
+
+
+async def get_dashboard_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> DashboardService:
+    """Get DashboardService dependency.
+
+    This creates a DashboardService with all required repositories using
+    the injected database session.
+
+    Args:
+        session: Database session from dependency injection
+
+    Returns:
+        DashboardService instance
+    """
+    customer_repository = CustomerRepository(session=session)
+    job_repository = JobRepository(session=session)
+    staff_repository = StaffRepository(session=session)
+    appointment_repository = AppointmentRepository(session=session)
+    return DashboardService(
+        customer_repository=customer_repository,
+        job_repository=job_repository,
+        staff_repository=staff_repository,
+        appointment_repository=appointment_repository,
+    )
+
+
 __all__ = [
+    "get_appointment_service",
     "get_customer_service",
+    "get_dashboard_service",
     "get_db_session",
     "get_job_service",
     "get_property_service",

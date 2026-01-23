@@ -528,3 +528,52 @@ class CustomerRepository(LoggerMixin):
 
         self.log_completed("bulk_update_preferences", updated_count=updated_count)
         return updated_count, errors
+
+    async def count_all(self) -> int:
+        """Count all customers (excluding deleted).
+
+        Returns:
+            Total count of non-deleted customers
+
+        Validates: Admin Dashboard Requirement 1.6
+        """
+        self.log_started("count_all")
+
+        stmt = (
+            select(func.count())
+            .select_from(Customer)
+            .where(Customer.is_deleted == False)  # noqa: E712
+        )
+
+        result = await self.session.execute(stmt)
+        count = result.scalar() or 0
+
+        self.log_completed("count_all", count=count)
+        return count
+
+    async def count_active(self) -> int:
+        """Count active customers (non-deleted with recent activity).
+
+        For now, this counts all non-deleted customers.
+        Future: Could filter by last_activity_date or similar.
+
+        Returns:
+            Count of active customers
+
+        Validates: Admin Dashboard Requirement 1.6
+        """
+        self.log_started("count_active")
+
+        # For now, active = not deleted
+        # Future enhancement: filter by recent activity
+        stmt = (
+            select(func.count())
+            .select_from(Customer)
+            .where(Customer.is_deleted == False)  # noqa: E712
+        )
+
+        result = await self.session.execute(stmt)
+        count = result.scalar() or 0
+
+        self.log_completed("count_active", count=count)
+        return count

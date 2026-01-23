@@ -5,6 +5,7 @@ This module provides repository classes for data access operations,
 following the repository pattern for clean separation of concerns.
 """
 
+from grins_platform.repositories.appointment_repository import AppointmentRepository
 from grins_platform.repositories.customer_repository import CustomerRepository
 from grins_platform.repositories.job_repository import JobRepository
 from grins_platform.repositories.property_repository import PropertyRepository
@@ -14,6 +15,7 @@ from grins_platform.repositories.service_offering_repository import (
 from grins_platform.repositories.staff_repository import StaffRepository
 
 __all__ = [
+    "AppointmentRepository",
     "CustomerRepository",
     "JobRepository",
     "PropertyRepository",

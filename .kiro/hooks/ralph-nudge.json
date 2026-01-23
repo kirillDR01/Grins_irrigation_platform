@@ -1,0 +1,12 @@
+{
+  "name": "Ralph Nudge - Stagnation Recovery",
+  "version": "1.0.0",
+  "description": "Nudges the agent to continue when stuck on timeouts or stagnant progress",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "RALPH NUDGE: If you just experienced a timeout or got stuck, try these recovery strategies:\n\n1. **Command Timeout**: Try breaking the command into smaller parts, or use a different approach entirely\n2. **NPM Install Stuck**: Try `npm install <package> --legacy-peer-deps` or install packages one at a time\n3. **shadcn/ui Stuck**: Manually create the component files instead of using the CLI\n4. **General Stagnation**: Skip the problematic step and document it, then continue with the next task\n\nDO NOT wait for user input. Pick an alternative approach and continue immediately. The goal is autonomous overnight execution.\n\nIf the last command timed out, acknowledge it briefly and try a different approach NOW."
+  }
+}
