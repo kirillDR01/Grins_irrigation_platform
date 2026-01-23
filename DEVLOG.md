@@ -13,6 +13,136 @@ This repository contains documentation and examples for Kiro development workflo
 
 ## Recent Activity
 
+## [2026-01-22 16:45] - BUGFIX: Frontend API Path Prefix Duplication Fixed
+
+### What Was Accomplished
+
+**Fixed Frontend 404 Errors from Duplicate `/api/v1/` Path Prefix**
+
+Resolved all frontend API calls that were failing with 404 errors due to duplicated path prefixes. The frontend was making requests to `/api/v1/api/v1/...` instead of `/api/v1/...`.
+
+| Endpoint | Before (404) | After (200) |
+|----------|--------------|-------------|
+| Dashboard Metrics | `/api/v1/api/v1/dashboard/metrics` | `/api/v1/dashboard/metrics` |
+| Jobs by Status | `/api/v1/api/v1/dashboard/jobs-by-status` | `/api/v1/dashboard/jobs-by-status` |
+| Today Schedule | `/api/v1/api/v1/dashboard/today-schedule` | `/api/v1/dashboard/today-schedule` |
+| Appointments | `/api/v1/api/v1/appointments` | `/api/v1/appointments` |
+| Weekly Appointments | `/api/v1/api/v1/appointments/weekly` | `/api/v1/appointments/weekly` |
+
+**Root Cause:**
+The `apiClient` in `frontend/src/core/api/client.ts` already has `baseURL: ${config.apiBaseUrl}/api/${config.apiVersion}` (resolving to `http://localhost:8000/api/v1`), but some API files were adding `/api/v1/` again in their endpoint paths.
+
+**Files Fixed (in previous session):**
+1. `frontend/src/features/dashboard/api/dashboardApi.ts` - Changed hardcoded `/api/v1/dashboard/...` paths to use `BASE_PATH = '/dashboard'`
+2. `frontend/src/features/schedule/api/appointmentApi.ts` - Changed `BASE_URL = '/api/v1/appointments'` to `BASE_URL = '/appointments'`
+
+**Additional Fixes Applied:**
+1. Ran missing database migration (`uv run alembic upgrade head`) to create `appointments` table
+2. Restarted backend server to properly serve the new routes
+
+### Technical Details
+
+**API Client Configuration:**
+```typescript
+// frontend/src/core/api/client.ts
+export const apiClient = axios.create({
+  baseURL: `${config.apiBaseUrl}/api/${config.apiVersion}`,  // http://localhost:8000/api/v1
+  // ...
+});
+```
+
+**Dashboard API Fix:**
+```typescript
+// Before (WRONG)
+const response = await apiClient.get('/api/v1/dashboard/metrics');
+
+// After (CORRECT)
+const BASE_PATH = '/dashboard';
+const response = await apiClient.get(`${BASE_PATH}/metrics`);
+```
+
+**Appointment API Fix:**
+```typescript
+// Before (WRONG)
+const BASE_URL = '/api/v1/appointments';
+
+// After (CORRECT)
+const BASE_URL = '/appointments';
+```
+
+**Verification Commands:**
+```bash
+# All endpoints now return 200 OK
+curl http://localhost:8000/api/v1/dashboard/metrics
+curl http://localhost:8000/api/v1/dashboard/jobs-by-status
+curl http://localhost:8000/api/v1/dashboard/today-schedule
+curl "http://localhost:8000/api/v1/appointments?page=1&page_size=5"
+curl "http://localhost:8000/api/v1/appointments/weekly?start_date=2026-01-19"
+curl "http://localhost:8000/api/v1/customers?page=1&page_size=20"
+curl "http://localhost:8000/api/v1/jobs?page=1&page_size=5"
+```
+
+### Decision Rationale
+
+**Why This Pattern Causes Issues:**
+- Axios `baseURL` already includes the API version prefix
+- Adding `/api/v1/` in individual API files creates duplication
+- This is a common mistake when API files are created independently
+
+**Correct Pattern:**
+- API files should use relative paths from the API version root
+- Example: `/dashboard/metrics` not `/api/v1/dashboard/metrics`
+- The `apiClient` handles the full base URL construction
+
+### Challenges and Solutions
+
+**Challenge 1: Missing Appointments Table**
+- **Problem**: Backend returned 500 error for appointments endpoint
+- **Cause**: Database migration hadn't been run
+- **Solution**: Ran `uv run alembic upgrade head` to create table
+
+**Challenge 2: Backend Server State**
+- **Problem**: After migration, routes still not working
+- **Cause**: Server needed restart to pick up new routes
+- **Solution**: Restarted backend server (process ID 26)
+
+### Impact and Dependencies
+
+**Fixed Issues:**
+- Dashboard page now loads metrics correctly
+- Schedule page now loads appointments correctly
+- All API calls return 200 OK instead of 404
+
+**Verified Working:**
+- Dashboard metrics display
+- Jobs by status chart
+- Today's schedule
+- Appointments list and weekly view
+- Customer list
+- Jobs list
+
+### Next Steps
+
+- Continue with any remaining frontend features
+- Deploy to production when ready
+
+### Files Modified
+
+```
+frontend/src/features/dashboard/api/dashboardApi.ts  # Fixed path prefix
+frontend/src/features/schedule/api/appointmentApi.ts # Fixed path prefix
+```
+
+### Verification Screenshots
+
+- `screenshots/dashboard-test-01.png` - Dashboard page loading correctly
+- `screenshots/dashboard-test-02-customers.png` - Customers page working
+- `screenshots/dashboard-test-03-schedule.png` - Schedule page working
+
+**Status: FRONTEND API PATHS FIXED ✅ | ALL ENDPOINTS RETURNING 200 OK ✅**
+
+---
+
 ## [2026-01-22 15:30] - MILESTONE: Admin Dashboard Phase 3 - FULLY COMPLETE ✅
 
 ### What Was Accomplished
