@@ -13,6 +13,153 @@ This repository contains documentation and examples for Kiro development workflo
 
 ## Recent Activity
 
+## [2026-01-23 10:30] - PLANNING: Phase 4 Route Optimization Spec Complete
+
+### What Was Accomplished
+
+**Phase 4A Route Optimization Spec Created**
+
+Successfully created comprehensive spec for Route Optimization feature (Phase 4A) using Kiro's spec-driven development workflow:
+
+| Document | Location | Content |
+|----------|----------|---------|
+| `requirements.md` | `.kiro/specs/route-optimization/` | 14 requirements, 70+ EARS-pattern acceptance criteria |
+| `design.md` | `.kiro/specs/route-optimization/` | Full technical design, 5 services, 20 correctness properties |
+| `tasks.md` | `.kiro/specs/route-optimization/` | 17 task groups, ~70 subtasks with requirement traceability |
+
+**Phase 4 Planning Document Updated**
+
+Updated `PHASE-4-PLANNING.md` with decision to skip Timefold POC:
+
+| Change | Details |
+|--------|---------|
+| Timefold POC (4A.0) | ⏭️ Skipped - validation will happen implicitly during 4A.5 |
+| Effort Estimate | Updated from 33-49 hours to 31-45 hours |
+| Decision Notes | Added new section documenting rationale |
+
+### Technical Details
+
+**Requirements Document (14 Requirements):**
+1. Staff Availability Calendar - CRUD for staff availability entries
+2. Equipment Assignment on Staff - Equipment list management
+3. Staff Starting Location - Default start coordinates
+4. Travel Time Calculation - Google Maps API + fallback
+5. Schedule Generation - One-click optimization with Timefold
+6. Hard Constraints (7) - Availability, equipment, no overlap, multi-staff, lunch, start/end times
+7. Soft Constraints (9) - Travel time, city batching, job type, priority, buffer, backtracking, time windows, FCFS
+8. Buffer Time Configuration - Per-service buffer minutes
+9. Emergency Job Insertion - Re-optimization for urgent jobs
+10. Schedule Conflict Resolution - Cancellations, reschedules, waitlist
+11. Staff Reassignment - Mid-day unavailability handling
+12. Minimal Schedule Generation UI - Date picker + generate button
+13. Test Data Seeding - Twin Cities test data
+14. Functional End-to-End Validation - API and UI verification
+
+**Design Document Highlights:**
+- 3-layer architecture (API → Service → Repository)
+- 5 main services: StaffAvailabilityService, TravelTimeService, ScheduleGenerationService, ConflictResolutionService, StaffReassignmentService
+- 3 new database tables: staff_availability, schedule_waitlist, schedule_reassignment
+- Modifications to existing tables: staff, service_offering, appointment
+- 20 correctness properties for property-based testing
+- Complete Pydantic schemas for all operations
+- Error handling patterns with custom exceptions
+
+**Task Structure (17 Groups):**
+| Phase | Tasks | Focus |
+|-------|-------|-------|
+| Foundation | 1-7 | Test data, staff availability, equipment, starting location, Google Maps |
+| Core | 8-11 | Buffer time, Timefold solver, schedule generation API |
+| Advanced | 12-15 | Emergency insertion, conflict resolution, staff reassignment |
+| Frontend | 16 | Schedule generation UI |
+| Final | 17 | Complete validation checkpoint |
+
+**Checkpoints Included:**
+- Task 3: Staff Availability Complete
+- Task 7: Foundation Complete
+- Task 11: Core Optimization Complete
+- Task 15: Backend Complete
+- Task 17: Phase 4A Complete
+
+### Decision Rationale
+
+**Why Skip Timefold POC (4A.0):**
+- Timefold has excellent Python documentation
+- Use case is simple: 10-50 jobs, 3-5 staff
+- If issues arise, they'll be discovered during Task 9 (Timefold Scheduling Service)
+- Saves 2-4 hours of POC work
+- Validation happens implicitly during implementation
+
+**Why 20 Correctness Properties:**
+- Property-based testing ensures universal correctness
+- Each property maps to specific requirements
+- Hard constraints (Properties 5-11) must never be violated
+- Soft constraints validated through optimization score
+
+**Why Functional Validation Scripts:**
+- Unit tests prove code correctness
+- Functional validation proves feature works end-to-end
+- Scripts in `scripts/validate_*.py` for each major feature
+- Ensures system is usable, not just passing tests
+
+### Impact and Dependencies
+
+**Enables:**
+- One-click schedule generation replacing 12+ hours/week manual work
+- Intelligent constraint-based optimization with Timefold
+- Emergency job insertion without manual rework
+- Staff reassignment when unavailability occurs
+- Waitlist management for cancelled slots
+
+**Dependencies:**
+- Existing Phase 1-3 infrastructure (customers, jobs, staff, appointments)
+- Google Maps API key for travel time calculation
+- Timefold solver library (Python)
+
+**Estimated Effort:**
+- Total: 31-45 hours
+- Foundation (Tasks 1-7): 8-12 hours
+- Core Optimization (Tasks 8-11): 12-18 hours
+- Advanced Features (Tasks 12-15): 8-12 hours
+- Frontend UI (Task 16): 3-5 hours
+
+### Next Steps
+
+1. Begin Task 1: Test Data Seeding
+2. Create `scripts/seed_route_optimization_test_data.py`
+3. Generate Twin Cities test properties, jobs, and staff
+4. Proceed through tasks sequentially with checkpoint validation
+
+### Files Created/Modified
+
+```
+.kiro/specs/route-optimization/requirements.md  # NEW - 14 requirements
+.kiro/specs/route-optimization/design.md        # NEW - Technical design
+.kiro/specs/route-optimization/tasks.md         # NEW - 17 task groups
+PHASE-4-PLANNING.md                             # MODIFIED - Skipped POC, updated estimates
+```
+
+### Kiro Features Showcased
+
+**Spec-Driven Development:**
+- Used requirements-first-workflow subagent
+- Created complete spec with requirements → design → tasks flow
+- EARS-pattern acceptance criteria for testability
+- Correctness properties for property-based testing
+
+**Subagent Delegation:**
+- Orchestrator delegated to requirements-first-workflow subagent
+- Subagent created all three spec documents
+- Clean handoff back to orchestrator
+
+**Decision Documentation:**
+- Added "📝 Decision Notes" section to planning document
+- Documented rationale for skipping POC
+- Maintained traceability of decisions
+
+**Status: PHASE 4A SPEC COMPLETE ✅ | READY FOR IMPLEMENTATION** 🚀
+
+---
+
 ## [2026-01-22 16:45] - BUGFIX: Frontend API Path Prefix Duplication Fixed
 
 ### What Was Accomplished
