@@ -22,3 +22,11 @@ export {
   useMarkAppointmentCompleted,
   useMarkAppointmentNoShow,
 } from './useAppointmentMutations';
+
+export {
+  scheduleGenerationKeys,
+  useScheduleCapacity,
+  useScheduleStatus,
+  useGenerateSchedule,
+  usePreviewSchedule,
+} from './useScheduleGeneration';

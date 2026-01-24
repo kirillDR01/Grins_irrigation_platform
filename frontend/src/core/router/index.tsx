@@ -16,6 +16,11 @@ const JobsPage = lazy(() =>
 const SchedulePage = lazy(() =>
   import('@/pages/Schedule').then((m) => ({ default: m.SchedulePage }))
 );
+const ScheduleGeneratePage = lazy(() =>
+  import('@/pages/ScheduleGenerate').then((m) => ({
+    default: m.ScheduleGeneratePage,
+  }))
+);
 const StaffPage = lazy(() =>
   import('@/pages/Staff').then((m) => ({ default: m.StaffPage }))
 );
@@ -66,6 +71,10 @@ export const router = createBrowserRouter([
       {
         path: 'schedule',
         element: <SchedulePage />,
+      },
+      {
+        path: 'schedule/generate',
+        element: <ScheduleGeneratePage />,
       },
       {
         path: 'staff',

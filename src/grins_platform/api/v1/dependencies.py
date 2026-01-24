@@ -34,6 +34,7 @@ from grins_platform.services.dashboard_service import DashboardService
 from grins_platform.services.job_service import JobService
 from grins_platform.services.property_service import PropertyService
 from grins_platform.services.service_offering_service import ServiceOfferingService
+from grins_platform.services.staff_availability_service import StaffAvailabilityService
 from grins_platform.services.staff_service import StaffService
 
 
@@ -195,6 +196,22 @@ async def get_dashboard_service(
     )
 
 
+async def get_staff_availability_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> StaffAvailabilityService:
+    """Get StaffAvailabilityService dependency.
+
+    This creates a StaffAvailabilityService using the injected database session.
+
+    Args:
+        session: Database session from dependency injection
+
+    Returns:
+        StaffAvailabilityService instance
+    """
+    return StaffAvailabilityService(session=session)
+
+
 __all__ = [
     "get_appointment_service",
     "get_customer_service",
@@ -203,5 +220,6 @@ __all__ = [
     "get_job_service",
     "get_property_service",
     "get_service_offering_service",
+    "get_staff_availability_service",
     "get_staff_service",
 ]

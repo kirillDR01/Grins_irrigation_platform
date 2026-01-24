@@ -220,6 +220,7 @@ class TestServiceOfferingResponse:
             category=ServiceCategory.SEASONAL,
             pricing_model=PricingModel.FLAT,
             staffing_required=1,
+            buffer_minutes=10,
             lien_eligible=False,
             requires_prepay=False,
             is_active=True,
@@ -238,6 +239,7 @@ class TestServiceOfferingResponse:
             category="seasonal",  # type: ignore
             pricing_model="flat",  # type: ignore
             staffing_required=1,
+            buffer_minutes=10,
             lien_eligible=False,
             requires_prepay=False,
             is_active=True,

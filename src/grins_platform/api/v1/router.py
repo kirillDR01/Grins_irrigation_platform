@@ -9,12 +9,16 @@ Validates: Requirement 10.5-10.7
 from fastapi import APIRouter
 
 from grins_platform.api.v1.appointments import router as appointments_router
+from grins_platform.api.v1.conflict_resolution import router as conflict_router
 from grins_platform.api.v1.customers import router as customers_router
 from grins_platform.api.v1.dashboard import router as dashboard_router
 from grins_platform.api.v1.jobs import router as jobs_router
 from grins_platform.api.v1.properties import router as properties_router
+from grins_platform.api.v1.schedule import router as schedule_router
 from grins_platform.api.v1.services import router as services_router
 from grins_platform.api.v1.staff import router as staff_router
+from grins_platform.api.v1.staff_availability import router as staff_availability_router
+from grins_platform.api.v1.staff_reassignment import router as reassignment_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -45,6 +49,13 @@ api_router.include_router(
     tags=["staff"],
 )
 
+# Include staff availability endpoints
+api_router.include_router(
+    staff_availability_router,
+    prefix="/staff",
+    tags=["staff-availability"],
+)
+
 # Include job endpoints
 api_router.include_router(
     jobs_router,
@@ -64,6 +75,24 @@ api_router.include_router(
     dashboard_router,
     prefix="/dashboard",
     tags=["dashboard"],
+)
+
+# Include schedule generation endpoints
+api_router.include_router(
+    schedule_router,
+    tags=["schedule"],
+)
+
+# Include conflict resolution endpoints
+api_router.include_router(
+    conflict_router,
+    tags=["conflict-resolution"],
+)
+
+# Include staff reassignment endpoints
+api_router.include_router(
+    reassignment_router,
+    tags=["staff-reassignment"],
 )
 
 __all__ = ["api_router"]

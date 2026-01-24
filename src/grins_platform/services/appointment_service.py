@@ -184,6 +184,23 @@ class AppointmentService(LoggerMixin):
         # Build update dict
         update_data = data.model_dump(exclude_unset=True)
 
+        # If rescheduling a cancelled appointment (date/time changed), reactivate it
+        is_rescheduling = (
+            "scheduled_date" in update_data
+            or "time_window_start" in update_data
+            or "time_window_end" in update_data
+        )
+        if (
+            appointment.status == AppointmentStatus.CANCELLED.value
+            and is_rescheduling
+            and "status" not in update_data
+        ):
+            update_data["status"] = AppointmentStatus.SCHEDULED.value
+            self.log_started(
+                "reactivate_cancelled_appointment",
+                appointment_id=str(appointment_id),
+            )
+
         # Validate status transition if status is being updated
         if "status" in update_data and update_data["status"] is not None:
             new_status = update_data["status"]

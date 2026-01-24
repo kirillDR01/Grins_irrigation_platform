@@ -212,6 +212,25 @@ class StaffNotFoundError(FieldOperationsError):
         super().__init__(f"Staff member not found: {staff_id}")
 
 
+class StaffAvailabilityNotFoundError(FieldOperationsError):
+    """Raised when a staff availability entry is not found.
+
+    Validates: Route Optimization Requirement 1.2
+    """
+
+    def __init__(self, availability_id: UUID | str) -> None:
+        """Initialize with availability ID or message.
+
+        Args:
+            availability_id: UUID of the availability entry or error message
+        """
+        self.availability_id = availability_id
+        if isinstance(availability_id, str):
+            super().__init__(availability_id)
+        else:
+            super().__init__(f"Staff availability not found: {availability_id}")
+
+
 class AppointmentNotFoundError(FieldOperationsError):
     """Raised when an appointment is not found.
 
@@ -277,6 +296,7 @@ __all__ = [
     "PropertyNotFoundError",
     "ServiceOfferingInactiveError",
     "ServiceOfferingNotFoundError",
+    "StaffAvailabilityNotFoundError",
     "StaffNotFoundError",
     "ValidationError",
 ]

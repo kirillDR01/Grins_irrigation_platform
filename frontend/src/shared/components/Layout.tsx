@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   Droplets,
+  Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -50,6 +51,12 @@ const navItems: NavItem[] = [
     href: '/schedule',
     icon: <Calendar className="h-5 w-5" />,
     testId: 'nav-schedule',
+  },
+  {
+    label: 'Generate Routes',
+    href: '/schedule/generate',
+    icon: <Zap className="h-5 w-5" />,
+    testId: 'nav-generate',
   },
   {
     label: 'Staff',

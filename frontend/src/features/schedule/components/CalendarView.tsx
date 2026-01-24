@@ -24,6 +24,7 @@ interface CalendarViewProps {
 // Map appointment status to calendar event colors
 const statusColors: Record<AppointmentStatus, { bg: string; border: string }> = {
   pending: { bg: '#fef3c7', border: '#f59e0b' },
+  scheduled: { bg: '#f3e8ff', border: '#a855f7' },
   confirmed: { bg: '#dbeafe', border: '#3b82f6' },
   in_progress: { bg: '#ffedd5', border: '#f97316' },
   completed: { bg: '#dcfce7', border: '#22c55e' },
@@ -56,7 +57,12 @@ export function CalendarView({ onDateClick, onEventClick }: CalendarViewProps) {
       allAppointments.push(...day.appointments);
     });
 
-    return allAppointments.map((appointment) => {
+    // Filter out cancelled appointments
+    const activeAppointments = allAppointments.filter(
+      (appointment) => appointment.status !== 'cancelled'
+    );
+
+    return activeAppointments.map((appointment) => {
       const colors = statusColors[appointment.status];
       const statusLabel = appointmentStatusConfig[appointment.status].label;
 

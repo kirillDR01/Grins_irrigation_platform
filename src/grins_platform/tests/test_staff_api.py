@@ -55,6 +55,11 @@ def mock_staff_model() -> Mock:
     staff.role = StaffRole.TECH
     staff.skill_level = SkillLevel.SENIOR
     staff.certifications = ["irrigation_certified"]
+    staff.assigned_equipment = ["standard_tools"]
+    staff.default_start_address = None
+    staff.default_start_city = None
+    staff.default_start_lat = None
+    staff.default_start_lng = None
     staff.hourly_rate = Decimal("25.00")
     staff.is_available = True
     staff.availability_notes = "Available weekdays"

@@ -5,6 +5,7 @@
 
 export type AppointmentStatus =
   | 'pending'
+  | 'scheduled'
   | 'confirmed'
   | 'in_progress'
   | 'completed'
@@ -116,6 +117,11 @@ export const appointmentStatusConfig: Record<
     color: 'text-yellow-800',
     bgColor: 'bg-yellow-100',
   },
+  scheduled: {
+    label: 'Scheduled',
+    color: 'text-purple-800',
+    bgColor: 'bg-purple-100',
+  },
   confirmed: {
     label: 'Confirmed',
     color: 'text-blue-800',
@@ -142,3 +148,76 @@ export const appointmentStatusConfig: Record<
     bgColor: 'bg-gray-100',
   },
 };
+
+
+// =============================================================================
+// Schedule Generation Types (Route Optimization)
+// =============================================================================
+
+export type GenerationStatus = 'idle' | 'generating' | 'completed' | 'failed';
+
+export interface ScheduleJobAssignment {
+  job_id: string;
+  customer_name: string;
+  address: string | null;
+  city: string | null;
+  service_type: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  travel_time_minutes: number;
+  sequence_index: number;
+}
+
+export interface ScheduleStaffAssignment {
+  staff_id: string;
+  staff_name: string;
+  jobs: ScheduleJobAssignment[];
+  total_jobs: number;
+  total_travel_minutes: number;
+  first_job_start: string | null;
+  last_job_end: string | null;
+}
+
+export interface UnassignedJobResponse {
+  job_id: string;
+  customer_name: string;
+  service_type: string;
+  reason: string;
+}
+
+export interface ScheduleGenerateRequest {
+  schedule_date: string;
+  timeout_seconds?: number;
+}
+
+export interface ScheduleGenerateResponse {
+  schedule_date: string;
+  is_feasible: boolean;
+  hard_score: number;
+  soft_score: number;
+  assignments: ScheduleStaffAssignment[];
+  unassigned_jobs: UnassignedJobResponse[];
+  total_jobs: number;
+  total_assigned: number;
+  total_travel_minutes: number;
+  optimization_time_seconds: number;
+}
+
+export interface ScheduleCapacityResponse {
+  schedule_date: string;
+  total_staff: number;
+  available_staff: number;
+  total_capacity_minutes: number;
+  scheduled_minutes: number;
+  remaining_capacity_minutes: number;
+  can_accept_more: boolean;
+}
+
+export interface ScheduleGenerationStatusResponse {
+  date: string;
+  status: GenerationStatus;
+  last_generated_at: string | null;
+  total_assignments: number;
+  total_unassigned: number;
+}

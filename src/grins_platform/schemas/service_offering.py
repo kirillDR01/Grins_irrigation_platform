@@ -71,6 +71,12 @@ class ServiceOfferingCreate(BaseModel):
         default=None,
         description="List of equipment needed for the service",
     )
+    buffer_minutes: int = Field(
+        default=10,
+        ge=0,
+        le=60,
+        description="Buffer time in minutes between jobs (0-60)",
+    )
     lien_eligible: bool = Field(
         default=False,
         description="Whether service qualifies for mechanic's lien",
@@ -142,6 +148,12 @@ class ServiceOfferingUpdate(BaseModel):
         default=None,
         description="List of equipment needed",
     )
+    buffer_minutes: int | None = Field(
+        default=None,
+        ge=0,
+        le=60,
+        description="Buffer time in minutes between jobs",
+    )
     lien_eligible: bool | None = Field(
         default=None,
         description="Whether service qualifies for mechanic's lien",
@@ -200,6 +212,10 @@ class ServiceOfferingResponse(BaseModel):
     equipment_required: list[str] | None = Field(
         default=None,
         description="List of equipment needed",
+    )
+    buffer_minutes: int = Field(
+        ...,
+        description="Buffer time in minutes between jobs",
     )
     lien_eligible: bool = Field(
         ...,

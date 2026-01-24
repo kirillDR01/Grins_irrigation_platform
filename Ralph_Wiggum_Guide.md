@@ -457,11 +457,3 @@ Screenshots let you visually verify what the agent is doing without watching it 
 * [Spec-Driven Development Video](https://youtu.be/wKx66sYyyUs)
 
 ---
-
-## Contact
-
-For more AI tools and tutorials, follow JeredBlu:
-* Book a Call: [JeredBlu on Cal.com](https://cal.com/jeredblu)
-* YouTube: [@JeredBlu](https://youtube.com/@JeredBlu)
-* Twitter/X: [@JeredBlu](https://twitter.com/JeredBlu)
-* Website: [jeredblu.com](https://jeredblu.com)

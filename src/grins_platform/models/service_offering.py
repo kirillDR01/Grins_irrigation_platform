@@ -77,6 +77,11 @@ class ServiceOffering(Base):
     )
     equipment_required: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
+    # Buffer Time (Requirement 8.1 - Route Optimization)
+    buffer_minutes: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="10",
+    )
+
     # Business Rules (Requirements 1.12, 1.13)
     lien_eligible: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false",

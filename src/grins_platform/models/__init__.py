@@ -6,6 +6,7 @@ This package contains all database models used by the platform.
 Phase 1 (Customer Management): Customer, Property
 Phase 2 (Field Operations): ServiceOffering, Job, JobStatusHistory, Staff
 Phase 3 (Admin Dashboard): Appointment
+Phase 4 (Route Optimization): StaffAvailability
 """
 
 from grins_platform.models.appointment import Appointment
@@ -29,6 +30,7 @@ from grins_platform.models.job_status_history import JobStatusHistory
 from grins_platform.models.property import Property
 from grins_platform.models.service_offering import ServiceOffering
 from grins_platform.models.staff import Staff
+from grins_platform.models.staff_availability import StaffAvailability
 
 __all__ = [
     # Phase 3: Admin Dashboard
@@ -51,6 +53,8 @@ __all__ = [
     "ServiceOffering",
     "SkillLevel",
     "Staff",
+    # Phase 4: Route Optimization
+    "StaffAvailability",
     "StaffRole",
     "SystemType",
 ]

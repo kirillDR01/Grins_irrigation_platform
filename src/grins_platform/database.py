@@ -5,18 +5,18 @@ This module provides async database connection management using SQLAlchemy 2.0
 with asyncpg for PostgreSQL. It includes connection pooling and session management.
 """
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
 from typing import Any, Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from grins_platform.log_config import LoggerMixin, get_logger
 
@@ -171,3 +171,26 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     db_manager = get_database_manager()
     async for session in db_manager.get_session():
         yield session
+
+
+def get_sync_db() -> Generator[Session, None, None]:
+    """Dependency for getting sync database sessions.
+
+    Used for schedule generation which requires sync operations.
+
+    Yields:
+        Session: Sync database session
+    """
+    settings = DatabaseSettings()
+    # Use sync URL (without asyncpg)
+    sync_url = settings.database_url
+    if sync_url.startswith("postgresql+asyncpg://"):
+        sync_url = sync_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+
+    engine = create_engine(sync_url, pool_pre_ping=True)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    session = session_factory()
+    try:
+        yield session
+    finally:
+        session.close()

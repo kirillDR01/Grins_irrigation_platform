@@ -21,6 +21,7 @@ from grins_platform.models.enums import SkillLevel, StaffRole
 
 if TYPE_CHECKING:
     from grins_platform.models.appointment import Appointment
+    from grins_platform.models.staff_availability import StaffAvailability
 
 
 class Staff(Base):
@@ -72,6 +73,23 @@ class Staff(Base):
     # Compensation (Requirement 8.9)
     hourly_rate: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
 
+    # Equipment Assignment (Requirement 2.1 - Route Optimization)
+    assigned_equipment: Mapped[list[str] | None] = mapped_column(
+        JSON, nullable=True, server_default="[]",
+    )
+
+    # Starting Location (Requirement 3.1 - Route Optimization)
+    default_start_address: Mapped[str | None] = mapped_column(
+        String(255), nullable=True,
+    )
+    default_start_city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    default_start_lat: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 7), nullable=True,
+    )
+    default_start_lng: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 7), nullable=True,
+    )
+
     # Status
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="true",
@@ -87,6 +105,11 @@ class Staff(Base):
     appointments: Mapped[list["Appointment"]] = relationship(
         "Appointment",
         back_populates="staff",
+    )
+    availability_entries: Mapped[list["StaffAvailability"]] = relationship(
+        "StaffAvailability",
+        back_populates="staff",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:
@@ -117,6 +140,15 @@ class Staff(Base):
             "role": self.role,
             "skill_level": self.skill_level,
             "certifications": self.certifications,
+            "assigned_equipment": self.assigned_equipment,
+            "default_start_address": self.default_start_address,
+            "default_start_city": self.default_start_city,
+            "default_start_lat": (
+                float(self.default_start_lat) if self.default_start_lat else None
+            ),
+            "default_start_lng": (
+                float(self.default_start_lng) if self.default_start_lng else None
+            ),
             "is_available": self.is_available,
             "availability_notes": self.availability_notes,
             "hourly_rate": float(self.hourly_rate) if self.hourly_rate else None,

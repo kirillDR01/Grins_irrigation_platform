@@ -38,7 +38,9 @@ VALID_APPOINTMENT_TRANSITIONS: dict[str, list[str]] = {
         AppointmentStatus.CANCELLED.value,
     ],
     AppointmentStatus.COMPLETED.value: [],  # Terminal state
-    AppointmentStatus.CANCELLED.value: [],  # Terminal state
+    AppointmentStatus.CANCELLED.value: [
+        AppointmentStatus.SCHEDULED.value,  # Can be rescheduled
+    ],
 }
 
 
@@ -112,9 +114,25 @@ class Appointment(Base):
         onupdate=func.now(),
     )
 
+    # Cancellation/Reschedule fields (Requirement 10.2, 10.3)
+    cancellation_reason: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+    cancelled_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    rescheduled_from_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("appointments.id"),
+        nullable=True,
+    )
+
     # Relationships
     job: Mapped["Job"] = relationship("Job", back_populates="appointments")
     staff: Mapped["Staff"] = relationship("Staff", back_populates="appointments")
+    rescheduled_from: Mapped["Appointment | None"] = relationship(
+        "Appointment",
+        remote_side="Appointment.id",
+        foreign_keys=[rescheduled_from_id],
+    )
 
     def __repr__(self) -> str:
         """Return string representation of the appointment."""

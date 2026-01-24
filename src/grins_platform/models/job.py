@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from grins_platform.models.customer import Customer
     from grins_platform.models.job_status_history import JobStatusHistory
     from grins_platform.models.property import Property
+    from grins_platform.models.schedule_waitlist import ScheduleWaitlist
     from grins_platform.models.service_offering import ServiceOffering
 
 
@@ -163,6 +164,11 @@ class Job(Base):
     )
     appointments: Mapped[list["Appointment"]] = relationship(
         "Appointment",
+        back_populates="job",
+        cascade="all, delete-orphan",
+    )
+    waitlist_entries: Mapped[list["ScheduleWaitlist"]] = relationship(
+        "ScheduleWaitlist",
         back_populates="job",
         cascade="all, delete-orphan",
     )

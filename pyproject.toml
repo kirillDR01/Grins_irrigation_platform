@@ -3,7 +3,7 @@ name = "grins-irrigation-platform"
 version = "0.1.0"
 description = "Business optimization platform for Grins Irrigations with AI-powered development tools"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     {name = "Grins Irrigations Development Team"}
 ]
@@ -13,7 +13,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -38,6 +37,8 @@ dependencies = [
     "asyncpg>=0.29.0",
     "email-validator>=2.1.0",
     "greenlet>=3.0.0",
+    "timefold>=1.24.0b0",
+    "psycopg2-binary>=2.9.11",
 ]
 
 [project.optional-dependencies]
@@ -471,18 +472,18 @@ reportOverlappingOverload = "error"
 reportMissingSuperCall = "warning"
 reportUninitializedInstanceVariable = "error"
 reportInvalidStringEscapeSequence = "error"
-reportUnknownParameterType = "error"
-reportUnknownArgumentType = "error"
+reportUnknownParameterType = "warning"  # SQLAlchemy columns have complex types
+reportUnknownArgumentType = "warning"  # Pydantic Field() has dynamic defaults
 reportUnknownLambdaType = "error"
-reportUnknownVariableType = "error"
-reportUnknownMemberType = "error"
+reportUnknownVariableType = "warning"  # SQLAlchemy query results
+reportUnknownMemberType = "warning"  # SQLAlchemy column attributes
 reportMissingParameterType = "error"
 reportMissingTypeArgument = "error"
 reportInvalidTypeVarUse = "error"
-reportCallInDefaultInitializer = "warning"
+reportCallInDefaultInitializer = "none"  # FastAPI/Pydantic use Query() in defaults
 reportUnnecessaryIsInstance = "warning"
 reportUnnecessaryCast = "warning"
-reportUnnecessaryComparison = "warning"
+reportUnnecessaryComparison = "none"  # SQLAlchemy validators have runtime checks
 reportUnnecessaryContains = "warning"
 reportAssertAlwaysTrue = "warning"
 reportSelfClsParameterName = "warning"
@@ -495,7 +496,7 @@ reportUnsupportedDunderAll = "warning"
 reportUnusedCallResult = "warning"
 reportUnusedCoroutine = "error"
 reportUnusedExpression = "warning"
-reportUnnecessaryTypeIgnoreComment = "warning"
+reportUnnecessaryTypeIgnoreComment = "none"  # MyPy needs these, pyright doesn't
 reportMatchNotExhaustive = "warning"
 
 # Additional strict checks

@@ -14,12 +14,21 @@ export type {
   StaffDailyScheduleResponse,
   WeeklyScheduleResponse,
   CalendarEvent,
+  ScheduleGenerateRequest,
+  ScheduleGenerateResponse,
+  ScheduleJobAssignment,
+  ScheduleStaffAssignment,
+  UnassignedJobResponse,
+  ScheduleCapacityResponse,
+  ScheduleGenerationStatusResponse,
+  GenerationStatus,
 } from './types';
 
 export { appointmentStatusConfig } from './types';
 
 // API
 export { appointmentApi } from './api/appointmentApi';
+export { scheduleGenerationApi } from './api/scheduleGenerationApi';
 
 // Hooks
 export {
@@ -38,6 +47,11 @@ export {
   useMarkAppointmentArrived,
   useMarkAppointmentCompleted,
   useMarkAppointmentNoShow,
+  scheduleGenerationKeys,
+  useScheduleCapacity,
+  useScheduleStatus,
+  useGenerateSchedule,
+  usePreviewSchedule,
 } from './hooks';
 
 // Components
@@ -47,4 +61,6 @@ export {
   AppointmentList,
   AppointmentDetail,
   AppointmentForm,
+  ScheduleGenerationPage,
+  ScheduleResults,
 } from './components';

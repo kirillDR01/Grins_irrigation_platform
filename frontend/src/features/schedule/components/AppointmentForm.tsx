@@ -26,6 +26,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCreateAppointment, useUpdateAppointment } from '../hooks/useAppointmentMutations';
+import { useJobsReadyToSchedule } from '@/features/jobs/hooks';
+import { useStaff } from '@/features/staff/hooks';
 import type { Appointment, AppointmentCreate, AppointmentUpdate } from '../types';
 
 // Form validation schema
@@ -60,20 +62,6 @@ interface AppointmentFormProps {
   onCancel?: () => void;
 }
 
-// Mock data for job and staff selection
-// In a real app, these would come from API hooks
-const mockJobs = [
-  { id: '123e4567-e89b-12d3-a456-426614174001', label: 'Spring Startup - John Doe' },
-  { id: '123e4567-e89b-12d3-a456-426614174002', label: 'Winterization - Jane Smith' },
-  { id: '123e4567-e89b-12d3-a456-426614174003', label: 'Repair - Bob Wilson' },
-];
-
-const mockStaff = [
-  { id: '123e4567-e89b-12d3-a456-426614174010', name: 'Viktor' },
-  { id: '123e4567-e89b-12d3-a456-426614174011', name: 'Vas' },
-  { id: '123e4567-e89b-12d3-a456-426614174012', name: 'Dad' },
-];
-
 export function AppointmentForm({
   appointment,
   initialDate,
@@ -84,6 +72,10 @@ export function AppointmentForm({
 }: AppointmentFormProps) {
   const createMutation = useCreateAppointment();
   const updateMutation = useUpdateAppointment();
+  
+  // Fetch real jobs and staff from API
+  const { data: jobsData, isLoading: jobsLoading } = useJobsReadyToSchedule();
+  const { data: staffData, isLoading: staffLoading } = useStaff({ is_active: true });
 
   const isEditing = !!appointment;
 
@@ -132,6 +124,11 @@ export function AppointmentForm({
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
+  const isLoadingData = jobsLoading || staffLoading;
+  
+  // Get jobs and staff arrays
+  const jobs = jobsData?.items ?? [];
+  const staff = staffData?.items ?? [];
 
   return (
     <Form {...form}>
@@ -150,17 +147,20 @@ export function AppointmentForm({
               <Select
                 onValueChange={field.onChange}
                 defaultValue={field.value}
-                disabled={isEditing}
+                disabled={isEditing || isLoadingData}
               >
                 <FormControl>
                   <SelectTrigger data-testid="job-select">
-                    <SelectValue placeholder="Select a job" />
+                    <SelectValue placeholder={jobsLoading ? "Loading jobs..." : "Select a job"} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {mockJobs.map((job) => (
+                  {jobs.length === 0 && !jobsLoading && (
+                    <SelectItem value="no-jobs" disabled>No jobs ready to schedule</SelectItem>
+                  )}
+                  {jobs.map((job) => (
                     <SelectItem key={job.id} value={job.id}>
-                      {job.label}
+                      {job.job_type} - {job.description?.slice(0, 40) || 'No description'}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -177,16 +177,23 @@ export function AppointmentForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>Staff Member</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select 
+                onValueChange={field.onChange} 
+                defaultValue={field.value}
+                disabled={isLoadingData}
+              >
                 <FormControl>
                   <SelectTrigger data-testid="staff-select">
-                    <SelectValue placeholder="Select staff member" />
+                    <SelectValue placeholder={staffLoading ? "Loading staff..." : "Select staff member"} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {mockStaff.map((staff) => (
-                    <SelectItem key={staff.id} value={staff.id}>
-                      {staff.name}
+                  {staff.length === 0 && !staffLoading && (
+                    <SelectItem value="no-staff" disabled>No staff available</SelectItem>
+                  )}
+                  {staff.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {member.name} ({member.role})
                     </SelectItem>
                   ))}
                 </SelectContent>

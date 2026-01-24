@@ -22,7 +22,7 @@ from grins_platform.schemas.customer import normalize_phone
 class StaffCreate(BaseModel):
     """Schema for creating a new staff member.
 
-    Validates: Requirements 8.1-8.3, 8.8-8.10
+    Validates: Requirements 8.1-8.3, 8.8-8.10, 2.1, 3.1 (Route Optimization)
     """
 
     name: str = Field(
@@ -52,6 +52,32 @@ class StaffCreate(BaseModel):
     certifications: list[str] | None = Field(
         default=None,
         description="List of certifications",
+    )
+    assigned_equipment: list[str] | None = Field(
+        default=None,
+        description="List of assigned equipment (e.g., compressor, pipe_puller)",
+    )
+    default_start_address: str | None = Field(
+        default=None,
+        max_length=255,
+        description="Default starting address for route optimization",
+    )
+    default_start_city: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Default starting city",
+    )
+    default_start_lat: Decimal | None = Field(
+        default=None,
+        ge=-90,
+        le=90,
+        description="Default starting latitude (-90 to 90)",
+    )
+    default_start_lng: Decimal | None = Field(
+        default=None,
+        ge=-180,
+        le=180,
+        description="Default starting longitude (-180 to 180)",
     )
     hourly_rate: Decimal | None = Field(
         default=None,
@@ -85,7 +111,7 @@ class StaffUpdate(BaseModel):
 
     All fields are optional - only provided fields will be updated.
 
-    Validates: Requirement 8.5
+    Validates: Requirement 8.5, 2.1, 3.1 (Route Optimization)
     """
 
     name: str | None = Field(
@@ -115,6 +141,32 @@ class StaffUpdate(BaseModel):
     certifications: list[str] | None = Field(
         default=None,
         description="List of certifications",
+    )
+    assigned_equipment: list[str] | None = Field(
+        default=None,
+        description="List of assigned equipment",
+    )
+    default_start_address: str | None = Field(
+        default=None,
+        max_length=255,
+        description="Default starting address",
+    )
+    default_start_city: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Default starting city",
+    )
+    default_start_lat: Decimal | None = Field(
+        default=None,
+        ge=-90,
+        le=90,
+        description="Default starting latitude",
+    )
+    default_start_lng: Decimal | None = Field(
+        default=None,
+        ge=-180,
+        le=180,
+        description="Default starting longitude",
     )
     hourly_rate: Decimal | None = Field(
         default=None,
@@ -162,7 +214,7 @@ class StaffAvailabilityUpdate(BaseModel):
 class StaffResponse(BaseModel):
     """Schema for staff response data.
 
-    Validates: Requirement 8.4
+    Validates: Requirement 8.4, 2.1, 3.1 (Route Optimization)
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -179,6 +231,26 @@ class StaffResponse(BaseModel):
     certifications: list[str] | None = Field(
         default=None,
         description="List of certifications",
+    )
+    assigned_equipment: list[str] | None = Field(
+        default=None,
+        description="List of assigned equipment",
+    )
+    default_start_address: str | None = Field(
+        default=None,
+        description="Default starting address",
+    )
+    default_start_city: str | None = Field(
+        default=None,
+        description="Default starting city",
+    )
+    default_start_lat: Decimal | None = Field(
+        default=None,
+        description="Default starting latitude",
+    )
+    default_start_lng: Decimal | None = Field(
+        default=None,
+        description="Default starting longitude",
     )
     is_available: bool = Field(..., description="Whether currently available")
     availability_notes: str | None = Field(
