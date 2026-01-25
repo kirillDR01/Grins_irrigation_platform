@@ -33,9 +33,12 @@ You are executing the Ralph Wiggum autonomous loop. This loop continuously execu
 **Current Task:** None
 **Loop Status:** Started
 
+## Retry Tracking
+<!-- Format: Task {task-id}: Attempt {n}/3 [{status}] [{timestamp}] [{reason}] -->
+
 ---
 
-## Session Log
+## Activity Entries
 
 <!-- Ralph Wiggum loop will append entries here -->
 ```
@@ -47,24 +50,123 @@ You are executing the Ralph Wiggum autonomous loop. This loop continuously execu
    - `- [x]` = Completed (skip)
    - `- [-]` = In progress (continue this)
    - `- [~]` = Queued (skip for now)
-2. Find the first task with `- [ ]` that is NOT a sub-task of an incomplete parent
+   - `- [S]` = Skipped (skip)
+2. Find the first task with `- [ ]` or `- [-]` that is NOT a sub-task of an incomplete parent
 3. If task has sub-tasks, start with the first incomplete sub-task
 
-### Step 4: Execute Task
+### Step 3.5: Check Retry State
 
-1. Mark task as in-progress using `taskStatus` tool
-2. Read relevant files for context
-3. Implement the task following:
+**CRITICAL:** Before executing, check if this task has already been attempted.
+
+1. Read the "Retry Tracking" section in activity.md
+2. Look for line matching: `Task {task-id}: Attempt`
+3. Parse the attempt number:
+   - If line exists: Extract current attempt number (e.g., "Attempt 2/3")
+   - If line doesn't exist: This is attempt 1
+4. **Enforce retry limit:**
+   - If attempt >= 3: 
+     - Output: `USER INPUT REQUIRED: Task {task-id} has failed 3 times`
+     - Skip this task and continue to next task
+   - If attempt < 3:
+     - Increment attempt number
+     - Continue to Step 4
+5. Add/update retry tracking line:
+   ```
+   Task {task-id}: Attempt {n}/3 [started] [{timestamp}]
+   ```
+
+**Example Retry Tracking:**
+```markdown
+## Retry Tracking
+Task 1.1: Attempt 1/3 [started] [2026-01-24 18:00]
+Task 1.2: Attempt 2/3 [failed] [2026-01-24 18:15] [Type error in schema]
+Task 1.3: Attempt 1/3 [completed] [2026-01-24 18:30]
+```
+
+### Step 4: Execute Task (WITH TIMEOUT)
+
+**IMPORTANT:** Mark task as in-progress FIRST, then implement.
+
+**Timeout Rule:** If a single task takes > 15 minutes, force alternative approach.
+
+1. **Log start time:**
+   - Add to retry tracking:
+     ```
+     Task {task-id}: Attempt {n}/3 [started] [{timestamp}]
+     ```
+
+2. **Update task state to in-progress:**
+   - Call internal prompt: `@update-task-state {spec-name} "{exact-task-text}" "in_progress"`
+   - Wait for SUCCESS confirmation
+   - If ERROR, retry once
+   - If still ERROR, output USER INPUT REQUIRED and stop
+
+3. Read relevant files for context
+
+4. Implement the task following:
    - `.kiro/steering/code-standards.md` requirements
    - Include logging (LoggerMixin for classes)
    - Include type hints
    - Include tests (unit, functional, integration)
-4. Write code changes
+
+5. Write code changes
+
+6. **Check elapsed time before quality checks:**
+   - Calculate time since start
+   - If < 15 minutes → proceed to Step 5
+   - If >= 15 minutes → TIMEOUT TRIGGERED
+
+7. **On TIMEOUT:**
+   a. Log timeout in activity.md:
+      ```
+      Task {task-id}: TIMEOUT after 15 minutes
+      ```
+   b. Analyze what's taking so long:
+      - Stuck on npm install? → Install packages individually
+      - Stuck on shadcn CLI? → Create component files manually
+      - Stuck on complex logic? → Simplify scope
+      - Stuck on API calls? → Use mock data
+   c. Try alternative approach (counts as retry attempt)
+   d. If alternative also times out → USER INPUT REQUIRED
+   e. **DO NOT wait for user input** - make a decision and continue
 
 ### Step 5: Validate Work
 
-Run quality checks (ALL must pass):
+**CRITICAL:** ALL quality checks must pass before marking complete.
 
+1. **Determine task type:**
+   - If task modifies `src/grins_platform/` → backend
+   - If task modifies `frontend/` → frontend
+
+2. **Run quality checks:**
+   - Call internal prompt: `@validate-quality {task-type} {retry-attempt}`
+   - Wait for result
+
+3. **For frontend UI tasks, also run visual validation:**
+   - Extract validation commands from tasks.md
+   - Call internal prompt: `@validate-visual {spec-name} {task-id} "{validation-commands}"`
+   - Wait for result
+
+4. **Parse results:**
+   - If ALL checks PASSED → proceed to Step 6
+   - If ANY check FAILED:
+     a. Read error details from output
+     b. Update retry tracking:
+        ```
+        Task {task-id}: Attempt {n}/3 [failed] [{timestamp}] [{error-summary}]
+        ```
+     c. If retry_attempt < 3:
+        - Fix the issues
+        - Increment retry_attempt
+        - Go back to Step 4 (re-implement)
+     d. If retry_attempt >= 3:
+        - Output: `USER INPUT REQUIRED: Task {task-id} failed quality checks 3 times`
+        - Log failure details in activity.md
+        - Stop execution
+
+**Quality Check Details:**
+
+For backend tasks:
 ```bash
 uv run ruff check src/
 uv run mypy src/
@@ -72,44 +174,75 @@ uv run pyright src/
 uv run pytest -v
 ```
 
-For frontend tasks, also run:
+For frontend tasks:
 ```bash
-cd frontend && npm run lint && npm run typecheck && npm test
+cd frontend && npm run lint
+cd frontend && npm run typecheck
+cd frontend && npm test
 ```
 
-For visual validation (frontend), use `agent-browser`:
+For frontend UI tasks (ADDITIONAL):
 ```bash
-agent-browser open http://localhost:5173
-agent-browser snapshot -i
+# Validation commands from tasks.md, e.g.:
+agent-browser open http://localhost:5173/schedule
+agent-browser wait --load networkidle
+agent-browser is visible "[data-testid='map-view']"
+agent-browser screenshot screenshots/{spec-name}/{task-id}.png
 ```
 
 ### Step 6: Mark Complete
 
-1. Use `taskStatus` tool to mark task as completed
-2. If task has sub-tasks and all are complete, mark parent complete too
+**IMPORTANT:** Only mark complete after quality checks pass.
+
+1. **Update task state to completed:**
+   - Call internal prompt: `@update-task-state {spec-name} "{exact-task-text}" "completed"`
+   - Wait for SUCCESS confirmation
+   - If ERROR (e.g., sub-tasks incomplete), fix issue and retry
+   - If still ERROR, output USER INPUT REQUIRED and stop
+
+2. **Update retry tracking:**
+   ```
+   Task {task-id}: Attempt {n}/3 [completed] [{timestamp}]
+   ```
+
+3. **Check parent task:**
+   - If this task is a sub-task, check if all sibling sub-tasks are complete
+   - If yes, mark parent task as completed too
+   - Use `@update-task-state` for parent task
 
 ### Step 7: Log Activity
 
-Append entry to `activity.md`:
+**IMPORTANT:** Log every completed task for audit trail.
 
-```markdown
-## [{timestamp}] Task {task-id}: {task-name}
+Call internal prompt: `@log-activity` with these parameters:
 
-### What Was Done
-- {description of changes}
-
-### Files Modified
-- {list of files}
-
-### Quality Check Results
-- Ruff: ✅ Pass / ❌ Fail
-- MyPy: ✅ Pass / ❌ Fail
-- Pyright: ✅ Pass / ❌ Fail
-- Tests: ✅ X/Y passing / ❌ Failed
-
-### Notes
-- {any issues or observations}
 ```
+@log-activity {spec-name} "{task-id}" "{task-name}" "{what-was-done}" "{files-modified}" "{quality-results}" "{notes}"
+```
+
+**Parameter Guidelines:**
+
+1. **what_was_done** - Bullet list of changes:
+   ```
+   - Implemented coordinate fields in schema
+   - Added validation logic
+   - Updated tests
+   ```
+
+2. **files_modified** - File paths with descriptions:
+   ```
+   - `src/grins_platform/schemas/schedule.py` - Added fields
+   - `src/grins_platform/tests/test_schema.py` - Added tests
+   ```
+
+3. **quality_results** - Paste output from @validate-quality
+
+4. **notes** - Any observations or decisions made
+
+**If logging fails:**
+- Output warning but continue
+- Logging failure is not critical
+- Task is still considered complete
 
 ### Step 8: Check Continuation
 
@@ -127,16 +260,55 @@ Append entry to `activity.md`:
 
 ## Failure Handling
 
-If a task fails:
+### Retry Logic (Automatic)
 
-1. **Retry (up to 3 times):**
-   - Log retry attempt in activity.md
-   - Try alternative approach if possible
+If a task fails quality checks:
 
-2. **After 3 retries:**
-   - Output: `USER INPUT REQUIRED: {task-id} failed after 3 attempts`
-   - Log failure details in activity.md
-   - Stop and wait for user guidance
+1. **Attempt 1-2:**
+   - Update retry tracking with failure reason
+   - Fix the issues based on error messages
+   - Re-run from Step 4 (implementation)
+   - Increment retry_attempt
+
+2. **Attempt 3:**
+   - If still failing, output: `USER INPUT REQUIRED: Task {task-id} failed after 3 attempts`
+   - Log detailed failure information in activity.md
+   - Stop execution (don't continue to next task)
+
+### Task State Update Failures
+
+If `@update-task-state` fails:
+
+1. **First failure:**
+   - Retry once with same parameters
+   - Verify task text matches exactly
+
+2. **Second failure:**
+   - Output: `USER INPUT REQUIRED: Cannot update task state for {task-id}`
+   - Log error details
+   - Stop execution
+
+### Quality Check Failures
+
+If `@validate-quality` fails to run (not just failing checks):
+
+1. Check if tools are installed (ruff, mypy, pyright, pytest)
+2. Check if virtual environment is activated
+3. If tools missing, output: `USER INPUT REQUIRED: Quality check tools not available`
+4. Stop execution
+
+### Stagnation Recovery
+
+If you notice you're stuck on the same error for >10 minutes:
+
+1. Log the stagnation in activity.md
+2. Try a completely different approach:
+   - npm install stuck? → Install packages one at a time
+   - shadcn CLI stuck? → Create component files manually
+   - Complex logic stuck? → Simplify scope
+3. If no alternative exists, mark task as blocked and continue to next task
+
+**DO NOT wait for user input during autonomous execution.**
 
 ## Safety Rules
 

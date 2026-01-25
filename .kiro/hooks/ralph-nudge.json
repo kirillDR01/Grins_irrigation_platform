@@ -1,12 +1,12 @@
 {
   "name": "Ralph Nudge - Stagnation Recovery",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Nudges the agent to continue when stuck on timeouts or stagnant progress",
   "when": {
     "type": "agentStop"
   },
   "then": {
     "type": "askAgent",
-    "prompt": "RALPH NUDGE: If you just experienced a timeout or got stuck, try these recovery strategies:\n\n1. **Command Timeout**: Try breaking the command into smaller parts, or use a different approach entirely\n2. **NPM Install Stuck**: Try `npm install <package> --legacy-peer-deps` or install packages one at a time\n3. **shadcn/ui Stuck**: Manually create the component files instead of using the CLI\n4. **General Stagnation**: Skip the problematic step and document it, then continue with the next task\n\nDO NOT wait for user input. Pick an alternative approach and continue immediately. The goal is autonomous overnight execution.\n\nIf the last command timed out, acknowledge it briefly and try a different approach NOW."
+    "prompt": "RALPH NUDGE: Stagnation/Timeout Recovery\n\n⏱️ TIMEOUT CHECK: If you've been working on the same task for >15 minutes:\n1. Log the timeout in activity.md: 'Task {task-id}: TIMEOUT after 15 minutes'\n2. Try a completely different approach\n3. If no alternative exists, mark task as blocked and continue to next task\n\n🔄 COMMAND TIMEOUT RECOVERY:\nIf you just experienced a command timeout, try these strategies:\n\n1. **npm install timeout**:\n   - Install packages one at a time: npm install pkg1 && npm install pkg2\n   - Use --legacy-peer-deps flag\n   - Skip optional dependencies\n\n2. **shadcn/ui CLI timeout**:\n   - Manually create component files from shadcn/ui source\n   - Copy component code directly\n   - Install dependencies manually\n\n3. **Build/compile timeout**:\n   - Check for infinite loops in code\n   - Reduce scope of changes\n   - Comment out problematic sections temporarily\n\n4. **Test timeout**:\n   - Run specific test file instead of full suite\n   - Skip slow tests temporarily\n   - Increase test timeout in config\n\n5. **General stagnation**:\n   - Skip the problematic step and document it\n   - Continue with next task\n   - Mark current task as blocked\n\n⚠️ CRITICAL: DO NOT wait for user input during autonomous execution.\n\nMake a decision NOW:\n- Try alternative approach (counts as retry attempt)\n- Skip and continue to next task\n- Mark as blocked and document why\n\nThe goal is overnight/unattended execution. Keep moving forward."
   }
 }

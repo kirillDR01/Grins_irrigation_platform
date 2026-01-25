@@ -19,37 +19,47 @@ This is identical to `@ralph-loop` but stops after completing ONE task instead o
 
 ### Step 2: Initialize Activity Log
 
-Create `.kiro/specs/{spec-name}/activity.md` if it doesn't exist.
+Create `.kiro/specs/{spec-name}/activity.md` if it doesn't exist using the template from `@ralph-loop`.
 
 ### Step 3: Find Next Task
 
 1. Parse `tasks.md` for task states
-2. Find first `- [ ]` task (not started)
+2. Find first `- [ ]` or `- [-]` task (not started or in progress)
 3. If task has sub-tasks, find first incomplete sub-task
 
-### Step 4: Execute Task
+### Step 3.5: Check Retry State
 
-1. Mark task as in-progress using `taskStatus` tool
-2. Implement the task following code-standards.md
-3. Include logging, type hints, tests
+**CRITICAL:** Check retry tracking before executing (same as `@ralph-loop` Step 3.5).
+
+### Step 4: Execute Task (WITH TIMEOUT)
+
+1. Log start time in retry tracking
+2. Call `@update-task-state {spec-name} "{task-text}" "in_progress"`
+3. Implement the task following code-standards.md
+4. Include logging, type hints, tests
+5. Check elapsed time (15-minute timeout rule applies)
 
 ### Step 5: Validate Work
 
-Run ALL quality checks:
-```bash
-uv run ruff check src/
-uv run mypy src/
-uv run pyright src/
-uv run pytest -v
-```
+1. Determine task type (backend/frontend)
+2. Call `@validate-quality {task-type} {retry-attempt}`
+3. For frontend UI tasks, also call `@validate-visual {spec-name} {task-id} "{commands}"`
+4. If FAILED and retry < 3:
+   - Fix issues
+   - Increment retry
+   - Go back to Step 4
+5. If FAILED and retry >= 3:
+   - Output USER INPUT REQUIRED
+   - Stop
 
 ### Step 6: Mark Complete
 
-Use `taskStatus` tool to mark task as completed.
+1. Call `@update-task-state {spec-name} "{task-text}" "completed"`
+2. Update retry tracking to "completed"
 
 ### Step 7: Log Activity
 
-Append completion entry to `activity.md`.
+Call `@log-activity` with all required parameters (same as `@ralph-loop` Step 7).
 
 ### Step 8: STOP
 
@@ -75,8 +85,11 @@ Run `@ralph-loop {spec-name}` to continue automatically.
 ## Failure Handling
 
 Same as `@ralph-loop`:
-- Retry up to 3 times
+- Retry up to 3 times with quality gate enforcement
+- Visual validation for frontend UI tasks
+- Timeout detection and recovery (15-minute limit)
 - After 3 failures, output `USER INPUT REQUIRED` and stop
+- Use internal prompts: `@update-task-state`, `@validate-quality`, `@validate-visual`, `@log-activity`
 
 ## Output Format
 
@@ -86,6 +99,8 @@ Same as `@ralph-loop`:
 
 📋 Task: {task-id} - {task-name}
    Status: In Progress
+   Attempt: {n}/3
+   Started: {timestamp}
 
    [... implementation details ...]
 
@@ -94,6 +109,13 @@ Same as `@ralph-loop`:
    - MyPy: ✅
    - Pyright: ✅
    - Tests: ✅ 127/127
+
+{For frontend UI tasks:}
+✅ Visual Validation:
+   - Page loads: ✅
+   - Elements visible: ✅
+   - No console errors: ✅
+   - Screenshot: screenshots/{spec-name}/{task-id}.png
 
 📝 Logged to activity.md
 

@@ -2,17 +2,32 @@
   "mcpServers": {
     "git": {
       "command": "uvx",
-      "args": ["mcp-server-git"],
+      "args": [
+        "mcp-server-git"
+      ],
       "env": {},
       "disabled": false,
-      "autoApprove": ["git_status", "git_log", "git_diff"]
+      "autoApprove": [
+        "git_status",
+        "git_log",
+        "git_diff",
+        "git_commit"
+      ]
     },
     "filesystem": {
       "command": "uvx",
-      "args": ["mcp-server-filesystem", "--allowed-directories", "."],
+      "args": [
+        "mcp-server-filesystem",
+        "--allowed-directories",
+        "."
+      ],
       "env": {},
       "disabled": false,
-      "autoApprove": ["read_file", "list_directory", "search_files"]
+      "autoApprove": [
+        "read_file",
+        "list_directory",
+        "search_files"
+      ]
     }
   }
 }
