@@ -247,9 +247,10 @@ Call internal prompt: `@log-activity` with these parameters:
 ### Step 8: Check Continuation
 
 1. **If task name contains "Checkpoint":**
-   - Output: `CHECKPOINT REACHED: {task-name}`
-   - Stop and wait for user to review
-   - User can run `@ralph-loop {spec-name}` to continue
+   - Output: `CHECKPOINT PASSED: {task-name}`
+   - Log checkpoint completion in activity.md
+   - **Continue to next task** (do not stop)
+   - Note: User can review checkpoints in activity log later
 
 2. **If all tasks are complete (`[x]`):**
    - Output: `LOOP COMPLETE: All tasks finished!`
@@ -319,10 +320,10 @@ If you notice you're stuck on the same error for >10 minutes:
 
 ## Configuration
 
-- **Max iterations:** 50 (safety limit)
+- **Max iterations:** 100 (safety limit for large specs)
 - **Retry limit:** 3 per task
 - **Quality checks:** MANDATORY (no skipping)
-- **Checkpoint pause:** MANDATORY
+- **Checkpoint pause:** DISABLED (logs but continues)
 
 ## Output Format
 

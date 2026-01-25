@@ -120,15 +120,12 @@ for ((i=1; i<=$MAX_ITERATIONS; i++)); do
     exit 0
   fi
   
-  if [[ "$result" == *"CHECKPOINT REACHED"* ]]; then
+  if [[ "$result" == *"CHECKPOINT PASSED"* ]]; then
     echo ""
-    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${YELLOW}⏸️  Checkpoint reached after $i iterations.${NC}"
-    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo "Review progress and run again to continue:"
-    echo "  ./scripts/ralph.sh $SPEC_NAME $MAX_ITERATIONS"
-    exit 0
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}✓ Checkpoint passed, continuing execution...${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    # Continue to next iteration (do not exit)
   fi
   
   if [[ "$result" == *"USER INPUT REQUIRED"* ]]; then
