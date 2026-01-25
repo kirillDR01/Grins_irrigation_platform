@@ -13,6 +13,81 @@ This repository contains documentation and examples for Kiro development workflo
 
 ## Recent Activity
 
+## [2026-01-25 07:35] - FEATURE: Map Scheduling Interface - Bug Fixes & Polish
+
+### What Was Accomplished
+
+Completed extensive bug fixes and polish for the Phase 5 Map-Based Scheduling Interface, addressing route polyline visibility, staff filtering, sequence numbering, and starting point markers.
+
+### Technical Details
+
+#### Route Polyline Visibility Fix
+- **Problem:** Google Maps `@react-google-maps/api` Polyline component doesn't properly clean up when React unmounts it - polylines remained visible even after filtering staff off
+- **Solution:** Rewrote `RoutePolyline.tsx` to use manual Google Maps API control:
+  - Use `useGoogleMap()` hook to get map instance
+  - Create polylines manually with `new google.maps.Polyline()`
+  - Store in ref and use `polyline.setMap(null)` to hide/remove
+  - Proper cleanup on unmount
+- **Files Modified:** `frontend/src/features/schedule/components/map/RoutePolyline.tsx`
+
+#### Staff Filter Integration
+- Fixed route lines to properly hide/show when toggling staff filters
+- Routes now correctly disappear when staff is filtered out
+- "Show Routes" toggle now works correctly
+- Filters remain visible even when all staff are filtered out (was hiding entire map)
+
+#### Sequence Numbering Fix
+- **Problem:** Job sequence numbers were using global `sequence_index` from backend, causing gaps (0, 1, 2, 6 instead of 0, 1, 2, 3)
+- **Solution:** Calculate per-staff display sequence in `ScheduleMap.tsx`:
+  - Sort jobs by `sequence_index` within each staff assignment
+  - Assign 1-indexed display sequence (1, 2, 3, 4...)
+  - Pass `displaySequence` prop to `MapMarker`
+- **Files Modified:** 
+  - `frontend/src/features/schedule/components/map/ScheduleMap.tsx`
+  - `frontend/src/features/schedule/components/map/MapMarker.tsx`
+
+#### Starting Point Marker Fix
+- **Problem:** Viktor's starting point showed "2" instead of "0" because a job marker at same coordinates was rendering on top
+- **Solution:** 
+  - Changed `StaffHomeMarker` to show "0" in a circle (matching job marker style)
+  - Added `zIndex={1000}` to ensure start markers always render on top
+  - Moved StaffHomeMarker rendering after job markers in render order
+  - Added click handler showing info window with "{Staff Name} Starting Point"
+- **Files Modified:** `frontend/src/features/schedule/components/map/StaffHomeMarker.tsx`
+
+#### Marker Clustering Removed
+- Disabled MarkerClusterer per user request (blue cluster dots were confusing)
+- Markers now always render individually
+
+### Validation Results
+
+All features validated with agent-browser:
+
+| Feature | Status |
+|---------|--------|
+| Show Routes toggle hides/shows all routes | ✅ |
+| Staff filter hides/shows that staff's routes | ✅ |
+| Staff filter hides/shows that staff's job markers | ✅ |
+| Filters remain visible when all staff filtered | ✅ |
+| Starting point shows "0" for all staff | ✅ |
+| Starting point click shows "{Name} Starting Point" | ✅ |
+| Job sequence numbers are 1-indexed per staff | ✅ |
+| No gaps in sequence numbers | ✅ |
+
+### Files Modified
+- `frontend/src/features/schedule/components/map/RoutePolyline.tsx` - Manual Google Maps API control
+- `frontend/src/features/schedule/components/map/ScheduleMap.tsx` - Per-staff sequence calculation, render order fix
+- `frontend/src/features/schedule/components/map/MapMarker.tsx` - Accept displaySequence prop
+- `frontend/src/features/schedule/components/map/StaffHomeMarker.tsx` - Show "0", high zIndex, info window
+
+### Screenshots
+Validation screenshots saved to `screenshots/map/`:
+- `v4-both-on.png`, `v4-routes-off.png`, `v4-vas-off.png`, `v4-viktor-off.png`
+- `viktor-start-fix.png`, `viktor-start-clicked.png`
+- `vas-only.png`, `vas-start-clicked.png`
+
+---
+
 ## [2026-01-24 18:20] - FEATURE: Ralph Wiggum Autonomous Loop - Phase 1 & 2 Complete
 
 ### What Was Accomplished

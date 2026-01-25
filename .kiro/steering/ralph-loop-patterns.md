@@ -22,13 +22,15 @@ No exceptions. If quality checks fail:
 2. Re-run quality checks
 3. Only mark complete when all pass
 
-### 3. Checkpoint Respect
-**ALWAYS PAUSE AT CHECKPOINT TASKS.**
+### 3. Checkpoint Handling
+**LOG CHECKPOINTS BUT CONTINUE EXECUTION.**
 
-Checkpoints are natural review points. When you reach a task containing "Checkpoint" in its name:
-1. Stop execution
-2. Output `CHECKPOINT REACHED`
-3. Wait for user to review and continue
+Checkpoints are progress markers for tracking. When you reach a task containing "Checkpoint" in its name:
+1. Log `CHECKPOINT REACHED: {checkpoint name}` in activity.md
+2. Mark the checkpoint task as complete
+3. **Continue to the next task without stopping**
+
+Note: For overnight/unattended runs, checkpoints should NOT pause execution. They exist for progress tracking and activity logging only.
 
 ### 4. Activity Logging
 **LOG EVERY ACTION IN ACTIVITY.MD.**
@@ -296,13 +298,213 @@ The loop stops automatically when:
 1. A checkpoint is reached
 2. All tasks are complete
 3. User input is required (after 3 retries)
-4. Max iterations (50) is reached
+4. Max iterations (100) is reached
 
 ---
 
-## Integration with Kiro Tools
+## Inline Visual Validation Pattern
 
-### taskStatus Tool
+### Task Structure for UI Components
+
+Every UI component task group MUST include an inline validation sub-task:
+
+```markdown
+- [ ] 6. MapMarker Component
+  - [ ] 6.1 Create MapMarker component
+  - [ ] 6.2 Add data-testid to MapMarker
+  - [ ] 6.3 **Validate MapMarker renders correctly** ← INLINE VALIDATION
+```
+
+### Validation Task Naming Convention
+
+Validation tasks should be named:
+- `Validate {component} renders correctly`
+- `Validate {feature} works end-to-end`
+- `Visual validation: {description}`
+
+### Ralph Loop Validation Behavior
+
+When the Ralph loop encounters a validation task:
+
+1. **Start servers** (if not running)
+2. **Execute agent-browser commands** to validate
+3. **If validation PASSES**: Mark complete, proceed to next task
+4. **If validation FAILS**:
+   - Log the failure in activity.md
+   - Identify the root cause from console errors or missing elements
+   - Fix the issue in the relevant component
+   - Re-run quality checks (typecheck, lint)
+   - **Re-validate** with agent-browser
+   - Repeat until validation passes (max 3 attempts)
+   - Only then proceed to next task
+
+### Validation Failure Recovery Flow
+
+```
+Validation Task
+      │
+      ▼
+┌─────────────────┐
+│ Run agent-browser│
+│ validation      │
+└─────────────────┘
+      │
+      ├── PASS ──► Mark complete, next task
+      │
+      ▼ FAIL
+┌─────────────────┐
+│ Log failure     │
+│ Analyze error   │
+└─────────────────┘
+      │
+      ▼
+┌─────────────────┐
+│ Fix component   │
+│ Run quality     │
+│ checks          │
+└─────────────────┘
+      │
+      ▼
+┌─────────────────┐
+│ Re-validate     │──► PASS ──► Mark complete
+│ (attempt 2/3)   │
+└─────────────────┘
+      │ FAIL
+      ▼
+┌─────────────────┐
+│ Fix again       │
+│ Re-validate     │──► PASS ──► Mark complete
+│ (attempt 3/3)   │
+└─────────────────┘
+      │ FAIL
+      ▼
+┌─────────────────┐
+│ USER INPUT      │
+│ REQUIRED        │
+└─────────────────┘
+```
+
+### Example Validation Task Execution
+
+For task "6.3 Validate MapMarker renders correctly":
+
+```bash
+# 1. Ensure servers running
+curl -s http://localhost:8000/health || (start backend)
+curl -s http://localhost:5173 || (start frontend)
+
+# 2. Navigate and trigger component render
+agent-browser open http://localhost:5173/schedule/generate
+agent-browser click "[data-testid='preview-btn']"
+agent-browser wait --load networkidle
+agent-browser click "[data-testid='view-toggle-map']"
+
+# 3. Validate component
+agent-browser is visible "[data-testid='map-marker']"
+# If false → FIX and retry
+
+# 4. Validate interactions (if applicable)
+agent-browser click "[data-testid='map-marker']"
+agent-browser is visible "[data-testid='map-info-window']"
+```
+
+### Tasks.md Template for UI Features
+
+When creating tasks.md for UI features, use this pattern:
+
+```markdown
+## Phase X: {Feature Name}
+
+- [ ] 1. {Component A}
+  - [ ] 1.1 Create {Component A}
+  - [ ] 1.2 Add data-testid attributes
+  - [ ] 1.3 Validate {Component A} renders correctly
+
+- [ ] 2. {Component B}
+  - [ ] 2.1 Create {Component B}
+  - [ ] 2.2 Add data-testid attributes
+  - [ ] 2.3 Validate {Component B} renders correctly
+
+- [ ] 3. {Integration}
+  - [ ] 3.1 Integrate {Component A} and {Component B}
+  - [ ] 3.2 Validate integration works end-to-end
+```
+
+---
+
+## Visual Validation
+
+### Server Management for Visual Validation
+
+Before any task requiring agent-browser validation, ensure servers are running:
+
+```bash
+# Check if servers are running
+curl -s http://localhost:8000/health > /dev/null 2>&1 && echo "Backend running" || echo "Backend not running"
+curl -s http://localhost:5173 > /dev/null 2>&1 && echo "Frontend running" || echo "Frontend not running"
+```
+
+**If servers are not running, start them automatically:**
+
+```bash
+# Start backend (in background)
+cd /Users/kirillrakitin/Grins_irrigation_platform
+nohup uv run uvicorn grins_platform.main:app --reload --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &
+echo $! > /tmp/backend.pid
+
+# Wait for backend to be ready
+for i in {1..30}; do
+  curl -s http://localhost:8000/health > /dev/null 2>&1 && break
+  sleep 1
+done
+
+# Start frontend (in background)
+cd /Users/kirillrakitin/Grins_irrigation_platform/frontend
+nohup npm run dev > /tmp/frontend.log 2>&1 &
+echo $! > /tmp/frontend.pid
+
+# Wait for frontend to be ready
+for i in {1..30}; do
+  curl -s http://localhost:5173 > /dev/null 2>&1 && break
+  sleep 1
+done
+```
+
+**Server startup is MANDATORY before visual validation tasks.** Do not skip or mark visual validation tasks complete without actually running agent-browser commands.
+
+### Cleanup After Validation
+
+After all visual validation tasks are complete:
+
+```bash
+# Stop servers if we started them
+[ -f /tmp/backend.pid ] && kill $(cat /tmp/backend.pid) 2>/dev/null && rm /tmp/backend.pid
+[ -f /tmp/frontend.pid ] && kill $(cat /tmp/frontend.pid) 2>/dev/null && rm /tmp/frontend.pid
+```
+
+### Visual Validation Task Detection
+
+A task requires visual validation if it contains any of:
+- "visual validation"
+- "agent-browser"
+- "screenshot"
+- "UI validation"
+- "end-to-end validation"
+- Task number pattern matching validation tasks (e.g., 28.x for map-scheduling-interface)
+
+### agent-browser Tool
+
+Use the `taskStatus` tool to update task states:
+
+```
+taskStatus(
+  taskFilePath=".kiro/specs/{spec-name}/tasks.md",
+  task="{exact task text}",
+  status="in_progress" | "completed"
+)
+```
+
+### agent-browser Tool
 
 Use the `taskStatus` tool to update task states:
 
@@ -471,7 +673,7 @@ state_storage:
   activity_log: .kiro/specs/{feature}/activity.md
 
 failure_handling: graduated_response
-max_iterations: 50
+max_iterations: 100
 retry_limit: 3
 checkpoint_detection: true
 

@@ -32,6 +32,8 @@ class ScheduleJobAssignment(BaseModel):
     duration_minutes: int
     travel_time_minutes: int
     sequence_index: int
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class ScheduleStaffAssignment(BaseModel):
@@ -39,6 +41,8 @@ class ScheduleStaffAssignment(BaseModel):
 
     staff_id: UUID
     staff_name: str
+    start_lat: float | None = None
+    start_lng: float | None = None
     jobs: list[ScheduleJobAssignment] = Field(default_factory=list)
     total_jobs: int = 0
     total_travel_minutes: int = 0

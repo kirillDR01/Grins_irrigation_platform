@@ -161,6 +161,8 @@ export interface ScheduleJobAssignment {
   customer_name: string;
   address: string | null;
   city: string | null;
+  latitude: number | null;
+  longitude: number | null;
   service_type: string;
   start_time: string;
   end_time: string;
@@ -172,6 +174,8 @@ export interface ScheduleJobAssignment {
 export interface ScheduleStaffAssignment {
   staff_id: string;
   staff_name: string;
+  start_lat: number | null;
+  start_lng: number | null;
   jobs: ScheduleJobAssignment[];
   total_jobs: number;
   total_travel_minutes: number;

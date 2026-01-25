@@ -322,11 +322,14 @@ class ScheduleGenerationService(LoggerMixin):
             staff_travel = 0
 
             for slot in slots:
+                loc = slot.job.location
                 job_assignments.append(ScheduleJobAssignment(
                     job_id=slot.job.id,
                     customer_name=slot.job.customer_name,
-                    address=slot.job.location.address,
-                    city=slot.job.location.city,
+                    address=loc.address,
+                    city=loc.city,
+                    latitude=float(loc.latitude) if loc.latitude else None,
+                    longitude=float(loc.longitude) if loc.longitude else None,
                     service_type=slot.job.service_type,
                     start_time=slot.start_time,
                     end_time=slot.end_time,
@@ -337,9 +340,14 @@ class ScheduleGenerationService(LoggerMixin):
                 staff_travel += slot.travel_time_from_previous
 
             if job_assignments:
+                start_loc = assignment.staff.start_location
+                start_lat = float(start_loc.latitude) if start_loc.latitude else None
+                start_lng = float(start_loc.longitude) if start_loc.longitude else None
                 assignments.append(ScheduleStaffAssignment(
                     staff_id=assignment.staff.id,
                     staff_name=assignment.staff.name,
+                    start_lat=start_lat,
+                    start_lng=start_lng,
                     jobs=job_assignments,
                     total_jobs=len(job_assignments),
                     total_travel_minutes=staff_travel,

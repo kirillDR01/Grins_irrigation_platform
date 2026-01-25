@@ -20,7 +20,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { CalendarIcon, Loader2, Zap, Eye } from 'lucide-react';
+import { CalendarIcon, Loader2, Zap, Eye, List, Map } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   useGenerateSchedule,
@@ -28,11 +28,17 @@ import {
   useScheduleCapacity,
 } from '../hooks/useScheduleGeneration';
 import { ScheduleResults } from './ScheduleResults';
+import { MapProvider } from './map/MapProvider';
+import { ScheduleMap } from './map/ScheduleMap';
 import type { ScheduleGenerateResponse } from '../types';
+import type { ViewMode } from '../types/map';
 
 export function ScheduleGenerationPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [results, setResults] = useState<ScheduleGenerateResponse | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [showRoutes, setShowRoutes] = useState(true);
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
   const { data: capacity, isLoading: capacityLoading } =
@@ -193,8 +199,46 @@ export function ScheduleGenerationPage() {
         </Card>
       </div>
 
-      {/* Results Section */}
-      {results && <ScheduleResults results={results} />}
+      {/* View Toggle and Results Section */}
+      {results && (
+        <div className="space-y-4">
+          {/* View Toggle Buttons */}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+              data-testid="view-toggle-list"
+            >
+              <List className="mr-2 h-4 w-4" />
+              List
+            </Button>
+            <Button
+              variant={viewMode === 'map' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('map')}
+              data-testid="view-toggle-map"
+            >
+              <Map className="mr-2 h-4 w-4" />
+              Map
+            </Button>
+          </div>
+
+          {/* Conditional View Rendering */}
+          {viewMode === 'list' ? (
+            <ScheduleResults results={results} />
+          ) : (
+            <MapProvider>
+              <ScheduleMap
+                assignments={results.assignments}
+                selectedJobId={selectedJobId}
+                onJobSelect={setSelectedJobId}
+                showRoutes={showRoutes}
+              />
+            </MapProvider>
+          )}
+        </div>
+      )}
 
       {/* Error Display */}
       {(generateMutation.error || previewMutation.error) && (
