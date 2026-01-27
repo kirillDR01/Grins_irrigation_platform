@@ -6,7 +6,7 @@ Validates: Requirements 5.1, 5.6, 5.7, 5.8
 
 from __future__ import annotations
 
-from datetime import date  # noqa: TC003
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session  # noqa: TC002

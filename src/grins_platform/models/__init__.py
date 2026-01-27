@@ -7,8 +7,11 @@ Phase 1 (Customer Management): Customer, Property
 Phase 2 (Field Operations): ServiceOffering, Job, JobStatusHistory, Staff
 Phase 3 (Admin Dashboard): Appointment
 Phase 4 (Route Optimization): StaffAvailability
+Phase 6 (AI Assistant): AIAuditLog, AIUsage, SentMessage
 """
 
+from grins_platform.models.ai_audit_log import AIAuditLog
+from grins_platform.models.ai_usage import AIUsage
 from grins_platform.models.appointment import Appointment
 from grins_platform.models.customer import Customer
 from grins_platform.models.enums import (
@@ -28,11 +31,15 @@ from grins_platform.models.enums import (
 from grins_platform.models.job import Job
 from grins_platform.models.job_status_history import JobStatusHistory
 from grins_platform.models.property import Property
+from grins_platform.models.sent_message import SentMessage
 from grins_platform.models.service_offering import ServiceOffering
 from grins_platform.models.staff import Staff
 from grins_platform.models.staff_availability import StaffAvailability
 
 __all__ = [
+    # Phase 6: AI Assistant
+    "AIAuditLog",
+    "AIUsage",
     # Phase 3: Admin Dashboard
     "Appointment",
     "AppointmentStatus",
@@ -49,6 +56,8 @@ __all__ = [
     "PricingModel",
     "Property",
     "PropertyType",
+    # Phase 6: AI Assistant
+    "SentMessage",
     "ServiceCategory",
     "ServiceOffering",
     "SkillLevel",

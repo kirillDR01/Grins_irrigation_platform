@@ -9,8 +9,8 @@ Validates: Requirement 2.2, 2.3, 2.4, 2.8-2.11
 
 from __future__ import annotations
 
-from datetime import datetime  # noqa: TC003
-from uuid import UUID  # noqa: TC003
+from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 

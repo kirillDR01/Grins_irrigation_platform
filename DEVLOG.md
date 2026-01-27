@@ -13,6 +13,427 @@ This repository contains documentation and examples for Kiro development workflo
 
 ## Recent Activity
 
+## [2026-01-27 14:30] - CONFIG: Ralph Wiggum Overnight System Deep Dive & Fixes
+
+### What Was Accomplished
+
+**Comprehensive Review and Fixes for Ralph Wiggum Autonomous Execution System**
+
+Completed a deep dive review of the entire Ralph Wiggum overnight execution system to ensure consistency across all components. Identified and fixed several issues related to timeout documentation and duplicate content.
+
+| Component | File | Status |
+|-----------|------|--------|
+| Main bash script | `scripts/ralph-overnight.sh` | ✅ Verified |
+| Overnight prompt | `.kiro/prompts/ralph-next-overnight.md` | ✅ Verified |
+| Interactive loop prompt | `.kiro/prompts/ralph-loop.md` | ✅ Verified |
+| Single task prompt | `.kiro/prompts/ralph-next.md` | ✅ Verified |
+| Steering rules | `.kiro/steering/ralph-loop-patterns.md` | ✅ Fixed |
+| Documentation | `OVERNIGHT-RALPH-WIGGUM.md` | ✅ Fixed |
+
+### Technical Details
+
+**Fixes Applied:**
+
+1. **Removed Duplicate Section** - Deleted duplicate `taskStatus` tool section in `ralph-loop-patterns.md` that was causing confusion
+
+2. **Clarified Two-Level Timeout System:**
+   - Task-level timeout: 10 minutes (enforced by bash script)
+   - Command-level timeout: 60 seconds (enforced by prompt)
+   - Updated documentation to clearly distinguish between these two levels
+
+3. **Updated Configuration Reference** - Added both timeout values to the configuration reference section in steering document:
+   ```yaml
+   overnight_mode:
+     max_task_timeout: 600  # 10 minutes per task (bash script level)
+     max_command_timeout: 60  # 60 seconds per command (prompt level)
+   ```
+
+4. **Updated OVERNIGHT-RALPH-WIGGUM.md** - Changed "5-minute task timeout" to correct "10-minute task timeout" to match actual script behavior
+
+**Key Components Verified:**
+
+| Component | Purpose | Key Features |
+|-----------|---------|--------------|
+| `ralph-overnight.sh` | Main execution script | 10-min task timeout, server management, iteration tracking |
+| `ralph-next-overnight.md` | Overnight mode prompt | No user input waiting, task skipping, checkpoint handling |
+| `ralph-loop.md` | Interactive loop prompt | User checkpoints, graduated retry, activity logging |
+| `ralph-next.md` | Single task prompt | One task execution, quality checks, status updates |
+| `ralph-loop-patterns.md` | Steering rules | Checkpoint behavior, timeout handling, validation patterns |
+
+**Checkpoint Behavior Clarification:**
+- Checkpoints are **mandatory quality gates** that BLOCK until ALL checks pass
+- Checkpoints are NEVER skipped - they fix issues up to 5 times, then STOP the loop
+- This ensures code quality is maintained throughout autonomous execution
+
+### Decision Rationale
+
+**Why Two-Level Timeouts:**
+- Task-level (10 min): Prevents infinite loops in complex tasks, allows time for quality checks
+- Command-level (60 sec): Catches hung individual commands quickly, enables faster recovery
+
+**Why Checkpoints Block Instead of Skip:**
+- Quality gates ensure code passes ruff, mypy, pyright, pytest before proceeding
+- Prevents accumulation of technical debt during overnight runs
+- Maintains code quality standards even in autonomous mode
+
+### Impact and Dependencies
+
+- All Ralph Wiggum documentation is now consistent
+- Overnight execution will correctly enforce 10-minute task timeouts
+- Users have clear understanding of timeout behavior at both levels
+- Checkpoint behavior is clearly documented as blocking, not skipping
+
+### Next Steps
+
+- Monitor overnight runs to verify timeout behavior works as documented
+- Consider adding timeout configuration to environment variables for flexibility
+- Update any remaining documentation that references old timeout values
+
+### Resources and References
+
+- `scripts/ralph-overnight.sh` - Main execution script
+- `.kiro/steering/ralph-loop-patterns.md` - Comprehensive steering rules
+- `OVERNIGHT-RALPH-WIGGUM.md` - User-facing documentation
+- `Ralph_Wiggum_Guide.md` - Complete guide to Ralph Wiggum system
+
+---
+
+## [2026-01-26 10:30] - SPEC: Phase 6 AI Assistant Integration Spec Complete
+
+### What Was Accomplished
+
+**Created Complete Spec for AI Assistant Integration (Phase 6)**
+
+Successfully created comprehensive spec for the AI Assistant Integration feature using Kiro's spec-driven development workflow. This phase integrates Pydantic AI with GPT-5-nano to automate Viktor's most time-consuming manual tasks, potentially saving 15-20 hours per week during peak season.
+
+| Document | Location | Lines | Content |
+|----------|----------|-------|---------|
+| `requirements.md` | `.kiro/specs/ai-assistant/` | ~450 | 19 requirements, 140+ EARS-pattern acceptance criteria |
+| `design.md` | `.kiro/specs/ai-assistant/` | ~600 | Full technical design, Pydantic AI architecture, 14 correctness properties |
+| `tasks.md` | `.kiro/specs/ai-assistant/` | ~740 | 26 task groups, ~100 subtasks with agent-browser validation |
+| `PHASE-6-PLANNING.md` | Root directory | ~1470 | Comprehensive planning document with UI mockups |
+
+### Technical Details
+
+**Requirements Document (19 Requirements):**
+
+| # | Requirement | Description |
+|---|-------------|-------------|
+| 1 | AI Agent Foundation | Pydantic AI with GPT-5-nano, provider abstraction, streaming support |
+| 2 | Rate Limiting & Cost Control | 100 requests/day limit, token budgets, cost alerts |
+| 3 | AI Audit Trail | Complete logging of recommendations and user decisions |
+| 4 | Intelligent Batch Scheduling | AI-generated optimized weekly schedules |
+| 5 | Job Request Categorization | Auto-categorize with confidence scoring (85% threshold) |
+| 6 | Customer Communication Drafts | AI-drafted confirmations, reminders, follow-ups |
+| 7 | Communications Queue | Centralized pending/sent message management |
+| 8 | Natural Language Queries | Chat interface for business questions |
+| 9 | Smart Estimate Generation | AI-calculated pricing with similar job references |
+| 10 | Morning Briefing Panel | Daily summary of overnight requests and priorities |
+| 11 | Weather Integration | OpenWeatherMap for scheduling weather flags |
+| 12 | SMS Infrastructure | Twilio integration for customer messaging |
+| 13 | Session Management | 50-message limit, browser tab scoped |
+| 14 | Error Handling | Graceful degradation to manual workflows |
+| 15 | API Endpoints | 12 new endpoints for AI features |
+| 16 | Frontend Components | 7 new AI-powered UI components |
+| 17 | Data Validation & Security | PII protection, prompt injection prevention |
+| 18 | Testing Strategy | Mock LLM for unit tests, golden datasets |
+| 19 | Agent Browser Validation | Visual validation for all AI components |
+
+**Key Technical Decisions:**
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| **LLM Provider** | GPT-5-nano (default) | Cost-effective, fast, sufficient for business tasks |
+| **AI Framework** | Pydantic AI | Type-safe tools, structured outputs, Python-native |
+| **PII Protection** | Placeholder system | Never send real names/phones/emails to LLM |
+| **Human-in-the-Loop** | Mandatory | AI recommends, user approves, system executes |
+| **Rate Limiting** | 100 requests/day | Cost control with graceful degradation |
+| **Context Window** | 4000 tokens max | Efficient context with priority truncation |
+
+**New Database Tables:**
+- `ai_audit_log` - Tracks all AI recommendations and user decisions
+- `ai_usage` - Per-user daily request counts and token usage
+- `sent_messages` - Customer communication history with Twilio tracking
+
+**New API Endpoints (12):**
+```
+AI Endpoints:
+- POST /api/v1/ai/chat (streaming SSE)
+- POST /api/v1/ai/schedule/generate
+- POST /api/v1/ai/jobs/categorize
+- POST /api/v1/ai/communication/draft
+- POST /api/v1/ai/estimate/generate
+- GET /api/v1/ai/usage
+- GET /api/v1/ai/audit
+- POST /api/v1/ai/audit/{id}/decision
+
+SMS Endpoints:
+- POST /api/v1/sms/send
+- POST /api/v1/sms/webhook
+- GET /api/v1/communications/queue
+- POST /api/v1/communications/send-bulk
+```
+
+**New Frontend Components (7):**
+- `AIQueryChat` - Natural language business queries
+- `AIScheduleGenerator` - Batch schedule generation
+- `AICategorization` - Job request categorization
+- `AICommunicationDrafts` - Message drafting
+- `AIEstimateGenerator` - Smart estimate generation
+- `MorningBriefing` - Daily summary panel
+- `CommunicationsQueue` - Centralized message management
+
+**Correctness Properties (14):**
+1. PII Protection - No personal data in LLM context
+2. Context Token Limit - Never exceed 4000 tokens
+3. Rate Limit Enforcement - Reject requests over 100/day
+4. Audit Log Completeness - All recommendations logged
+5. Audit Decision Tracking - All user decisions recorded
+6. Schedule Location Batching - Jobs grouped by city
+7. Schedule Job Type Batching - Similar jobs together
+8. Schedule Staff Matching - Skills match requirements
+9. Confidence Threshold Routing - 85% cutoff enforced
+10. Human Approval Required - No auto-execution
+11. Duplicate Message Prevention - No repeat sends
+12. Session History Limit - Max 50 messages
+13. SMS Opt-in Enforcement - Only send to opted-in
+14. Input Sanitization - Prevent prompt injection
+
+### Task Structure (26 Groups)
+
+| Phase | Tasks | Focus |
+|-------|-------|-------|
+| Foundation | 1-3 | Database schema, models, Pydantic schemas |
+| Repository | 4 | Data access layer for AI tables |
+| Core Services | 5-6 | Rate limiting, audit, context builder |
+| AI Agent | 7-9 | Pydantic AI setup, tools implementation |
+| External | 10 | Twilio SMS integration |
+| API | 11-12 | Backend endpoints |
+| Session/Security | 13-14 | Session management, input validation |
+| Backend Complete | 15 | Checkpoint |
+| Frontend Setup | 16 | AI feature module structure |
+| Shared Components | 17 | Loading, error, streaming states |
+| AI Components | 18-24 | All 7 AI-powered components |
+| Frontend Complete | 25 | Checkpoint |
+| Integration | 26-28 | Dashboard integration, testing |
+| Final | 29 | Phase 6 complete checkpoint |
+
+### Decision Rationale
+
+**Why Pydantic AI:**
+- Type-safe tool definitions with automatic validation
+- Structured outputs matching Pydantic schemas
+- Native Python integration with existing codebase
+- Provider abstraction for future LLM swaps
+
+**Why Human-in-the-Loop:**
+- Viktor explicitly requested: "AI should never send messages without my approval"
+- Reduces risk of incorrect categorizations or pricing
+- Maintains customer relationship quality
+- Provides audit trail for compliance
+
+**Why 85% Confidence Threshold:**
+- Based on analysis of Viktor's manual categorization patterns
+- High enough to catch uncertain cases
+- Low enough to automate routine seasonal services
+- Configurable for future tuning
+
+### Impact and Dependencies
+
+**Business Value:**
+- Scheduling time: 8-10 hrs/week → 30 min/week (95% reduction)
+- Job categorization: 3-4 hrs/day → 15 min/day (90% reduction)
+- Customer communication: 2-3 hrs/week → 15 min/week (90% reduction)
+- Total admin time: 15-20 hrs/week → 5-8 hrs/week (60-70% reduction)
+
+**Dependencies:**
+- Phase 1-5 complete ✅ (customers, jobs, staff, scheduling, maps)
+- OpenAI API key (for GPT-5-nano)
+- Twilio account (for SMS)
+- OpenWeatherMap API key (for weather)
+
+**Estimated Effort:**
+- Total: 40-60 hours
+- Foundation (Tasks 1-6): 8-12 hours
+- AI Agent & Tools (Tasks 7-10): 12-16 hours
+- API & Security (Tasks 11-15): 8-12 hours
+- Frontend Components (Tasks 16-25): 12-16 hours
+- Integration & Testing (Tasks 26-29): 4-8 hours
+
+### Files Created
+
+```
+.kiro/specs/ai-assistant/requirements.md  # NEW - 19 requirements, 140+ criteria
+.kiro/specs/ai-assistant/design.md        # NEW - Technical design, 14 properties
+.kiro/specs/ai-assistant/tasks.md         # NEW - 26 task groups, ~100 subtasks
+PHASE-6-PLANNING.md                       # NEW - Comprehensive planning (~1470 lines)
+```
+
+### Next Steps
+
+1. Begin Task 1: Database Schema and Models
+2. Create Alembic migrations for ai_audit_log, ai_usage, sent_messages
+3. Implement SQLAlchemy models
+4. Proceed through tasks with checkpoint validation
+
+### Kiro Features Showcased
+
+| Feature | Usage | Impact |
+|---------|-------|--------|
+| **Spec-Driven Development** | Complete spec with requirements → design → tasks | ⭐⭐⭐⭐⭐ |
+| **EARS-Pattern Criteria** | 140+ testable acceptance criteria | ⭐⭐⭐⭐⭐ |
+| **Property-Based Testing** | 14 correctness properties defined | ⭐⭐⭐⭐⭐ |
+| **Agent-Browser Validation** | Visual validation for all 7 AI components | ⭐⭐⭐⭐⭐ |
+| **Steering Documents** | Comprehensive planning with UI mockups | ⭐⭐⭐⭐⭐ |
+
+**Status: PHASE 6 SPEC COMPLETE ✅ | READY FOR IMPLEMENTATION** 🚀
+
+---
+
+## [2026-01-25 07:42] - MILESTONE: Phase 5 Map-Based Scheduling Interface - COMPLETE ✅
+
+### What Was Accomplished
+
+**Phase 5 Map-Based Scheduling Interface - Full Implementation Complete**
+
+Successfully completed the entire Phase 5 Map-Based Scheduling Interface feature, adding Google Maps visualization to the schedule generation workflow with staff-colored markers, route polylines, and interactive filtering.
+
+| Metric | Value |
+|--------|-------|
+| Backend Tests | 903 Passing |
+| Frontend Tests | 319 Passing |
+| Total Tests | 1,222 Automated Tests |
+| Tasks Completed | 38/38 (100%) |
+| New Components | 21 |
+| New Hooks | 2 |
+| New Utilities | 2 |
+
+**Key Features Implemented:**
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| Map View Toggle | Switch between List and Map views | ✅ Complete |
+| Staff-Colored Markers | Each staff member has unique color | ✅ Complete |
+| Route Polylines | Straight-line routes between jobs | ✅ Complete |
+| Starting Point Markers | "0" markers for staff home locations | ✅ Complete |
+| Staff Filters | Toggle visibility per staff member | ✅ Complete |
+| Show Routes Toggle | Hide/show all route lines | ✅ Complete |
+| Map Info Windows | Click markers for job details | ✅ Complete |
+| Map Legend | Color key for staff assignments | ✅ Complete |
+| Map Controls | Zoom, center, fit bounds | ✅ Complete |
+| Mobile Layout | Responsive design with job sheet | ✅ Complete |
+| Empty/Error/Loading States | Graceful handling of all states | ✅ Complete |
+
+### Technical Details
+
+**New Frontend Components (21):**
+```
+frontend/src/features/schedule/components/map/
+├── index.ts              # Barrel exports
+├── MapProvider.tsx       # Google Maps API provider
+├── ScheduleMap.tsx       # Main map container
+├── MapMarker.tsx         # Job markers with sequence numbers
+├── MapLegend.tsx         # Staff color legend
+├── StaffHomeMarker.tsx   # Starting point "0" markers
+├── RoutePolyline.tsx     # Route lines (manual API control)
+├── MapInfoWindow.tsx     # Popup on marker click
+├── MapFilters.tsx        # Staff visibility toggles
+├── MapControls.tsx       # Zoom/center controls
+├── MapEmptyState.tsx     # No jobs message
+├── MapErrorState.tsx     # Error display
+├── MapLoadingState.tsx   # Loading spinner
+├── MissingCoordsWarning.tsx  # Missing coordinates alert
+└── MobileJobSheet.tsx    # Mobile job details sheet
+```
+
+**New Hooks (2):**
+- `useMapData.ts` - Transforms schedule data for map display
+- `useMapBounds.ts` - Calculates map bounds from job coordinates
+
+**New Utilities (2):**
+- `staffColors.ts` - Staff color palette with tests
+- `mapStyles.ts` - Google Maps styling configuration
+
+**Key Technical Challenges Solved:**
+
+| Challenge | Solution |
+|-----------|----------|
+| Polyline cleanup on filter | Manual Google Maps API control instead of React component |
+| Sequence number gaps | Per-staff display sequence calculation |
+| Starting point overlap | High zIndex (1000) for home markers |
+| Filter state persistence | React state with proper toggle logic |
+
+### Files Created/Modified
+
+**Backend (3 files):**
+- `src/grins_platform/schemas/schedule_generation.py` - Added coordinate fields
+- `src/grins_platform/services/schedule_generation_service.py` - Pass coordinates
+- `src/grins_platform/tests/test_schedule_generation_schemas.py` - Schema tests
+
+**Frontend (22 files):**
+- Types: `types/index.ts`, `types/map.ts`
+- Utils: `utils/staffColors.ts`, `utils/mapStyles.ts`
+- Hooks: `hooks/useMapData.ts`, `hooks/useMapBounds.ts`
+- Components: 16 new map components in `components/map/`
+- Modified: `ScheduleGenerationPage.tsx` - View toggle integration
+
+### Quality Check Results
+
+| Check | Result |
+|-------|--------|
+| Ruff | ✅ Zero violations |
+| MyPy | ✅ Zero errors |
+| Pyright | ✅ Zero errors |
+| Backend Tests | ✅ 903/903 passing |
+| Frontend TypeCheck | ✅ Zero errors |
+| Frontend Lint | ✅ Zero errors |
+| Frontend Tests | ✅ 319/319 passing |
+
+### Visual Validation Results
+
+All features validated with agent-browser:
+
+| Feature | Validation | Status |
+|---------|------------|--------|
+| Map renders with markers | `is visible "[data-testid='schedule-map']"` | ✅ |
+| View toggle works | Click toggle, verify map appears | ✅ |
+| Staff filters toggle markers | Filter off, markers disappear | ✅ |
+| Staff filters toggle routes | Filter off, routes disappear | ✅ |
+| Show routes toggle | Toggle off, all routes hide | ✅ |
+| Starting points show "0" | Verify marker content | ✅ |
+| Info window on click | Click marker, popup appears | ✅ |
+| Sequence numbers correct | 1, 2, 3, 4 per staff | ✅ |
+
+### Screenshots
+
+Validation screenshots saved to `screenshots/map/`:
+- `final-integrated.png` - Complete map view
+- `v4-both-on.png` - Both staff visible
+- `v4-routes-off.png` - Routes hidden
+- `v4-vas-off.png` - Vas filtered out
+- `v4-viktor-off.png` - Viktor filtered out
+- `viktor-start-fix.png` - Starting point marker
+- `sequence-numbers.png` - Per-staff numbering
+
+### Git Commit
+
+```
+feat: Complete Phase 5 Map-Based Scheduling Interface
+
+- Add map view with Google Maps integration and staff-colored markers
+- Implement route polylines with manual API control for proper cleanup
+- Add staff filters that toggle markers and routes independently
+- Fix sequence numbering to be per-staff (1,2,3,4 not global)
+- Add starting point markers showing "0" with info window on click
+- Create MapProvider, MapMarker, RoutePolyline, StaffHomeMarker components
+- Add MapFilters, MapControls, MapLegend, MapInfoWindow components
+- Implement useMapData and useMapBounds hooks for data management
+```
+
+**Status: PHASE 5 MAP INTERFACE COMPLETE ✅ | 1,222 TESTS PASSING ✅ | READY FOR PHASE 6** 🚀
+
+---
+
 ## [2026-01-25 07:35] - FEATURE: Map Scheduling Interface - Bug Fixes & Polish
 
 ### What Was Accomplished

@@ -5,8 +5,8 @@ Validates: Requirements 11.1, 11.2, 11.6
 
 from __future__ import annotations
 
-from datetime import date  # noqa: TC003
-from uuid import UUID  # noqa: TC003
+from datetime import date
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session  # noqa: TC002

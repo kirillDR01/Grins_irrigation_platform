@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timezone
 from typing import TYPE_CHECKING
-from uuid import UUID  # noqa: TC003
+from uuid import UUID
 
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.appointment import Appointment
@@ -266,7 +266,11 @@ class ConflictResolutionService(LoggerMixin):
 
         for entry in waitlist_entries:
             job = self.db.query(Job).filter(Job.id == entry.job_id).first()
-            if job and job.estimated_duration_minutes <= gap_minutes:
+            if (
+                job
+                and job.estimated_duration_minutes is not None
+                and job.estimated_duration_minutes <= gap_minutes
+            ):
                 suggestions.append(
                     FillGapSuggestion(
                         job_id=job.id,

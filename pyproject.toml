@@ -39,6 +39,8 @@ dependencies = [
     "greenlet>=3.0.0",
     "timefold>=1.24.0b0",
     "psycopg2-binary>=2.9.11",
+    "openai>=2.15.0",
+    "twilio>=9.10.0",
 ]
 
 [project.optional-dependencies]
@@ -232,6 +234,8 @@ ignore = [
     "ANN202",
     # Allow boolean positional arguments (common in APIs)
     "FBT001", "FBT002", "FBT003",
+    # Allow runtime imports of typing constructs (we use from __future__ import annotations)
+    "TC003",
 ]
 
 # Enable automatic fixing for all fixable rules
@@ -314,7 +318,7 @@ docstring-code-line-length = "dynamic"
 # MyPy configuration optimized for AI coding and strict type checking
 
 # Python version and basic settings
-python_version = "3.9"
+python_version = "3.11"
 platform = "linux"
 show_error_codes = true
 show_column_numbers = true
@@ -419,11 +423,16 @@ module = [
 ignore_missing_imports = true
 follow_imports = "skip"
 
+# API modules use FastAPI decorators which are not fully typed
+[[tool.mypy.overrides]]
+module = "grins_platform.api.v1.*"
+disallow_untyped_decorators = false
+
 [tool.pyright]
 # Pyright configuration for comprehensive type checking alongside MyPy
 
 # Basic settings
-pythonVersion = "3.9"
+pythonVersion = "3.11"
 pythonPlatform = "All"
 include = ["src"]
 exclude = [
@@ -435,6 +444,7 @@ exclude = [
     "**/venv",
     "build",
     "dist",
+    "**/tests/**",
 ]
 
 # Type checking mode - strict for maximum safety
@@ -513,5 +523,5 @@ stubPath = "typings"
 
 # Execution environments for different Python versions
 executionEnvironments = [
-    { root = "src", pythonVersion = "3.9", pythonPlatform = "All", reportPrivateUsage = "none", reportUninitializedInstanceVariable = "none" },
+    { root = "src", pythonVersion = "3.11", pythonPlatform = "All", reportPrivateUsage = "none", reportUninitializedInstanceVariable = "none" },
 ]

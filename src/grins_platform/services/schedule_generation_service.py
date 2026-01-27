@@ -7,10 +7,10 @@ Validates: Requirements 5.1-5.8
 from __future__ import annotations
 
 import time as time_module
-from datetime import date  # noqa: TC003
+from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
-from uuid import UUID  # noqa: TC003
+from uuid import UUID
 
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.appointment import Appointment
@@ -220,9 +220,11 @@ class ScheduleGenerationService(LoggerMixin):
 
         total = 0
         for apt in appointments:
-            if apt.scheduled_start and apt.scheduled_end:
-                start_mins = apt.scheduled_start.hour * 60 + apt.scheduled_start.minute
-                end_mins = apt.scheduled_end.hour * 60 + apt.scheduled_end.minute
+            if apt.time_window_start and apt.time_window_end:
+                start = apt.time_window_start
+                end = apt.time_window_end
+                start_mins = start.hour * 60 + start.minute
+                end_mins = end.hour * 60 + end.minute
                 total += end_mins - start_mins
 
         return total

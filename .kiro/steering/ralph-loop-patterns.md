@@ -23,14 +23,29 @@ No exceptions. If quality checks fail:
 3. Only mark complete when all pass
 
 ### 3. Checkpoint Handling
-**LOG CHECKPOINTS BUT CONTINUE EXECUTION.**
+**CHECKPOINTS ARE QUALITY GATES - ALL CHECKS MUST PASS.**
 
-Checkpoints are progress markers for tracking. When you reach a task containing "Checkpoint" in its name:
-1. Log `CHECKPOINT REACHED: {checkpoint name}` in activity.md
-2. Mark the checkpoint task as complete
-3. **Continue to the next task without stopping**
+Checkpoints are **mandatory quality gates** that ensure code quality before proceeding. When you reach a task containing "Checkpoint" in its name:
 
-Note: For overnight/unattended runs, checkpoints should NOT pause execution. They exist for progress tracking and activity logging only.
+1. **Run ALL quality checks:**
+   - Backend: `uv run ruff check src/`, `uv run mypy src/`, `uv run pyright src/`, `uv run pytest -v`
+   - Frontend: `cd frontend && npm run lint`, `npm run typecheck`, `npm test`
+
+2. **If ALL checks pass:**
+   - Log `CHECKPOINT PASSED: {checkpoint name}` in activity.md
+   - Mark the checkpoint task as complete
+   - Continue to the next task
+
+3. **If ANY check fails:**
+   - Log `CHECKPOINT BLOCKED: {checkpoint name}` with failure details
+   - **DO NOT mark checkpoint complete**
+   - **DO NOT skip the checkpoint**
+   - **FIX the issues** - go back to previous tasks and fix the failing code
+   - Re-run quality checks
+   - Retry up to 5 times to fix issues
+   - If still failing after 5 fix attempts, output `CHECKPOINT_FAILED: {name}` and stop
+
+**CRITICAL: Checkpoints are NOT skippable. They ensure code quality is maintained throughout the project.**
 
 ### 4. Activity Logging
 **LOG EVERY ACTION IN ACTIVITY.MD.**
@@ -492,19 +507,7 @@ A task requires visual validation if it contains any of:
 - "end-to-end validation"
 - Task number pattern matching validation tasks (e.g., 28.x for map-scheduling-interface)
 
-### agent-browser Tool
-
-Use the `taskStatus` tool to update task states:
-
-```
-taskStatus(
-  taskFilePath=".kiro/specs/{spec-name}/tasks.md",
-  task="{exact task text}",
-  status="in_progress" | "completed"
-)
-```
-
-### agent-browser Tool
+### taskStatus Tool
 
 Use the `taskStatus` tool to update task states:
 
@@ -659,6 +662,166 @@ The Ralph loop is designed for overnight/unattended execution. When stuck:
 
 ---
 
+## Overnight Mode Rules (CRITICAL FOR UNATTENDED EXECUTION)
+
+When running in overnight mode (`./scripts/ralph-overnight.sh`), the following rules apply:
+
+### CHECKPOINTS ARE MANDATORY QUALITY GATES
+
+**CRITICAL: Checkpoints CANNOT be skipped. They are quality gates that ensure all code passes validation.**
+
+In overnight mode, the loop handles situations as follows:
+
+| Situation | Overnight Mode Behavior |
+|-----------|-------------------------|
+| Checkpoint reached | Run ALL quality checks, BLOCK until all pass |
+| Checkpoint validation fails | FIX issues, retry up to 5 times, then STOP (not skip) |
+| Regular task fails | Retry 3x, then skip with [S] marker |
+| Visual validation fails | Retry 3x, screenshot, skip if still fails |
+| Command timeout | Skip after 60 seconds |
+
+### Task Skip Behavior (Regular Tasks Only)
+
+When a **regular task** (not a checkpoint) cannot be completed:
+
+1. Mark with `- [S]` (Skipped) instead of leaving incomplete
+2. Log detailed reason in activity.md
+3. Continue to next task immediately
+
+**NOTE: Checkpoints are NEVER skipped. If a checkpoint fails, the loop STOPS.**
+
+### Checkpoint Behavior (Overnight Mode) - QUALITY GATE
+
+```markdown
+# Checkpoint reached:
+- [ ] 11. Checkpoint - Phase 5A Complete
+  → Run ALL quality checks (ruff, mypy, pyright, pytest)
+  → If ALL pass: Log "CHECKPOINT PASSED", mark [x], continue
+  → If ANY fail: FIX the issues, retry quality checks
+  → After 5 fix attempts still failing: Output "CHECKPOINT_FAILED", STOP loop
+```
+
+### Checkpoint Validation Flow
+
+```
+Checkpoint Task
+      │
+      ▼
+┌─────────────────┐
+│ Run ALL quality │
+│ checks          │
+└─────────────────┘
+      │
+      ├── ALL PASS ──► Mark complete, continue
+      │
+      ▼ ANY FAIL
+┌─────────────────┐
+│ Identify failing│
+│ code/tests      │
+└─────────────────┘
+      │
+      ▼
+┌─────────────────┐
+│ Fix the issues  │
+│ (attempt 1/5)   │
+└─────────────────┘
+      │
+      ▼
+┌─────────────────┐
+│ Re-run quality  │──► ALL PASS ──► Mark complete, continue
+│ checks          │
+└─────────────────┘
+      │ STILL FAIL
+      ▼
+┌─────────────────┐
+│ Fix again       │
+│ (attempt 2-5/5) │──► Repeat until pass or 5 attempts
+└─────────────────┘
+      │ 5 attempts exhausted
+      ▼
+┌─────────────────┐
+│ CHECKPOINT_FAILED│
+│ STOP LOOP       │
+└─────────────────┘
+```
+
+### Output Signals
+
+The overnight prompt MUST output exactly ONE of these signals:
+
+| Signal | Meaning | Action |
+|--------|---------|--------|
+| `TASK_COMPLETE` | Task finished successfully | Continue to next |
+| `TASK_SKIPPED: {reason}` | Regular task skipped due to failure | Continue to next |
+| `ALL_TASKS_COMPLETE` | No more tasks to execute | Exit loop |
+| `CHECKPOINT_PASSED: {name}` | Checkpoint validation passed | Continue to next |
+| `CHECKPOINT_FAILED: {name}` | Checkpoint validation failed after 5 fix attempts | **STOP loop** |
+
+### Timeout Handling
+
+**Two-Level Timeout System:**
+
+1. **Task-Level Timeout (10 minutes):** The bash script enforces a 10-minute maximum per task execution.
+
+2. **Command-Level Timeout (60 seconds):** Individual commands should complete within 60 seconds.
+
+If any command takes > 60 seconds:
+1. Cancel the command
+2. Log timeout in activity.md
+3. Try alternative approach
+4. If still fails, skip task with `TASK_SKIPPED: timeout`
+
+### Server Health Checks
+
+Before visual validation tasks:
+```bash
+curl -s http://localhost:8000/health || echo "BACKEND_DOWN"
+curl -s http://localhost:5173 || echo "FRONTEND_DOWN"
+```
+
+If servers are down:
+1. Attempt automatic restart (overnight script handles this)
+2. If restart fails, skip visual validation
+3. Mark task complete if code changes are correct
+
+### Starting Overnight Mode
+
+```bash
+# Full overnight run
+./scripts/ralph-overnight.sh <spec-name> [max-iterations]
+
+# Examples
+./scripts/ralph-overnight.sh map-scheduling-interface 100
+./scripts/ralph-overnight.sh admin-dashboard 50
+```
+
+### Overnight Activity Log Format
+
+```markdown
+## [{YYYY-MM-DD HH:MM}] Task {task-id}: {task-name}
+
+### Status: ✅ COMPLETE | ⏭️ SKIPPED | 🔄 IN PROGRESS
+
+### What Was Done
+- {description of changes}
+
+### Files Modified
+- `path/to/file` - {brief description}
+
+### Quality Check Results
+- Ruff: ✅ Pass | ❌ Fail
+- MyPy: ✅ Pass | ❌ Fail
+- Pyright: ✅ Pass | ❌ Fail
+- Tests: ✅ X/X passing | ❌ X failures
+
+### Notes
+- {any issues or observations}
+
+---
+```
+
+---
+
 ## Configuration Reference
 
 ```yaml
@@ -692,4 +855,17 @@ visual_validation:
   enabled: true
   tool: agent-browser
   screenshot_dir: screenshots/{feature}/
+
+# Overnight mode specific
+overnight_mode:
+  enabled: false  # Set to true when running ralph-overnight.sh
+  checkpoint_pause: false
+  checkpoint_skip: false  # CRITICAL: Checkpoints are NEVER skipped
+  checkpoint_quality_gate: true  # Checkpoints block until all checks pass
+  checkpoint_fix_attempts: 5  # Max attempts to fix failing code at checkpoint
+  user_input_wait: false
+  max_task_timeout: 600  # 10 minutes per task (bash script level)
+  max_command_timeout: 60  # 60 seconds per command (prompt level)
+  server_health_check: true
+  auto_restart_servers: true
 ```

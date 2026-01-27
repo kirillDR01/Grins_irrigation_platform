@@ -85,11 +85,22 @@ Run `@ralph-loop {spec-name}` to continue automatically.
 ## Failure Handling
 
 Same as `@ralph-loop`:
-- Retry up to 3 times with quality gate enforcement
+- Retry up to 3 times with quality gate enforcement for regular tasks
+- **Checkpoints are quality gates** - ALL checks must pass, retry up to 5 times to fix
 - Visual validation for frontend UI tasks
 - Timeout detection and recovery (15-minute limit)
-- After 3 failures, output `USER INPUT REQUIRED` and stop
+- After 3 failures on regular tasks, output `USER INPUT REQUIRED` and stop
+- After 5 fix attempts on checkpoints, output `CHECKPOINT FAILED` and stop
 - Use internal prompts: `@update-task-state`, `@validate-quality`, `@validate-visual`, `@log-activity`
+
+## Checkpoint Handling
+
+If the next task is a **Checkpoint** (contains "Checkpoint" in name):
+- This is a **QUALITY GATE** - ALL quality checks must pass
+- Run: ruff, mypy, pyright, pytest (backend) or lint, typecheck, test (frontend)
+- If ANY check fails: FIX the issues, retry up to 5 times
+- Checkpoints are NEVER skipped
+- If still failing after 5 fix attempts: Output `CHECKPOINT FAILED` and stop
 
 ## Output Format
 

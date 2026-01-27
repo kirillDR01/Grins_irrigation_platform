@@ -428,8 +428,8 @@ def job_to_schedule_job(
     """Convert a Job model to a ScheduleJob for scheduling."""
     prop = job.job_property
     location = ScheduleLocation(
-        latitude=prop.latitude if prop else Decimal("44.8547"),
-        longitude=prop.longitude if prop else Decimal("-93.4708"),
+        latitude=prop.latitude if prop and prop.latitude else Decimal("44.8547"),
+        longitude=prop.longitude if prop and prop.longitude else Decimal("-93.4708"),
         address=prop.address if prop else None,
         city=prop.city if prop else None,
     )
@@ -444,8 +444,8 @@ def job_to_schedule_job(
         priority=job.priority_level or 0,
         preferred_time_start=None,
         preferred_time_end=None,
-        requires_multi_staff=job.requires_multi_staff or False,
-        staff_count_required=job.staff_count_required or 1,
+        requires_multi_staff=(job.staffing_required or 1) > 1,
+        staff_count_required=job.staffing_required or 1,
         buffer_minutes=buffer_minutes,
     )
 

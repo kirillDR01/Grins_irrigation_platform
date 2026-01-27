@@ -10,7 +10,7 @@ Validates: Requirement 10.5-10.7
 from __future__ import annotations
 
 from collections.abc import (
-    AsyncGenerator,  # noqa: TC003 - Required at runtime for FastAPI
+    AsyncGenerator,
 )
 from typing import Annotated
 

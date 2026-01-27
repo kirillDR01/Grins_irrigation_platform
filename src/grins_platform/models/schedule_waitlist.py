@@ -5,9 +5,9 @@ Validates: Requirements 10.4, 10.5
 
 from __future__ import annotations
 
-from datetime import date, datetime, time  # noqa: TC003
+from datetime import date, datetime, time
 from typing import TYPE_CHECKING
-from uuid import UUID  # noqa: TC003
+from uuid import UUID
 
 from sqlalchemy import Date, DateTime, ForeignKey, Integer, Text, Time
 from sqlalchemy.dialects.postgresql import UUID as PGUUID

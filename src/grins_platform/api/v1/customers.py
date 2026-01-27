@@ -10,7 +10,7 @@ Validates: Requirement 1.1-1.6, 3.1-3.6, 4.1-4.7, 6.6, 10.1-10.7, 11.1-11.6, 12.
 from __future__ import annotations
 
 from typing import Annotated
-from uuid import UUID  # noqa: TC003 - Required at runtime for FastAPI path params
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 

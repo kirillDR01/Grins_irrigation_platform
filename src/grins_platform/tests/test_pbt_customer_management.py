@@ -78,8 +78,8 @@ def name_strategy() -> st.SearchStrategy[str]:
         Strategy that generates names between 1-100 characters.
     """
     return st.text(
-        alphabet=st.characters(  # type: ignore[reportUnknownMemberType]
-            whitelist_categories=("L",),  # Letters only
+        alphabet=st.characters(
+            whitelist_categories=["L"],  # Letters only
             min_codepoint=65,
             max_codepoint=122,
         ),

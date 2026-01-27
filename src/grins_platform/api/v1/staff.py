@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 from typing import Annotated
-from uuid import UUID  # noqa: TC003 - Required at runtime for FastAPI path params
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 

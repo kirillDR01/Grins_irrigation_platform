@@ -10,12 +10,15 @@ Validates: Requirement 9.5
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncGenerator, Generator
 from datetime import datetime
-from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
 
+from grins_platform.main import app
 from grins_platform.models.enums import (
     CustomerStatus,
     LeadSource,
@@ -24,10 +27,6 @@ from grins_platform.models.enums import (
 )
 from grins_platform.schemas.customer import CustomerCreate, CustomerResponse
 from grins_platform.schemas.property import PropertyCreate, PropertyResponse
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
-
 
 # =============================================================================
 # Pytest Configuration
@@ -258,3 +257,26 @@ def mock_property_model(
     prop.created_at = datetime.now()
     prop.updated_at = datetime.now()
     return prop
+
+
+# =============================================================================
+# HTTP Client Fixtures
+# =============================================================================
+
+
+@pytest_asyncio.fixture
+async def client() -> AsyncGenerator[AsyncClient, None]:
+    """Create an async HTTP client for testing."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+
+
+@pytest_asyncio.fixture
+async def authenticated_client() -> AsyncGenerator[AsyncClient, None]:
+    """Create an authenticated async HTTP client for testing."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # Add mock authentication token
+        ac.headers.update({"Authorization": "Bearer test-token"})
+        yield ac

@@ -14,7 +14,7 @@ from datetime import (
     datetime,
     time,
 )
-from uuid import UUID  # noqa: TC003
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 

@@ -5,8 +5,8 @@ Validates: Requirements 10.1-10.7
 
 from __future__ import annotations
 
-from datetime import date, datetime, time  # noqa: TC003
-from uuid import UUID  # noqa: TC003
+from datetime import date, datetime, time
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 

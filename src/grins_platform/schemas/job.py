@@ -9,10 +9,10 @@ Validates: Requirements 2.1-2.12, 4.1-4.10, 5.1-5.7, 6.1-6.9
 
 from __future__ import annotations
 
-from datetime import datetime  # noqa: TC003
-from decimal import Decimal  # noqa: TC003
+from datetime import datetime
+from decimal import Decimal
 from typing import Any
-from uuid import UUID  # noqa: TC003
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 

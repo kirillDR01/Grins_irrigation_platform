@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 from datetime import (
-    datetime,  # noqa: TC003 - Required at runtime for FastAPI query params
+    datetime,
 )
 from decimal import Decimal
 from typing import Annotated
@@ -31,8 +31,9 @@ from grins_platform.exceptions import (
 )
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import (
-    JobCategory,  # noqa: TC001 - Required at runtime for FastAPI query params
-    JobStatus,  # noqa: TC001 - Required at runtime for FastAPI query params
+    JobCategory,
+    JobStatus,
+    PricingModel,
 )
 from grins_platform.schemas.job import (
     JobCreate,
@@ -595,17 +596,23 @@ async def calculate_job_price(
         )
         # Convert result dict to PriceCalculationResponse
         zone_count_val = result.get("zone_count")
+        pricing_model_val = result.get("pricing_model")
+        calculated_price_val = result.get("calculated_price")
         return PriceCalculationResponse(
             job_id=UUID(str(result["job_id"])),
             service_offering_id=UUID(str(result["service_offering_id"]))
             if result.get("service_offering_id")
             else None,
-            pricing_model=result.get("pricing_model"),
+            pricing_model=PricingModel(pricing_model_val)
+            if pricing_model_val
+            else None,
             base_price=Decimal(str(result["base_price"]))
             if result.get("base_price")
             else None,
             zone_count=int(zone_count_val) if zone_count_val is not None else None,
-            calculated_price=result.get("calculated_price"),
+            calculated_price=Decimal(str(calculated_price_val))
+            if calculated_price_val
+            else None,
             requires_manual_quote=bool(result.get("requires_manual_quote", True)),
             calculation_details={},
         )

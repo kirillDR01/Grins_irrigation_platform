@@ -247,10 +247,21 @@ Call internal prompt: `@log-activity` with these parameters:
 ### Step 8: Check Continuation
 
 1. **If task name contains "Checkpoint":**
-   - Output: `CHECKPOINT PASSED: {task-name}`
-   - Log checkpoint completion in activity.md
-   - **Continue to next task** (do not stop)
-   - Note: User can review checkpoints in activity log later
+   - This is a **QUALITY GATE** - ALL checks must pass
+   - If ALL quality checks passed:
+     - Output: `CHECKPOINT PASSED: {task-name}`
+     - Log checkpoint completion in activity.md
+     - **Continue to next task**
+   - If ANY quality check failed:
+     - Output: `CHECKPOINT BLOCKED: {task-name}`
+     - **DO NOT mark checkpoint complete**
+     - **FIX the failing code/tests**
+     - Re-run quality checks
+     - Retry up to 5 times
+     - If still failing after 5 attempts:
+       - Output: `CHECKPOINT FAILED: {task-name} - Quality checks failed after 5 fix attempts`
+       - Log detailed failure report in activity.md
+       - **STOP execution** (checkpoints are mandatory quality gates)
 
 2. **If all tasks are complete (`[x]`):**
    - Output: `LOOP COMPLETE: All tasks finished!`

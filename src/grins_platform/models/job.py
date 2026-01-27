@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from grins_platform.models.job_status_history import JobStatusHistory
     from grins_platform.models.property import Property
     from grins_platform.models.schedule_waitlist import ScheduleWaitlist
+    from grins_platform.models.sent_message import SentMessage
     from grins_platform.models.service_offering import ServiceOffering
 
 
@@ -171,6 +172,11 @@ class Job(Base):
         "ScheduleWaitlist",
         back_populates="job",
         cascade="all, delete-orphan",
+    )
+    sent_messages: Mapped[list["SentMessage"]] = relationship(
+        "SentMessage",
+        back_populates="job",
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:

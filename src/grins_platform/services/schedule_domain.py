@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
-from decimal import Decimal  # noqa: TC003
-from uuid import UUID  # noqa: TC003
+from decimal import Decimal
+from uuid import UUID
 
 
 @dataclass

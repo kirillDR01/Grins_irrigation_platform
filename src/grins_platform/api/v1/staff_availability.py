@@ -9,9 +9,9 @@ Validates: Requirements 1.1-1.5 (Route Optimization)
 
 from __future__ import annotations
 
-from datetime import date  # noqa: TC003 - Required at runtime for FastAPI params
+from datetime import date
 from typing import Annotated
-from uuid import UUID  # noqa: TC003 - Required at runtime for FastAPI path params
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 

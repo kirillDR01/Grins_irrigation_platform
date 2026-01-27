@@ -20,6 +20,7 @@ from grins_platform.models.enums import AppointmentStatus
 
 if TYPE_CHECKING:
     from grins_platform.models.job import Job
+    from grins_platform.models.sent_message import SentMessage
     from grins_platform.models.staff import Staff
 
 
@@ -132,6 +133,11 @@ class Appointment(Base):
         "Appointment",
         remote_side="Appointment.id",
         foreign_keys=[rescheduled_from_id],
+    )
+    sent_messages: Mapped[list["SentMessage"]] = relationship(
+        "SentMessage",
+        back_populates="appointment",
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:
