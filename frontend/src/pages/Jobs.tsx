@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/shared/components/PageHeader';
 import { JobList } from '@/features/jobs/components/JobList';
 import { JobForm } from '@/features/jobs/components/JobForm';
 import { JobDetail } from '@/features/jobs/components/JobDetail';
+import { AICategorization } from '@/features/ai/components/AICategorization';
+import { useAICategorize } from '@/features/ai/hooks/useAICategorize';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -11,29 +13,57 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 
 export function JobsPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-
-  // Sync URL param with selected job
-  useEffect(() => {
-    if (id) {
-      setSelectedJobId(id);
-    }
-  }, [id]);
+  const [showCategorization, setShowCategorization] = useState(false);
+  
+  // AI Categorization hook
+  const {
+    categorizations,
+    summary,
+    isLoading: isCategorizing,
+    error: categorizeError,
+    categorizeJobs,
+    approveBulk,
+    clearCategorizations,
+  } = useAICategorize();
+  
+  // Sync URL param with selected job - use id directly instead of effect
+  const selectedJobId = id || null;
 
   const handleJobClick = (jobId: string) => {
     navigate(`/jobs/${jobId}`);
-    setSelectedJobId(jobId);
   };
 
   const handleCloseDetail = () => {
     navigate('/jobs');
-    setSelectedJobId(null);
+  };
+
+  const handleCategorizeJobs = async () => {
+    setShowCategorization(true);
+    await categorizeJobs({
+      job_ids: [], // Empty array means categorize all uncategorized jobs
+    });
+  };
+
+  const handleApproveAll = async () => {
+    const readyJobIds = categorizations
+      .filter(c => !c.requires_review)
+      .map(c => c.job_id);
+    await approveBulk(readyJobIds);
+  };
+
+  const handleApproveJob = async (jobId: string) => {
+    await approveBulk([jobId]);
+  };
+
+  const handleReviewJob = (jobId: string) => {
+    navigate(`/jobs/${jobId}`);
+    setShowCategorization(false);
   };
 
   return (
@@ -42,12 +72,42 @@ export function JobsPage() {
         title="Jobs"
         description="Manage job requests and track their status"
         action={
-          <Button onClick={() => setShowCreateDialog(true)} data-testid="add-job-btn">
-            <Plus className="mr-2 h-4 w-4" />
-            New Job
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={handleCategorizeJobs}
+              data-testid="categorize-jobs-btn"
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              AI Categorize
+            </Button>
+            <Button onClick={() => setShowCreateDialog(true)} data-testid="add-job-btn">
+              <Plus className="mr-2 h-4 w-4" />
+              New Job
+            </Button>
+          </div>
         }
       />
+
+      {/* AI Categorization Section */}
+      {showCategorization && (categorizations.length > 0 || isCategorizing || categorizeError) && (
+        <div className="mb-6">
+          <AICategorization
+            categorizations={categorizations}
+            summary={summary || {
+              total_jobs: 0,
+              ready_to_schedule: 0,
+              requires_review: 0,
+              avg_confidence: 0,
+            }}
+            isLoading={isCategorizing}
+            error={categorizeError ? new Error(categorizeError) : null}
+            onApproveAll={handleApproveAll}
+            onApproveJob={handleApproveJob}
+            onReviewJob={handleReviewJob}
+          />
+        </div>
+      )}
 
       <JobList onJobClick={handleJobClick} />
 

@@ -22,6 +22,9 @@ import {
 import { useDashboardMetrics, useTodaySchedule, useJobsByStatus } from '../hooks';
 import { MetricsCard } from './MetricsCard';
 import { RecentActivity } from './RecentActivity';
+import { AIQueryChat } from '@/features/ai/components/AIQueryChat';
+import { MorningBriefing } from '@/features/ai/components/MorningBriefing';
+import { CommunicationsQueue } from '@/features/ai/components/CommunicationsQueue';
 
 export function DashboardPage() {
   const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics();
@@ -59,6 +62,9 @@ export function DashboardPage() {
         </div>
       ) : (
         <>
+          {/* Morning Briefing */}
+          <MorningBriefing />
+
           {/* Metrics Cards */}
           <div
             className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
@@ -220,6 +226,12 @@ export function DashboardPage() {
 
           {/* Recent Activity */}
           <RecentActivity />
+
+          {/* Communications Queue */}
+          <CommunicationsQueue />
+
+          {/* AI Query Chat */}
+          <AIQueryChat />
         </>
       )}
     </div>

@@ -105,7 +105,7 @@ export function ScheduleMap({
   }, [filteredAssignments]);
 
   // Find selected job and its staff name
-  const selectedJobInfo = useMemo(() => {
+  const selectedJobInfo = (() => {
     if (!selectedJobId) return null;
     for (const assignment of filteredAssignments) {
       const job = assignment.jobs.find((j) => j.job_id === selectedJobId);
@@ -114,7 +114,7 @@ export function ScheduleMap({
       }
     }
     return null;
-  }, [selectedJobId, filteredAssignments]);
+  })();
 
   // Handle staff filter toggle
   const handleStaffToggle = (staffName: string, checked: boolean) => {

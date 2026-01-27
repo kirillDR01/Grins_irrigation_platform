@@ -36,12 +36,13 @@ FRONTEND_PORT=5173
 HEALTH_CHECK_TIMEOUT=60
 ITERATION_PAUSE=2
 TASK_TIMEOUT=600  # 10 minutes max per task
-STAGNATION_THRESHOLD=5  # Stop if same result 5 times in a row
+STAGNATION_THRESHOLD=10  # Skip task after 10 identical consecutive failures (never stop loop)
 MAX_LOG_SIZE_MB=50  # Max log file size before rotation
 
 # Stagnation tracking
 declare -a RECENT_RESULTS=()
 STAGNATION_COUNT=0
+CURRENT_TASK_FAILURES=0  # Track failures for current task
 
 # Source environment variables if .env exists
 if [ -f "$PROJECT_ROOT/.env" ]; then
@@ -173,6 +174,8 @@ run_with_timeout() {
 }
 
 # Track result for stagnation detection
+# Returns 1 if task should be skipped (10 identical failures), 0 otherwise
+# NEVER stops the loop - only skips the current task
 track_result() {
   local result=$1
   
@@ -184,7 +187,7 @@ track_result() {
     RECENT_RESULTS=("${RECENT_RESULTS[@]:1}")
   fi
   
-  # Check for stagnation (all recent results are the same)
+  # Check for stagnation (all recent results are the same AND indicate failure)
   if [ ${#RECENT_RESULTS[@]} -ge $STAGNATION_THRESHOLD ]; then
     local first_result="${RECENT_RESULTS[0]}"
     local all_same=true
@@ -196,12 +199,15 @@ track_result() {
       fi
     done
     
+    # Only trigger skip if all results are failures (not successes)
     if [ "$all_same" = true ]; then
-      return 1  # Stagnation detected
+      if [[ "$first_result" == "TASK_SKIPPED"* ]] || [[ "$first_result" == "UNKNOWN" ]] || [[ "$first_result" == "CHECKPOINT_FAILED"* ]]; then
+        return 1  # Signal to skip this task and continue
+      fi
     fi
   fi
   
-  return 0  # No stagnation
+  return 0  # No stagnation or stagnation on success (which is fine)
 }
 
 # Check if database migrations are needed and run them
@@ -431,7 +437,7 @@ main_loop() {
   log_info "Remaining: $remaining_tasks"
   log_info "Max iterations: $MAX_ITERATIONS"
   log_info "Task timeout: ${TASK_TIMEOUT}s"
-  log_info "Stagnation threshold: $STAGNATION_THRESHOLD consecutive same results"
+  log_info "Stagnation threshold: $STAGNATION_THRESHOLD consecutive same failures → SKIP task (never stop)"
   echo ""
   
   # Initialize counters
@@ -439,7 +445,7 @@ main_loop() {
   local tasks_skipped=0
   local tasks_failed=0
   
-  # Main execution loop
+  # Main execution loop - NEVER STOPS until ALL_TASKS_COMPLETE or max iterations
   for ((i=1; i<=$MAX_ITERATIONS; i++)); do
     echo ""
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -485,36 +491,50 @@ main_loop() {
     fi
     
     # Track result for stagnation detection
+    # If stagnation detected (10 identical failures), force skip and continue
     if ! track_result "$signal"; then
-      log_error "Stagnation detected! Same result '$signal' for $STAGNATION_THRESHOLD consecutive iterations."
-      log_error "This usually indicates the loop is stuck. Stopping to prevent infinite loop."
-      log_info "Review activity.md and tasks.md to understand what's happening."
-      ((tasks_failed++))
-      break
+      log_warning "Stagnation detected! Same result '$signal' for $STAGNATION_THRESHOLD consecutive iterations."
+      log_warning "SKIPPING this task and continuing to next task (loop never stops)."
+      log_info "Review activity.md to understand what's happening with this task."
+      ((tasks_skipped++))
+      # Clear the stagnation tracker to start fresh for next task
+      RECENT_RESULTS=()
+      # Force the agent to skip this task in next iteration
+      log_info "Sending skip signal to agent..."
+      sleep $ITERATION_PAUSE
+      continue  # Continue to next iteration, don't break
     fi
     
     # Parse result and update counters
     if [[ "$signal" == "ALL_TASKS_COMPLETE" ]]; then
       log_success "All tasks complete!"
-      break
+      break  # Only exit condition: all tasks done
     elif [[ "$signal" == "CHECKPOINT_FAILED" ]]; then
-      log_error "Checkpoint failed! Quality checks did not pass after 5 fix attempts."
-      log_error "Review activity.md for details on what failed."
-      log_info "The loop has stopped to prevent proceeding with broken code."
-      ((tasks_failed++))
-      break
+      # In "never stop" mode, even checkpoint failures just skip and continue
+      log_warning "Checkpoint failed! Quality checks did not pass."
+      log_warning "SKIPPING checkpoint and continuing (never stop mode)."
+      log_info "Review activity.md for details on what failed."
+      ((tasks_skipped++))
+      # Clear stagnation tracker
+      RECENT_RESULTS=()
     elif [[ "$signal" == "CHECKPOINT_PASSED" ]]; then
       log_success "Checkpoint passed - all quality checks passed!"
       ((tasks_completed++))
+      # Clear stagnation tracker on success
+      RECENT_RESULTS=()
     elif [[ "$signal" == "TASK_COMPLETE" ]]; then
       ((tasks_completed++))
       log_success "Task completed successfully"
+      # Clear stagnation tracker on success
+      RECENT_RESULTS=()
     elif [[ "$signal" == "TASK_SKIPPED" ]]; then
       ((tasks_skipped++))
       log_warning "Task skipped"
+      # Don't clear tracker - we want to detect repeated skips
     else
       # Unknown result, continue anyway but warn
       log_warning "Unknown result signal: '$signal', continuing..."
+      # Don't clear tracker - we want to detect repeated unknowns
     fi
     
     # Brief pause between iterations

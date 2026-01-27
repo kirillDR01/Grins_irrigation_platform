@@ -1,21 +1,46 @@
 Brainstorm: Fully Autonomous Ralph Wiggum Loop for Overnight Execution
+
+## CRITICAL UPDATE: NEVER STOP MODE
+
+**The Ralph Wiggum overnight loop is designed to NEVER STOP until all tasks are complete.**
+
+Key behavior changes:
+- **10 retries** before skipping (increased from 3)
+- **Checkpoints can be skipped** after 10 failures (loop never stops)
+- **Stagnation = Skip** (not stop) - after 10 identical failures, skip task and continue
+- **Only exit condition**: ALL_TASKS_COMPLETE or max iterations reached
+
 Current State Analysis
 What Works Well
 Detailed task structure - Tasks have clear validation commands with agent-browser
 Quality checks defined - Backend (ruff, mypy, pyright, pytest) and frontend (lint, typecheck, test)
 Checkpoint system - Quality gates that ensure code quality
 Activity logging - Per-spec activity.md for tracking
-Stagnation recovery - Already documented in steering
+Stagnation recovery - Skip and continue (never stop)
+
 Current Gaps for Fully Autonomous Execution
 Gap	Impact	Solution Needed
-Checkpoints must pass	Ensures code quality	Fix issues until all checks pass
+Checkpoints blocking	Could stop loop	Skip after 10 failures, continue
 Server management	Frontend/backend must be running	Auto-start servers at loop start
 User input requests	Blocks execution	Skip blocked tasks, continue
 Context window limits	Can't run 50+ tasks in one context	Fresh context per task (bash loop)
-Test failures	May block progress	Retry logic, then skip with logging
-Visual validation failures	May block progress	Retry, then skip with screenshot
+Test failures	May block progress	Retry 10x, then skip with logging
+Visual validation failures	May block progress	Retry 10x, then skip with screenshot
+
 Proposed Architecture: "Ralph Wiggum Overnight Mode"
-Core Principle: Checkpoints Are Quality Gates
+
+## Core Principle: NEVER STOP
+
+The loop will:
+- ✅ Retry errors up to 10 times
+- ✅ Try different approaches on each retry
+- ✅ Skip tasks after 10 identical failures
+- ✅ Skip checkpoints after 10 failures (not stop)
+- ✅ Continue until ALL_TASKS_COMPLETE
+- ❌ NEVER stop for user input
+- ❌ NEVER halt on checkpoint failures
+- ❌ NEVER wait for confirmation
+
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    OVERNIGHT EXECUTION FLOW                          │
 └─────────────────────────────────────────────────────────────────────┘
@@ -54,14 +79,14 @@ Core Principle: Checkpoints Are Quality Gates
          │                                                │
          ├── Success ──────────────────────────────────────┘
          │
-         ├── Checkpoint ──► ALL checks must pass ──► Pass? Continue
-         │                                      └──► Fail? FIX (5 attempts) ──► Still fail? STOP
+         ├── Checkpoint ──► Run checks ──► Pass? Continue
+         │                            └──► Fail? Retry 10x ──► Still fail? SKIP, continue
          │
-         ├── Fail (retryable) ──► Retry up to 3x ──► Skip if still fails
+         ├── Fail (retryable) ──► Retry up to 10x ──► Skip if still fails, continue
          │
          ├── Fail (skip) ──► Mark [S], log reason, continue
          │
-         ├── Stagnation ──► Same result 5x in a row ──► STOP loop
+         ├── Stagnation (10x same) ──► SKIP task, continue (never stop)
          │
          └── All done ──► POST-FLIGHT
                               │

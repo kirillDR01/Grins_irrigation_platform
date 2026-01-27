@@ -196,34 +196,42 @@ Update the "Current Status" section at the top of activity.md after each task:
 
 ## Failure Handling
 
-### Graduated Response
+### Graduated Response - NEVER STOP MODE
+
+The Ralph Wiggum loop is designed to **NEVER STOP** until all tasks are complete. It will keep trying to fix errors and only skip tasks after 10 identical consecutive failures.
 
 ```
 Task Fails
     │
     ▼
 ┌─────────────────┐
-│  Retry 1/3      │──► Success? → Continue
+│  Retry 1/10     │──► Success? → Continue, reset counter
 └─────────────────┘
     │ Fail
     ▼
 ┌─────────────────┐
-│  Retry 2/3      │──► Success? → Continue
+│  Retry 2/10     │──► Success? → Continue, reset counter
 │  (try different │
 │   approach)     │
 └─────────────────┘
     │ Fail
     ▼
 ┌─────────────────┐
-│  Retry 3/3      │──► Success? → Continue
-│  (simplify if   │
-│   possible)     │
+│  Retry 3-9/10   │──► Success? → Continue, reset counter
+│  (keep trying   │
+│   alternatives) │
 └─────────────────┘
     │ Fail
     ▼
 ┌─────────────────┐
-│  USER INPUT     │
-│  REQUIRED       │
+│  Retry 10/10    │──► Success? → Continue
+│  (final attempt)│
+└─────────────────┘
+    │ Fail (10 identical failures)
+    ▼
+┌─────────────────┐
+│  SKIP TASK      │──► Mark [S], log reason, CONTINUE to next task
+│  (never stop)   │
 └─────────────────┘
 ```
 
@@ -232,27 +240,44 @@ Task Fails
 1. **First retry:** Same approach, check for typos/errors
 2. **Second retry:** Try alternative implementation
 3. **Third retry:** Simplify scope if possible
+4. **Retries 4-9:** Keep trying different approaches, check logs, analyze errors
+5. **Retry 10:** Final attempt with most conservative approach
+
+### CRITICAL: The Loop NEVER Stops
+
+The overnight loop is designed for unattended execution. It will:
+- ✅ Keep retrying errors (up to 10 times per task)
+- ✅ Try to fix issues automatically
+- ✅ Skip tasks after 10 identical failures
+- ✅ Continue to the next task
+- ✅ Run until ALL tasks are complete or max iterations reached
+- ❌ NEVER stop for user input
+- ❌ NEVER halt on checkpoint failures (skip and continue)
+- ❌ NEVER wait for confirmation
 
 ### Logging Failures
 
 Log each retry attempt:
 
 ```markdown
-## [{timestamp}] Task {task-id}: RETRY {n}/3
+## [{timestamp}] Task {task-id}: RETRY {n}/10
 
 ### Issue
 {description of what failed}
 
 ### Approach
 {what will be tried differently}
+
+### Previous Attempts
+{summary of what was already tried}
 ```
 
-### User Input Required
+### After 10 Failures - Auto Skip
 
-When all retries fail:
+When 10 identical failures occur, the task is automatically skipped:
 
 ```markdown
-## [{timestamp}] Task {task-id}: USER INPUT REQUIRED
+## [{timestamp}] Task {task-id}: AUTO-SKIPPED (10 identical failures)
 
 ### Issue
 {detailed description of the problem}
@@ -260,15 +285,14 @@ When all retries fail:
 ### Attempts Made
 1. {first approach and result}
 2. {second approach and result}
-3. {third approach and result}
+...
+10. {tenth approach and result}
 
-### Suggested Actions
-- {option 1}
-- {option 2}
-- {option 3}
+### Reason for Skip
+Same error occurred 10 consecutive times. Task marked as [S] and loop continues.
 
-### To Continue
-Run `@ralph-loop {spec-name}` after resolving the issue.
+### Next Task
+Proceeding to next incomplete task...
 ```
 
 ---
@@ -309,11 +333,15 @@ Marks a task as skipped and moves to the next.
 
 ### Stopping the Loop
 
-The loop stops automatically when:
-1. A checkpoint is reached
-2. All tasks are complete
-3. User input is required (after 3 retries)
-4. Max iterations (100) is reached
+The loop stops automatically ONLY when:
+1. All tasks are complete (ALL_TASKS_COMPLETE)
+2. Max iterations reached (default 100)
+
+**The loop NEVER stops for:**
+- Checkpoint failures (skips and continues)
+- Task failures (retries 10x, then skips)
+- Stagnation (skips task after 10 identical failures)
+- Errors (tries to fix, then skips)
 
 ---
 
@@ -638,27 +666,29 @@ npm install pkg2
 npm install pkg3
 ```
 
-### Stagnation Detection Rules
+### Stagnation Detection Rules (10 Failures = Skip)
 
 If you notice:
 - Command running > 60 seconds with no output
-- Same error appearing 3+ times
-- No progress for 2+ minutes
+- Same error appearing 10+ times
+- No progress for 5+ minutes
 
 Then IMMEDIATELY:
 1. Cancel/abandon the current approach
 2. Log the issue in activity.md
 3. Try an alternative approach
-4. If no alternative works after 3 attempts, mark task as blocked and continue to next task
+4. If same error occurs 10 times consecutively, **SKIP the task and continue**
+5. **NEVER stop the loop** - always continue to next task
 
 ### Never Wait for User Input During Autonomous Execution
 
 The Ralph loop is designed for overnight/unattended execution. When stuck:
-- DO try alternative approaches
-- DO skip and document blockers
+- DO try alternative approaches (up to 10 times)
+- DO skip and document blockers after 10 failures
 - DO continue with next tasks
 - DO NOT wait for user confirmation
 - DO NOT ask clarifying questions
+- DO NOT stop the loop for any reason except ALL_TASKS_COMPLETE
 
 ---
 
@@ -666,42 +696,45 @@ The Ralph loop is designed for overnight/unattended execution. When stuck:
 
 When running in overnight mode (`./scripts/ralph-overnight.sh`), the following rules apply:
 
-### CHECKPOINTS ARE MANDATORY QUALITY GATES
+### THE LOOP NEVER STOPS
 
-**CRITICAL: Checkpoints CANNOT be skipped. They are quality gates that ensure all code passes validation.**
+**CRITICAL: The overnight loop is designed to run until completion. It will NEVER stop for errors, failures, or checkpoints.**
 
 In overnight mode, the loop handles situations as follows:
 
 | Situation | Overnight Mode Behavior |
 |-----------|-------------------------|
-| Checkpoint reached | Run ALL quality checks, BLOCK until all pass |
-| Checkpoint validation fails | FIX issues, retry up to 5 times, then STOP (not skip) |
-| Regular task fails | Retry 3x, then skip with [S] marker |
-| Visual validation fails | Retry 3x, screenshot, skip if still fails |
-| Command timeout | Skip after 60 seconds |
+| Checkpoint reached | Run quality checks, retry fixes up to 10 times, then SKIP and continue |
+| Checkpoint validation fails | Try to fix 10 times, then SKIP checkpoint and continue |
+| Regular task fails | Retry 10x with different approaches, then SKIP and continue |
+| Visual validation fails | Retry 10x, screenshot, then SKIP and continue |
+| Command timeout | Try alternative, if fails 10x then SKIP |
+| Same error 10 times | SKIP task and continue to next |
 
-### Task Skip Behavior (Regular Tasks Only)
+### Task Skip Behavior
 
-When a **regular task** (not a checkpoint) cannot be completed:
+When a task cannot be completed after 10 identical failures:
 
 1. Mark with `- [S]` (Skipped) instead of leaving incomplete
-2. Log detailed reason in activity.md
-3. Continue to next task immediately
+2. Log detailed reason in activity.md with all 10 attempts
+3. Clear the failure counter
+4. Continue to next task immediately
 
-**NOTE: Checkpoints are NEVER skipped. If a checkpoint fails, the loop STOPS.**
+**NOTE: Even checkpoints can be skipped in "never stop" mode. The loop prioritizes progress over perfection.**
 
-### Checkpoint Behavior (Overnight Mode) - QUALITY GATE
+### Checkpoint Behavior (Overnight Mode) - SKIP ON FAILURE
 
 ```markdown
 # Checkpoint reached:
 - [ ] 11. Checkpoint - Phase 5A Complete
   → Run ALL quality checks (ruff, mypy, pyright, pytest)
   → If ALL pass: Log "CHECKPOINT PASSED", mark [x], continue
-  → If ANY fail: FIX the issues, retry quality checks
-  → After 5 fix attempts still failing: Output "CHECKPOINT_FAILED", STOP loop
+  → If ANY fail: Try to FIX the issues
+  → Retry quality checks up to 10 times
+  → If still failing after 10 attempts: Log "CHECKPOINT SKIPPED", mark [S], CONTINUE
 ```
 
-### Checkpoint Validation Flow
+### Checkpoint Validation Flow (Never Stop Mode)
 
 ```
 Checkpoint Task
@@ -723,7 +756,7 @@ Checkpoint Task
       ▼
 ┌─────────────────┐
 │ Fix the issues  │
-│ (attempt 1/5)   │
+│ (attempt 1/10)  │
 └─────────────────┘
       │
       ▼
@@ -735,14 +768,14 @@ Checkpoint Task
       ▼
 ┌─────────────────┐
 │ Fix again       │
-│ (attempt 2-5/5) │──► Repeat until pass or 5 attempts
+│ (attempt 2-10)  │──► Repeat until pass or 10 attempts
 └─────────────────┘
-      │ 5 attempts exhausted
+      │ 10 attempts exhausted
       ▼
-┌─────────────────┐
-│ CHECKPOINT_FAILED│
-│ STOP LOOP       │
-└─────────────────┘
+┌─────────────────────────┐
+│ CHECKPOINT SKIPPED      │
+│ Mark [S], CONTINUE      │──► Next task (loop never stops)
+└─────────────────────────┘
 ```
 
 ### Output Signals
@@ -752,10 +785,10 @@ The overnight prompt MUST output exactly ONE of these signals:
 | Signal | Meaning | Action |
 |--------|---------|--------|
 | `TASK_COMPLETE` | Task finished successfully | Continue to next |
-| `TASK_SKIPPED: {reason}` | Regular task skipped due to failure | Continue to next |
-| `ALL_TASKS_COMPLETE` | No more tasks to execute | Exit loop |
+| `TASK_SKIPPED: {reason}` | Task skipped due to failure | Continue to next |
+| `ALL_TASKS_COMPLETE` | No more tasks to execute | Exit loop (only exit condition) |
 | `CHECKPOINT_PASSED: {name}` | Checkpoint validation passed | Continue to next |
-| `CHECKPOINT_FAILED: {name}` | Checkpoint validation failed after 5 fix attempts | **STOP loop** |
+| `CHECKPOINT_SKIPPED: {name}` | Checkpoint skipped after 10 failures | Continue to next |
 
 ### Timeout Handling
 
@@ -769,7 +802,8 @@ If any command takes > 60 seconds:
 1. Cancel the command
 2. Log timeout in activity.md
 3. Try alternative approach
-4. If still fails, skip task with `TASK_SKIPPED: timeout`
+4. If still fails after 10 attempts, skip task with `TASK_SKIPPED: timeout`
+5. **CONTINUE to next task (never stop)**
 
 ### Server Health Checks
 
@@ -782,18 +816,30 @@ curl -s http://localhost:5173 || echo "FRONTEND_DOWN"
 If servers are down:
 1. Attempt automatic restart (overnight script handles this)
 2. If restart fails, skip visual validation
-3. Mark task complete if code changes are correct
+3. Mark task as skipped and continue
+4. **NEVER stop the loop**
 
 ### Starting Overnight Mode
 
 ```bash
-# Full overnight run
+# Full overnight run (never stops until complete)
 ./scripts/ralph-overnight.sh <spec-name> [max-iterations]
 
 # Examples
 ./scripts/ralph-overnight.sh map-scheduling-interface 100
 ./scripts/ralph-overnight.sh admin-dashboard 50
 ```
+
+### Never Stop Behavior Summary
+
+| Scenario | Old Behavior | New Behavior |
+|----------|--------------|--------------|
+| Task fails 3x | Stop, ask user | Retry up to 10x, then skip |
+| Checkpoint fails | Stop loop | Retry 10x, then skip checkpoint |
+| Same error 5x | Stop (stagnation) | Continue retrying up to 10x |
+| Same error 10x | N/A | Skip task, continue to next |
+| Unknown error | Stop | Log, skip, continue |
+| Server down | Stop | Restart, if fails skip task |
 
 ### Overnight Activity Log Format
 
@@ -828,16 +874,16 @@ If servers are down:
 # Default configuration for Ralph Wiggum Loop
 
 context_mode: continuous_with_checkpoint_reset
-continue_mode: auto_until_checkpoint
+continue_mode: auto_until_complete  # Never stop until all tasks done
 task_execution: single_task
 
 state_storage:
   task_status: .kiro/specs/{feature}/tasks.md
   activity_log: .kiro/specs/{feature}/activity.md
 
-failure_handling: graduated_response
+failure_handling: never_stop  # Skip after 10 failures, never halt
 max_iterations: 100
-retry_limit: 3
+retry_limit: 10  # Increased from 3 to 10
 checkpoint_detection: true
 
 quality_checks:
@@ -856,16 +902,17 @@ visual_validation:
   tool: agent-browser
   screenshot_dir: screenshots/{feature}/
 
-# Overnight mode specific
+# Overnight mode specific - NEVER STOP MODE
 overnight_mode:
   enabled: false  # Set to true when running ralph-overnight.sh
+  never_stop: true  # Loop continues until ALL_TASKS_COMPLETE
   checkpoint_pause: false
-  checkpoint_skip: false  # CRITICAL: Checkpoints are NEVER skipped
-  checkpoint_quality_gate: true  # Checkpoints block until all checks pass
-  checkpoint_fix_attempts: 5  # Max attempts to fix failing code at checkpoint
-  user_input_wait: false
+  checkpoint_skip_on_failure: true  # Skip checkpoints after 10 failures (don't stop)
+  user_input_wait: false  # Never wait for user input
   max_task_timeout: 600  # 10 minutes per task (bash script level)
   max_command_timeout: 60  # 60 seconds per command (prompt level)
+  stagnation_threshold: 10  # Skip task after 10 identical consecutive failures
   server_health_check: true
   auto_restart_servers: true
+  skip_on_stagnation: true  # Skip task instead of stopping loop
 ```

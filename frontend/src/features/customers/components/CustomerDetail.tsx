@@ -7,6 +7,8 @@ import { StatusBadge, LoadingPage, ErrorMessage, PageHeader } from '@/shared/com
 import { useCustomer, useDeleteCustomer } from '../hooks';
 import { getCustomerFlags, getCustomerFullName } from '../types';
 import { toast } from 'sonner';
+import { AICommunicationDrafts } from '@/features/ai/components';
+import { useAICommunication } from '@/features/ai/hooks/useAICommunication';
 
 interface CustomerDetailProps {
   onEdit?: () => void;
@@ -17,6 +19,7 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
   const navigate = useNavigate();
   const { data: customer, isLoading, error, refetch } = useCustomer(id!);
   const deleteMutation = useDeleteCustomer();
+  const { draft, isLoading: isDraftLoading, error: draftError, sendNow, scheduleLater } = useAICommunication();
 
   const handleDelete = async () => {
     if (!customer) return;
@@ -183,6 +186,17 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
             </Button>
           </CardContent>
         </Card>
+
+        {/* AI Communication Drafts */}
+        <div className="md:col-span-2">
+          <AICommunicationDrafts
+            draft={draft}
+            isLoading={isDraftLoading}
+            error={draftError ? new Error(draftError) : null}
+            onSendNow={sendNow}
+            onScheduleLater={scheduleLater}
+          />
+        </div>
       </div>
     </div>
   );

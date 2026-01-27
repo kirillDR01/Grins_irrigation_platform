@@ -87,10 +87,12 @@ class TestSMSSendEndpoint:
 class TestSMSWebhookEndpoint:
     """Tests for /api/v1/sms/webhook endpoint."""
 
+    @patch("grins_platform.api.v1.sms.validate_twilio_signature", return_value=True)
     @patch("grins_platform.api.v1.sms.SMSService")
     async def test_webhook_processes_incoming(
         self,
         mock_sms_cls: Mock,
+        _mock_validate: Mock,
         client: AsyncClient,
     ) -> None:
         """Test that webhook processes incoming messages."""

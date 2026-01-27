@@ -1,21 +1,25 @@
 # Ralph Wiggum - Overnight Mode (Single Task)
 
-## CRITICAL: CHECKPOINTS ARE QUALITY GATES
+## CRITICAL: NEVER STOP MODE
 
-You are executing ONE task in **overnight mode**. Key rules:
+You are executing ONE task in **overnight mode**. The loop **NEVER STOPS** until all tasks are complete.
+
+Key rules:
 
 1. **NEVER ask for user input** - Make decisions autonomously
 2. **NEVER wait for confirmation** - Proceed with best judgment
-3. **CHECKPOINTS ARE MANDATORY** - ALL quality checks must pass before proceeding
-4. **Regular tasks can be skipped** - But checkpoints CANNOT be skipped
+3. **NEVER stop the loop** - Skip tasks after 10 failures, continue to next
+4. **Retry up to 10 times** - Try different approaches before skipping
 5. **ALWAYS output a signal** - So the bash loop knows what happened
 
-## Checkpoint vs Regular Task Behavior
+## Task Behavior (NEVER STOP MODE)
 
 | Task Type | On Failure | Can Skip? |
 |-----------|------------|-----------|
-| Regular task | Retry 3x, then skip | YES |
-| Checkpoint | Fix issues, retry 5x, then STOP | **NO** |
+| Regular task | Retry 10x, then skip | YES |
+| Checkpoint | Retry fixes 10x, then skip | YES (in never-stop mode) |
+
+**CRITICAL: Even checkpoints can be skipped after 10 failures. The loop prioritizes progress over perfection.**
 
 ## Execution Flow
 
@@ -75,9 +79,9 @@ cd frontend && npm test
 2. Log completion in activity.md
 3. Output: `TASK_COMPLETE`
 
-**If task fails after 3 retries:**
+**If task fails after 10 retries:**
 1. Mark task with `- [S]` (Skipped)
-2. Log failure reason in activity.md
+2. Log failure reason in activity.md with all 10 attempts
 3. Output: `TASK_SKIPPED: {reason}`
 
 #### For CHECKPOINT TASKS (Quality Gates):
@@ -90,14 +94,14 @@ cd frontend && npm test
 **If ANY quality check fails:**
 1. Log `CHECKPOINT BLOCKED: {checkpoint name}` with failure details
 2. **DO NOT mark checkpoint complete**
-3. **DO NOT skip the checkpoint**
-4. **Identify and FIX the failing code/tests**
-5. Re-run ALL quality checks
-6. Repeat fix-and-check cycle up to 5 times
-7. If still failing after 5 fix attempts:
-   - Log detailed failure report in activity.md
-   - Output: `CHECKPOINT_FAILED: {name}`
-   - **This will STOP the overnight loop**
+3. **Identify and FIX the failing code/tests**
+4. Re-run ALL quality checks
+5. Repeat fix-and-check cycle up to 10 times
+6. If still failing after 10 fix attempts:
+   - Log detailed failure report in activity.md with all 10 attempts
+   - Mark checkpoint with `- [S]` (Skipped)
+   - Output: `CHECKPOINT_SKIPPED: {name}`
+   - **CONTINUE to next task (loop never stops)**
 
 ### Step 7: Visual Validation (Frontend Tasks)
 
@@ -119,10 +123,12 @@ You MUST output exactly ONE of these signals at the end:
 | Signal | Meaning | Loop Action |
 |--------|---------|-------------|
 | `TASK_COMPLETE` | Task finished successfully | Continue |
-| `TASK_SKIPPED: {reason}` | Regular task skipped | Continue |
-| `ALL_TASKS_COMPLETE` | No more tasks | Exit loop |
+| `TASK_SKIPPED: {reason}` | Regular task skipped after 10 retries | Continue |
+| `ALL_TASKS_COMPLETE` | No more tasks | Exit loop (ONLY exit condition) |
 | `CHECKPOINT_PASSED: {name}` | Checkpoint validation passed | Continue |
-| `CHECKPOINT_FAILED: {name}` | Checkpoint failed after 5 fix attempts | **STOP loop** |
+| `CHECKPOINT_SKIPPED: {name}` | Checkpoint skipped after 10 fix attempts | Continue |
+
+**NOTE: The loop ONLY exits on `ALL_TASKS_COMPLETE`. All other signals continue to the next task.**
 
 ## Checkpoint Fix Strategy
 
@@ -137,6 +143,8 @@ When a checkpoint fails validation, follow this strategy to fix issues:
    - Test failures: Fix the failing tests or the code they test
 4. **Re-run checks:** After each fix, re-run ALL quality checks
 5. **Document fixes:** Log what was fixed in activity.md
+6. **Retry up to 10 times:** Keep trying different approaches
+7. **Skip if still failing:** After 10 attempts, skip and continue (never stop)
 
 ## Timeout Handling
 
@@ -148,29 +156,31 @@ When a checkpoint fails validation, follow this strategy to fix issues:
    - Cancel the command
    - Log timeout in activity.md
    - Try alternative approach
-   - If still fails, skip task with `TASK_SKIPPED: timeout` (regular tasks only)
+   - If still fails after 10 attempts, skip task with `TASK_SKIPPED: timeout`
+   - **CONTINUE to next task (never stop)**
 
-**NOTE: Timeouts at checkpoints should trigger fix attempts, not skips.**
+**NOTE: Timeouts trigger retry attempts, not immediate skips. Try 10 times before skipping.**
 
 ## Stagnation Recovery
 
 If you notice:
-- Same error appearing 3+ times
-- No progress for 2+ minutes
+- Same error appearing 10+ times
+- No progress for 5+ minutes
 - Command hanging with no output
 
 Then IMMEDIATELY:
 1. Abandon current approach
 2. Log the issue
-3. For regular tasks: Try alternative OR skip task
-4. For checkpoints: Try different fix strategy, continue attempting
+3. Try a different approach (up to 10 total attempts)
+4. After 10 identical failures: **SKIP task and continue**
+5. **NEVER stop the loop** - always continue to next task
 
 ## Activity Log Format
 
 ```markdown
 ## [{YYYY-MM-DD HH:MM}] Task {task-id}: {task-name}
 
-### Status: ✅ COMPLETE | ⏭️ SKIPPED | 🚫 CHECKPOINT_FAILED
+### Status: ✅ COMPLETE | ⏭️ SKIPPED | 🔄 IN PROGRESS
 
 ### What Was Done
 - {description of changes}
@@ -201,7 +211,7 @@ Then IMMEDIATELY:
    - MyPy: ❌ 21 errors
    - Tests: ❌ 75 failures
 
-3. CHECKPOINT BLOCKED - fixing issues (attempt 1/5)...
+3. CHECKPOINT BLOCKED - fixing issues (attempt 1/10)...
    - Running: uv run ruff check --fix src/
    - Fixed 95 ruff violations
    - Fixing remaining type errors...
@@ -210,7 +220,7 @@ Then IMMEDIATELY:
    - Ruff: ✅ Pass
    - MyPy: ❌ 5 errors remaining
 
-5. Fixing remaining issues (attempt 2/5)...
+5. Fixing remaining issues (attempt 2/10)...
    - Fixed type annotations in conftest.py
 
 6. Re-running quality checks...
@@ -219,7 +229,7 @@ Then IMMEDIATELY:
    - Pyright: ✅ Pass
    - Tests: ❌ 20 failures (AI API tests)
 
-7. Fixing test failures (attempt 3/5)...
+7. Fixing test failures (attempt 3/10)...
    - Identified schema validation issues
    - Fixed request/response models
 
@@ -234,12 +244,35 @@ Then IMMEDIATELY:
 CHECKPOINT_PASSED: Backend API Complete
 ```
 
+## Example: Checkpoint Skipped (After 10 Failures)
+
+```
+1. Reading tasks.md...
+   - Found: - [ ] 12. Checkpoint - Backend API Complete
+
+2. This is a CHECKPOINT - running ALL quality checks...
+   - Tests: ❌ 5 failures (persistent issue)
+
+3-12. Attempts 1-10 to fix the issue...
+   - Tried multiple approaches
+   - Same 5 tests keep failing
+   - Root cause unclear
+
+13. 10 attempts exhausted - SKIPPING checkpoint
+   - Logged all 10 attempts in activity.md
+   - Marked checkpoint with [S]
+   - Continuing to next task (loop never stops)
+
+CHECKPOINT_SKIPPED: Backend API Complete
+```
+
 ## Remember
 
 - You are running UNATTENDED overnight
 - No human is watching
 - Make autonomous decisions
-- **Regular tasks: Skip if stuck after 3 retries**
-- **Checkpoints: FIX issues, NEVER skip, STOP if can't fix after 5 attempts**
+- **The loop NEVER stops** - only exits on ALL_TASKS_COMPLETE
+- **Retry up to 10 times** before skipping any task
+- **Even checkpoints can be skipped** after 10 failures
 - Always output a signal
 - Log everything for morning review

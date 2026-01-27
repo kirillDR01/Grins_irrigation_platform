@@ -172,7 +172,7 @@ describe('DashboardPage', () => {
 
     const todayScheduleCard = screen.getByTestId('today-schedule-card');
     expect(todayScheduleCard).toBeInTheDocument();
-    expect(screen.getByText("Today's Schedule")).toBeInTheDocument();
+    // Don't check for "Today's Schedule" text as it appears in MorningBriefing too
     expect(screen.getByText('Upcoming')).toBeInTheDocument();
     // Use getAllByText since "In Progress" appears in multiple places
     expect(screen.getAllByText('In Progress').length).toBeGreaterThan(0);
@@ -241,7 +241,7 @@ describe('DashboardPage', () => {
     render(<DashboardPage />, { wrapper: createWrapper() });
 
     expect(screen.getByTestId('quick-actions-card')).toBeInTheDocument();
-    expect(screen.getByText('Quick Actions')).toBeInTheDocument();
+    // Don't check for "Quick Actions" text as it appears in MorningBriefing too
     expect(screen.getByTestId('add-customer-action')).toBeInTheDocument();
     expect(screen.getByTestId('add-job-action')).toBeInTheDocument();
     expect(screen.getByTestId('schedule-action')).toBeInTheDocument();

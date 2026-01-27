@@ -58,11 +58,15 @@ class TestSMSOptInProperty:
         mock_session = AsyncMock()
         service = SMSService(mock_session)
 
-        # Mock repository
+        # Mock repository methods
         mock_message = AsyncMock()
         mock_message.id = uuid4()
         service.message_repo.create = AsyncMock(return_value=mock_message)
         service.message_repo.update = AsyncMock(return_value=mock_message)
+        # No recent messages
+        service.message_repo.get_by_customer_and_type = AsyncMock(
+            return_value=[],
+        )
 
         result = await service.send_message(
             customer_id=uuid4(),

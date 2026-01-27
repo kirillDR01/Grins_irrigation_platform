@@ -13,6 +13,72 @@ This repository contains documentation and examples for Kiro development workflo
 
 ## Recent Activity
 
+## [2026-01-27 15:45] - CONFIG: Ralph Wiggum "Never Stop Mode" Implementation
+
+### What Was Accomplished
+
+**Implemented "Never Stop Mode" for Ralph Wiggum Overnight Execution System**
+
+Modified the entire Ralph Wiggum overnight system to NEVER stop until all tasks are complete. The loop now:
+- Retries failed tasks up to 10 times (increased from 3)
+- Skips tasks after 10 identical consecutive failures
+- Even skips checkpoints after 10 failures (previously would stop)
+- Only exits on `ALL_TASKS_COMPLETE` or max iterations reached
+
+### Technical Details
+
+**Files Modified:**
+
+| File | Changes |
+|------|---------|
+| `scripts/ralph-overnight.sh` | Updated stagnation threshold to 10, modified `track_result()` to return skip signal instead of stop, checkpoint failures now skip and continue |
+| `.kiro/steering/ralph-loop-patterns.md` | Updated retry limit to 10, added "Never Stop Behavior Summary" table, updated all flow diagrams, added `CHECKPOINT_SKIPPED` signal |
+| `.kiro/prompts/ralph-next-overnight.md` | Complete rewrite for "Never Stop Mode" - 10 retries, checkpoints can be skipped, removed `CHECKPOINT_FAILED` signal |
+| `OVERNIGHT-RALPH-WIGGUM.md` | Added "CRITICAL UPDATE: NEVER STOP MODE" section (done in previous session) |
+
+**Key Behavior Changes:**
+
+| Scenario | Old Behavior | New Behavior |
+|----------|--------------|--------------|
+| Task fails 3x | Stop, ask user | Retry up to 10x, then skip |
+| Checkpoint fails | Stop loop | Retry 10x, then skip checkpoint |
+| Same error 5x | Stop (stagnation) | Continue retrying up to 10x |
+| Same error 10x | N/A | Skip task, continue to next |
+| Unknown error | Stop | Log, skip, continue |
+
+**Output Signals Updated:**
+
+| Signal | Meaning | Loop Action |
+|--------|---------|-------------|
+| `TASK_COMPLETE` | Task finished successfully | Continue |
+| `TASK_SKIPPED: {reason}` | Task skipped after 10 retries | Continue |
+| `ALL_TASKS_COMPLETE` | No more tasks | Exit loop (ONLY exit) |
+| `CHECKPOINT_PASSED: {name}` | Checkpoint validation passed | Continue |
+| `CHECKPOINT_SKIPPED: {name}` | Checkpoint skipped after 10 failures | Continue |
+
+### Decision Rationale
+
+The overnight loop is designed for unattended execution. Stopping the loop for any reason defeats the purpose - the user won't be there to respond. By implementing "never stop mode", the system:
+- Maximizes progress during overnight runs
+- Documents all failures for morning review
+- Prioritizes completing as many tasks as possible
+- Allows the user to manually address skipped tasks later
+
+### Impact and Dependencies
+
+- All Ralph Wiggum overnight runs will now continue until completion
+- Skipped tasks are marked with `[S]` for easy identification
+- Activity logs contain detailed information about all 10 retry attempts
+- Morning review should check for `[S]` tasks and address root causes
+
+### Next Steps
+
+- Test the overnight system with a real spec to verify behavior
+- Monitor first overnight run to ensure no unexpected issues
+- Consider adding email/notification on completion
+
+---
+
 ## [2026-01-27 14:30] - CONFIG: Ralph Wiggum Overnight System Deep Dive & Fixes
 
 ### What Was Accomplished

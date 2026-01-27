@@ -20,7 +20,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { CalendarIcon, Loader2, Zap, Eye, List, Map } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CalendarIcon, Loader2, Zap, Eye, List, Map, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   useGenerateSchedule,
@@ -30,6 +31,7 @@ import {
 import { ScheduleResults } from './ScheduleResults';
 import { MapProvider } from './map/MapProvider';
 import { ScheduleMap } from './map/ScheduleMap';
+import { AIScheduleGenerator } from '@/features/ai/components/AIScheduleGenerator';
 import type { ScheduleGenerateResponse } from '../types';
 import type { ViewMode } from '../types/map';
 
@@ -39,6 +41,7 @@ export function ScheduleGenerationPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [showRoutes, setShowRoutes] = useState(true);
+  const [generationMode, setGenerationMode] = useState<'manual' | 'ai'>('manual');
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
   const { data: capacity, isLoading: capacityLoading } =
@@ -72,7 +75,22 @@ export function ScheduleGenerationPage() {
         description="Optimize routes and generate schedules for field staff"
       />
 
-      <div className="grid gap-6 md:grid-cols-3">
+      {/* Generation Mode Tabs */}
+      <Tabs value={generationMode} onValueChange={(v) => setGenerationMode(v as 'manual' | 'ai')}>
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="manual" data-testid="manual-mode-tab">
+            <Zap className="mr-2 h-4 w-4" />
+            Manual Generation
+          </TabsTrigger>
+          <TabsTrigger value="ai" data-testid="ai-mode-tab">
+            <Sparkles className="mr-2 h-4 w-4" />
+            AI-Powered
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Manual Generation Mode */}
+        <TabsContent value="manual" className="space-y-6">
+          <div className="grid gap-6 md:grid-cols-3">
         {/* Date Selection Card */}
         <Card>
           <CardHeader>
@@ -252,6 +270,13 @@ export function ScheduleGenerationPage() {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+
+        {/* AI Generation Mode */}
+        <TabsContent value="ai" className="space-y-6">
+          <AIScheduleGenerator />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

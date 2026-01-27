@@ -26,6 +26,10 @@ import {
   getJobPriorityConfig,
   JOB_SOURCE_CONFIG,
 } from '../types';
+import { AICommunicationDrafts } from '@/features/ai/components/AICommunicationDrafts';
+import { AIEstimateGenerator } from '@/features/ai/components/AIEstimateGenerator';
+import { useAICommunication } from '@/features/ai/hooks/useAICommunication';
+import { useAIEstimate } from '@/features/ai/hooks/useAIEstimate';
 
 interface JobDetailProps {
   jobId?: string;
@@ -39,6 +43,26 @@ export function JobDetail({ jobId: propJobId, onEdit }: JobDetailProps) {
 
   const { data: job, isLoading, error, refetch } = useJob(id);
   const updateStatusMutation = useUpdateJobStatus();
+  
+  // AI Communication hook
+  const {
+    draft,
+    isLoading: isDraftLoading,
+    error: draftError,
+    sendNow,
+    scheduleLater,
+  } = useAICommunication();
+
+  // AI Estimate hook - only for jobs needing estimates
+  const needsEstimate = job?.status === 'requested' && !job?.quoted_amount;
+  const {
+    estimate,
+    isLoading: isEstimateLoading,
+    error: estimateError,
+    generatePDF,
+    scheduleSiteVisit,
+    adjustQuote,
+  } = useAIEstimate(needsEstimate ? id : undefined);
 
   const handleStatusChange = async (newStatus: JobStatus) => {
     if (!job) return;
@@ -373,6 +397,32 @@ export function JobDetail({ jobId: propJobId, onEdit }: JobDetailProps) {
             )}
           </CardContent>
         </Card>
+
+        {/* AI Communication Drafts */}
+        <div className="md:col-span-2">
+          <AICommunicationDrafts
+            draft={draft}
+            isLoading={isDraftLoading}
+            error={draftError}
+            onSendNow={sendNow}
+            onEdit={(draftId) => console.log('Edit draft:', draftId)}
+            onScheduleLater={scheduleLater}
+          />
+        </div>
+
+        {/* AI Estimate Generator - Show for jobs needing estimates */}
+        {needsEstimate && (
+          <div className="md:col-span-2">
+            <AIEstimateGenerator
+              estimate={estimate}
+              isLoading={isEstimateLoading}
+              error={estimateError}
+              onGeneratePDF={generatePDF}
+              onScheduleSiteVisit={scheduleSiteVisit}
+              onAdjustQuote={adjustQuote}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
