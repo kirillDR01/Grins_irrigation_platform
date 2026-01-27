@@ -1372,7 +1372,7 @@ Add the following to your `.env` file:
 
 ```bash
 # Twilio SMS Configuration
-TWILIO_ACCOUNT_SID=AC746f6b24b3a0f5d6eba29bdbbe2a5a5b
+TWILIO_ACCOUNT_SID=YOUR_TWILIO_ACCOUNT_SID
 TWILIO_AUTH_TOKEN=your_auth_token_here
 TWILIO_PHONE_NUMBER=+1XXXXXXXXXX
 ```
@@ -1382,12 +1382,12 @@ TWILIO_PHONE_NUMBER=+1XXXXXXXXXX
 To test SMS sending directly via Twilio API:
 
 ```bash
-curl 'https://api.twilio.com/2010-04-01/Accounts/AC746f6b24b3a0f5d6eba29bdbbe2a5a5b/Messages.json' \
+curl 'https://api.twilio.com/2010-04-01/Accounts/YOUR_TWILIO_ACCOUNT_SID/Messages.json' \
   -X POST \
   --data-urlencode 'To=+18777804236' \
   --data-urlencode 'From=+1XXXXXXXXXX' \
   --data-urlencode 'Body=Your message here' \
-  -u AC746f6b24b3a0f5d6eba29bdbbe2a5a5b:[AuthToken]
+  -u YOUR_TWILIO_ACCOUNT_SID:[AuthToken]
 ```
 
 Replace `[AuthToken]` with your actual auth token from the `.env` file.

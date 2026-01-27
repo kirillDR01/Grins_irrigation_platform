@@ -8,8 +8,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Twilio credentials from .env
-account_sid = os.getenv('TWILIO_ACCOUNT_SID', 'AC746f6b24b3a0f5d6eba29bdbbe2a5a5b')
-auth_token = os.getenv('TWILIO_AUTH_TOKEN', 'df4b2e501c1b46c15587e9ffd6b23145')
+account_sid = os.getenv('TWILIO_ACCOUNT_SID', 'YOUR_TWILIO_ACCOUNT_SID')
+auth_token = os.getenv('TWILIO_AUTH_TOKEN', 'YOUR_TWILIO_AUTH_TOKEN')
 phone_number = os.getenv('TWILIO_PHONE_NUMBER', '+18556086555')
 
 print('Testing Twilio credentials...')
