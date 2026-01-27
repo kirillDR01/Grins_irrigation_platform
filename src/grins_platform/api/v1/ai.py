@@ -14,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from grins_platform.database import get_db_session as get_db
 from grins_platform.schemas.ai import (
     AIActionType,
+    AIChatRequest,
+    AIChatResponse,
     AIEntityType,
     AuditDecisionRequest,
     AuditLogResponse,
@@ -46,31 +48,49 @@ router = APIRouter(prefix="/ai", tags=["AI Assistant"])
 DEMO_USER_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 
-@router.post("/chat")
+@router.post("/chat", response_model=None)
 async def chat(
-    message: str,
+    request: AIChatRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> StreamingResponse:
-    """Chat with AI assistant with streaming response.
+    stream: bool = False,
+) -> StreamingResponse | AIChatResponse:
+    """Chat with AI assistant.
 
     Args:
-        message: User message
+        request: Chat request with message and optional session_id
         db: Database session
+        stream: If True, return streaming response; otherwise return JSON
 
     Returns:
-        Streaming response with AI reply
+        Streaming response or JSON response with AI reply
     """
     agent = AIAgentService(db)
+    message = request.message
 
-    async def generate() -> AsyncGenerator[str, None]:
-        try:
-            async for chunk in agent.chat_stream(DEMO_USER_ID, message):
-                yield f"data: {chunk}\n\n"
-            yield "data: [DONE]\n\n"
-        except RateLimitError as e:
-            yield f"data: ERROR: {e}\n\n"
+    if stream:
+        async def generate() -> AsyncGenerator[str, None]:
+            try:
+                async for chunk in agent.chat_stream(DEMO_USER_ID, message):
+                    yield f"data: {chunk}\n\n"
+                yield "data: [DONE]\n\n"
+            except RateLimitError as e:
+                yield f"data: ERROR: {e}\n\n"
 
-    return StreamingResponse(generate(), media_type="text/event-stream")
+        return StreamingResponse(generate(), media_type="text/event-stream")
+    # Non-streaming response
+    try:
+        response_text = await agent.chat(DEMO_USER_ID, message)
+        return AIChatResponse(
+            message=response_text,
+            session_id=request.session_id or DEMO_USER_ID,
+            tokens_used=len(message) // 4 + len(response_text) // 4,
+            is_streaming=False,
+        )
+    except RateLimitError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(e),
+        ) from e
 
 
 @router.post("/schedule/generate", response_model=ScheduleGenerationResponse)

@@ -6,10 +6,10 @@
 
 import { useState, useCallback } from 'react';
 import { aiApi } from '../api/aiApi';
-import type { ScheduleGenerateRequest, GeneratedSchedule } from '../types';
+import type { ScheduleGenerateRequest, ScheduleGenerateResponse } from '../types';
 
 export interface UseAIScheduleReturn {
-  schedule: GeneratedSchedule | null;
+  schedule: ScheduleGenerateResponse | null;
   isLoading: boolean;
   error: string | null;
   auditLogId: string | null;
@@ -19,7 +19,7 @@ export interface UseAIScheduleReturn {
 }
 
 export function useAISchedule(): UseAIScheduleReturn {
-  const [schedule, setSchedule] = useState<GeneratedSchedule | null>(null);
+  const [schedule, setSchedule] = useState<ScheduleGenerateResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [auditLogId, setAuditLogId] = useState<string | null>(null);
@@ -32,8 +32,8 @@ export function useAISchedule(): UseAIScheduleReturn {
 
     try {
       const response = await aiApi.generateSchedule(request);
-      setSchedule(response.schedule);
-      setAuditLogId(response.audit_log_id);
+      setSchedule(response);
+      setAuditLogId(response.audit_id);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate schedule';
       setError(errorMessage);

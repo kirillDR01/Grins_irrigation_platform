@@ -27,7 +27,7 @@ describe('AICommunicationDrafts', () => {
 
   it('renders empty state when no draft', () => {
     render(<AICommunicationDrafts draft={null} />);
-    expect(screen.getByTestId('ai-communication-drafts')).toBeInTheDocument();
+    expect(screen.getByTestId('ai-communication-drafts-empty')).toBeInTheDocument();
     expect(screen.getByText(/no draft available/i)).toBeInTheDocument();
   });
 

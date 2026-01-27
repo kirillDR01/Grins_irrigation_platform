@@ -44,7 +44,7 @@ describe('AIEstimateGenerator', () => {
       />
     );
 
-    expect(screen.getByTestId('ai-estimate-generator')).toBeInTheDocument();
+    expect(screen.getByTestId('ai-estimate-generator-loading')).toBeInTheDocument();
     expect(screen.getByText('Generating estimate...')).toBeInTheDocument();
   });
 
@@ -61,7 +61,7 @@ describe('AIEstimateGenerator', () => {
       />
     );
 
-    expect(screen.getByTestId('ai-estimate-generator')).toBeInTheDocument();
+    expect(screen.getByTestId('ai-estimate-generator-error')).toBeInTheDocument();
     expect(screen.getByText('Failed to generate estimate')).toBeInTheDocument();
   });
 

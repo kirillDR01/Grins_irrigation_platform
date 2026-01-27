@@ -115,10 +115,8 @@ export interface ScheduleSummary {
 }
 
 export interface ScheduleGenerateRequest {
-  start_date: string;
-  end_date: string;
-  staff_ids?: string[];
-  include_pending_jobs?: boolean;
+  target_date: string;
+  job_ids?: string[];
 }
 
 export interface GeneratedSchedule {
@@ -130,8 +128,10 @@ export interface GeneratedSchedule {
 }
 
 export interface ScheduleGenerateResponse {
-  schedule: GeneratedSchedule;
-  audit_log_id: string;
+  audit_id: string;
+  schedule: Record<string, unknown>;
+  confidence_score: number;
+  warnings: string[];
 }
 
 // =============================================================================
@@ -156,14 +156,17 @@ export interface CategorizationSummary {
 }
 
 export interface JobCategorizationRequest {
-  job_ids?: string[];
-  include_uncategorized_only?: boolean;
+  description: string;
+  customer_history?: Record<string, unknown>[];
 }
 
 export interface JobCategorizationResponse {
-  categorizations: JobCategorization[];
-  summary: CategorizationSummary;
-  audit_log_id: string;
+  audit_id: string;
+  category: string;
+  confidence_score: number;
+  reasoning: string;
+  suggested_services: string[];
+  needs_review: boolean;
 }
 
 // =============================================================================
@@ -229,6 +232,31 @@ export interface EstimateGenerateResponse {
   requires_site_visit: boolean;
   confidence_score: number;
   audit_log_id: string;
+}
+
+// Frontend-specific estimate response type for UI components
+export interface EstimateSimilarJob {
+  service_type: string;
+  zone_count: number;
+  final_price: number;
+  similarity_score: number;
+}
+
+export interface EstimateBreakdownNumeric {
+  materials: number;
+  labor: number;
+  equipment: number;
+  margin: number;
+}
+
+export interface EstimateResponse {
+  estimated_price: number;
+  estimated_zones: number;
+  confidence_score: number;
+  breakdown: EstimateBreakdownNumeric;
+  similar_jobs: EstimateSimilarJob[];
+  recommendation?: string;
+  ai_notes?: string;
 }
 
 // =============================================================================

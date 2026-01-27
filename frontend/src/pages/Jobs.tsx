@@ -4,31 +4,32 @@ import { PageHeader } from '@/shared/components/PageHeader';
 import { JobList } from '@/features/jobs/components/JobList';
 import { JobForm } from '@/features/jobs/components/JobForm';
 import { JobDetail } from '@/features/jobs/components/JobDetail';
-import { AICategorization } from '@/features/ai/components/AICategorization';
 import { useAICategorize } from '@/features/ai/hooks/useAICategorize';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Sparkles } from 'lucide-react';
+import { Plus, Sparkles, CheckCircle, AlertTriangle, X } from 'lucide-react';
 
 export function JobsPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [showCategorization, setShowCategorization] = useState(false);
+  const [showCategorizeDialog, setShowCategorizeDialog] = useState(false);
+  const [jobDescription, setJobDescription] = useState('');
   
   // AI Categorization hook
   const {
-    categorizations,
-    summary,
+    categorization,
     isLoading: isCategorizing,
     error: categorizeError,
     categorizeJobs,
-    approveBulk,
     clearCategorizations,
   } = useAICategorize();
   
@@ -43,27 +44,17 @@ export function JobsPage() {
     navigate('/jobs');
   };
 
-  const handleCategorizeJobs = async () => {
-    setShowCategorization(true);
+  const handleCategorizeJob = async () => {
+    if (!jobDescription.trim()) return;
     await categorizeJobs({
-      job_ids: [], // Empty array means categorize all uncategorized jobs
+      description: jobDescription,
     });
   };
 
-  const handleApproveAll = async () => {
-    const readyJobIds = categorizations
-      .filter(c => !c.requires_review)
-      .map(c => c.job_id);
-    await approveBulk(readyJobIds);
-  };
-
-  const handleApproveJob = async (jobId: string) => {
-    await approveBulk([jobId]);
-  };
-
-  const handleReviewJob = (jobId: string) => {
-    navigate(`/jobs/${jobId}`);
-    setShowCategorization(false);
+  const handleCloseCategorization = () => {
+    setShowCategorizeDialog(false);
+    setJobDescription('');
+    clearCategorizations();
   };
 
   return (
@@ -75,7 +66,7 @@ export function JobsPage() {
           <div className="flex gap-2">
             <Button
               variant="outline"
-              onClick={handleCategorizeJobs}
+              onClick={() => setShowCategorizeDialog(true)}
               data-testid="categorize-jobs-btn"
             >
               <Sparkles className="mr-2 h-4 w-4" />
@@ -89,27 +80,111 @@ export function JobsPage() {
         }
       />
 
-      {/* AI Categorization Section */}
-      {showCategorization && (categorizations.length > 0 || isCategorizing || categorizeError) && (
-        <div className="mb-6">
-          <AICategorization
-            categorizations={categorizations}
-            summary={summary || {
-              total_jobs: 0,
-              ready_to_schedule: 0,
-              requires_review: 0,
-              avg_confidence: 0,
-            }}
-            isLoading={isCategorizing}
-            error={categorizeError ? new Error(categorizeError) : null}
-            onApproveAll={handleApproveAll}
-            onApproveJob={handleApproveJob}
-            onReviewJob={handleReviewJob}
-          />
-        </div>
-      )}
-
       <JobList onJobClick={handleJobClick} />
+
+      {/* AI Categorize Dialog */}
+      <Dialog open={showCategorizeDialog} onOpenChange={setShowCategorizeDialog}>
+        <DialogContent className="max-w-2xl" aria-describedby="categorize-job-description">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5" />
+              AI Job Categorization
+            </DialogTitle>
+            <p id="categorize-job-description" className="text-sm text-muted-foreground">
+              Enter a job description and let AI categorize it for you.
+            </p>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Input Section */}
+            <div>
+              <label htmlFor="job-description" className="block text-sm font-medium mb-2">
+                Job Description
+              </label>
+              <textarea
+                id="job-description"
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value)}
+                placeholder="e.g., Broken sprinkler head in front yard, water leaking..."
+                className="w-full px-3 py-2 border rounded-md min-h-[100px]"
+                data-testid="job-description-input"
+              />
+            </div>
+            
+            <Button
+              onClick={handleCategorizeJob}
+              disabled={!jobDescription.trim() || isCategorizing}
+              className="w-full"
+              data-testid="categorize-btn"
+            >
+              {isCategorizing ? 'Categorizing...' : 'Categorize Job'}
+            </Button>
+
+            {/* Error State */}
+            {categorizeError && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{categorizeError}</AlertDescription>
+              </Alert>
+            )}
+
+            {/* Result Section */}
+            {categorization && !isCategorizing && (
+              <Card data-testid="categorization-result">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    Categorization Result
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Category:</span>
+                    <Badge>{categorization.category}</Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Confidence:</span>
+                    <Badge variant={categorization.confidence_score >= 70 ? 'default' : 'secondary'}>
+                      {categorization.confidence_score}%
+                    </Badge>
+                  </div>
+                  <div>
+                    <span className="font-medium">Reasoning:</span>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {categorization.reasoning}
+                    </p>
+                  </div>
+                  {categorization.suggested_services.length > 0 && (
+                    <div>
+                      <span className="font-medium">Suggested Services:</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {categorization.suggested_services.map((service, idx) => (
+                          <Badge key={idx} variant="outline">{service}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {categorization.needs_review && (
+                    <Alert>
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>
+                        This categorization needs manual review due to low confidence.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={handleCloseCategorization}>
+                <X className="h-4 w-4 mr-2" />
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Job Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>

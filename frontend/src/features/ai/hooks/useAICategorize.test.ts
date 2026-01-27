@@ -1,44 +1,29 @@
 /**
  * Tests for useAICategorize hook
+ * 
+ * Updated to match new backend API that returns a single categorization result
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { useAICategorize } from './useAICategorize';
 import { aiApi } from '../api/aiApi';
-import type { JobCategorizationResponse } from '../types';
+import type { JobCategorizationResponse, JobCategorizationRequest } from '../types';
 
 vi.mock('../api/aiApi');
 
 describe('useAICategorize', () => {
   const mockResponse: JobCategorizationResponse = {
-    categorizations: [
-      {
-        job_id: '1',
-        suggested_category: 'seasonal',
-        suggested_job_type: 'spring_startup',
-        suggested_price: '$150',
-        confidence_score: 0.92,
-        ai_notes: 'Standard spring startup',
-        requires_review: false,
-      },
-      {
-        job_id: '2',
-        suggested_category: 'repair',
-        suggested_job_type: 'broken_head',
-        suggested_price: '$50',
-        confidence_score: 0.65,
-        ai_notes: 'Low confidence - needs review',
-        requires_review: true,
-      },
-    ],
-    summary: {
-      total_jobs: 2,
-      ready_to_schedule: 1,
-      requires_review: 1,
-      avg_confidence: 0.785,
-    },
-    audit_log_id: 'audit-123',
+    audit_id: 'audit-123',
+    category: 'ready_to_schedule',
+    confidence_score: 90,
+    reasoning: 'Standard service with known pricing',
+    suggested_services: ['head_replacement'],
+    needs_review: false,
+  };
+
+  const mockRequest: JobCategorizationRequest = {
+    description: 'Broken sprinkler head in front yard',
   };
 
   beforeEach(() => {
@@ -48,27 +33,25 @@ describe('useAICategorize', () => {
   it('initializes with empty state', () => {
     const { result } = renderHook(() => useAICategorize());
 
-    expect(result.current.categorizations).toEqual([]);
-    expect(result.current.summary).toBeNull();
+    expect(result.current.categorization).toBeNull();
     expect(result.current.isLoading).toBe(false);
     expect(result.current.error).toBeNull();
     expect(result.current.auditLogId).toBeNull();
   });
 
-  it('categorizes jobs successfully', async () => {
+  it('categorizes job successfully', async () => {
     vi.mocked(aiApi.categorizeJobs).mockResolvedValue(mockResponse);
 
     const { result } = renderHook(() => useAICategorize());
 
-    result.current.categorizeJobs({ include_uncategorized_only: true });
-
-    await waitFor(() => {
-      expect(result.current.categorizations).toEqual(mockResponse.categorizations);
+    await act(async () => {
+      await result.current.categorizeJobs(mockRequest);
     });
 
-    expect(result.current.summary).toEqual(mockResponse.summary);
+    expect(result.current.categorization).toEqual(mockResponse);
     expect(result.current.auditLogId).toBe('audit-123');
     expect(result.current.error).toBeNull();
+    expect(result.current.isLoading).toBe(false);
   });
 
   it('handles categorization errors', async () => {
@@ -77,61 +60,32 @@ describe('useAICategorize', () => {
 
     const { result } = renderHook(() => useAICategorize());
 
-    result.current.categorizeJobs({ include_uncategorized_only: true });
-
-    await waitFor(() => {
-      expect(result.current.error).toBe('API error');
+    await act(async () => {
+      await result.current.categorizeJobs(mockRequest);
     });
 
-    expect(result.current.categorizations).toEqual([]);
-    expect(result.current.summary).toBeNull();
+    expect(result.current.error).toBe('API error');
+    expect(result.current.categorization).toBeNull();
   });
 
-  it('approves jobs in bulk', async () => {
+  it('clears categorization', async () => {
     vi.mocked(aiApi.categorizeJobs).mockResolvedValue(mockResponse);
 
     const { result } = renderHook(() => useAICategorize());
 
     // First categorize
-    result.current.categorizeJobs({ include_uncategorized_only: true });
-
-    await waitFor(() => {
-      expect(result.current.categorizations).toHaveLength(2);
+    await act(async () => {
+      await result.current.categorizeJobs(mockRequest);
     });
 
-    // Then approve one job
-    result.current.approveBulk(['1']);
-
-    await waitFor(() => {
-      expect(result.current.categorizations).toHaveLength(1);
-    });
-
-    expect(result.current.categorizations[0].job_id).toBe('2');
-    expect(result.current.summary?.total_jobs).toBe(1);
-    expect(result.current.summary?.ready_to_schedule).toBe(0);
-  });
-
-  it('clears categorizations', async () => {
-    vi.mocked(aiApi.categorizeJobs).mockResolvedValue(mockResponse);
-
-    const { result } = renderHook(() => useAICategorize());
-
-    // First categorize
-    result.current.categorizeJobs({ include_uncategorized_only: true });
-
-    await waitFor(() => {
-      expect(result.current.categorizations).toHaveLength(2);
-    });
+    expect(result.current.categorization).toEqual(mockResponse);
 
     // Then clear
-    result.current.clearCategorizations();
-
-    // Wait for state update
-    await waitFor(() => {
-      expect(result.current.categorizations).toEqual([]);
+    act(() => {
+      result.current.clearCategorizations();
     });
 
-    expect(result.current.summary).toBeNull();
+    expect(result.current.categorization).toBeNull();
     expect(result.current.error).toBeNull();
     expect(result.current.auditLogId).toBeNull();
   });
@@ -146,7 +100,10 @@ describe('useAICategorize', () => {
 
     const { result } = renderHook(() => useAICategorize());
 
-    result.current.categorizeJobs({ include_uncategorized_only: true });
+    // Start categorization without awaiting
+    act(() => {
+      result.current.categorizeJobs(mockRequest);
+    });
 
     // Wait for loading state to be set
     await waitFor(() => {
@@ -154,10 +111,32 @@ describe('useAICategorize', () => {
     });
 
     // Resolve the promise
-    resolvePromise!(mockResponse);
+    await act(async () => {
+      resolvePromise!(mockResponse);
+    });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
     });
+  });
+
+  it('handles bulk approval', async () => {
+    const { result } = renderHook(() => useAICategorize());
+
+    // First set up some categorization
+    vi.mocked(aiApi.categorizeJobs).mockResolvedValue(mockResponse);
+    await act(async () => {
+      await result.current.categorizeJobs(mockRequest);
+    });
+
+    expect(result.current.categorization).toEqual(mockResponse);
+
+    // Then approve bulk
+    await act(async () => {
+      await result.current.approveBulk(['job-1', 'job-2']);
+    });
+
+    // After approval, categorization should be cleared
+    expect(result.current.categorization).toBeNull();
   });
 });

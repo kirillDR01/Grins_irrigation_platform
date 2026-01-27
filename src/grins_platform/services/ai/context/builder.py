@@ -9,9 +9,14 @@ from datetime import date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from grins_platform.log_config import LoggerMixin
+from grins_platform.models.appointment import Appointment
+from grins_platform.models.customer import Customer
+from grins_platform.models.job import Job
+from grins_platform.models.staff import Staff
 
 
 class ContextBuilder(LoggerMixin):
@@ -184,21 +189,149 @@ class ContextBuilder(LoggerMixin):
             end_date = date.today()
             start_date = end_date - timedelta(days=30)
 
+        # Fetch real business data from the database
+        business_data = await self._fetch_business_summary(start_date, end_date)
+
         context = {
             "query": query,
             "date_range": {
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),
             },
-            "available_data": [
-                "customers",
-                "jobs",
-                "appointments",
-                "invoices",
-                "staff",
-            ],
             "current_time": datetime.now().isoformat(),
+            "today": date.today().isoformat(),
+            "business_data": business_data,
         }
 
         self.log_completed("build_query_context")
         return context
+
+    async def _fetch_business_summary(
+        self,
+        start_date: date,
+        end_date: date,
+    ) -> dict[str, Any]:
+        """Fetch a summary of business data for AI context.
+
+        Args:
+            start_date: Start of date range
+            end_date: End of date range
+
+        Returns:
+            Dictionary with business summary data
+        """
+        today = date.today()
+
+        # Count customers
+        customer_count_stmt = select(func.count()).select_from(Customer)
+        customer_result = await self.session.execute(customer_count_stmt)
+        total_customers = customer_result.scalar() or 0
+
+        # Count jobs by status
+        job_status_stmt = (
+            select(Job.status, func.count())
+            .where(Job.is_deleted == False)  # noqa: E712
+            .group_by(Job.status)
+        )
+        job_status_result = await self.session.execute(job_status_stmt)
+        jobs_by_status = dict(job_status_result.all())
+
+        # Count today's appointments
+        today_appointments_stmt = (
+            select(func.count())
+            .select_from(Appointment)
+            .where(Appointment.scheduled_date == today)
+        )
+        today_appointments_result = await self.session.execute(today_appointments_stmt)
+        today_appointments = today_appointments_result.scalar() or 0
+
+        # Count today's appointments by status
+        today_status_stmt = (
+            select(Appointment.status, func.count())
+            .where(Appointment.scheduled_date == today)
+            .group_by(Appointment.status)
+        )
+        today_status_result = await self.session.execute(today_status_stmt)
+        today_by_status = dict(today_status_result.all())
+
+        # Count appointments in date range
+        range_appointments_stmt = (
+            select(func.count())
+            .select_from(Appointment)
+            .where(Appointment.scheduled_date >= start_date)
+            .where(Appointment.scheduled_date <= end_date)
+        )
+        range_appointments_result = await self.session.execute(range_appointments_stmt)
+        range_appointments = range_appointments_result.scalar() or 0
+
+        # Count staff
+        staff_count_stmt = (
+            select(func.count())
+            .select_from(Staff)
+            .where(Staff.is_active == True)  # noqa: E712
+        )
+        staff_result = await self.session.execute(staff_count_stmt)
+        total_staff = staff_result.scalar() or 0
+
+        # Get jobs scheduled for today (via appointments)
+        scheduled_jobs_stmt = (
+            select(func.count())
+            .select_from(Appointment)
+            .where(Appointment.scheduled_date == today)
+            .where(Appointment.status == "scheduled")
+        )
+        scheduled_jobs_result = await self.session.execute(scheduled_jobs_stmt)
+        scheduled_today = scheduled_jobs_result.scalar() or 0
+
+        # Get completed jobs today
+        completed_today_stmt = (
+            select(func.count())
+            .select_from(Appointment)
+            .where(Appointment.scheduled_date == today)
+            .where(Appointment.status == "completed")
+        )
+        completed_today_result = await self.session.execute(completed_today_stmt)
+        completed_today = completed_today_result.scalar() or 0
+
+        # Get in-progress jobs today
+        in_progress_today_stmt = (
+            select(func.count())
+            .select_from(Appointment)
+            .where(Appointment.scheduled_date == today)
+            .where(Appointment.status == "in_progress")
+        )
+        in_progress_today_result = await self.session.execute(in_progress_today_stmt)
+        in_progress_today = in_progress_today_result.scalar() or 0
+
+        return {
+            "customers": {
+                "total": total_customers,
+            },
+            "jobs": {
+                "by_status": jobs_by_status,
+                "total_pending": (
+                    jobs_by_status.get("requested", 0) +
+                    jobs_by_status.get("approved", 0)
+                ),
+                "total_scheduled": jobs_by_status.get("scheduled", 0),
+                "total_completed": jobs_by_status.get("completed", 0),
+                "total_in_progress": jobs_by_status.get("in_progress", 0),
+            },
+            "appointments": {
+                "today": {
+                    "total": today_appointments,
+                    "scheduled": scheduled_today,
+                    "completed": completed_today,
+                    "in_progress": in_progress_today,
+                    "by_status": today_by_status,
+                },
+                "date_range": {
+                    "total": range_appointments,
+                    "start": start_date.isoformat(),
+                    "end": end_date.isoformat(),
+                },
+            },
+            "staff": {
+                "total_active": total_staff,
+            },
+        }

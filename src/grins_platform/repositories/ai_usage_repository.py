@@ -21,6 +21,7 @@ class AIUsageRepository(LoggerMixin):
 
     def __init__(self, session: AsyncSession) -> None:
         """Initialize repository with database session."""
+        super().__init__()
         self.session = session
 
     async def get_or_create(

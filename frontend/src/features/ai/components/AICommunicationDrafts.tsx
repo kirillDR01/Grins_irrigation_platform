@@ -42,7 +42,7 @@ export function AICommunicationDrafts({
 
   if (!draft) {
     return (
-      <Card data-testid="ai-communication-drafts">
+      <Card data-testid="ai-communication-drafts-empty">
         <CardContent className="py-8 text-center text-muted-foreground">
           No draft available. Generate a communication draft to get started.
         </CardContent>

@@ -7,6 +7,11 @@ Usage:
     uvicorn grins_platform.main:app --reload
 """
 
-from grins_platform.app import app
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+from grins_platform.app import app  # noqa: E402
 
 __all__ = ["app"]

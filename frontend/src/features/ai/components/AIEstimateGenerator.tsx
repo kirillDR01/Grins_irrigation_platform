@@ -25,7 +25,7 @@ export function AIEstimateGenerator({
 }: AIEstimateGeneratorProps) {
   if (isLoading) {
     return (
-      <Card data-testid="ai-estimate-generator">
+      <Card data-testid="ai-estimate-generator-loading">
         <CardContent className="p-6">
           <div className="flex items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
@@ -38,7 +38,7 @@ export function AIEstimateGenerator({
 
   if (error) {
     return (
-      <Card data-testid="ai-estimate-generator">
+      <Card data-testid="ai-estimate-generator-error">
         <CardContent className="p-6">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
