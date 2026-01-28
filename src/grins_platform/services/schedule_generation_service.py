@@ -108,8 +108,7 @@ class ScheduleGenerationService(LoggerMixin):
         # Convert to schedule domain objects
         schedule_jobs = [self._job_to_schedule_job(j) for j in jobs]
         schedule_staff = [
-            self._staff_to_schedule_staff(s, a)
-            for s, a in staff_with_availability
+            self._staff_to_schedule_staff(s, a) for s, a in staff_with_availability
         ]
 
         # Run solver
@@ -121,7 +120,11 @@ class ScheduleGenerationService(LoggerMixin):
 
         # Build response
         response = self._build_response(
-            schedule_date, solution, time_slots, jobs, start_time,
+            schedule_date,
+            solution,
+            time_slots,
+            jobs,
+            start_time,
         )
 
         self.log_completed(
@@ -325,46 +328,46 @@ class ScheduleGenerationService(LoggerMixin):
 
             for slot in slots:
                 loc = slot.job.location
-                job_assignments.append(ScheduleJobAssignment(
-                    job_id=slot.job.id,
-                    customer_name=slot.job.customer_name,
-                    address=loc.address,
-                    city=loc.city,
-                    latitude=float(loc.latitude) if loc.latitude else None,
-                    longitude=float(loc.longitude) if loc.longitude else None,
-                    service_type=slot.job.service_type,
-                    start_time=slot.start_time,
-                    end_time=slot.end_time,
-                    duration_minutes=slot.job.duration_minutes,
-                    travel_time_minutes=slot.travel_time_from_previous,
-                    sequence_index=slot.sequence_index,
-                ))
+                job_assignments.append(
+                    ScheduleJobAssignment(
+                        job_id=slot.job.id,
+                        customer_name=slot.job.customer_name,
+                        address=loc.address,
+                        city=loc.city,
+                        latitude=float(loc.latitude) if loc.latitude else None,
+                        longitude=float(loc.longitude) if loc.longitude else None,
+                        service_type=slot.job.service_type,
+                        start_time=slot.start_time,
+                        end_time=slot.end_time,
+                        duration_minutes=slot.job.duration_minutes,
+                        travel_time_minutes=slot.travel_time_from_previous,
+                        sequence_index=slot.sequence_index,
+                    ),
+                )
                 staff_travel += slot.travel_time_from_previous
 
             if job_assignments:
                 start_loc = assignment.staff.start_location
                 start_lat = float(start_loc.latitude) if start_loc.latitude else None
                 start_lng = float(start_loc.longitude) if start_loc.longitude else None
-                assignments.append(ScheduleStaffAssignment(
-                    staff_id=assignment.staff.id,
-                    staff_name=assignment.staff.name,
-                    start_lat=start_lat,
-                    start_lng=start_lng,
-                    jobs=job_assignments,
-                    total_jobs=len(job_assignments),
-                    total_travel_minutes=staff_travel,
-                    first_job_start=job_assignments[0].start_time,
-                    last_job_end=job_assignments[-1].end_time,
-                ))
+                assignments.append(
+                    ScheduleStaffAssignment(
+                        staff_id=assignment.staff.id,
+                        staff_name=assignment.staff.name,
+                        start_lat=start_lat,
+                        start_lng=start_lng,
+                        jobs=job_assignments,
+                        total_jobs=len(job_assignments),
+                        total_travel_minutes=staff_travel,
+                        first_job_start=job_assignments[0].start_time,
+                        last_job_end=job_assignments[-1].end_time,
+                    ),
+                )
                 total_travel += staff_travel
 
         # Build unassigned jobs list
         unassigned: list[UnassignedJob] = []
-        assigned_ids = {
-            slot.job.id
-            for slots in time_slots.values()
-            for slot in slots
-        }
+        assigned_ids = {slot.job.id for slots in time_slots.values() for slot in slots}
 
         unassigned.extend(
             UnassignedJob(
@@ -452,8 +455,7 @@ class ScheduleGenerationService(LoggerMixin):
         # Convert to schedule domain objects
         schedule_jobs = [self._job_to_schedule_job(j) for j in existing_jobs]
         schedule_staff = [
-            self._staff_to_schedule_staff(s, a)
-            for s, a in staff_with_availability
+            self._staff_to_schedule_staff(s, a) for s, a in staff_with_availability
         ]
 
         # Re-optimize with emergency job having high priority

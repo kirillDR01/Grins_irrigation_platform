@@ -74,7 +74,9 @@ class TestAuditProperty:
 
         assert result is not None
         service.audit_repo.update_decision.assert_called_once_with(
-            audit_id, decision, user_id,
+            audit_id,
+            decision,
+            user_id,
         )
 
     async def test_decision_not_found_returns_none(self) -> None:
@@ -84,7 +86,9 @@ class TestAuditProperty:
         service.audit_repo.update_decision = AsyncMock(return_value=None)
 
         result = await service.record_decision(
-            uuid4(), UserDecision.APPROVED, uuid4(),
+            uuid4(),
+            UserDecision.APPROVED,
+            uuid4(),
         )
 
         assert result is None

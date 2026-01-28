@@ -254,8 +254,8 @@ class DashboardService(LoggerMixin):
         """
         self.log_started("get_payment_status")
 
-        # TODO: Implement when invoice repository is available
-        # For now, return placeholder data
+        # NOTE: Invoice functionality is planned for a future phase
+        # Returning placeholder data until invoice repository is implemented
         overview = PaymentStatusOverview(
             total_invoices=0,
             pending_invoices=0,

@@ -107,7 +107,7 @@ wait_for_service() {
   
   log_info "Waiting for $name to be ready..."
   for ((i=1; i<=timeout; i++)); do
-    if curl -s "$url" > /dev/null 2>&1; then
+    if curl -s --max-time 5 "$url" > /dev/null 2>&1; then
       log_success "$name is ready!"
       return 0
     fi
@@ -121,7 +121,10 @@ wait_for_service() {
 count_tasks() {
   local spec_dir=$1
   local pattern=$2
-  grep -c "$pattern" "$spec_dir/tasks.md" 2>/dev/null || echo "0"
+  local count
+  count=$(grep -c "$pattern" "$spec_dir/tasks.md" 2>/dev/null || echo "0")
+  # Ensure we return a clean decimal number (strip leading zeros, handle empty)
+  echo "$((count + 0))"
 }
 
 # Rotate log file if it exceeds max size
@@ -395,7 +398,7 @@ verify_services() {
   local all_ok=true
   
   # Check backend
-  if curl -s "http://localhost:$BACKEND_PORT/health" > /dev/null 2>&1; then
+  if curl -s --max-time 10 "http://localhost:$BACKEND_PORT/health" > /dev/null 2>&1; then
     log_success "Backend: ✅ Running"
   else
     log_error "Backend: ❌ Not responding"
@@ -403,7 +406,7 @@ verify_services() {
   fi
   
   # Check frontend
-  if curl -s "http://localhost:$FRONTEND_PORT" > /dev/null 2>&1; then
+  if curl -s --max-time 5 "http://localhost:$FRONTEND_PORT" > /dev/null 2>&1; then
     log_success "Frontend: ✅ Running"
   else
     log_error "Frontend: ❌ Not responding"
@@ -605,12 +608,12 @@ Execute now.\""
 
 check_server_health() {
   # Quick health check - restart if needed
-  if ! curl -s "http://localhost:$BACKEND_PORT/health" > /dev/null 2>&1; then
+  if ! curl -s --max-time 10 "http://localhost:$BACKEND_PORT/health" > /dev/null 2>&1; then
     log_warning "Backend not responding, attempting restart..."
     start_backend
   fi
   
-  if ! curl -s "http://localhost:$FRONTEND_PORT" > /dev/null 2>&1; then
+  if ! curl -s --max-time 5 "http://localhost:$FRONTEND_PORT" > /dev/null 2>&1; then
     log_warning "Frontend not responding, attempting restart..."
     start_frontend
   fi

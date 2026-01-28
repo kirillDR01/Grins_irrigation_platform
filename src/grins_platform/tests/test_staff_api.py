@@ -89,8 +89,11 @@ class TestCreateStaff:
     """Tests for POST /api/v1/staff endpoint."""
 
     def test_create_staff_success(
-        self, client: TestClient, mock_staff_service: AsyncMock,
-        mock_staff_model: Mock, sample_staff_data: dict[str, Any],
+        self,
+        client: TestClient,
+        mock_staff_service: AsyncMock,
+        mock_staff_model: Mock,
+        sample_staff_data: dict[str, Any],
     ) -> None:
         """Test successful staff creation returns 201."""
         mock_staff_service.create_staff.return_value = mock_staff_model
@@ -101,7 +104,9 @@ class TestCreateStaff:
         mock_staff_service.create_staff.assert_called_once()
 
     def test_create_staff_minimal_data(
-        self, client: TestClient, mock_staff_service: AsyncMock,
+        self,
+        client: TestClient,
+        mock_staff_service: AsyncMock,
         mock_staff_model: Mock,
     ) -> None:
         """Test staff creation with minimal required fields."""
@@ -128,7 +133,9 @@ class TestGetStaff:
     """Tests for GET /api/v1/staff/{id} endpoint."""
 
     def test_get_staff_success(
-        self, client: TestClient, mock_staff_service: AsyncMock,
+        self,
+        client: TestClient,
+        mock_staff_service: AsyncMock,
         mock_staff_model: Mock,
     ) -> None:
         """Test successful staff retrieval returns 200."""
@@ -138,7 +145,9 @@ class TestGetStaff:
         assert response.json()["id"] == str(mock_staff_model.id)
 
     def test_get_staff_not_found(
-        self, client: TestClient, mock_staff_service: AsyncMock,
+        self,
+        client: TestClient,
+        mock_staff_service: AsyncMock,
     ) -> None:
         """Test staff not found returns 404."""
         staff_id = uuid4()
@@ -152,7 +161,9 @@ class TestUpdateStaff:
     """Tests for PUT /api/v1/staff/{id} endpoint."""
 
     def test_update_staff_success(
-        self, client: TestClient, mock_staff_service: AsyncMock,
+        self,
+        client: TestClient,
+        mock_staff_service: AsyncMock,
         mock_staff_model: Mock,
     ) -> None:
         """Test successful staff update returns 200."""
@@ -165,7 +176,9 @@ class TestUpdateStaff:
         assert response.status_code == status.HTTP_200_OK
 
     def test_update_staff_not_found(
-        self, client: TestClient, mock_staff_service: AsyncMock,
+        self,
+        client: TestClient,
+        mock_staff_service: AsyncMock,
     ) -> None:
         """Test update staff not found returns 404."""
         staff_id = uuid4()
@@ -179,7 +192,9 @@ class TestDeleteStaff:
     """Tests for DELETE /api/v1/staff/{id} endpoint."""
 
     def test_delete_staff_success(
-        self, client: TestClient, mock_staff_service: AsyncMock,
+        self,
+        client: TestClient,
+        mock_staff_service: AsyncMock,
     ) -> None:
         """Test successful staff deletion returns 204."""
         staff_id = uuid4()
@@ -188,7 +203,9 @@ class TestDeleteStaff:
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
     def test_delete_staff_not_found(
-        self, client: TestClient, mock_staff_service: AsyncMock,
+        self,
+        client: TestClient,
+        mock_staff_service: AsyncMock,
     ) -> None:
         """Test delete staff not found returns 404."""
         staff_id = uuid4()
@@ -202,7 +219,9 @@ class TestListStaff:
     """Tests for GET /api/v1/staff endpoint."""
 
     def test_list_staff_success(
-        self, client: TestClient, mock_staff_service: AsyncMock,
+        self,
+        client: TestClient,
+        mock_staff_service: AsyncMock,
         mock_staff_model: Mock,
     ) -> None:
         """Test successful staff listing returns 200."""
@@ -214,7 +233,9 @@ class TestListStaff:
         assert len(data["items"]) == 1
 
     def test_list_staff_empty(
-        self, client: TestClient, mock_staff_service: AsyncMock,
+        self,
+        client: TestClient,
+        mock_staff_service: AsyncMock,
     ) -> None:
         """Test empty staff list returns 200 with empty items."""
         mock_staff_service.list_staff.return_value = ([], 0)
@@ -223,7 +244,9 @@ class TestListStaff:
         assert response.json()["total"] == 0
 
     def test_list_staff_filter_by_role(
-        self, client: TestClient, mock_staff_service: AsyncMock,
+        self,
+        client: TestClient,
+        mock_staff_service: AsyncMock,
         mock_staff_model: Mock,
     ) -> None:
         """Test staff listing filtered by role."""
@@ -237,7 +260,9 @@ class TestGetAvailableStaff:
     """Tests for GET /api/v1/staff/available endpoint."""
 
     def test_get_available_staff_success(
-        self, client: TestClient, mock_staff_service: AsyncMock,
+        self,
+        client: TestClient,
+        mock_staff_service: AsyncMock,
         mock_staff_model: Mock,
     ) -> None:
         """Test successful available staff retrieval returns 200."""
@@ -252,7 +277,9 @@ class TestGetStaffByRole:
     """Tests for GET /api/v1/staff/by-role/{role} endpoint."""
 
     def test_get_staff_by_role_tech(
-        self, client: TestClient, mock_staff_service: AsyncMock,
+        self,
+        client: TestClient,
+        mock_staff_service: AsyncMock,
         mock_staff_model: Mock,
     ) -> None:
         """Test get staff by tech role returns 200."""
@@ -267,7 +294,9 @@ class TestUpdateStaffAvailability:
     """Tests for PUT /api/v1/staff/{id}/availability endpoint."""
 
     def test_update_availability_success(
-        self, client: TestClient, mock_staff_service: AsyncMock,
+        self,
+        client: TestClient,
+        mock_staff_service: AsyncMock,
         mock_staff_model: Mock,
     ) -> None:
         """Test successful availability update returns 200."""
@@ -280,7 +309,9 @@ class TestUpdateStaffAvailability:
         assert response.status_code == status.HTTP_200_OK
 
     def test_update_availability_not_found(
-        self, client: TestClient, mock_staff_service: AsyncMock,
+        self,
+        client: TestClient,
+        mock_staff_service: AsyncMock,
     ) -> None:
         """Test update availability for non-existent staff returns 404."""
         staff_id = uuid4()

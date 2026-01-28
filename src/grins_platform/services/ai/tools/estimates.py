@@ -62,44 +62,52 @@ class EstimateTools(LoggerMixin):
         subtotal = Decimal("0.00")
 
         # Add service call fee
-        line_items.append({
-            "description": "Service Call",
-            "quantity": 1,
-            "unit_price": float(PRICING["service_call"]),
-            "total": float(PRICING["service_call"]),
-        })
+        line_items.append(
+            {
+                "description": "Service Call",
+                "quantity": 1,
+                "unit_price": float(PRICING["service_call"]),
+                "total": float(PRICING["service_call"]),
+            },
+        )
         subtotal += PRICING["service_call"]
 
         # Add service-specific items
         if service_type == "startup":
             per_zone = PRICING["startup_per_zone"]
             zone_total = per_zone * zone_count
-            line_items.append({
-                "description": f"Spring Startup ({zone_count} zones)",
-                "quantity": zone_count,
-                "unit_price": float(per_zone),
-                "total": float(zone_total),
-            })
+            line_items.append(
+                {
+                    "description": f"Spring Startup ({zone_count} zones)",
+                    "quantity": zone_count,
+                    "unit_price": float(per_zone),
+                    "total": float(zone_total),
+                },
+            )
             subtotal += zone_total
 
         elif service_type == "winterization":
             per_zone = PRICING["winterization_per_zone"]
             zone_total = per_zone * zone_count
-            line_items.append({
-                "description": f"Winterization ({zone_count} zones)",
-                "quantity": zone_count,
-                "unit_price": float(per_zone),
-                "total": float(zone_total),
-            })
+            line_items.append(
+                {
+                    "description": f"Winterization ({zone_count} zones)",
+                    "quantity": zone_count,
+                    "unit_price": float(per_zone),
+                    "total": float(zone_total),
+                },
+            )
             subtotal += zone_total
 
         elif service_type == "diagnostic":
-            line_items.append({
-                "description": "Diagnostic Fee (first hour)",
-                "quantity": 1,
-                "unit_price": float(PRICING["diagnostic_fee"]),
-                "total": float(PRICING["diagnostic_fee"]),
-            })
+            line_items.append(
+                {
+                    "description": "Diagnostic Fee (first hour)",
+                    "quantity": 1,
+                    "unit_price": float(PRICING["diagnostic_fee"]),
+                    "total": float(PRICING["diagnostic_fee"]),
+                },
+            )
             subtotal += PRICING["diagnostic_fee"]
 
         # Add additional items
@@ -108,12 +116,14 @@ class EstimateTools(LoggerMixin):
                 qty = item.get("quantity", 1)
                 unit_price = Decimal(str(item.get("unit_price", 0)))
                 item_total = unit_price * qty
-                line_items.append({
-                    "description": item.get("description", "Additional item"),
-                    "quantity": qty,
-                    "unit_price": float(item.get("unit_price", 0)),
-                    "total": float(item_total),
-                })
+                line_items.append(
+                    {
+                        "description": item.get("description", "Additional item"),
+                        "quantity": qty,
+                        "unit_price": float(item.get("unit_price", 0)),
+                        "total": float(item_total),
+                    },
+                )
                 subtotal += item_total
 
         # Calculate total

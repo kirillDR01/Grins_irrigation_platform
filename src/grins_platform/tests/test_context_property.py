@@ -30,7 +30,8 @@ class TestContextBuilderProperty:
     )
     @settings(max_examples=20)
     async def test_scheduling_context_has_required_fields(
-        self, days_offset: int,
+        self,
+        days_offset: int,
     ) -> None:
         """Property: Scheduling context always has required fields."""
         mock_session = AsyncMock()
@@ -51,7 +52,8 @@ class TestContextBuilderProperty:
     )
     @settings(max_examples=20)
     async def test_categorization_context_has_required_fields(
-        self, description: str,
+        self,
+        description: str,
     ) -> None:
         """Property: Categorization context always has required fields."""
         mock_session = AsyncMock()
@@ -72,14 +74,16 @@ class TestContextBuilderProperty:
     )
     @settings(max_examples=10)
     async def test_communication_context_has_required_fields(
-        self, message_type: str,
+        self,
+        message_type: str,
     ) -> None:
         """Property: Communication context always has required fields."""
         mock_session = AsyncMock()
         builder = ContextBuilder(mock_session)
 
         context = await builder.build_communication_context(
-            uuid4(), message_type,
+            uuid4(),
+            message_type,
         )
 
         assert "customer_id" in context

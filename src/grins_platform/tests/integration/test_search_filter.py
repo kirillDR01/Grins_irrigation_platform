@@ -212,7 +212,8 @@ class TestPaginationWithLargeDatasets:
         )
 
         response = client.get(
-            "/api/v1/customers", params={"page": 10, "page_size": 20},
+            "/api/v1/customers",
+            params={"page": 10, "page_size": 20},
         )
 
         assert response.status_code == 200
@@ -327,7 +328,8 @@ class TestFilterCombinations:
         )
 
         response = client.get(
-            "/api/v1/customers", params={"city": "Eden Prairie"},
+            "/api/v1/customers",
+            params={"city": "Eden Prairie"},
         )
 
         assert response.status_code == 200
@@ -346,9 +348,7 @@ class TestFilterCombinations:
 
         Validates: Requirement 4.3
         """
-        customers = [
-            customer_factory(status=CustomerStatus.ACTIVE) for _ in range(5)
-        ]
+        customers = [customer_factory(status=CustomerStatus.ACTIVE) for _ in range(5)]
         mock_service.list_customers.return_value = PaginatedCustomerResponse(
             items=customers,
             total=5,
@@ -373,9 +373,7 @@ class TestFilterCombinations:
 
         Validates: Requirement 4.3
         """
-        customers = [
-            customer_factory(status=CustomerStatus.INACTIVE) for _ in range(2)
-        ]
+        customers = [customer_factory(status=CustomerStatus.INACTIVE) for _ in range(2)]
         mock_service.list_customers.return_value = PaginatedCustomerResponse(
             items=customers,
             total=2,
@@ -517,9 +515,7 @@ class TestFilterCombinations:
 
         Validates: Requirement 4.5
         """
-        customers = [
-            customer_factory(status=CustomerStatus.ACTIVE) for _ in range(2)
-        ]
+        customers = [customer_factory(status=CustomerStatus.ACTIVE) for _ in range(2)]
         mock_service.list_customers.return_value = PaginatedCustomerResponse(
             items=customers,
             total=2,
@@ -688,7 +684,8 @@ class TestSearchFunctionality:
         )
 
         response = client.get(
-            "/api/v1/customers", params={"search": "john.doe@example.com"},
+            "/api/v1/customers",
+            params={"search": "john.doe@example.com"},
         )
 
         assert response.status_code == 200
@@ -809,7 +806,8 @@ class TestSearchFunctionality:
         )
 
         response = client.get(
-            "/api/v1/customers", params={"search": "NonExistentName"},
+            "/api/v1/customers",
+            params={"search": "NonExistentName"},
         )
 
         assert response.status_code == 200
@@ -917,7 +915,8 @@ class TestSortingOptions:
         )
 
         response = client.get(
-            "/api/v1/customers", params={"sort_by": "first_name", "sort_order": "asc"},
+            "/api/v1/customers",
+            params={"sort_by": "first_name", "sort_order": "asc"},
         )
 
         assert response.status_code == 200
@@ -945,7 +944,8 @@ class TestSortingOptions:
         )
 
         response = client.get(
-            "/api/v1/customers", params={"sort_by": "created_at", "sort_order": "asc"},
+            "/api/v1/customers",
+            params={"sort_by": "created_at", "sort_order": "asc"},
         )
 
         assert response.status_code == 200
@@ -974,7 +974,8 @@ class TestSortingOptions:
         )
 
         response = client.get(
-            "/api/v1/customers", params={"sort_by": "created_at", "sort_order": "desc"},
+            "/api/v1/customers",
+            params={"sort_by": "created_at", "sort_order": "desc"},
         )
 
         assert response.status_code == 200
@@ -1006,7 +1007,8 @@ class TestSortingOptions:
         )
 
         response = client.get(
-            "/api/v1/customers", params={"sort_by": "status", "sort_order": "asc"},
+            "/api/v1/customers",
+            params={"sort_by": "status", "sort_order": "asc"},
         )
 
         assert response.status_code == 200
@@ -1109,7 +1111,8 @@ class TestSortingOptions:
         Validates: Requirement 4.7
         """
         response = client.get(
-            "/api/v1/customers", params={"sort_order": "invalid"},
+            "/api/v1/customers",
+            params={"sort_order": "invalid"},
         )
 
         assert response.status_code == 422
@@ -1200,7 +1203,8 @@ class TestComplexSearchFilterScenarios:
         )
 
         response = client.get(
-            "/api/v1/customers", params={"page": 5, "page_size": 20},
+            "/api/v1/customers",
+            params={"page": 5, "page_size": 20},
         )
 
         assert response.status_code == 200

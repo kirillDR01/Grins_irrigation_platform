@@ -22,7 +22,8 @@ class TestQueryTools:
         return QueryTools(mock_session)
 
     async def test_query_customers_no_filters(
-        self, query_tools: QueryTools,
+        self,
+        query_tools: QueryTools,
     ) -> None:
         """Test querying customers without filters."""
         result = await query_tools.query_customers()
@@ -34,7 +35,8 @@ class TestQueryTools:
         assert result["filters_applied"] == {}
 
     async def test_query_customers_with_filters(
-        self, query_tools: QueryTools,
+        self,
+        query_tools: QueryTools,
     ) -> None:
         """Test querying customers with filters."""
         filters = {"city": "Eden Prairie", "status": "active"}
@@ -44,7 +46,8 @@ class TestQueryTools:
         assert isinstance(result["customers"], list)
 
     async def test_query_customers_respects_limit(
-        self, query_tools: QueryTools,
+        self,
+        query_tools: QueryTools,
     ) -> None:
         """Test that query respects limit parameter."""
         result = await query_tools.query_customers(limit=5)
@@ -54,7 +57,8 @@ class TestQueryTools:
         assert len(result["customers"]) <= 5
 
     async def test_query_jobs_no_filters(
-        self, query_tools: QueryTools,
+        self,
+        query_tools: QueryTools,
     ) -> None:
         """Test querying jobs without filters."""
         result = await query_tools.query_jobs()
@@ -66,7 +70,8 @@ class TestQueryTools:
         assert isinstance(result["jobs"], list)
 
     async def test_query_jobs_with_date_range(
-        self, query_tools: QueryTools,
+        self,
+        query_tools: QueryTools,
     ) -> None:
         """Test querying jobs with date range."""
         start_date = date(2024, 1, 1)
@@ -79,7 +84,8 @@ class TestQueryTools:
         assert result["date_range"]["end"] == "2024-01-31"
 
     async def test_query_jobs_with_filters(
-        self, query_tools: QueryTools,
+        self,
+        query_tools: QueryTools,
     ) -> None:
         """Test querying jobs with filters."""
         filters = {"status": "scheduled", "type": "startup"}
@@ -88,7 +94,8 @@ class TestQueryTools:
         assert result["filters_applied"] == filters
 
     async def test_query_revenue_default_date_range(
-        self, query_tools: QueryTools,
+        self,
+        query_tools: QueryTools,
     ) -> None:
         """Test querying revenue with default date range (last 30 days)."""
         result = await query_tools.query_revenue()
@@ -106,7 +113,8 @@ class TestQueryTools:
         assert result["date_range"]["end"] == end_date.isoformat()
 
     async def test_query_revenue_custom_date_range(
-        self, query_tools: QueryTools,
+        self,
+        query_tools: QueryTools,
     ) -> None:
         """Test querying revenue with custom date range."""
         start_date = date(2024, 1, 1)
@@ -119,7 +127,8 @@ class TestQueryTools:
         assert result["date_range"]["end"] == "2024-03-31"
 
     async def test_query_revenue_group_by_week(
-        self, query_tools: QueryTools,
+        self,
+        query_tools: QueryTools,
     ) -> None:
         """Test querying revenue grouped by week."""
         result = await query_tools.query_revenue(group_by="week")
@@ -127,7 +136,8 @@ class TestQueryTools:
         assert result["group_by"] == "week"
 
     async def test_query_revenue_group_by_month(
-        self, query_tools: QueryTools,
+        self,
+        query_tools: QueryTools,
     ) -> None:
         """Test querying revenue grouped by month."""
         result = await query_tools.query_revenue(group_by="month")
@@ -135,7 +145,8 @@ class TestQueryTools:
         assert result["group_by"] == "month"
 
     async def test_query_staff_without_availability(
-        self, query_tools: QueryTools,
+        self,
+        query_tools: QueryTools,
     ) -> None:
         """Test querying staff without availability."""
         result = await query_tools.query_staff()
@@ -146,7 +157,8 @@ class TestQueryTools:
         assert result["include_availability"] is False
 
     async def test_query_staff_with_availability(
-        self, query_tools: QueryTools,
+        self,
+        query_tools: QueryTools,
     ) -> None:
         """Test querying staff with availability."""
         result = await query_tools.query_staff(include_availability=True)
@@ -154,7 +166,9 @@ class TestQueryTools:
         assert result["include_availability"] is True
 
     async def test_query_tools_logging(
-        self, query_tools: QueryTools, caplog: pytest.LogCaptureFixture,
+        self,
+        query_tools: QueryTools,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Test that query tools log operations."""
         await query_tools.query_customers()
@@ -163,7 +177,8 @@ class TestQueryTools:
         assert any("query_customers" in record.message for record in caplog.records)
 
     async def test_query_customers_empty_result_structure(
-        self, query_tools: QueryTools,
+        self,
+        query_tools: QueryTools,
     ) -> None:
         """Test that empty results have correct structure."""
         result = await query_tools.query_customers()
@@ -173,7 +188,8 @@ class TestQueryTools:
         assert isinstance(result["filters_applied"], dict)
 
     async def test_query_jobs_empty_result_structure(
-        self, query_tools: QueryTools,
+        self,
+        query_tools: QueryTools,
     ) -> None:
         """Test that empty job results have correct structure."""
         result = await query_tools.query_jobs()
@@ -184,7 +200,8 @@ class TestQueryTools:
         assert result["date_range"]["end"] is None
 
     async def test_query_revenue_structure(
-        self, query_tools: QueryTools,
+        self,
+        query_tools: QueryTools,
     ) -> None:
         """Test revenue query result structure."""
         result = await query_tools.query_revenue()
@@ -194,7 +211,8 @@ class TestQueryTools:
         assert isinstance(result["breakdown"], list)
 
     async def test_query_staff_empty_result_structure(
-        self, query_tools: QueryTools,
+        self,
+        query_tools: QueryTools,
     ) -> None:
         """Test that empty staff results have correct structure."""
         result = await query_tools.query_staff()

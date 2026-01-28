@@ -270,7 +270,6 @@ class AppointmentService(LoggerMixin):
         self.log_completed("cancel_appointment", appointment_id=str(appointment_id))
         return updated  # type: ignore[return-value]
 
-
     async def list_appointments(
         self,
         page: int = 1,

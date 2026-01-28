@@ -234,7 +234,7 @@ class ContextBuilder(LoggerMixin):
             .group_by(Job.status)
         )
         job_status_result = await self.session.execute(job_status_stmt)
-        jobs_by_status = dict(job_status_result.all())
+        jobs_by_status: dict[str, int] = dict(job_status_result.all())  # type: ignore[arg-type]
 
         # Count today's appointments
         today_appointments_stmt = (
@@ -252,7 +252,7 @@ class ContextBuilder(LoggerMixin):
             .group_by(Appointment.status)
         )
         today_status_result = await self.session.execute(today_status_stmt)
-        today_by_status = dict(today_status_result.all())
+        today_by_status: dict[str, int] = dict(today_status_result.all())  # type: ignore[arg-type]
 
         # Count appointments in date range
         range_appointments_stmt = (
@@ -266,9 +266,7 @@ class ContextBuilder(LoggerMixin):
 
         # Count staff
         staff_count_stmt = (
-            select(func.count())
-            .select_from(Staff)
-            .where(Staff.is_active == True)  # noqa: E712
+            select(func.count()).select_from(Staff).where(Staff.is_active == True)  # noqa: E712
         )
         staff_result = await self.session.execute(staff_count_stmt)
         total_staff = staff_result.scalar() or 0
@@ -310,8 +308,8 @@ class ContextBuilder(LoggerMixin):
             "jobs": {
                 "by_status": jobs_by_status,
                 "total_pending": (
-                    jobs_by_status.get("requested", 0) +
-                    jobs_by_status.get("approved", 0)
+                    jobs_by_status.get("requested", 0)
+                    + jobs_by_status.get("approved", 0)
                 ),
                 "total_scheduled": jobs_by_status.get("scheduled", 0),
                 "total_completed": jobs_by_status.get("completed", 0),

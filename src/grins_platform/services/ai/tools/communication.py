@@ -91,15 +91,19 @@ class CommunicationTools(LoggerMixin):
         }
 
         if appointment_data:
-            context.update({
-                "date": appointment_data.get("date", "TBD"),
-                "time_window": appointment_data.get("time_window", "TBD"),
-                "service_type": appointment_data.get("service_type", "service"),
-                "tech_name": appointment_data.get("tech_name", "our technician"),
-                "eta": appointment_data.get("eta", "30"),
-                "work_summary": appointment_data.get("work_summary", "Work completed"),
-                "amount": appointment_data.get("amount", "0.00"),
-            })
+            context.update(
+                {
+                    "date": appointment_data.get("date", "TBD"),
+                    "time_window": appointment_data.get("time_window", "TBD"),
+                    "service_type": appointment_data.get("service_type", "service"),
+                    "tech_name": appointment_data.get("tech_name", "our technician"),
+                    "eta": appointment_data.get("eta", "30"),
+                    "work_summary": appointment_data.get(
+                        "work_summary", "Work completed",
+                    ),
+                    "amount": appointment_data.get("amount", "0.00"),
+                },
+            )
 
         # Add default values for optional fields
         context.setdefault("review_link", "https://g.page/grins-irrigation")

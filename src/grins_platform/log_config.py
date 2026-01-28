@@ -22,7 +22,8 @@ import structlog
 
 # Context variable for request ID correlation
 request_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
-    "request_id", default=None,
+    "request_id",
+    default=None,
 )
 
 
@@ -45,7 +46,9 @@ def add_timestamp(
 ) -> dict[str, Any]:
     """Add ISO timestamp to log entries."""
     event_dict["timestamp"] = structlog.stdlib.add_log_level(
-        logger, method_name, event_dict,
+        logger,
+        method_name,
+        event_dict,
     )
     return event_dict
 
@@ -86,7 +89,8 @@ def configure_logging(
         # Human-readable output for development
         processors.append(
             structlog.dev.ConsoleRenderer(  # pyright: ignore[reportArgumentType]
-                colors=True, exception_formatter=structlog.dev.plain_traceback,
+                colors=True,
+                exception_formatter=structlog.dev.plain_traceback,
             ),
         )
 
@@ -198,7 +202,10 @@ class LoggerMixin:
         self.logger.info(event, **kwargs)
 
     def log_failed(
-        self, action: str, error: Optional[Exception] = None, **kwargs: Any,
+        self,
+        action: str,
+        error: Optional[Exception] = None,
+        **kwargs: Any,
     ) -> None:
         """Log action failed event."""
         domain = getattr(self, "DOMAIN", "app")

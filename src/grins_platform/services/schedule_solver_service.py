@@ -121,10 +121,7 @@ class ScheduleSolverService(LoggerMixin):
         )
 
         # Create empty assignments for each staff
-        assignments = [
-            ScheduleAssignment(id=uuid4(), staff=s, jobs=[])
-            for s in staff
-        ]
+        assignments = [ScheduleAssignment(id=uuid4(), staff=s, jobs=[]) for s in staff]
 
         # Track remaining capacity per staff
         staff_remaining: dict[UUID, int] = {
@@ -226,7 +223,8 @@ class ScheduleSolverService(LoggerMixin):
 
             for job in jobs:
                 distance = haversine_travel_minutes(
-                    current_lat, current_lng,
+                    current_lat,
+                    current_lng,
                     float(job.location.latitude),
                     float(job.location.longitude),
                 )
@@ -289,7 +287,8 @@ class ScheduleSolverService(LoggerMixin):
                 if len(assignment.jobs) >= 2:
                     i, j = random.sample(range(len(assignment.jobs)), 2)
                     assignment.jobs[i], assignment.jobs[j] = (
-                        assignment.jobs[j], assignment.jobs[i],
+                        assignment.jobs[j],
+                        assignment.jobs[i],
                     )
                     break
 
@@ -306,8 +305,9 @@ class ScheduleSolverService(LoggerMixin):
                 i = random.randrange(len(a1.jobs))  # noqa: S311
                 j = random.randrange(len(a2.jobs))  # noqa: S311
                 # Check equipment compatibility
-                if (a1.staff.has_equipment(a2.jobs[j].equipment_required) and
-                    a2.staff.has_equipment(a1.jobs[i].equipment_required)):
+                if a1.staff.has_equipment(
+                    a2.jobs[j].equipment_required,
+                ) and a2.staff.has_equipment(a1.jobs[i].equipment_required):
                     a1.jobs[i], a2.jobs[j] = a2.jobs[j], a1.jobs[i]
 
         else:  # move
@@ -320,7 +320,8 @@ class ScheduleSolverService(LoggerMixin):
 
                 # Find valid target
                 valid_targets = [
-                    a for a in new_assignments
+                    a
+                    for a in new_assignments
                     if a != source and a.staff.has_equipment(job.equipment_required)
                 ]
                 if valid_targets:

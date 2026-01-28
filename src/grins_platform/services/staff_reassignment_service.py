@@ -93,10 +93,12 @@ class StaffReassignmentService(LoggerMixin):
             .filter(
                 Appointment.staff_id == staff_id,
                 Appointment.scheduled_date == target_date,
-                Appointment.status.notin_([
-                    AppointmentStatus.CANCELLED.value,
-                    AppointmentStatus.COMPLETED.value,
-                ]),
+                Appointment.status.notin_(
+                    [
+                        AppointmentStatus.CANCELLED.value,
+                        AppointmentStatus.COMPLETED.value,
+                    ],
+                ),
             )
             .count()
         )
@@ -148,10 +150,12 @@ class StaffReassignmentService(LoggerMixin):
             .filter(
                 Appointment.staff_id == original_staff_id,
                 Appointment.scheduled_date == target_date,
-                Appointment.status.notin_([
-                    AppointmentStatus.CANCELLED.value,
-                    AppointmentStatus.COMPLETED.value,
-                ]),
+                Appointment.status.notin_(
+                    [
+                        AppointmentStatus.CANCELLED.value,
+                        AppointmentStatus.COMPLETED.value,
+                    ],
+                ),
             )
             .all()
         )
@@ -209,10 +213,12 @@ class StaffReassignmentService(LoggerMixin):
         # Get jobs that need coverage
         jobs_query = self.db.query(Appointment).filter(
             Appointment.scheduled_date == target_date,
-            Appointment.status.notin_([
-                AppointmentStatus.CANCELLED.value,
-                AppointmentStatus.COMPLETED.value,
-            ]),
+            Appointment.status.notin_(
+                [
+                    AppointmentStatus.CANCELLED.value,
+                    AppointmentStatus.COMPLETED.value,
+                ],
+            ),
         )
         if exclude_staff_id:
             jobs_query = jobs_query.filter(Appointment.staff_id == exclude_staff_id)
@@ -241,10 +247,12 @@ class StaffReassignmentService(LoggerMixin):
                 .filter(
                     Appointment.staff_id == staff.id,
                     Appointment.scheduled_date == target_date,
-                    Appointment.status.notin_([
-                        AppointmentStatus.CANCELLED.value,
-                        AppointmentStatus.COMPLETED.value,
-                    ]),
+                    Appointment.status.notin_(
+                        [
+                            AppointmentStatus.CANCELLED.value,
+                            AppointmentStatus.COMPLETED.value,
+                        ],
+                    ),
                 )
                 .all()
             )
@@ -264,12 +272,10 @@ class StaffReassignmentService(LoggerMixin):
 
             if availability:
                 start_mins = (
-                    availability.start_time.hour * 60
-                    + availability.start_time.minute
+                    availability.start_time.hour * 60 + availability.start_time.minute
                 )
                 end_mins = (
-                    availability.end_time.hour * 60
-                    + availability.end_time.minute
+                    availability.end_time.hour * 60 + availability.end_time.minute
                 )
                 total_capacity = end_mins - start_mins
                 available_capacity = total_capacity - current_duration

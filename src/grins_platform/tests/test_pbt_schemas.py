@@ -64,7 +64,8 @@ class TestPhoneNormalizationPBT:
     )
     @settings(max_examples=100)
     def test_normalize_idempotence_11_digit_with_country_code(
-        self, phone_suffix: str,
+        self,
+        phone_suffix: str,
     ) -> None:
         """Test idempotence for 11-digit phones starting with country code 1.
 
@@ -115,7 +116,9 @@ class TestPhoneNormalizationPBT:
     )
     @settings(max_examples=100)
     def test_normalize_idempotence_with_formatting(
-        self, digits: str, separators: list[str],
+        self,
+        digits: str,
+        separators: list[str],
     ) -> None:
         """Test idempotence with various formatting characters.
 
@@ -154,7 +157,9 @@ class TestPhoneNormalizationPBT:
     )
     @settings(max_examples=200)
     def test_normalize_idempotence_mixed_format(
-        self, digits: str, insertions: list[tuple[int, str]],
+        self,
+        digits: str,
+        insertions: list[tuple[int, str]],
     ) -> None:
         """Test idempotence with mixed format phone strings.
 

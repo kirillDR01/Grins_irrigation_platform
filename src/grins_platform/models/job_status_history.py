@@ -41,7 +41,8 @@ class JobStatusHistory(Base):
 
     # Primary key
     id: Mapped[UUID] = mapped_column(
-        primary_key=True, server_default=func.gen_random_uuid(),
+        primary_key=True,
+        server_default=func.gen_random_uuid(),
     )
 
     # Foreign key to job (Requirement 7.1)

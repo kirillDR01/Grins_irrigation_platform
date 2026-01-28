@@ -192,9 +192,7 @@ class Appointment(Base):
         start_minutes: int = (
             self.time_window_start.hour * 60 + self.time_window_start.minute
         )
-        end_minutes: int = (
-            self.time_window_end.hour * 60 + self.time_window_end.minute
-        )
+        end_minutes: int = self.time_window_end.hour * 60 + self.time_window_end.minute
         return end_minutes - start_minutes
 
     def to_dict(self) -> dict[str, Any]:

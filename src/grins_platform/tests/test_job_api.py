@@ -142,7 +142,8 @@ class TestCreateJob:
         property_id = uuid4()
         customer_id = uuid4()
         mock_job_service.create_job.side_effect = PropertyCustomerMismatchError(
-            property_id, customer_id,
+            property_id,
+            customer_id,
         )
 
         response = client.post(
@@ -334,7 +335,8 @@ class TestUpdateJobStatus:
         """Test status update with invalid transition."""
         job_id = uuid4()
         mock_job_service.update_status.side_effect = InvalidStatusTransitionError(
-            JobStatus.REQUESTED, JobStatus.COMPLETED,
+            JobStatus.REQUESTED,
+            JobStatus.COMPLETED,
         )
 
         response = client.put(
@@ -466,7 +468,10 @@ class TestCalculatePrice:
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_calculate_price_requires_manual_quote(
-        self, client, mock_job, mock_job_service,
+        self,
+        client,
+        mock_job,
+        mock_job_service,
     ):
         """Test price calculation requiring manual quote."""
         mock_job_service.calculate_price.return_value = {

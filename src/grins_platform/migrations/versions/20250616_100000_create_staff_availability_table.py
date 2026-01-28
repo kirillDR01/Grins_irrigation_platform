@@ -95,7 +95,9 @@ def upgrade() -> None:
         ),
         # Unique constraint on (staff_id, date)
         sa.UniqueConstraint(
-            "staff_id", "date", name="uq_staff_availability_staff_date",
+            "staff_id",
+            "date",
+            name="uq_staff_availability_staff_date",
         ),
         # Check constraint: start_time < end_time
         sa.CheckConstraint(
@@ -141,10 +143,12 @@ def downgrade() -> None:
     """Drop staff_availability table and all indexes."""
     # Drop indexes first
     op.drop_index(
-        "idx_staff_availability_date_available", table_name="staff_availability",
+        "idx_staff_availability_date_available",
+        table_name="staff_availability",
     )
     op.drop_index(
-        "idx_staff_availability_staff_date", table_name="staff_availability",
+        "idx_staff_availability_staff_date",
+        table_name="staff_availability",
     )
     op.drop_index("idx_staff_availability_date", table_name="staff_availability")
     op.drop_index("idx_staff_availability_staff_id", table_name="staff_availability")

@@ -1129,8 +1129,7 @@ class TestSoftDeletePreservationProperty:
 
         # Add properties
         properties = [
-            create_mock_property(customer_id=customer_id)
-            for _ in range(num_properties)
+            create_mock_property(customer_id=customer_id) for _ in range(num_properties)
         ]
         customer.properties = properties
 

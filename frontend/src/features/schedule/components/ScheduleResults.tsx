@@ -25,32 +25,40 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { CheckCircle, XCircle, Clock, MapPin, AlertTriangle } from 'lucide-react';
+import { CheckCircle, XCircle, MapPin, AlertTriangle } from 'lucide-react';
+import { ScheduleExplanationModal } from './ScheduleExplanationModal';
+import { UnassignedJobExplanationCard } from './UnassignedJobExplanationCard';
 import type { ScheduleGenerateResponse } from '../types';
 
 interface ScheduleResultsProps {
   results: ScheduleGenerateResponse;
+  scheduleDate: string;
 }
 
-export function ScheduleResults({ results }: ScheduleResultsProps) {
+export function ScheduleResults({ results, scheduleDate }: ScheduleResultsProps) {
   return (
     <div className="space-y-6" data-testid="schedule-results">
       {/* Summary Card */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            {results.is_feasible ? (
-              <CheckCircle className="h-5 w-5 text-green-600" />
-            ) : (
-              <XCircle className="h-5 w-5 text-red-600" />
-            )}
-            Schedule {results.is_feasible ? 'Generated' : 'Incomplete'}
-          </CardTitle>
-          <CardDescription>
-            {results.is_feasible
-              ? 'All jobs successfully assigned'
-              : 'Some jobs could not be assigned'}
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                {results.is_feasible ? (
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                ) : (
+                  <XCircle className="h-5 w-5 text-red-600" />
+                )}
+                Schedule {results.is_feasible ? 'Generated' : 'Incomplete'}
+              </CardTitle>
+              <CardDescription>
+                {results.is_feasible
+                  ? 'All jobs successfully assigned'
+                  : 'Some jobs could not be assigned'}
+              </CardDescription>
+            </div>
+            <ScheduleExplanationModal results={results} scheduleDate={scheduleDate} />
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -178,14 +186,14 @@ export function ScheduleResults({ results }: ScheduleResultsProps) {
 
       {/* Unassigned Jobs */}
       {results.unassigned_jobs.length > 0 && (
-        <Card className="border-yellow-200">
+        <Card className="border-yellow-200" data-testid="unassigned-jobs-section">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-yellow-800">
               <AlertTriangle className="h-5 w-5" />
               Unassigned Jobs
             </CardTitle>
             <CardDescription>
-              These jobs could not be scheduled
+              These jobs could not be scheduled. Click "Why?" for detailed explanations.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -195,6 +203,7 @@ export function ScheduleResults({ results }: ScheduleResultsProps) {
                   <TableHead>Customer</TableHead>
                   <TableHead>Service Type</TableHead>
                   <TableHead>Reason</TableHead>
+                  <TableHead className="w-24">Details</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -208,6 +217,13 @@ export function ScheduleResults({ results }: ScheduleResultsProps) {
                       <Badge variant="outline">{job.service_type}</Badge>
                     </TableCell>
                     <TableCell className="text-yellow-800">{job.reason}</TableCell>
+                    <TableCell>
+                      <UnassignedJobExplanationCard
+                        job={job}
+                        scheduleDate={scheduleDate}
+                        availableStaff={results.assignments.map((a) => a.staff_name)}
+                      />
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

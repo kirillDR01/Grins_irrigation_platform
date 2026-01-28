@@ -204,7 +204,6 @@ class TestAppointmentJobIntegration:
         assert result.job_id == job_id
         mock_job_repo.get_by_id.assert_called_once_with(job_id)
 
-
     async def test_appointment_creation_with_nonexistent_job_fails(
         self,
         appointment_service: AppointmentService,
@@ -417,7 +416,6 @@ class TestAppointmentStaffIntegration:
         with pytest.raises(StaffNotFoundError):
             await appointment_service.create_appointment(data)
 
-
     async def test_staff_daily_schedule_retrieval(
         self,
         appointment_service: AppointmentService,
@@ -450,11 +448,13 @@ class TestAppointmentStaffIntegration:
         ]
         mock_appointment_repo.get_staff_daily_schedule.return_value = appointments
 
-        result, count, total_minutes = (
-            await appointment_service.get_staff_daily_schedule(
-                staff_id=staff_id,
-                schedule_date=schedule_date,
-            )
+        (
+            result,
+            count,
+            total_minutes,
+        ) = await appointment_service.get_staff_daily_schedule(
+            staff_id=staff_id,
+            schedule_date=schedule_date,
         )
 
         assert len(result) == 2
@@ -508,11 +508,13 @@ class TestAppointmentStaffIntegration:
         ]
         mock_appointment_repo.get_staff_daily_schedule.return_value = appointments
 
-        result, count, total_minutes = (
-            await appointment_service.get_staff_daily_schedule(
-                staff_id=staff_id,
-                schedule_date=schedule_date,
-            )
+        (
+            result,
+            count,
+            total_minutes,
+        ) = await appointment_service.get_staff_daily_schedule(
+            staff_id=staff_id,
+            schedule_date=schedule_date,
         )
 
         assert len(result) == 5
@@ -619,7 +621,6 @@ class TestScheduleQueryIntegration:
 
         assert len(result) == 0
         assert count == 0
-
 
     async def test_weekly_schedule_retrieval(
         self,
@@ -819,7 +820,6 @@ class TestAppointmentStatusWorkflowIntegration:
 
         result = await appointment_service.mark_completed(appointment_id)
         assert result.status == AppointmentStatus.COMPLETED.value
-
 
     async def test_appointment_cancellation_from_scheduled(
         self,
@@ -1035,7 +1035,6 @@ class TestCrossComponentAppointmentIntegration:
         assert len(result) == 2
         assert total == 2
         mock_appointment_repo.list_with_filters.assert_called_once()
-
 
     async def test_update_appointment_with_new_staff(
         self,

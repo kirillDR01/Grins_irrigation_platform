@@ -46,16 +46,18 @@ class TestJobCreationDefaults:
 
     @pytest.mark.unit
     @given(
-        job_type=st.sampled_from([
-            "spring_startup",
-            "summer_tuneup",
-            "winterization",
-            "small_repair",
-            "head_replacement",
-            "new_installation",
-            "diagnostic",
-            "landscaping",
-        ]),
+        job_type=st.sampled_from(
+            [
+                "spring_startup",
+                "summer_tuneup",
+                "winterization",
+                "small_repair",
+                "head_replacement",
+                "new_installation",
+                "diagnostic",
+                "landscaping",
+            ],
+        ),
     )
     @settings(max_examples=50)
     def test_default_status_is_requested(self, job_type: str) -> None:  # noqa: ARG002
@@ -194,17 +196,20 @@ class TestAutoCategorization:
 
     @pytest.mark.unit
     @given(
-        job_type=st.sampled_from([
-            "spring_startup",
-            "summer_tuneup",
-            "winterization",
-            "small_repair",
-            "head_replacement",
-        ]),
+        job_type=st.sampled_from(
+            [
+                "spring_startup",
+                "summer_tuneup",
+                "winterization",
+                "small_repair",
+                "head_replacement",
+            ],
+        ),
     )
     @settings(max_examples=50)
     def test_seasonal_and_small_repairs_ready_to_schedule(
-        self, job_type: str,
+        self,
+        job_type: str,
     ) -> None:
         """
         Feature: field-operations, Property 3: Job Auto-Categorization Correctness
@@ -230,7 +235,8 @@ class TestAutoCategorization:
     )
     @settings(max_examples=50)
     def test_quoted_amount_makes_ready_to_schedule(
-        self, quoted_amount: Decimal,
+        self,
+        quoted_amount: Decimal,
     ) -> None:
         """
         Feature: field-operations, Property 3: Job Auto-Categorization Correctness
@@ -256,23 +262,29 @@ class TestAutoCategorization:
 
     @pytest.mark.unit
     @given(
-        job_type=st.sampled_from([
-            "new_installation",
-            "major_repair",
-            "landscaping",
-            "custom_work",
-        ]),
-        source=st.sampled_from([
-            JobSource.WEBSITE,
-            JobSource.GOOGLE,
-            JobSource.REFERRAL,
-            JobSource.PHONE,
-            None,
-        ]),
+        job_type=st.sampled_from(
+            [
+                "new_installation",
+                "major_repair",
+                "landscaping",
+                "custom_work",
+            ],
+        ),
+        source=st.sampled_from(
+            [
+                JobSource.WEBSITE,
+                JobSource.GOOGLE,
+                JobSource.REFERRAL,
+                JobSource.PHONE,
+                None,
+            ],
+        ),
     )
     @settings(max_examples=50)
     def test_other_jobs_require_estimate(
-        self, job_type: str, source: JobSource | None,
+        self,
+        job_type: str,
+        source: JobSource | None,
     ) -> None:
         """
         Feature: field-operations, Property 3: Job Auto-Categorization Correctness
@@ -330,7 +342,9 @@ class TestStatusTransitions:
     )
     @settings(max_examples=100)
     def test_status_transition_validity(
-        self, current_status: JobStatus, target_status: JobStatus,
+        self,
+        current_status: JobStatus,
+        target_status: JobStatus,
     ) -> None:
         """
         Feature: field-operations, Property 4: Status Transition Validity
@@ -353,7 +367,8 @@ class TestStatusTransitions:
     @given(target_status=st.sampled_from(list(JobStatus)))
     @settings(max_examples=20)
     def test_terminal_states_have_no_transitions(
-        self, target_status: JobStatus,
+        self,
+        target_status: JobStatus,
     ) -> None:
         """
         Feature: field-operations, Property 4: Status Transition Validity
@@ -366,16 +381,19 @@ class TestStatusTransitions:
 
     @pytest.mark.unit
     @given(
-        current_status=st.sampled_from([
-            JobStatus.REQUESTED,
-            JobStatus.APPROVED,
-            JobStatus.SCHEDULED,
-            JobStatus.IN_PROGRESS,
-        ]),
+        current_status=st.sampled_from(
+            [
+                JobStatus.REQUESTED,
+                JobStatus.APPROVED,
+                JobStatus.SCHEDULED,
+                JobStatus.IN_PROGRESS,
+            ],
+        ),
     )
     @settings(max_examples=20)
     def test_cancellation_from_non_terminal_states(
-        self, current_status: JobStatus,
+        self,
+        current_status: JobStatus,
     ) -> None:
         """
         Feature: field-operations, Property 4: Status Transition Validity
@@ -444,7 +462,10 @@ class TestPricingCalculation:
     )
     @settings(max_examples=100)
     def test_zone_based_pricing_formula(
-        self, base_price: Decimal, price_per_zone: Decimal, zone_count: int,
+        self,
+        base_price: Decimal,
+        price_per_zone: Decimal,
+        zone_count: int,
     ) -> None:
         """
         Feature: field-operations, Property 5: Pricing Calculation Correctness

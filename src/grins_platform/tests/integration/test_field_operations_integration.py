@@ -137,7 +137,6 @@ def create_mock_staff(
     return staff
 
 
-
 # =============================================================================
 # Job-Customer Integration Tests
 # =============================================================================
@@ -256,7 +255,6 @@ class TestJobCustomerIntegration:
         result = await job_service.get_job(job_id)
 
         assert result.customer_id == customer_id
-
 
 
 # =============================================================================
@@ -424,7 +422,6 @@ class TestJobPropertyIntegration:
         # Expected: 50 + (5 * 10) = 100
         assert result["calculated_price"] == Decimal("100.00")
         assert result["zone_count"] == 10
-
 
 
 # =============================================================================
@@ -608,7 +605,6 @@ class TestJobServiceOfferingIntegration:
 
         assert result["calculated_price"] == Decimal("150.00")
         assert result["pricing_model"] == PricingModel.FLAT.value
-
 
 
 # =============================================================================
@@ -829,7 +825,6 @@ class TestStatusWorkflowIntegration:
             result = await job_service.update_status(job_id, status_data)
 
             assert result.status == JobStatus.CANCELLED.value
-
 
 
 # =============================================================================
@@ -1069,4 +1064,3 @@ class TestCrossComponentIntegration:
         assert len(result) == 1
         call_kwargs = mock_job_repo.list_with_filters.call_args.kwargs
         assert call_kwargs["category"] == JobCategory.REQUIRES_ESTIMATE
-

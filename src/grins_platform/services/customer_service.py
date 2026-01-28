@@ -297,9 +297,7 @@ class CustomerService(LoggerMixin):
         total_pages = (total + params.page_size - 1) // params.page_size
 
         # Convert to response schemas
-        customer_responses = [
-            CustomerResponse.model_validate(c) for c in customers
-        ]
+        customer_responses = [CustomerResponse.model_validate(c) for c in customers]
 
         self.log_completed(
             "list_customers",
@@ -627,41 +625,45 @@ class CustomerService(LoggerMixin):
         writer = csv.writer(output)
 
         # Write header
-        writer.writerow([
-            "id",
-            "first_name",
-            "last_name",
-            "phone",
-            "email",
-            "status",
-            "is_priority",
-            "is_red_flag",
-            "is_slow_payer",
-            "is_new_customer",
-            "sms_opt_in",
-            "email_opt_in",
-            "lead_source",
-            "created_at",
-        ])
+        writer.writerow(
+            [
+                "id",
+                "first_name",
+                "last_name",
+                "phone",
+                "email",
+                "status",
+                "is_priority",
+                "is_red_flag",
+                "is_slow_payer",
+                "is_new_customer",
+                "sms_opt_in",
+                "email_opt_in",
+                "lead_source",
+                "created_at",
+            ],
+        )
 
         # Write data rows
         for customer in all_customers:
-            writer.writerow([
-                str(customer.id),
-                customer.first_name,
-                customer.last_name,
-                customer.phone,
-                customer.email or "",
-                customer.status,
-                customer.is_priority,
-                customer.is_red_flag,
-                customer.is_slow_payer,
-                customer.is_new_customer,
-                customer.sms_opt_in,
-                customer.email_opt_in,
-                customer.lead_source or "",
-                customer.created_at.isoformat() if customer.created_at else "",
-            ])
+            writer.writerow(
+                [
+                    str(customer.id),
+                    customer.first_name,
+                    customer.last_name,
+                    customer.phone,
+                    customer.email or "",
+                    customer.status,
+                    customer.is_priority,
+                    customer.is_red_flag,
+                    customer.is_slow_payer,
+                    customer.is_new_customer,
+                    customer.sms_opt_in,
+                    customer.email_opt_in,
+                    customer.lead_source or "",
+                    customer.created_at.isoformat() if customer.created_at else "",
+                ],
+            )
 
         csv_content = output.getvalue()
         output.close()

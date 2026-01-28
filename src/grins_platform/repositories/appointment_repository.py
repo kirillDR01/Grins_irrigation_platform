@@ -219,7 +219,6 @@ class AppointmentRepository(LoggerMixin):
         self.log_completed("delete", appointment_id=str(appointment_id))
         return True
 
-
     async def list_with_filters(
         self,
         page: int = 1,

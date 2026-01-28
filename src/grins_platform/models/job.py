@@ -81,15 +81,18 @@ class Job(Base):
 
     # Primary key
     id: Mapped[UUID] = mapped_column(
-        primary_key=True, server_default=func.gen_random_uuid(),
+        primary_key=True,
+        server_default=func.gen_random_uuid(),
     )
 
     # Foreign keys (Requirements 10.8-10.10)
     customer_id: Mapped[UUID] = mapped_column(
-        ForeignKey("customers.id"), nullable=False,
+        ForeignKey("customers.id"),
+        nullable=False,
     )
     property_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("properties.id"), nullable=True,
+        ForeignKey("properties.id"),
+        nullable=True,
     )
     service_offering_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("service_offerings.id"),
@@ -100,24 +103,33 @@ class Job(Base):
     job_type: Mapped[str] = mapped_column(String(50), nullable=False)
     category: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(
-        String(50), nullable=False, server_default="requested",
+        String(50),
+        nullable=False,
+        server_default="requested",
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Scheduling
     estimated_duration_minutes: Mapped[int | None] = mapped_column(
-        Integer, nullable=True,
+        Integer,
+        nullable=True,
     )
     priority_level: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="0",
+        Integer,
+        nullable=False,
+        server_default="0",
     )
     weather_sensitive: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="false",
+        Boolean,
+        nullable=False,
+        server_default="false",
     )
 
     # Requirements (Requirement 2.8)
     staffing_required: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="1",
+        Integer,
+        nullable=False,
+        server_default="1",
     )
     equipment_required: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     materials_required: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
@@ -140,7 +152,9 @@ class Job(Base):
 
     # Soft Delete
     is_deleted: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="false",
+        Boolean,
+        nullable=False,
+        server_default="false",
     )
     deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
 

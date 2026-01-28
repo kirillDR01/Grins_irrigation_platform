@@ -33,7 +33,8 @@ class TestLoggingConfiguration:
     """Test logging configuration and setup."""
 
     def test_configure_logging_json_output(
-        self, capsys: pytest.CaptureFixture[str],
+        self,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Test JSON output configuration."""
         configure_logging(level="DEBUG", json_output=True)
@@ -55,7 +56,8 @@ class TestLoggingConfiguration:
         assert "timestamp" in log_data
 
     def test_configure_logging_human_readable(
-        self, capsys: pytest.CaptureFixture[str],
+        self,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Test human-readable output configuration."""
         configure_logging(level="INFO", json_output=False)
@@ -110,7 +112,8 @@ class TestRequestIdCorrelation:
         assert request_id_var.get() is None
 
     def test_request_id_in_log_output(
-        self, capsys: pytest.CaptureFixture[str],
+        self,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Test that request ID appears in log output."""
         configure_logging(json_output=True)
@@ -134,7 +137,8 @@ class TestHybridDottedNamespace:
     """Test hybrid dotted namespace pattern."""
 
     def test_log_event_basic_pattern(
-        self, capsys: pytest.CaptureFixture[str],
+        self,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Test basic event logging with dotted namespace."""
         configure_logging(json_output=True)
@@ -152,7 +156,8 @@ class TestHybridDottedNamespace:
         assert log_data["level"] == "info"
 
     def test_log_event_different_levels(
-        self, capsys: pytest.CaptureFixture[str],
+        self,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Test logging events at different levels."""
         configure_logging(level="DEBUG", json_output=True)
@@ -185,7 +190,8 @@ class TestHybridDottedNamespace:
             assert log_data["test_data"] == "value"
 
     def test_namespace_pattern_validation(
-        self, capsys: pytest.CaptureFixture[str],
+        self,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Test various namespace patterns."""
         configure_logging(json_output=True)
@@ -264,7 +270,8 @@ class TestLoggerMixin:
         assert log_data["level"] == "info"
 
     def test_log_failed_method_with_exception(
-        self, caplog: LogCaptureFixture,
+        self,
+        caplog: LogCaptureFixture,
     ) -> None:
         """Test log_failed method with exception."""
 
@@ -316,7 +323,8 @@ class TestLoggerMixin:
         assert log_data["level"] == "warning"
 
     def test_default_domain_when_not_specified(
-        self, caplog: LogCaptureFixture,
+        self,
+        caplog: LogCaptureFixture,
     ) -> None:
         """Test default domain when DOMAIN not specified."""
 
@@ -342,8 +350,11 @@ class TestDomainLogger:
     def test_user_event_logging(self, caplog: LogCaptureFixture) -> None:
         """Test user domain event logging."""
         DomainLogger.user_event(
-            self.logger, "login", "started",
-            email="user@example.com", source="web",
+            self.logger,
+            "login",
+            "started",
+            email="user@example.com",
+            source="web",
         )
 
         assert len(caplog.records) > 0
@@ -355,8 +366,11 @@ class TestDomainLogger:
     def test_database_event_logging(self, caplog: LogCaptureFixture) -> None:
         """Test database domain event logging."""
         DomainLogger.database_event(
-            self.logger, "query", "completed",
-            table="users", duration_ms=150,
+            self.logger,
+            "query",
+            "completed",
+            table="users",
+            duration_ms=150,
         )
 
         assert len(caplog.records) > 0
@@ -368,8 +382,11 @@ class TestDomainLogger:
     def test_api_event_logging(self, caplog: LogCaptureFixture) -> None:
         """Test API domain event logging."""
         DomainLogger.api_event(
-            self.logger, "processing", "failed",
-            endpoint="/api/users", status_code=500,
+            self.logger,
+            "processing",
+            "failed",
+            endpoint="/api/users",
+            status_code=500,
         )
 
         assert len(caplog.records) > 0
@@ -381,8 +398,11 @@ class TestDomainLogger:
     def test_validation_event_logging(self, caplog: LogCaptureFixture) -> None:
         """Test validation domain events logging."""
         DomainLogger.validation_event(
-            self.logger, "user_data", "rejected",
-            reason="missing_fields", fields=["email"],
+            self.logger,
+            "user_data",
+            "rejected",
+            reason="missing_fields",
+            fields=["email"],
         )
 
         assert len(caplog.records) > 0
@@ -401,7 +421,8 @@ class TestExceptionHandling:
         self.logger = get_logger("test")
 
     def test_exception_logging_with_stack_trace(
-        self, caplog: LogCaptureFixture,
+        self,
+        caplog: LogCaptureFixture,
     ) -> None:
         """Test logging exceptions with stack traces."""
         try:
@@ -422,7 +443,8 @@ class TestExceptionHandling:
         assert log_data.get("exc_info") is True
 
     def test_logger_mixin_exception_handling(
-        self, caplog: LogCaptureFixture,
+        self,
+        caplog: LogCaptureFixture,
     ) -> None:
         """Test LoggerMixin exception handling."""
 
@@ -446,7 +468,8 @@ class TestIntegration:
     """Integration tests for complete logging workflow."""
 
     def test_complete_logging_workflow(
-        self, capsys: pytest.CaptureFixture[str],
+        self,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Test complete logging workflow with request correlation."""
         configure_logging(json_output=True)
@@ -461,7 +484,9 @@ class TestIntegration:
                     # Simulate processing
                     if "@" not in email:
                         self.log_rejected(
-                            "processing", reason="invalid_email", email=email,
+                            "processing",
+                            reason="invalid_email",
+                            email=email,
                         )
                         msg = "Invalid email"
                         raise ValueError(msg)

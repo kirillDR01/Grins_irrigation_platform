@@ -400,9 +400,7 @@ class StaffRepository(LoggerMixin):
         self.log_started("count_active")
 
         stmt = (
-            select(func.count())
-            .select_from(Staff)
-            .where(Staff.is_active == True)  # noqa: E712
+            select(func.count()).select_from(Staff).where(Staff.is_active == True)  # noqa: E712
         )
 
         result = await self.session.execute(stmt)

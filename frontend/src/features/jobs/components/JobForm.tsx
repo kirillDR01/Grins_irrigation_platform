@@ -21,6 +21,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { useCreateJob, useUpdateJob } from '../hooks';
+import { SearchableCustomerDropdown } from './SearchableCustomerDropdown';
 import type { Job, JobCreate, JobUpdate, JobSource } from '../types';
 
 // Form validation schema - using simple types without coerce
@@ -116,23 +117,25 @@ export function JobForm({ job, customerId, onSuccess, onCancel }: JobFormProps) 
         className="space-y-6"
         data-testid="job-form"
       >
-        {/* Customer ID - required for new jobs */}
-        {!isEditing && !customerId && (
+        {/* Customer ID - required for new jobs, read-only when editing */}
+        {!customerId && (
           <FormField
             control={form.control}
             name="customer_id"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Customer ID *</FormLabel>
+                <FormLabel>Customer *</FormLabel>
                 <FormControl>
-                  <Input
-                    {...field}
-                    placeholder="Enter customer UUID"
-                    data-testid="customer-id-input"
+                  <SearchableCustomerDropdown
+                    value={field.value}
+                    onChange={field.onChange}
+                    disabled={isEditing}
                   />
                 </FormControl>
                 <FormDescription>
-                  The UUID of the customer for this job
+                  {isEditing
+                    ? 'Customer cannot be changed after job creation'
+                    : 'Search and select the customer for this job'}
                 </FormDescription>
                 <FormMessage />
               </FormItem>

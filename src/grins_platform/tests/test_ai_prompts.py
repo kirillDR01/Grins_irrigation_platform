@@ -3,7 +3,6 @@
 Validates: AI Assistant Requirements 1.1, 4.1, 5.1, 6.1, 9.1
 """
 
-
 from grins_platform.services.ai.prompts.categorization import (
     CATEGORIZATION_PROMPT,
     CATEGORIZATION_REVIEW_PROMPT,
@@ -188,9 +187,9 @@ class TestCommunicationTemplates:
             template_lower = template.lower()
             # At least some templates should be polite
             if key in ["appointment_confirmation", "follow_up", "completion_summary"]:
-                assert any(
-                    word in template_lower for word in polite_words
-                ), f"Template {key} should be more polite"
+                assert any(word in template_lower for word in polite_words), (
+                    f"Template {key} should be more polite"
+                )
 
     def test_all_required_message_types_present(self) -> None:
         """Test that all required message types have templates."""

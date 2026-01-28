@@ -570,9 +570,7 @@ class JobRepository(LoggerMixin):
         rows = result.all()
 
         counts: dict[date, int] = {
-            job_date: count
-            for job_date, count in rows
-            if isinstance(job_date, date)
+            job_date: count for job_date, count in rows if isinstance(job_date, date)
         }
 
         self.log_completed("count_by_day", days=len(counts))

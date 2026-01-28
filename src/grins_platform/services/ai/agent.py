@@ -126,7 +126,9 @@ class AIAgentService(LoggerMixin):
             AIAgentError: If AI processing fails
         """
         self.log_started(
-            "chat_stream", user_id=str(user_id), message_length=len(message),
+            "chat_stream",
+            user_id=str(user_id),
+            message_length=len(message),
         )
 
         # Check rate limit
@@ -193,27 +195,27 @@ class AIAgentService(LoggerMixin):
                 jobs_status = jobs.get("by_status", {})
                 appts = bd.get("appointments", {}).get("today", {})
                 context_str = f"""
-Current Business Data (as of {context.get('current_time', 'now')}):
+Current Business Data (as of {context.get("current_time", "now")}):
 
 CUSTOMERS:
-- Total customers: {bd.get('customers', {}).get('total', 0)}
+- Total customers: {bd.get("customers", {}).get("total", 0)}
 
 JOBS:
-- Requested: {jobs_status.get('requested', 0)}
-- Approved: {jobs_status.get('approved', 0)}
-- Scheduled: {jobs_status.get('scheduled', 0)}
-- In Progress: {jobs_status.get('in_progress', 0)}
-- Completed: {jobs_status.get('completed', 0)}
-- Total Pending (requested + approved): {jobs.get('total_pending', 0)}
+- Requested: {jobs_status.get("requested", 0)}
+- Approved: {jobs_status.get("approved", 0)}
+- Scheduled: {jobs_status.get("scheduled", 0)}
+- In Progress: {jobs_status.get("in_progress", 0)}
+- Completed: {jobs_status.get("completed", 0)}
+- Total Pending (requested + approved): {jobs.get("total_pending", 0)}
 
-TODAY'S APPOINTMENTS ({context.get('today', 'today')}):
-- Total scheduled for today: {appts.get('total', 0)}
-- Scheduled (not started): {appts.get('scheduled', 0)}
-- In Progress: {appts.get('in_progress', 0)}
-- Completed: {appts.get('completed', 0)}
+TODAY'S APPOINTMENTS ({context.get("today", "today")}):
+- Total scheduled for today: {appts.get("total", 0)}
+- Scheduled (not started): {appts.get("scheduled", 0)}
+- In Progress: {appts.get("in_progress", 0)}
+- Completed: {appts.get("completed", 0)}
 
 STAFF:
-- Active staff members: {bd.get('staff', {}).get('total_active', 0)}
+- Active staff members: {bd.get("staff", {}).get("total_active", 0)}
 
 Use this data to answer the user's question accurately.
 If the data shows 0 for something, report that honestly.

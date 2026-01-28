@@ -59,7 +59,8 @@ async def create_availability(
     staff_id: UUID,
     data: StaffAvailabilityCreate,
     service: Annotated[
-        StaffAvailabilityService, Depends(get_staff_availability_service),
+        StaffAvailabilityService,
+        Depends(get_staff_availability_service),
     ],
 ) -> StaffAvailabilityResponse:
     """Create a new staff availability entry.
@@ -108,7 +109,8 @@ async def create_availability(
 async def list_availability(
     staff_id: UUID,
     service: Annotated[
-        StaffAvailabilityService, Depends(get_staff_availability_service),
+        StaffAvailabilityService,
+        Depends(get_staff_availability_service),
     ],
     start_date: date | None = Query(
         default=None,
@@ -162,7 +164,8 @@ async def get_availability_by_date(
     staff_id: UUID,
     target_date: date,
     service: Annotated[
-        StaffAvailabilityService, Depends(get_staff_availability_service),
+        StaffAvailabilityService,
+        Depends(get_staff_availability_service),
     ],
 ) -> StaffAvailabilityResponse:
     """Get availability for a specific staff member and date.
@@ -214,7 +217,8 @@ async def update_availability(
     target_date: date,
     data: StaffAvailabilityUpdate,
     service: Annotated[
-        StaffAvailabilityService, Depends(get_staff_availability_service),
+        StaffAvailabilityService,
+        Depends(get_staff_availability_service),
     ],
 ) -> StaffAvailabilityResponse:
     """Update a staff availability entry.
@@ -265,7 +269,8 @@ async def delete_availability(
     staff_id: UUID,
     target_date: date,
     service: Annotated[
-        StaffAvailabilityService, Depends(get_staff_availability_service),
+        StaffAvailabilityService,
+        Depends(get_staff_availability_service),
     ],
 ) -> None:
     """Delete a staff availability entry.
@@ -314,7 +319,8 @@ async def delete_availability(
 async def get_available_staff_on_date(
     target_date: date,
     service: Annotated[
-        StaffAvailabilityService, Depends(get_staff_availability_service),
+        StaffAvailabilityService,
+        Depends(get_staff_availability_service),
     ],
 ) -> AvailableStaffOnDateResponse:
     """Get all available staff members for a specific date.

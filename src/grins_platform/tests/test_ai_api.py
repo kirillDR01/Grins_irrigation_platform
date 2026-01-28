@@ -19,6 +19,7 @@ class TestAIChatEndpoint:
         client: AsyncClient,
     ) -> None:
         """Test that chat endpoint returns streaming response."""
+
         # Mock the chat_stream method to return an async generator
         async def mock_stream() -> AsyncGenerator[str, None]:
             yield "Hello"

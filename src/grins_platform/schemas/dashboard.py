@@ -17,16 +17,20 @@ class DashboardMetrics(BaseModel):
 
     total_customers: int = Field(..., description="Total number of customers")
     active_customers: int = Field(
-        ..., description="Customers with recent activity (last 90 days)",
+        ...,
+        description="Customers with recent activity (last 90 days)",
     )
     jobs_by_status: dict[str, int] = Field(
-        ..., description="Count of jobs grouped by status",
+        ...,
+        description="Count of jobs grouped by status",
     )
     today_appointments: int = Field(
-        ..., description="Number of appointments scheduled for today",
+        ...,
+        description="Number of appointments scheduled for today",
     )
     available_staff: int = Field(
-        ..., description="Number of staff members currently available",
+        ...,
+        description="Number of staff members currently available",
     )
     total_staff: int = Field(..., description="Total number of active staff members")
 
@@ -40,16 +44,20 @@ class RequestVolumeMetrics(BaseModel):
     period_end: date = Field(..., description="End date of the period")
     total_requests: int = Field(..., description="Total job requests in period")
     requests_by_day: dict[str, int] = Field(
-        ..., description="Job requests grouped by day (ISO date string -> count)",
+        ...,
+        description="Job requests grouped by day (ISO date string -> count)",
     )
     requests_by_category: dict[str, int] = Field(
-        ..., description="Job requests grouped by category",
+        ...,
+        description="Job requests grouped by category",
     )
     requests_by_source: dict[str, int] = Field(
-        ..., description="Job requests grouped by source",
+        ...,
+        description="Job requests grouped by source",
     )
     average_daily_requests: float = Field(
-        ..., description="Average number of requests per day",
+        ...,
+        description="Average number of requests per day",
     )
 
     model_config = {"from_attributes": True}
@@ -60,19 +68,24 @@ class ScheduleOverview(BaseModel):
 
     schedule_date: date = Field(..., description="Date of the schedule overview")
     total_appointments: int = Field(
-        ..., description="Total appointments for the date",
+        ...,
+        description="Total appointments for the date",
     )
     appointments_by_status: dict[str, int] = Field(
-        ..., description="Appointments grouped by status",
+        ...,
+        description="Appointments grouped by status",
     )
     appointments_by_staff: dict[str, int] = Field(
-        ..., description="Appointments grouped by staff member name",
+        ...,
+        description="Appointments grouped by staff member name",
     )
     total_scheduled_minutes: int = Field(
-        ..., description="Total scheduled time in minutes",
+        ...,
+        description="Total scheduled time in minutes",
     )
     staff_utilization: dict[str, float] = Field(
-        ..., description="Staff utilization percentage (staff name -> percentage)",
+        ...,
+        description="Staff utilization percentage (staff name -> percentage)",
     )
 
     model_config = {"from_attributes": True}
@@ -86,11 +99,13 @@ class PaymentStatusOverview(BaseModel):
     paid_invoices: int = Field(..., description="Number of paid invoices")
     overdue_invoices: int = Field(..., description="Number of overdue invoices")
     total_pending_amount: float = Field(
-        ..., description="Total amount pending payment",
+        ...,
+        description="Total amount pending payment",
     )
     total_overdue_amount: float = Field(..., description="Total overdue amount")
     average_days_to_payment: float = Field(
-        ..., description="Average days from invoice to payment",
+        ...,
+        description="Average days from invoice to payment",
     )
 
     model_config = {"from_attributes": True}
@@ -107,7 +122,8 @@ class RecentActivityItem(BaseModel):
     description: str = Field(..., description="Human-readable description")
     job_id: Optional[UUID] = Field(None, description="Related job ID if applicable")
     customer_name: str = Field(
-        ..., description="Customer name associated with activity",
+        ...,
+        description="Customer name associated with activity",
     )
     timestamp: datetime = Field(..., description="When the activity occurred")
 
@@ -142,19 +158,24 @@ class TodayScheduleResponse(BaseModel):
 
     schedule_date: date = Field(..., description="Today's date")
     total_appointments: int = Field(
-        ..., description="Total appointments for today",
+        ...,
+        description="Total appointments for today",
     )
     completed_appointments: int = Field(
-        ..., description="Completed appointments today",
+        ...,
+        description="Completed appointments today",
     )
     in_progress_appointments: int = Field(
-        ..., description="Appointments currently in progress",
+        ...,
+        description="Appointments currently in progress",
     )
     upcoming_appointments: int = Field(
-        ..., description="Upcoming appointments today",
+        ...,
+        description="Upcoming appointments today",
     )
     cancelled_appointments: int = Field(
-        ..., description="Cancelled appointments today",
+        ...,
+        description="Cancelled appointments today",
     )
 
     model_config = {"from_attributes": True}

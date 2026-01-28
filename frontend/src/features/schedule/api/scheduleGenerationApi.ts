@@ -9,7 +9,16 @@ import type {
   ScheduleGenerateResponse,
   ScheduleCapacityResponse,
   ScheduleGenerationStatusResponse,
+  ScheduleExplanationRequest,
+  ScheduleExplanationResponse,
+  UnassignedJobExplanationRequest,
+  UnassignedJobExplanationResponse,
+  ParseConstraintsRequest,
+  ParseConstraintsResponse,
+  JobsReadyToScheduleResponse,
+  CustomerSearchResult,
 } from '../types';
+import type { PaginatedResponse } from '@/core/api';
 
 const BASE_URL = '/schedule';
 
@@ -58,5 +67,75 @@ export const scheduleGenerationApi = {
       `${BASE_URL}/generation-status/${date}`
     );
     return response.data;
+  },
+
+  /**
+   * Get AI explanation for a generated schedule.
+   */
+  async explainSchedule(
+    request: ScheduleExplanationRequest
+  ): Promise<ScheduleExplanationResponse> {
+    const response = await apiClient.post<ScheduleExplanationResponse>(
+      `${BASE_URL}/explain`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Get AI explanation for why a job was not assigned.
+   */
+  async explainUnassignedJob(
+    request: UnassignedJobExplanationRequest
+  ): Promise<UnassignedJobExplanationResponse> {
+    const response = await apiClient.post<UnassignedJobExplanationResponse>(
+      `${BASE_URL}/explain-unassigned`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Parse natural language constraints into structured format.
+   */
+  async parseConstraints(
+    request: ParseConstraintsRequest
+  ): Promise<ParseConstraintsResponse> {
+    const response = await apiClient.post<ParseConstraintsResponse>(
+      `${BASE_URL}/parse-constraints`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Get jobs that are ready to be scheduled for a date range.
+   */
+  async getJobsReadyToSchedule(params?: {
+    start_date?: string;
+    end_date?: string;
+  }): Promise<JobsReadyToScheduleResponse> {
+    const response = await apiClient.get<JobsReadyToScheduleResponse>(
+      '/schedule/jobs-ready',
+      { 
+        params: {
+          date_from: params?.start_date,
+          date_to: params?.end_date,
+        }
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Search customers by name, phone, or email.
+   * Returns simplified customer data for dropdowns.
+   */
+  async searchCustomers(query: string): Promise<CustomerSearchResult[]> {
+    const response = await apiClient.get<PaginatedResponse<CustomerSearchResult>>(
+      '/customers',
+      { params: { search: query, page_size: 20 } }
+    );
+    return response.data.items;
   },
 };

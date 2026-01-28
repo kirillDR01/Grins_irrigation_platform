@@ -20,10 +20,8 @@ class SMSError(Exception):
     """Base exception for SMS errors."""
 
 
-
 class SMSOptInError(SMSError):
     """Raised when customer has not opted in to SMS."""
-
 
 
 class SMSService(LoggerMixin):

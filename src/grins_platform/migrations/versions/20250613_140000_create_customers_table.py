@@ -53,10 +53,16 @@ def upgrade() -> None:
         sa.Column("is_priority", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column("is_red_flag", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column(
-            "is_slow_payer", sa.Boolean(), nullable=False, server_default="false",
+            "is_slow_payer",
+            sa.Boolean(),
+            nullable=False,
+            server_default="false",
         ),
         sa.Column(
-            "is_new_customer", sa.Boolean(), nullable=False, server_default="true",
+            "is_new_customer",
+            sa.Boolean(),
+            nullable=False,
+            server_default="true",
         ),
         # Communication Preferences
         sa.Column("sms_opt_in", sa.Boolean(), nullable=False, server_default="false"),
@@ -105,7 +111,9 @@ def upgrade() -> None:
     op.create_index("idx_customers_lead_source", "customers", ["lead_source"])
     op.create_index("idx_customers_is_deleted", "customers", ["is_deleted"])
     op.create_index(
-        "idx_customers_name", "customers", ["last_name", "first_name"],
+        "idx_customers_name",
+        "customers",
+        ["last_name", "first_name"],
     )
     # Composite index for common query pattern: active customers
     op.create_index(

@@ -26,7 +26,9 @@ logger = get_logger(__name__)
 class DatabaseSettings(BaseSettings):
     """Database configuration settings loaded from environment."""
 
-    database_url: str = "postgresql://grins_user:grins_password@localhost:5432/grins_platform"
+    database_url: str = (
+        "postgresql://grins_user:grins_password@localhost:5432/grins_platform"
+    )
 
     # Connection pool settings
     pool_size: int = 5
@@ -53,7 +55,6 @@ class DatabaseSettings(BaseSettings):
 
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy models."""
-
 
 
 class DatabaseManager(LoggerMixin):

@@ -94,7 +94,9 @@ class TravelTimeService(LoggerMixin):
         if self.api_key:
             try:
                 travel_time = await self._get_google_travel_time(
-                    origin, destination, departure_time,
+                    origin,
+                    destination,
+                    departure_time,
                 )
             except Exception as e:
                 self.log_failed(
@@ -104,7 +106,9 @@ class TravelTimeService(LoggerMixin):
                 )
             else:
                 self.log_completed(
-                    "get_travel_time", minutes=travel_time, source="google",
+                    "get_travel_time",
+                    minutes=travel_time,
+                    source="google",
                 )
                 return travel_time
 
@@ -207,7 +211,8 @@ class TravelTimeService(LoggerMixin):
             for j, destination in enumerate(locations):
                 if i != j:
                     matrix[(i, j)] = self.calculate_fallback_travel_time(
-                        origin, destination,
+                        origin,
+                        destination,
                     )
 
         self.log_completed("get_travel_matrix", pairs=len(matrix), source="fallback")
@@ -259,7 +264,8 @@ class TravelTimeService(LoggerMixin):
                 elif i != j:
                     # Use fallback for failed routes
                     matrix[(i, j)] = self.calculate_fallback_travel_time(
-                        locations[i], locations[j],
+                        locations[i],
+                        locations[j],
                     )
 
         return matrix

@@ -24,7 +24,6 @@ class CustomerError(Exception):
     """
 
 
-
 class CustomerNotFoundError(CustomerError):
     """Raised when a customer is not found.
 
@@ -136,7 +135,6 @@ class FieldOperationsError(Exception):
 
     Validates: Requirement 10.1-10.5
     """
-
 
 
 class ServiceOfferingNotFoundError(FieldOperationsError):

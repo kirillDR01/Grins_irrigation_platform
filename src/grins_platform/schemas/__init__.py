@@ -8,6 +8,7 @@ Phase 1: Customer Management schemas
 Phase 2: Field Operations schemas (Service Offerings, Jobs, Staff)
 Phase 3: Admin Dashboard schemas (Appointments, Dashboard Metrics)
 Phase 6: AI Assistant schemas (AI, SMS)
+Phase 7: Schedule AI Updates schemas (Schedule Explanation)
 """
 
 from grins_platform.schemas.ai import (
@@ -90,6 +91,18 @@ from grins_platform.schemas.property import (
     PropertyResponse,
     PropertyUpdate,
 )
+from grins_platform.schemas.schedule_explanation import (
+    JobReadyToSchedule,
+    JobsReadyToScheduleResponse,
+    ParseConstraintsRequest,
+    ParseConstraintsResponse,
+    ParsedConstraint,
+    ScheduleExplanationRequest,
+    ScheduleExplanationResponse,
+    StaffAssignmentSummary,
+    UnassignedJobExplanationRequest,
+    UnassignedJobExplanationResponse,
+)
 from grins_platform.schemas.service_offering import (
     PaginatedServiceResponse,
     ServiceListParams,
@@ -155,16 +168,21 @@ __all__ = [
     "JobCreate",
     "JobDetailResponse",
     "JobListParams",
+    "JobReadyToSchedule",
     "JobResponse",
     "JobStatusHistoryResponse",
     "JobStatusUpdate",
     "JobUpdate",
     "JobsByStatusResponse",
+    "JobsReadyToScheduleResponse",
     "MessageType",
     "PaginatedCustomerResponse",
     "PaginatedJobResponse",
     "PaginatedServiceResponse",
     "PaginatedStaffResponse",
+    "ParseConstraintsRequest",
+    "ParseConstraintsResponse",
+    "ParsedConstraint",
     "PaymentStatusOverview",
     "PriceCalculationResponse",
     "PropertyCreate",
@@ -177,6 +195,8 @@ __all__ = [
     "SMSSendResponse",
     "SMSWebhookPayload",
     "ScheduleDay",
+    "ScheduleExplanationRequest",
+    "ScheduleExplanationResponse",
     "ScheduleGenerateRequest",
     "ScheduleGenerateResponse",
     "ScheduleOverview",
@@ -190,6 +210,7 @@ __all__ = [
     "ServiceOfferingUpdate",
     "SimilarJob",
     "StaffAssignment",
+    "StaffAssignmentSummary",
     "StaffAvailabilityUpdate",
     "StaffCreate",
     "StaffDailyScheduleResponse",
@@ -197,6 +218,8 @@ __all__ = [
     "StaffResponse",
     "StaffUpdate",
     "TodayScheduleResponse",
+    "UnassignedJobExplanationRequest",
+    "UnassignedJobExplanationResponse",
     "UserDecision",
     "WeeklyScheduleResponse",
 ]

@@ -58,7 +58,10 @@ def calculate_job_end_time(start_minutes: int, job: ScheduleJob) -> int:
 
 
 def haversine_travel_minutes(
-    lat1: float, lon1: float, lat2: float, lon2: float,
+    lat1: float,
+    lon1: float,
+    lat2: float,
+    lon2: float,
 ) -> int:
     """Calculate travel time using haversine formula.
 
@@ -142,12 +145,14 @@ class ConstraintChecker:
                 score.hard_score -= 1
                 if score.violations is not None:
                     desc = f"Staff {assignment.staff.name} missing equipment"
-                    score.violations.append(ConstraintViolation(
-                        constraint_name="Equipment required",
-                        description=f"{desc} for job {job.id}",
-                        penalty=1,
-                        is_hard=True,
-                    ))
+                    score.violations.append(
+                        ConstraintViolation(
+                            constraint_name="Equipment required",
+                            description=f"{desc} for job {job.id}",
+                            penalty=1,
+                            is_hard=True,
+                        ),
+                    )
 
     def _check_availability_constraint(
         self,
@@ -195,12 +200,14 @@ class ConstraintChecker:
             score.hard_score -= overtime
             if score.violations is not None:
                 desc = f"Staff {assignment.staff.name} overbooked"
-                score.violations.append(ConstraintViolation(
-                    constraint_name="Staff availability",
-                    description=f"{desc} by {overtime} minutes",
-                    penalty=overtime,
-                    is_hard=True,
-                ))
+                score.violations.append(
+                    ConstraintViolation(
+                        constraint_name="Staff availability",
+                        description=f"{desc} by {overtime} minutes",
+                        penalty=overtime,
+                        is_hard=True,
+                    ),
+                )
 
     def _calculate_travel_penalty(
         self,
@@ -246,4 +253,3 @@ class ConstraintChecker:
             city2 = assignment.jobs[i + 1].location.city
             if city1 and city2 and city1 == city2:
                 score.soft_score += 70
-

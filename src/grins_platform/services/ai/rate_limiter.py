@@ -20,7 +20,6 @@ class RateLimitError(Exception):
     """Raised when rate limit is exceeded."""
 
 
-
 class RateLimitService(LoggerMixin):
     """Service for rate limiting AI requests."""
 

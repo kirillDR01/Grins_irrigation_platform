@@ -574,4 +574,3 @@ class TestPrimaryPropertyUniquenessProperty:
             assert count_primaries() == 1, (
                 f"Invariant violated: expected 1 primary, got {count_primaries()}"
             )
-

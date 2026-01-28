@@ -63,72 +63,342 @@ data: {"type": "done"}
 
 ## Schedule Generation
 
-### POST /ai/schedule/generate
+### POST /schedule/generate
 
-Generate an optimized weekly schedule using AI.
+Generate an optimized schedule for a specific date using OR-Tools constraint solver.
 
 **Request:**
 ```json
 {
-  "start_date": "2025-02-01",
-  "end_date": "2025-02-07",
-  "staff_ids": ["uuid1", "uuid2"],
-  "job_type_filter": "seasonal"
+  "schedule_date": "2025-02-01",
+  "timeout_seconds": 15
 }
 ```
 
 **Response:**
 ```json
 {
-  "schedule": {
-    "days": [
-      {
-        "date": "2025-02-01",
-        "staff_assignments": [
-          {
-            "staff_id": "uuid1",
-            "staff_name": "Vas",
-            "jobs": [
-              {
-                "job_id": "uuid",
-                "customer_name": "John Doe",
-                "address": "123 Main St",
-                "time_window": "09:00-11:00",
-                "estimated_duration": 60,
-                "service_type": "Spring Startup"
-              }
-            ]
-          }
-        ]
-      }
-    ],
-    "warnings": [
-      {
-        "type": "equipment_conflict",
-        "message": "Compressor needed for 2 jobs at same time",
-        "affected_jobs": ["uuid1", "uuid2"]
-      }
-    ],
-    "summary": {
-      "total_jobs": 45,
-      "total_staff": 3,
-      "avg_jobs_per_day": 9,
-      "estimated_revenue": 12500.00
+  "is_feasible": true,
+  "schedule_date": "2025-02-01",
+  "staff_assignments": [
+    {
+      "staff_id": "uuid1",
+      "staff_name": "Vas",
+      "jobs": [
+        {
+          "job_id": "uuid",
+          "customer_name": "John Doe",
+          "city": "Eden Prairie",
+          "job_type": "Spring Startup",
+          "estimated_duration_minutes": 60,
+          "start_time": "09:00",
+          "end_time": "10:00"
+        }
+      ],
+      "total_duration_minutes": 420,
+      "total_jobs": 7
     }
-  },
-  "ai_explanation": "I've optimized the schedule by batching jobs in Eden Prairie on Monday...",
-  "confidence_score": 92
+  ],
+  "unassigned_jobs": [
+    {
+      "job_id": "uuid2",
+      "customer_name": "Jane Smith",
+      "city": "Plymouth",
+      "job_type": "Repair",
+      "reason": "No available staff with required skills"
+    }
+  ],
+  "total_assigned": 45,
+  "total_unassigned": 3,
+  "optimization_time_seconds": 12.5
 }
 ```
 
 **Status Codes:**
 - `200 OK` - Schedule generated
-- `400 Bad Request` - Invalid date range or parameters
-- `429 Too Many Requests` - Rate limit exceeded
+- `400 Bad Request` - Invalid date or parameters
+- `500 Internal Server Error` - Schedule generation failed
 
 ---
 
-## Job Categorization
+### POST /schedule/explain
+
+Generate natural language explanation of a schedule.
+
+**Request:**
+```json
+{
+  "schedule_date": "2025-02-01",
+  "staff_assignments": [
+    {
+      "staff_name": "Vas",
+      "job_count": 7,
+      "total_duration_minutes": 420,
+      "cities": ["Eden Prairie", "Plymouth"],
+      "job_types": ["Spring Startup", "Repair"]
+    }
+  ],
+  "unassigned_count": 3,
+  "total_jobs": 50
+}
+```
+
+**Response:**
+```json
+{
+  "explanation": "For February 1st, I've scheduled 47 out of 50 jobs across 3 staff members. Vas has 7 jobs in Eden Prairie and Plymouth, focusing on spring startups and repairs. The schedule optimizes for geographic clustering to minimize drive time.",
+  "highlights": [
+    "Geographic batching in Eden Prairie saves 45 minutes of drive time",
+    "All spring startups scheduled before repairs for efficiency",
+    "3 jobs couldn't be scheduled due to staff availability constraints"
+  ]
+}
+```
+
+**Status Codes:**
+- `200 OK` - Explanation generated
+- `500 Internal Server Error` - Explanation failed
+
+---
+
+### POST /schedule/explain-unassigned
+
+Explain why a specific job couldn't be scheduled.
+
+**Request:**
+```json
+{
+  "job_id": "uuid",
+  "job_type": "Installation",
+  "city": "Rogers",
+  "estimated_duration_minutes": 240,
+  "required_equipment": ["pipe_puller", "utility_trailer"],
+  "schedule_date": "2025-02-01",
+  "available_staff": ["Vas", "Dad", "Steven"]
+}
+```
+
+**Response:**
+```json
+{
+  "explanation": "This 4-hour installation in Rogers couldn't be scheduled because it requires specialized equipment (pipe puller and utility trailer) that's already allocated to another job on this date.",
+  "constraint_violations": [
+    "Equipment conflict: pipe_puller needed by 2 jobs simultaneously",
+    "Duration exceeds remaining capacity for all available staff"
+  ],
+  "suggestions": [
+    "Schedule for February 2nd when equipment is available",
+    "Split into two 2-hour sessions across different days",
+    "Assign to Steven who has more capacity on this date"
+  ],
+  "alternative_dates": ["2025-02-02", "2025-02-03"]
+}
+```
+
+**Status Codes:**
+- `200 OK` - Explanation generated
+- `500 Internal Server Error` - Explanation failed (provides fallback)
+
+---
+
+### POST /schedule/parse-constraints
+
+Parse natural language constraints into structured format.
+
+**Request:**
+```json
+{
+  "constraint_text": "Don't schedule Viktor before 10am. Keep all Eden Prairie jobs together. Dad can only work until 3pm on Tuesdays.",
+  "schedule_date": "2025-02-01",
+  "available_staff": ["Viktor", "Dad", "Vas"]
+}
+```
+
+**Response:**
+```json
+{
+  "constraints": [
+    {
+      "type": "staff_time",
+      "staff_name": "Viktor",
+      "time_restriction": "no_work_before_10am",
+      "validation_errors": []
+    },
+    {
+      "type": "job_grouping",
+      "city": "Eden Prairie",
+      "group_together": true,
+      "validation_errors": []
+    },
+    {
+      "type": "staff_time",
+      "staff_name": "Dad",
+      "time_restriction": "end_by_3pm_tuesday",
+      "validation_errors": []
+    }
+  ],
+  "unparseable_text": null
+}
+```
+
+**Constraint Types:**
+- `staff_time` - Time restrictions for specific staff
+- `job_grouping` - Geographic or job type batching
+- `staff_restriction` - Staff skill or availability limits
+- `geographic` - City or region preferences
+
+**Status Codes:**
+- `200 OK` - Constraints parsed
+- `500 Internal Server Error` - Parsing failed
+
+---
+
+### GET /schedule/jobs-ready
+
+Get jobs ready to schedule with grouping by city and job type.
+
+**Query Parameters:**
+- `date_from` - Filter jobs from this date (optional)
+- `date_to` - Filter jobs to this date (optional)
+
+**Response:**
+```json
+{
+  "jobs": [
+    {
+      "job_id": "uuid",
+      "customer_id": "uuid",
+      "customer_name": "John Doe",
+      "job_type": "Spring Startup",
+      "city": "Eden Prairie",
+      "priority": "normal",
+      "estimated_duration_minutes": 60,
+      "requires_equipment": [],
+      "status": "approved"
+    }
+  ],
+  "total_count": 65,
+  "by_city": {
+    "Eden Prairie": 25,
+    "Plymouth": 20,
+    "Maple Grove": 15,
+    "Rogers": 5
+  },
+  "by_job_type": {
+    "Spring Startup": 40,
+    "Repair": 15,
+    "Tune-up": 10
+  }
+}
+```
+
+**Status Codes:**
+- `200 OK` - Jobs retrieved
+- `500 Internal Server Error` - Query failed
+
+---
+
+### POST /schedule/preview
+
+Preview a schedule without persisting to database.
+
+**Request:**
+```json
+{
+  "schedule_date": "2025-02-01",
+  "timeout_seconds": 15
+}
+```
+
+**Response:** Same format as `/schedule/generate`
+
+**Status Codes:**
+- `200 OK` - Preview generated
+- `400 Bad Request` - Invalid parameters
+- `500 Internal Server Error` - Preview failed
+
+---
+
+### GET /schedule/capacity/{schedule_date}
+
+Get scheduling capacity for a specific date.
+
+**Response:**
+```json
+{
+  "schedule_date": "2025-02-01",
+  "available_staff": 3,
+  "total_capacity_minutes": 1440,
+  "used_capacity_minutes": 840,
+  "remaining_capacity_minutes": 600,
+  "staff_capacity": [
+    {
+      "staff_id": "uuid",
+      "staff_name": "Vas",
+      "available_minutes": 480,
+      "used_minutes": 420,
+      "remaining_minutes": 60
+    }
+  ]
+}
+```
+
+**Status Codes:**
+- `200 OK` - Capacity retrieved
+- `500 Internal Server Error` - Capacity check failed
+
+---
+
+### POST /schedule/insert-emergency
+
+Insert an emergency job into existing schedule.
+
+**Request:**
+```json
+{
+  "job_id": "uuid",
+  "target_date": "2025-02-01",
+  "priority_level": "high"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "assigned_staff_id": "uuid",
+  "assigned_staff_name": "Vas",
+  "start_time": "14:30",
+  "end_time": "15:30",
+  "displaced_jobs": [],
+  "message": "Emergency job successfully inserted into Vas's schedule at 2:30 PM"
+}
+```
+
+**Status Codes:**
+- `200 OK` - Job inserted
+- `500 Internal Server Error` - Insertion failed
+
+---
+
+### POST /schedule/re-optimize/{target_date}
+
+Re-optimize an existing schedule for a date.
+
+**Request:**
+```json
+{
+  "timeout_seconds": 15
+}
+```
+
+**Response:** Same format as `/schedule/generate`
+
+**Status Codes:**
+- `200 OK` - Schedule re-optimized
+- `500 Internal Server Error` - Re-optimization failed
+
+---
 
 ### POST /ai/jobs/categorize
 
@@ -542,3 +812,145 @@ All endpoints return errors in this format:
 ## Environment Configuration
 
 See [AI_SETUP.md](./AI_SETUP.md) for environment variable configuration.
+
+---
+
+## Request/Response Examples
+
+### Complete Schedule Generation Flow
+
+**1. Check jobs ready to schedule:**
+```bash
+GET /api/v1/schedule/jobs-ready
+```
+
+**2. Preview schedule before committing:**
+```bash
+POST /api/v1/schedule/preview
+{
+  "schedule_date": "2025-02-01",
+  "timeout_seconds": 15
+}
+```
+
+**3. Generate and persist schedule:**
+```bash
+POST /api/v1/schedule/generate
+{
+  "schedule_date": "2025-02-01",
+  "timeout_seconds": 15
+}
+```
+
+**4. Get explanation of the schedule:**
+```bash
+POST /api/v1/schedule/explain
+{
+  "schedule_date": "2025-02-01",
+  "staff_assignments": [...],
+  "unassigned_count": 3,
+  "total_jobs": 50
+}
+```
+
+**5. Explain unassigned jobs:**
+```bash
+POST /api/v1/schedule/explain-unassigned
+{
+  "job_id": "uuid",
+  "job_type": "Installation",
+  "city": "Rogers",
+  ...
+}
+```
+
+### Natural Language Constraints Flow
+
+**1. Parse user input:**
+```bash
+POST /api/v1/schedule/parse-constraints
+{
+  "constraint_text": "Don't schedule Viktor before 10am",
+  "schedule_date": "2025-02-01",
+  "available_staff": ["Viktor", "Dad", "Vas"]
+}
+```
+
+**2. Apply constraints to schedule generation:**
+```bash
+POST /api/v1/schedule/generate
+{
+  "schedule_date": "2025-02-01",
+  "timeout_seconds": 15,
+  "constraints": [
+    {
+      "type": "staff_time",
+      "staff_name": "Viktor",
+      "time_restriction": "no_work_before_10am"
+    }
+  ]
+}
+```
+
+### Emergency Job Insertion Flow
+
+**1. Check capacity:**
+```bash
+GET /api/v1/schedule/capacity/2025-02-01
+```
+
+**2. Insert emergency job:**
+```bash
+POST /api/v1/schedule/insert-emergency
+{
+  "job_id": "uuid",
+  "target_date": "2025-02-01",
+  "priority_level": "high"
+}
+```
+
+**3. Re-optimize if needed:**
+```bash
+POST /api/v1/schedule/re-optimize/2025-02-01
+{
+  "timeout_seconds": 15
+}
+```
+
+---
+
+## Error Handling Examples
+
+### Schedule Generation Timeout
+```json
+{
+  "detail": "Schedule generation timed out after 15 seconds. Try increasing timeout_seconds or reducing job count."
+}
+```
+
+### No Available Staff
+```json
+{
+  "detail": "No staff available for the selected date. Please check staff availability."
+}
+```
+
+### AI Service Unavailable
+```json
+{
+  "detail": "AI explanation service temporarily unavailable. Schedule was generated successfully but explanation could not be provided."
+}
+```
+
+### Invalid Constraint
+```json
+{
+  "constraints": [
+    {
+      "type": "staff_time",
+      "staff_name": "Unknown",
+      "validation_errors": ["Staff 'Unknown' not found in available staff list"]
+    }
+  ]
+}
+```

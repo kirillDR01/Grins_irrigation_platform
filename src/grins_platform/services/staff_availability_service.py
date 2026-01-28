@@ -86,7 +86,8 @@ class StaffAvailabilityService(LoggerMixin):
         return StaffAvailabilityResponse.model_validate(availability)  # type: ignore[no-any-return]
 
     async def get_availability(
-        self, availability_id: UUID,
+        self,
+        availability_id: UUID,
     ) -> StaffAvailabilityResponse:
         """Get a staff availability entry by ID."""
         self.log_started("get_availability", availability_id=str(availability_id))
@@ -117,7 +118,8 @@ class StaffAvailabilityService(LoggerMixin):
             raise StaffNotFoundError(staff_id)
 
         availability = await self.repository.get_by_staff_and_date(
-            staff_id, target_date,
+            staff_id,
+            target_date,
         )
         if availability is None:
             self.log_rejected("get_availability_by_date", reason="not_found")
@@ -162,9 +164,7 @@ class StaffAvailabilityService(LoggerMixin):
             staff_id=str(staff_id),
             count=len(availabilities),
         )
-        return [
-            StaffAvailabilityResponse.model_validate(a) for a in availabilities
-        ]
+        return [StaffAvailabilityResponse.model_validate(a) for a in availabilities]
 
     async def update_availability(
         self,

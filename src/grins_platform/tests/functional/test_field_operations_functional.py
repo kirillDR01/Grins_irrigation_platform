@@ -850,4 +850,3 @@ class TestJobServiceFunctional:
             status_data = JobStatusUpdate(status=next_status)
             result = await service.update_status(job_id, status_data)
             assert result.status == next_status.value
-

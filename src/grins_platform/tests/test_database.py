@@ -1,6 +1,5 @@
 """Tests for database configuration and connection management."""
 
-
 from grins_platform.database import (
     Base,
     DatabaseManager,
@@ -25,21 +24,30 @@ class TestDatabaseSettings:
         settings = DatabaseSettings(
             database_url="postgresql://user:pass@localhost:5432/db",
         )
-        assert settings.async_database_url == "postgresql+asyncpg://user:pass@localhost:5432/db"
+        assert (
+            settings.async_database_url
+            == "postgresql+asyncpg://user:pass@localhost:5432/db"
+        )
 
     def test_async_database_url_postgres(self) -> None:
         """Test async URL conversion for postgres:// prefix."""
         settings = DatabaseSettings(
             database_url="postgres://user:pass@localhost:5432/db",
         )
-        assert settings.async_database_url == "postgresql+asyncpg://user:pass@localhost:5432/db"
+        assert (
+            settings.async_database_url
+            == "postgresql+asyncpg://user:pass@localhost:5432/db"
+        )
 
     def test_async_database_url_already_async(self) -> None:
         """Test async URL is unchanged if already in async format."""
         settings = DatabaseSettings(
             database_url="postgresql+asyncpg://user:pass@localhost:5432/db",
         )
-        assert settings.async_database_url == "postgresql+asyncpg://user:pass@localhost:5432/db"
+        assert (
+            settings.async_database_url
+            == "postgresql+asyncpg://user:pass@localhost:5432/db"
+        )
 
 
 class TestDatabaseManager:

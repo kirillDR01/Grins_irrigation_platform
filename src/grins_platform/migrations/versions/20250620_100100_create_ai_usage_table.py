@@ -38,13 +38,22 @@ def upgrade() -> None:
         sa.Column("usage_date", sa.Date(), nullable=False),
         sa.Column("request_count", sa.Integer(), nullable=False, server_default="0"),
         sa.Column(
-            "total_input_tokens", sa.Integer(), nullable=False, server_default="0",
+            "total_input_tokens",
+            sa.Integer(),
+            nullable=False,
+            server_default="0",
         ),
         sa.Column(
-            "total_output_tokens", sa.Integer(), nullable=False, server_default="0",
+            "total_output_tokens",
+            sa.Integer(),
+            nullable=False,
+            server_default="0",
         ),
         sa.Column(
-            "estimated_cost_usd", sa.Float(), nullable=False, server_default="0.0",
+            "estimated_cost_usd",
+            sa.Float(),
+            nullable=False,
+            server_default="0.0",
         ),
         sa.Column(
             "created_at",
@@ -61,13 +70,16 @@ def upgrade() -> None:
         sa.UniqueConstraint("user_id", "usage_date", name="uq_ai_usage_user_date"),
         sa.CheckConstraint("request_count >= 0", name="ck_ai_usage_request_count"),
         sa.CheckConstraint(
-            "total_input_tokens >= 0", name="ck_ai_usage_input_tokens",
+            "total_input_tokens >= 0",
+            name="ck_ai_usage_input_tokens",
         ),
         sa.CheckConstraint(
-            "total_output_tokens >= 0", name="ck_ai_usage_output_tokens",
+            "total_output_tokens >= 0",
+            name="ck_ai_usage_output_tokens",
         ),
         sa.CheckConstraint(
-            "estimated_cost_usd >= 0", name="ck_ai_usage_cost",
+            "estimated_cost_usd >= 0",
+            name="ck_ai_usage_cost",
         ),
     )
 

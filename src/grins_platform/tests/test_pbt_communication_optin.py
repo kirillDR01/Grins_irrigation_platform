@@ -55,12 +55,14 @@ def valid_email_strategy() -> st.SearchStrategy[str | None]:
         max_size=20,
     ).filter(lambda x: len(x) > 0)
 
-    domain = st.sampled_from([
-        "example.com",
-        "test.org",
-        "email.net",
-        "company.io",
-    ])
+    domain = st.sampled_from(
+        [
+            "example.com",
+            "test.org",
+            "email.net",
+            "company.io",
+        ],
+    )
 
     email = st.builds(
         lambda local, dom: f"{local}@{dom}",
@@ -300,8 +302,7 @@ class TestCommunicationOptInDefaults:
         )
 
         assert customer.sms_opt_in == sms_opt_in, (
-            f"Expected sms_opt_in={sms_opt_in}, "
-            f"got sms_opt_in={customer.sms_opt_in}"
+            f"Expected sms_opt_in={sms_opt_in}, got sms_opt_in={customer.sms_opt_in}"
         )
         assert customer.email_opt_in == email_opt_in, (
             f"Expected email_opt_in={email_opt_in}, "

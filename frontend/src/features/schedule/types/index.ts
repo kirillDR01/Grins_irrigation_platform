@@ -187,12 +187,23 @@ export interface UnassignedJobResponse {
   job_id: string;
   customer_name: string;
   service_type: string;
+  city: string | null;
+  duration_minutes: number;
   reason: string;
 }
 
 export interface ScheduleGenerateRequest {
   schedule_date: string;
   timeout_seconds?: number;
+  constraints?: Array<{
+    type: string;
+    description: string;
+    staff_name?: string;
+    time_start?: string;
+    time_end?: string;
+    job_type?: string;
+    city?: string;
+  }>;
 }
 
 export interface ScheduleGenerateResponse {

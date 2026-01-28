@@ -62,9 +62,7 @@ class ConflictResolutionService(LoggerMixin):
         self.log_started("cancel_appointment", appointment_id=str(appointment_id))
 
         appointment = (
-            self.db.query(Appointment)
-            .filter(Appointment.id == appointment_id)
-            .first()
+            self.db.query(Appointment).filter(Appointment.id == appointment_id).first()
         )
 
         if not appointment:
@@ -136,9 +134,7 @@ class ConflictResolutionService(LoggerMixin):
         self.log_started("reschedule_appointment", appointment_id=str(appointment_id))
 
         original = (
-            self.db.query(Appointment)
-            .filter(Appointment.id == appointment_id)
-            .first()
+            self.db.query(Appointment).filter(Appointment.id == appointment_id).first()
         )
 
         if not original:
@@ -248,9 +244,8 @@ class ConflictResolutionService(LoggerMixin):
             gap_end=str(gap_end),
         )
 
-        gap_minutes = (
-            (gap_end.hour * 60 + gap_end.minute)
-            - (gap_start.hour * 60 + gap_start.minute)
+        gap_minutes = (gap_end.hour * 60 + gap_end.minute) - (
+            gap_start.hour * 60 + gap_start.minute
         )
 
         suggestions: list[FillGapSuggestion] = []

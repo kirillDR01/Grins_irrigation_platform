@@ -106,7 +106,8 @@ class TestServiceOfferingService:
 
         # Assert
         mock_repository.get_by_id.assert_called_once_with(
-            service_id, include_inactive=True,
+            service_id,
+            include_inactive=True,
         )
         assert result == mock_service
 
@@ -238,7 +239,8 @@ class TestServiceOfferingService:
 
         # Assert
         mock_repository.find_by_category.assert_called_once_with(
-            ServiceCategory.SEASONAL, active_only=True,
+            ServiceCategory.SEASONAL,
+            active_only=True,
         )
         assert result == mock_services
 
@@ -305,7 +307,8 @@ class TestStaffService:
 
         # Assert
         mock_repository.get_by_id.assert_called_once_with(
-            staff_id, include_inactive=True,
+            staff_id,
+            include_inactive=True,
         )
         assert result == mock_staff
 
@@ -414,7 +417,9 @@ class TestStaffService:
 
         # Act
         result = await service.update_availability(
-            staff_id, is_available=False, availability_notes="On vacation",
+            staff_id,
+            is_available=False,
+            availability_notes="On vacation",
         )
 
         # Assert
@@ -482,10 +487,10 @@ class TestStaffService:
 
         # Assert
         mock_repository.find_by_role.assert_called_once_with(
-            StaffRole.TECH, active_only=True,
+            StaffRole.TECH,
+            active_only=True,
         )
         assert result == mock_staff_list
-
 
 
 # =============================================================================
@@ -952,7 +957,8 @@ class TestJobService:
 
         # Assert
         mock_job_repository.get_by_id.assert_called_once_with(
-            job_id, include_relationships=False,
+            job_id,
+            include_relationships=False,
         )
         assert result == mock_job
 

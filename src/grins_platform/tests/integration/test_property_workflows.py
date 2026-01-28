@@ -215,7 +215,6 @@ class TestPropertyCRUDWorkflow:
         assert delete_response.status_code == 204
         mock_service.delete_property.assert_called_once_with(property_id)
 
-
     def test_add_multiple_properties_workflow(
         self,
         client: TestClient,
@@ -460,7 +459,6 @@ class TestPrimaryPropertySwitching:
         assert final_properties[1]["is_primary"] is False
         assert final_properties[1]["address"] == "Property A"
 
-
     def test_first_property_becomes_primary_automatically(
         self,
         client: TestClient,
@@ -618,7 +616,6 @@ class TestPropertyCascadeBehavior:
         assert len(final_properties) == 1
         assert final_properties[0]["is_primary"] is True
         assert final_properties[0]["address"] == "Secondary Property"
-
 
     def test_delete_non_primary_property_preserves_primary(
         self,
@@ -797,7 +794,6 @@ class TestPropertyValidationWorkflow:
             },
         )
         assert response.status_code == 422
-
 
     def test_valid_zone_count_range(
         self,

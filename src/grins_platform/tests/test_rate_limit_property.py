@@ -45,7 +45,8 @@ class TestRateLimitProperty:
     @given(request_count=st.integers(min_value=100, max_value=1000))
     @settings(max_examples=20)
     async def test_requests_at_or_over_limit_rejected(
-        self, request_count: int,
+        self,
+        request_count: int,
     ) -> None:
         """Property: Requests at or over limit are always rejected."""
         mock_session = AsyncMock()

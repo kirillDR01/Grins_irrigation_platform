@@ -52,6 +52,7 @@ from grins_platform.utils.equipment import can_staff_handle_job
 # Strategies for generating valid test data
 # =============================================================================
 
+
 def valid_time_strategy() -> st.SearchStrategy[time]:
     """Generate valid time objects."""
     return st.builds(
@@ -319,14 +320,16 @@ class TestEquipmentAssignmentPersistence:
     @pytest.mark.unit
     @given(
         equipment=st.lists(
-            st.sampled_from([
-                "compressor",
-                "pipe_puller",
-                "utility_trailer",
-                "dump_trailer",
-                "skid_steer",
-                "standard_tools",
-            ]),
+            st.sampled_from(
+                [
+                    "compressor",
+                    "pipe_puller",
+                    "utility_trailer",
+                    "dump_trailer",
+                    "skid_steer",
+                    "standard_tools",
+                ],
+            ),
             min_size=0,
             max_size=5,
             unique=True,
@@ -437,7 +440,8 @@ class TestTravelTimeFallback:
         """
         service = TravelTimeService()
         travel_time = service.calculate_fallback_travel_time(
-            (lat1, lng1), (lat2, lng2),
+            (lat1, lng1),
+            (lat2, lng2),
         )
 
         assert travel_time >= 1, "Travel time should be at least 1 minute"
@@ -525,7 +529,9 @@ class TestScheduleSolverConstraints:
                 id=uuid4(),
                 customer_name=f"Customer {i}",
                 location=ScheduleLocation(
-                    Decimal("44.8547"), Decimal("-93.4708"), city="Eden Prairie",
+                    Decimal("44.8547"),
+                    Decimal("-93.4708"),
+                    city="Eden Prairie",
                 ),
                 service_type="Startup",
                 duration_minutes=30,
@@ -539,7 +545,8 @@ class TestScheduleSolverConstraints:
                 id=uuid4(),
                 name=f"Tech {i}",
                 start_location=ScheduleLocation(
-                    Decimal("44.8500"), Decimal("-93.4700"),
+                    Decimal("44.8500"),
+                    Decimal("-93.4700"),
                 ),
                 assigned_equipment=["standard_tools"],
             )
@@ -674,7 +681,9 @@ class TestScheduleGenerationCompleteness:
                 id=uuid4(),
                 customer_name=f"Customer {i}",
                 location=ScheduleLocation(
-                    Decimal("44.8547"), Decimal("-93.4708"), city="Eden Prairie",
+                    Decimal("44.8547"),
+                    Decimal("-93.4708"),
+                    city="Eden Prairie",
                 ),
                 service_type="Startup",
                 duration_minutes=30,
@@ -687,7 +696,8 @@ class TestScheduleGenerationCompleteness:
                 id=uuid4(),
                 name=f"Tech {i}",
                 start_location=ScheduleLocation(
-                    Decimal("44.8500"), Decimal("-93.4700"),
+                    Decimal("44.8500"),
+                    Decimal("-93.4700"),
                 ),
                 assigned_equipment=["standard_tools"],
             )
@@ -720,7 +730,8 @@ class TestScheduleGenerationCompleteness:
                 id=uuid4(),
                 customer_name=f"Customer {i}",
                 location=ScheduleLocation(
-                    Decimal("44.8547"), Decimal("-93.4708"),
+                    Decimal("44.8547"),
+                    Decimal("-93.4708"),
                 ),
                 service_type="Startup",
                 duration_minutes=30,
@@ -733,7 +744,8 @@ class TestScheduleGenerationCompleteness:
                 id=uuid4(),
                 name=f"Tech {i}",
                 start_location=ScheduleLocation(
-                    Decimal("44.8500"), Decimal("-93.4700"),
+                    Decimal("44.8500"),
+                    Decimal("-93.4700"),
                 ),
             )
             for i in range(2)
@@ -787,7 +799,8 @@ class TestPreviewNonPersistence:
                 id=uuid4(),
                 name="Tech",
                 start_location=ScheduleLocation(
-                    Decimal("44.8500"), Decimal("-93.4700"),
+                    Decimal("44.8500"),
+                    Decimal("-93.4700"),
                 ),
             ),
         ]
@@ -999,7 +1012,8 @@ class TestEmergencyJobInsertion:
                 id=uuid4(),
                 name="Tech",
                 start_location=ScheduleLocation(
-                    Decimal("44.8500"), Decimal("-93.4700"),
+                    Decimal("44.8500"),
+                    Decimal("-93.4700"),
                 ),
                 availability_start=time(8, 0),
                 availability_end=time(17, 0),  # 9 hours
@@ -1010,9 +1024,7 @@ class TestEmergencyJobInsertion:
         solution = solver.solve(date.today(), all_jobs, staff)
 
         # Count assigned jobs
-        assigned_count = sum(
-            len(a.jobs) for a in solution.assignments
-        )
+        assigned_count = sum(len(a.jobs) for a in solution.assignments)
 
         # With enough capacity, all jobs should be assigned
         assert assigned_count >= len(existing_jobs), "Existing jobs should be preserved"

@@ -7,9 +7,13 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from grins_platform.log_config import LoggerMixin
+from grins_platform.models.job import Job
+from grins_platform.models.staff import Staff
 
 
 class SchedulingTools(LoggerMixin):
@@ -36,8 +40,28 @@ class SchedulingTools(LoggerMixin):
         """
         self.log_started("get_pending_jobs", target_date=str(target_date))
 
-        # Placeholder - would query actual jobs from database
-        jobs: list[dict[str, Any]] = []
+        stmt = (
+            select(Job)
+            .options(selectinload(Job.customer), selectinload(Job.job_property))
+            .where(Job.is_deleted == False)  # noqa: E712
+            .where(Job.category == "ready_to_schedule")
+            .where(Job.status.in_(["approved", "requested"]))
+        )
+        result = await self.session.execute(stmt)
+        job_models = result.scalars().all()
+
+        jobs = [
+            {
+                "id": str(j.id),
+                "customer_name": j.customer.full_name if j.customer else "Unknown",
+                "address": j.job_property.address if j.job_property else None,
+                "city": j.job_property.city if j.job_property else None,
+                "job_type": j.job_type,
+                "estimated_duration": j.estimated_duration_minutes or 60,
+                "priority_level": j.priority_level,
+            }
+            for j in job_models
+        ]
 
         self.log_completed("get_pending_jobs", count=len(jobs))
         return jobs
@@ -56,8 +80,29 @@ class SchedulingTools(LoggerMixin):
         """
         self.log_started("get_staff_availability", target_date=str(target_date))
 
-        # Placeholder - would query actual staff availability
-        staff: list[dict[str, Any]] = []
+        stmt = (
+            select(Staff)
+            .where(Staff.is_active == True)  # noqa: E712
+            .where(Staff.is_available == True)  # noqa: E712
+        )
+        result = await self.session.execute(stmt)
+        staff_models = result.scalars().all()
+
+        staff = [
+            {
+                "id": str(s.id),
+                "name": s.name,
+                "role": s.role,
+                "skill_level": s.skill_level,
+                "start_lat": (
+                    float(s.default_start_lat) if s.default_start_lat else None
+                ),
+                "start_lng": (
+                    float(s.default_start_lng) if s.default_start_lng else None
+                ),
+            }
+            for s in staff_models
+        ]
 
         self.log_completed("get_staff_availability", count=len(staff))
         return staff
@@ -138,14 +183,16 @@ class SchedulingTools(LoggerMixin):
             duration = job.get("estimated_duration", 60)
             end_time = current_time + timedelta(minutes=duration)
 
-            slots.append({
-                "job_id": job.get("id"),
-                "start_time": current_time.isoformat(),
-                "end_time": end_time.isoformat(),
-                "staff_id": staff[0].get("id") if staff else None,
-                "city": job.get("city"),
-                "job_type": job.get("job_type"),
-            })
+            slots.append(
+                {
+                    "job_id": job.get("id"),
+                    "start_time": current_time.isoformat(),
+                    "end_time": end_time.isoformat(),
+                    "staff_id": staff[0].get("id") if staff else None,
+                    "city": job.get("city"),
+                    "job_type": job.get("job_type"),
+                },
+            )
 
             # Add travel buffer
             current_time = end_time + timedelta(minutes=15)

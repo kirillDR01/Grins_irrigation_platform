@@ -49,7 +49,8 @@ class Staff(Base):
 
     # Primary key
     id: Mapped[UUID] = mapped_column(
-        primary_key=True, server_default=func.gen_random_uuid(),
+        primary_key=True,
+        server_default=func.gen_random_uuid(),
     )
 
     # Basic info
@@ -61,12 +62,15 @@ class Staff(Base):
     role: Mapped[str] = mapped_column(String(50), nullable=False)
     skill_level: Mapped[str | None] = mapped_column(String(50), nullable=True)
     certifications: Mapped[list[str] | None] = mapped_column(
-        JSON, nullable=True,
+        JSON,
+        nullable=True,
     )  # Requirement 8.8
 
     # Availability (Requirements 9.1, 9.2)
     is_available: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="true",
+        Boolean,
+        nullable=False,
+        server_default="true",
     )
     availability_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -75,30 +79,38 @@ class Staff(Base):
 
     # Equipment Assignment (Requirement 2.1 - Route Optimization)
     assigned_equipment: Mapped[list[str] | None] = mapped_column(
-        JSON, nullable=True, server_default="[]",
+        JSON,
+        nullable=True,
+        server_default="[]",
     )
 
     # Starting Location (Requirement 3.1 - Route Optimization)
     default_start_address: Mapped[str | None] = mapped_column(
-        String(255), nullable=True,
+        String(255),
+        nullable=True,
     )
     default_start_city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     default_start_lat: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 7), nullable=True,
+        Numeric(10, 7),
+        nullable=True,
     )
     default_start_lng: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 7), nullable=True,
+        Numeric(10, 7),
+        nullable=True,
     )
 
     # Status
     is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="true",
+        Boolean,
+        nullable=False,
+        server_default="true",
     )
 
     # Timestamps (Requirement 8.7)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), onupdate=func.now(),
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
     # Relationships

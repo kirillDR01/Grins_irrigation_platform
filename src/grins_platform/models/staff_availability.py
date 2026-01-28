@@ -48,7 +48,8 @@ class StaffAvailability(Base):
 
     # Primary key
     id: Mapped[UUID] = mapped_column(
-        primary_key=True, server_default=func.gen_random_uuid(),
+        primary_key=True,
+        server_default=func.gen_random_uuid(),
     )
 
     # Foreign key to staff
@@ -62,23 +63,33 @@ class StaffAvailability(Base):
 
     # Time window
     start_time: Mapped[time] = mapped_column(
-        Time, nullable=False, server_default="07:00:00",
+        Time,
+        nullable=False,
+        server_default="07:00:00",
     )
     end_time: Mapped[time] = mapped_column(
-        Time, nullable=False, server_default="17:00:00",
+        Time,
+        nullable=False,
+        server_default="17:00:00",
     )
 
     # Availability flag
     is_available: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="true",
+        Boolean,
+        nullable=False,
+        server_default="true",
     )
 
     # Lunch break configuration
     lunch_start: Mapped[Optional[time]] = mapped_column(
-        Time, nullable=True, server_default="12:00:00",
+        Time,
+        nullable=True,
+        server_default="12:00:00",
     )
     lunch_duration_minutes: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="30",
+        Integer,
+        nullable=False,
+        server_default="30",
     )
 
     # Notes
@@ -87,12 +98,14 @@ class StaffAvailability(Base):
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), onupdate=func.now(),
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
     # Relationships
     staff: Mapped["Staff"] = relationship(
-        "Staff", back_populates="availability_entries",
+        "Staff",
+        back_populates="availability_entries",
     )
 
     def __repr__(self) -> str:
@@ -113,9 +126,7 @@ class StaffAvailability(Base):
                 msg = "end_time must be after start_time"
                 raise ValueError(msg)
         elif (
-            key == "start_time"
-            and self.end_time is not None
-            and value >= self.end_time
+            key == "start_time" and self.end_time is not None and value >= self.end_time
         ):
             msg = "start_time must be before end_time"
             raise ValueError(msg)
@@ -123,7 +134,9 @@ class StaffAvailability(Base):
 
     @validates("lunch_start")  # type: ignore[misc,untyped-decorator]
     def validate_lunch_within_window(
-        self, key: str, value: Optional[time],  # noqa: ARG002
+        self,
+        key: str,  # noqa: ARG002
+        value: Optional[time],
     ) -> Optional[time]:
         """Validate that lunch_start is within the availability window.
 

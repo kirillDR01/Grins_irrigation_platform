@@ -20,8 +20,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarIcon, Loader2, Zap, Eye, List, Map, Sparkles } from 'lucide-react';
+import { CalendarIcon, Loader2, Zap, Eye, List, Map } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   useGenerateSchedule,
@@ -31,9 +30,13 @@ import {
 import { ScheduleResults } from './ScheduleResults';
 import { MapProvider } from './map/MapProvider';
 import { ScheduleMap } from './map/ScheduleMap';
-import { AIScheduleGenerator } from '@/features/ai/components/AIScheduleGenerator';
+import { NaturalLanguageConstraintsInput } from './NaturalLanguageConstraintsInput';
+import { SchedulingHelpAssistant } from './SchedulingHelpAssistant';
+import { JobsReadyToSchedulePreview } from './JobsReadyToSchedulePreview';
+import { useJobsReadyToSchedule } from '../hooks/useJobsReadyToSchedule';
 import type { ScheduleGenerateResponse } from '../types';
 import type { ViewMode } from '../types/map';
+import type { ParsedConstraint } from '../types/explanation';
 
 export function ScheduleGenerationPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -41,11 +44,15 @@ export function ScheduleGenerationPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [showRoutes, setShowRoutes] = useState(true);
-  const [generationMode, setGenerationMode] = useState<'manual' | 'ai'>('manual');
+  const [constraints, setConstraints] = useState<ParsedConstraint[]>([]);
+  const [excludedJobIds, setExcludedJobIds] = useState<Set<string>>(new Set());
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
   const { data: capacity, isLoading: capacityLoading } =
     useScheduleCapacity(dateStr);
+  
+  const { data: jobsData, isLoading: jobsLoading, error: jobsError} = 
+    useJobsReadyToSchedule(); // Don't pass date params - we want ALL unscheduled jobs
 
   const generateMutation = useGenerateSchedule();
   const previewMutation = usePreviewSchedule();
@@ -53,17 +60,57 @@ export function ScheduleGenerationPage() {
   const isGenerating =
     generateMutation.isPending || previewMutation.isPending;
 
+  const handleToggleExclude = (jobId: string) => {
+    setExcludedJobIds(prev => {
+      const next = new Set(prev);
+      if (next.has(jobId)) {
+        next.delete(jobId);
+      } else {
+        next.add(jobId);
+      }
+      return next;
+    });
+  };
+
   const handleGenerate = async () => {
+    const includedJobIds = jobsData?.jobs
+      .filter(j => !excludedJobIds.has(j.job_id))
+      .map(j => j.job_id);
+
     const response = await generateMutation.mutateAsync({
       schedule_date: dateStr,
+      job_ids: includedJobIds,
+      constraints: constraints.map((c) => ({
+        type: c.type,
+        description: c.description,
+        staff_name: c.staff_name,
+        time_start: c.time_start,
+        time_end: c.time_end,
+        job_type: c.job_type,
+        city: c.city,
+      })),
     });
     setResults(response);
   };
 
   const handlePreview = async () => {
+    const includedJobIds = jobsData?.jobs
+      .filter(j => !excludedJobIds.has(j.job_id))
+      .map(j => j.job_id);
+
     const response = await previewMutation.mutateAsync({
       schedule_date: dateStr,
       preview_only: true,
+      job_ids: includedJobIds,
+      constraints: constraints.map((c) => ({
+        type: c.type,
+        description: c.description,
+        staff_name: c.staff_name,
+        time_start: c.time_start,
+        time_end: c.time_end,
+        job_type: c.job_type,
+        city: c.city,
+      })),
     });
     setResults(response);
   };
@@ -75,22 +122,7 @@ export function ScheduleGenerationPage() {
         description="Optimize routes and generate schedules for field staff"
       />
 
-      {/* Generation Mode Tabs */}
-      <Tabs value={generationMode} onValueChange={(v) => setGenerationMode(v as 'manual' | 'ai')}>
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="manual" data-testid="manual-mode-tab">
-            <Zap className="mr-2 h-4 w-4" />
-            Manual Generation
-          </TabsTrigger>
-          <TabsTrigger value="ai" data-testid="ai-mode-tab">
-            <Sparkles className="mr-2 h-4 w-4" />
-            AI-Powered
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Manual Generation Mode */}
-        <TabsContent value="manual" className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-3">
         {/* Date Selection Card */}
         <Card>
           <CardHeader>
@@ -128,6 +160,11 @@ export function ScheduleGenerationPage() {
               </PopoverContent>
             </Popover>
 
+            <NaturalLanguageConstraintsInput
+              scheduleDate={dateStr}
+              onConstraintsChange={setConstraints}
+            />
+
             <div className="flex gap-2">
               <Button
                 onClick={handlePreview}
@@ -147,14 +184,14 @@ export function ScheduleGenerationPage() {
                 onClick={handleGenerate}
                 disabled={isGenerating}
                 className="flex-1"
-                data-testid="generate-btn"
+                data-testid="generate-schedule-btn"
               >
                 {generateMutation.isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <Zap className="mr-2 h-4 w-4" />
                 )}
-                Generate
+                Generate Schedule
               </Button>
             </div>
           </CardContent>
@@ -217,6 +254,18 @@ export function ScheduleGenerationPage() {
         </Card>
       </div>
 
+      {/* Scheduling Help Assistant */}
+      <SchedulingHelpAssistant />
+
+      {/* Jobs Ready to Schedule Preview */}
+      <JobsReadyToSchedulePreview
+        jobs={jobsData?.jobs ?? []}
+        isLoading={jobsLoading}
+        error={jobsError}
+        excludedJobIds={excludedJobIds}
+        onToggleExclude={handleToggleExclude}
+      />
+
       {/* View Toggle and Results Section */}
       {results && (
         <div className="space-y-4">
@@ -244,7 +293,7 @@ export function ScheduleGenerationPage() {
 
           {/* Conditional View Rendering */}
           {viewMode === 'list' ? (
-            <ScheduleResults results={results} />
+            <ScheduleResults results={results} scheduleDate={dateStr} />
           ) : (
             <MapProvider>
               <ScheduleMap
@@ -270,13 +319,6 @@ export function ScheduleGenerationPage() {
           </CardContent>
         </Card>
       )}
-        </TabsContent>
-
-        {/* AI Generation Mode */}
-        <TabsContent value="ai" className="space-y-6">
-          <AIScheduleGenerator />
-        </TabsContent>
-      </Tabs>
     </div>
   );
 }

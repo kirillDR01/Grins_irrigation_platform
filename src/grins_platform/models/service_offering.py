@@ -48,7 +48,8 @@ class ServiceOffering(Base):
 
     # Primary key
     id: Mapped[UUID] = mapped_column(
-        primary_key=True, server_default=func.gen_random_uuid(),
+        primary_key=True,
+        server_default=func.gen_random_uuid(),
     )
 
     # Service Identity
@@ -59,46 +60,60 @@ class ServiceOffering(Base):
     # Pricing (Requirements 1.8)
     base_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     price_per_zone: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 2), nullable=True,
+        Numeric(10, 2),
+        nullable=True,
     )
     pricing_model: Mapped[str] = mapped_column(String(50), nullable=False)
 
     # Duration Estimates (Requirement 1.9)
     estimated_duration_minutes: Mapped[int | None] = mapped_column(
-        Integer, nullable=True,
+        Integer,
+        nullable=True,
     )
     duration_per_zone_minutes: Mapped[int | None] = mapped_column(
-        Integer, nullable=True,
+        Integer,
+        nullable=True,
     )
 
     # Requirements (Requirement 1.10)
     staffing_required: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="1",
+        Integer,
+        nullable=False,
+        server_default="1",
     )
     equipment_required: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
     # Buffer Time (Requirement 8.1 - Route Optimization)
     buffer_minutes: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="10",
+        Integer,
+        nullable=False,
+        server_default="10",
     )
 
     # Business Rules (Requirements 1.12, 1.13)
     lien_eligible: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="false",
+        Boolean,
+        nullable=False,
+        server_default="false",
     )
     requires_prepay: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="false",
+        Boolean,
+        nullable=False,
+        server_default="false",
     )
 
     # Status
     is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="true",
+        Boolean,
+        nullable=False,
+        server_default="true",
     )
 
     # Timestamps (Requirement 1.7)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), onupdate=func.now(),
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
     def __repr__(self) -> str:

@@ -46,9 +46,9 @@ class TestInputSanitizationProperty:
         # Verify no dangerous characters in output
         dangerous_chars = ["<", ">", "{", "}", "[", "]", "|"]
         for char in dangerous_chars:
-            assert (
-                char not in sanitized
-            ), f"Dangerous character '{char}' found in sanitized output"
+            assert char not in sanitized, (
+                f"Dangerous character '{char}' found in sanitized output"
+            )
 
     @given(st.text(min_size=0, max_size=100))
     def test_sanitized_output_length_bounded(self, user_input: str) -> None:
@@ -116,9 +116,9 @@ class TestInputSanitizationProperty:
         # Verify non-string values unchanged
         for key, value in data.items():
             if not isinstance(value, str):
-                assert (
-                    sanitized[key] == value
-                ), f"Non-string value changed for key {key}"
+                assert sanitized[key] == value, (
+                    f"Non-string value changed for key {key}"
+                )
 
     def test_empty_input_returns_empty(self) -> None:
         """Property: Empty input SHALL return empty output."""

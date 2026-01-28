@@ -30,3 +30,8 @@ export {
   useGenerateSchedule,
   usePreviewSchedule,
 } from './useScheduleGeneration';
+
+export { useScheduleExplanation } from './useScheduleExplanation';
+export { useUnassignedJobExplanation } from './useUnassignedJobExplanation';
+export { useConstraintParser } from './useConstraintParser';
+export { useJobsReadyToSchedule } from './useJobsReadyToSchedule';

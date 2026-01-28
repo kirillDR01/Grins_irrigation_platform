@@ -68,6 +68,7 @@ async def chat(
     message = request.message
 
     if stream:
+
         async def generate() -> AsyncGenerator[str, None]:
             try:
                 async for chunk in agent.chat_stream(DEMO_USER_ID, message):

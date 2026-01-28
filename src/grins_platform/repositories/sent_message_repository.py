@@ -56,9 +56,7 @@ class SentMessageRepository(LoggerMixin):
             message_type=message_type.value,
         )
 
-        status = (
-            DeliveryStatus.SCHEDULED if scheduled_for else DeliveryStatus.PENDING
-        )
+        status = DeliveryStatus.SCHEDULED if scheduled_for else DeliveryStatus.PENDING
 
         message = SentMessage(
             customer_id=customer_id,
@@ -170,7 +168,10 @@ class SentMessageRepository(LoggerMixin):
 
         if include_sent_today:
             today_start = datetime.now().replace(
-                hour=0, minute=0, second=0, microsecond=0,
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
             )
             sent_result = await self.session.execute(
                 select(SentMessage)

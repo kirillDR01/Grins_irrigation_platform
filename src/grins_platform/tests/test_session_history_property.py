@@ -45,7 +45,8 @@ class TestSessionHistoryLimitProperty:
         message_count=st.integers(min_value=51, max_value=100),
     )
     def test_oldest_messages_removed_when_limit_exceeded(
-        self, message_count: int,
+        self,
+        message_count: int,
     ) -> None:
         """Property: Oldest messages are removed when limit exceeded.
 

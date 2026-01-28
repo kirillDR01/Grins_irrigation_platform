@@ -95,10 +95,14 @@ def upgrade() -> None:
     op.create_index("idx_sent_messages_job_id", "sent_messages", ["job_id"])
     op.create_index("idx_sent_messages_message_type", "sent_messages", ["message_type"])
     op.create_index(
-        "idx_sent_messages_delivery_status", "sent_messages", ["delivery_status"],
+        "idx_sent_messages_delivery_status",
+        "sent_messages",
+        ["delivery_status"],
     )
     op.create_index(
-        "idx_sent_messages_scheduled_for", "sent_messages", ["scheduled_for"],
+        "idx_sent_messages_scheduled_for",
+        "sent_messages",
+        ["scheduled_for"],
     )
 
 

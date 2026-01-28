@@ -188,18 +188,22 @@ async def send_bulk(
                 message_type=request.message_type,
                 sms_opt_in=recipient.sms_opt_in,
             )
-            results.append({
-                "customer_id": str(recipient.customer_id),
-                "success": True,
-                "message_id": result["message_id"],
-            })
+            results.append(
+                {
+                    "customer_id": str(recipient.customer_id),
+                    "success": True,
+                    "message_id": result["message_id"],
+                },
+            )
             success_count += 1
         except Exception as e:  # noqa: PERF203
-            results.append({
-                "customer_id": str(recipient.customer_id),
-                "success": False,
-                "error": str(e),
-            })
+            results.append(
+                {
+                    "customer_id": str(recipient.customer_id),
+                    "success": False,
+                    "error": str(e),
+                },
+            )
             failure_count += 1
 
     return BulkSendResponse(

@@ -63,4 +63,6 @@ export {
   AppointmentForm,
   ScheduleGenerationPage,
   ScheduleResults,
+  UnassignedJobExplanationCard,
+  JobsReadyToSchedulePreview,
 } from './components';
