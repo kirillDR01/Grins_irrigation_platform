@@ -7,9 +7,13 @@ ensuring type safety and consistent values across the application.
 Phase 1 (Customer Management): CustomerStatus, LeadSource, SystemType, PropertyType
 Phase 2 (Field Operations): ServiceCategory, PricingModel, JobCategory, JobStatus,
                            JobSource, StaffRole, SkillLevel
+Phase 8 (Authentication): UserRole
+Phase 8 (Invoice Management): InvoiceStatus, PaymentMethod
 
 Validates: Requirements 1.12, 2.3, 2.4 (Phase 1)
 Validates: Requirements 1.2, 1.3, 4.1, 8.2, 8.3 (Phase 2)
+Validates: Requirement 17.1 (Phase 8 - Authentication)
+Validates: Requirements 8.1-8.10, 9.2 (Phase 8 - Invoice)
 """
 
 from enum import Enum
@@ -168,3 +172,54 @@ class AppointmentStatus(str, Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+
+
+# =============================================================================
+# Phase 8: Authentication Enums
+# =============================================================================
+
+
+class UserRole(str, Enum):
+    """User role enumeration for role-based access control.
+
+    Validates: Requirement 17.1
+    """
+
+    ADMIN = "admin"
+    MANAGER = "manager"
+    TECH = "tech"
+
+
+# =============================================================================
+# Phase 8: Invoice Management Enums
+# =============================================================================
+
+
+class InvoiceStatus(str, Enum):
+    """Invoice status enumeration for invoice workflow management.
+
+    Validates: Requirements 8.1-8.10
+    """
+
+    DRAFT = "draft"
+    SENT = "sent"
+    VIEWED = "viewed"
+    PAID = "paid"
+    PARTIAL = "partial"
+    OVERDUE = "overdue"
+    LIEN_WARNING = "lien_warning"
+    LIEN_FILED = "lien_filed"
+    CANCELLED = "cancelled"
+
+
+class PaymentMethod(str, Enum):
+    """Payment method enumeration for invoice payments.
+
+    Validates: Requirement 9.2
+    """
+
+    CASH = "cash"
+    CHECK = "check"
+    VENMO = "venmo"
+    ZELLE = "zelle"
+    STRIPE = "stripe"

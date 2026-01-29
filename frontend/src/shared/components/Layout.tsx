@@ -12,9 +12,11 @@ import {
   X,
   Droplets,
   Zap,
+  FileText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { UserMenu } from '@/features/auth';
 
 interface LayoutProps {
   children: ReactNode;
@@ -63,6 +65,12 @@ const navItems: NavItem[] = [
     href: '/staff',
     icon: <UserCog className="h-5 w-5" />,
     testId: 'nav-staff',
+  },
+  {
+    label: 'Invoices',
+    href: '/invoices',
+    icon: <FileText className="h-5 w-5" />,
+    testId: 'nav-invoices',
   },
   {
     label: 'Settings',
@@ -170,13 +178,8 @@ export function Layout({ children }: LayoutProps) {
             </h1>
           </div>
 
-          {/* User info placeholder */}
-          <div className="flex items-center gap-2" data-testid="user-info">
-            <span className="text-sm text-muted-foreground">Viktor</span>
-            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <span className="text-sm font-medium">VG</span>
-            </div>
-          </div>
+          {/* User menu */}
+          <UserMenu />
         </header>
 
         {/* Page content */}

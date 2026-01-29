@@ -8,6 +8,7 @@ Phase 2 (Field Operations): ServiceOffering, Job, JobStatusHistory, Staff
 Phase 3 (Admin Dashboard): Appointment
 Phase 4 (Route Optimization): StaffAvailability
 Phase 6 (AI Assistant): AIAuditLog, AIUsage, SentMessage
+Phase 8 (Schedule Workflow): ScheduleClearAudit, Invoice
 """
 
 from grins_platform.models.ai_audit_log import AIAuditLog
@@ -17,10 +18,12 @@ from grins_platform.models.customer import Customer
 from grins_platform.models.enums import (
     AppointmentStatus,
     CustomerStatus,
+    InvoiceStatus,
     JobCategory,
     JobSource,
     JobStatus,
     LeadSource,
+    PaymentMethod,
     PricingModel,
     PropertyType,
     ServiceCategory,
@@ -28,9 +31,11 @@ from grins_platform.models.enums import (
     StaffRole,
     SystemType,
 )
+from grins_platform.models.invoice import Invoice
 from grins_platform.models.job import Job
 from grins_platform.models.job_status_history import JobStatusHistory
 from grins_platform.models.property import Property
+from grins_platform.models.schedule_clear_audit import ScheduleClearAudit
 from grins_platform.models.sent_message import SentMessage
 from grins_platform.models.service_offering import ServiceOffering
 from grins_platform.models.staff import Staff
@@ -46,6 +51,9 @@ __all__ = [
     # Phase 1: Customer Management
     "Customer",
     "CustomerStatus",
+    # Phase 8: Invoice Management
+    "Invoice",
+    "InvoiceStatus",
     # Phase 2: Field Operations
     "Job",
     "JobCategory",
@@ -53,9 +61,12 @@ __all__ = [
     "JobStatus",
     "JobStatusHistory",
     "LeadSource",
+    "PaymentMethod",
     "PricingModel",
     "Property",
     "PropertyType",
+    # Phase 8: Schedule Workflow
+    "ScheduleClearAudit",
     # Phase 6: AI Assistant
     "SentMessage",
     "ServiceCategory",

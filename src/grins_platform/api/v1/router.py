@@ -10,12 +10,15 @@ from fastapi import APIRouter
 
 from grins_platform.api.v1.ai import router as ai_router
 from grins_platform.api.v1.appointments import router as appointments_router
+from grins_platform.api.v1.auth import router as auth_router
 from grins_platform.api.v1.conflict_resolution import router as conflict_router
 from grins_platform.api.v1.customers import router as customers_router
 from grins_platform.api.v1.dashboard import router as dashboard_router
+from grins_platform.api.v1.invoices import router as invoices_router
 from grins_platform.api.v1.jobs import router as jobs_router
 from grins_platform.api.v1.properties import router as properties_router
 from grins_platform.api.v1.schedule import router as schedule_router
+from grins_platform.api.v1.schedule_clear import router as schedule_clear_router
 from grins_platform.api.v1.services import router as services_router
 from grins_platform.api.v1.sms import (
     communications_router,
@@ -26,6 +29,9 @@ from grins_platform.api.v1.staff_availability import router as staff_availabilit
 from grins_platform.api.v1.staff_reassignment import router as reassignment_router
 
 api_router = APIRouter(prefix="/api/v1")
+
+# Include authentication endpoints
+api_router.include_router(auth_router)
 
 # Include customer endpoints
 api_router.include_router(
@@ -86,6 +92,18 @@ api_router.include_router(
 api_router.include_router(
     schedule_router,
     tags=["schedule"],
+)
+
+# Include schedule clear endpoints
+api_router.include_router(
+    schedule_clear_router,
+    tags=["schedule-clear"],
+)
+
+# Include invoice endpoints
+api_router.include_router(
+    invoices_router,
+    tags=["invoices"],
 )
 
 # Include conflict resolution endpoints

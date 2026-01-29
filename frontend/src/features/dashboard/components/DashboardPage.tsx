@@ -25,6 +25,7 @@ import { RecentActivity } from './RecentActivity';
 import { AIQueryChat } from '@/features/ai/components/AIQueryChat';
 import { MorningBriefing } from '@/features/ai/components/MorningBriefing';
 import { CommunicationsQueue } from '@/features/ai/components/CommunicationsQueue';
+import { OverdueInvoicesWidget, LienDeadlinesWidget } from '@/features/invoices';
 
 export function DashboardPage() {
   const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics();
@@ -193,6 +194,12 @@ export function DashboardPage() {
                 </div>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Invoice Widgets */}
+          <div className="grid gap-4 md:grid-cols-2" data-testid="invoice-widgets-section">
+            <OverdueInvoicesWidget />
+            <LienDeadlinesWidget />
           </div>
 
           {/* Quick Actions */}

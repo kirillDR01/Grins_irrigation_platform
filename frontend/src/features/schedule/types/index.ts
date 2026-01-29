@@ -346,3 +346,34 @@ export interface CustomerSearchResult {
   phone: string;
   email: string | null;
 }
+
+// =============================================================================
+// Schedule Clear Types
+// =============================================================================
+
+export interface ScheduleClearRequest {
+  schedule_date: string;
+  notes?: string;
+}
+
+export interface ScheduleClearResponse {
+  audit_id: string;
+  schedule_date: string;
+  appointments_deleted: number;
+  jobs_reset: number;
+  cleared_at: string;
+}
+
+export interface ScheduleClearAuditResponse {
+  id: string;
+  schedule_date: string;
+  appointment_count: number;
+  cleared_at: string;
+  cleared_by: string | null;
+  notes: string | null;
+}
+
+export interface ScheduleClearAuditDetailResponse extends ScheduleClearAuditResponse {
+  appointments_data: Record<string, unknown>[];
+  jobs_reset: string[];
+}

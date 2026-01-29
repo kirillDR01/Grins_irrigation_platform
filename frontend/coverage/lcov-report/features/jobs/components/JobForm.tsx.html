@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">86.2% </span>
+                <span class="strong">89.65% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>25/29</span>
+                <span class='fraction'>26/29</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">85.18% </span>
+                <span class="strong">85.45% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>46/54</span>
+                <span class='fraction'>47/55</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">80% </span>
+                <span class="strong">86.66% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>12/15</span>
+                <span class='fraction'>13/15</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">86.2% </span>
+                <span class="strong">89.65% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>25/29</span>
+                <span class='fraction'>26/29</span>
             </div>
         
             
@@ -447,6 +447,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -545,7 +546,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -651,7 +654,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -676,7 +678,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -694,7 +695,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">34x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -802,20 +802,21 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { useCreateJob, useUpdateJob } from '../hooks';
+import { SearchableCustomerDropdown } from './SearchableCustomerDropdown';
 import type { Job, JobCreate, JobUpdate, JobSource } from '../types';
 &nbsp;
-// Form validation schema
+// Form validation schema - using simple types without coerce
 const jobFormSchema = z.object({
-  customer_id: z.string().uuid('Please select a customer'),
-  property_id: z.string().uuid().optional().nullable(),
-  service_offering_id: z.string().uuid().optional().nullable(),
+  customer_id: z.string().min(1, 'Please select a customer'),
+  property_id: z.string().optional().nullable(),
+  service_offering_id: z.string().optional().nullable(),
   job_type: z.string().min(1, 'Job type is required'),
   description: z.string().optional().nullable(),
-  estimated_duration_minutes: z.coerce.number().positive().optional().nullable(),
-  priority_level: z.coerce.number().min(0).max(2).default(0),
-  weather_sensitive: z.boolean().default(false),
-  staffing_required: z.coerce.number().min(1).default(1),
-  quoted_amount: z.coerce.number().nonnegative().optional().nullable(),
+  estimated_duration_minutes: z.number().positive().optional().nullable(),
+  priority_level: z.number().min(0).max(2),
+  weather_sensitive: z.boolean(),
+  staffing_required: z.number().min(1),
+  quoted_amount: z.number().nonnegative().optional().nullable(),
   source: z.enum(['website', 'google', 'referral', 'phone', 'partner']).optional().nullable(),
 });
 &nbsp;
@@ -842,9 +843,9 @@ export function JobForm({ job, customerId, onSuccess, onCancel }: JobFormProps) 
       job_type: job?.job_type || '',
       description: job?.description || '',
       estimated_duration_minutes: job?.estimated_duration_minutes || null,
-      priority_level: job?.priority_level || 0,
-      weather_sensitive: job?.weather_sensitive || false,
-      staffing_required: job?.staffing_required || 1,
+      priority_level: job?.priority_level ?? 0,
+      weather_sensitive: job?.weather_sensitive ?? false,
+      staffing_required: job?.staffing_required ?? 1,
       quoted_amount: job?.quoted_amount || null,
       source: job?.source || null,
     },
@@ -897,23 +898,25 @@ export function JobForm({ job, customerId, onSuccess, onCancel }: JobFormProps) 
         className="space-y-6"
         data-testid="job-form"
       &gt;
-        {/* Customer ID - required for new jobs */}
-        {!isEditing &amp;&amp; !customerId &amp;&amp; (
-<span class="branch-2 cbranch-no" title="branch not covered" >          &lt;FormField</span>
+        {/* Customer ID - required for new jobs, read-only when editing */}
+        {!customerId &amp;&amp; (
+          &lt;FormField
             control={form.control}
             name="customer_id"
-            render={<span class="fstat-no" title="function not covered" >({</span> field }) =&gt; (
-<span class="cstat-no" title="statement not covered" >              &lt;FormItem&gt;</span>
-                &lt;FormLabel&gt;Customer ID *&lt;/FormLabel&gt;
+            render={({ field }) =&gt; (
+              &lt;FormItem&gt;
+                &lt;FormLabel&gt;Customer *&lt;/FormLabel&gt;
                 &lt;FormControl&gt;
-                  &lt;Input
-                    {...field}
-                    placeholder="Enter customer UUID"
-                    data-testid="customer-id-input"
+                  &lt;SearchableCustomerDropdown
+                    value={field.value}
+                    onChange={field.onChange}
+                    disabled={isEditing}
                   /&gt;
                 &lt;/FormControl&gt;
                 &lt;FormDescription&gt;
-                  The UUID of the customer for this job
+                  {isEditing
+                    ? 'Customer cannot be changed after job creation'
+                    : <span class="branch-1 cbranch-no" title="branch not covered" >'Search and select the customer for this job'}</span>
                 &lt;/FormDescription&gt;
                 &lt;FormMessage /&gt;
               &lt;/FormItem&gt;
@@ -1006,7 +1009,6 @@ export function JobForm({ job, customerId, onSuccess, onCancel }: JobFormProps) 
                 &lt;FormLabel&gt;Staff Required&lt;/FormLabel&gt;
                 &lt;FormControl&gt;
                   &lt;Input
-                    {...field}
                     type="number"
                     min={1}
                     value={field.value || <span class="branch-1 cbranch-no" title="branch not covered" >1}</span>
@@ -1030,10 +1032,9 @@ export function JobForm({ job, customerId, onSuccess, onCancel }: JobFormProps) 
                 &lt;FormLabel&gt;Duration (minutes)&lt;/FormLabel&gt;
                 &lt;FormControl&gt;
                   &lt;Input
-                    {...field}
                     type="number"
                     min={1}
-                    value={field.value || ''}
+                    value={field.value ?? ''}
                     onChange={(e) =&gt;
                       field.onChange(e.target.value ? parseInt(e.target.value) : <span class="branch-1 cbranch-no" title="branch not covered" >null)</span>
                     }
@@ -1055,11 +1056,10 @@ export function JobForm({ job, customerId, onSuccess, onCancel }: JobFormProps) 
                 &lt;FormLabel&gt;Quoted Amount ($)&lt;/FormLabel&gt;
                 &lt;FormControl&gt;
                   &lt;Input
-                    {...field}
                     type="number"
                     min={0}
                     step="0.01"
-                    value={field.value || ''}
+                    value={field.value ?? ''}
                     onChange={(e) =&gt;
                       field.onChange(e.target.value ? parseFloat(e.target.value) : <span class="branch-1 cbranch-no" title="branch not covered" >null)</span>
                     }
@@ -1144,7 +1144,7 @@ export function JobForm({ job, customerId, onSuccess, onCancel }: JobFormProps) 
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-22T20:35:56.864Z
+                at 2026-01-29T09:06:41.182Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

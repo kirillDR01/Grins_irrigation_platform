@@ -5,6 +5,7 @@ import { Checkbox } from '@/shared/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/shared/components/ui/alert';
+import { JobSelectionControls } from './JobSelectionControls';
 import type { JobReadyToSchedule } from '../types';
 
 interface JobsReadyToSchedulePreviewProps {
@@ -13,6 +14,8 @@ interface JobsReadyToSchedulePreviewProps {
   error: Error | null;
   excludedJobIds: Set<string>;
   onToggleExclude: (jobId: string) => void;
+  onSelectAll?: () => void;
+  onDeselectAll?: () => void;
 }
 
 export function JobsReadyToSchedulePreview({
@@ -21,6 +24,8 @@ export function JobsReadyToSchedulePreview({
   error,
   excludedJobIds,
   onToggleExclude,
+  onSelectAll,
+  onDeselectAll,
 }: JobsReadyToSchedulePreviewProps) {
   const [filterJobType, setFilterJobType] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
@@ -150,11 +155,19 @@ export function JobsReadyToSchedulePreview({
         </div>
       </CardHeader>
       <CardContent>
-        <div className="mb-4" data-testid="jobs-summary">
+        <div className="mb-4 flex items-center justify-between" data-testid="jobs-summary">
           <p className="text-sm text-muted-foreground">
             {selectedCount} jobs selected for scheduling
             {excludedCount > 0 && ` (${excludedCount} excluded)`}
           </p>
+          {onSelectAll && onDeselectAll && (
+            <JobSelectionControls
+              jobIds={filteredJobs.map(j => j.job_id)}
+              excludedJobIds={excludedJobIds}
+              onSelectAll={onSelectAll}
+              onDeselectAll={onDeselectAll}
+            />
+          )}
         </div>
 
         <div className="space-y-2 max-h-[400px] overflow-y-auto">

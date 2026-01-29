@@ -8,7 +8,7 @@ Validates: Requirements 3.1-3.7, 4.1-4.5, 5.1-5.5
 """
 
 from datetime import date, timedelta
-from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
@@ -19,6 +19,31 @@ from hypothesis import (
 )
 
 from grins_platform.services.ai.context.builder import ContextBuilder
+
+
+def create_mock_session() -> MagicMock:
+    """Create a properly mocked async session for testing."""
+    mock_session = MagicMock()
+
+    # Create mock result objects that behave correctly
+    def create_mock_result(
+        scalar_value: int | None = 0,
+        all_value: list[MagicMock] | None = None,
+    ) -> MagicMock:
+        mock_result = MagicMock()
+        mock_result.scalar.return_value = scalar_value
+        mock_result.all.return_value = all_value or []
+        mock_result.scalars.return_value.all.return_value = all_value or []
+        return mock_result
+
+    # Create an async function that returns the mock result
+    async def mock_execute(*args, **kwargs):  # noqa: ARG001
+        return create_mock_result(scalar_value=0, all_value=[])
+
+    # Mock execute to return proper result objects
+    mock_session.execute = mock_execute
+
+    return mock_session
 
 
 @pytest.mark.asyncio
@@ -34,7 +59,7 @@ class TestContextBuilderProperty:
         days_offset: int,
     ) -> None:
         """Property: Scheduling context always has required fields."""
-        mock_session = AsyncMock()
+        mock_session = create_mock_session()
         builder = ContextBuilder(mock_session)
 
         target_date = date.today() + timedelta(days=days_offset)
@@ -56,7 +81,7 @@ class TestContextBuilderProperty:
         description: str,
     ) -> None:
         """Property: Categorization context always has required fields."""
-        mock_session = AsyncMock()
+        mock_session = create_mock_session()
         builder = ContextBuilder(mock_session)
 
         context = await builder.build_categorization_context(description)
@@ -78,7 +103,7 @@ class TestContextBuilderProperty:
         message_type: str,
     ) -> None:
         """Property: Communication context always has required fields."""
-        mock_session = AsyncMock()
+        mock_session = create_mock_session()
         builder = ContextBuilder(mock_session)
 
         context = await builder.build_communication_context(
@@ -94,7 +119,7 @@ class TestContextBuilderProperty:
 
     async def test_estimate_context_has_pricing(self) -> None:
         """Test that estimate context includes pricing information."""
-        mock_session = AsyncMock()
+        mock_session = create_mock_session()
         builder = ContextBuilder(mock_session)
 
         context = await builder.build_estimate_context(uuid4())
@@ -110,12 +135,12 @@ class TestContextBuilderProperty:
     @settings(max_examples=20)
     async def test_query_context_has_required_fields(self, query: str) -> None:
         """Property: Query context always has required fields."""
-        mock_session = AsyncMock()
+        mock_session = create_mock_session()
         builder = ContextBuilder(mock_session)
 
         context = await builder.build_query_context(query)
 
         assert "query" in context
         assert "date_range" in context
-        assert "available_data" in context
+        assert "business_data" in context  # Changed from available_data
         assert context["query"] == query

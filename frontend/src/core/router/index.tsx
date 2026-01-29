@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
 import { Layout } from '@/shared/components/Layout';
 import { LoadingPage } from '@/shared/components/LoadingSpinner';
+import { ProtectedRoute, LoginPage } from '@/features/auth';
 
 // Lazy load pages for code splitting
 const DashboardPage = lazy(() =>
@@ -27,6 +28,9 @@ const StaffPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import('@/pages/Settings').then((m) => ({ default: m.SettingsPage }))
 );
+const InvoicesPage = lazy(() =>
+  import('@/pages/Invoices').then((m) => ({ default: m.InvoicesPage }))
+);
 
 // Layout wrapper component with Suspense for lazy loaded pages
 function LayoutWrapper() {
@@ -39,10 +43,25 @@ function LayoutWrapper() {
   );
 }
 
+// Protected layout wrapper - wraps all authenticated routes
+function ProtectedLayoutWrapper() {
+  return (
+    <ProtectedRoute>
+      <LayoutWrapper />
+    </ProtectedRoute>
+  );
+}
+
 export const router = createBrowserRouter([
+  // Public route: Login
+  {
+    path: '/login',
+    element: <LoginPage />,
+  },
+  // Protected routes
   {
     path: '/',
-    element: <LayoutWrapper />,
+    element: <ProtectedLayoutWrapper />,
     children: [
       {
         index: true,
@@ -83,6 +102,14 @@ export const router = createBrowserRouter([
       {
         path: 'staff/:id',
         element: <StaffPage />,
+      },
+      {
+        path: 'invoices',
+        element: <InvoicesPage />,
+      },
+      {
+        path: 'invoices/:id',
+        element: <InvoicesPage />,
       },
       {
         path: 'settings',

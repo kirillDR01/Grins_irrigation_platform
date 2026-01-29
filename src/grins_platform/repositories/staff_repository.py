@@ -431,3 +431,96 @@ class StaffRepository(LoggerMixin):
 
         self.log_completed("count_available", count=count)
         return count
+
+    async def find_by_username(self, username: str) -> Staff | None:
+        """Find a staff member by username.
+
+        Args:
+            username: Username to search for
+
+        Returns:
+            Staff instance or None if not found
+
+        Validates: Requirement 15.1
+        """
+        self.log_started("find_by_username", username=username)
+
+        stmt = (
+            select(Staff)
+            .where(Staff.username == username)
+            .where(Staff.is_active == True)  # noqa: E712
+        )
+
+        result = await self.session.execute(stmt)
+        staff: Staff | None = result.scalar_one_or_none()
+
+        if staff:
+            self.log_completed("find_by_username", username=username, found=True)
+        else:
+            self.log_completed("find_by_username", username=username, found=False)
+
+        return staff
+
+    async def update_auth_fields(
+        self,
+        staff_id: UUID,
+        password_hash: str | None = None,
+        failed_login_attempts: int | None = None,
+        locked_until: datetime | None = None,
+        last_login: datetime | None = None,
+    ) -> Staff | None:
+        """Update authentication-related fields for a staff member.
+
+        Args:
+            staff_id: UUID of the staff member
+            password_hash: New password hash (optional)
+            failed_login_attempts: Failed login attempt count (optional)
+            locked_until: Account lockout timestamp (optional)
+            last_login: Last login timestamp (optional)
+
+        Returns:
+            Updated Staff instance or None if not found
+
+        Validates: Requirements 15.4-15.7, 16.5-16.7
+        """
+        self.log_started("update_auth_fields", staff_id=str(staff_id))
+
+        update_data: dict[str, Any] = {"updated_at": datetime.now()}
+
+        if password_hash is not None:
+            update_data["password_hash"] = password_hash
+
+        if failed_login_attempts is not None:
+            update_data["failed_login_attempts"] = failed_login_attempts
+
+        # Allow setting locked_until to None to unlock account
+        if "locked_until" not in update_data or locked_until is not None:
+            if locked_until is not None:
+                update_data["locked_until"] = locked_until
+            elif failed_login_attempts == 0:
+                # Reset lockout when failed attempts are reset
+                update_data["locked_until"] = None
+
+        if last_login is not None:
+            update_data["last_login"] = last_login
+
+        stmt = (
+            update(Staff)
+            .where(Staff.id == staff_id)
+            .values(**update_data)
+            .returning(Staff)
+        )
+
+        result = await self.session.execute(stmt)
+        await self.session.flush()
+
+        staff: Staff | None = result.scalar_one_or_none()
+
+        if staff:
+            self.log_completed("update_auth_fields", staff_id=str(staff_id))
+        else:
+            self.log_completed(
+                "update_auth_fields", staff_id=str(staff_id), found=False,
+            )
+
+        return staff

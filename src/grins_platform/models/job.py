@@ -22,6 +22,7 @@ from grins_platform.models.enums import JobCategory, JobSource, JobStatus
 if TYPE_CHECKING:
     from grins_platform.models.appointment import Appointment
     from grins_platform.models.customer import Customer
+    from grins_platform.models.invoice import Invoice
     from grins_platform.models.job_status_history import JobStatusHistory
     from grins_platform.models.property import Property
     from grins_platform.models.schedule_waitlist import ScheduleWaitlist
@@ -61,6 +62,7 @@ class Job(Base):
         materials_required: List of materials needed
         quoted_amount: Quoted price for the job
         final_amount: Final price after completion
+        payment_collected_on_site: Whether payment was collected during service
         source: Lead source (website, google, referral, etc.)
         source_details: Additional source information
         requested_at: When the job was requested
@@ -74,7 +76,7 @@ class Job(Base):
         created_at: Record creation timestamp
         updated_at: Record update timestamp
 
-    Validates: Requirements 2.1-2.12, 4.1-4.9
+    Validates: Requirements 2.1-2.12, 4.1-4.9, 10.6
     """
 
     __tablename__ = "jobs"
@@ -138,6 +140,13 @@ class Job(Base):
     quoted_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     final_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
 
+    # Payment tracking (Requirement 10.6)
+    payment_collected_on_site: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
+
     # Lead Attribution (Requirements 2.11, 2.12)
     source: Mapped[str | None] = mapped_column(String(50), nullable=True)
     source_details: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
@@ -189,6 +198,11 @@ class Job(Base):
     )
     sent_messages: Mapped[list["SentMessage"]] = relationship(
         "SentMessage",
+        back_populates="job",
+        lazy="selectin",
+    )
+    invoices: Mapped[list["Invoice"]] = relationship(
+        "Invoice",
         back_populates="job",
         lazy="selectin",
     )

@@ -4,7 +4,7 @@ Staff model for staff management.
 This module defines the Staff SQLAlchemy model representing staff members
 in the Grin's Irrigation Platform.
 
-Validates: Requirements 8.1-8.10
+Validates: Requirements 8.1-8.10, 15.1-15.8
 """
 
 from datetime import datetime
@@ -12,7 +12,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
-from sqlalchemy import JSON, Boolean, Numeric, String, Text
+from sqlalchemy import JSON, Boolean, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -39,10 +39,16 @@ class Staff(Base):
         availability_notes: Notes about availability
         hourly_rate: Hourly compensation rate
         is_active: Whether the staff member is active
+        username: Unique username for login (optional)
+        password_hash: Bcrypt hashed password (optional)
+        is_login_enabled: Whether the user can log in
+        last_login: Timestamp of last successful login
+        failed_login_attempts: Counter for failed login attempts
+        locked_until: Timestamp until which account is locked
         created_at: Record creation timestamp
         updated_at: Record update timestamp
 
-    Validates: Requirements 8.1-8.10
+    Validates: Requirements 8.1-8.10, 15.1-15.8
     """
 
     __tablename__ = "staff"
@@ -57,6 +63,20 @@ class Staff(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     phone: Mapped[str] = mapped_column(String(20), nullable=False)  # Requirement 8.10
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Authentication fields (Requirements 15.1-15.8)
+    username: Mapped[str | None] = mapped_column(
+        String(50), unique=True, nullable=True, index=True,
+    )
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_login_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false",
+    )
+    last_login: Mapped[datetime | None] = mapped_column(nullable=True)
+    failed_login_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0",
+    )
+    locked_until: Mapped[datetime | None] = mapped_column(nullable=True)
 
     # Role and skills (Requirements 8.2, 8.3)
     role: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -143,6 +163,7 @@ class Staff(Base):
 
         Returns:
             Dictionary representation of the staff member.
+            Note: password_hash is intentionally excluded for security.
         """
         return {
             "id": str(self.id),
@@ -165,6 +186,14 @@ class Staff(Base):
             "availability_notes": self.availability_notes,
             "hourly_rate": float(self.hourly_rate) if self.hourly_rate else None,
             "is_active": self.is_active,
+            # Authentication fields (excluding password_hash for security)
+            "username": self.username,
+            "is_login_enabled": self.is_login_enabled,
+            "last_login": self.last_login.isoformat() if self.last_login else None,
+            "failed_login_attempts": self.failed_login_attempts,
+            "locked_until": (
+                self.locked_until.isoformat() if self.locked_until else None
+            ),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

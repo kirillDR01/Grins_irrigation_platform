@@ -125,9 +125,9 @@ async def test_explain_schedule_handles_ai_error(
     mock_ai_service_class: AsyncMock,
     client: AsyncClient,
 ) -> None:
-    """Test that endpoint handles AI service errors gracefully.
+    """Test that endpoint handles AI service errors gracefully with fallback.
 
-    Validates: Requirement 6.1 (error handling)
+    Validates: Requirement 6.1 (error handling with graceful degradation)
     """
     # Arrange - Mock AI service to raise error
     mock_ai_instance = AsyncMock()
@@ -157,9 +157,12 @@ async def test_explain_schedule_handles_ai_error(
         json=request_data.model_dump(mode="json"),
     )
 
-    # Assert
-    assert response.status_code == 500
-    assert "Schedule explanation failed" in response.json()["detail"]
+    # Assert - Service returns 200 with fallback explanation when AI unavailable
+    assert response.status_code == 200
+    data = response.json()
+    assert "explanation" in data
+    # Fallback explanation should still provide useful info
+    assert len(data["explanation"]) > 0
 
 
 @pytest.mark.asyncio
@@ -308,9 +311,9 @@ async def test_parse_constraints_handles_ai_error(
     mock_ai_service_class: AsyncMock,
     client: AsyncClient,
 ) -> None:
-    """Test that endpoint handles AI service errors gracefully.
+    """Test that endpoint handles AI service errors gracefully with fallback.
 
-    Validates: Requirement 6.3 (error handling)
+    Validates: Requirement 6.3 (error handling with graceful degradation)
     """
     # Arrange - Mock AI service to raise error
     mock_ai_instance = AsyncMock()
@@ -329,6 +332,9 @@ async def test_parse_constraints_handles_ai_error(
         json=request_data.model_dump(mode="json"),
     )
 
-    # Assert
-    assert response.status_code == 500
-    assert "Constraint parsing failed" in response.json()["detail"]
+    # Assert - Service returns 200 with empty constraints when AI unavailable
+    assert response.status_code == 200
+    data = response.json()
+    assert "constraints" in data
+    # When AI is unavailable, constraints list may be empty
+    assert isinstance(data["constraints"], list)

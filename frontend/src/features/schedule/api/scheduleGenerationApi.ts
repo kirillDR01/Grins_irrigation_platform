@@ -19,6 +19,10 @@ import type {
   CustomerSearchResult,
   ApplyScheduleRequest,
   ApplyScheduleResponse,
+  ScheduleClearRequest,
+  ScheduleClearResponse,
+  ScheduleClearAuditResponse,
+  ScheduleClearAuditDetailResponse,
 } from '../types';
 import type { PaginatedResponse } from '@/core/api';
 
@@ -150,6 +154,40 @@ export const scheduleGenerationApi = {
     const response = await apiClient.post<ApplyScheduleResponse>(
       `${BASE_URL}/apply`,
       request
+    );
+    return response.data;
+  },
+
+  /**
+   * Clear schedule for a date.
+   */
+  async clearSchedule(
+    request: ScheduleClearRequest
+  ): Promise<ScheduleClearResponse> {
+    const response = await apiClient.post<ScheduleClearResponse>(
+      `${BASE_URL}/clear`,
+      request
+    );
+    return response.data;
+  },
+
+  /**
+   * Get recently cleared schedules.
+   */
+  async getRecentClears(hours: number = 24): Promise<ScheduleClearAuditResponse[]> {
+    const response = await apiClient.get<ScheduleClearAuditResponse[]>(
+      `${BASE_URL}/clear/recent`,
+      { params: { hours } }
+    );
+    return response.data;
+  },
+
+  /**
+   * Get schedule clear audit details.
+   */
+  async getClearDetails(auditId: string): Promise<ScheduleClearAuditDetailResponse> {
+    const response = await apiClient.get<ScheduleClearAuditDetailResponse>(
+      `${BASE_URL}/clear/${auditId}`
     );
     return response.data;
   },

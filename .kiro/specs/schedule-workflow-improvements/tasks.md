@@ -18,7 +18,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
 ### Phase 8A: Authentication - Database & Models
 
 - [ ] 1. Database Migrations for Authentication
-  - [ ] 1.1 Create staff authentication columns migration
+  - [x] 1.1 Create staff authentication columns migration
     - Add username (VARCHAR(50), UNIQUE, nullable)
     - Add password_hash (VARCHAR(255), nullable)
     - Add is_login_enabled (BOOLEAN, default FALSE)
@@ -28,19 +28,19 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Add index on username WHERE username IS NOT NULL
     - _Requirements: 15.1-15.8_
 
-  - [ ] 1.2 Test authentication migration
+  - [x] 1.2 Test authentication migration
     - Run migration against test database
     - Verify columns added correctly
     - Test rollback functionality
     - _Requirements: 15.1-15.8_
 
 - [ ] 2. Authentication Models and Enums
-  - [ ] 2.1 Create UserRole enum
+  - [x] 2.1 Create UserRole enum
     - Add ADMIN, MANAGER, TECH values
     - Add to models/enums.py
     - _Requirements: 17.1_
 
-  - [ ] 2.2 Update Staff model with authentication fields
+  - [x] 2.2 Update Staff model with authentication fields
     - Add username field (unique, nullable)
     - Add password_hash field (nullable)
     - Add is_login_enabled field (default False)
@@ -49,13 +49,13 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Add locked_until field
     - _Requirements: 15.1-15.8_
 
-  - [ ] 2.3 Write model tests for authentication fields
+  - [x] 2.3 Write model tests for authentication fields
     - Test Staff model with auth fields
     - Test UserRole enum values
     - _Requirements: 15.1-15.8, 17.1_
 
 - [ ] 3. Authentication Schemas
-  - [ ] 3.1 Create authentication request/response schemas
+  - [x] 3.1 Create authentication request/response schemas
     - LoginRequest (username, password, remember_me)
     - LoginResponse (access_token, token_type, expires_in, user)
     - TokenResponse (access_token, token_type, expires_in)
@@ -63,7 +63,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - ChangePasswordRequest with password validation
     - _Requirements: 14.1-14.8, 18.1-18.8_
 
-  - [ ] 3.2 Write schema validation tests
+  - [x] 3.2 Write schema validation tests
     - Test password strength validation
     - Test required field validation
     - _Requirements: 16.1-16.4_
@@ -71,7 +71,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
 ### Phase 8B: Authentication - Service Layer
 
 - [ ] 4. Authentication Service
-  - [ ] 4.1 Create AuthService with LoggerMixin
+  - [x] 4.1 Create AuthService with LoggerMixin
     - Implement authenticate method
     - Implement _verify_password method (bcrypt)
     - Implement _hash_password method (bcrypt, cost 12)
@@ -84,14 +84,14 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Implement get_current_user method
     - _Requirements: 14.1-14.8, 16.1-16.8_
 
-  - [ ] 4.2 Implement account lockout logic
+  - [x] 4.2 Implement account lockout logic
     - Track failed login attempts
     - Lock account after 5 failed attempts
     - Set lockout duration to 15 minutes
     - Reset counter on successful login
     - _Requirements: 16.5-16.7_
 
-  - [ ] 4.3 Create authentication exceptions
+  - [x] 4.3 Create authentication exceptions
     - InvalidCredentialsError
     - AccountLockedError
     - TokenExpiredError
@@ -99,7 +99,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - UserNotFoundError
     - _Requirements: 14.2, 16.5-16.7_
 
-  - [ ] 4.5 Implement CSRF protection middleware
+  - [x] 4.5 Implement CSRF protection middleware
     - Create CSRFMiddleware class
     - Generate secure CSRF tokens (secrets.token_urlsafe)
     - Validate X-CSRF-Token header against csrf_token cookie
@@ -107,7 +107,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Return 403 Forbidden on validation failure
     - _Requirements: 16.8_
 
-  - [ ]* 4.4 Write AuthService unit tests
+  - [x] 4.4 Write AuthService unit tests
     - Test successful authentication
     - Test invalid credentials
     - Test account lockout
@@ -116,27 +116,27 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - **Property 1: Password Hashing Round-Trip**
     - _Requirements: 14.1-14.8, 16.1-16.8_
 
-- [ ] 5. Role-Based Access Control
-  - [ ] 5.1 Create permission decorator
+- [x] 5. Role-Based Access Control
+  - [x] 5.1 Create permission decorator
     - Implement require_roles decorator
     - Support multiple allowed roles
     - Return 403 Forbidden for unauthorized access
     - _Requirements: 17.1-17.12_
 
-  - [ ] 5.2 Create FastAPI dependencies for auth
+  - [x] 5.2 Create FastAPI dependencies for auth
     - get_current_user dependency
     - get_current_active_user dependency
     - require_admin dependency
     - require_manager_or_admin dependency
     - _Requirements: 17.1-17.12, 20.1-20.6_
 
-  - [ ]* 5.3 Write RBAC unit tests
+  - [x] 5.3 Write RBAC unit tests
     - Test permission decorator
     - Test role-based access
     - **Property 2: Role Permission Hierarchy**
     - _Requirements: 17.1-17.12_
 
-- [ ] 6. Checkpoint - Authentication Service Layer
+- [x] 6. Checkpoint - Authentication Service Layer
   - Ensure all authentication service tests pass
   - Ensure all quality checks pass (ruff, mypy, pyright)
   - Ask the user if questions arise
@@ -144,13 +144,13 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
 ### Phase 8C: Authentication - API & Frontend
 
 - [ ] 7. Authentication API Endpoints
-  - [ ] 7.1 Create FastAPI router for auth
+  - [x] 7.1 Create FastAPI router for auth
     - Create api/v1/auth.py
     - Set up dependency injection for AuthService
     - Register router in main app
     - _Requirements: 18.1-18.8_
 
-  - [ ] 7.2 Implement POST /api/v1/auth/login
+  - [x] 7.2 Implement POST /api/v1/auth/login
     - Authenticate user with username/password
     - Return access token and user info
     - Set refresh token as HttpOnly cookie
@@ -159,31 +159,31 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Return 401 on invalid credentials
     - _Requirements: 14.1-14.2, 16.8, 18.1, 18.6-18.8_
 
-  - [ ] 7.3 Implement POST /api/v1/auth/logout
+  - [x] 7.3 Implement POST /api/v1/auth/logout
     - Clear refresh token cookie
     - Clear CSRF token cookie
     - Return 204 No Content
     - _Requirements: 14.8, 16.8, 18.2_
 
-  - [ ] 7.4 Implement POST /api/v1/auth/refresh
+  - [x] 7.4 Implement POST /api/v1/auth/refresh
     - Verify refresh token from cookie
     - Generate new access token
     - Return 401 if refresh token invalid
     - _Requirements: 18.3, 18.8_
 
-  - [ ] 7.5 Implement GET /api/v1/auth/me
+  - [x] 7.5 Implement GET /api/v1/auth/me
     - Return current user info
     - Require valid access token
     - _Requirements: 18.4_
 
-  - [ ] 7.6 Implement POST /api/v1/auth/change-password
+  - [x] 7.6 Implement POST /api/v1/auth/change-password
     - Verify current password
     - Validate new password strength
     - Update password hash
     - Return 204 No Content
     - _Requirements: 18.5_
 
-  - [ ]* 7.7 Write authentication API tests
+  - [x] 7.7 Write authentication API tests
     - Test login success and failure
     - Test logout
     - Test token refresh
@@ -192,7 +192,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - _Requirements: 14.1-14.8, 18.1-18.8_
 
 - [ ] 8. Frontend Authentication Components
-  - [ ] 8.1 Create AuthProvider context
+  - [x] 8.1 Create AuthProvider context
     - Manage user state
     - Manage access token in memory
     - Manage CSRF token (read from cookie, send in headers)
@@ -202,7 +202,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Auto-refresh before expiration
     - _Requirements: 16.8, 19.1-19.8, 20.5-20.6_
 
-  - [ ] 8.2 Create LoginPage component
+  - [x] 8.2 Create LoginPage component
     - Username input with User icon
     - Password input with visibility toggle
     - Remember me checkbox
@@ -212,26 +212,26 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Add data-testid attributes
     - _Requirements: 19.1-19.7_
 
-  - [ ] 8.3 Create ProtectedRoute component
+  - [x] 8.3 Create ProtectedRoute component
     - Check authentication state
     - Redirect to login if not authenticated
     - Check role permissions
     - Display AccessDenied for unauthorized roles
     - _Requirements: 20.1-20.4_
 
-  - [ ] 8.4 Create UserMenu component
+  - [x] 8.4 Create UserMenu component
     - Display user name
     - Dropdown with settings and logout
     - Add data-testid attributes
     - _Requirements: 19.8_
 
-  - [ ] 8.5 Update App.tsx with auth routes
+  - [x] 8.5 Update App.tsx with auth routes
     - Wrap routes with AuthProvider
     - Add /login route
     - Protect all other routes with ProtectedRoute
     - _Requirements: 20.1-20.6_
 
-  - [ ] 8.6 Create auth API client
+  - [x] 8.6 Create auth API client
     - login function
     - logout function
     - refresh function
@@ -239,7 +239,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - changePassword function
     - _Requirements: 18.1-18.8_
 
-  - [ ]* 8.7 Write frontend auth tests
+  - [x] 8.7 Write frontend auth tests
     - Test LoginPage rendering
     - Test form validation
     - Test login flow
@@ -247,7 +247,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Test user menu
     - _Requirements: 19.1-19.8, 20.1-20.6_
 
-- [ ] 9. Checkpoint - Authentication Complete
+- [x] 9. Checkpoint - Authentication Complete
   - Ensure all authentication tests pass
   - Ensure login flow works end-to-end
   - Ensure protected routes redirect correctly
@@ -256,7 +256,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
 ### Phase 8D: Schedule Clear - Database & Models
 
 - [ ] 10. Database Migrations for Schedule Clear
-  - [ ] 10.1 Create schedule_clear_audit table migration
+  - [x] 10.1 Create schedule_clear_audit table migration
     - id (UUID, PRIMARY KEY)
     - schedule_date (DATE, NOT NULL)
     - appointments_data (JSONB, NOT NULL)
@@ -269,33 +269,33 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Add indexes on schedule_date and cleared_at
     - _Requirements: 5.1-5.6_
 
-  - [ ] 10.2 Test schedule clear audit migration
+  - [x] 10.2 Test schedule clear audit migration
     - Run migration against test database
     - Verify table and indexes created
     - Test rollback functionality
     - _Requirements: 5.1-5.6_
 
 - [ ] 11. Schedule Clear Models
-  - [ ] 11.1 Create ScheduleClearAudit model
+  - [x] 11.1 Create ScheduleClearAudit model
     - Define model with all fields from design
     - Add relationship to Staff (cleared_by)
     - Configure timestamps
     - _Requirements: 5.1-5.6_
 
-  - [ ] 11.2 Write model tests
+  - [x] 11.2 Write model tests
     - Test model instantiation
     - Test JSON serialization of appointments_data
     - _Requirements: 5.1-5.6_
 
 - [ ] 12. Schedule Clear Schemas
-  - [ ] 12.1 Create schedule clear request/response schemas
+  - [x] 12.1 Create schedule clear request/response schemas
     - ScheduleClearRequest (schedule_date, notes)
     - ScheduleClearResponse (audit_id, schedule_date, appointments_deleted, jobs_reset, cleared_at)
     - ScheduleClearAuditResponse (id, schedule_date, appointment_count, cleared_at, cleared_by, notes)
     - ScheduleClearAuditDetailResponse (extends with appointments_data, jobs_reset)
     - _Requirements: 3.1-3.7, 5.1-5.6, 6.1-6.5_
 
-  - [ ] 12.2 Write schema validation tests
+  - [x] 12.2 Write schema validation tests
     - Test date validation
     - Test response serialization
     - _Requirements: 3.1-3.7, 5.1-5.6_
@@ -303,19 +303,19 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
 ### Phase 8E: Schedule Clear - Service & Repository
 
 - [ ] 13. Schedule Clear Repository
-  - [ ] 13.1 Create ScheduleClearAuditRepository
+  - [x] 13.1 Create ScheduleClearAuditRepository
     - Implement create method
     - Implement get_by_id method
     - Implement find_since method (for recent clears)
     - _Requirements: 5.1-5.6, 6.1-6.5_
 
-  - [ ] 13.2 Write repository tests
+  - [x] 13.2 Write repository tests
     - Test CRUD operations
     - Test find_since filtering
     - _Requirements: 5.1-5.6, 6.1-6.5_
 
 - [ ] 14. Schedule Clear Service
-  - [ ] 14.1 Create ScheduleClearService with LoggerMixin
+  - [x] 14.1 Create ScheduleClearService with LoggerMixin
     - Implement clear_schedule method
     - Get appointments for date
     - Serialize appointment data for audit
@@ -326,21 +326,21 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Return response with counts
     - _Requirements: 3.1-3.7_
 
-  - [ ] 14.2 Implement get_recent_clears method
+  - [x] 14.2 Implement get_recent_clears method
     - Get clears from last N hours (default 24)
     - Return list of audit records
     - _Requirements: 6.1-6.5_
 
-  - [ ] 14.3 Implement get_clear_details method
+  - [x] 14.3 Implement get_clear_details method
     - Get full audit record by ID
     - Include appointments_data and jobs_reset
     - _Requirements: 6.3_
 
-  - [ ] 14.4 Create schedule clear exceptions
+  - [x] 14.4 Create schedule clear exceptions
     - ScheduleClearAuditNotFoundError
     - _Requirements: 22.3_
 
-  - [ ]* 14.5 Write ScheduleClearService unit tests
+  - [x] 14.5 Write ScheduleClearService unit tests
     - Test clear_schedule with appointments
     - Test clear_schedule with no appointments
     - Test job status reset logic
@@ -349,7 +349,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - **Property 4: Job Status Reset Correctness**
     - _Requirements: 3.1-3.7, 5.1-5.6_
 
-- [ ] 15. Checkpoint - Schedule Clear Service Layer
+- [x] 15. Checkpoint - Schedule Clear Service Layer
   - Ensure all schedule clear service tests pass
   - Ensure all quality checks pass (ruff, mypy, pyright)
   - Ask the user if questions arise
@@ -357,32 +357,32 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
 ### Phase 8F: Schedule Clear - API & Frontend
 
 - [ ] 16. Schedule Clear API Endpoints
-  - [ ] 16.1 Create FastAPI router for schedule clear
+  - [x] 16.1 Create FastAPI router for schedule clear
     - Create api/v1/schedule_clear.py
     - Set up dependency injection for ScheduleClearService
     - Register router in main app
     - Apply require_manager_or_admin to all endpoints
     - _Requirements: 17.5-17.6, 22.5-22.7_
 
-  - [ ] 16.2 Implement POST /api/v1/schedule/clear
+  - [x] 16.2 Implement POST /api/v1/schedule/clear
     - Clear appointments for specified date
     - Create audit log
     - Reset job statuses
     - Return ScheduleClearResponse
     - _Requirements: 3.1-3.7, 21.1_
 
-  - [ ] 16.3 Implement GET /api/v1/schedule/clear/recent
+  - [x] 16.3 Implement GET /api/v1/schedule/clear/recent
     - Get recently cleared schedules (last 24 hours)
     - Return ScheduleClearAuditResponse[]
     - _Requirements: 6.1-6.2, 21.4_
 
-  - [ ] 16.4 Implement GET /api/v1/schedule/clear/{audit_id}
+  - [x] 16.4 Implement GET /api/v1/schedule/clear/{audit_id}
     - Get detailed audit log
     - Return 404 if not found
     - Return ScheduleClearAuditDetailResponse
     - _Requirements: 6.3, 22.3_
 
-  - [ ]* 16.5 Write schedule clear API tests
+  - [x] 16.5 Write schedule clear API tests
     - Test clear endpoint
     - Test recent clears endpoint
     - Test audit details endpoint
@@ -391,26 +391,26 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - _Requirements: 3.1-3.7, 5.1-5.6, 6.1-6.5_
 
 - [ ] 17. Frontend Schedule Clear Components
-  - [ ] 17.1 Create ClearResultsButton component
+  - [x] 17.1 Create ClearResultsButton component
     - Button with X icon
     - Variant: outline
     - Only visible when schedule results present
     - Add data-testid="clear-results-btn"
     - _Requirements: 1.1-1.6_
 
-  - [ ] 17.2 Create JobSelectionControls component
+  - [x] 17.2 Create JobSelectionControls component
     - "Select All" and "Deselect All" text links
     - Style: text-sm text-blue-600 hover:underline
     - Add data-testid attributes
     - _Requirements: 2.1-2.5_
 
-  - [ ] 17.3 Create ClearDayButton component
+  - [x] 17.3 Create ClearDayButton component
     - Button with Trash2 icon
     - Variant: destructive outline
     - Add data-testid="clear-day-btn"
     - _Requirements: 3.1_
 
-  - [ ] 17.4 Create ClearDayDialog component
+  - [x] 17.4 Create ClearDayDialog component
     - AlertTriangle warning icon
     - Show date in title
     - Show appointment count
@@ -421,41 +421,41 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Add data-testid="clear-day-dialog"
     - _Requirements: 4.1-4.8_
 
-  - [ ] 17.5 Create RecentlyClearedSection component
+  - [x] 17.5 Create RecentlyClearedSection component
     - Show clears from last 24 hours
     - Display date, count, timestamp
     - "View Details" action
     - Add data-testid attributes
     - _Requirements: 6.1-6.5_
 
-  - [ ] 17.6 Update GenerateRoutesTab with clear features
+  - [x] 17.6 Update GenerateRoutesTab with clear features
     - Add ClearResultsButton to results section
     - Add JobSelectionControls above job list
     - Implement select all/deselect all logic
     - Implement clear results logic
     - _Requirements: 1.1-1.6, 2.1-2.5_
 
-  - [ ] 17.7 Update ScheduleTab with clear day feature
+  - [x] 17.7 Update ScheduleTab with clear day feature
     - Add ClearDayButton to toolbar
     - Integrate ClearDayDialog
     - Add RecentlyClearedSection below calendar
     - Implement clear day API call
     - _Requirements: 3.1-3.7, 4.1-4.8, 6.1-6.5_
 
-  - [ ] 17.8 Create schedule clear API client
+  - [x] 17.8 Create schedule clear API client
     - clearSchedule function
     - getRecentClears function
     - getClearDetails function
     - _Requirements: 3.1-3.7, 6.1-6.5_
 
-  - [ ]* 17.9 Write frontend schedule clear tests
+  - [x] 17.9 Write frontend schedule clear tests
     - Test ClearResultsButton visibility
     - Test JobSelectionControls
     - Test ClearDayDialog
     - Test RecentlyClearedSection
     - _Requirements: 1.1-1.6, 2.1-2.5, 3.1-3.7, 4.1-4.8, 6.1-6.5_
 
-- [ ] 18. Checkpoint - Schedule Clear Complete
+- [x] 18. Checkpoint - Schedule Clear Complete
   - Ensure all schedule clear tests pass
   - Ensure clear results works in Generate Routes tab
   - Ensure clear day works in Schedule tab
@@ -464,7 +464,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
 ### Phase 8G: Invoice - Database & Models
 
 - [ ] 19. Database Migrations for Invoices
-  - [ ] 19.1 Create invoices table migration
+  - [x] 19.1 Create invoices table migration
     - id (UUID, PRIMARY KEY)
     - job_id (UUID, REFERENCES jobs, NOT NULL)
     - customer_id (UUID, REFERENCES customers, NOT NULL)
@@ -492,80 +492,80 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Add indexes on job_id, customer_id, status, dates, lien_eligible
     - _Requirements: 7.1-7.10_
 
-  - [ ] 19.2 Create invoice_number_seq sequence
+  - [x] 19.2 Create invoice_number_seq sequence
     - PostgreSQL sequence for thread-safe numbering
     - Start at 1
     - _Requirements: 7.1_
 
-  - [ ] 19.3 Add payment_collected_on_site to jobs table
+  - [x] 19.3 Add payment_collected_on_site to jobs table
     - Add column (BOOLEAN, DEFAULT FALSE)
     - _Requirements: 10.6_
 
-  - [ ] 19.4 Test invoice migrations
+  - [x] 19.4 Test invoice migrations
     - Run migrations against test database
     - Verify tables, indexes, constraints, sequence
     - Test rollback functionality
     - _Requirements: 7.1-7.10_
 
 - [ ] 20. Invoice Models and Enums
-  - [ ] 20.1 Create InvoiceStatus enum
+  - [x] 20.1 Create InvoiceStatus enum
     - DRAFT, SENT, VIEWED, PAID, PARTIAL
     - OVERDUE, LIEN_WARNING, LIEN_FILED, CANCELLED
     - Add to models/enums.py
     - _Requirements: 8.1-8.10_
 
-  - [ ] 20.2 Create PaymentMethod enum
+  - [x] 20.2 Create PaymentMethod enum
     - CASH, CHECK, VENMO, ZELLE, STRIPE
     - Add to models/enums.py
     - _Requirements: 9.2_
 
-  - [ ] 20.3 Create Invoice model
+  - [x] 20.3 Create Invoice model
     - Define model with all fields from design
     - Add relationships to Job and Customer
     - Configure timestamps
     - _Requirements: 7.1-7.10_
 
-  - [ ] 20.4 Update Job model with payment_collected_on_site
+  - [x] 20.4 Update Job model with payment_collected_on_site
     - Add field (default False)
     - _Requirements: 10.6_
 
-  - [ ] 20.6 Update Job schemas with payment_collected_on_site
-    - Add payment_collected_on_site to JobResponse schema
-    - Add payment_collected_on_site to JobUpdate schema (optional field)
-    - Add payment_collected_on_site to job completion workflow schemas
+  - [x] 20.6 Update Job schemas with payment_collected_on_site
+    - [x] Add payment_collected_on_site to JobResponse schema
+    - [x] Add payment_collected_on_site to JobUpdate schema (optional field)
+    - [x] Add payment_collected_on_site to job completion workflow schemas
     - _Requirements: 10.5.1-10.5.3_
 
-  - [ ] 20.5 Write model tests
+  - [x] 20.5 Write model tests
     - Test Invoice model instantiation
     - Test relationships
     - Test enum values
     - _Requirements: 7.1-7.10, 8.1-8.10, 9.2_
 
 - [ ] 21. Invoice Schemas
-  - [ ] 21.1 Create invoice line item schema
+  - [x] 21.1 Create invoice line item schema
     - InvoiceLineItem (description, quantity, unit_price, total)
     - Validation for positive values
     - _Requirements: 7.8_
 
-  - [ ] 21.2 Create invoice request/response schemas
+  - [x] 21.2 Create invoice request/response schemas
     - InvoiceCreate (job_id, amount, late_fee_amount, due_date, line_items, notes)
     - InvoiceUpdate (amount, late_fee_amount, due_date, line_items, notes)
     - InvoiceResponse (all fields)
     - InvoiceDetailResponse (with job and customer)
     - _Requirements: 7.1-7.10, 13.1-13.7_
 
-  - [ ] 21.3 Create payment and lien schemas
+  - [x] 21.3 Create payment and lien schemas
     - PaymentRecord (amount, payment_method, payment_reference)
     - LienFiledRequest (filing_date, notes)
     - LienDeadlineResponse (approaching_45_day, approaching_120_day)
     - _Requirements: 9.1-9.7, 11.1-11.8_
 
-  - [ ] 21.4 Create invoice list params schema
+  - [x] 21.4 Create invoice list params schema
     - InvoiceListParams (page, page_size, status, customer_id, date_from, date_to, lien_eligible, sort_by, sort_order)
     - PaginatedInvoiceResponse
     - _Requirements: 13.1-13.7_
 
-  - [ ] 21.5 Write schema validation tests
+  - [x] 21.5 Write schema validation tests
     - Test line item validation
     - Test payment amount validation
     - Test enum validation
@@ -574,7 +574,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
 ### Phase 8H: Invoice - Service & Repository
 
 - [ ] 22. Invoice Repository
-  - [ ] 22.1 Create InvoiceRepository
+  - [x] 22.1 Create InvoiceRepository
     - Implement create method
     - Implement get_by_id method
     - Implement update method
@@ -585,7 +585,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Implement find_lien_filing_due method
     - _Requirements: 7.1-7.10, 11.2-11.4, 13.1-13.7_
 
-  - [ ] 22.2 Write repository tests
+  - [x] 22.2 Write repository tests
     - Test CRUD operations
     - Test sequence generation
     - Test filter methods
@@ -593,7 +593,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - _Requirements: 7.1-7.10, 11.2-11.4, 13.1-13.7_
 
 - [ ] 23. Invoice Service
-  - [ ] 23.1 Create InvoiceService with LoggerMixin
+  - [x] 23.1 Create InvoiceService with LoggerMixin
     - Define LIEN_ELIGIBLE_TYPES constant
     - Implement create_invoice method
     - Implement _generate_invoice_number method
@@ -603,140 +603,130 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Implement list_invoices method
     - _Requirements: 7.1-7.10, 13.1-13.7_
 
-  - [ ] 23.2 Implement invoice status operations
+  - [x] 23.2 Implement invoice status operations
     - Implement send_invoice method (draft → sent)
     - Implement mark_viewed method (sent → viewed)
     - Implement mark_overdue method
     - _Requirements: 8.1-8.6_
 
-  - [ ] 23.3 Implement payment recording
+  - [x] 23.3 Implement payment recording
     - Implement record_payment method
     - Calculate new paid amount
     - Determine status (paid vs partial)
     - Store payment method and reference
     - _Requirements: 9.1-9.7_
 
-  - [ ] 23.4 Implement reminder functionality
+  - [x] 23.4 Implement reminder functionality
     - Implement send_reminder method
     - Increment reminder_count
     - Update last_reminder_sent
     - _Requirements: 12.1-12.5_
 
-  - [ ] 23.5 Implement lien tracking
+  - [x] 23.5 Implement lien tracking
     - Implement send_lien_warning method
     - Implement mark_lien_filed method
     - Implement get_lien_deadlines method
     - _Requirements: 11.1-11.8_
 
-  - [ ] 23.6 Implement generate_from_job method
+  - [x] 23.6 Implement generate_from_job method
     - Validate job exists and not deleted
     - Check payment_collected_on_site flag
     - Use final_amount or quoted_amount
     - Create line items from job
     - _Requirements: 10.1-10.7_
 
-  - [ ] 23.7 Create invoice exceptions
+  - [x] 23.7 Create invoice exceptions
     - InvoiceNotFoundError
     - InvalidInvoiceOperationError
     - _Requirements: 22.2-22.4_
 
-  - [ ]* 23.8 Write InvoiceService unit tests
-    - Test invoice creation
-    - Test invoice number generation
-    - Test status transitions
-    - Test payment recording
-    - Test lien tracking
-    - Test generate from job
-    - **Property 5: Invoice Number Uniqueness**
-    - **Property 6: Payment Recording Correctness**
-    - **Property 7: Lien Eligibility Determination**
-    - _Requirements: 7.1-7.10, 8.1-8.10, 9.1-9.7, 10.1-10.7, 11.1-11.8_
+  - [x] 23.8 Write InvoiceService unit tests
 
-- [ ] 24. Checkpoint - Invoice Service Layer
+- [x] 24. Checkpoint - Invoice Service Layer
   - Ensure all invoice service tests pass
   - Ensure all quality checks pass (ruff, mypy, pyright)
   - Ask the user if questions arise
 
 ### Phase 8I: Invoice - API Endpoints
 
-- [ ] 25. Invoice API Endpoints
-  - [ ] 25.1 Create FastAPI router for invoices
+- [x] 25. Invoice API Endpoints
+  - [x] 25.1 Create FastAPI router for invoices
     - Create api/v1/invoices.py
     - Set up dependency injection for InvoiceService
     - Register router in main app
     - Apply require_manager_or_admin to most endpoints
     - _Requirements: 17.7, 22.5-22.7_
 
-  - [ ] 25.2 Implement POST /api/v1/invoices
+  - [x] 25.2 Implement POST /api/v1/invoices
     - Create invoice
     - Return 201 on success
     - Return InvoiceResponse
     - _Requirements: 7.1-7.10, 22.1_
 
-  - [ ] 25.3 Implement GET /api/v1/invoices/{id}
+  - [x] 25.3 Implement GET /api/v1/invoices/{id}
     - Get invoice with job and customer details
     - Return 404 if not found
     - Return InvoiceDetailResponse
     - _Requirements: 13.1, 22.3_
 
-  - [ ] 25.4 Implement PUT /api/v1/invoices/{id}
+  - [x] 25.4 Implement PUT /api/v1/invoices/{id}
     - Update invoice (draft only)
     - Return 404 if not found
     - Return InvoiceResponse
     - _Requirements: 7.1-7.10, 22.3_
 
-  - [ ] 25.5 Implement DELETE /api/v1/invoices/{id}
+  - [x] 25.5 Implement DELETE /api/v1/invoices/{id}
     - Cancel invoice
     - Return 204 on success
     - Return 404 if not found
     - _Requirements: 8.9, 22.3_
 
-  - [ ] 25.6 Implement GET /api/v1/invoices
+  - [x] 25.6 Implement GET /api/v1/invoices
     - List invoices with pagination and filters
     - Return PaginatedInvoiceResponse
     - _Requirements: 13.1-13.7_
 
-  - [ ] 25.7 Implement POST /api/v1/invoices/{id}/send
+  - [x] 25.7 Implement POST /api/v1/invoices/{id}/send
     - Mark invoice as sent
     - Return InvoiceResponse
     - _Requirements: 8.2_
 
-  - [ ] 25.8 Implement POST /api/v1/invoices/{id}/payment
+  - [x] 25.8 Implement POST /api/v1/invoices/{id}/payment
     - Record payment
     - Return InvoiceResponse
     - _Requirements: 9.1-9.7_
 
-  - [ ] 25.9 Implement POST /api/v1/invoices/{id}/reminder
+  - [x] 25.9 Implement POST /api/v1/invoices/{id}/reminder
     - Send payment reminder
     - Return InvoiceResponse
     - _Requirements: 12.1-12.5_
 
-  - [ ] 25.10 Implement POST /api/v1/invoices/{id}/lien-warning
+  - [x] 25.10 Implement POST /api/v1/invoices/{id}/lien-warning
     - Send lien warning (admin only)
     - Return InvoiceResponse
     - _Requirements: 11.6, 17.8_
 
-  - [ ] 25.11 Implement POST /api/v1/invoices/{id}/lien-filed
+  - [x] 25.11 Implement POST /api/v1/invoices/{id}/lien-filed
     - Mark lien as filed (admin only)
     - Return InvoiceResponse
     - _Requirements: 11.7, 17.8_
 
-  - [ ] 25.12 Implement GET /api/v1/invoices/overdue
+  - [x] 25.12 Implement GET /api/v1/invoices/overdue
     - List overdue invoices
     - Return PaginatedInvoiceResponse
     - _Requirements: 13.5_
 
-  - [ ] 25.13 Implement GET /api/v1/invoices/lien-deadlines
+  - [x] 25.13 Implement GET /api/v1/invoices/lien-deadlines
     - Get invoices approaching lien deadlines
     - Return LienDeadlineResponse
     - _Requirements: 11.4-11.5, 13.6_
 
-  - [ ] 25.14 Implement POST /api/v1/invoices/generate-from-job/{job_id}
+  - [x] 25.14 Implement POST /api/v1/invoices/generate-from-job/{job_id}
     - Generate invoice from completed job
     - Return InvoiceResponse
     - _Requirements: 10.1-10.7_
 
-  - [ ]* 25.15 Write invoice API tests
+  - [x] 25.15 Write invoice API tests
     - Test all CRUD endpoints
     - Test status transitions
     - Test payment recording
@@ -746,7 +736,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Target 85%+ coverage
     - _Requirements: 7.1-7.10, 8.1-8.10, 9.1-9.7, 10.1-10.7, 11.1-11.8, 12.1-12.5, 13.1-13.7_
 
-- [ ] 26. Checkpoint - Invoice API Complete
+- [x] 26. Checkpoint - Invoice API Complete
   - Ensure all invoice API tests pass
   - Ensure all quality checks pass (ruff, mypy, pyright)
   - Ask the user if questions arise
@@ -754,7 +744,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
 ### Phase 8J: Invoice - Frontend
 
 - [ ] 27. Invoice Frontend Components
-  - [ ] 27.1 Create InvoiceStatusBadge component
+  - [x] 27.1 Create InvoiceStatusBadge component
     - Color-coded badges for all statuses
     - draft: gray, sent: blue, paid: green
     - partial: yellow, overdue: red
@@ -763,14 +753,14 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Add data-testid attributes
     - _Requirements: 8.1-8.10_
 
-  - [ ] 27.2 Create InvoiceList component
+  - [x] 27.2 Create InvoiceList component
     - DataTable with pagination
     - Columns: number, customer, amount, status, due_date, actions
     - Filter controls for status, customer, date range
     - Add data-testid="invoice-list"
     - _Requirements: 13.1-13.7_
 
-  - [ ] 27.3 Create InvoiceDetail component
+  - [x] 27.3 Create InvoiceDetail component
     - Display all invoice fields
     - Show job and customer info
     - Show line items
@@ -778,7 +768,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Add data-testid="invoice-detail"
     - _Requirements: 7.1-7.10_
 
-  - [ ] 27.4 Create InvoiceForm component
+  - [x] 27.4 Create InvoiceForm component
     - Form for creating/editing invoices
     - Line items editor
     - Due date picker
@@ -786,21 +776,21 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Add data-testid="invoice-form"
     - _Requirements: 7.1-7.10_
 
-  - [ ] 27.5 Create PaymentDialog component
+  - [x] 27.5 Create PaymentDialog component
     - Amount input (default: remaining balance)
     - Payment method select
     - Reference input (optional)
     - Add data-testid="payment-dialog"
     - _Requirements: 9.1-9.7_
 
-  - [ ] 27.6 Create GenerateInvoiceButton component
+  - [x] 27.6 Create GenerateInvoiceButton component
     - Button on JobDetail page
     - Only visible when payment_collected_on_site is false
     - Opens invoice creation flow
     - Add data-testid="generate-invoice-btn"
     - _Requirements: 10.1-10.7_
 
-  - [ ] 27.7 Create LienDeadlinesWidget component
+  - [x] 27.7 Create LienDeadlinesWidget component
     - Dashboard widget
     - Show invoices approaching 45-day warning
     - Show invoices approaching 120-day filing
@@ -808,7 +798,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Add data-testid="lien-deadlines-widget"
     - _Requirements: 11.4-11.5, 11.8_
 
-  - [ ] 27.8 Create invoice API client
+  - [x] 27.8 Create invoice API client
     - All CRUD operations
     - Status operations
     - Payment recording
@@ -816,24 +806,24 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Generate from job
     - _Requirements: All invoice API requirements_
 
-  - [ ] 27.9 Add Invoices to navigation
+  - [x] 27.9 Add Invoices to navigation
     - Add "Invoices" item to sidebar
     - Route to /invoices
     - _Requirements: UI organization_
 
-  - [ ] 27.10 Update JobDetail with invoice features
-    - Add GenerateInvoiceButton
-    - Show linked invoice if exists
-    - Add payment_collected_on_site toggle/checkbox
-    - Update job completion workflow to set payment_collected_on_site
+  - [x] 27.10 Update JobDetail with invoice features
+    - [x] Add GenerateInvoiceButton
+    - [x] Show linked invoice if exists
+    - [x] Add payment_collected_on_site toggle/checkbox
+    - [x] Update job completion workflow to set payment_collected_on_site
     - _Requirements: 10.1-10.7, 10.5.1-10.5.3_
 
-  - [ ] 27.11 Update Dashboard with invoice widgets
+  - [x] 27.11 Update Dashboard with invoice widgets
     - Add "Overdue Invoices" widget
     - Add LienDeadlinesWidget
     - _Requirements: 11.4-11.5_
 
-  - [ ]* 27.12 Write frontend invoice tests
+  - [x] 27.12 Write frontend invoice tests
     - Test InvoiceList rendering
     - Test InvoiceDetail rendering
     - Test InvoiceForm validation
@@ -841,7 +831,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Test LienDeadlinesWidget
     - _Requirements: All invoice frontend requirements_
 
-- [ ] 28. Checkpoint - Invoice Frontend Complete
+- [x] 28. Checkpoint - Invoice Frontend Complete
   - Ensure all invoice frontend tests pass
   - Ensure invoice list and detail pages work
   - Ensure payment recording works
@@ -850,79 +840,79 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
 ### Phase 8K: Integration Testing & Property-Based Tests
 
 - [ ] 29. Integration Testing
-  - [ ] 29.1 Create test fixtures
+  - [x] 29.1 Create test fixtures
     - Database fixtures for invoices
     - Database fixtures for schedule clear audit
     - Database fixtures for authenticated users
     - Test client setup with auth
     - _Requirements: All integration requirements_
 
-  - [ ] 29.2 Write authentication integration tests
+  - [x] 29.2 Write authentication integration tests
     - Test login flow end-to-end
     - Test token refresh flow
     - Test protected route access
     - Test role-based access control
     - _Requirements: 14.1-14.8, 17.1-17.12, 20.1-20.6_
 
-  - [ ] 29.3 Write schedule clear integration tests
+  - [x] 29.3 Write schedule clear integration tests
     - Test clear schedule with appointments
     - Test job status reset
     - Test audit log creation
     - Test recent clears retrieval
     - _Requirements: 3.1-3.7, 5.1-5.6, 6.1-6.5_
 
-  - [ ] 29.4 Write invoice integration tests
+  - [x] 29.4 Write invoice integration tests
     - Test invoice creation from job
     - Test payment recording
     - Test status transitions
     - Test lien tracking workflow
     - _Requirements: 7.1-7.10, 8.1-8.10, 9.1-9.7, 10.1-10.7, 11.1-11.8_
 
-  - [ ] 29.5 Write cross-component integration tests
+  - [x] 29.5 Write cross-component integration tests
     - Test invoice generation requires auth
     - Test schedule clear requires manager role
     - Test lien warning requires admin role
     - _Requirements: 17.5-17.9_
 
 - [ ] 30. Property-Based Tests
-  - [ ]* 30.1 Write password hashing property tests
+  - [x] 30.1 Write password hashing property tests
     - Test hash then verify returns true
     - Test different passwords produce different hashes
     - **Property 1: Password Hashing Round-Trip**
     - _Requirements: 15.8, 16.1-16.4_
 
-  - [ ]* 30.2 Write role permission property tests
+  - [x] 30.2 Write role permission property tests
     - Test admin has all permissions
     - Test manager has subset of admin
     - Test tech has subset of manager
     - **Property 2: Role Permission Hierarchy**
     - _Requirements: 17.1-17.12_
 
-  - [ ]* 30.3 Write schedule clear audit property tests
+  - [x] 30.3 Write schedule clear audit property tests
     - Test audit contains all deleted appointments
     - Test audit contains all reset job IDs
     - **Property 3: Clear Schedule Audit Completeness**
     - _Requirements: 5.1-5.6_
 
-  - [ ]* 30.4 Write job status reset property tests
+  - [x] 30.4 Write job status reset property tests
     - Test only 'scheduled' jobs are reset
     - Test 'in_progress' and 'completed' jobs unchanged
     - **Property 4: Job Status Reset Correctness**
     - _Requirements: 3.3-3.4_
 
-  - [ ]* 30.5 Write invoice number property tests
+  - [x] 30.5 Write invoice number property tests
     - Test invoice numbers are unique
     - Test format matches INV-{YEAR}-{SEQUENCE}
     - **Property 5: Invoice Number Uniqueness**
     - _Requirements: 7.1_
 
-  - [ ]* 30.6 Write payment recording property tests
+  - [x] 30.6 Write payment recording property tests
     - Test paid_amount >= total_amount → status = paid
     - Test paid_amount < total_amount → status = partial
     - **Property 6: Payment Recording Correctness**
     - _Requirements: 9.5-9.6_
 
-  - [ ]* 30.7 Write lien eligibility property tests
+  - [x] 30.7 Write lien eligibility property tests
     - Test installation jobs are lien-eligible
     - Test major_repair jobs are lien-eligible
     - Test seasonal services are not lien-eligible
@@ -931,8 +921,8 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
 
 ### Phase 8L: Comprehensive Unit Testing (90%+ Coverage)
 
-- [ ] 31. Backend Unit Tests - Authentication
-  - [ ] 31.1 AuthService unit tests (target: 95% coverage)
+- [x] 31. Backend Unit Tests - Authentication
+  - [x] 31.1 AuthService unit tests (target: 95% coverage)
     - Test authenticate with valid credentials
     - Test authenticate with invalid username
     - Test authenticate with invalid password
@@ -958,7 +948,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Test get_current_user returns user info
     - _Requirements: 14.1-14.8, 16.1-16.8_
 
-  - [ ] 31.2 RBAC unit tests (target: 95% coverage)
+  - [x] 31.2 RBAC unit tests (target: 95% coverage)
     - Test require_roles decorator with allowed role
     - Test require_roles decorator with disallowed role
     - Test require_roles decorator with multiple allowed roles
@@ -975,7 +965,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - _Requirements: 17.1-17.12_
 
 - [ ] 32. Backend Unit Tests - Schedule Clear
-  - [ ] 32.1 ScheduleClearService unit tests (target: 95% coverage)
+  - [x] 32.1 ScheduleClearService unit tests (target: 95% coverage)
     - Test clear_schedule with appointments present
     - Test clear_schedule with no appointments
     - Test clear_schedule creates audit log
@@ -994,7 +984,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Test get_clear_details includes jobs_reset
     - _Requirements: 3.1-3.7, 5.1-5.6, 6.1-6.5_
 
-  - [ ] 32.2 ScheduleClearAuditRepository unit tests (target: 90% coverage)
+  - [x] 32.2 ScheduleClearAuditRepository unit tests (target: 90% coverage)
     - Test create audit record
     - Test get_by_id with valid ID
     - Test get_by_id with invalid ID returns None
@@ -1004,7 +994,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - _Requirements: 5.1-5.6, 6.1-6.5_
 
 - [ ] 33. Backend Unit Tests - Invoice
-  - [ ] 33.1 InvoiceService unit tests (target: 95% coverage)
+  - [x] 33.1 InvoiceService unit tests (target: 95% coverage)
     - Test create_invoice with valid data
     - Test create_invoice generates unique invoice number
     - Test create_invoice calculates total_amount correctly
@@ -1046,7 +1036,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Test generate_from_job creates line items from job
     - _Requirements: 7.1-7.10, 8.1-8.10, 9.1-9.7, 10.1-10.7, 11.1-11.8, 12.1-12.5, 13.1-13.7_
 
-  - [ ] 33.2 InvoiceRepository unit tests (target: 90% coverage)
+  - [x] 33.2 InvoiceRepository unit tests (target: 90% coverage)
     - Test create invoice record
     - Test get_by_id with valid ID
     - Test get_by_id with invalid ID returns None
@@ -1059,7 +1049,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - _Requirements: 7.1-7.10, 11.2-11.4, 13.1-13.7_
 
 - [ ] 34. Frontend Unit Tests - Authentication
-  - [ ] 34.1 AuthProvider tests (target: 90% coverage)
+  - [x] 34.1 AuthProvider tests (target: 90% coverage)
     - Test initial state (not authenticated)
     - Test login success updates user state
     - Test login failure does not update state
@@ -1070,7 +1060,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Test CSRF token sent in headers
     - _Requirements: 16.8, 19.1-19.8, 20.5-20.6_
 
-  - [ ] 34.2 LoginPage tests (target: 90% coverage)
+  - [x] 34.2 LoginPage tests (target: 90% coverage)
     - Test renders username input
     - Test renders password input
     - Test renders remember me checkbox
@@ -1083,14 +1073,14 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Test redirect to dashboard on success
     - _Requirements: 19.1-19.7_
 
-  - [ ] 34.3 ProtectedRoute tests (target: 90% coverage)
+  - [x] 34.3 ProtectedRoute tests (target: 90% coverage)
     - Test redirects to login when not authenticated
     - Test renders children when authenticated
     - Test checks role permissions
     - Test displays AccessDenied for unauthorized roles
     - _Requirements: 20.1-20.4_
 
-  - [ ] 34.4 UserMenu tests (target: 90% coverage)
+  - [x] 34.4 UserMenu tests (target: 90% coverage)
     - Test displays user name
     - Test dropdown opens on click
     - Test settings option present
@@ -1098,15 +1088,15 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Test logout calls logout function
     - _Requirements: 19.8_
 
-- [ ] 35. Frontend Unit Tests - Schedule Clear
-  - [ ] 35.1 ClearResultsButton tests (target: 90% coverage)
+- [x] 35. Frontend Unit Tests - Schedule Clear
+  - [x] 35.1 ClearResultsButton tests (target: 90% coverage)
     - Test renders when schedule results present
     - Test hidden when no schedule results
     - Test click triggers clear action
     - Test has correct data-testid
     - _Requirements: 1.1-1.6_
 
-  - [ ] 35.2 JobSelectionControls tests (target: 90% coverage)
+  - [x] 35.2 JobSelectionControls tests (target: 90% coverage)
     - Test renders Select All link
     - Test renders Deselect All link
     - Test Select All selects all jobs
@@ -1114,13 +1104,13 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Test has correct data-testid attributes
     - _Requirements: 2.1-2.5_
 
-  - [ ] 35.3 ClearDayButton tests (target: 90% coverage)
+  - [x] 35.3 ClearDayButton tests (target: 90% coverage)
     - Test renders with Trash2 icon
     - Test click opens dialog
     - Test has correct data-testid
     - _Requirements: 3.1_
 
-  - [ ] 35.4 ClearDayDialog tests (target: 90% coverage)
+  - [x] 35.4 ClearDayDialog tests (target: 90% coverage)
     - Test renders warning icon
     - Test displays date in title
     - Test displays appointment count
@@ -1133,7 +1123,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Test has correct data-testid
     - _Requirements: 4.1-4.8_
 
-  - [ ] 35.5 RecentlyClearedSection tests (target: 90% coverage)
+  - [x] 35.5 RecentlyClearedSection tests (target: 90% coverage)
     - Test renders clears from last 24 hours
     - Test displays date, count, timestamp
     - Test View Details action present
@@ -1141,8 +1131,8 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Test has correct data-testid attributes
     - _Requirements: 6.1-6.5_
 
-- [ ] 36. Frontend Unit Tests - Invoice
-  - [ ] 36.1 InvoiceStatusBadge tests (target: 90% coverage)
+- [x] 36. Frontend Unit Tests - Invoice
+  - [x] 36.1 InvoiceStatusBadge tests (target: 90% coverage)
     - Test draft status renders gray badge
     - Test sent status renders blue badge
     - Test paid status renders green badge
@@ -1154,7 +1144,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Test has correct data-testid
     - _Requirements: 8.1-8.10_
 
-  - [ ] 36.2 InvoiceList tests (target: 90% coverage)
+  - [x] 36.2 InvoiceList tests (target: 90% coverage)
     - Test renders DataTable
     - Test displays invoice number column
     - Test displays customer column
@@ -1170,7 +1160,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Test has correct data-testid
     - _Requirements: 13.1-13.7_
 
-  - [ ] 36.3 InvoiceDetail tests (target: 90% coverage)
+  - [x] 36.3 InvoiceDetail tests (target: 90% coverage)
     - Test displays all invoice fields
     - Test displays job info
     - Test displays customer info
@@ -1179,7 +1169,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Test has correct data-testid
     - _Requirements: 7.1-7.10_
 
-  - [ ] 36.4 InvoiceForm tests (target: 90% coverage)
+  - [x] 36.4 InvoiceForm tests (target: 90% coverage)
     - Test renders amount input
     - Test renders due date picker
     - Test renders line items editor
@@ -1191,7 +1181,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Test has correct data-testid
     - _Requirements: 7.1-7.10_
 
-  - [ ] 36.5 PaymentDialog tests (target: 90% coverage)
+  - [x] 36.5 PaymentDialog tests (target: 90% coverage)
     - Test renders amount input with default
     - Test renders payment method select
     - Test renders reference input
@@ -1200,7 +1190,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Test has correct data-testid
     - _Requirements: 9.1-9.7_
 
-  - [ ] 36.6 LienDeadlinesWidget tests (target: 90% coverage)
+  - [x] 36.6 LienDeadlinesWidget tests (target: 90% coverage)
     - Test displays 45-day warning invoices
     - Test displays 120-day filing invoices
     - Test quick action buttons present
@@ -1208,7 +1198,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - Test has correct data-testid
     - _Requirements: 11.4-11.5, 11.8_
 
-- [ ] 37. Checkpoint - Unit Test Coverage
+- [x] 37. Checkpoint - Unit Test Coverage
   - Run `uv run pytest --cov=src/grins_platform --cov-report=term-missing`
   - Run `cd frontend && npm run test:coverage`
   - **REQUIRED: Backend coverage must be 90%+ overall**
@@ -1219,8 +1209,8 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
 
 ### Phase 8M: End-to-End UI Validation (agent-browser)
 
-- [ ] 38. Authentication E2E Validation
-  - [ ] 38.1 Validate login page renders correctly
+- [x] 38. Authentication E2E Validation
+  - [x] 38.1 Validate login page renders correctly
     - `agent-browser open http://localhost:5173/login`
     - `agent-browser snapshot -i`
     - `agent-browser is visible "[data-testid='login-page']"`
@@ -1231,7 +1221,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - If any fail: fix component, re-run quality checks, retry validation
     - _Requirements: 19.1-19.7_
 
-  - [ ] 38.2 Validate login flow with valid credentials
+  - [x] 38.2 Validate login flow with valid credentials
     - `agent-browser open http://localhost:5173/login`
     - `agent-browser fill "[data-testid='username-input']" "admin"`
     - `agent-browser fill "[data-testid='password-input']" "password123"`
@@ -1241,7 +1231,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - If any fail: fix auth flow, re-run quality checks, retry validation
     - _Requirements: 14.1-14.2, 19.1-19.7_
 
-  - [ ] 38.3 Validate login error handling
+  - [x] 38.3 Validate login error handling
     - `agent-browser open http://localhost:5173/login`
     - `agent-browser fill "[data-testid='username-input']" "invalid"`
     - `agent-browser fill "[data-testid='password-input']" "wrong"`
@@ -1251,7 +1241,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - If any fail: fix error handling, re-run quality checks, retry validation
     - _Requirements: 14.2, 19.6_
 
-  - [ ] 38.4 Validate password visibility toggle
+  - [x] 38.4 Validate password visibility toggle
     - `agent-browser open http://localhost:5173/login`
     - `agent-browser fill "[data-testid='password-input']" "testpass"`
     - `agent-browser click "[data-testid='password-toggle']"`
@@ -1261,14 +1251,14 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - If any fail: fix toggle, re-run quality checks, retry validation
     - _Requirements: 19.3_
 
-  - [ ] 38.5 Validate protected route redirect
+  - [x] 38.5 Validate protected route redirect
     - `agent-browser open http://localhost:5173/customers`
     - `agent-browser wait --url "**/login"`
     - Verify redirected to login page
     - If any fail: fix ProtectedRoute, re-run quality checks, retry validation
     - _Requirements: 20.1-20.2_
 
-  - [ ] 38.6 Validate user menu
+  - [x] 38.6 Validate user menu
     - Login as admin user first
     - `agent-browser is visible "[data-testid='user-menu']"`
     - `agent-browser click "[data-testid='user-menu']"`
@@ -1277,7 +1267,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - If any fail: fix UserMenu, re-run quality checks, retry validation
     - _Requirements: 19.8_
 
-  - [ ] 38.7 Validate logout flow
+  - [x] 38.7 Validate logout flow
     - Login as admin user first
     - `agent-browser click "[data-testid='user-menu']"`
     - `agent-browser click "[data-testid='logout-btn']"`
@@ -1287,7 +1277,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - _Requirements: 14.8_
 
 - [ ] 39. Schedule Clear E2E Validation
-  - [ ] 39.1 Validate Generate Routes tab clear results button
+  - [x] 39.1 Validate Generate Routes tab clear results button
     - Login as manager/admin
     - Navigate to schedule generation page
     - Generate a schedule with results
@@ -1297,7 +1287,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - If any fail: fix ClearResultsButton, re-run quality checks, retry validation
     - _Requirements: 1.1-1.6_
 
-  - [ ] 39.2 Validate job selection controls
+  - [x] 39.2 Validate job selection controls
     - Login as manager/admin
     - Navigate to schedule generation page
     - Generate a schedule with multiple jobs
@@ -1310,7 +1300,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - If any fail: fix JobSelectionControls, re-run quality checks, retry validation
     - _Requirements: 2.1-2.5_
 
-  - [ ] 39.3 Validate clear day button and dialog
+  - [x] 39.3 Validate clear day button and dialog
     - Login as manager/admin
     - Navigate to schedule tab with appointments
     - `agent-browser is visible "[data-testid='clear-day-btn']"`
@@ -1323,7 +1313,7 @@ This implementation plan breaks down the Schedule Workflow Improvements feature 
     - If any fail: fix ClearDayDialog, re-run quality checks, retry validation
     - _Requirements: 3.1, 4.1-4.8_
 
-  - [ ] 39.4 Validate clear day confirmation flow
+  - [x] 39.4 Validate clear day confirmation flow
     - Login as manager/admin
     - Navigate to schedule tab with appointments
     - `agent-browser click "[data-testid='clear-day-btn']"`

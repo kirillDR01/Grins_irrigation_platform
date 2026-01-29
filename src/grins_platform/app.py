@@ -76,10 +76,15 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
     )
 
-    # Configure CORS
+    # Configure CORS - must specify explicit origins when using credentials
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Configure appropriately for production
+        allow_origins=[
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:3000",
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

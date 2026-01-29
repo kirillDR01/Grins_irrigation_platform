@@ -28,6 +28,7 @@ import {
   useScheduleCapacity,
 } from '../hooks/useScheduleGeneration';
 import { ScheduleResults } from './ScheduleResults';
+import { ClearResultsButton } from './ClearResultsButton';
 import { MapProvider } from './map/MapProvider';
 import { ScheduleMap } from './map/ScheduleMap';
 import { NaturalLanguageConstraintsInput } from './NaturalLanguageConstraintsInput';
@@ -70,6 +71,16 @@ export function ScheduleGenerationPage() {
       }
       return next;
     });
+  };
+
+  const handleSelectAll = () => {
+    setExcludedJobIds(new Set());
+  };
+
+  const handleDeselectAll = () => {
+    if (jobsData?.jobs) {
+      setExcludedJobIds(new Set(jobsData.jobs.map(j => j.job_id)));
+    }
   };
 
   const handleGenerate = async () => {
@@ -264,31 +275,36 @@ export function ScheduleGenerationPage() {
         error={jobsError}
         excludedJobIds={excludedJobIds}
         onToggleExclude={handleToggleExclude}
+        onSelectAll={handleSelectAll}
+        onDeselectAll={handleDeselectAll}
       />
 
       {/* View Toggle and Results Section */}
       {results && (
         <div className="space-y-4">
           {/* View Toggle Buttons */}
-          <div className="flex justify-end gap-2">
-            <Button
-              variant={viewMode === 'list' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setViewMode('list')}
-              data-testid="view-toggle-list"
-            >
-              <List className="mr-2 h-4 w-4" />
-              List
-            </Button>
-            <Button
-              variant={viewMode === 'map' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setViewMode('map')}
-              data-testid="view-toggle-map"
-            >
-              <Map className="mr-2 h-4 w-4" />
-              Map
-            </Button>
+          <div className="flex justify-between items-center">
+            <ClearResultsButton onClear={() => setResults(null)} />
+            <div className="flex gap-2">
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+                data-testid="view-toggle-list"
+              >
+                <List className="mr-2 h-4 w-4" />
+                List
+              </Button>
+              <Button
+                variant={viewMode === 'map' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('map')}
+                data-testid="view-toggle-map"
+              >
+                <Map className="mr-2 h-4 w-4" />
+                Map
+              </Button>
+            </div>
           </div>
 
           {/* Conditional View Rendering */}

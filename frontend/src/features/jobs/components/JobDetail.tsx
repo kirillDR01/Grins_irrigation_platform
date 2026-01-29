@@ -10,12 +10,16 @@ import {
   AlertTriangle,
   Cloud,
   Users,
+  FileText,
+  CreditCard,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { LoadingPage, ErrorMessage } from '@/shared/components';
-import { useJob, useUpdateJobStatus } from '../hooks';
+import { useJob, useUpdateJobStatus, useUpdateJob } from '../hooks';
 import { JobStatusBadge } from './JobStatusBadge';
 import type { JobStatus } from '../types';
 import {
@@ -30,6 +34,7 @@ import { AICommunicationDrafts } from '@/features/ai/components/AICommunicationD
 import { AIEstimateGenerator } from '@/features/ai/components/AIEstimateGenerator';
 import { useAICommunication } from '@/features/ai/hooks/useAICommunication';
 import { useAIEstimate } from '@/features/ai/hooks/useAIEstimate';
+import { GenerateInvoiceButton, InvoiceStatusBadge, useInvoicesByJob } from '@/features/invoices';
 
 interface JobDetailProps {
   jobId?: string;
@@ -43,6 +48,11 @@ export function JobDetail({ jobId: propJobId, onEdit }: JobDetailProps) {
 
   const { data: job, isLoading, error, refetch } = useJob(id);
   const updateStatusMutation = useUpdateJobStatus();
+  const updateJobMutation = useUpdateJob();
+  
+  // Get invoices for this job
+  const { data: invoices } = useInvoicesByJob(id);
+  const linkedInvoice = invoices?.[0]; // Get the first invoice if exists
   
   // AI Communication hook
   const {
@@ -73,6 +83,18 @@ export function JobDetail({ jobId: propJobId, onEdit }: JobDetailProps) {
       });
     } catch (err) {
       console.error('Failed to update status:', err);
+    }
+  };
+
+  const handlePaymentCollectedChange = async (checked: boolean) => {
+    if (!job) return;
+    try {
+      await updateJobMutation.mutateAsync({
+        id: job.id,
+        data: { payment_collected_on_site: checked },
+      });
+    } catch (err) {
+      console.error('Failed to update payment collected status:', err);
     }
   };
 
@@ -269,6 +291,51 @@ export function JobDetail({ jobId: propJobId, onEdit }: JobDetailProps) {
                   <MapPin className="h-4 w-4" />
                   Property #{job.property_id.slice(0, 8)}
                 </div>
+              </div>
+            )}
+
+            <Separator />
+
+            {/* Payment Collection Status */}
+            <div className="flex items-center space-x-2" data-testid="payment-collected-section">
+              <Checkbox
+                id="payment-collected"
+                checked={job.payment_collected_on_site}
+                onCheckedChange={handlePaymentCollectedChange}
+                disabled={updateJobMutation.isPending}
+                data-testid="payment-collected-checkbox"
+              />
+              <Label
+                htmlFor="payment-collected"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4" />
+                  Payment collected on site
+                </div>
+              </Label>
+            </div>
+
+            {/* Linked Invoice */}
+            {linkedInvoice && (
+              <div data-testid="linked-invoice-section">
+                <p className="text-sm text-muted-foreground">Invoice</p>
+                <Link
+                  to={`/invoices/${linkedInvoice.id}`}
+                  className="flex items-center gap-2 text-primary hover:underline"
+                  data-testid="linked-invoice-link"
+                >
+                  <FileText className="h-4 w-4" />
+                  <span>{linkedInvoice.invoice_number}</span>
+                  <InvoiceStatusBadge status={linkedInvoice.status} />
+                </Link>
+              </div>
+            )}
+
+            {/* Generate Invoice Button */}
+            {!linkedInvoice && ['completed', 'closed'].includes(job.status) && (
+              <div data-testid="generate-invoice-section">
+                <GenerateInvoiceButton job={job} />
               </div>
             )}
           </CardContent>

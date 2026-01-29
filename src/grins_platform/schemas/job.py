@@ -169,6 +169,10 @@ class JobUpdate(BaseModel):
         ge=0,
         description="Final price after completion",
     )
+    payment_collected_on_site: bool | None = Field(
+        default=None,
+        description="Whether payment was collected during service",
+    )
     source: JobSource | None = Field(
         default=None,
         description="Lead source",
@@ -247,6 +251,10 @@ class JobResponse(BaseModel):
     final_amount: Decimal | None = Field(
         default=None,
         description="Final price",
+    )
+    payment_collected_on_site: bool = Field(
+        default=False,
+        description="Whether payment was collected during service",
     )
     source: JobSource | None = Field(default=None, description="Lead source")
     source_details: dict[str, Any] | None = Field(

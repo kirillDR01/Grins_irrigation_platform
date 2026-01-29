@@ -9,6 +9,9 @@ Phase 2: Field Operations schemas (Service Offerings, Jobs, Staff)
 Phase 3: Admin Dashboard schemas (Appointments, Dashboard Metrics)
 Phase 6: AI Assistant schemas (AI, SMS)
 Phase 7: Schedule AI Updates schemas (Schedule Explanation)
+Phase 8: Authentication schemas (Login, Token, Password)
+Phase 8: Schedule Clear schemas (Clear, Audit)
+Phase 8: Invoice schemas (Invoice CRUD, Payment, Lien)
 """
 
 from grins_platform.schemas.ai import (
@@ -53,6 +56,13 @@ from grins_platform.schemas.appointment import (
     StaffDailyScheduleResponse,
     WeeklyScheduleResponse,
 )
+from grins_platform.schemas.auth import (
+    ChangePasswordRequest,
+    LoginRequest,
+    LoginResponse,
+    TokenResponse,
+    UserResponse,
+)
 from grins_platform.schemas.customer import (
     BulkPreferencesUpdate,
     BulkUpdateResponse,
@@ -75,6 +85,19 @@ from grins_platform.schemas.dashboard import (
     ScheduleOverview,
     TodayScheduleResponse,
 )
+from grins_platform.schemas.invoice import (
+    InvoiceCreate,
+    InvoiceDetailResponse,
+    InvoiceLineItem,
+    InvoiceListParams,
+    InvoiceResponse,
+    InvoiceUpdate,
+    LienDeadlineInvoice,
+    LienDeadlineResponse,
+    LienFiledRequest,
+    PaginatedInvoiceResponse,
+    PaymentRecord,
+)
 from grins_platform.schemas.job import (
     JobCreate,
     JobDetailResponse,
@@ -90,6 +113,12 @@ from grins_platform.schemas.property import (
     PropertyCreate,
     PropertyResponse,
     PropertyUpdate,
+)
+from grins_platform.schemas.schedule_clear import (
+    ScheduleClearAuditDetailResponse,
+    ScheduleClearAuditResponse,
+    ScheduleClearRequest,
+    ScheduleClearResponse,
 )
 from grins_platform.schemas.schedule_explanation import (
     JobReadyToSchedule,
@@ -144,6 +173,8 @@ __all__ = [
     "BulkPreferencesUpdate",
     "BulkUpdateResponse",
     "CategorizationSummary",
+    # Phase 8: Authentication
+    "ChangePasswordRequest",
     "CommunicationDraft",
     "CommunicationDraftRequest",
     "CommunicationDraftResponse",
@@ -162,6 +193,13 @@ __all__ = [
     "EstimateGenerateRequest",
     "EstimateGenerateResponse",
     "GeneratedSchedule",
+    # Phase 8: Invoice
+    "InvoiceCreate",
+    "InvoiceDetailResponse",
+    "InvoiceLineItem",
+    "InvoiceListParams",
+    "InvoiceResponse",
+    "InvoiceUpdate",
     "JobCategorization",
     "JobCategorizationRequest",
     "JobCategorizationResponse",
@@ -175,14 +213,21 @@ __all__ = [
     "JobUpdate",
     "JobsByStatusResponse",
     "JobsReadyToScheduleResponse",
+    "LienDeadlineInvoice",
+    "LienDeadlineResponse",
+    "LienFiledRequest",
+    "LoginRequest",
+    "LoginResponse",
     "MessageType",
     "PaginatedCustomerResponse",
+    "PaginatedInvoiceResponse",
     "PaginatedJobResponse",
     "PaginatedServiceResponse",
     "PaginatedStaffResponse",
     "ParseConstraintsRequest",
     "ParseConstraintsResponse",
     "ParsedConstraint",
+    "PaymentRecord",
     "PaymentStatusOverview",
     "PriceCalculationResponse",
     "PropertyCreate",
@@ -194,6 +239,11 @@ __all__ = [
     "SMSSendRequest",
     "SMSSendResponse",
     "SMSWebhookPayload",
+    # Phase 8: Schedule Clear
+    "ScheduleClearAuditDetailResponse",
+    "ScheduleClearAuditResponse",
+    "ScheduleClearRequest",
+    "ScheduleClearResponse",
     "ScheduleDay",
     "ScheduleExplanationRequest",
     "ScheduleExplanationResponse",
@@ -218,8 +268,10 @@ __all__ = [
     "StaffResponse",
     "StaffUpdate",
     "TodayScheduleResponse",
+    "TokenResponse",
     "UnassignedJobExplanationRequest",
     "UnassignedJobExplanationResponse",
     "UserDecision",
+    "UserResponse",
     "WeeklyScheduleResponse",
 ]

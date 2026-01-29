@@ -11,6 +11,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+# Import authentication exceptions
+from grins_platform.exceptions.auth import (
+    AccountLockedError,
+    AuthenticationError,
+    InvalidCredentialsError,
+    InvalidTokenError,
+    TokenExpiredError,
+    UserNotFoundError,
+)
+
 if TYPE_CHECKING:
     from uuid import UUID
 
@@ -281,20 +291,86 @@ class ServiceOfferingInactiveError(FieldOperationsError):
         super().__init__(f"Service offering is inactive: {service_id}")
 
 
+# ============================================================================
+# Schedule Clear Exceptions (Phase 8)
+# ============================================================================
+
+
+class ScheduleClearAuditNotFoundError(FieldOperationsError):
+    """Raised when a schedule clear audit record is not found.
+
+    Validates: Requirement 22.3
+    """
+
+    def __init__(self, audit_id: UUID) -> None:
+        """Initialize with audit ID.
+
+        Args:
+            audit_id: UUID of the audit record that was not found
+        """
+        self.audit_id = audit_id
+        super().__init__(f"Schedule clear audit not found: {audit_id}")
+
+
+# ============================================================================
+# Invoice Exceptions (Phase 8)
+# ============================================================================
+
+
+class InvoiceNotFoundError(FieldOperationsError):
+    """Raised when an invoice is not found.
+
+    Validates: Requirement 22.2
+    """
+
+    def __init__(self, invoice_id: UUID) -> None:
+        """Initialize with invoice ID.
+
+        Args:
+            invoice_id: UUID of the invoice that was not found
+        """
+        self.invoice_id = invoice_id
+        super().__init__(f"Invoice not found: {invoice_id}")
+
+
+class InvalidInvoiceOperationError(FieldOperationsError):
+    """Raised when an invalid invoice operation is attempted.
+
+    Validates: Requirement 22.4
+    """
+
+    def __init__(self, message: str) -> None:
+        """Initialize with error message.
+
+        Args:
+            message: Description of the invalid operation
+        """
+        super().__init__(message)
+
+
 __all__ = [
+    "AccountLockedError",
     "AppointmentNotFoundError",
+    "AuthenticationError",
     "BulkOperationError",
     "CustomerError",
     "CustomerNotFoundError",
     "DuplicateCustomerError",
     "FieldOperationsError",
+    "InvalidCredentialsError",
+    "InvalidInvoiceOperationError",
     "InvalidStatusTransitionError",
+    "InvalidTokenError",
+    "InvoiceNotFoundError",
     "JobNotFoundError",
     "PropertyCustomerMismatchError",
     "PropertyNotFoundError",
+    "ScheduleClearAuditNotFoundError",
     "ServiceOfferingInactiveError",
     "ServiceOfferingNotFoundError",
     "StaffAvailabilityNotFoundError",
     "StaffNotFoundError",
+    "TokenExpiredError",
+    "UserNotFoundError",
     "ValidationError",
 ]

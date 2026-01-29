@@ -30,14 +30,15 @@ class TestAIChatEndpoint:
 
         response = await client.post(
             "/api/v1/ai/chat",
-            params={"message": "How many jobs today?"},
+            json={"message": "How many jobs today?"},
+            params={"stream": "true"},
         )
         assert response.status_code == 200
         assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
 
     async def test_chat_requires_message(self, client: AsyncClient) -> None:
-        """Test that chat endpoint requires message parameter."""
-        response = await client.post("/api/v1/ai/chat")
+        """Test that chat endpoint requires message in request body."""
+        response = await client.post("/api/v1/ai/chat", json={})
         assert response.status_code == 422
 
 

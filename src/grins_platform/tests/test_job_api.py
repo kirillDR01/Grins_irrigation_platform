@@ -51,6 +51,7 @@ def mock_job():
     job.materials_required = None
     job.quoted_amount = None
     job.final_amount = None
+    job.payment_collected_on_site = False
     job.source = None
     job.source_details = None
     job.requested_at = datetime.now()

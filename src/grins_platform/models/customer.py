@@ -22,6 +22,7 @@ from grins_platform.database import Base
 from grins_platform.models.enums import CustomerStatus, LeadSource
 
 if TYPE_CHECKING:
+    from grins_platform.models.invoice import Invoice
     from grins_platform.models.job import Job
     from grins_platform.models.property import Property
     from grins_platform.models.sent_message import SentMessage
@@ -139,6 +140,11 @@ class Customer(Base):
     )
     sent_messages: Mapped[list["SentMessage"]] = relationship(
         "SentMessage",
+        back_populates="customer",
+        lazy="selectin",
+    )
+    invoices: Mapped[list["Invoice"]] = relationship(
+        "Invoice",
         back_populates="customer",
         lazy="selectin",
     )

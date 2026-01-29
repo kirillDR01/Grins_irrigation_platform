@@ -41,6 +41,8 @@ dependencies = [
     "psycopg2-binary>=2.9.11",
     "openai>=2.15.0",
     "twilio>=9.10.0",
+    "types-python-jose>=3.5.0.20250531",
+    "types-passlib>=1.7.7.20250602",
 ]
 
 [project.optional-dependencies]
@@ -525,3 +527,14 @@ stubPath = "typings"
 executionEnvironments = [
     { root = "src", pythonVersion = "3.11", pythonPlatform = "All", reportPrivateUsage = "none", reportUninitializedInstanceVariable = "none" },
 ]
+
+[tool.pytest.ini_options]
+# Pytest configuration
+testpaths = ["src/grins_platform/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+# Exclude scripts directory from test collection
+norecursedirs = ["scripts", ".git", ".venv", "node_modules", "__pycache__"]

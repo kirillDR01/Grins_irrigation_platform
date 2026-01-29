@@ -35,6 +35,7 @@ export interface Job extends BaseEntity {
   final_amount: number | null;
   source: JobSource | null;
   source_details: Record<string, unknown> | null;
+  payment_collected_on_site: boolean;
   requested_at: string | null;
   approved_at: string | null;
   scheduled_at: string | null;
@@ -78,6 +79,7 @@ export interface JobUpdate {
   final_amount?: number | null;
   source?: JobSource | null;
   source_details?: Record<string, unknown> | null;
+  payment_collected_on_site?: boolean;
 }
 
 // Job status update request
