@@ -116,3 +116,26 @@ class ReoptimizeRequest(BaseModel):
 
     target_date: date
     timeout_seconds: int = Field(default=15, ge=5, le=60)
+
+
+class ApplyScheduleRequest(BaseModel):
+    """Request to apply a generated schedule by creating appointments.
+
+    Validates: Requirements 5.1, 5.8
+    """
+
+    schedule_date: date
+    assignments: list[ScheduleStaffAssignment] = Field(default_factory=list)
+
+
+class ApplyScheduleResponse(BaseModel):
+    """Response from applying a schedule.
+
+    Validates: Requirements 5.1, 5.8
+    """
+
+    success: bool
+    schedule_date: date
+    appointments_created: int
+    message: str
+    created_appointment_ids: list[UUID] = Field(default_factory=list)

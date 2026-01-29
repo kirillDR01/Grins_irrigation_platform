@@ -3,6 +3,9 @@
  * Displays generated schedule assignments grouped by staff.
  */
 
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
   Card,
   CardContent,
@@ -11,6 +14,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -25,9 +29,10 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { CheckCircle, XCircle, MapPin, AlertTriangle } from 'lucide-react';
+import { CheckCircle, MapPin, AlertTriangle, Calendar, Loader2 } from 'lucide-react';
 import { ScheduleExplanationModal } from './ScheduleExplanationModal';
 import { UnassignedJobExplanationCard } from './UnassignedJobExplanationCard';
+import { useApplySchedule } from '../hooks/useApplySchedule';
 import type { ScheduleGenerateResponse } from '../types';
 
 interface ScheduleResultsProps {
@@ -36,6 +41,42 @@ interface ScheduleResultsProps {
 }
 
 export function ScheduleResults({ results, scheduleDate }: ScheduleResultsProps) {
+  const [isApplied, setIsApplied] = useState(false);
+  const navigate = useNavigate();
+  const applyMutation = useApplySchedule();
+
+  // Format the date for display
+  const formattedDate = new Date(scheduleDate + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  const handleApplySchedule = async () => {
+    try {
+      const response = await applyMutation.mutateAsync({
+        schedule_date: scheduleDate,
+        assignments: results.assignments,
+      });
+
+      if (response.success) {
+        setIsApplied(true);
+        toast.success('Schedule Applied', {
+          description: `Created ${response.appointments_created} appointments for ${formattedDate}`,
+        });
+      }
+    } catch (error) {
+      toast.error('Failed to Apply Schedule', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+      });
+    }
+  };
+
+  const handleViewSchedule = () => {
+    navigate('/schedule');
+  };
+
   return (
     <div className="space-y-6" data-testid="schedule-results">
       {/* Summary Card */}
@@ -44,20 +85,46 @@ export function ScheduleResults({ results, scheduleDate }: ScheduleResultsProps)
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
-                {results.is_feasible ? (
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                ) : (
-                  <XCircle className="h-5 w-5 text-red-600" />
-                )}
-                Schedule {results.is_feasible ? 'Generated' : 'Incomplete'}
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                Schedule Completed for {formattedDate}
               </CardTitle>
               <CardDescription>
-                {results.is_feasible
-                  ? 'All jobs successfully assigned'
-                  : 'Some jobs could not be assigned'}
+                {results.total_assigned} jobs assigned
+                {results.unassigned_jobs.length > 0 &&
+                  `, ${results.unassigned_jobs.length} could not fit in today's schedule`}
               </CardDescription>
             </div>
-            <ScheduleExplanationModal results={results} scheduleDate={scheduleDate} />
+            <div className="flex items-center gap-2">
+              <ScheduleExplanationModal results={results} scheduleDate={scheduleDate} />
+              {isApplied ? (
+                <Button
+                  variant="outline"
+                  onClick={handleViewSchedule}
+                  data-testid="view-schedule-btn"
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  View Schedule
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleApplySchedule}
+                  disabled={applyMutation.isPending || results.total_assigned === 0}
+                  data-testid="apply-schedule-btn"
+                >
+                  {applyMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Applying...
+                    </>
+                  ) : (
+                    <>
+                      <Calendar className="h-4 w-4 mr-2" />
+                      Apply Schedule
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -184,9 +251,63 @@ export function ScheduleResults({ results, scheduleDate }: ScheduleResultsProps)
         </Card>
       )}
 
+      {/* Assigned Jobs Overview */}
+      {results.total_assigned > 0 && (
+        <Card className="border-green-200 bg-green-50" data-testid="assigned-jobs-section">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-green-800">
+              <CheckCircle className="h-5 w-5" />
+              Assigned Jobs ({results.total_assigned})
+            </CardTitle>
+            <CardDescription className="text-green-700">
+              Jobs successfully scheduled for this date
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Service Type</TableHead>
+                  <TableHead>Assigned To</TableHead>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead className="text-right">Duration</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {results.assignments.flatMap((staffAssignment) =>
+                  staffAssignment.jobs.map((job) => (
+                    <TableRow
+                      key={job.job_id}
+                      data-testid={`assigned-job-${job.job_id}`}
+                    >
+                      <TableCell className="font-medium">{job.customer_name}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
+                          {job.service_type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{staffAssignment.staff_name}</TableCell>
+                      <TableCell>
+                        {job.start_time.slice(0, 5)} - {job.end_time.slice(0, 5)}
+                      </TableCell>
+                      <TableCell>
+                        <div>{job.city || 'N/A'}</div>
+                      </TableCell>
+                      <TableCell className="text-right">{job.duration_minutes}m</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Unassigned Jobs */}
       {results.unassigned_jobs.length > 0 && (
-        <Card className="border-yellow-200" data-testid="unassigned-jobs-section">
+        <Card className="border-yellow-200 bg-yellow-50" data-testid="unassigned-jobs-section">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-yellow-800">
               <AlertTriangle className="h-5 w-5" />
@@ -218,11 +339,7 @@ export function ScheduleResults({ results, scheduleDate }: ScheduleResultsProps)
                     </TableCell>
                     <TableCell className="text-yellow-800">{job.reason}</TableCell>
                     <TableCell>
-                      <UnassignedJobExplanationCard
-                        job={job}
-                        scheduleDate={scheduleDate}
-                        availableStaff={results.assignments.map((a) => a.staff_name)}
-                      />
+                      <UnassignedJobExplanationCard job={job} />
                     </TableCell>
                   </TableRow>
                 ))}

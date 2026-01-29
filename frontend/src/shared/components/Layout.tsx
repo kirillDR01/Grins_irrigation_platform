@@ -106,7 +106,19 @@ export function Layout({ children }: LayoutProps) {
         {/* Navigation */}
         <nav className="flex flex-col gap-1 p-4" data-testid="sidebar-nav">
           {navItems.map((item) => {
-            const isActive = location.pathname.startsWith(item.href);
+            // Check for exact match first, then check if it's a parent route
+            // but only if no other nav item is a more specific match
+            const isExactMatch = location.pathname === item.href;
+            const isParentRoute = location.pathname.startsWith(item.href + '/');
+            // For routes like /schedule, only highlight if we're exactly on /schedule
+            // not on /schedule/generate (which has its own nav item)
+            const hasMoreSpecificNavItem = navItems.some(
+              (other) =>
+                other.href !== item.href &&
+                other.href.startsWith(item.href + '/') &&
+                location.pathname.startsWith(other.href)
+            );
+            const isActive = isExactMatch || (isParentRoute && !hasMoreSpecificNavItem);
             return (
               <Link
                 key={item.href}

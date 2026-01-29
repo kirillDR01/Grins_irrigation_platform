@@ -7,7 +7,8 @@ Validates: Requirements 5.1, 5.6, 5.7, 5.8
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
-from datetime import date
+from datetime import date, datetime
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -15,6 +16,7 @@ from sqlalchemy.orm import Session  # noqa: TC002
 
 from grins_platform.database import get_database_manager, get_sync_db
 from grins_platform.log_config import LoggerMixin
+from grins_platform.models.appointment import Appointment
 from grins_platform.models.customer import Customer
 from grins_platform.models.job import Job
 from grins_platform.models.property import Property
@@ -29,6 +31,8 @@ from grins_platform.schemas.schedule_explanation import (
     UnassignedJobExplanationResponse,
 )
 from grins_platform.schemas.schedule_generation import (
+    ApplyScheduleRequest,
+    ApplyScheduleResponse,
     EmergencyInsertRequest,
     EmergencyInsertResponse,
     ReoptimizeRequest,
@@ -462,4 +466,95 @@ def get_jobs_ready_to_schedule(
         ) from e
     else:
         endpoints.log_completed("get_jobs_ready", total_count=len(jobs))
+        return response
+
+
+@router.post(  # type: ignore[misc,untyped-decorator]
+    "/apply",
+    response_model=ApplyScheduleResponse,
+)
+def apply_schedule(
+    request: ApplyScheduleRequest,
+    db: Session = Depends(get_sync_db),
+) -> ApplyScheduleResponse:
+    """Apply a generated schedule by creating appointments.
+
+    POST /api/v1/schedule/apply
+
+    This endpoint takes the generated schedule assignments and creates
+    actual appointment records in the database.
+
+    Validates: Requirements 5.1, 5.8
+    """
+    endpoints.log_started(
+        "apply_schedule",
+        schedule_date=str(request.schedule_date),
+        staff_count=len(request.assignments),
+    )
+
+    try:
+        created_ids: list[UUID] = []
+
+        for staff_assignment in request.assignments:
+            staff_id = staff_assignment.staff_id
+
+            for job in staff_assignment.jobs:
+                job_id = job.job_id
+                start_time = job.start_time
+                end_time = job.end_time
+
+                # Create appointment
+                appointment = Appointment(
+                    job_id=job_id,
+                    staff_id=staff_id,
+                    scheduled_date=request.schedule_date,
+                    time_window_start=start_time,
+                    time_window_end=end_time,
+                    status="scheduled",
+                    route_order=job.sequence_index,
+                    estimated_arrival=start_time,
+                    notes=f"Auto-generated from schedule for {request.schedule_date}",
+                )
+
+                db.add(appointment)
+                db.flush()
+                created_ids.append(appointment.id)
+
+                # Update job status to scheduled
+                job_record = db.execute(
+                    select(Job).where(Job.id == job_id),
+                ).scalar_one_or_none()
+                if job_record:
+                    job_record.status = "scheduled"
+                    job_record.scheduled_at = datetime.combine(
+                        request.schedule_date,
+                        start_time,
+                    )
+
+        db.commit()
+
+        msg = (
+            f"Successfully created {len(created_ids)} appointments "
+            f"for {request.schedule_date}"
+        )
+        response = ApplyScheduleResponse(
+            success=True,
+            schedule_date=request.schedule_date,
+            appointments_created=len(created_ids),
+            message=msg,
+            created_appointment_ids=created_ids,
+        )
+
+    except Exception as e:
+        db.rollback()
+        endpoints.log_failed("apply_schedule", error=e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to apply schedule: {e!s}",
+        ) from e
+    else:
+        endpoints.log_completed(
+            "apply_schedule",
+            appointments_created=len(created_ids),
+        )
         return response

@@ -34,26 +34,31 @@ export function useScheduleExplanation(): UseScheduleExplanationReturn {
     setError(null);
 
     try {
-      // Build staff assignment summaries from results
-      const assignments: StaffAssignmentSummary[] = results.assignments.map((assignment) => {
+      // Build staff assignment summaries from results matching backend schema
+      const staff_assignments: StaffAssignmentSummary[] = results.assignments.map((assignment) => {
         const jobs = assignment.jobs || [];
-        const firstJob = jobs[0];
-        const lastJob = jobs[jobs.length - 1];
+        
+        // Extract unique cities and job types from jobs
+        const cities = [...new Set(jobs.map(job => job.city).filter((c): c is string => c !== null))];
+        const job_types = [...new Set(jobs.map(job => job.service_type))];
+        
+        // Calculate total minutes from job durations
+        const total_minutes = jobs.reduce((sum, job) => sum + job.duration_minutes, 0);
 
         return {
+          staff_id: assignment.staff_id,
           staff_name: assignment.staff_name,
-          total_jobs: jobs.length,
-          total_travel_minutes: assignment.total_travel_minutes || 0,
-          first_job_start: firstJob?.time_window_start || null,
-          last_job_end: lastJob?.time_window_end || null,
+          job_count: jobs.length,
+          total_minutes,
+          cities,
+          job_types,
         };
       });
 
       const response = await scheduleGenerationApi.explainSchedule({
         schedule_date: scheduleDate,
-        assignments,
-        unassigned_count: results.unassigned_jobs?.length || 0,
-        total_travel_minutes: results.total_travel_minutes || 0,
+        staff_assignments,
+        unassigned_job_count: results.unassigned_jobs?.length || 0,
       });
 
       setExplanation(response);

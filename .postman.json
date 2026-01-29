@@ -19,7 +19,10 @@
     "create_customer": "5dc14ba4-3139-89f8-2902-d9c51fc50bac",
     "list_jobs": "03fa1105-2fca-9d57-264b-c29bb612ec29",
     "list_staff": "2ce71865-aa3b-c48b-7dd4-8704e1bab715",
-    "list_services": "851c793c-0d8c-1b3b-977a-aa8ae11b8f6b"
+    "list_services": "851c793c-0d8c-1b3b-977a-aa8ae11b8f6b",
+    "generate_schedule": "292d538f-16ca-a046-7183-26a0d27ef86f",
+    "apply_schedule": "854f6685-a85a-15ed-c9c1-72337a0de3f7",
+    "check_schedule_capacity": "2964874c-130a-c628-6a4d-578a0eb1f3eb"
   },
   "created_at": "2026-01-22T00:48:00Z",
   "description": "Postman configuration for Grin's Irrigation Platform API testing"

@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -20,20 +19,14 @@ import type { UnassignedJobResponse } from '../types';
 
 interface UnassignedJobExplanationCardProps {
   job: UnassignedJobResponse;
-  scheduleDate: string;
-  availableStaff: string[];
 }
 
 export function UnassignedJobExplanationCard({
   job,
-  scheduleDate,
-  availableStaff,
 }: UnassignedJobExplanationCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const { explanation, isLoading, error, refetch } = useUnassignedJobExplanation({
     job,
-    scheduleDate,
-    availableStaff,
     enabled: isExpanded,
   });
 
@@ -65,32 +58,30 @@ export function UnassignedJobExplanationCard({
         )}
       </Button>
 
-      {/* Expandable Explanation Card */}
+      {/* Expandable Explanation Card - Compact Design */}
       {isExpanded && (
-        <Card className="mt-2 border-yellow-200 bg-yellow-50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Why wasn't this job scheduled?</CardTitle>
-            <CardDescription className="text-sm">
-              {job.customer_name} - {job.service_type}
-            </CardDescription>
+        <Card className="mt-1 border-yellow-200 bg-yellow-50 max-w-md">
+          <CardHeader className="py-2 px-3">
+            <CardTitle className="text-sm font-medium">Why not scheduled?</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="py-2 px-3 space-y-2">
             {/* Loading State */}
             {isLoading && (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Analyzing constraints...</span>
+              <div className="flex items-center gap-2 text-muted-foreground text-xs">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Analyzing...</span>
               </div>
             )}
 
             {/* Error State */}
             {error && (
-              <Alert variant="destructive">
-                <AlertDescription className="flex items-center justify-between">
-                  <span>Failed to load explanation. {error.message}</span>
+              <Alert variant="destructive" className="py-1 px-2">
+                <AlertDescription className="flex items-center justify-between text-xs">
+                  <span>Failed to load</span>
                   <Button
                     variant="outline"
                     size="sm"
+                    className="h-6 text-xs px-2"
                     onClick={() => refetch()}
                     data-testid={`retry-explanation-${job.job_id}`}
                   >
@@ -100,59 +91,57 @@ export function UnassignedJobExplanationCard({
               </Alert>
             )}
 
-            {/* Explanation Content */}
+            {/* Explanation Content - Compact */}
             {explanation && (
-              <>
-                {/* Main Explanation */}
-                <div className="text-sm">
-                  <p className="font-medium mb-2">Reason:</p>
-                  <p className="text-muted-foreground">{explanation.explanation}</p>
+              <div className="space-y-2 text-xs">
+                {/* Main Reason - truncated */}
+                <div>
+                  <span className="font-medium">Reason: </span>
+                  <span className="text-muted-foreground">
+                    {explanation.reason.length > 150 
+                      ? `${explanation.reason.substring(0, 150)}...` 
+                      : explanation.reason}
+                  </span>
                 </div>
 
-                {/* Suggestions */}
+                {/* Suggestions - show first 2 only */}
                 {explanation.suggestions.length > 0 && (
-                  <div className="text-sm">
-                    <p className="font-medium mb-2">Suggestions:</p>
-                    <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                      {explanation.suggestions.map((suggestion, index) => (
-                        <li key={index} data-testid={`suggestion-${job.job_id}-${index}`}>
-                          {suggestion}
-                        </li>
-                      ))}
-                    </ul>
+                  <div>
+                    <span className="font-medium">Tips: </span>
+                    <span className="text-muted-foreground">
+                      {explanation.suggestions.slice(0, 2).join(' • ')}
+                    </span>
                   </div>
                 )}
 
-                {/* Alternative Dates */}
+                {/* Alternative Dates - inline badges */}
                 {explanation.alternative_dates.length > 0 && (
-                  <div className="text-sm">
-                    <p className="font-medium mb-2">Alternative Dates:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {explanation.alternative_dates.map((date, index) => (
-                        <Badge
-                          key={index}
-                          variant="outline"
-                          className="bg-white"
-                          data-testid={`alt-date-${job.job_id}-${index}`}
-                        >
-                          {new Date(date).toLocaleDateString('en-US', {
-                            weekday: 'short',
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </Badge>
-                      ))}
-                    </div>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="font-medium">Try: </span>
+                    {explanation.alternative_dates.slice(0, 3).map((date, index) => (
+                      <Badge
+                        key={index}
+                        variant="outline"
+                        className="bg-white text-xs py-0 px-1.5 h-5"
+                        data-testid={`alt-date-${job.job_id}-${index}`}
+                      >
+                        {new Date(date).toLocaleDateString('en-US', {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </Badge>
+                    ))}
                   </div>
                 )}
-              </>
+              </div>
             )}
 
             {/* Fallback: Show basic reason if no AI explanation */}
             {!isLoading && !error && !explanation && (
-              <div className="text-sm text-muted-foreground">
-                <p className="font-medium mb-2">Basic Reason:</p>
-                <p>{job.reason}</p>
+              <div className="text-xs text-muted-foreground">
+                <span className="font-medium">Reason: </span>
+                <span>{job.reason}</span>
               </div>
             )}
           </CardContent>

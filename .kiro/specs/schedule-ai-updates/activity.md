@@ -1,10 +1,84 @@
 # Schedule AI Updates - Activity Log
 
 ## Current Status
-**Last Updated:** 2026-01-28 00:07
-**Tasks Completed:** 99 / 99
+**Last Updated:** 2026-01-28 21:45
+**Tasks Completed:** 99 / 99 + Apply Schedule Feature
 **Current Task:** ALL TASKS COMPLETE
 **Loop Status:** Complete
+
+
+## [2026-01-28 21:45] Feature: Apply Schedule with Staff Color-Coding
+
+### What Was Done
+- Implemented "Apply Schedule" feature to create appointments from generated schedule
+- Added staff color-coding to calendar view for easy identification
+- Created backend endpoint POST /api/v1/schedule/apply
+- Created frontend hook useApplySchedule
+- Updated ScheduleResults component with Apply/View Schedule buttons
+- Updated CalendarView to color-code events by staff member
+
+### Backend Implementation
+- Added `ApplyScheduleRequest` and `ApplyScheduleResponse` schemas
+- Created `/api/v1/schedule/apply` endpoint that:
+  - Creates appointments from schedule assignments
+  - Updates job status to "scheduled"
+  - Returns success response with created appointment IDs
+  - Includes auto-generated notes for traceability
+
+### Frontend Implementation
+- Added `applySchedule()` method to scheduleGenerationApi
+- Created `useApplySchedule` hook with cache invalidation
+- Updated ScheduleResults with:
+  - "Apply Schedule" button (disabled when no assignments)
+  - Loading state while applying
+  - Success toast notification using sonner
+  - "View Schedule" button after applied (navigates to /schedule)
+- Updated CalendarView with:
+  - Staff ID to name mapping via useStaff hook
+  - Staff color lookup using existing staffColors.ts
+  - Lighter background with staff color border for events
+  - Staff name displayed in event title
+
+### Files Modified
+- `src/grins_platform/api/v1/schedule.py` - Added apply endpoint
+- `src/grins_platform/schemas/schedule_generation.py` - Added request/response schemas
+- `frontend/src/features/schedule/api/scheduleGenerationApi.ts` - Added applySchedule method
+- `frontend/src/features/schedule/hooks/useApplySchedule.ts` - New hook
+- `frontend/src/features/schedule/types/index.ts` - Added ApplyScheduleRequest/Response types
+- `frontend/src/features/schedule/components/ScheduleResults.tsx` - Added Apply/View buttons
+- `frontend/src/features/schedule/components/CalendarView.tsx` - Added staff color-coding
+
+### Quality Check Results
+- Backend ruff: ✅ All checks passed
+- Backend mypy: ✅ Success, no issues found
+- Frontend typecheck: ✅ Zero errors
+- Frontend lint: ✅ Zero errors (only warnings)
+
+### Agent-Browser Validation
+1. ✅ Navigated to /schedule/generate
+2. ✅ Generated schedule with 17 jobs assigned to 3 staff
+3. ✅ Verified "Apply Schedule" button visible
+4. ✅ Clicked "Apply Schedule" button
+5. ✅ Verified button changed to "View Schedule"
+6. ✅ Clicked "View Schedule" to navigate to /schedule
+7. ✅ Verified appointments appear on calendar
+8. ✅ Verified events are color-coded by staff member
+
+### Screenshots Captured
+- `screenshots/apply-schedule-01-generate-page.png` - Generated schedule with Apply button
+- `screenshots/apply-schedule-02-applied.png` - After applying, View Schedule button
+- `screenshots/apply-schedule-03-calendar.png` - Calendar view with appointments
+- `screenshots/apply-schedule-04-calendar-scrolled.png` - Scrolled calendar view
+- `screenshots/apply-schedule-05-calendar-with-appointments.png` - Refreshed calendar
+- `screenshots/apply-schedule-06-calendar-scrolled.png` - Scrolled view
+- `screenshots/apply-schedule-07-day-view.png` - Day view of appointments
+- `screenshots/apply-schedule-08-day-view-scrolled.png` - Scrolled day view
+
+### Notes
+- Staff colors: Viktor=red, Vas=blue, Dad/Gennadiy=green, Steven=amber, Vitallik=purple
+- Events show staff name in title for easy identification
+- Appointments include auto-generated notes for traceability
+- Cache invalidation ensures calendar updates immediately after applying
 
 
 ## [2026-01-28 00:07] Task 7: Checkpoint - Backend Complete (CHECKPOINT PASSED)

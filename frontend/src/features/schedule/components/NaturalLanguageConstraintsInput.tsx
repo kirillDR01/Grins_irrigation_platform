@@ -17,12 +17,7 @@ interface NaturalLanguageConstraintsInputProps {
   onConstraintsChange: (constraints: ParsedConstraint[]) => void;
 }
 
-const EXAMPLE_CONSTRAINTS = [
-  "Don't schedule Viktor before 10am",
-  "Keep all winterizations together",
-  "Only assign repairs to Vas",
-  "Focus on Eden Prairie first",
-];
+const EXAMPLE_CONSTRAINT = "e.g., Don't schedule Viktor before 10am";
 
 export function NaturalLanguageConstraintsInput({
   scheduleDate,
@@ -85,10 +80,10 @@ export function NaturalLanguageConstraintsInput({
         <Textarea
           id="constraints-input"
           data-testid="constraints-input"
-          placeholder={`Enter constraints in plain English, one per line:\n${EXAMPLE_CONSTRAINTS.join('\n')}`}
+          placeholder={EXAMPLE_CONSTRAINT}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          rows={4}
+          rows={3}
           className="resize-none"
         />
         <Button

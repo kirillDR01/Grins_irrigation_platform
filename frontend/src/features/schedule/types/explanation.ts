@@ -8,18 +8,18 @@
 // =============================================================================
 
 export interface StaffAssignmentSummary {
+  staff_id: string;
   staff_name: string;
-  total_jobs: number;
-  total_travel_minutes: number;
-  first_job_start: string | null;
-  last_job_end: string | null;
+  job_count: number;
+  total_minutes: number;
+  cities: string[];
+  job_types: string[];
 }
 
 export interface ScheduleExplanationRequest {
   schedule_date: string;
-  assignments: StaffAssignmentSummary[];
-  unassigned_count: number;
-  total_travel_minutes: number;
+  staff_assignments: StaffAssignmentSummary[];
+  unassigned_job_count: number;
 }
 
 export interface ScheduleExplanationResponse {
@@ -33,17 +33,17 @@ export interface ScheduleExplanationResponse {
 
 export interface UnassignedJobExplanationRequest {
   job_id: string;
+  job_type: string;
   customer_name: string;
-  service_type: string;
-  city: string | null;
-  duration_minutes: number;
-  schedule_date: string;
-  available_staff: string[];
-  reason: string;
+  city: string;
+  estimated_duration_minutes: number;
+  priority: string;
+  requires_equipment: string[];
+  constraint_violations: string[];
 }
 
 export interface UnassignedJobExplanationResponse {
-  explanation: string;
+  reason: string;
   suggestions: string[];
   alternative_dates: string[];
 }

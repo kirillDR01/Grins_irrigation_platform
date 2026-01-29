@@ -17,6 +17,8 @@ import type {
   ParseConstraintsResponse,
   JobsReadyToScheduleResponse,
   CustomerSearchResult,
+  ApplyScheduleRequest,
+  ApplyScheduleResponse,
 } from '../types';
 import type { PaginatedResponse } from '@/core/api';
 
@@ -137,5 +139,18 @@ export const scheduleGenerationApi = {
       { params: { search: query, page_size: 20 } }
     );
     return response.data.items;
+  },
+
+  /**
+   * Apply a generated schedule by creating appointments.
+   */
+  async applySchedule(
+    request: ApplyScheduleRequest
+  ): Promise<ApplyScheduleResponse> {
+    const response = await apiClient.post<ApplyScheduleResponse>(
+      `${BASE_URL}/apply`,
+      request
+    );
+    return response.data;
   },
 };

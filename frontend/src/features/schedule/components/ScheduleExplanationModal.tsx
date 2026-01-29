@@ -14,7 +14,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import { useScheduleExplanation } from '../hooks/useScheduleExplanation';
 import type { ScheduleGenerateResponse } from '../types';
@@ -96,7 +95,7 @@ export function ScheduleExplanationModal({
             <>
               {/* Main Explanation */}
               <div className="prose prose-sm max-w-none">
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
                   {explanation.explanation}
                 </p>
               </div>
@@ -105,18 +104,17 @@ export function ScheduleExplanationModal({
               {explanation.highlights.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="text-sm font-semibold">Key Highlights</h4>
-                  <div className="flex flex-wrap gap-2">
+                  <ul className="list-disc list-inside space-y-1">
                     {explanation.highlights.map((highlight, index) => (
-                      <Badge
+                      <li
                         key={index}
-                        variant="secondary"
-                        className="text-xs"
+                        className="text-sm text-muted-foreground break-words"
                         data-testid={`highlight-${index}`}
                       >
                         {highlight}
-                      </Badge>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 </div>
               )}
             </>

@@ -187,8 +187,6 @@ export interface UnassignedJobResponse {
   job_id: string;
   customer_name: string;
   service_type: string;
-  city: string | null;
-  duration_minutes: number;
   reason: string;
 }
 
@@ -235,4 +233,116 @@ export interface ScheduleGenerationStatusResponse {
   last_generated_at: string | null;
   total_assignments: number;
   total_unassigned: number;
+}
+
+
+// =============================================================================
+// Apply Schedule Types
+// =============================================================================
+
+export interface ApplyScheduleRequest {
+  schedule_date: string;
+  assignments: ScheduleStaffAssignment[];
+}
+
+export interface ApplyScheduleResponse {
+  success: boolean;
+  schedule_date: string;
+  appointments_created: number;
+  message: string;
+  created_appointment_ids: string[];
+}
+
+// =============================================================================
+// Schedule Explanation Types (for API)
+// =============================================================================
+
+export interface ScheduleExplanationRequest {
+  schedule_date: string;
+  staff_assignments: Array<{
+    staff_name: string;
+    jobs: Array<{
+      customer_name: string;
+      service_type: string;
+      city: string | null;
+      start_time: string;
+      end_time: string;
+      travel_time_minutes: number;
+    }>;
+    total_travel_minutes: number;
+  }>;
+  unassigned_jobs: Array<{
+    customer_name: string;
+    service_type: string;
+    reason: string;
+  }>;
+  total_travel_minutes: number;
+}
+
+export interface ScheduleExplanationResponse {
+  explanation: string;
+  key_decisions: string[];
+  optimization_notes: string[];
+}
+
+export interface UnassignedJobExplanationRequest {
+  job_id: string;
+  customer_name: string;
+  job_type: string;
+  city: string | null;
+  reason: string;
+  schedule_date: string;
+  available_staff: string[];
+}
+
+export interface UnassignedJobExplanationResponse {
+  explanation: string;
+  suggestions: string[];
+  alternative_dates: string[];
+}
+
+export interface ParseConstraintsRequest {
+  constraint_text: string;
+  schedule_date: string;
+}
+
+export interface ParseConstraintsResponse {
+  constraints: Array<{
+    type: string;
+    description: string;
+    staff_name?: string;
+    time_start?: string;
+    time_end?: string;
+    job_type?: string;
+    city?: string;
+    validation_errors?: string[];
+  }>;
+  raw_text: string;
+}
+
+export interface JobReadyToSchedule {
+  job_id: string;
+  customer_id: string;
+  customer_name: string;
+  job_type: string;
+  city: string;
+  priority: string;
+  estimated_duration_minutes: number;
+  requires_equipment: string[];
+  status: string;
+}
+
+export interface JobsReadyToScheduleResponse {
+  jobs: JobReadyToSchedule[];
+  total_count: number;
+  by_city: Record<string, number>;
+  by_job_type: Record<string, number>;
+}
+
+export interface CustomerSearchResult {
+  id: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  email: string | null;
 }

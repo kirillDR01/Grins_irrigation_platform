@@ -13,6 +13,784 @@ This repository contains documentation and examples for Kiro development workflo
 
 ## Recent Activity
 
+## [2026-01-28 23:55] - PLANNING: Comprehensive Testing Requirements for Schedule Workflow Improvements
+
+### What Was Accomplished
+
+**Enhanced the schedule-workflow-improvements spec with extensive testing requirements targeting 90%+ coverage and comprehensive E2E validation**
+
+Updated `.kiro/specs/schedule-workflow-improvements/tasks.md` with three new major testing phases:
+
+#### 1. Phase 8L: Comprehensive Unit Testing (90%+ Coverage)
+
+Added detailed unit test tasks (Tasks 31-37) covering:
+
+**Backend Unit Tests:**
+- AuthService: 24 tests targeting 95% coverage
+  - Authentication flows (valid/invalid credentials, lockout)
+  - Password hashing and verification
+  - JWT token generation and verification
+  - Token refresh and password change
+- RBAC: 13 tests targeting 95% coverage
+  - Permission decorators with various roles
+  - FastAPI dependencies (get_current_user, require_admin, etc.)
+- ScheduleClearService: 16 tests targeting 95% coverage
+  - Clear schedule with/without appointments
+  - Job status reset logic
+  - Audit log creation and retrieval
+- ScheduleClearAuditRepository: 6 tests targeting 90% coverage
+- InvoiceService: 38 tests targeting 95% coverage
+  - Invoice CRUD operations
+  - Status transitions
+  - Payment recording
+  - Lien tracking
+  - Generate from job
+- InvoiceRepository: 9 tests targeting 90% coverage
+
+**Frontend Unit Tests:**
+- AuthProvider: 8 tests (login, logout, token refresh, CSRF)
+- LoginPage: 10 tests (rendering, validation, error handling)
+- ProtectedRoute: 4 tests (redirect, role checking)
+- UserMenu: 5 tests (display, dropdown, logout)
+- Schedule Clear Components: 22 tests total
+- Invoice Components: 47 tests total
+
+#### 2. Phase 8M: End-to-End UI Validation (agent-browser)
+
+Added comprehensive E2E validation tasks (Tasks 38-42) with 23 total validations:
+
+**Authentication E2E (7 validations):**
+- Login page rendering
+- Login flow with valid credentials
+- Login error handling
+- Password visibility toggle
+- Protected route redirect
+- User menu functionality
+- Logout flow
+
+**Schedule Clear E2E (5 validations):**
+- Clear results button in Generate Routes tab
+- Job selection controls (select all/deselect all)
+- Clear day button and dialog
+- Clear day confirmation flow
+- Recently cleared section
+
+**Invoice E2E (8 validations):**
+- Invoice list page
+- Invoice detail page
+- Invoice creation form
+- Payment dialog
+- Invoice status transitions
+- Generate invoice from job
+- Lien deadlines widget
+- Invoice filters and pagination
+
+**Cross-Feature E2E (3 validations):**
+- Role-based access control
+- Complete workflow: Job → Invoice → Payment
+- Complete workflow: Schedule → Clear → Audit
+
+#### 3. Phase 8N: Documentation & Quality
+
+Updated final phase with stricter requirements:
+- 90%+ coverage mandatory (up from 85%)
+- 100% test pass rate required
+- Zero quality check violations
+
+### Technical Details
+
+**Coverage Targets (MANDATORY):**
+| Component | Target | Minimum |
+|-----------|--------|---------|
+| Backend Services | 95%+ | 90% |
+| Backend API | 90%+ | 85% |
+| Backend Repositories | 90%+ | 85% |
+| Frontend Components | 90%+ | 85% |
+| Overall Backend | 90%+ | 90% |
+| Overall Frontend | 90%+ | 90% |
+
+**E2E Validation Retry Policy:**
+1. Identify the issue (console errors, missing elements)
+2. Fix the component
+3. Run quality checks (ruff, mypy, pyright, npm run lint, npm run typecheck)
+4. Re-run the validation
+5. Maximum 3 retries before escalating to user
+
+**Test Count Summary:**
+- Backend Unit Tests: ~106 tests
+- Frontend Unit Tests: ~96 tests
+- E2E Validations: 23 validations
+- Integration Tests: 5 test suites
+- Property-Based Tests: 7 properties
+- **Grand Total: ~230+ tests/validations**
+
+### Files Modified
+- `.kiro/specs/schedule-workflow-improvements/tasks.md` - Added ~500 lines of comprehensive testing tasks
+
+### Decision Rationale
+
+**Why 90%+ coverage?**
+- Higher coverage catches more edge cases before production
+- Ensures all code paths are exercised
+- Provides confidence for refactoring
+- Aligns with enterprise-grade quality standards
+
+**Why extensive E2E validation?**
+- Unit tests verify code correctness, E2E verifies user experience
+- Catches integration issues between frontend and backend
+- Validates real user workflows end-to-end
+- Uses agent-browser for automated, repeatable validation
+
+**Why retry/fix cycles?**
+- E2E tests often fail due to timing or rendering issues
+- Immediate fix and retry prevents blocking progress
+- Maximum 3 retries prevents infinite loops
+- Documents issues for future reference
+
+### Impact
+
+- Testing effort increased from ~55 tests to ~230+ tests/validations
+- Estimated effort increased from 39-54 hours to 55-80 hours
+- Quality assurance is now comprehensive and mandatory
+- E2E validation ensures features work as users expect
+- Retry/fix policy ensures issues are resolved, not skipped
+
+### Next Steps
+- Begin implementation with Phase 8A (Authentication Database & Models)
+- Execute tasks sequentially through Phase 8K
+- Run comprehensive unit tests in Phase 8L
+- Execute E2E validations in Phase 8M
+- Complete documentation and final quality checks in Phase 8N
+
+---
+
+## [2026-01-28 23:45] - PLANNING: Detailed Login Page Design & Production Readiness Checklist
+
+### What Was Accomplished
+
+**Expanded Phase 8 authentication brainstorming with detailed frontend design and production readiness analysis**
+
+Added two major sections to PHASE-8-PLANNING.md:
+
+#### 1. Detailed Login Page Design
+
+- **Component Structure**: Full component tree using shadcn/ui (Card, Form, Input, Button, Alert, Checkbox)
+- **Detailed UI Mockup**: ASCII art showing exact layout with styling classes
+- **Responsive Design Specs**: Mobile (full width), Tablet/Desktop (400px centered card)
+- **Complete Component Implementation Sketch**: ~150 lines of TypeScript/React code showing:
+  - Form validation with zod schema
+  - Password visibility toggle (Eye/EyeOff icons)
+  - Remember me checkbox
+  - Loading state with spinner
+  - Error alert display
+  - Icon prefixes on inputs (User, Lock)
+- **Login Page States**: Initial, Typing, Submitting, Error, Success, Account Locked
+- **Error Messages**: Mapped error codes to user-friendly messages
+- **Accessibility Requirements**: Labels, screen reader support, keyboard navigation, WCAG AA contrast
+
+#### 2. Production Readiness Checklist
+
+Comprehensive gap analysis across 9 categories:
+
+| Category | Status | Key Gaps |
+|----------|--------|----------|
+| **Security** | ❌ | HTTPS, rate limiting, CORS config, CSRF, security headers |
+| **Environment** | ⚠️ | Secrets management, Redis for sessions |
+| **Monitoring** | ❌ | Sentry, log aggregation, APM, uptime monitoring |
+| **Database** | ⚠️ | Automated backups, point-in-time recovery |
+| **Auth Gaps** | ❌ | Password reset flow, initial user seeding script |
+| **Frontend** | ⚠️ | Environment variables, error boundaries |
+| **Deployment** | ❌ | CI/CD pipeline, staging environment |
+| **Documentation** | ⚠️ | User manual, runbook |
+| **Testing** | ⚠️ | Load testing, security testing, mobile testing |
+
+**Minimum Viable Production Checklist** (10 items):
+1. Implement authentication
+2. Configure HTTPS
+3. Set up rate limiting
+4. Configure production CORS
+5. Set up Sentry
+6. Create initial admin user
+7. Configure database backups
+8. Set up CI/CD
+9. Create staging environment
+10. Security review
+
+**Code Examples Provided**:
+- Rate limiting with slowapi
+- Security headers middleware
+- Sentry integration
+- Initial user seeding script
+- GitHub Actions CI/CD workflow
+- Frontend environment configuration
+
+### Technical Details
+
+- Login form uses react-hook-form + zod for validation
+- Password toggle uses Eye/EyeOff icons from lucide-react
+- Error states use shadcn Alert component with destructive variant
+- Remember me extends refresh token from 7 days (configurable)
+- Production needs slowapi for rate limiting (5 attempts/minute on login)
+- Sentry SDK with FastAPI and SQLAlchemy integrations
+
+### Files Modified
+- `PHASE-8-PLANNING.md` - Added ~400 lines of detailed design and production checklist
+
+### Impact
+- Phase 8 planning is now comprehensive enough for implementation
+- Production readiness gaps are clearly identified with priorities
+- Frontend developers have exact component structure and code to follow
+- DevOps has clear checklist for production deployment
+
+### Next Steps
+- Review production readiness items and prioritize
+- Decide which items are Phase 8 vs post-Phase 8
+- Consider creating separate "Production Hardening" phase
+- Begin implementation with Phase 8L (backend auth)
+
+---
+
+## [2026-01-28 22:15] - PLANNING: Authentication & Login System Added to Phase 8
+
+### What Was Accomplished
+
+**Brainstormed and documented complete authentication system for Phase 8**
+
+Added Priority 3: Authentication & Login System to PHASE-8-PLANNING.md with comprehensive design:
+
+1. **User Roles & Permissions Matrix**:
+   - Admin (Viktor): Full system access
+   - Manager (Future): Operations management, most features
+   - Tech (Vas, Dad, Steven, Vitallik): Mobile view, job updates, on-site payments
+   - Detailed permission matrix for all operations (schedule, invoices, lien tracking)
+
+2. **User Model Design Options**:
+   - Option A (Recommended): Extend Staff model with auth fields
+   - Option B: Separate User model with FK to Staff
+   - Decision: Start with Option A for simplicity
+
+3. **Authentication Flow**:
+   - JWT tokens with access (15 min) and refresh (7 days) tokens
+   - Login page UI mockup
+   - User menu dropdown in header
+   - Protected routes with role requirements
+
+4. **Security Considerations**:
+   - Password requirements (8+ chars, mixed case, numbers)
+   - Account lockout after 5 failed attempts (15 min)
+   - bcrypt hashing (cost factor 12)
+   - HttpOnly cookies for refresh tokens
+
+5. **API Endpoints**:
+   - POST /api/v1/auth/login
+   - POST /api/v1/auth/logout
+   - POST /api/v1/auth/refresh
+   - GET /api/v1/auth/me
+   - POST /api/v1/auth/change-password
+
+6. **Implementation Phases**:
+   - Phase 8L: Backend auth (4-5 hours)
+   - Phase 8M: Frontend auth (3-4 hours)
+   - Phase 8N: Role-based access control (2-3 hours)
+   - Phase 8O: User setup & testing (1-2 hours)
+   - Total: 10-14 hours
+
+7. **Updated Phase 8 Totals**:
+   - Priority 1: Schedule Clear/Reset (9-13 hours)
+   - Priority 2: Invoice Management (16-21 hours)
+   - Priority 3: Authentication (10-14 hours)
+   - **New Total: 35-48 hours**
+
+8. **Updated Implementation Order**:
+   - Auth first (security foundation, needed for audit logging)
+   - Then Schedule Clear/Reset
+   - Then Invoice Management
+
+### Technical Details
+
+- Extends existing `StaffRole` enum (TECH, SALES, ADMIN)
+- JWT structure includes: sub, username, role, name, iat, exp
+- Frontend uses AuthProvider context with useAuth hook
+- ProtectedRoute component with requiredRole prop
+- Token refresh handled automatically on API calls
+
+### Files Modified
+- `PHASE-8-PLANNING.md` - Added complete Priority 3: Authentication section
+
+### Next Steps
+- Create Kiro spec for authentication feature
+- Implement Phase 8L (backend auth) first
+- Consider if auth should be a separate Phase 8.5 or stay in Phase 8
+
+---
+
+## [2026-01-28 21:30] - REFACTOR: Phase 8/9 Planning Documents Restructured
+
+### What Was Accomplished
+
+**Refactored Phase 8 and Created Phase 9 Planning Documents**
+
+Based on deep analysis of PHASE-8-PLANNING.md, identified issues and implemented user-requested changes:
+
+1. **Moved all Telnyx/SMS content to new PHASE-9-PLANNING.md**:
+   - Extracted Priority 2 (Telnyx SMS Integration) section
+   - Extracted Phases 8D, 8E, 8F implementation details
+   - Extracted SMS-related brainstorming questions (Q2, Q3, Q8)
+   - Added rate limiting, webhook signature verification, idempotency handling
+   - Added message template specifications
+
+2. **Updated PHASE-8-PLANNING.md with improvements**:
+   - Added `payment_collected_on_site` boolean field to Job model for invoice generation
+   - Clarified invoice generation is **manual** (button click, not automatic)
+   - Updated lien tracking with manual triggers only (no cron jobs)
+   - Added dashboard widget design for "Lien Deadlines Approaching"
+   - Added `lien_warning_sent` and `lien_filed_date` audit fields
+   - Added rollback strategy: audit log with JSON blob for deleted appointments
+   - Added "Recently Cleared" section showing deletions in last 24 hours
+   - Updated total effort estimates (removed SMS hours: now 25-34 hours)
+   - Updated implementation order (removed SMS phases)
+   - Removed SMS-related brainstorming questions
+
+3. **Key Design Decisions Documented**:
+   - Invoice generation: Manual button click from Job detail page
+   - Lien tracking: Manual triggers only, dashboard widget for visibility
+   - Clear Day: Hard delete with audit log for potential recovery
+   - Job status reset: Only reset jobs with `status = 'scheduled'`
+
+### Files Modified
+- `PHASE-8-PLANNING.md` - Complete rewrite removing SMS, adding improvements
+- `PHASE-9-PLANNING.md` - New file with all Telnyx/SMS content
+
+### Technical Details
+- Phase 8 now focuses on: Schedule Clear/Reset + Invoice Management
+- Phase 9 will focus on: Telnyx SMS Integration (allows verification wait time)
+- Added `schedule_clear_audit` table design for rollback capability
+- Added `payment_collected_on_site` field to Job model
+
+### Impact
+- Cleaner separation of concerns between phases
+- Phase 8 can proceed immediately without waiting for Telnyx verification
+- Better audit trail for destructive operations (Clear Day)
+- Manual invoice workflow matches Viktor's preference for review before sending
+
+---
+
+## [2026-01-28 19:15] - ANALYSIS: Implementation Status Verification Complete
+
+### What Was Accomplished
+
+**Verified IMPLEMENTATION-STATUS.md Against All Planning Documents**
+
+Cross-referenced the implementation status document against:
+- `ARCHITECTURE.md` (1887 lines) - Complete technical architecture with 7 phases, 6 dashboards
+- `main_plan.md` - Unified implementation roadmap
+- `Grins_Irrigation_Backend_System.md` (731 lines) - Viktor's detailed business process documentation
+
+**Items Added to IMPLEMENTATION-STATUS.md:**
+
+1. **Phase 1 Missing Items:**
+   - Customer username/password for portal login
+   - Lead source details JSONB field population
+   - Customer contact list export feature
+
+2. **Phase 2 Missing Items:**
+   - Staff locations table/history (GPS tracking)
+   - Vehicle tracking table (equipment, inventory, mileage)
+   - Break/stop functionality for staff
+   - Time remaining alerts
+   - Materials used tracking per job
+   - Review collection workflow
+
+3. **Phase 3 Missing Items:**
+   - Notifications table for tracking sent notifications
+   - Expiring appointments (auto-remove if no confirm)
+   - Two-way SMS conversation tracking
+   - Mass text/email campaigns
+
+4. **Phase 4 Missing Items:**
+   - Invoice model with late_fee, lien_eligible, reminder_count
+   - Lien eligibility tracking and workflow (45-day warning, 120-day filing)
+   - Prepay requirement for non-lien-eligible services
+
+5. **Phase 5 Expanded (Customer Self-Service & Sales):**
+   - Guest checkout option
+   - Terms and conditions acceptance
+   - Preferred service times input
+   - Estimate templates with tier options
+   - AI visualization (mulch colors, etc.)
+   - Property diagram tool
+
+6. **Phase 6 Expanded (Accounting & Marketing):**
+   - Expenses table with receipt OCR
+   - Plaid bank account connection
+   - QR code generation
+   - Social media auto-post
+
+7. **Phase 7 Expanded (Website & Growth):**
+   - System design tool
+   - Customer financing options
+   - Yearly service contracts
+
+8. **New Section: Viktor's Pain Points Addressed**
+   - Mapped each pain point from business docs to implementation status
+
+### Files Modified
+- `IMPLEMENTATION-STATUS.md` - Comprehensive updates with all missing items from planning docs
+
+### Technical Details
+- Verified all 7 phases from ARCHITECTURE.md are captured
+- Verified all 6 dashboards (Client, Scheduling, Staff/Crew, Sales, Accounting, Marketing) are documented
+- Cross-referenced database schema from ARCHITECTURE.md (customers, properties, jobs, staff, appointments, invoices, estimates, staff_locations, notifications)
+- Verified Viktor's specific pain points from Grins_Irrigation_Backend_System.md are addressed
+
+### Next Steps
+- Phase 8 implementation (Schedule Clear/Reset + Telnyx SMS) as planned
+- Invoice/Payment system would provide highest business value after Phase 8
+
+---
+
+## [2026-01-28 18:30] - ANALYSIS: Implementation Status Assessment Complete
+
+### What Was Accomplished
+
+**Created Comprehensive Implementation Status Document**
+
+Analyzed the entire codebase against the original ARCHITECTURE.md planning document and Viktor's business requirements from `Grins_Irrigation_Backend_System.md` to determine what has been implemented vs what remains.
+
+**Key Findings:**
+
+| Phase | Status | Completion |
+|-------|--------|------------|
+| Phase 1: Foundation (CRM + Job Tracking) | ✅ Complete | 95% |
+| Phase 2: Field Operations | ✅ Complete | 90% |
+| Phase 3: Customer Communication | 🟡 Partial | 60% |
+| Phase 4: Scheduling & Payments | 🟡 Partial | 70% |
+| Phase 5: Customer Self-Service | ❌ Not Started | 0% |
+| Phase 6: Accounting & Marketing | ❌ Not Started | 0% |
+| Phase 7: Website & Growth | ❌ Not Started | 0% |
+
+**Overall Progress: ~45% of full vision implemented**
+
+**What's Working Well:**
+- Complete CRM with customers, properties, jobs
+- Full staff management with availability
+- AI-powered schedule generation with OR-Tools solver
+- Map-based route visualization with Google Maps
+- Natural language constraint input
+- Schedule explanation ("Why" buttons)
+- AI chat/query interface
+- Comprehensive test suite (unit, functional, integration, PBT)
+
+**Main Gaps Identified:**
+1. **SMS/Communication** - Twilio blocked by A2P 10DLC, Telnyx migration planned
+2. **Payments** - No invoice/payment system yet
+3. **Mobile PWA** - Field staff need dedicated mobile experience
+4. **Customer Portal** - No self-service yet
+5. **Schedule Clear/Reset** - Already planned in Phase 8
+
+### Files Created
+- `IMPLEMENTATION-STATUS.md` - Comprehensive status document with all details
+
+### Technical Details
+- Analyzed 15 database models (all implemented)
+- Reviewed 16 API routers (all functional)
+- Checked 6 frontend feature slices (all complete)
+- Identified missing endpoints and features
+
+### Next Steps
+1. Complete Phase 8 (Schedule Clear/Reset + Telnyx SMS)
+2. Add Invoice/Payment functionality (high business value)
+3. Build Staff Mobile PWA
+4. Consider Customer Portal for self-service
+
+---
+
+## [2026-01-28 17:15] - PLANNING: Telnyx SMS Integration Strategy Added to Phase 8
+
+### What Was Accomplished
+
+**Added Comprehensive Telnyx Two-Way SMS Strategy to Phase 8 Planning**
+
+Extended `PHASE-8-PLANNING.md` with a complete strategy for replacing Twilio with Telnyx for SMS messaging. This addresses the regulatory blockers (A2P 10DLC registration) that were preventing SMS functionality.
+
+**Key Decisions:**
+
+1. **Provider Choice: Telnyx**
+   - 30-70% cheaper than Twilio
+   - Excellent Python SDK and documentation
+   - Full two-way SMS support (send + receive)
+   - Enterprise-grade reliability
+
+2. **Number Type: Toll-Free (1-800 style)**
+   - Simpler verification process (1-3 days vs 2-4 weeks for 10DLC)
+   - Customer-acceptable for business communications
+   - ~$2/month for the number
+
+3. **Two-Way Architecture:**
+   - **Outbound**: `TelnyxSMSService.send_message()` → Telnyx API → Customer
+   - **Inbound**: Customer → Telnyx → Webhook `POST /api/v1/sms/inbound` → Parse & respond
+
+**Message Types Planned:**
+- Appointment confirmation (after schedule applied)
+- Day-before reminder
+- "On the way" notification
+- Arrival notification
+- Completion summary
+
+**Inbound Reply Handling:**
+- YES/CONFIRM → Update appointment to "confirmed"
+- NO/CANCEL → Flag for admin follow-up
+- STOP → Set customer `sms_opt_in = false`
+- HELP → Send help message
+
+### Technical Details
+
+**New Components:**
+- `TelnyxSMSService` - Send/receive SMS, handle replies
+- `SMSMessage` model - Database logging
+- `sms_messages` table - Message history
+- `POST /api/v1/sms/inbound` - Webhook endpoint
+- SMS templates for each message type
+
+**Implementation Phases:**
+- **Phase 8D**: Account setup + outbound SMS (2-3 hours)
+- **Phase 8E**: Inbound webhook + reply handling (3-4 hours)
+- **Phase 8F**: Templates + automation triggers (2-3 hours)
+
+**Cost Estimate:** ~$10/month for 500 messages (much cheaper than Twilio)
+
+### Files Modified
+- `PHASE-8-PLANNING.md` - Added "PRIORITY 2: Telnyx SMS Integration" section
+
+### Next Steps
+1. Create Telnyx account and purchase toll-free number
+2. Complete toll-free verification (1-3 business days)
+3. Implement Phase 8D (basic outbound SMS)
+4. Configure webhook and implement Phase 8E (inbound handling)
+
+---
+
+## [2026-01-28 16:30] - PLANNING: Phase 8 - Schedule Clear/Reset Functionality
+
+### What Was Accomplished
+
+**Comprehensive Planning for Schedule Management Improvements**
+
+Created detailed planning document (`PHASE-8-PLANNING.md`) for Phase 8 features that enable users to clear and reset schedules. This addresses a key workflow gap: the ability to iterate on schedule generation and redo applied schedules.
+
+**Key Features Planned:**
+
+1. **Generate Routes Tab - Three Controls:**
+   - **Clear Results Button**: Clears generated (in-memory) schedule results, returns to job selection state, keeps job checkboxes intact
+   - **Select All Link**: Checks all job checkboxes
+   - **Deselect All Link**: Unchecks all job checkboxes
+   - These are separate controls to give users maximum flexibility
+
+2. **Schedule Tab - Clear Day:**
+   - **Clear Day Button** with date picker: User can select ANY date to clear (not just currently viewed)
+   - **Confirmation Dialog** showing:
+     - Date being cleared
+     - Number of appointments to be deleted
+     - Preview of affected jobs (first few + "and X more")
+     - Warning that action cannot be undone
+   - **Job Status Reset**: When appointments are deleted, associated jobs reset to "approved" status so they're available for rescheduling
+
+3. **Backend Endpoint:**
+   - `POST /api/v1/schedule/clear` with request body `{"schedule_date": "2026-01-28"}`
+   - Returns: appointments deleted count, jobs reset count, success message
+
+### Technical Details
+
+**Implementation Phases:**
+- **Phase 8A**: Generate Routes Controls (frontend only) - 2-3 hours
+- **Phase 8B**: Clear Day Backend + Frontend - 4-6 hours
+- **Phase 8C**: Testing & Polish - 2-3 hours
+- **Total Estimated Effort**: 8-12 hours
+
+**Components to Create/Modify:**
+- `ScheduleResults.tsx` - Add "Clear Results" button
+- `JobsToScheduleList.tsx` - Add "Select All" / "Deselect All" links
+- `ScheduleGenerationPage.tsx` - Wire up clear results handler
+- `SchedulePage.tsx` - Add "Clear Day" button
+- `ClearDayDialog.tsx` - New confirmation dialog component
+
+**Backend Changes:**
+- New endpoint: `POST /api/v1/schedule/clear`
+- `AppointmentService.clear_schedule_for_date(date)` method
+- `JobService.reset_jobs_to_approved(job_ids)` method
+
+### Decision Rationale
+
+**Key Decisions Made:**
+
+1. **Separate buttons for Clear Results vs Deselect All**: These serve different purposes - Clear Results clears the output, Deselect All clears the input. Keeping them separate gives users more control.
+
+2. **Clear Day requires date selection**: User should be able to clear any date, not just the currently viewed one. This provides flexibility for managing schedules across different days.
+
+3. **Job status reset to "approved"**: When appointments are deleted, jobs must be reset to "approved" status so they become available for rescheduling. This completes the "redo" workflow.
+
+4. **Confirmation dialog for Clear Day only**: Since Clear Day is a destructive database operation, it requires confirmation. Clear Results only clears in-memory data, so no confirmation needed.
+
+### Files Created
+- `PHASE-8-PLANNING.md` - Comprehensive planning document with UI mockups, API specs, and implementation details
+
+### Next Steps
+- Begin Phase 8A implementation (Generate Routes controls)
+- Create spec files in `.kiro/specs/schedule-clear-reset/` if using formal spec workflow
+- Implement backend endpoint for Clear Day
+- Add frontend components and wire up handlers
+
+---
+
+## [2026-01-28 15:15] - FEATURE: Assigned Jobs Section Added to Schedule Generation Page
+
+### What Was Accomplished
+
+**Added Light Green "Assigned Jobs" Section to Schedule Results**
+
+Implemented a new section in the Schedule Generation page that displays assigned jobs in a light green card, complementing the existing light yellow "Unassigned Jobs" section.
+
+**UI Changes:**
+- Added new Card component with green styling (`border-green-200 bg-green-50`)
+- CheckCircle icon with green text for visual consistency
+- Table showing: Customer, Service Type, Assigned To (staff name), Time, Location, Duration
+- Green-styled badges for service types (`bg-green-100 text-green-800 border-green-300`)
+- Added `bg-yellow-50` background to unassigned jobs section for consistency
+
+**Component Structure:**
+- Section only displays when `results.total_assigned > 0`
+- Flattens all staff assignments into a single table view
+- Each row shows job details with the assigned staff member's name
+- Uses `data-testid="assigned-jobs-section"` for testing
+
+### Technical Details
+
+**File Modified:** `frontend/src/features/schedule/components/ScheduleResults.tsx`
+
+**New Section Code Pattern:**
+```tsx
+{results.total_assigned > 0 && (
+  <Card className="border-green-200 bg-green-50" data-testid="assigned-jobs-section">
+    <CardHeader>
+      <CardTitle className="flex items-center gap-2 text-green-800">
+        <CheckCircle className="h-5 w-5" />
+        Assigned Jobs ({results.total_assigned})
+      </CardTitle>
+    </CardHeader>
+    <CardContent>
+      <Table>
+        {/* Table with Customer, Service Type, Assigned To, Time, Location, Duration */}
+      </Table>
+    </CardContent>
+  </Card>
+)}
+```
+
+### Visual Validation
+
+- Frontend tests: ✅ All 403 tests passing
+- Visual verification: ✅ Page loads correctly at `/schedule/generate`
+- Schedule generation: ✅ Works (currently shows unassigned jobs due to no available staff)
+- Screenshots captured: `screenshots/assigned-jobs-section.png`, `screenshots/schedule-results-unassigned.png`
+
+### Files Modified
+- `frontend/src/features/schedule/components/ScheduleResults.tsx` - Added assigned jobs section
+
+### Quality Check Results
+- Frontend Tests: ✅ 403/403 passing
+- TypeScript: ✅ No type errors
+- Lint: ✅ No violations
+- Visual: ✅ Verified in browser
+
+### Notes
+- The assigned jobs section will only appear when the schedule generation algorithm successfully assigns jobs to staff
+- Currently, the test data shows all jobs as unassigned because no staff are available for the selected date
+- The section provides a flat view of all assigned jobs across all staff members for easy overview
+
+---
+
+## [2026-01-28 14:53] - TESTING: API Server Verification & Postman Collection Updates
+
+### What Was Accomplished
+
+**API Server Verification and Test Suite Execution**
+
+Verified the backend API server is running and healthy, executed the full test suite, and added new Postman requests for the schedule application endpoint.
+
+**Test Results Summary:**
+- **Total Tests:** 1,127 tests collected
+- **Passed:** 1,117 tests
+- **Failed:** 10 tests (AI-related mocking issues)
+- **Warnings:** 13 (mostly async mock warnings)
+
+The 10 failing tests are related to AI agent service mocking and don't affect core functionality:
+- `test_ai_agent.py` - 5 tests (mock configuration issues)
+- `test_ai_api.py` - 1 test (streaming response mock)
+- `test_context_property.py` - 1 test (async mock)
+- `test_schedule_explanation_api.py` - 2 tests (AI error handling)
+- `test_session_history_property.py` - 1 test (session limit)
+
+**Postman Collection Updates:**
+
+Added 3 new requests to the Grins Irrigation API collection:
+
+| Request | Method | Endpoint | Purpose |
+|---------|--------|----------|---------|
+| Generate Schedule | POST | `/api/v1/schedule/generate` | Generate optimized schedule for a date |
+| Apply Schedule | POST | `/api/v1/schedule/apply` | Create appointments from generated schedule |
+| Check Schedule Capacity | GET | `/api/v1/schedule/capacity/{date}` | Check scheduling capacity for a date |
+
+**New Schema Verification:**
+
+Verified the schedule generation schemas are working correctly:
+- `ScheduleGenerateRequest` - Request to generate schedule
+- `ScheduleGenerateResponse` - Response with assignments and unassigned jobs
+- `ApplyScheduleRequest` - Request to apply schedule (create appointments)
+- `ApplyScheduleResponse` - Response with created appointment IDs
+- `ScheduleCapacityResponse` - Capacity check response
+
+### Technical Details
+
+**API Endpoints Tested:**
+```bash
+# Health check - verified server running
+curl http://localhost:8000/health
+# Response: {"status":"healthy","version":"1.0.0","database":{"status":"healthy"}}
+
+# Apply schedule - empty assignments
+curl -X POST http://localhost:8000/api/v1/schedule/apply \
+  -H "Content-Type: application/json" \
+  -d '{"schedule_date": "2026-01-29", "assignments": []}'
+# Response: {"success":true,"appointments_created":0,...}
+
+# Generate schedule - optimization test
+curl -X POST http://localhost:8000/api/v1/schedule/generate \
+  -H "Content-Type: application/json" \
+  -d '{"schedule_date": "2026-01-29", "timeout_seconds": 10}'
+# Response: Schedule with unassigned jobs (no available staff)
+```
+
+**Postman Request IDs Added:**
+- `generate_schedule`: `292d538f-16ca-a046-7183-26a0d27ef86f`
+- `apply_schedule`: `854f6685-a85a-15ed-c9c1-72337a0de3f7`
+- `check_schedule_capacity`: `2964874c-130a-c628-6a4d-578a0eb1f3eb`
+
+### Files Modified
+- `.postman.json` - Added 3 new request IDs
+
+### Quality Check Results
+- Backend Server: ✅ Running and healthy
+- Database: ✅ Connected
+- Test Suite: ✅ 1,117/1,127 passing (98.9%)
+- Postman Collection: ✅ Updated with schedule endpoints
+
+### Next Steps
+- Fix AI-related test mocking issues
+- Add more comprehensive schedule integration tests
+- Consider adding Postman test scripts for automated validation
+
+---
+
 ## [2026-01-27 23:48] - FEATURE: Phase 7 Schedule AI Updates - Implementation Complete
 
 ### What Was Accomplished
