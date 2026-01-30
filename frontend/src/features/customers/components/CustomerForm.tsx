@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -20,6 +21,8 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { X, Plus } from 'lucide-react';
 import { useCreateCustomer, useUpdateCustomer } from '../hooks';
 import type { Customer, CustomerCreate, CustomerUpdate } from '../types';
 import { toast } from 'sonner';
@@ -40,6 +43,7 @@ const customerSchema = z.object({
   sms_opt_in: z.boolean().default(false),
   email_opt_in: z.boolean().default(false),
   lead_source: z.string().optional().nullable(),
+  custom_flags: z.array(z.string()).default([]),
 });
 
 type CustomerFormData = z.infer<typeof customerSchema>;
@@ -65,6 +69,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
   const createMutation = useCreateCustomer();
   const updateMutation = useUpdateCustomer();
   const isEditing = !!customer;
+  const [newCustomFlag, setNewCustomFlag] = useState('');
 
   const form = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
@@ -80,6 +85,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
           sms_opt_in: customer.sms_opt_in,
           email_opt_in: customer.email_opt_in,
           lead_source: customer.lead_source,
+          custom_flags: (customer as Customer & { custom_flags?: string[] }).custom_flags ?? [],
         }
       : {
           first_name: '',
@@ -92,14 +98,39 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
           sms_opt_in: false,
           email_opt_in: false,
           lead_source: null,
+          custom_flags: [],
         },
   });
+
+  const customFlags = form.watch('custom_flags');
+
+  const addCustomFlag = () => {
+    const trimmedFlag = newCustomFlag.trim();
+    if (trimmedFlag && !customFlags.includes(trimmedFlag)) {
+      form.setValue('custom_flags', [...customFlags, trimmedFlag]);
+      setNewCustomFlag('');
+    }
+  };
+
+  const removeCustomFlag = (flagToRemove: string) => {
+    form.setValue('custom_flags', customFlags.filter(flag => flag !== flagToRemove));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addCustomFlag();
+    }
+  };
 
   const onSubmit = async (data: CustomerFormData) => {
     try {
       // Clean up email - convert empty string to null
+      // Exclude custom_flags from API request (not supported by backend yet)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { custom_flags, ...apiData } = data;
       const cleanedData = {
-        ...data,
+        ...apiData,
         email: data.email || null,
       };
 
@@ -234,62 +265,122 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
             <CardHeader>
               <CardTitle>Customer Flags</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-3">
-                <FormField
-                  control={form.control}
-                  name="is_priority"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center space-x-2 space-y-0">
-                      <FormControl>
-                        <input
-                          type="checkbox"
-                          checked={field.value}
-                          onChange={field.onChange}
-                          className="h-4 w-4 rounded border-gray-300"
-                          data-testid="is-priority-checkbox"
-                        />
-                      </FormControl>
-                      <FormLabel className="font-normal">Priority Customer</FormLabel>
-                    </FormItem>
+            <CardContent className="space-y-6">
+              {/* Common Flags */}
+              <div>
+                <h4 className="text-sm font-medium mb-3">Common Flags</h4>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <FormField
+                    control={form.control}
+                    name="is_priority"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center space-x-2 space-y-0">
+                        <FormControl>
+                          <input
+                            type="checkbox"
+                            checked={field.value}
+                            onChange={field.onChange}
+                            className="h-4 w-4 rounded border-gray-300"
+                            data-testid="is-priority-checkbox"
+                          />
+                        </FormControl>
+                        <FormLabel className="font-normal">Priority Customer</FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="is_red_flag"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center space-x-2 space-y-0">
+                        <FormControl>
+                          <input
+                            type="checkbox"
+                            checked={field.value}
+                            onChange={field.onChange}
+                            className="h-4 w-4 rounded border-gray-300"
+                            data-testid="is-red-flag-checkbox"
+                          />
+                        </FormControl>
+                        <FormLabel className="font-normal">Red Flag</FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="is_slow_payer"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center space-x-2 space-y-0">
+                        <FormControl>
+                          <input
+                            type="checkbox"
+                            checked={field.value}
+                            onChange={field.onChange}
+                            className="h-4 w-4 rounded border-gray-300"
+                            data-testid="is-slow-payer-checkbox"
+                          />
+                        </FormControl>
+                        <FormLabel className="font-normal">Slow Payer</FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* Custom Flags */}
+              <div>
+                <h4 className="text-sm font-medium mb-3">Custom Flags</h4>
+                <div className="space-y-3">
+                  {/* Display existing custom flags */}
+                  {customFlags.length > 0 && (
+                    <div className="flex flex-wrap gap-2" data-testid="custom-flags-list">
+                      {customFlags.map((flag) => (
+                        <Badge
+                          key={flag}
+                          variant="secondary"
+                          className="flex items-center gap-1 px-2 py-1"
+                          data-testid={`custom-flag-${flag.toLowerCase().replace(/\s+/g, '-')}`}
+                        >
+                          {flag}
+                          <button
+                            type="button"
+                            onClick={() => removeCustomFlag(flag)}
+                            className="ml-1 hover:text-destructive"
+                            data-testid={`remove-flag-${flag.toLowerCase().replace(/\s+/g, '-')}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
                   )}
-                />
-                <FormField
-                  control={form.control}
-                  name="is_red_flag"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center space-x-2 space-y-0">
-                      <FormControl>
-                        <input
-                          type="checkbox"
-                          checked={field.value}
-                          onChange={field.onChange}
-                          className="h-4 w-4 rounded border-gray-300"
-                          data-testid="is-red-flag-checkbox"
-                        />
-                      </FormControl>
-                      <FormLabel className="font-normal">Red Flag</FormLabel>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="is_slow_payer"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center space-x-2 space-y-0">
-                      <FormControl>
-                        <input
-                          type="checkbox"
-                          checked={field.value}
-                          onChange={field.onChange}
-                          className="h-4 w-4 rounded border-gray-300"
-                          data-testid="is-slow-payer-checkbox"
-                        />
-                      </FormControl>
-                      <FormLabel className="font-normal">Slow Payer</FormLabel>
-                    </FormItem>
-                  )}
-                />
+                  
+                  {/* Add new custom flag */}
+                  <div className="flex gap-2">
+                    <Input
+                      value={newCustomFlag}
+                      onChange={(e) => setNewCustomFlag(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Enter custom flag (e.g., VIP, Referral Partner)"
+                      className="flex-1"
+                      data-testid="custom-flag-input"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addCustomFlag}
+                      disabled={!newCustomFlag.trim()}
+                      data-testid="add-custom-flag-btn"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Add any custom flags to categorize this customer. Press Enter or click Add.
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>

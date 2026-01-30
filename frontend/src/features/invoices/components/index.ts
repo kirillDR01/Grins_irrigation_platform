@@ -6,3 +6,4 @@ export { PaymentDialog } from './PaymentDialog';
 export { GenerateInvoiceButton } from './GenerateInvoiceButton';
 export { LienDeadlinesWidget } from './LienDeadlinesWidget';
 export { OverdueInvoicesWidget } from './OverdueInvoicesWidget';
+export { CreateInvoiceDialog } from './CreateInvoiceDialog';

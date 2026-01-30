@@ -24,7 +24,6 @@ import { MetricsCard } from './MetricsCard';
 import { RecentActivity } from './RecentActivity';
 import { AIQueryChat } from '@/features/ai/components/AIQueryChat';
 import { MorningBriefing } from '@/features/ai/components/MorningBriefing';
-import { CommunicationsQueue } from '@/features/ai/components/CommunicationsQueue';
 import { OverdueInvoicesWidget, LienDeadlinesWidget } from '@/features/invoices';
 
 export function DashboardPage() {
@@ -233,9 +232,6 @@ export function DashboardPage() {
 
           {/* Recent Activity */}
           <RecentActivity />
-
-          {/* Communications Queue */}
-          <CommunicationsQueue />
 
           {/* AI Query Chat */}
           <AIQueryChat />

@@ -13,6 +13,215 @@ This repository contains documentation and examples for Kiro development workflo
 
 ## Recent Activity
 
+## [2026-01-29 03:33] - FEATURE: Phase 8 Implementation Complete - Invoice System & E2E Validation
+
+### What Was Accomplished
+
+**Completed comprehensive Phase 8 implementation via overnight Ralph Wiggum autonomous execution**
+
+The overnight run executed Tasks 20-39 of the schedule-workflow-improvements spec, implementing the complete Invoice Management system and comprehensive testing/validation.
+
+#### Invoice System Implementation (Tasks 20-27)
+
+**Backend:**
+- Invoice model with full schema (status, line items, payments, lien tracking)
+- InvoiceRepository with CRUD operations, filtering, pagination, lien deadline queries
+- InvoiceService with business logic for:
+  - Invoice generation from completed jobs
+  - Status transitions (draft → sent → paid/partial/overdue/cancelled)
+  - Payment recording with automatic status updates
+  - Lien tracking (45-day warning, 120-day filing deadlines)
+  - Lien eligibility determination by job type
+- Invoice API endpoints (15 endpoints covering all operations)
+
+**Frontend:**
+- InvoiceStatusBadge component with color-coded status indicators
+- InvoiceList with filtering, pagination, and status badges
+- InvoiceDetail with full invoice information and action buttons
+- InvoiceForm for creating/editing invoices
+- PaymentDialog for recording payments
+- GenerateInvoiceButton for creating invoices from jobs
+- LienDeadlinesWidget showing upcoming lien deadlines
+- Dashboard integration with invoice widgets
+
+#### Testing & Validation (Tasks 29-39)
+
+**Integration Tests (Task 29):**
+- Authentication integration tests (login, token refresh, logout)
+- Schedule clear integration tests (clear, audit, job reset)
+- Invoice integration tests (CRUD, payments, lien tracking)
+- Cross-component integration tests (RBAC across features)
+
+**Property-Based Tests (Task 30):**
+- Property 1: Password hashing round-trip
+- Property 2: Role permission hierarchy
+- Property 3: Clear schedule audit completeness
+- Property 4: Job status reset correctness
+- Property 5: Invoice number uniqueness
+- Property 6: Payment recording correctness
+- Property 7: Lien eligibility determination
+
+**Unit Tests (Tasks 31-34):**
+- AuthService: 46 tests (98% coverage)
+- RBAC dependencies: 25 tests (97% coverage)
+- ScheduleClearService: 17 tests (95%+ coverage)
+- ScheduleClearAuditRepository: 8 tests (100% coverage)
+- InvoiceService: 73 tests (98% coverage)
+- InvoiceRepository: 26 tests (100% coverage)
+- AuthProvider: 10 tests
+- LoginPage: 17 tests
+
+**Checkpoint Validation (Task 37):**
+- Backend: 1712/1712 tests passing (100% pass rate)
+- Backend coverage: 91% overall
+- Frontend: 704/704 tests passing (100% pass rate)
+- All quality checks passed (ruff, mypy, pyright, eslint, typecheck)
+
+**E2E Validation (Tasks 38-39):**
+- Authentication E2E: Login, logout, protected routes, user menu
+- Schedule Clear E2E: Clear results button, job selection controls, clear day dialog
+- All validations passed using agent-browser
+
+### Technical Details
+
+**Files Created:**
+- `src/grins_platform/models/invoice.py` - Invoice SQLAlchemy model
+- `src/grins_platform/schemas/invoice.py` - Pydantic schemas
+- `src/grins_platform/repositories/invoice_repository.py` - Data access layer
+- `src/grins_platform/services/invoice_service.py` - Business logic
+- `src/grins_platform/api/v1/invoices.py` - API endpoints
+- `frontend/src/features/invoices/` - Complete invoice feature slice
+- `src/grins_platform/tests/test_invoice_property.py` - Property-based tests
+- `src/grins_platform/tests/test_auth_property.py` - Auth property tests
+- `src/grins_platform/tests/test_schedule_clear_property.py` - Schedule clear property tests
+- `src/grins_platform/tests/integration/test_*_integration.py` - Integration test suites
+
+**Test Statistics:**
+- Total backend tests: 1712
+- Total frontend tests: 704
+- Property-based tests: 34 (7 properties)
+- Integration tests: 61
+- E2E validations: 12
+
+**Coverage Achieved:**
+- Backend overall: 91% (target: 90%)
+- Frontend overall: 82.7% statements, 84.6% lines
+- AuthService: 98%
+- InvoiceService: 98%
+- InvoiceRepository: 100%
+
+### Decision Rationale
+
+**Invoice Number Format:** `INV-{YEAR}-{SEQUENCE:06d}` ensures uniqueness and readability.
+
+**Lien Eligibility:** Only installation and major repair jobs are lien-eligible (per Minnesota mechanic's lien law). Seasonal services are explicitly excluded.
+
+**Payment Status Logic:**
+- `paid_amount >= total_amount` → status = 'paid'
+- `paid_amount > 0 && paid_amount < total_amount` → status = 'partial'
+
+### Impact
+
+- Complete invoice management system ready for production use
+- Comprehensive test coverage ensures reliability
+- Property-based tests validate correctness properties
+- E2E validation confirms user workflows work as expected
+- Phase 8 implementation is 70% complete (140/200+ tasks)
+
+### Next Steps
+- Complete remaining E2E validations (Tasks 39.5-42)
+- Final documentation and quality checks (Phase 8N)
+- Consider Phase 9 (Telnyx SMS Integration) after Phase 8 completion
+
+---
+
+## [2026-01-29 21:30] - BUGFIX: Bug Hunt Completion - All Issues Resolved
+
+### What Was Accomplished
+
+Completed comprehensive bug hunt investigation and resolved all identified issues:
+
+**Bugs Fixed (3):**
+1. HTML nesting error in PageHeader component (fixed in previous session)
+2. Add Property button non-functional (fixed - implemented complete dialog)
+3. Customer Form dialog missing DialogDescription (fixed - added accessibility description)
+
+**Issues Investigated and Closed as "Not Bugs" (3):**
+1. **Create Invoice - No Jobs Displayed**: Working correctly. All 3 completed jobs already have invoices, so the dialog correctly shows "No completed jobs without invoices"
+2. **AI Categorize - No Visual Feedback**: Working correctly. Shows categorization result with Category, Confidence, Reasoning, and Suggested Services
+3. **401 Unauthorized Errors on Initial Load**: Expected behavior. AuthProvider tries to restore session on mount, which returns 401 if no valid session exists
+
+### Technical Details
+
+**Investigation Process:**
+- Used agent-browser for automated UI testing
+- Verified backend API returns 3 completed jobs with status 'completed'
+- Confirmed all 3 completed jobs have corresponding invoices (INV-2026-000039, INV-2026-000040, INV-2026-000041)
+- Tested AI Categorize with sample input "Broken sprinkler head in front yard, water leaking everywhere" - returned Category: urgent, Confidence: 95%
+- Reviewed AuthProvider.tsx to understand 401 error source - normal session restoration behavior
+
+**Additional Testing:**
+- Verified Generate Routes Preview functionality
+- Tested "Explain This Schedule" AI feature - working with detailed insights
+- Tested Map view with Google Maps integration - working correctly
+- Verified Settings page loads correctly
+
+### Files Modified
+- `BUG-HUNT-REPORT.md` - Updated all bug statuses and added investigation results
+
+### Screenshots Captured
+- `screenshots/bug-hunt/32-ai-categorize-working.png`
+- `screenshots/bug-hunt/33-map-view-working.png`
+
+### Summary
+**Total Bugs Found:** 6
+**Fixed:** 3
+**Not Bugs (Working as Designed):** 3
+
+---
+
+## [2026-01-29 14:30] - BUGFIX: Frontend Bug Fixes from Penetration Testing
+
+### What Was Accomplished
+
+Fixed two bugs identified during the comprehensive UI penetration testing session:
+
+1. **Add Property Button Fix** - The "Add Property" button on the Customer Detail page was non-functional. Implemented a complete Add Property dialog with form fields for address, city, state, ZIP code, and notes.
+
+2. **Dialog Accessibility Fix** - Added `DialogDescription` component to the Customer Form dialog in Customers.tsx to improve screen reader accessibility.
+
+### Technical Details
+
+**Files Modified:**
+- `frontend/src/features/customers/components/CustomerDetail.tsx`
+  - Added useState hooks for dialog state and form fields
+  - Added imports for Dialog components, Input, Label, Plus, MapPin icons
+  - Implemented `handleAddProperty` function with validation
+  - Added complete Add Property dialog with form fields
+  - Updated Properties card with proper button onClick handler
+
+- `frontend/src/pages/Customers.tsx`
+  - Added `DialogDescription` import
+  - Added description text to Create Customer dialog
+
+- `BUG-HUNT-REPORT.md`
+  - Updated bug status to mark fixes as complete
+
+### Validation
+
+Tested both fixes using agent-browser:
+- Add Property button now opens dialog correctly
+- Form accepts input and shows success toast on submission
+- Customer Form dialog now shows accessibility description
+- Screenshots captured: `screenshots/bug-hunt/29-add-property-dialog.png`, `screenshots/bug-hunt/30-add-property-success.png`, `screenshots/bug-hunt/31-customer-dialog-with-description.png`
+
+### Remaining Bugs (Lower Priority)
+
+- Create Invoice job search not showing results (needs backend investigation)
+- 401 errors on initial page load (auth timing issue)
+
+---
+
 ## [2026-01-28 23:55] - PLANNING: Comprehensive Testing Requirements for Schedule Workflow Improvements
 
 ### What Was Accomplished

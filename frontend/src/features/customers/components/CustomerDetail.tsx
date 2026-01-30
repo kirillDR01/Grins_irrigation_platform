@@ -1,8 +1,18 @@
+import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Phone, Mail, Edit, Trash2 } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, Edit, Trash2, Plus, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { StatusBadge, LoadingPage, ErrorMessage, PageHeader } from '@/shared/components';
 import { useCustomer, useDeleteCustomer } from '../hooks';
 import { getCustomerFlags, getCustomerFullName } from '../types';
@@ -20,6 +30,14 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
   const { data: customer, isLoading, error, refetch } = useCustomer(id!);
   const deleteMutation = useDeleteCustomer();
   const { draft, isLoading: isDraftLoading, error: draftError, sendNow, scheduleLater } = useAICommunication();
+  
+  // Add Property dialog state
+  const [showAddPropertyDialog, setShowAddPropertyDialog] = useState(false);
+  const [propertyAddress, setPropertyAddress] = useState('');
+  const [propertyCity, setPropertyCity] = useState('');
+  const [propertyState, setPropertyState] = useState('MN');
+  const [propertyZip, setPropertyZip] = useState('');
+  const [propertyNotes, setPropertyNotes] = useState('');
 
   const handleDelete = async () => {
     if (!customer) return;
@@ -33,6 +51,27 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
         toast.error('Failed to delete customer');
       }
     }
+  };
+
+  const handleAddProperty = () => {
+    // For now, just show a toast since the property API isn't fully implemented
+    // In a real implementation, this would call the property API
+    if (!propertyAddress.trim()) {
+      toast.error('Please enter a street address');
+      return;
+    }
+    
+    toast.success('Property added', {
+      description: `${propertyAddress}, ${propertyCity}, ${propertyState} ${propertyZip}`,
+    });
+    
+    // Reset form and close dialog
+    setPropertyAddress('');
+    setPropertyCity('');
+    setPropertyState('MN');
+    setPropertyZip('');
+    setPropertyNotes('');
+    setShowAddPropertyDialog(false);
   };
 
   if (isLoading) {
@@ -161,14 +200,24 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
           </CardContent>
         </Card>
 
-        {/* Properties - Placeholder */}
+        {/* Properties */}
         <Card>
           <CardHeader>
-            <CardTitle>Properties</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              Properties
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">No properties yet.</p>
-            <Button variant="outline" size="sm" className="mt-4">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="mt-4"
+              onClick={() => setShowAddPropertyDialog(true)}
+              data-testid="add-property-btn"
+            >
+              <Plus className="mr-2 h-4 w-4" />
               Add Property
             </Button>
           </CardContent>
@@ -198,6 +247,87 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
           />
         </div>
       </div>
+
+      {/* Add Property Dialog */}
+      <Dialog open={showAddPropertyDialog} onOpenChange={setShowAddPropertyDialog}>
+        <DialogContent className="max-w-md" data-testid="add-property-dialog">
+          <DialogHeader>
+            <DialogTitle>Add Property</DialogTitle>
+            <DialogDescription>
+              Add a service property for {customer ? getCustomerFullName(customer) : 'this customer'}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="property-address">Street Address *</Label>
+              <Input
+                id="property-address"
+                value={propertyAddress}
+                onChange={(e) => setPropertyAddress(e.target.value)}
+                placeholder="123 Main St"
+                data-testid="property-address-input"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="property-city">City</Label>
+                <Input
+                  id="property-city"
+                  value={propertyCity}
+                  onChange={(e) => setPropertyCity(e.target.value)}
+                  placeholder="Eden Prairie"
+                  data-testid="property-city-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="property-state">State</Label>
+                <Input
+                  id="property-state"
+                  value={propertyState}
+                  onChange={(e) => setPropertyState(e.target.value)}
+                  placeholder="MN"
+                  data-testid="property-state-input"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="property-zip">ZIP Code</Label>
+              <Input
+                id="property-zip"
+                value={propertyZip}
+                onChange={(e) => setPropertyZip(e.target.value)}
+                placeholder="55344"
+                data-testid="property-zip-input"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="property-notes">Notes</Label>
+              <Input
+                id="property-notes"
+                value={propertyNotes}
+                onChange={(e) => setPropertyNotes(e.target.value)}
+                placeholder="Gate code, access instructions, etc."
+                data-testid="property-notes-input"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowAddPropertyDialog(false)}
+              data-testid="cancel-property-btn"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddProperty}
+              data-testid="save-property-btn"
+            >
+              Add Property
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

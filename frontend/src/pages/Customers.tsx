@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -47,6 +48,9 @@ export function CustomersPage() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Customer</DialogTitle>
+            <DialogDescription>
+              Fill in the customer details below. Required fields are marked with an asterisk.
+            </DialogDescription>
           </DialogHeader>
           <CustomerForm onSuccess={handleCreateSuccess} />
         </DialogContent>

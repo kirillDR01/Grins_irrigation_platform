@@ -9,7 +9,8 @@ export function useCreateInvoice() {
   return useMutation({
     mutationFn: (data: InvoiceCreate) => invoiceApi.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: invoiceKeys.lists() });
+      // Invalidate all invoice queries to ensure fresh data everywhere
+      queryClient.invalidateQueries({ queryKey: invoiceKeys.all });
     },
   });
 }

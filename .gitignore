@@ -84,3 +84,6 @@ temp/
 tmp/
 # Local Netlify folder
 .netlify
+
+# # Credentials documentation (contains sensitive info)
+# CREDENTIALS.md
