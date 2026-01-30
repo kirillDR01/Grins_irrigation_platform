@@ -1,7 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -42,30 +41,42 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           className="flex items-center justify-center min-h-[400px] p-4"
           data-testid="error-boundary"
         >
-          <Card className="max-w-md w-full">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-destructive">
-                <AlertTriangle className="h-5 w-5" />
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 max-w-md w-full">
+            <div className="flex flex-col items-center text-center">
+              {/* Error icon */}
+              <div className="bg-red-100 rounded-full p-3 mb-4">
+                <AlertTriangle className="h-6 w-6 text-red-500" />
+              </div>
+              
+              {/* Title */}
+              <h3 className="text-lg font-bold text-slate-800 mb-2">
                 Something went wrong
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
+              </h3>
+              
+              {/* Message */}
+              <p className="text-slate-500 mb-4">
                 An unexpected error occurred. Please try again or contact support if the
                 problem persists.
               </p>
+              
+              {/* Error details */}
               {this.state.error && (
-                <pre className="mt-4 p-2 bg-muted rounded text-xs overflow-auto">
+                <pre className="w-full mt-2 p-3 bg-slate-50 rounded-lg text-xs text-slate-600 overflow-auto text-left mb-4">
                   {this.state.error.message}
                 </pre>
               )}
-            </CardContent>
-            <CardFooter>
-              <Button onClick={this.handleReset} data-testid="error-retry-button">
+              
+              {/* Retry button - primary teal styling */}
+              <Button 
+                onClick={this.handleReset} 
+                data-testid="error-retry-button"
+                className="bg-teal-500 hover:bg-teal-600 text-white"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
                 Try Again
               </Button>
-            </CardFooter>
-          </Card>
+            </div>
+          </div>
         </div>
       );
     }
@@ -84,23 +95,38 @@ export function ErrorMessage({ error, onRetry }: ErrorMessageProps) {
   if (!error) return null;
 
   return (
-    <Card className="border-destructive" data-testid="error-message">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-destructive text-base">
-          <AlertTriangle className="h-4 w-4" />
-          Error
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">{error.message}</p>
-      </CardContent>
-      {onRetry && (
-        <CardFooter>
-          <Button variant="outline" size="sm" onClick={onRetry}>
-            Retry
-          </Button>
-        </CardFooter>
-      )}
-    </Card>
+    <div 
+      className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6" 
+      data-testid="error-message"
+    >
+      <div className="flex items-start gap-4">
+        {/* Error icon */}
+        <div className="bg-red-100 rounded-full p-3 flex-shrink-0">
+          <AlertTriangle className="h-5 w-5 text-red-500" />
+        </div>
+        
+        <div className="flex-1">
+          {/* Title */}
+          <h4 className="text-lg font-bold text-slate-800 mb-1">
+            Error
+          </h4>
+          
+          {/* Message */}
+          <p className="text-slate-500 text-sm">{error.message}</p>
+          
+          {/* Retry button */}
+          {onRetry && (
+            <Button 
+              onClick={onRetry} 
+              className="mt-4 bg-teal-500 hover:bg-teal-600 text-white"
+              size="sm"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

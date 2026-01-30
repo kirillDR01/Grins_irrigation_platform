@@ -1,5 +1,6 @@
 /**
  * Tests for MorningBriefing component.
+ * Updated for redesigned amber alert styling.
  */
 
 import { render, screen } from '@testing-library/react';
@@ -10,9 +11,7 @@ import * as dashboardHooks from '@/features/dashboard/hooks';
 
 // Mock the dashboard hooks
 vi.mock('@/features/dashboard/hooks', () => ({
-  useDashboardMetrics: vi.fn(),
   useJobsByStatus: vi.fn(),
-  useTodaySchedule: vi.fn(),
 }));
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -23,20 +22,7 @@ describe('MorningBriefing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     
-    // Default mock data
-    vi.mocked(dashboardHooks.useDashboardMetrics).mockReturnValue({
-      data: {
-        total_customers: 100,
-        active_customers: 80,
-        jobs_by_status: {},
-        today_appointments: 10,
-        available_staff: 3,
-        total_staff: 4,
-      },
-      isLoading: false,
-      error: null,
-    } as ReturnType<typeof dashboardHooks.useDashboardMetrics>);
-
+    // Default mock data with overnight requests
     vi.mocked(dashboardHooks.useJobsByStatus).mockReturnValue({
       data: {
         requested: 5,
@@ -50,60 +36,19 @@ describe('MorningBriefing', () => {
       isLoading: false,
       error: null,
     } as ReturnType<typeof dashboardHooks.useJobsByStatus>);
-
-    vi.mocked(dashboardHooks.useTodaySchedule).mockReturnValue({
-      data: {
-        schedule_date: '2025-01-27',
-        total_appointments: 10,
-        completed_appointments: 3,
-        in_progress_appointments: 2,
-        upcoming_appointments: 5,
-        cancelled_appointments: 0,
-      },
-      isLoading: false,
-      error: null,
-    } as ReturnType<typeof dashboardHooks.useTodaySchedule>);
   });
 
-  it('renders morning briefing card', () => {
+  it('renders morning briefing when there are overnight requests', () => {
     render(<MorningBriefing />, { wrapper });
     expect(screen.getByTestId('morning-briefing')).toBeInTheDocument();
   });
 
-  it('displays personalized greeting', () => {
+  it('displays personalized greeting with request count', () => {
     render(<MorningBriefing />, { wrapper });
     const greeting = screen.getByTestId('greeting');
     expect(greeting).toBeInTheDocument();
     expect(greeting.textContent).toContain('Viktor');
-  });
-
-  it('displays overnight requests count', () => {
-    render(<MorningBriefing />, { wrapper });
-    const overnightSection = screen.getByTestId('overnight-requests');
-    expect(overnightSection).toBeInTheDocument();
-    expect(overnightSection.textContent).toContain('5');
-  });
-
-  it('displays today schedule summary', () => {
-    render(<MorningBriefing />, { wrapper });
-    const scheduleSection = screen.getByTestId('today-schedule');
-    expect(scheduleSection).toBeInTheDocument();
-    expect(scheduleSection.textContent).toContain('10');
-    expect(scheduleSection.textContent).toContain('3 completed');
-    expect(scheduleSection.textContent).toContain('2 in progress');
-    expect(scheduleSection.textContent).toContain('5 upcoming');
-  });
-
-  it('displays pending communications count', () => {
-    render(<MorningBriefing />, { wrapper });
-    const commsSection = screen.getByTestId('pending-communications');
-    expect(commsSection).toBeInTheDocument();
-  });
-
-  it('displays quick actions', () => {
-    render(<MorningBriefing />, { wrapper });
-    const quickActions = screen.getByTestId('quick-actions');
-    expect(quickActions).toBeInTheDocument();
+    expect(greeting.textContent).toContain('5 overnight requests');
   });
 
   it('shows review requests button when overnight requests exist', () => {
@@ -111,12 +56,7 @@ describe('MorningBriefing', () => {
     expect(screen.getByTestId('review-requests-btn')).toBeInTheDocument();
   });
 
-  it('shows view schedule button', () => {
-    render(<MorningBriefing />, { wrapper });
-    expect(screen.getByTestId('morning-briefing-view-schedule-btn')).toBeInTheDocument();
-  });
-
-  it('handles zero overnight requests', () => {
+  it('does not render when there are zero overnight requests', () => {
     vi.mocked(dashboardHooks.useJobsByStatus).mockReturnValue({
       data: {
         requested: 0,
@@ -132,26 +72,50 @@ describe('MorningBriefing', () => {
     } as ReturnType<typeof dashboardHooks.useJobsByStatus>);
 
     render(<MorningBriefing />, { wrapper });
-    const overnightSection = screen.getByTestId('overnight-requests');
-    expect(overnightSection.textContent).toContain('0');
-    expect(screen.queryByTestId('review-requests-btn')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('morning-briefing')).not.toBeInTheDocument();
   });
 
-  it('handles missing data gracefully', () => {
+  it('does not render when data is undefined', () => {
     vi.mocked(dashboardHooks.useJobsByStatus).mockReturnValue({
       data: undefined,
       isLoading: false,
       error: null,
     } as ReturnType<typeof dashboardHooks.useJobsByStatus>);
 
-    vi.mocked(dashboardHooks.useTodaySchedule).mockReturnValue({
-      data: undefined,
+    render(<MorningBriefing />, { wrapper });
+    expect(screen.queryByTestId('morning-briefing')).not.toBeInTheDocument();
+  });
+
+  it('handles singular request correctly', () => {
+    vi.mocked(dashboardHooks.useJobsByStatus).mockReturnValue({
+      data: {
+        requested: 1,
+        approved: 3,
+        scheduled: 8,
+        in_progress: 2,
+        completed: 50,
+        closed: 40,
+        cancelled: 1,
+      },
       isLoading: false,
       error: null,
-    } as ReturnType<typeof dashboardHooks.useTodaySchedule>);
+    } as ReturnType<typeof dashboardHooks.useJobsByStatus>);
 
     render(<MorningBriefing />, { wrapper });
-    expect(screen.getByTestId('morning-briefing')).toBeInTheDocument();
-    expect(screen.getByTestId('overnight-requests').textContent).toContain('0');
+    const greeting = screen.getByTestId('greeting');
+    expect(greeting.textContent).toContain('1 overnight request');
+    expect(greeting.textContent).not.toContain('requests');
+  });
+
+  it('has amber alert styling', () => {
+    render(<MorningBriefing />, { wrapper });
+    const briefing = screen.getByTestId('morning-briefing');
+    expect(briefing).toHaveClass('border-l-4', 'border-amber-400');
+  });
+
+  it('review button links to jobs with requested status filter', () => {
+    render(<MorningBriefing />, { wrapper });
+    const reviewBtn = screen.getByTestId('review-requests-btn');
+    expect(reviewBtn).toHaveAttribute('href', '/jobs?status=requested');
   });
 });

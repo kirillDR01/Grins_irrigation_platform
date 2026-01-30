@@ -5,10 +5,9 @@
 
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowRight, Briefcase, Calendar, User } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { Briefcase, Calendar, User } from 'lucide-react';
+import { format } from 'date-fns';
 import { useJobs } from '@/features/jobs/hooks';
 import { useAppointments } from '@/features/schedule/hooks';
 
@@ -30,7 +29,7 @@ export function RecentActivity() {
     ...(jobsData?.items ?? []).map((job) => ({
       id: job.id,
       type: 'job' as const,
-      title: `Job: ${job.job_type}`,
+      title: job.job_type,
       description: job.description || 'No description',
       status: job.status,
       timestamp: job.created_at,
@@ -39,7 +38,7 @@ export function RecentActivity() {
     ...(appointmentsData?.items ?? []).map((apt) => ({
       id: apt.id,
       type: 'appointment' as const,
-      title: `Appointment`,
+      title: 'Appointment',
       description: `Scheduled for ${apt.scheduled_date}`,
       status: apt.status,
       timestamp: apt.created_at,
@@ -54,16 +53,17 @@ export function RecentActivity() {
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
-      requested: 'bg-yellow-100 text-yellow-800',
-      approved: 'bg-blue-100 text-blue-800',
-      scheduled: 'bg-purple-100 text-purple-800',
-      in_progress: 'bg-orange-100 text-orange-800',
-      completed: 'bg-green-100 text-green-800',
-      cancelled: 'bg-red-100 text-red-800',
-      pending: 'bg-yellow-100 text-yellow-800',
-      confirmed: 'bg-blue-100 text-blue-800',
+      requested: 'bg-amber-100 text-amber-700',
+      approved: 'bg-blue-100 text-blue-700',
+      scheduled: 'bg-violet-100 text-violet-700',
+      in_progress: 'bg-orange-100 text-orange-700',
+      completed: 'bg-emerald-100 text-emerald-700',
+      cancelled: 'bg-red-100 text-red-700',
+      pending: 'bg-amber-100 text-amber-700',
+      confirmed: 'bg-blue-100 text-blue-700',
+      closed: 'bg-slate-100 text-slate-500',
     };
-    return colors[status] || 'bg-gray-100 text-gray-800';
+    return colors[status] || 'bg-slate-100 text-slate-600';
   };
 
   const getIcon = (type: 'job' | 'appointment') => {
@@ -76,13 +76,15 @@ export function RecentActivity() {
 
   return (
     <Card data-testid="recent-activity-card">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-lg font-medium">Recent Activity</CardTitle>
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/jobs">
-            View All <ArrowRight className="ml-2 h-4 w-4" />
-          </Link>
-        </Button>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-6">
+        <CardTitle className="font-bold text-slate-800 text-lg">Recent Jobs</CardTitle>
+        <Link
+          to="/jobs"
+          className="text-teal-600 text-sm font-medium hover:text-teal-700 flex items-center gap-1"
+          data-testid="view-all-jobs-link"
+        >
+          View All
+        </Link>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -90,18 +92,21 @@ export function RecentActivity() {
             {[...Array(5)].map((_, i) => (
               <div
                 key={i}
-                className="flex items-center gap-4 animate-pulse"
+                className="flex items-center justify-between p-4 bg-slate-50 rounded-xl animate-pulse"
               >
-                <div className="h-8 w-8 rounded-full bg-muted" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 w-1/3 bg-muted rounded" />
-                  <div className="h-3 w-1/2 bg-muted rounded" />
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-lg bg-slate-200" />
+                  <div className="space-y-2">
+                    <div className="h-4 w-32 bg-slate-200 rounded" />
+                    <div className="h-3 w-24 bg-slate-200 rounded" />
+                  </div>
                 </div>
+                <div className="h-6 w-20 bg-slate-200 rounded-full" />
               </div>
             ))}
           </div>
         ) : recentItems.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
+          <div className="text-center py-8 text-slate-400">
             <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p>No recent activity</p>
           </div>
@@ -111,31 +116,26 @@ export function RecentActivity() {
               <Link
                 key={`${item.type}-${item.id}`}
                 to={item.link}
-                className="flex items-center gap-4 p-2 rounded-lg hover:bg-muted transition-colors"
+                className="flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer group"
                 data-testid={`activity-item-${item.type}-${item.id}`}
               >
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-                  {getIcon(item.type)}
+                <div className="flex items-center gap-4">
+                  <div className="bg-white p-3 rounded-lg shadow-sm group-hover:shadow text-teal-600 transition-shadow">
+                    {getIcon(item.type)}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-800">{item.title}</p>
+                    <p className="text-xs text-slate-500">
+                      {format(new Date(item.timestamp), 'MMM d, yyyy')} • ID: {item.id.slice(0, 8)}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{item.title}</p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {item.description}
-                  </p>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <Badge
-                    variant="secondary"
-                    className={getStatusColor(item.status)}
-                  >
-                    {item.status.replace('_', ' ')}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(item.timestamp), {
-                      addSuffix: true,
-                    })}
-                  </span>
-                </div>
+                <Badge
+                  variant="secondary"
+                  className={`${getStatusColor(item.status)} px-3 py-1 rounded-full text-xs font-medium`}
+                >
+                  {item.status.replace('_', ' ')}
+                </Badge>
               </Link>
             ))}
           </div>

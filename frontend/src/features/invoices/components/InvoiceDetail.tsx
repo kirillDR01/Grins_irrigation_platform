@@ -117,22 +117,35 @@ export function InvoiceDetail({
   const canMarkLienFiled = invoice.lien_eligible && invoice.lien_warning_sent && !invoice.lien_filed_date;
 
   return (
-    <div data-testid="invoice-detail" className="space-y-6">
+    <div data-testid="invoice-detail" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Go back">
-            <ArrowLeft className="h-4 w-4" />
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => navigate(-1)} 
+            aria-label="Go back"
+            className="hover:bg-slate-100 rounded-lg"
+          >
+            <ArrowLeft className="h-4 w-4 text-slate-600" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold" data-testid="invoice-number">
-              {invoice.invoice_number}
-            </h1>
-            <p className="text-muted-foreground">Invoice Details</p>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-slate-800" data-testid="invoice-number">
+                {invoice.invoice_number}
+              </h1>
+              <InvoiceStatusBadge status={invoice.status} />
+            </div>
+            <p className="text-slate-500 mt-1">Invoice Details</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <InvoiceStatusBadge status={invoice.status} />
+        <div className="flex items-center gap-3">
+          {/* Amount prominently displayed */}
+          <div className="text-right mr-4">
+            <p className="text-xs text-slate-400 uppercase tracking-wider">Total</p>
+            <p className="text-3xl font-bold text-slate-800">{formatCurrency(invoice.total_amount)}</p>
+          </div>
           {onEdit && invoice.status === 'draft' && (
             <Button variant="outline" onClick={onEdit} data-testid="edit-invoice-btn">
               Edit Invoice
@@ -141,124 +154,135 @@ export function InvoiceDetail({
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Invoice Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
+      <div className="grid gap-8 grid-cols-1 lg:grid-cols-3">
+        {/* Main Info Card - spans 2 columns */}
+        <Card className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+          <CardHeader className="p-6 border-b border-slate-100">
+            <CardTitle className="flex items-center gap-2 font-bold text-slate-800 text-lg">
+              <div className="p-2 rounded-lg bg-teal-50">
+                <FileText className="h-5 w-5 text-teal-600" />
+              </div>
               Invoice Information
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+          <CardContent className="p-6 space-y-6">
+            {/* Dates Row */}
+            <div className="grid grid-cols-2 gap-6">
               <div>
-                <p className="text-sm text-muted-foreground">Invoice Date</p>
-                <p className="font-medium">{formatDate(invoice.invoice_date)}</p>
+                <p className="text-xs text-slate-400 uppercase tracking-wider font-medium">Invoice Date</p>
+                <p className="font-medium text-slate-700 mt-1">{formatDate(invoice.invoice_date)}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Due Date</p>
-                <p className="font-medium">{formatDate(invoice.due_date)}</p>
+                <p className="text-xs text-slate-400 uppercase tracking-wider font-medium">Due Date</p>
+                <p className="font-medium text-slate-700 mt-1">{formatDate(invoice.due_date)}</p>
               </div>
             </div>
 
-            <Separator />
+            <Separator className="bg-slate-100" />
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Amount</p>
-                <p className="text-lg font-semibold" data-testid="invoice-amount">
+            {/* Amounts Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div className="bg-slate-50 rounded-xl p-4">
+                <p className="text-xs text-slate-400 uppercase tracking-wider font-medium">Subtotal</p>
+                <p className="text-lg font-semibold text-slate-800 mt-1" data-testid="invoice-amount">
                   {formatCurrency(invoice.amount)}
                 </p>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Late Fee</p>
-                <p className="text-lg font-semibold">
+              <div className="bg-slate-50 rounded-xl p-4">
+                <p className="text-xs text-slate-400 uppercase tracking-wider font-medium">Late Fee</p>
+                <p className="text-lg font-semibold text-slate-800 mt-1">
                   {formatCurrency(invoice.late_fee_amount)}
                 </p>
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Amount</p>
-                <p className="text-xl font-bold text-primary">
+              <div className="bg-teal-50 rounded-xl p-4 border border-teal-100">
+                <p className="text-xs text-teal-600 uppercase tracking-wider font-medium">Total</p>
+                <p className="text-xl font-bold text-teal-700 mt-1">
                   {formatCurrency(invoice.total_amount)}
                 </p>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Paid Amount</p>
-                <p className="text-lg font-semibold text-green-600">
+              <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+                <p className="text-xs text-emerald-600 uppercase tracking-wider font-medium">Paid</p>
+                <p className="text-lg font-semibold text-emerald-700 mt-1">
                   {formatCurrency(invoice.paid_amount)}
                 </p>
               </div>
             </div>
 
             {remainingBalance > 0 && (
-              <div className="rounded-lg bg-amber-50 p-3">
-                <p className="text-sm text-amber-800">
-                  Remaining Balance: <span className="font-bold">{formatCurrency(remainingBalance)}</span>
-                </p>
+              <div className="rounded-xl bg-amber-50 p-4 border border-amber-100 flex items-center gap-3">
+                <div className="p-2 rounded-full bg-amber-100">
+                  <DollarSign className="h-4 w-4 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-amber-800">
+                    Remaining Balance
+                  </p>
+                  <p className="text-lg font-bold text-amber-700">{formatCurrency(remainingBalance)}</p>
+                </div>
               </div>
             )}
 
             {invoice.notes && (
               <>
-                <Separator />
+                <Separator className="bg-slate-100" />
                 <div>
-                  <p className="text-sm text-muted-foreground">Notes</p>
-                  <p className="mt-1">{invoice.notes}</p>
+                  <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-2">Notes</p>
+                  <p className="text-slate-600 bg-slate-50 rounded-lg p-3">{invoice.notes}</p>
                 </div>
               </>
             )}
           </CardContent>
         </Card>
 
-        {/* Customer & Job Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
+        {/* Customer & Job Information - Right column */}
+        <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+          <CardHeader className="p-6 border-b border-slate-100">
+            <CardTitle className="flex items-center gap-2 font-bold text-slate-800 text-lg">
+              <div className="p-2 rounded-lg bg-blue-50">
+                <User className="h-5 w-5 text-blue-600" />
+              </div>
               Customer & Job
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="p-6 space-y-4">
             <div>
-              <p className="text-sm text-muted-foreground">Customer</p>
+              <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-2">Customer</p>
               {invoice.customer_name ? (
                 <Link
                   to={`/customers/${invoice.customer_id}`}
-                  className="flex items-center gap-2 text-primary hover:underline font-medium"
+                  className="flex items-center gap-2 text-teal-600 hover:text-teal-700 font-medium transition-colors"
                 >
-                  <User className="h-4 w-4" />
+                  <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center">
+                    <User className="h-4 w-4 text-teal-600" />
+                  </div>
                   {invoice.customer_name}
                 </Link>
               ) : (
-                <p className="text-muted-foreground">-</p>
+                <p className="text-slate-400">-</p>
               )}
             </div>
 
             {invoice.customer_phone && (
               <div>
-                <p className="text-sm text-muted-foreground">Phone</p>
-                <p>{invoice.customer_phone}</p>
+                <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-1">Phone</p>
+                <p className="text-slate-600">{invoice.customer_phone}</p>
               </div>
             )}
 
             {invoice.customer_email && (
               <div>
-                <p className="text-sm text-muted-foreground">Email</p>
-                <p>{invoice.customer_email}</p>
+                <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-1">Email</p>
+                <p className="text-slate-600">{invoice.customer_email}</p>
               </div>
             )}
 
-            <Separator />
+            <Separator className="bg-slate-100" />
 
             <div>
-              <p className="text-sm text-muted-foreground">Job</p>
+              <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-2">Job</p>
               <Link
                 to={`/jobs/${invoice.job_id}`}
-                className="flex items-center gap-2 text-primary hover:underline"
+                className="flex items-center gap-2 text-teal-600 hover:text-teal-700 font-medium transition-colors"
               >
                 <FileText className="h-4 w-4" />
                 View Job Details
@@ -267,91 +291,95 @@ export function InvoiceDetail({
 
             {invoice.job_description && (
               <div>
-                <p className="text-sm text-muted-foreground">Job Description</p>
-                <p className="mt-1">{invoice.job_description}</p>
+                <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-2">Job Description</p>
+                <p className="text-slate-600 text-sm bg-slate-50 rounded-lg p-3">{invoice.job_description}</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Line Items */}
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5" />
+        {/* Line Items - Full width */}
+        <Card className="lg:col-span-3 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow">
+          <CardHeader className="p-6 border-b border-slate-100 bg-slate-50/50">
+            <CardTitle className="flex items-center gap-2 font-bold text-slate-800 text-lg">
+              <div className="p-2 rounded-lg bg-emerald-50">
+                <DollarSign className="h-5 w-5 text-emerald-600" />
+              </div>
               Line Items
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             {invoice.line_items && invoice.line_items.length > 0 ? (
               <div className="overflow-x-auto" data-testid="invoice-line-items">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b">
-                      <th className="py-2 text-left text-sm font-medium text-muted-foreground">Description</th>
-                      <th className="py-2 text-right text-sm font-medium text-muted-foreground">Qty</th>
-                      <th className="py-2 text-right text-sm font-medium text-muted-foreground">Unit Price</th>
-                      <th className="py-2 text-right text-sm font-medium text-muted-foreground">Total</th>
+                    <tr className="bg-slate-50/50">
+                      <th className="px-6 py-4 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Description</th>
+                      <th className="px-6 py-4 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Qty</th>
+                      <th className="px-6 py-4 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Unit Price</th>
+                      <th className="px-6 py-4 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Total</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-50">
                     {invoice.line_items.map((item: InvoiceLineItem, index: number) => (
-                      <tr key={index} className="border-b last:border-0">
-                        <td className="py-3">{item.description}</td>
-                        <td className="py-3 text-right">{item.quantity}</td>
-                        <td className="py-3 text-right">{formatCurrency(item.unit_price)}</td>
-                        <td className="py-3 text-right font-medium">{formatCurrency(item.total)}</td>
+                      <tr key={index} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-6 py-4 text-slate-700">{item.description}</td>
+                        <td className="px-6 py-4 text-right text-slate-600">{item.quantity}</td>
+                        <td className="px-6 py-4 text-right text-slate-600">{formatCurrency(item.unit_price)}</td>
+                        <td className="px-6 py-4 text-right font-medium text-slate-800">{formatCurrency(item.total)}</td>
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot>
-                    <tr className="border-t-2">
-                      <td colSpan={3} className="py-3 text-right font-medium">Subtotal</td>
-                      <td className="py-3 text-right font-bold">{formatCurrency(invoice.amount)}</td>
+                  <tfoot className="bg-slate-50/50">
+                    <tr className="border-t-2 border-slate-100">
+                      <td colSpan={3} className="px-6 py-4 text-right font-medium text-slate-600">Subtotal</td>
+                      <td className="px-6 py-4 text-right font-bold text-slate-800">{formatCurrency(invoice.amount)}</td>
                     </tr>
                     {invoice.late_fee_amount > 0 && (
                       <tr>
-                        <td colSpan={3} className="py-2 text-right text-sm text-muted-foreground">Late Fee</td>
-                        <td className="py-2 text-right">{formatCurrency(invoice.late_fee_amount)}</td>
+                        <td colSpan={3} className="px-6 py-2 text-right text-sm text-slate-500">Late Fee</td>
+                        <td className="px-6 py-2 text-right text-slate-600">{formatCurrency(invoice.late_fee_amount)}</td>
                       </tr>
                     )}
-                    <tr>
-                      <td colSpan={3} className="py-3 text-right text-lg font-bold">Total</td>
-                      <td className="py-3 text-right text-lg font-bold text-primary">{formatCurrency(invoice.total_amount)}</td>
+                    <tr className="bg-teal-50">
+                      <td colSpan={3} className="px-6 py-4 text-right text-lg font-bold text-slate-800">Total</td>
+                      <td className="px-6 py-4 text-right text-lg font-bold text-teal-700">{formatCurrency(invoice.total_amount)}</td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
             ) : (
-              <p className="text-muted-foreground">No line items</p>
+              <div className="p-6 text-center text-slate-400">No line items</div>
             )}
           </CardContent>
         </Card>
 
         {/* Payment Information */}
         {invoice.paid_at && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />
+          <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+            <CardHeader className="p-6 border-b border-slate-100">
+              <CardTitle className="flex items-center gap-2 font-bold text-slate-800 text-lg">
+                <div className="p-2 rounded-lg bg-emerald-50">
+                  <CreditCard className="h-5 w-5 text-emerald-600" />
+                </div>
                 Payment Information
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Payment Method</p>
-                  <p className="font-medium capitalize">{invoice.payment_method || '-'}</p>
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <p className="text-xs text-slate-400 uppercase tracking-wider font-medium">Payment Method</p>
+                  <p className="font-medium text-slate-700 capitalize mt-1">{invoice.payment_method || '-'}</p>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Paid At</p>
-                  <p className="font-medium">{formatDate(invoice.paid_at)}</p>
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <p className="text-xs text-slate-400 uppercase tracking-wider font-medium">Paid At</p>
+                  <p className="font-medium text-slate-700 mt-1">{formatDate(invoice.paid_at)}</p>
                 </div>
               </div>
               {invoice.payment_reference && (
                 <div>
-                  <p className="text-sm text-muted-foreground">Reference</p>
-                  <p>{invoice.payment_reference}</p>
+                  <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-1">Reference</p>
+                  <p className="text-slate-600 font-mono text-sm bg-slate-50 rounded-lg p-2">{invoice.payment_reference}</p>
                 </div>
               )}
             </CardContent>
@@ -360,27 +388,30 @@ export function InvoiceDetail({
 
         {/* Lien Information */}
         {invoice.lien_eligible && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-500" />
+          <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+            <CardHeader className="p-6 border-b border-slate-100">
+              <CardTitle className="flex items-center gap-2 font-bold text-slate-800 text-lg">
+                <div className="p-2 rounded-lg bg-amber-50">
+                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                </div>
                 Lien Information
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-lg bg-amber-50 p-3">
-                <p className="text-sm text-amber-800 font-medium">
+            <CardContent className="p-6 space-y-4">
+              <div className="rounded-xl bg-amber-50 p-4 border border-amber-100">
+                <p className="text-sm text-amber-800 font-medium flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
                   This invoice is eligible for mechanic's lien
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Warning Sent</p>
-                  <p className="font-medium">{formatDate(invoice.lien_warning_sent)}</p>
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <p className="text-xs text-slate-400 uppercase tracking-wider font-medium">Warning Sent</p>
+                  <p className="font-medium text-slate-700 mt-1">{formatDate(invoice.lien_warning_sent)}</p>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Lien Filed</p>
-                  <p className="font-medium">{formatDate(invoice.lien_filed_date)}</p>
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <p className="text-xs text-slate-400 uppercase tracking-wider font-medium">Lien Filed</p>
+                  <p className="font-medium text-slate-700 mt-1">{formatDate(invoice.lien_filed_date)}</p>
                 </div>
               </div>
             </CardContent>
@@ -389,22 +420,24 @@ export function InvoiceDetail({
 
         {/* Reminder Information */}
         {invoice.reminder_count > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bell className="h-5 w-5" />
+          <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+            <CardHeader className="p-6 border-b border-slate-100">
+              <CardTitle className="flex items-center gap-2 font-bold text-slate-800 text-lg">
+                <div className="p-2 rounded-lg bg-violet-50">
+                  <Bell className="h-5 w-5 text-violet-600" />
+                </div>
                 Reminders
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Reminders Sent</p>
-                  <p className="font-medium">{invoice.reminder_count}</p>
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <p className="text-xs text-slate-400 uppercase tracking-wider font-medium">Reminders Sent</p>
+                  <p className="font-medium text-slate-700 mt-1">{invoice.reminder_count}</p>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Last Reminder</p>
-                  <p className="font-medium">{formatDate(invoice.last_reminder_sent)}</p>
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <p className="text-xs text-slate-400 uppercase tracking-wider font-medium">Last Reminder</p>
+                  <p className="font-medium text-slate-700 mt-1">{formatDate(invoice.last_reminder_sent)}</p>
                 </div>
               </div>
             </CardContent>
@@ -412,17 +445,19 @@ export function InvoiceDetail({
         )}
 
         {/* Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
+        <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+          <CardHeader className="p-6 border-b border-slate-100">
+            <CardTitle className="flex items-center gap-2 font-bold text-slate-800 text-lg">
+              <div className="p-2 rounded-lg bg-slate-100">
+                <Clock className="h-5 w-5 text-slate-600" />
+              </div>
               Actions
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="p-6 space-y-3">
             {canSend && (
               <Button
-                className="w-full"
+                className="w-full bg-teal-500 hover:bg-teal-600 text-white shadow-sm shadow-teal-200"
                 onClick={handleSendInvoice}
                 disabled={sendInvoiceMutation.isPending}
                 data-testid="send-invoice-btn"
@@ -456,8 +491,7 @@ export function InvoiceDetail({
             )}
             {canSendLienWarning && (
               <Button
-                className="w-full"
-                variant="destructive"
+                className="w-full bg-red-500 hover:bg-red-600 text-white"
                 onClick={handleSendLienWarning}
                 disabled={sendLienWarningMutation.isPending}
                 data-testid="send-lien-warning-btn"
@@ -468,8 +502,7 @@ export function InvoiceDetail({
             )}
             {canMarkLienFiled && (
               <Button
-                className="w-full"
-                variant="destructive"
+                className="w-full bg-red-500 hover:bg-red-600 text-white"
                 onClick={handleMarkLienFiled}
                 disabled={markLienFiledMutation.isPending}
                 data-testid="mark-lien-filed-btn"

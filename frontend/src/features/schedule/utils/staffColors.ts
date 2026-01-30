@@ -4,16 +4,16 @@
  */
 
 export const STAFF_COLORS: Record<string, string> = {
-  Viktor: '#EF4444', // Red
-  Vas: '#3B82F6', // Blue
-  Dad: '#22C55E', // Green
-  Gennadiy: '#22C55E', // Green (alias for Dad)
-  Steven: '#F59E0B', // Amber
-  Vitallik: '#8B5CF6', // Purple
+  Viktor: '#14B8A6', // Teal-500
+  Vas: '#8B5CF6', // Violet-500
+  Dad: '#F59E0B', // Amber-500
+  Gennadiy: '#F59E0B', // Amber-500 (alias for Dad)
+  Steven: '#F43F5E', // Rose-500
+  Vitallik: '#3B82F6', // Blue-500
 };
 
-export const UNASSIGNED_COLOR = '#6B7280'; // Gray
-export const DEFAULT_COLOR = '#9CA3AF'; // Light gray for unknown
+export const UNASSIGNED_COLOR = '#64748B'; // Slate-500
+export const DEFAULT_COLOR = '#10B981'; // Emerald-500 for additional staff
 
 /**
  * Get the color for a staff member by name.

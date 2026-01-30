@@ -18,10 +18,13 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
+  Bell,
 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useDashboardMetrics, useTodaySchedule, useJobsByStatus } from '../hooks';
 import { MetricsCard } from './MetricsCard';
 import { RecentActivity } from './RecentActivity';
+import { TechnicianAvailability } from './TechnicianAvailability';
 import { AIQueryChat } from '@/features/ai/components/AIQueryChat';
 import { MorningBriefing } from '@/features/ai/components/MorningBriefing';
 import { OverdueInvoicesWidget, LienDeadlinesWidget } from '@/features/invoices';
@@ -34,13 +37,13 @@ export function DashboardPage() {
   const isLoading = metricsLoading || scheduleLoading || jobsLoading;
 
   return (
-    <div className="space-y-6" data-testid="dashboard-page">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500" data-testid="dashboard-page">
       <PageHeader
-        title="Dashboard"
-        description="Overview of your business operations"
+        title="Hello, Viktor!"
+        description="Here's what's happening today."
         action={
           <div className="flex gap-2">
-            <Button asChild variant="outline" data-testid="view-schedule-btn">
+            <Button asChild variant="secondary" data-testid="view-schedule-btn">
               <Link to="/schedule">
                 <Calendar className="mr-2 h-4 w-4" />
                 View Schedule
@@ -62,42 +65,77 @@ export function DashboardPage() {
         </div>
       ) : (
         <>
+          {/* Alerts Section */}
+          {(jobsByStatus?.requested ?? 0) > 0 && (
+            <Alert
+              data-testid="alert"
+              className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-amber-400"
+            >
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-full bg-amber-100">
+                  <Bell className="h-4 w-4 text-amber-600" />
+                </div>
+                <div className="flex-1">
+                  <AlertTitle className="text-slate-800 font-medium">
+                    {jobsByStatus?.requested ?? 0} Overnight Requests
+                  </AlertTitle>
+                  <AlertDescription className="text-slate-500 text-sm mt-1">
+                    New job requests came in overnight and need your attention.
+                  </AlertDescription>
+                </div>
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="sm"
+                  className="text-amber-600 bg-amber-50 hover:bg-amber-100"
+                  data-testid="review-overnight-btn"
+                >
+                  <Link to="/jobs?status=requested">Review Now</Link>
+                </Button>
+              </div>
+            </Alert>
+          )}
+
           {/* Morning Briefing */}
           <MorningBriefing />
 
           {/* Metrics Cards */}
           <div
-            className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8"
             data-testid="metrics-grid"
           >
             <MetricsCard
-              title="Total Customers"
-              value={metrics?.total_customers ?? 0}
-              description={`${metrics?.active_customers ?? 0} active`}
-              icon={Users}
-              testId="customers-metric"
-            />
-            <MetricsCard
-              title="Today's Appointments"
+              title="Today's Schedule"
               value={todaySchedule?.total_appointments ?? 0}
               description={`${todaySchedule?.completed_appointments ?? 0} completed`}
               icon={Calendar}
+              variant="teal"
               testId="appointments-metric"
             />
             <MetricsCard
-              title="Jobs Pending"
+              title="Messages"
+              value={metrics?.total_customers ?? 0}
+              description={`${metrics?.active_customers ?? 0} unread`}
+              icon={Users}
+              variant="violet"
+              testId="customers-metric"
+            />
+            <MetricsCard
+              title="Invoices"
               value={
                 (jobsByStatus?.requested ?? 0) + (jobsByStatus?.approved ?? 0)
               }
-              description={`${jobsByStatus?.in_progress ?? 0} in progress`}
+              description={`${jobsByStatus?.in_progress ?? 0} pending`}
               icon={Briefcase}
+              variant="emerald"
               testId="jobs-metric"
             />
             <MetricsCard
-              title="Staff Available"
+              title="Staff"
               value={metrics?.available_staff ?? 0}
-              description={`of ${metrics?.total_staff ?? 0} total`}
+              description={`of ${metrics?.total_staff ?? 0} available`}
               icon={UserCheck}
+              variant="blue"
               testId="staff-metric"
             />
           </div>
@@ -230,8 +268,13 @@ export function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Recent Activity */}
-          <RecentActivity />
+          {/* Two-column layout: Recent Jobs and Technician Availability */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8" data-testid="two-column-section">
+            {/* Recent Activity (left) */}
+            <RecentActivity />
+            {/* Technician Availability (right) */}
+            <TechnicianAvailability />
+          </div>
 
           {/* AI Query Chat */}
           <AIQueryChat />

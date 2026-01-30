@@ -216,12 +216,12 @@ describe('ErrorMessage', () => {
       expect(screen.getByText('This is the error message')).toBeInTheDocument();
     });
 
-    it('should have destructive border styling', () => {
+    it('should have redesigned card styling', () => {
       const error = new Error('Test error');
 
       render(<ErrorMessage error={error} />);
 
-      expect(screen.getByTestId('error-message')).toHaveClass('border-destructive');
+      expect(screen.getByTestId('error-message')).toHaveClass('bg-white', 'rounded-2xl', 'shadow-sm', 'border', 'border-slate-100');
     });
   });
 

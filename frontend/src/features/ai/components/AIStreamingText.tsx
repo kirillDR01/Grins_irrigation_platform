@@ -29,10 +29,10 @@ export function AIStreamingText({ text, isStreaming, speed = 20 }: AIStreamingTe
   }, [text, isStreaming, speed]);
 
   return (
-    <div data-testid="ai-streaming-text" className="whitespace-pre-wrap">
+    <div data-testid="ai-streaming-text" className="text-slate-700 leading-relaxed whitespace-pre-wrap">
       {displayedText}
       {isStreaming && displayedText.length < text.length && (
-        <span className="animate-pulse">▊</span>
+        <span className="inline-block w-2 h-5 bg-teal-500 animate-pulse ml-1">▊</span>
       )}
     </div>
   );

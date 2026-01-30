@@ -62,14 +62,14 @@ export function JobsReadyToSchedulePreview({
 
   if (isLoading) {
     return (
-      <Card data-testid="jobs-preview-section">
+      <Card data-testid="jobs-ready-preview">
         <CardHeader>
-          <CardTitle>Jobs to Schedule</CardTitle>
+          <CardTitle>Jobs Ready to Schedule</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-muted-foreground">Loading jobs...</span>
+            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+            <span className="ml-2 text-slate-500">Loading jobs...</span>
           </div>
         </CardContent>
       </Card>
@@ -78,9 +78,9 @@ export function JobsReadyToSchedulePreview({
 
   if (error) {
     return (
-      <Card data-testid="jobs-preview-section">
+      <Card data-testid="jobs-ready-preview">
         <CardHeader>
-          <CardTitle>Jobs to Schedule</CardTitle>
+          <CardTitle>Jobs Ready to Schedule</CardTitle>
         </CardHeader>
         <CardContent>
           <Alert variant="destructive">
@@ -96,16 +96,13 @@ export function JobsReadyToSchedulePreview({
 
   if (jobs.length === 0) {
     return (
-      <Card data-testid="jobs-preview-section">
+      <Card data-testid="jobs-ready-preview">
         <CardHeader>
-          <CardTitle>Jobs to Schedule</CardTitle>
+          <CardTitle>Jobs Ready to Schedule</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8 text-muted-foreground">
-            <p>No jobs available for scheduling on the selected date.</p>
-            <p className="text-sm mt-2">
-              Jobs with status "approved" or "requested" will appear here.
-            </p>
+          <div className="text-center py-8 text-slate-400 text-sm italic">
+            <p>No jobs ready to schedule</p>
           </div>
         </CardContent>
       </Card>
@@ -113,9 +110,14 @@ export function JobsReadyToSchedulePreview({
   }
 
   return (
-    <Card data-testid="jobs-preview-section">
+    <Card data-testid="jobs-ready-preview">
       <CardHeader>
-        <CardTitle>Jobs to Schedule</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>Jobs Ready to Schedule</CardTitle>
+          <Badge className="bg-teal-100 text-teal-700 hover:bg-teal-100">
+            {jobs.length}
+          </Badge>
+        </div>
         <div className="flex gap-2 mt-4">
           <Select value={filterJobType} onValueChange={setFilterJobType}>
             <SelectTrigger className="w-[180px]">
@@ -156,9 +158,8 @@ export function JobsReadyToSchedulePreview({
       </CardHeader>
       <CardContent>
         <div className="mb-4 flex items-center justify-between" data-testid="jobs-summary">
-          <p className="text-sm text-muted-foreground">
-            {selectedCount} jobs selected for scheduling
-            {excludedCount > 0 && ` (${excludedCount} excluded)`}
+          <p className="text-sm text-slate-500">
+            {selectedCount} of {filteredJobs.length} jobs selected
           </p>
           {onSelectAll && onDeselectAll && (
             <JobSelectionControls
@@ -170,42 +171,54 @@ export function JobsReadyToSchedulePreview({
           )}
         </div>
 
-        <div className="space-y-2 max-h-[400px] overflow-y-auto">
+        <div className="space-y-3 max-h-[400px] overflow-y-auto">
           {filteredJobs.map(job => {
             const isExcluded = excludedJobIds.has(job.job_id);
             return (
               <div
                 key={job.job_id}
                 data-testid={`job-preview-${job.job_id}`}
-                className={`flex items-start gap-3 p-3 border rounded-lg ${
-                  isExcluded ? 'opacity-50 bg-muted' : 'bg-background'
+                className={`flex items-center gap-4 p-3 bg-slate-50 rounded-lg ${
+                  isExcluded ? 'opacity-50' : ''
                 }`}
               >
                 <Checkbox
                   checked={!isExcluded}
                   onCheckedChange={() => onToggleExclude(job.job_id)}
-                  data-testid={`exclude-job-${job.job_id}`}
+                  data-testid={`job-checkbox-${job.job_id}`}
+                  className="data-[state=checked]:bg-teal-500 data-[state=checked]:border-teal-500"
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className={`font-medium ${isExcluded ? 'line-through' : ''}`}>
+                    <span className={`font-medium text-slate-700 ${isExcluded ? 'line-through' : ''}`}>
                       {job.customer_name}
                     </span>
-                    <Badge variant="outline">{job.job_type}</Badge>
-                    <Badge variant={job.priority === 'high' ? 'destructive' : 'secondary'}>
-                      {job.priority}
-                    </Badge>
+                    <Badge variant="outline" className="text-xs">{job.job_type}</Badge>
+                    {job.priority === 'high' ? (
+                      <Badge className="bg-orange-50 text-orange-600 hover:bg-orange-50 text-xs">
+                        High
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-slate-100 text-slate-500 hover:bg-slate-100 text-xs">
+                        Normal
+                      </Badge>
+                    )}
                   </div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-sm text-slate-500">
                     {job.city && <span>{job.city} • </span>}
                     <span>{job.estimated_duration_minutes} min</span>
-                    {job.status && <span> • {job.status}</span>}
                   </div>
                 </div>
               </div>
             );
           })}
         </div>
+
+        {filteredJobs.length === 0 && (
+          <div className="text-center py-8 text-slate-400 text-sm italic">
+            No jobs ready to schedule
+          </div>
+        )}
       </CardContent>
     </Card>
   );

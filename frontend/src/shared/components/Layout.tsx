@@ -13,6 +13,8 @@ import {
   Droplets,
   Zap,
   FileText,
+  Search,
+  Bell,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -98,21 +100,23 @@ export function Layout({ children }: LayoutProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-card border-r transform transition-transform duration-200 ease-in-out lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-64 flex flex-col h-screen bg-white border-r border-slate-100 transform transition-transform duration-200 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
         data-testid="sidebar"
       >
         {/* Logo */}
-        <div className="flex items-center gap-2 px-6 py-4">
-          <Droplets className="h-8 w-8 text-primary" />
-          <span className="text-xl font-bold">Grin's Irrigation</span>
+        <div className="flex items-center gap-3 px-6 py-5">
+          <div className="w-8 h-8 bg-teal-500 rounded-lg shadow-lg shadow-teal-500/30 flex items-center justify-center">
+            <Droplets className="h-5 w-5 text-white" />
+          </div>
+          <span className="text-lg font-bold tracking-tight text-slate-900">Grin's Irrigation</span>
         </div>
 
         <Separator />
 
         {/* Navigation */}
-        <nav className="flex flex-col gap-1 p-4" data-testid="sidebar-nav">
+        <nav className="flex flex-col gap-1 py-4 flex-1" data-testid="sidebar-nav">
           {navItems.map((item) => {
             // Check for exact match first, then check if it's a parent route
             // but only if no other nav item is a more specific match
@@ -133,33 +137,52 @@ export function Layout({ children }: LayoutProps) {
                 to={item.href}
                 data-testid={item.testId}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                  'relative flex items-center gap-3 px-6 py-4 text-sm font-medium transition-all duration-200',
                   isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    ? 'bg-teal-50 text-teal-600'
+                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
                 )}
                 onClick={() => setSidebarOpen(false)}
               >
+                {isActive && (
+                  <div className="absolute left-0 w-1 h-8 bg-teal-500 rounded-r-full" />
+                )}
                 {item.icon}
                 {item.label}
               </Link>
             );
           })}
         </nav>
+
+        {/* User Profile Card */}
+        <div
+          className="bg-slate-50 rounded-xl mx-4 mb-4 p-3 hover:bg-slate-100 transition-colors cursor-pointer"
+          data-testid="user-profile-card"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm bg-teal-100 flex items-center justify-center">
+              <span className="text-teal-700 font-bold text-sm">VG</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-slate-800">Viktor Grin</span>
+              <span className="text-xs text-slate-500">Owner</span>
+            </div>
+          </div>
+        </div>
       </aside>
 
       {/* Main content */}
       <div className="lg:pl-64">
         {/* Header */}
         <header
-          className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 lg:px-6"
+          className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-slate-100 bg-white/80 backdrop-blur-md px-4 lg:px-6"
           data-testid="header"
         >
           {/* Mobile menu button */}
           <Button
             variant="ghost"
             size="icon"
-            className="lg:hidden"
+            className="lg:hidden transition-all duration-200"
             onClick={() => setSidebarOpen(!sidebarOpen)}
             data-testid="mobile-menu-button"
             aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
@@ -171,15 +194,57 @@ export function Layout({ children }: LayoutProps) {
             )}
           </Button>
 
-          {/* Page title - could be dynamic based on route */}
-          <div className="flex-1">
-            <h1 className="text-lg font-semibold lg:hidden">
-              Grin's Irrigation
-            </h1>
+          {/* Page title - mobile only */}
+          <h1 className="text-lg font-semibold lg:hidden">
+            Grin's Irrigation
+          </h1>
+
+          {/* Global search input */}
+          <div className="hidden lg:flex flex-1 max-w-md">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search customers, jobs, invoices..."
+                className="w-full bg-transparent border-none pl-10 pr-4 py-2 text-sm text-slate-600 placeholder-slate-400 focus:outline-none"
+                data-testid="global-search"
+              />
+            </div>
           </div>
 
-          {/* User menu */}
-          <UserMenu />
+          {/* Spacer for mobile */}
+          <div className="flex-1 lg:hidden" />
+
+          {/* Right side actions */}
+          <div className="flex items-center gap-2">
+            {/* Notification bell with badge */}
+            <button
+              className="relative p-2 rounded-lg hover:bg-slate-100 transition-colors"
+              data-testid="notification-bell"
+              aria-label="Notifications"
+            >
+              <Bell className="h-5 w-5 text-slate-600" />
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-rose-500 border-2 border-white flex items-center justify-center">
+                <span className="text-[10px] font-medium text-white">3</span>
+              </span>
+            </button>
+
+            {/* Vertical separator */}
+            <div className="h-8 w-px bg-slate-200" data-testid="header-separator" />
+
+            {/* User avatar */}
+            <div
+              className="w-8 h-8 rounded-full bg-teal-100 text-teal-700 font-bold text-xs flex items-center justify-center cursor-pointer hover:bg-teal-200 transition-colors"
+              data-testid="user-avatar"
+            >
+              VG
+            </div>
+
+            {/* User menu (hidden on mobile, shown on larger screens) */}
+            <div className="hidden sm:block">
+              <UserMenu />
+            </div>
+          </div>
         </header>
 
         {/* Page content */}

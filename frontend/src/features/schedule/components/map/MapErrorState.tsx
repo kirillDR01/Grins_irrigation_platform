@@ -2,9 +2,8 @@
  * MapErrorState component - Error state with retry button.
  */
 
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface MapErrorStateProps {
   error: string;
@@ -13,18 +12,22 @@ interface MapErrorStateProps {
 
 export function MapErrorState({ error, onRetry }: MapErrorStateProps) {
   return (
-    <Card data-testid="map-error-state" className="h-[500px] border-red-200">
-      <CardContent className="flex flex-col items-center justify-center h-full text-center">
-        <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-        <h3 className="text-lg font-semibold mb-2">Failed to load map</h3>
-        <p className="text-sm text-muted-foreground max-w-sm mb-4">{error}</p>
-        {onRetry && (
-          <Button onClick={onRetry} variant="outline">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Retry
-          </Button>
-        )}
-      </CardContent>
-    </Card>
+    <div 
+      data-testid="map-error-state" 
+      className="flex flex-col items-center justify-center h-full py-12 bg-red-50"
+    >
+      <AlertTriangle className="w-16 h-16 text-red-400" />
+      <h3 className="text-lg font-semibold text-red-700 mt-4">Failed to load map</h3>
+      <p className="text-sm text-red-500 mt-2 text-center max-w-xs">{error}</p>
+      {onRetry && (
+        <Button 
+          onClick={onRetry} 
+          className="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-lg mt-4"
+        >
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Retry
+        </Button>
+      )}
+    </div>
   );
 }

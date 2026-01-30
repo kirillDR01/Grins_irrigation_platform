@@ -5,18 +5,20 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Search, FileText, Calendar, DollarSign } from 'lucide-react';
+import { Plus, Search, FileText, Calendar, DollarSign, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { jobApi } from '@/features/jobs/api/jobApi';
 import { invoiceApi } from '../api/invoiceApi';
 import { InvoiceForm } from './InvoiceForm';
@@ -47,6 +49,7 @@ export function CreateInvoiceDialog({ onSuccess }: CreateInvoiceDialogProps) {
   const [open, setOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
 
   // Fetch completed jobs
   const { data: completedJobsData, isLoading: loadingJobs } = useQuery({
@@ -108,6 +111,18 @@ export function CreateInvoiceDialog({ onSuccess }: CreateInvoiceDialogProps) {
     setSelectedJob(job);
   };
 
+  const handleJobCheckboxChange = (jobId: string, checked: boolean) => {
+    setSelectedJobIds((prev) => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(jobId);
+      } else {
+        newSet.delete(jobId);
+      }
+      return newSet;
+    });
+  };
+
   const handleBack = () => {
     setSelectedJob(null);
   };
@@ -116,6 +131,7 @@ export function CreateInvoiceDialog({ onSuccess }: CreateInvoiceDialogProps) {
     setOpen(false);
     setSelectedJob(null);
     setSearchQuery('');
+    setSelectedJobIds(new Set());
     onSuccess?.();
   };
 
@@ -124,6 +140,7 @@ export function CreateInvoiceDialog({ onSuccess }: CreateInvoiceDialogProps) {
     if (!newOpen) {
       setSelectedJob(null);
       setSearchQuery('');
+      setSelectedJobIds(new Set());
     }
   };
 
@@ -134,6 +151,17 @@ export function CreateInvoiceDialog({ onSuccess }: CreateInvoiceDialogProps) {
     return typeof amount === 'string' ? parseFloat(amount) : amount;
   };
 
+  // Handle creating invoice from selected job (when using checkbox selection)
+  const handleCreateFromSelection = () => {
+    if (selectedJobIds.size === 1) {
+      const jobId = Array.from(selectedJobIds)[0];
+      const job = availableJobs.find((j) => j.id === jobId);
+      if (job) {
+        setSelectedJob(job);
+      }
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
@@ -142,135 +170,178 @@ export function CreateInvoiceDialog({ onSuccess }: CreateInvoiceDialogProps) {
           Create Invoice
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh]" data-testid="create-invoice-dialog">
+      <DialogContent 
+        className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col bg-white rounded-2xl shadow-xl" 
+        data-testid="create-invoice-dialog"
+      >
         {!selectedJob ? (
           <>
-            <DialogHeader>
-              <DialogTitle>Create New Invoice</DialogTitle>
-              <DialogDescription>
+            <DialogHeader className="p-6 border-b border-slate-100 bg-slate-50/50">
+              <DialogTitle className="text-lg font-bold text-slate-800">Create Invoice</DialogTitle>
+              <DialogDescription className="text-slate-500 text-sm">
                 Select a completed job to create an invoice for. Only jobs without
                 existing invoices are shown.
               </DialogDescription>
             </DialogHeader>
 
             {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search jobs by description or type..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-                data-testid="job-search-input"
-              />
+            <div className="px-6 pt-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  placeholder="Search jobs by description or type..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 bg-slate-50 border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
+                  data-testid="job-search-input"
+                />
+              </div>
             </div>
 
             {/* Job List */}
-            <div className="h-[400px] overflow-y-auto pr-4">
+            <div className="flex-1 overflow-y-auto px-6 py-4">
               {loadingJobs ? (
                 <div className="flex items-center justify-center h-32">
-                  <p className="text-muted-foreground">Loading jobs...</p>
+                  <div className="w-8 h-8 border-4 border-teal-200 border-t-teal-500 rounded-full animate-spin" />
                 </div>
               ) : availableJobs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-32 text-center">
-                  <FileText className="h-8 w-8 text-muted-foreground mb-2" />
-                  <p className="text-muted-foreground">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+                    <FileText className="h-6 w-6 text-slate-400" />
+                  </div>
+                  <p className="text-slate-600 font-medium">
                     {searchQuery
                       ? 'No matching jobs found'
                       : 'No completed jobs without invoices'}
                   </p>
-                  <p className="text-sm text-muted-foreground mt-1">
+                  <p className="text-sm text-slate-400 mt-1">
                     Complete a job first to create an invoice
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {availableJobs.map((job) => (
-                    <button
+                    <div
                       key={job.id}
+                      className="flex items-start gap-3 p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer group"
                       onClick={() => handleJobSelect(job)}
-                      className="w-full p-4 border rounded-lg hover:bg-accent transition-colors text-left"
                       data-testid={`job-option-${job.id}`}
                     >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium truncate">
-                              {job.description || 'No description'}
-                            </span>
-                            <Badge variant="secondary" className="shrink-0">
-                              {job.status}
-                            </Badge>
-                          </div>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                      <Checkbox
+                        checked={selectedJobIds.has(job.id)}
+                        onCheckedChange={(checked) => {
+                          handleJobCheckboxChange(job.id, checked as boolean);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-1 data-[state=checked]:bg-teal-500 data-[state=checked]:border-teal-500"
+                        data-testid="job-checkbox"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-slate-700 truncate">
+                            {job.description || 'No description'}
+                          </span>
+                          <Badge variant="secondary" className="shrink-0 bg-emerald-100 text-emerald-700">
+                            {job.status}
+                          </Badge>
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
+                          <span className="flex items-center gap-1">
+                            <FileText className="h-3 w-3" />
+                            {job.job_type || 'Unknown type'}
+                          </span>
+                          {job.completed_at && (
                             <span className="flex items-center gap-1">
-                              <FileText className="h-3 w-3" />
-                              {job.job_type || 'Unknown type'}
+                              <Calendar className="h-3 w-3" />
+                              Completed: {formatDate(job.completed_at)}
                             </span>
-                            {job.completed_at && (
-                              <span className="flex items-center gap-1">
-                                <Calendar className="h-3 w-3" />
-                                Completed: {formatDate(job.completed_at)}
-                              </span>
-                            )}
-                            {(job.final_amount != null || job.quoted_amount != null) && (
-                              <span className="flex items-center gap-1">
-                                <DollarSign className="h-3 w-3" />
-                                {job.final_amount != null
-                                  ? `Final: ${formatCurrency(job.final_amount)}`
-                                  : `Quoted: ${formatCurrency(job.quoted_amount)}`}
-                              </span>
-                            )}
-                          </div>
+                          )}
+                          {(job.final_amount != null || job.quoted_amount != null) && (
+                            <span className="flex items-center gap-1">
+                              <DollarSign className="h-3 w-3" />
+                              {job.final_amount != null
+                                ? `Final: ${formatCurrency(job.final_amount)}`
+                                : `Quoted: ${formatCurrency(job.quoted_amount)}`}
+                            </span>
+                          )}
                         </div>
                       </div>
-                    </button>
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Check className="h-5 w-5 text-teal-500" />
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
             </div>
 
-            <div className="text-sm text-muted-foreground text-center">
-              {availableJobs.length} job{availableJobs.length !== 1 ? 's' : ''} available
-            </div>
+            <DialogFooter className="p-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              <span className="text-sm text-slate-500">
+                {availableJobs.length} job{availableJobs.length !== 1 ? 's' : ''} available
+                {selectedJobIds.size > 0 && ` • ${selectedJobIds.size} selected`}
+              </span>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setOpen(false)}
+                  className="bg-white hover:bg-slate-50 border-slate-200 text-slate-700"
+                  data-testid="cancel-btn"
+                >
+                  Cancel
+                </Button>
+                {selectedJobIds.size === 1 && (
+                  <Button
+                    onClick={handleCreateFromSelection}
+                    className="bg-teal-500 hover:bg-teal-600 text-white shadow-sm shadow-teal-200"
+                    data-testid="create-from-selection-btn"
+                  >
+                    Create Invoice
+                  </Button>
+                )}
+              </div>
+            </DialogFooter>
           </>
         ) : (
           <>
-            <DialogHeader>
-              <DialogTitle>Create Invoice</DialogTitle>
-              <DialogDescription>
+            <DialogHeader className="p-6 border-b border-slate-100 bg-slate-50/50">
+              <DialogTitle className="text-lg font-bold text-slate-800">Create Invoice</DialogTitle>
+              <DialogDescription className="text-slate-500 text-sm">
                 Creating invoice for: {selectedJob.description || 'Job'}
               </DialogDescription>
             </DialogHeader>
 
             {/* Selected Job Summary */}
-            <div className="p-3 bg-muted rounded-lg mb-4">
-              <div className="flex items-center gap-2 text-sm">
-                <FileText className="h-4 w-4" />
-                <span className="font-medium">{selectedJob.job_type}</span>
-                <span className="text-muted-foreground">•</span>
-                <span className="text-muted-foreground">
-                  {selectedJob.description}
-                </span>
-              </div>
-              {(selectedJob.final_amount != null || selectedJob.quoted_amount != null) && (
-                <div className="flex items-center gap-2 text-sm mt-1">
-                  <DollarSign className="h-4 w-4" />
-                  <span>
-                    {selectedJob.final_amount != null
-                      ? `Final Amount: ${formatCurrency(selectedJob.final_amount)}`
-                      : `Quoted: ${formatCurrency(selectedJob.quoted_amount)}`}
+            <div className="px-6 pt-4">
+              <div className="p-4 bg-teal-50 rounded-xl border border-teal-100">
+                <div className="flex items-center gap-2 text-sm">
+                  <FileText className="h-4 w-4 text-teal-600" />
+                  <span className="font-medium text-slate-700">{selectedJob.job_type}</span>
+                  <span className="text-slate-400">•</span>
+                  <span className="text-slate-500">
+                    {selectedJob.description}
                   </span>
                 </div>
-              )}
+                {(selectedJob.final_amount != null || selectedJob.quoted_amount != null) && (
+                  <div className="flex items-center gap-2 text-sm mt-2">
+                    <DollarSign className="h-4 w-4 text-teal-600" />
+                    <span className="text-slate-700 font-medium">
+                      {selectedJob.final_amount != null
+                        ? `Final Amount: ${formatCurrency(selectedJob.final_amount)}`
+                        : `Quoted: ${formatCurrency(selectedJob.quoted_amount)}`}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
 
-            <InvoiceForm
-              jobId={selectedJob.id}
-              defaultAmount={getJobAmount(selectedJob)}
-              onSuccess={handleSuccess}
-              onCancel={handleBack}
-            />
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <InvoiceForm
+                jobId={selectedJob.id}
+                defaultAmount={getJobAmount(selectedJob)}
+                onSuccess={handleSuccess}
+                onCancel={handleBack}
+              />
+            </div>
           </>
         )}
       </DialogContent>

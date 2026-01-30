@@ -89,9 +89,9 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
   const flags = getCustomerFlags(customer);
 
   return (
-    <div data-testid="customer-detail">
+    <div data-testid="customer-detail" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="mb-6">
-        <Button variant="ghost" size="sm" asChild>
+        <Button variant="ghost" size="sm" asChild className="text-slate-600 hover:text-slate-800">
           <Link to="/customers">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Customers
@@ -123,121 +123,159 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
         }
       />
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Contact Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Contact Information</CardTitle>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main Info Card - spans 2 columns on large screens */}
+        <Card className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100">
+          <CardHeader className="border-b border-slate-100">
+            <CardTitle className="text-2xl font-bold text-slate-800">{getCustomerFullName(customer)}</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-3">
-              <Phone className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">Phone</p>
-                <a href={`tel:${customer.phone}`} className="font-medium hover:underline">
-                  {customer.phone}
-                </a>
+          <CardContent className="p-6 space-y-6">
+            {/* Contact Information Section */}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Contact Information</h3>
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-slate-100 rounded-lg">
+                    <Phone className="h-5 w-5 text-slate-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Phone</p>
+                    <a href={`tel:${customer.phone}`} className="font-medium text-slate-700 hover:text-teal-600 transition-colors">
+                      {customer.phone}
+                    </a>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-slate-100 rounded-lg">
+                    <Mail className="h-5 w-5 text-slate-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Email</p>
+                    {customer.email ? (
+                      <a
+                        href={`mailto:${customer.email}`}
+                        className="font-medium text-slate-700 hover:text-teal-600 transition-colors"
+                      >
+                        {customer.email}
+                      </a>
+                    ) : (
+                      <span className="text-slate-400 italic">Not provided</span>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <Mail className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">Email</p>
-                {customer.email ? (
-                  <a
-                    href={`mailto:${customer.email}`}
-                    className="font-medium hover:underline"
-                  >
-                    {customer.email}
-                  </a>
-                ) : (
-                  <span className="text-muted-foreground">Not provided</span>
-                )}
+
+            <Separator className="bg-slate-100" />
+
+            {/* Address Section */}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Address</h3>
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-slate-100 rounded-lg">
+                  <MapPin className="h-5 w-5 text-slate-600" />
+                </div>
+                <div>
+                  <p className="text-slate-400 italic">No address on file</p>
+                </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Status & Flags */}
+        {/* Right Column - Customer Flags */}
         <Card>
-          <CardHeader>
-            <CardTitle>Status & Flags</CardTitle>
+          <CardHeader className="border-b border-slate-100">
+            <CardTitle className="font-bold text-slate-800">Customer Flags</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-sm text-muted-foreground mb-2">Customer Flags</p>
-              <div className="flex gap-2 flex-wrap">
-                {flags.length > 0 ? (
-                  flags.map((flag) => (
-                    <StatusBadge key={flag} status={flag} type="customer" />
-                  ))
-                ) : (
-                  <span className="text-muted-foreground">No flags</span>
-                )}
-              </div>
+          <CardContent className="p-6 space-y-4">
+            <div className="flex gap-2 flex-wrap" data-testid="customer-flags">
+              {flags.length > 0 ? (
+                flags.map((flag) => (
+                  <StatusBadge key={flag} status={flag} type="customer" />
+                ))
+              ) : (
+                <span className="text-slate-400 italic">No flags</span>
+              )}
             </div>
-            <Separator />
+            <Separator className="bg-slate-100" />
             <div>
-              <p className="text-sm text-muted-foreground mb-2">Communication Preferences</p>
-              <div className="space-y-1">
-                <p className="text-sm">
-                  SMS: {customer.sms_opt_in ? '✓ Opted in' : '✗ Opted out'}
-                </p>
-                <p className="text-sm">
-                  Email: {customer.email_opt_in ? '✓ Opted in' : '✗ Opted out'}
-                </p>
+              <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Communication Preferences</p>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${customer.sms_opt_in ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                  <span className="text-sm text-slate-600">
+                    SMS: {customer.sms_opt_in ? 'Opted in' : 'Opted out'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${customer.email_opt_in ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                  <span className="text-sm text-slate-600">
+                    Email: {customer.email_opt_in ? 'Opted in' : 'Opted out'}
+                  </span>
+                </div>
               </div>
             </div>
             {customer.lead_source && (
               <>
-                <Separator />
+                <Separator className="bg-slate-100" />
                 <div>
-                  <p className="text-sm text-muted-foreground">Lead Source</p>
-                  <p className="font-medium">{customer.lead_source}</p>
+                  <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Lead Source</p>
+                  <p className="font-medium text-slate-700">{customer.lead_source}</p>
                 </div>
               </>
             )}
           </CardContent>
         </Card>
 
-        {/* Properties */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MapPin className="h-5 w-5" />
-              Properties
-            </CardTitle>
+        {/* Properties Section */}
+        <Card className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100" data-testid="properties-section">
+          <CardHeader className="border-b border-slate-100">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 font-bold text-slate-800">
+                <MapPin className="h-5 w-5 text-teal-500" />
+                Properties
+              </CardTitle>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setShowAddPropertyDialog(true)}
+                data-testid="add-property-btn"
+                className="text-teal-600 border-teal-200 hover:bg-teal-50"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Property
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">No properties yet.</p>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="mt-4"
-              onClick={() => setShowAddPropertyDialog(true)}
-              data-testid="add-property-btn"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Property
-            </Button>
+          <CardContent className="p-6">
+            <div className="text-center py-8">
+              <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <MapPin className="h-6 w-6 text-slate-400" />
+              </div>
+              <p className="text-slate-500">No properties yet</p>
+              <p className="text-sm text-slate-400 mt-1">Add a property to track service locations</p>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Jobs History - Placeholder */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Job History</CardTitle>
+        {/* Job History Section */}
+        <Card data-testid="job-history-section">
+          <CardHeader className="border-b border-slate-100">
+            <CardTitle className="font-bold text-slate-800">Job History</CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">No jobs yet.</p>
-            <Button variant="outline" size="sm" className="mt-4" asChild>
-              <Link to={`/jobs?customer_id=${customer.id}`}>View Jobs</Link>
-            </Button>
+          <CardContent className="p-6">
+            <div className="text-center py-6">
+              <p className="text-slate-500">No jobs yet</p>
+              <Button variant="outline" size="sm" className="mt-4 text-teal-600 border-teal-200 hover:bg-teal-50" asChild>
+                <Link to={`/jobs?customer_id=${customer.id}`}>View All Jobs</Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
-        {/* AI Communication Drafts */}
-        <div className="md:col-span-2">
+        {/* AI Communication Drafts - Full width */}
+        <div className="lg:col-span-3">
           <AICommunicationDrafts
             draft={draft}
             isLoading={isDraftLoading}

@@ -19,28 +19,60 @@ interface MapMarkerProps {
 
 /**
  * Create an SVG marker icon with staff color and sequence number.
+ * Updated styling: w-8 h-8 rounded-full shadow-md border-2 border-white
  */
 function createMarkerIcon(
   color: string,
   sequenceIndex: number,
-  isSelected: boolean
+  isSelected: boolean,
+  isActive: boolean = false
 ): google.maps.Icon {
-  const size = isSelected ? 36 : 30;
+  // Base size: 32px (w-8 h-8)
+  const baseSize = 32;
+  // Selected: scale-125 = 40px
+  const size = isSelected ? 40 : baseSize;
   const fontSize = isSelected ? 14 : 12;
-  const strokeWidth = isSelected ? 3 : 2;
+  // Border: 2px white border
+  const strokeWidth = 2;
+  
+  // Ring for selected state: ring-4 ring-teal-200
+  const ringSize = isSelected ? size + 16 : size;
+  const ringStrokeWidth = isSelected ? 4 : 0;
+  
+  // Pulse animation ring for active jobs: ring-2 ring-teal-400
+  const pulseRingSize = isActive ? size + 8 : size;
+  const pulseRingStrokeWidth = isActive ? 2 : 0;
 
   const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-      <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - strokeWidth}" 
+    <svg xmlns="http://www.w3.org/2000/svg" width="${ringSize}" height="${ringSize}" viewBox="0 0 ${ringSize} ${ringSize}">
+      ${isSelected ? `
+        <circle cx="${ringSize / 2}" cy="${ringSize / 2}" r="${(ringSize - ringStrokeWidth) / 2}" 
+          fill="none" 
+          stroke="rgb(153, 246, 228)" 
+          stroke-width="${ringStrokeWidth}"
+          opacity="0.5"/>
+      ` : ''}
+      ${isActive ? `
+        <circle cx="${ringSize / 2}" cy="${ringSize / 2}" r="${(pulseRingSize - pulseRingStrokeWidth) / 2}" 
+          fill="none" 
+          stroke="rgb(45, 212, 191)" 
+          stroke-width="${pulseRingStrokeWidth}"
+          opacity="0.6">
+          <animate attributeName="r" from="${(pulseRingSize - pulseRingStrokeWidth) / 2}" to="${(ringSize - 4) / 2}" dur="1.5s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" from="0.6" to="0" dur="1.5s" repeatCount="indefinite"/>
+        </circle>
+      ` : ''}
+      <circle cx="${ringSize / 2}" cy="${ringSize / 2}" r="${size / 2 - strokeWidth}" 
         fill="${color}" 
         stroke="white" 
-        stroke-width="${strokeWidth}"/>
-      <text x="${size / 2}" y="${size / 2 + fontSize / 3}" 
+        stroke-width="${strokeWidth}"
+        filter="drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1))"/>
+      <text x="${ringSize / 2}" y="${ringSize / 2 + fontSize / 3}" 
         text-anchor="middle" 
         fill="white" 
         font-size="${fontSize}" 
         font-weight="bold" 
-        font-family="Arial, sans-serif">
+        font-family="Inter, Arial, sans-serif">
         ${sequenceIndex}
       </text>
     </svg>
@@ -48,8 +80,8 @@ function createMarkerIcon(
 
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new google.maps.Size(size, size),
-    anchor: new google.maps.Point(size / 2, size / 2),
+    scaledSize: new google.maps.Size(ringSize, ringSize),
+    anchor: new google.maps.Point(ringSize / 2, ringSize / 2),
   };
 }
 
@@ -62,10 +94,13 @@ export function MapMarker({
   clusterer,
 }: MapMarkerProps) {
   const color = staffName ? getStaffColor(staffName) : DEFAULT_COLOR;
+  
+  // Determine if job is active (in progress)
+  const isActive = job.status === 'in_progress';
 
   const icon = useMemo(
-    () => createMarkerIcon(color, displaySequence, isSelected),
-    [color, displaySequence, isSelected]
+    () => createMarkerIcon(color, displaySequence, isSelected, isActive),
+    [color, displaySequence, isSelected, isActive]
   );
 
   // Skip markers without coordinates
@@ -80,6 +115,11 @@ export function MapMarker({
       onClick={onClick}
       title={`${job.customer_name} - ${job.service_type}`}
       clusterer={clusterer}
+      options={{
+        // Add cursor pointer for hover state
+        cursor: 'pointer',
+      }}
+      data-testid="map-marker"
     />
   );
 }

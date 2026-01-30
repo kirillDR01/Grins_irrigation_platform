@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -114,241 +116,290 @@ export function JobForm({ job, customerId, onSuccess, onCancel }: JobFormProps) 
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(onSubmit)}
-        className="space-y-6"
+        className="p-6 space-y-6"
         data-testid="job-form"
       >
-        {/* Customer ID - required for new jobs, read-only when editing */}
+        {/* Customer Section */}
         {!customerId && (
-          <FormField
-            control={form.control}
-            name="customer_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Customer *</FormLabel>
-                <FormControl>
-                  <SearchableCustomerDropdown
-                    value={field.value}
-                    onChange={field.onChange}
-                    disabled={isEditing}
-                  />
-                </FormControl>
-                <FormDescription>
-                  {isEditing
-                    ? 'Customer cannot be changed after job creation'
-                    : 'Search and select the customer for this job'}
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+              Customer
+            </h3>
+            <FormField
+              control={form.control}
+              name="customer_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium text-slate-700">Customer *</FormLabel>
+                  <FormControl>
+                    <SearchableCustomerDropdown
+                      value={field.value}
+                      onChange={field.onChange}
+                      disabled={isEditing}
+                      data-testid="customer-dropdown"
+                    />
+                  </FormControl>
+                  <FormDescription className="text-xs text-slate-500">
+                    {isEditing
+                      ? 'Customer cannot be changed after job creation'
+                      : 'Search and select the customer for this job'}
+                  </FormDescription>
+                  <FormMessage className="text-sm text-red-500 mt-1" data-testid="validation-error" />
+                </FormItem>
+              )}
+            />
+          </div>
         )}
 
-        {/* Job Type */}
-        <FormField
-          control={form.control}
-          name="job_type"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Job Type *</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger data-testid="job-type-select">
-                    <SelectValue placeholder="Select job type" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="spring_startup">Spring Startup</SelectItem>
-                  <SelectItem value="summer_tuneup">Summer Tune-up</SelectItem>
-                  <SelectItem value="winterization">Winterization</SelectItem>
-                  <SelectItem value="repair">Repair</SelectItem>
-                  <SelectItem value="diagnostic">Diagnostic</SelectItem>
-                  <SelectItem value="installation">Installation</SelectItem>
-                  <SelectItem value="landscaping">Landscaping</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {/* Description */}
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description</FormLabel>
-              <FormControl>
-                <Input
-                  {...field}
-                  value={field.value || ''}
-                  placeholder="Job description and notes"
-                  data-testid="description-input"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <div className="grid grid-cols-2 gap-4">
-          {/* Priority Level */}
+        {/* Job Details Section */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+            Job Details
+          </h3>
+          
+          {/* Job Type */}
           <FormField
             control={form.control}
-            name="priority_level"
+            name="job_type"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Priority</FormLabel>
-                <Select
-                  onValueChange={(value) => field.onChange(parseInt(value))}
-                  defaultValue={field.value?.toString()}
-                >
+                <FormLabel className="text-sm font-medium text-slate-700">Job Type *</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
                   <FormControl>
-                    <SelectTrigger data-testid="priority-select">
-                      <SelectValue placeholder="Select priority" />
+                    <SelectTrigger data-testid="job-type-select">
+                      <SelectValue placeholder="Select job type" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="0">Normal</SelectItem>
-                    <SelectItem value="1">High</SelectItem>
-                    <SelectItem value="2">Urgent</SelectItem>
+                    <SelectItem value="spring_startup">Spring Startup</SelectItem>
+                    <SelectItem value="summer_tuneup">Summer Tune-up</SelectItem>
+                    <SelectItem value="winterization">Winterization</SelectItem>
+                    <SelectItem value="repair">Repair</SelectItem>
+                    <SelectItem value="diagnostic">Diagnostic</SelectItem>
+                    <SelectItem value="installation">Installation</SelectItem>
+                    <SelectItem value="landscaping">Landscaping</SelectItem>
                   </SelectContent>
                 </Select>
-                <FormMessage />
+                <FormMessage className="text-sm text-red-500 mt-1" data-testid="validation-error" />
               </FormItem>
             )}
           />
 
-          {/* Staffing Required */}
+          {/* Description - using Textarea with teal focus ring */}
           <FormField
             control={form.control}
-            name="staffing_required"
+            name="description"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Staff Required</FormLabel>
+                <FormLabel className="text-sm font-medium text-slate-700">Description</FormLabel>
                 <FormControl>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={field.value || 1}
-                    onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
-                    data-testid="staffing-input"
+                  <Textarea
+                    {...field}
+                    value={field.value || ''}
+                    placeholder="Job description and notes"
+                    className="min-h-[100px]"
+                    data-testid="description-input"
                   />
                 </FormControl>
-                <FormMessage />
+                <FormMessage className="text-sm text-red-500 mt-1" data-testid="validation-error" />
               </FormItem>
             )}
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          {/* Estimated Duration */}
+        {/* Priority & Staffing Section */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+            Priority & Staffing
+          </h3>
+          
+          <div className="grid grid-cols-2 gap-4">
+            {/* Priority Level */}
+            <FormField
+              control={form.control}
+              name="priority_level"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium text-slate-700">Priority</FormLabel>
+                  <Select
+                    onValueChange={(value) => field.onChange(parseInt(value))}
+                    defaultValue={field.value?.toString()}
+                  >
+                    <FormControl>
+                      <SelectTrigger data-testid="priority-select">
+                        <SelectValue placeholder="Select priority" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="0">Normal</SelectItem>
+                      <SelectItem value="1">High</SelectItem>
+                      <SelectItem value="2">Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage className="text-sm text-red-500 mt-1" data-testid="validation-error" />
+                </FormItem>
+              )}
+            />
+
+            {/* Staffing Required */}
+            <FormField
+              control={form.control}
+              name="staffing_required"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium text-slate-700">Staff Required</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={field.value || 1}
+                      onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
+                      data-testid="staffing-input"
+                    />
+                  </FormControl>
+                  <FormMessage className="text-sm text-red-500 mt-1" data-testid="validation-error" />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+
+        {/* Scheduling & Pricing Section */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+            Scheduling & Pricing
+          </h3>
+          
+          <div className="grid grid-cols-2 gap-4">
+            {/* Estimated Duration */}
+            <FormField
+              control={form.control}
+              name="estimated_duration_minutes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium text-slate-700">Duration (minutes)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={field.value ?? ''}
+                      onChange={(e) =>
+                        field.onChange(e.target.value ? parseInt(e.target.value) : null)
+                      }
+                      placeholder="e.g., 60"
+                      data-testid="duration-input"
+                    />
+                  </FormControl>
+                  <FormMessage className="text-sm text-red-500 mt-1" data-testid="validation-error" />
+                </FormItem>
+              )}
+            />
+
+            {/* Quoted Amount - with currency formatting */}
+            <FormField
+              control={form.control}
+              name="quoted_amount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium text-slate-700">Quoted Amount ($)</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={field.value ?? ''}
+                        onChange={(e) =>
+                          field.onChange(e.target.value ? parseFloat(e.target.value) : null)
+                        }
+                        placeholder="0.00"
+                        className="pl-7"
+                        data-testid="amount-input"
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage className="text-sm text-red-500 mt-1" data-testid="validation-error" />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+
+        {/* Source & Options Section */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+            Source & Options
+          </h3>
+          
+          {/* Source */}
           <FormField
             control={form.control}
-            name="estimated_duration_minutes"
+            name="source"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Duration (minutes)</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={field.value ?? ''}
-                    onChange={(e) =>
-                      field.onChange(e.target.value ? parseInt(e.target.value) : null)
-                    }
-                    placeholder="e.g., 60"
-                    data-testid="duration-input"
-                  />
-                </FormControl>
-                <FormMessage />
+                <FormLabel className="text-sm font-medium text-slate-700">Lead Source</FormLabel>
+                <Select
+                  onValueChange={field.onChange}
+                  defaultValue={field.value || undefined}
+                >
+                  <FormControl>
+                    <SelectTrigger data-testid="source-select">
+                      <SelectValue placeholder="Select source" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="website">Website</SelectItem>
+                    <SelectItem value="google">Google</SelectItem>
+                    <SelectItem value="referral">Referral</SelectItem>
+                    <SelectItem value="phone">Phone</SelectItem>
+                    <SelectItem value="partner">Partner</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage className="text-sm text-red-500 mt-1" data-testid="validation-error" />
               </FormItem>
             )}
           />
 
-          {/* Quoted Amount */}
+          {/* Weather Sensitive - using Checkbox component with teal checked state */}
           <FormField
             control={form.control}
-            name="quoted_amount"
+            name="weather_sensitive"
             render={({ field }) => (
-              <FormItem>
-                <FormLabel>Quoted Amount ($)</FormLabel>
+              <FormItem className="flex items-center gap-3 space-y-0">
                 <FormControl>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={field.value ?? ''}
-                    onChange={(e) =>
-                      field.onChange(e.target.value ? parseFloat(e.target.value) : null)
-                    }
-                    placeholder="e.g., 150.00"
-                    data-testid="amount-input"
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    data-testid="weather-checkbox"
                   />
                 </FormControl>
-                <FormMessage />
+                <Label className="text-sm font-medium text-slate-700 cursor-pointer">
+                  Weather Sensitive
+                </Label>
               </FormItem>
             )}
           />
         </div>
-
-        {/* Source */}
-        <FormField
-          control={form.control}
-          name="source"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Lead Source</FormLabel>
-              <Select
-                onValueChange={field.onChange}
-                defaultValue={field.value || undefined}
-              >
-                <FormControl>
-                  <SelectTrigger data-testid="source-select">
-                    <SelectValue placeholder="Select source" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="website">Website</SelectItem>
-                  <SelectItem value="google">Google</SelectItem>
-                  <SelectItem value="referral">Referral</SelectItem>
-                  <SelectItem value="phone">Phone</SelectItem>
-                  <SelectItem value="partner">Partner</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {/* Weather Sensitive */}
-        <FormField
-          control={form.control}
-          name="weather_sensitive"
-          render={({ field }) => (
-            <FormItem className="flex items-center gap-2">
-              <FormControl>
-                <input
-                  type="checkbox"
-                  checked={field.value}
-                  onChange={field.onChange}
-                  className="h-4 w-4 rounded border-gray-300"
-                  data-testid="weather-checkbox"
-                />
-              </FormControl>
-              <Label className="!mt-0">Weather Sensitive</Label>
-            </FormItem>
-          )}
-        />
 
         {/* Form Actions */}
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
           {onCancel && (
-            <Button type="button" variant="outline" onClick={onCancel}>
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={onCancel}
+              className="px-4 py-2.5"
+            >
               Cancel
             </Button>
           )}
-          <Button type="submit" disabled={isPending} data-testid="submit-btn">
+          <Button 
+            type="submit" 
+            disabled={isPending} 
+            data-testid="submit-btn"
+            className="px-5 py-2.5"
+          >
             {isPending ? 'Saving...' : isEditing ? 'Update Job' : 'Create Job'}
           </Button>
         </div>

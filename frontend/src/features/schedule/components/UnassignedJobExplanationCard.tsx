@@ -4,15 +4,8 @@
  */
 
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, HelpCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Lightbulb, MapPin, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { useUnassignedJobExplanation } from '../hooks/useUnassignedJobExplanation';
 import type { UnassignedJobResponse } from '../types';
@@ -32,7 +25,6 @@ export function UnassignedJobExplanationCard({
 
   const handleToggle = () => {
     if (!isExpanded && !explanation && !error) {
-      // First time expanding - trigger fetch
       setIsExpanded(true);
     } else {
       setIsExpanded(!isExpanded);
@@ -40,113 +32,97 @@ export function UnassignedJobExplanationCard({
   };
 
   return (
-    <div data-testid={`job-explanation-${job.job_id}`}>
-      {/* Why? Link */}
-      <Button
-        variant="link"
-        size="sm"
-        onClick={handleToggle}
-        className="h-auto p-0 text-blue-600 hover:text-blue-800"
-        data-testid={`why-link-${job.job_id}`}
-      >
-        <HelpCircle className="h-4 w-4 mr-1" />
-        Why?
-        {isExpanded ? (
-          <ChevronDown className="h-4 w-4 ml-1" />
-        ) : (
-          <ChevronRight className="h-4 w-4 ml-1" />
+    <div className="bg-amber-50 rounded-xl p-4 border border-amber-100" data-testid={`job-explanation-${job.job_id}`}>
+      {/* Card Header */}
+      <div className="flex items-start gap-3 mb-3">
+        <div className="flex-shrink-0">
+          <AlertCircle className="h-5 w-5 text-amber-500" />
+        </div>
+        <div className="flex-1">
+          <h3 className="font-medium text-slate-800">Why This Job Wasn't Assigned</h3>
+        </div>
+      </div>
+
+      {/* Job Info Section */}
+      <div className="space-y-2 mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-slate-700">{job.job_type}</span>
+          <span className="text-sm text-slate-500">•</span>
+          <span className="text-sm text-slate-600">{job.customer_name}</span>
+        </div>
+        {job.address && (
+          <div className="flex items-center gap-2 text-sm text-slate-600">
+            <MapPin className="h-4 w-4 text-slate-400" />
+            <span>{job.address}</span>
+          </div>
         )}
-      </Button>
+      </div>
 
-      {/* Expandable Explanation Card - Compact Design */}
-      {isExpanded && (
-        <Card className="mt-1 border-yellow-200 bg-yellow-50 max-w-md">
-          <CardHeader className="py-2 px-3">
-            <CardTitle className="text-sm font-medium">Why not scheduled?</CardTitle>
-          </CardHeader>
-          <CardContent className="py-2 px-3 space-y-2">
-            {/* Loading State */}
-            {isLoading && (
-              <div className="flex items-center gap-2 text-muted-foreground text-xs">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>Analyzing...</span>
+      {/* Explanation Section */}
+      <div className="space-y-3">
+        <div className="text-sm text-amber-700">
+          <p className="font-medium mb-1">Reason:</p>
+          <ul className="list-disc list-inside space-y-1 ml-2">
+            <li>{job.reason}</li>
+            {explanation?.reason && explanation.reason !== job.reason && (
+              <li>{explanation.reason}</li>
+            )}
+          </ul>
+        </div>
+
+        {/* Suggestion Section */}
+        {(explanation?.suggestions.length ?? 0) > 0 && (
+          <div className="bg-white rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <Lightbulb className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-slate-700 mb-1">Suggested Action:</p>
+                <p className="text-sm text-slate-600">{explanation?.suggestions[0]}</p>
               </div>
-            )}
+            </div>
+          </div>
+        )}
 
-            {/* Error State */}
-            {error && (
-              <Alert variant="destructive" className="py-1 px-2">
-                <AlertDescription className="flex items-center justify-between text-xs">
-                  <span>Failed to load</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-6 text-xs px-2"
-                    onClick={() => refetch()}
-                    data-testid={`retry-explanation-${job.job_id}`}
-                  >
-                    Retry
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            )}
+        {/* Alternative Dates */}
+        {(explanation?.alternative_dates.length ?? 0) > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <Clock className="h-4 w-4 text-slate-400" />
+            <span className="text-sm text-slate-600">Try these dates:</span>
+            {explanation?.alternative_dates.slice(0, 3).map((date, index) => (
+              <Badge
+                key={index}
+                variant="outline"
+                className="bg-white text-xs"
+                data-testid={`alt-date-${job.job_id}-${index}`}
+              >
+                {new Date(date).toLocaleDateString('en-US', {
+                  weekday: 'short',
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </div>
 
-            {/* Explanation Content - Compact */}
-            {explanation && (
-              <div className="space-y-2 text-xs">
-                {/* Main Reason - truncated */}
-                <div>
-                  <span className="font-medium">Reason: </span>
-                  <span className="text-muted-foreground">
-                    {explanation.reason.length > 150 
-                      ? `${explanation.reason.substring(0, 150)}...` 
-                      : explanation.reason}
-                  </span>
-                </div>
-
-                {/* Suggestions - show first 2 only */}
-                {explanation.suggestions.length > 0 && (
-                  <div>
-                    <span className="font-medium">Tips: </span>
-                    <span className="text-muted-foreground">
-                      {explanation.suggestions.slice(0, 2).join(' • ')}
-                    </span>
-                  </div>
-                )}
-
-                {/* Alternative Dates - inline badges */}
-                {explanation.alternative_dates.length > 0 && (
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <span className="font-medium">Try: </span>
-                    {explanation.alternative_dates.slice(0, 3).map((date, index) => (
-                      <Badge
-                        key={index}
-                        variant="outline"
-                        className="bg-white text-xs py-0 px-1.5 h-5"
-                        data-testid={`alt-date-${job.job_id}-${index}`}
-                      >
-                        {new Date(date).toLocaleDateString('en-US', {
-                          weekday: 'short',
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Fallback: Show basic reason if no AI explanation */}
-            {!isLoading && !error && !explanation && (
-              <div className="text-xs text-muted-foreground">
-                <span className="font-medium">Reason: </span>
-                <span>{job.reason}</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {/* Action Buttons */}
+      <div className="flex gap-2 mt-4">
+        <Button
+          variant="secondary"
+          size="sm"
+          data-testid={`manual-assign-${job.job_id}`}
+        >
+          Manual Assign
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          data-testid={`reschedule-${job.job_id}`}
+        >
+          Reschedule
+        </Button>
+      </div>
     </div>
   );
 }

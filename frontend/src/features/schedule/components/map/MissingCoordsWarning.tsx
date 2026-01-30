@@ -2,7 +2,6 @@
  * MissingCoordsWarning component - Warning banner for jobs without coordinates.
  */
 
-import { Card, CardContent } from '@/components/ui/card';
 import { AlertTriangle } from 'lucide-react';
 
 interface MissingCoordsWarningProps {
@@ -15,17 +14,21 @@ export function MissingCoordsWarning({ count }: MissingCoordsWarningProps) {
   }
 
   return (
-    <Card
+    <div
       data-testid="missing-coords-warning"
-      className="border-yellow-200 bg-yellow-50"
+      className="bg-amber-50 rounded-xl p-4 border border-amber-100"
     >
-      <CardContent className="flex items-center gap-2 py-3">
-        <AlertTriangle className="h-4 w-4 text-yellow-600" />
-        <span className="text-sm text-yellow-800">
-          {count} job{count === 1 ? '' : 's'} cannot be displayed due to missing
-          location data.
-        </span>
-      </CardContent>
-    </Card>
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <h4 className="font-medium text-amber-800">
+            Missing Location Data
+          </h4>
+          <p className="text-sm text-amber-600 mt-1">
+            {count} job{count === 1 ? '' : 's'} cannot be displayed on the map due to missing coordinates.
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }

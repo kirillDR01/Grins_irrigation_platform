@@ -80,7 +80,7 @@ describe('AIEstimateGenerator', () => {
     expect(screen.getByTestId('ai-estimate-generator')).toBeInTheDocument();
     expect(screen.getByText('AI-Generated Estimate')).toBeInTheDocument();
     expect(screen.getByText('5')).toBeInTheDocument(); // zones
-    expect(screen.getByText('92%')).toBeInTheDocument(); // confidence
+    expect(screen.getAllByText('92%').length).toBeGreaterThan(0); // confidence appears in multiple places
   });
 
   it('renders price breakdown', () => {

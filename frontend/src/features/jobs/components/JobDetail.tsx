@@ -114,102 +114,107 @@ export function JobDetail({ jobId: propJobId, onEdit }: JobDetailProps) {
   const priorityConfig = getJobPriorityConfig(job.priority_level);
 
   return (
-    <div data-testid="job-detail" className="space-y-6">
+    <div data-testid="job-detail" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Go back">
-            <ArrowLeft className="h-4 w-4" />
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Go back" className="hover:bg-slate-100">
+            <ArrowLeft className="h-4 w-4 text-slate-600" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold" data-testid="job-title">
+            <h1 className="text-2xl font-bold text-slate-800" data-testid="job-title">
               {formatJobType(job.job_type)}
             </h1>
-            <p className="text-muted-foreground">Job #{job.id.slice(0, 8)}</p>
+            <p className="text-slate-500 text-sm">Job #{job.id.slice(0, 8)}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <JobStatusBadge status={job.status} />
+        <div className="flex items-center gap-3">
+          <JobStatusBadge status={job.status} data-testid="job-status-badge" />
           {onEdit && (
-            <Button variant="outline" onClick={onEdit} data-testid="edit-job-btn">
+            <Button variant="outline" onClick={onEdit} data-testid="edit-job-btn" className="border-slate-200 hover:bg-slate-50">
               Edit Job
             </Button>
           )}
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Job Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Wrench className="h-5 w-5" />
-              Job Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Category</p>
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${categoryConfig.bgColor} ${categoryConfig.color}`}
-                >
-                  {categoryConfig.label}
-                </span>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Priority</p>
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${priorityConfig.bgColor} ${priorityConfig.color}`}
-                >
-                  {priorityConfig.label}
-                </span>
+      <div className="grid gap-8 grid-cols-1 lg:grid-cols-3">
+        {/* Main Info Card - spans 2 columns on large screens */}
+        <Card className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+          <CardHeader className="p-6 border-b border-slate-100">
+            <div className="flex items-start justify-between">
+              <div className="space-y-3">
+                <CardTitle className="flex items-center gap-3 text-lg font-bold text-slate-800">
+                  <div className="p-2 rounded-lg bg-teal-50">
+                    <Wrench className="h-5 w-5 text-teal-600" />
+                  </div>
+                  Job Information
+                </CardTitle>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${categoryConfig.bgColor} ${categoryConfig.color} border ${categoryConfig.bgColor.replace('bg-', 'border-').replace('-50', '-100')}`}
+                    data-testid="job-category-badge"
+                  >
+                    {categoryConfig.label}
+                  </span>
+                  <span
+                    className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${priorityConfig.bgColor} ${priorityConfig.color}`}
+                    data-testid="job-priority-badge"
+                  >
+                    {priorityConfig.label}
+                  </span>
+                </div>
               </div>
             </div>
-
+          </CardHeader>
+          <CardContent className="p-6 space-y-6">
+            {/* Description */}
             {job.description && (
               <div>
-                <p className="text-sm text-muted-foreground">Description</p>
-                <p className="mt-1">{job.description}</p>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Description</p>
+                <p className="text-slate-700">{job.description}</p>
               </div>
             )}
 
-            <Separator />
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-muted-foreground" />
+            {/* Duration & Staff */}
+            <div className="grid grid-cols-2 gap-6">
+              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                <div className="p-2 rounded-lg bg-white shadow-sm">
+                  <Clock className="h-4 w-4 text-slate-500" />
+                </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Duration</p>
-                  <p>{formatDuration(job.estimated_duration_minutes)}</p>
+                  <p className="text-xs text-slate-400 uppercase tracking-wider">Duration</p>
+                  <p className="font-medium text-slate-700">{formatDuration(job.estimated_duration_minutes)}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-muted-foreground" />
+              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                <div className="p-2 rounded-lg bg-white shadow-sm">
+                  <Users className="h-4 w-4 text-slate-500" />
+                </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Staff Required</p>
-                  <p>{job.staffing_required}</p>
+                  <p className="text-xs text-slate-400 uppercase tracking-wider">Staff Required</p>
+                  <p className="font-medium text-slate-700">{job.staffing_required}</p>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              {job.weather_sensitive && (
-                <div className="flex items-center gap-1 text-amber-600">
-                  <Cloud className="h-4 w-4" />
-                  <span className="text-sm">Weather Sensitive</span>
-                </div>
-              )}
-            </div>
+            {/* Weather Sensitive */}
+            {job.weather_sensitive && (
+              <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-xl border border-amber-100">
+                <Cloud className="h-4 w-4 text-amber-600" />
+                <span className="text-sm font-medium text-amber-700">Weather Sensitive</span>
+              </div>
+            )}
 
+            {/* Equipment Required */}
             {job.equipment_required && job.equipment_required.length > 0 && (
               <div>
-                <p className="text-sm text-muted-foreground">Equipment Required</p>
-                <div className="flex flex-wrap gap-1 mt-1">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Equipment Required</p>
+                <div className="flex flex-wrap gap-2">
                   {job.equipment_required.map((item, index) => (
                     <span
                       key={index}
-                      className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs"
+                      className="inline-flex items-center rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600"
                     >
                       {item}
                     </span>
@@ -218,14 +223,15 @@ export function JobDetail({ jobId: propJobId, onEdit }: JobDetailProps) {
               </div>
             )}
 
+            {/* Materials Required */}
             {job.materials_required && job.materials_required.length > 0 && (
               <div>
-                <p className="text-sm text-muted-foreground">Materials Required</p>
-                <div className="flex flex-wrap gap-1 mt-1">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Materials Required</p>
+                <div className="flex flex-wrap gap-2">
                   {job.materials_required.map((item, index) => (
                     <span
                       key={index}
-                      className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs"
+                      className="inline-flex items-center rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600"
                     >
                       {item}
                     </span>
@@ -236,121 +242,143 @@ export function JobDetail({ jobId: propJobId, onEdit }: JobDetailProps) {
           </CardContent>
         </Card>
 
-        {/* Pricing & Source */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5" />
-              Pricing & Source
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Quoted Amount</p>
-                <p className="text-lg font-semibold">
-                  {formatAmount(job.quoted_amount)}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Final Amount</p>
-                <p className="text-lg font-semibold">
-                  {formatAmount(job.final_amount)}
-                </p>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div>
-              <p className="text-sm text-muted-foreground">Lead Source</p>
-              <p>
-                {job.source
-                  ? JOB_SOURCE_CONFIG[job.source]?.label || job.source
-                  : 'Not specified'}
-              </p>
-            </div>
-
-            {job.customer_id && (
-              <div>
-                <p className="text-sm text-muted-foreground">Customer</p>
+        {/* Sidebar - Customer, Pricing & Actions */}
+        <div className="space-y-6">
+          {/* Customer Info Card */}
+          <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+            <CardHeader className="p-6 border-b border-slate-100">
+              <CardTitle className="flex items-center gap-3 text-lg font-bold text-slate-800">
+                <div className="p-2 rounded-lg bg-blue-50">
+                  <User className="h-5 w-5 text-blue-600" />
+                </div>
+                Customer
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              {job.customer_id && (
                 <Link
                   to={`/customers/${job.customer_id}`}
-                  className="flex items-center gap-2 text-primary hover:underline"
+                  className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors group"
+                  data-testid="customer-link"
                 >
-                  <User className="h-4 w-4" />
-                  View Customer
+                  <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center">
+                    <User className="h-5 w-5 text-teal-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-slate-700 group-hover:text-teal-600 transition-colors">View Customer</p>
+                    <p className="text-xs text-slate-400">#{job.customer_id.slice(0, 8)}</p>
+                  </div>
                 </Link>
-              </div>
-            )}
+              )}
 
-            {job.property_id && (
-              <div>
-                <p className="text-sm text-muted-foreground">Property</p>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <MapPin className="h-4 w-4" />
-                  Property #{job.property_id.slice(0, 8)}
+              {job.property_id && (
+                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl" data-testid="property-info">
+                  <div className="p-2 rounded-lg bg-white shadow-sm">
+                    <MapPin className="h-4 w-4 text-slate-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 uppercase tracking-wider">Property</p>
+                    <p className="font-medium text-slate-700">#{job.property_id.slice(0, 8)}</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Pricing Card */}
+          <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+            <CardHeader className="p-6 border-b border-slate-100">
+              <CardTitle className="flex items-center gap-3 text-lg font-bold text-slate-800">
+                <div className="p-2 rounded-lg bg-emerald-50">
+                  <DollarSign className="h-5 w-5 text-emerald-600" />
+                </div>
+                Pricing
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-slate-50 rounded-xl">
+                  <p className="text-xs text-slate-400 uppercase tracking-wider">Quoted</p>
+                  <p className="text-lg font-bold text-slate-800">
+                    {formatAmount(job.quoted_amount)}
+                  </p>
+                </div>
+                <div className="p-3 bg-emerald-50 rounded-xl">
+                  <p className="text-xs text-emerald-600 uppercase tracking-wider">Final</p>
+                  <p className="text-lg font-bold text-emerald-700">
+                    {formatAmount(job.final_amount)}
+                  </p>
                 </div>
               </div>
-            )}
 
-            <Separator />
+              <div className="p-3 bg-slate-50 rounded-xl">
+                <p className="text-xs text-slate-400 uppercase tracking-wider">Lead Source</p>
+                <p className="font-medium text-slate-700">
+                  {job.source
+                    ? JOB_SOURCE_CONFIG[job.source]?.label || job.source
+                    : 'Not specified'}
+                </p>
+              </div>
 
-            {/* Payment Collection Status */}
-            <div className="flex items-center space-x-2" data-testid="payment-collected-section">
-              <Checkbox
-                id="payment-collected"
-                checked={job.payment_collected_on_site}
-                onCheckedChange={handlePaymentCollectedChange}
-                disabled={updateJobMutation.isPending}
-                data-testid="payment-collected-checkbox"
-              />
-              <Label
-                htmlFor="payment-collected"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                <div className="flex items-center gap-2">
-                  <CreditCard className="h-4 w-4" />
-                  Payment collected on site
-                </div>
-              </Label>
-            </div>
-
-            {/* Linked Invoice */}
-            {linkedInvoice && (
-              <div data-testid="linked-invoice-section">
-                <p className="text-sm text-muted-foreground">Invoice</p>
-                <Link
-                  to={`/invoices/${linkedInvoice.id}`}
-                  className="flex items-center gap-2 text-primary hover:underline"
-                  data-testid="linked-invoice-link"
+              {/* Payment Collection Status */}
+              <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-xl" data-testid="payment-collected-section">
+                <Checkbox
+                  id="payment-collected"
+                  checked={job.payment_collected_on_site}
+                  onCheckedChange={handlePaymentCollectedChange}
+                  disabled={updateJobMutation.isPending}
+                  data-testid="payment-collected-checkbox"
+                  className="data-[state=checked]:bg-teal-500 data-[state=checked]:border-teal-500"
+                />
+                <Label
+                  htmlFor="payment-collected"
+                  className="text-sm font-medium text-slate-700 leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                 >
-                  <FileText className="h-4 w-4" />
-                  <span>{linkedInvoice.invoice_number}</span>
-                  <InvoiceStatusBadge status={linkedInvoice.status} />
-                </Link>
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="h-4 w-4 text-slate-500" />
+                    Payment collected on site
+                  </div>
+                </Label>
               </div>
-            )}
 
-            {/* Generate Invoice Button */}
-            {!linkedInvoice && ['completed', 'closed'].includes(job.status) && (
-              <div data-testid="generate-invoice-section">
-                <GenerateInvoiceButton job={job} />
+              {/* Linked Invoice */}
+              {linkedInvoice && (
+                <div data-testid="linked-invoice-section" className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+                  <p className="text-xs text-blue-600 uppercase tracking-wider mb-2">Invoice</p>
+                  <Link
+                    to={`/invoices/${linkedInvoice.id}`}
+                    className="flex items-center gap-2 text-blue-700 hover:text-blue-800 font-medium"
+                    data-testid="linked-invoice-link"
+                  >
+                    <FileText className="h-4 w-4" />
+                    <span>{linkedInvoice.invoice_number}</span>
+                    <InvoiceStatusBadge status={linkedInvoice.status} />
+                  </Link>
+                </div>
+              )}
+
+              {/* Generate Invoice Button */}
+              {!linkedInvoice && ['completed', 'closed'].includes(job.status) && (
+                <div data-testid="generate-invoice-section">
+                  <GenerateInvoiceButton job={job} />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Timeline Card */}
+        <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+          <CardHeader className="p-6 border-b border-slate-100">
+            <CardTitle className="flex items-center gap-3 text-lg font-bold text-slate-800">
+              <div className="p-2 rounded-lg bg-violet-50">
+                <Calendar className="h-5 w-5 text-violet-600" />
               </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Timeline */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
               Timeline
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
+          <CardContent className="p-6">
+            <div className="space-y-4">
               <TimelineItem
                 label="Created"
                 date={job.created_at}
@@ -390,18 +418,20 @@ export function JobDetail({ jobId: propJobId, onEdit }: JobDetailProps) {
           </CardContent>
         </Card>
 
-        {/* Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" />
+        {/* Actions Card */}
+        <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+          <CardHeader className="p-6 border-b border-slate-100">
+            <CardTitle className="flex items-center gap-3 text-lg font-bold text-slate-800">
+              <div className="p-2 rounded-lg bg-amber-50">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+              </div>
               Actions
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="p-6 space-y-3">
             {job.status === 'requested' && (
               <Button
-                className="w-full"
+                className="w-full bg-teal-500 hover:bg-teal-600 text-white shadow-sm shadow-teal-200"
                 onClick={() => handleStatusChange('approved')}
                 disabled={updateStatusMutation.isPending}
                 data-testid="approve-job-btn"
@@ -411,8 +441,7 @@ export function JobDetail({ jobId: propJobId, onEdit }: JobDetailProps) {
             )}
             {job.status === 'approved' && (
               <Button
-                className="w-full"
-                variant="outline"
+                className="w-full bg-violet-500 hover:bg-violet-600 text-white shadow-sm shadow-violet-200"
                 onClick={() => handleStatusChange('scheduled')}
                 disabled={updateStatusMutation.isPending}
                 data-testid="schedule-job-btn"
@@ -422,7 +451,7 @@ export function JobDetail({ jobId: propJobId, onEdit }: JobDetailProps) {
             )}
             {job.status === 'scheduled' && (
               <Button
-                className="w-full"
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white shadow-sm shadow-orange-200"
                 onClick={() => handleStatusChange('in_progress')}
                 disabled={updateStatusMutation.isPending}
                 data-testid="start-job-btn"
@@ -432,7 +461,7 @@ export function JobDetail({ jobId: propJobId, onEdit }: JobDetailProps) {
             )}
             {job.status === 'in_progress' && (
               <Button
-                className="w-full"
+                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm shadow-emerald-200"
                 onClick={() => handleStatusChange('completed')}
                 disabled={updateStatusMutation.isPending}
                 data-testid="complete-job-btn"
@@ -442,7 +471,7 @@ export function JobDetail({ jobId: propJobId, onEdit }: JobDetailProps) {
             )}
             {job.status === 'completed' && (
               <Button
-                className="w-full"
+                className="w-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
                 variant="outline"
                 onClick={() => handleStatusChange('closed')}
                 disabled={updateStatusMutation.isPending}
@@ -453,7 +482,7 @@ export function JobDetail({ jobId: propJobId, onEdit }: JobDetailProps) {
             )}
             {!['cancelled', 'closed'].includes(job.status) && (
               <Button
-                className="w-full"
+                className="w-full bg-red-500 hover:bg-red-600 text-white"
                 variant="destructive"
                 onClick={() => handleStatusChange('cancelled')}
                 disabled={updateStatusMutation.isPending}
@@ -466,7 +495,7 @@ export function JobDetail({ jobId: propJobId, onEdit }: JobDetailProps) {
         </Card>
 
         {/* AI Communication Drafts */}
-        <div className="md:col-span-2">
+        <div className="lg:col-span-3">
           <AICommunicationDrafts
             draft={draft}
             isLoading={isDraftLoading}
@@ -479,7 +508,7 @@ export function JobDetail({ jobId: propJobId, onEdit }: JobDetailProps) {
 
         {/* AI Estimate Generator - Show for jobs needing estimates */}
         {needsEstimate && (
-          <div className="md:col-span-2">
+          <div className="lg:col-span-3">
             <AIEstimateGenerator
               estimate={estimate}
               isLoading={isEstimateLoading}
@@ -505,16 +534,16 @@ function TimelineItem({ label, date, isActive }: TimelineItemProps) {
   return (
     <div className="flex items-center gap-3">
       <div
-        className={`h-2 w-2 rounded-full ${
-          isActive ? 'bg-primary' : 'bg-gray-300'
+        className={`h-3 w-3 rounded-full ${
+          isActive ? 'bg-teal-500 ring-4 ring-teal-100' : 'bg-slate-200'
         }`}
       />
       <div className="flex-1">
-        <p className={`text-sm ${isActive ? 'font-medium' : 'text-muted-foreground'}`}>
+        <p className={`text-sm ${isActive ? 'font-medium text-slate-700' : 'text-slate-400'}`}>
           {label}
         </p>
       </div>
-      <p className="text-sm text-muted-foreground">
+      <p className={`text-sm ${isActive ? 'text-slate-600' : 'text-slate-300'}`}>
         {date ? new Date(date).toLocaleDateString() : '-'}
       </p>
     </div>

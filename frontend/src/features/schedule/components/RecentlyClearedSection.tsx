@@ -9,10 +9,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { format, formatDistanceToNow } from 'date-fns';
-import { Clock, Eye, History } from 'lucide-react';
+import { Clock } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
 import { scheduleGenerationApi } from '../api/scheduleGenerationApi';
@@ -37,72 +35,71 @@ export function RecentlyClearedSection({
 
   if (isLoading) {
     return (
-      <Card data-testid="recently-cleared-section">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <History className="h-4 w-4" />
-            Recently Cleared
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
-        </CardContent>
-      </Card>
+      <div className="bg-slate-50 rounded-xl p-4 border border-slate-100" data-testid="recently-cleared-section">
+        <div className="flex items-center gap-2 mb-3">
+          <Clock className="h-4 w-4 text-slate-400" />
+          <h3 className="text-sm font-semibold text-slate-700">Recently Cleared</h3>
+        </div>
+        <div className="space-y-2">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Card data-testid="recently-cleared-section">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <History className="h-4 w-4" />
-            Recently Cleared
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Failed to load recent clears
-          </p>
-        </CardContent>
-      </Card>
+      <div className="bg-slate-50 rounded-xl p-4 border border-slate-100" data-testid="recently-cleared-section">
+        <div className="flex items-center gap-2 mb-3">
+          <Clock className="h-4 w-4 text-slate-400" />
+          <h3 className="text-sm font-semibold text-slate-700">Recently Cleared</h3>
+        </div>
+        <p className="text-sm text-slate-400">
+          Failed to load recent clears
+        </p>
+      </div>
     );
   }
 
   const hasClears = recentClears && recentClears.length > 0;
 
   return (
-    <Card data-testid="recently-cleared-section">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <History className="h-4 w-4" />
-          Recently Cleared
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {!hasClears ? (
-          <p
-            className="text-sm text-muted-foreground"
-            data-testid="recently-cleared-empty"
+    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100" data-testid="recently-cleared-section">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Clock className="h-4 w-4 text-slate-400" />
+          <h3 className="text-sm font-semibold text-slate-700">Recently Cleared</h3>
+        </div>
+        {hasClears && (
+          <button
+            className="text-slate-400 hover:text-slate-600 text-sm"
+            onClick={() => {/* TODO: Implement clear all */}}
+            data-testid="clear-all-btn"
           >
-            No schedules cleared in the last 24 hours
-          </p>
-        ) : (
-          <div className="space-y-2" data-testid="recently-cleared-list">
-            {recentClears.map((audit: ScheduleClearAuditResponse) => (
-              <RecentClearItem
-                key={audit.id}
-                audit={audit}
-                onViewDetails={onViewDetails}
-              />
-            ))}
-          </div>
+            Clear All
+          </button>
         )}
-      </CardContent>
-    </Card>
+      </div>
+      {!hasClears ? (
+        <p
+          className="text-sm text-slate-400"
+          data-testid="recently-cleared-empty"
+        >
+          No schedules cleared in the last 24 hours
+        </p>
+      ) : (
+        <div className="space-y-2" data-testid="recently-cleared-list">
+          {recentClears.map((audit: ScheduleClearAuditResponse) => (
+            <RecentClearItem
+              key={audit.id}
+              audit={audit}
+              onViewDetails={onViewDetails}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -119,14 +116,14 @@ function RecentClearItem({ audit, onViewDetails }: RecentClearItemProps) {
 
   return (
     <div
-      className="flex items-center justify-between rounded-md border p-3"
+      className="flex items-center justify-between p-2 bg-white rounded-lg"
       data-testid="recently-cleared-item"
     >
       <div className="flex flex-col gap-1">
-        <span className="font-medium" data-testid="recently-cleared-date">
+        <span className="font-medium text-slate-700" data-testid="recently-cleared-date">
           {formattedDate}
         </span>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-sm text-slate-500">
           <span data-testid="recently-cleared-count">
             {audit.appointment_count} appointment
             {audit.appointment_count !== 1 ? 's' : ''} cleared
@@ -137,15 +134,13 @@ function RecentClearItem({ audit, onViewDetails }: RecentClearItemProps) {
           </span>
         </div>
       </div>
-      <Button
-        variant="ghost"
-        size="sm"
+      <button
+        className="text-teal-600 hover:text-teal-700 text-sm font-medium"
         onClick={() => onViewDetails?.(audit.id)}
-        data-testid="view-clear-details-btn"
+        data-testid="restore-job-btn"
       >
-        <Eye className="mr-1 h-4 w-4" />
-        Details
-      </Button>
+        Restore
+      </button>
     </div>
   );
 }

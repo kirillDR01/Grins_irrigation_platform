@@ -27,48 +27,48 @@ export interface InvoiceStatusConfig {
 export const INVOICE_STATUS_CONFIG: Record<InvoiceStatus, InvoiceStatusConfig> = {
   draft: {
     label: 'Draft',
-    bgColor: 'bg-gray-100',
-    color: 'text-gray-800',
+    bgColor: 'bg-slate-100',
+    color: 'text-slate-500',
   },
   sent: {
     label: 'Sent',
     bgColor: 'bg-blue-100',
-    color: 'text-blue-800',
+    color: 'text-blue-700',
   },
   viewed: {
     label: 'Viewed',
-    bgColor: 'bg-indigo-100',
-    color: 'text-indigo-800',
+    bgColor: 'bg-blue-100',
+    color: 'text-blue-700',
   },
   paid: {
     label: 'Paid',
-    bgColor: 'bg-green-100',
-    color: 'text-green-800',
+    bgColor: 'bg-emerald-100',
+    color: 'text-emerald-700',
   },
   partial: {
     label: 'Partial',
-    bgColor: 'bg-yellow-100',
-    color: 'text-yellow-800',
+    bgColor: 'bg-violet-100',
+    color: 'text-violet-700',
   },
   overdue: {
     label: 'Overdue',
     bgColor: 'bg-red-100',
-    color: 'text-red-800',
+    color: 'text-red-700',
   },
   lien_warning: {
     label: 'Lien Warning',
-    bgColor: 'bg-orange-100',
-    color: 'text-orange-800',
+    bgColor: 'bg-amber-100',
+    color: 'text-amber-700',
   },
   lien_filed: {
     label: 'Lien Filed',
-    bgColor: 'bg-red-200',
-    color: 'text-red-900',
+    bgColor: 'bg-red-100',
+    color: 'text-red-700',
   },
   cancelled: {
     label: 'Cancelled',
-    bgColor: 'bg-gray-100',
-    color: 'text-gray-500',
+    bgColor: 'bg-slate-100',
+    color: 'text-slate-500',
   },
 };
 

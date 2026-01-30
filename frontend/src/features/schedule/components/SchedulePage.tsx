@@ -120,7 +120,10 @@ export function SchedulePage() {
   };
 
   return (
-    <div data-testid="schedule-page" className="space-y-6">
+    <div 
+      data-testid="schedule-page" 
+      className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500"
+    >
       <PageHeader
         title="Schedule"
         description="Manage appointments and view daily/weekly schedules"
@@ -133,13 +136,22 @@ export function SchedulePage() {
             <Tabs
               value={viewMode}
               onValueChange={(v) => setViewMode(v as ViewMode)}
+              data-testid="schedule-view-toggle"
             >
-              <TabsList>
-                <TabsTrigger value="calendar" data-testid="calendar-view-tab">
+              <TabsList className="bg-slate-100 rounded-lg p-1 flex">
+                <TabsTrigger 
+                  value="calendar" 
+                  data-testid="view-calendar"
+                  className="data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
+                >
                   <Calendar className="mr-2 h-4 w-4" />
                   Calendar
                 </TabsTrigger>
-                <TabsTrigger value="list" data-testid="list-view-tab">
+                <TabsTrigger 
+                  value="list" 
+                  data-testid="view-list"
+                  className="data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
+                >
                   <List className="mr-2 h-4 w-4" />
                   List
                 </TabsTrigger>
@@ -148,6 +160,7 @@ export function SchedulePage() {
             <Button
               onClick={() => setShowCreateDialog(true)}
               data-testid="add-appointment-btn"
+              className="bg-teal-500 hover:bg-teal-600 text-white"
             >
               <Plus className="mr-2 h-4 w-4" />
               New Appointment

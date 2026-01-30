@@ -76,15 +76,15 @@ describe('SchedulePage', () => {
   it('renders view toggle tabs', () => {
     render(<SchedulePage />, { wrapper: createWrapper() });
 
-    expect(screen.getByTestId('calendar-view-tab')).toBeInTheDocument();
-    expect(screen.getByTestId('list-view-tab')).toBeInTheDocument();
+    expect(screen.getByTestId('view-calendar')).toBeInTheDocument();
+    expect(screen.getByTestId('view-list')).toBeInTheDocument();
   });
 
   it('switches to list view when tab is clicked', async () => {
     const user = userEvent.setup();
     render(<SchedulePage />, { wrapper: createWrapper() });
 
-    await user.click(screen.getByTestId('list-view-tab'));
+    await user.click(screen.getByTestId('view-list'));
 
     expect(screen.getByTestId('appointment-list')).toBeInTheDocument();
   });
@@ -129,7 +129,7 @@ describe('SchedulePage', () => {
     render(<SchedulePage />, { wrapper: createWrapper() });
 
     // Switch to list view
-    await user.click(screen.getByTestId('list-view-tab'));
+    await user.click(screen.getByTestId('view-list'));
 
     // Click appointment
     await user.click(screen.getByText('Click Appointment'));

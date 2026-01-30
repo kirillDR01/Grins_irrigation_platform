@@ -15,7 +15,7 @@ const sizeClasses = {
 export function LoadingSpinner({ size = 'md', className }: LoadingSpinnerProps) {
   return (
     <Loader2
-      className={cn('animate-spin text-muted-foreground', sizeClasses[size], className)}
+      className={cn('animate-spin text-teal-500', sizeClasses[size], className)}
       data-testid="loading-spinner"
     />
   );
@@ -32,7 +32,7 @@ export function LoadingPage({ message = 'Loading...' }: LoadingPageProps) {
       data-testid="loading-page"
     >
       <LoadingSpinner size="lg" />
-      <p className="text-muted-foreground">{message}</p>
+      <p className="text-slate-500">{message}</p>
     </div>
   );
 }

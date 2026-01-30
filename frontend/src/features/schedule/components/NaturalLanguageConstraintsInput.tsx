@@ -4,10 +4,9 @@
  */
 
 import { useState } from 'react';
-import { X, Loader2, AlertCircle } from 'lucide-react';
+import { X, Loader2, AlertCircle, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useConstraintParser } from '../hooks/useConstraintParser';
 import type { ParsedConstraint } from '../types';
@@ -17,7 +16,7 @@ interface NaturalLanguageConstraintsInputProps {
   onConstraintsChange: (constraints: ParsedConstraint[]) => void;
 }
 
-const EXAMPLE_CONSTRAINT = "e.g., Don't schedule Viktor before 10am";
+const EXAMPLE_CONSTRAINT = "e.g., 'No jobs before 9am' or 'Prioritize Eden Prairie'";
 
 export function NaturalLanguageConstraintsInput({
   scheduleDate,
@@ -56,75 +55,69 @@ export function NaturalLanguageConstraintsInput({
     onConstraintsChange(updated);
   };
 
-  const getConstraintColor = (type: ParsedConstraint['type']) => {
-    switch (type) {
-      case 'staff_time':
-        return 'bg-blue-100 text-blue-800';
-      case 'job_grouping':
-        return 'bg-green-100 text-green-800';
-      case 'staff_restriction':
-        return 'bg-purple-100 text-purple-800';
-      case 'geographic':
-        return 'bg-orange-100 text-orange-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   return (
     <div className="space-y-4" data-testid="constraints-input-container">
-      <div>
-        <label htmlFor="constraints-input" className="block text-sm font-medium mb-2">
-          Scheduling Constraints (Optional)
-        </label>
+      {/* Input Container - bg-slate-50 rounded-xl p-4 */}
+      <div className="bg-slate-50 rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Sparkles className="h-4 w-4 text-teal-500" />
+          <label htmlFor="constraints-input" className="text-sm font-medium text-slate-700">
+            Scheduling Constraints (Optional)
+          </label>
+        </div>
         <Textarea
           id="constraints-input"
           data-testid="constraints-input"
           placeholder={EXAMPLE_CONSTRAINT}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          rows={3}
-          className="resize-none"
+          rows={2}
+          className="resize-none bg-white border-slate-200 rounded-lg text-slate-700 text-sm placeholder-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
         />
         <Button
           data-testid="parse-constraints-btn"
           onClick={handleParse}
           disabled={!inputText.trim() || parseConstraints.isPending}
-          className="mt-2"
-          variant="outline"
+          className="mt-3 text-teal-600 hover:text-teal-700 text-sm font-medium bg-transparent hover:bg-teal-50 border-0 shadow-none p-0 h-auto"
+          variant="ghost"
         >
           {parseConstraints.isPending ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="mr-2 h-4 w-4 animate-spin text-teal-500" />
               Parsing...
             </>
           ) : (
-            'Parse Constraints'
+            <>
+              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+              Add Constraint
+            </>
           )}
         </Button>
       </div>
 
-      {/* Parsed Constraints */}
+      {/* Parsed Constraints - Chips */}
       {constraints.length > 0 && (
         <div data-testid="parsed-constraints-section">
-          <p className="text-sm font-medium mb-2">Active Constraints:</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+            Active Constraints:
+          </p>
           <div className="flex flex-wrap gap-2">
             {constraints.map((constraint, index) => (
-              <Badge
+              <div
                 key={index}
                 data-testid={`parsed-constraint-${index}`}
-                className={`${getConstraintColor(constraint.type)} flex items-center gap-2`}
+                className="bg-white px-3 py-1.5 rounded-full text-sm border border-slate-200 flex items-center gap-2 text-slate-700"
               >
                 <span>{constraint.description}</span>
                 <button
-                  data-testid={`remove-constraint-${index}`}
+                  data-testid={`remove-constraint-btn`}
                   onClick={() => handleRemoveConstraint(index)}
-                  className="hover:bg-black/10 rounded-full p-0.5"
+                  className="text-slate-400 hover:text-slate-600 transition-colors"
                   aria-label="Remove constraint"
                 >
-                  <X className="h-3 w-3" />
+                  <X className="h-3.5 w-3.5" />
                 </button>
-              </Badge>
+              </div>
             ))}
           </div>
         </div>
@@ -132,11 +125,11 @@ export function NaturalLanguageConstraintsInput({
 
       {/* Validation Errors */}
       {unparseable.length > 0 && (
-        <Alert variant="destructive" data-testid="unparseable-text-alert">
-          <AlertCircle className="h-4 w-4" />
+        <Alert variant="destructive" data-testid="unparseable-text-alert" className="bg-white rounded-xl shadow-sm border-l-4 border-l-red-400 border-t-slate-100 border-r-slate-100 border-b-slate-100">
+          <AlertCircle className="h-4 w-4 text-red-500" />
           <AlertDescription>
-            <p className="font-medium mb-1">Could not parse:</p>
-            <ul className="list-disc list-inside text-sm">
+            <p className="font-medium text-slate-800 mb-1">Could not parse:</p>
+            <ul className="list-disc list-inside text-sm text-slate-500">
               {unparseable.map((text, index) => (
                 <li key={index}>{text}</li>
               ))}
@@ -147,11 +140,11 @@ export function NaturalLanguageConstraintsInput({
 
       {/* Invalid Constraints */}
       {constraints.some((c) => !c.is_valid) && (
-        <Alert variant="destructive" data-testid="invalid-constraints-alert">
-          <AlertCircle className="h-4 w-4" />
+        <Alert variant="destructive" data-testid="invalid-constraints-alert" className="bg-white rounded-xl shadow-sm border-l-4 border-l-amber-400 border-t-slate-100 border-r-slate-100 border-b-slate-100">
+          <AlertCircle className="h-4 w-4 text-amber-500" />
           <AlertDescription>
-            <p className="font-medium mb-1">Invalid constraints:</p>
-            <ul className="list-disc list-inside text-sm">
+            <p className="font-medium text-slate-800 mb-1">Invalid constraints:</p>
+            <ul className="list-disc list-inside text-sm text-slate-500">
               {constraints
                 .filter((c) => !c.is_valid)
                 .map((c, index) => (
@@ -165,9 +158,9 @@ export function NaturalLanguageConstraintsInput({
       )}
 
       {parseConstraints.isError && (
-        <Alert variant="destructive" data-testid="parse-error-alert">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
+        <Alert variant="destructive" data-testid="parse-error-alert" className="bg-white rounded-xl shadow-sm border-l-4 border-l-red-400 border-t-slate-100 border-r-slate-100 border-b-slate-100">
+          <AlertCircle className="h-4 w-4 text-red-500" />
+          <AlertDescription className="text-slate-500 text-sm">
             Failed to parse constraints. Please try again or contact support if the issue persists.
           </AlertDescription>
         </Alert>

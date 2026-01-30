@@ -1,13 +1,12 @@
 /**
  * Morning Briefing component.
  * Displays personalized daily summary with overnight requests, schedule, and pending actions.
+ * Redesigned with amber alert styling per UI redesign spec.
  */
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
-import { Sun, Moon, Sunrise, Sunset, ArrowRight, AlertCircle, Clock, DollarSign, MessageSquare } from 'lucide-react';
-import { useDashboardMetrics, useJobsByStatus, useTodaySchedule } from '@/features/dashboard/hooks';
+import { Sun, Moon, Sunrise, Sunset, ArrowRight, AlertCircle } from 'lucide-react';
+import { useJobsByStatus } from '@/features/dashboard/hooks';
 
 function getGreeting(): { text: string; icon: typeof Sun } {
   const hour = new Date().getHours();
@@ -19,131 +18,50 @@ function getGreeting(): { text: string; icon: typeof Sun } {
 }
 
 export function MorningBriefing() {
-  const { data: metrics } = useDashboardMetrics();
   const { data: jobsByStatus } = useJobsByStatus();
-  const { data: todaySchedule } = useTodaySchedule();
 
   const greeting = getGreeting();
-  const GreetingIcon = greeting.icon;
+  const overnightRequests = jobsByStatus?.requested ?? 0;
 
-  const overnightRequests = (jobsByStatus?.requested ?? 0);
-  const unconfirmedAppointments = (todaySchedule?.upcoming_appointments ?? 0);
-  const pendingCommunications = 0; // TODO: Get from communications API
-  const outstandingInvoices = 0; // TODO: Get from invoices API
+  // Only show if there are overnight requests
+  if (overnightRequests === 0) {
+    return null;
+  }
 
   return (
-    <Card data-testid="morning-briefing" className="border-primary/20">
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          <GreetingIcon className="h-5 w-5 text-primary" />
-          <CardTitle className="text-xl" data-testid="greeting">
-            {greeting.text}, Viktor!
-          </CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Overnight Requests */}
-        <div data-testid="overnight-requests" className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-yellow-600" />
-              <span className="font-medium">Overnight Requests</span>
-            </div>
-            <span className="text-2xl font-bold text-yellow-600">{overnightRequests}</span>
-          </div>
-          {overnightRequests > 0 && (
-            <div className="text-sm text-muted-foreground pl-6">
-              {jobsByStatus?.requested ?? 0} need categorization
-            </div>
-          )}
+    <div
+      data-testid="morning-briefing"
+      className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-amber-400"
+    >
+      <div className="flex items-start gap-4">
+        {/* Icon container - amber styling */}
+        <div className="bg-amber-100 p-2 rounded-full text-amber-600 flex-shrink-0">
+          <AlertCircle className="h-5 w-5" />
         </div>
 
-        {/* Today's Schedule */}
-        <div data-testid="today-schedule" className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-blue-600" />
-              <span className="font-medium">Today's Schedule</span>
-            </div>
-            <span className="text-2xl font-bold text-blue-600">
-              {todaySchedule?.total_appointments ?? 0}
-            </span>
-          </div>
-          <div className="text-sm text-muted-foreground pl-6 space-y-1">
-            <div>{todaySchedule?.completed_appointments ?? 0} completed</div>
-            <div>{todaySchedule?.in_progress_appointments ?? 0} in progress</div>
-            <div>{todaySchedule?.upcoming_appointments ?? 0} upcoming</div>
-          </div>
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          {/* Title */}
+          <h4 className="text-slate-800 font-medium" data-testid="greeting">
+            {greeting.text}, Viktor! You have {overnightRequests} overnight request{overnightRequests !== 1 ? 's' : ''}
+          </h4>
+
+          {/* Description */}
+          <p className="text-slate-500 text-sm mt-1">
+            {overnightRequests} job{overnightRequests !== 1 ? 's' : ''} need{overnightRequests === 1 ? 's' : ''} categorization before scheduling
+          </p>
         </div>
 
-        {/* Unconfirmed Appointments */}
-        {unconfirmedAppointments > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-orange-600" />
-                <span className="font-medium">Unconfirmed</span>
-              </div>
-              <span className="text-2xl font-bold text-orange-600">{unconfirmedAppointments}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Pending Communications */}
-        <div data-testid="pending-communications" className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-purple-600" />
-              <span className="font-medium">Pending Messages</span>
-            </div>
-            <span className="text-2xl font-bold text-purple-600">{pendingCommunications}</span>
-          </div>
-        </div>
-
-        {/* Outstanding Invoices */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-green-600" />
-              <span className="font-medium">Outstanding Invoices</span>
-            </div>
-            <span className="text-2xl font-bold text-green-600">{outstandingInvoices}</span>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div data-testid="quick-actions" className="pt-2 space-y-2">
-          <div className="text-sm font-medium text-muted-foreground">Quick Actions</div>
-          <div className="flex flex-wrap gap-2">
-            {overnightRequests > 0 && (
-              <Button asChild variant="outline" size="sm" data-testid="review-requests-btn">
-                <Link to="/jobs?status=requested">
-                  Review Requests <ArrowRight className="ml-1 h-3 w-3" />
-                </Link>
-              </Button>
-            )}
-            <Button asChild variant="outline" size="sm" data-testid="morning-briefing-view-schedule-btn">
-              <Link to="/schedule">
-                View Schedule <ArrowRight className="ml-1 h-3 w-3" />
-              </Link>
-            </Button>
-            {pendingCommunications > 0 && (
-              <Button asChild variant="outline" size="sm" data-testid="send-confirmations-btn">
-                <Link to="/communications">
-                  Send Confirmations <ArrowRight className="ml-1 h-3 w-3" />
-                </Link>
-              </Button>
-            )}
-            {outstandingInvoices > 0 && (
-              <Button asChild variant="outline" size="sm" data-testid="view-invoices-btn">
-                <Link to="/invoices">
-                  View Invoices <ArrowRight className="ml-1 h-3 w-3" />
-                </Link>
-              </Button>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+        {/* Action button - amber styling */}
+        <Link
+          to="/jobs?status=requested"
+          data-testid="review-requests-btn"
+          className="text-amber-600 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 flex-shrink-0"
+        >
+          Review
+          <ArrowRight className="h-3 w-3" />
+        </Link>
+      </div>
+    </div>
   );
 }

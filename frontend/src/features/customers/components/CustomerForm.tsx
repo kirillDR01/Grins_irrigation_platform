@@ -20,7 +20,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { X, Plus } from 'lucide-react';
 import { useCreateCustomer, useUpdateCustomer } from '../hooks';
@@ -154,25 +154,23 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} data-testid="customer-form">
-        <div className="space-y-6">
-          {/* Basic Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Basic Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+      <form onSubmit={form.handleSubmit(onSubmit)} data-testid="customer-form" className="p-6 space-y-6">
+        {/* Basic Information */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Basic Information</h3>
+          <Card className="bg-white rounded-2xl shadow-sm border border-slate-100">
+            <CardContent className="p-6 space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="first_name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>First Name *</FormLabel>
+                      <FormLabel className="text-sm font-medium text-slate-700">First Name *</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="John" data-testid="first-name-input" />
+                        <Input {...field} placeholder="John" data-testid="first-name-input" className="border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
                       </FormControl>
-                      <FormMessage />
+                      <FormMessage className="text-sm text-red-500 mt-1" data-testid="validation-error" />
                     </FormItem>
                   )}
                 />
@@ -181,11 +179,11 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
                   name="last_name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Last Name *</FormLabel>
+                      <FormLabel className="text-sm font-medium text-slate-700">Last Name *</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Doe" data-testid="last-name-input" />
+                        <Input {...field} placeholder="Doe" data-testid="last-name-input" className="border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
                       </FormControl>
-                      <FormMessage />
+                      <FormMessage className="text-sm text-red-500 mt-1" data-testid="validation-error" />
                     </FormItem>
                   )}
                 />
@@ -197,16 +195,17 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
                   name="phone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phone *</FormLabel>
+                      <FormLabel className="text-sm font-medium text-slate-700">Phone *</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
                           type="tel"
                           placeholder="612-555-1234"
                           data-testid="phone-input"
+                          className="border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
                         />
                       </FormControl>
-                      <FormMessage />
+                      <FormMessage className="text-sm text-red-500 mt-1" data-testid="phone-error" />
                     </FormItem>
                   )}
                 />
@@ -215,16 +214,17 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email</FormLabel>
+                      <FormLabel className="text-sm font-medium text-slate-700">Email</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
                           type="email"
                           placeholder="john@example.com"
                           data-testid="email-input"
+                          className="border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
                         />
                       </FormControl>
-                      <FormMessage />
+                      <FormMessage className="text-sm text-red-500 mt-1" data-testid="email-error" />
                     </FormItem>
                   )}
                 />
@@ -235,13 +235,13 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
                 name="lead_source"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Lead Source</FormLabel>
+                    <FormLabel className="text-sm font-medium text-slate-700">Lead Source</FormLabel>
                     <Select
                       onValueChange={field.onChange}
                       defaultValue={field.value ?? undefined}
                     >
                       <FormControl>
-                        <SelectTrigger data-testid="lead-source-select">
+                        <SelectTrigger data-testid="lead-source-select" className="border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
                           <SelectValue placeholder="Select lead source" />
                         </SelectTrigger>
                       </FormControl>
@@ -253,22 +253,22 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
                         ))}
                       </SelectContent>
                     </Select>
-                    <FormMessage />
+                    <FormMessage className="text-sm text-red-500 mt-1" />
                   </FormItem>
                 )}
               />
             </CardContent>
           </Card>
+        </div>
 
           {/* Customer Flags */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Customer Flags</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Customer Flags</h3>
+            <Card className="bg-white rounded-2xl shadow-sm border border-slate-100">
+              <CardContent className="p-6 space-y-6">
               {/* Common Flags */}
               <div>
-                <h4 className="text-sm font-medium mb-3">Common Flags</h4>
+                <h4 className="text-sm font-medium text-slate-700 mb-3">Common Flags</h4>
                 <div className="grid gap-4 md:grid-cols-3">
                   <FormField
                     control={form.control}
@@ -280,11 +280,11 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
                             type="checkbox"
                             checked={field.value}
                             onChange={field.onChange}
-                            className="h-4 w-4 rounded border-gray-300"
+                            className="h-4 w-4 rounded border-slate-300 text-teal-500 focus:ring-2 focus:ring-teal-100"
                             data-testid="is-priority-checkbox"
                           />
                         </FormControl>
-                        <FormLabel className="font-normal">Priority Customer</FormLabel>
+                        <FormLabel className="font-normal text-slate-600">Priority Customer</FormLabel>
                       </FormItem>
                     )}
                   />
@@ -298,11 +298,11 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
                             type="checkbox"
                             checked={field.value}
                             onChange={field.onChange}
-                            className="h-4 w-4 rounded border-gray-300"
+                            className="h-4 w-4 rounded border-slate-300 text-teal-500 focus:ring-2 focus:ring-teal-100"
                             data-testid="is-red-flag-checkbox"
                           />
                         </FormControl>
-                        <FormLabel className="font-normal">Red Flag</FormLabel>
+                        <FormLabel className="font-normal text-slate-600">Red Flag</FormLabel>
                       </FormItem>
                     )}
                   />
@@ -316,11 +316,11 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
                             type="checkbox"
                             checked={field.value}
                             onChange={field.onChange}
-                            className="h-4 w-4 rounded border-gray-300"
+                            className="h-4 w-4 rounded border-slate-300 text-teal-500 focus:ring-2 focus:ring-teal-100"
                             data-testid="is-slow-payer-checkbox"
                           />
                         </FormControl>
-                        <FormLabel className="font-normal">Slow Payer</FormLabel>
+                        <FormLabel className="font-normal text-slate-600">Slow Payer</FormLabel>
                       </FormItem>
                     )}
                   />
@@ -329,7 +329,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
 
               {/* Custom Flags */}
               <div>
-                <h4 className="text-sm font-medium mb-3">Custom Flags</h4>
+                <h4 className="text-sm font-medium text-slate-700 mb-3">Custom Flags</h4>
                 <div className="space-y-3">
                   {/* Display existing custom flags */}
                   {customFlags.length > 0 && (
@@ -338,14 +338,14 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
                         <Badge
                           key={flag}
                           variant="secondary"
-                          className="flex items-center gap-1 px-2 py-1"
+                          className="flex items-center gap-1 px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-medium"
                           data-testid={`custom-flag-${flag.toLowerCase().replace(/\s+/g, '-')}`}
                         >
                           {flag}
                           <button
                             type="button"
                             onClick={() => removeCustomFlag(flag)}
-                            className="ml-1 hover:text-destructive"
+                            className="ml-1 text-slate-400 hover:text-red-500 transition-colors"
                             data-testid={`remove-flag-${flag.toLowerCase().replace(/\s+/g, '-')}`}
                           >
                             <X className="h-3 w-3" />
@@ -362,7 +362,7 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
                       onChange={(e) => setNewCustomFlag(e.target.value)}
                       onKeyDown={handleKeyDown}
                       placeholder="Enter custom flag (e.g., VIP, Referral Partner)"
-                      className="flex-1"
+                      className="flex-1 border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
                       data-testid="custom-flag-input"
                     />
                     <Button
@@ -371,89 +371,101 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
                       size="sm"
                       onClick={addCustomFlag}
                       disabled={!newCustomFlag.trim()}
+                      className="border-slate-200 hover:bg-slate-50 text-slate-700"
                       data-testid="add-custom-flag-btn"
                     >
                       <Plus className="h-4 w-4 mr-1" />
                       Add
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-slate-400">
                     Add any custom flags to categorize this customer. Press Enter or click Add.
                   </p>
                 </div>
               </div>
             </CardContent>
           </Card>
+        </div>
 
           {/* Communication Preferences */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Communication Preferences</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="sms_opt_in"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center space-x-2 space-y-0">
-                      <FormControl>
-                        <input
-                          type="checkbox"
-                          checked={field.value}
-                          onChange={field.onChange}
-                          className="h-4 w-4 rounded border-gray-300"
-                          data-testid="sms-opt-in-checkbox"
-                        />
-                      </FormControl>
-                      <div>
-                        <FormLabel className="font-normal">SMS Notifications</FormLabel>
-                        <FormDescription>
-                          Receive appointment reminders via text
-                        </FormDescription>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="email_opt_in"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center space-x-2 space-y-0">
-                      <FormControl>
-                        <input
-                          type="checkbox"
-                          checked={field.value}
-                          onChange={field.onChange}
-                          className="h-4 w-4 rounded border-gray-300"
-                          data-testid="email-opt-in-checkbox"
-                        />
-                      </FormControl>
-                      <div>
-                        <FormLabel className="font-normal">Email Notifications</FormLabel>
-                        <FormDescription>
-                          Receive invoices and updates via email
-                        </FormDescription>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Communication Preferences</h3>
+            <Card className="bg-white rounded-2xl shadow-sm border border-slate-100">
+              <CardContent className="p-6 space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="sms_opt_in"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center space-x-2 space-y-0">
+                        <FormControl>
+                          <input
+                            type="checkbox"
+                            checked={field.value}
+                            onChange={field.onChange}
+                            className="h-4 w-4 rounded border-slate-300 text-teal-500 focus:ring-2 focus:ring-teal-100"
+                            data-testid="sms-opt-in-checkbox"
+                          />
+                        </FormControl>
+                        <div>
+                          <FormLabel className="font-normal text-slate-700">SMS Notifications</FormLabel>
+                          <FormDescription className="text-xs text-slate-400">
+                            Receive appointment reminders via text
+                          </FormDescription>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="email_opt_in"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center space-x-2 space-y-0">
+                        <FormControl>
+                          <input
+                            type="checkbox"
+                            checked={field.value}
+                            onChange={field.onChange}
+                            className="h-4 w-4 rounded border-slate-300 text-teal-500 focus:ring-2 focus:ring-teal-100"
+                            data-testid="email-opt-in-checkbox"
+                          />
+                        </FormControl>
+                        <div>
+                          <FormLabel className="font-normal text-slate-700">Email Notifications</FormLabel>
+                          <FormDescription className="text-xs text-slate-400">
+                            Receive invoices and updates via email
+                          </FormDescription>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Form Actions */}
-          <div className="flex justify-end gap-4">
+          <div className="flex justify-end gap-4 pt-4">
             {onCancel && (
-              <Button type="button" variant="outline" onClick={onCancel}>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={onCancel}
+                className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-4 py-2.5 rounded-lg transition-all"
+                data-testid="cancel-btn"
+              >
                 Cancel
               </Button>
             )}
-            <Button type="submit" disabled={isPending} data-testid="submit-btn">
+            <Button 
+              type="submit" 
+              disabled={isPending} 
+              data-testid="submit-btn"
+              className="bg-teal-500 hover:bg-teal-600 text-white px-5 py-2.5 rounded-lg shadow-sm shadow-teal-200 transition-all"
+            >
               {isPending ? 'Saving...' : isEditing ? 'Update Customer' : 'Create Customer'}
             </Button>
           </div>
-        </div>
       </form>
     </Form>
   );

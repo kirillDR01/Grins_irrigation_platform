@@ -6,7 +6,6 @@ import { JobForm } from '@/features/jobs/components/JobForm';
 import { JobDetail } from '@/features/jobs/components/JobDetail';
 import { useAICategorize } from '@/features/ai/hooks/useAICategorize';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -15,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Sparkles, CheckCircle, AlertTriangle, X } from 'lucide-react';
+import { Plus, Sparkles, AlertTriangle } from 'lucide-react';
 
 export function JobsPage() {
   const { id } = useParams<{ id: string }>();
@@ -84,21 +83,24 @@ export function JobsPage() {
 
       {/* AI Categorize Dialog */}
       <Dialog open={showCategorizeDialog} onOpenChange={setShowCategorizeDialog}>
-        <DialogContent className="max-w-2xl" aria-describedby="categorize-job-description">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5" />
-              AI Job Categorization
-            </DialogTitle>
-            <p id="categorize-job-description" className="text-sm text-muted-foreground">
-              Enter a job description and let AI categorize it for you.
-            </p>
-          </DialogHeader>
+        <DialogContent className="max-w-xl p-0 overflow-hidden" aria-describedby="categorize-job-description" data-testid="ai-categorize-modal">
+          {/* Gradient Header */}
+          <div className="bg-gradient-to-r from-teal-500 to-teal-600 text-white p-6 rounded-t-2xl">
+            <DialogHeader className="space-y-2">
+              <DialogTitle className="flex items-center gap-2 text-white text-lg font-bold">
+                <Sparkles className="h-5 w-5" />
+                AI Job Categorization
+              </DialogTitle>
+              <p id="categorize-job-description" className="text-teal-100 text-sm">
+                Enter a job description and let AI categorize it for you.
+              </p>
+            </DialogHeader>
+          </div>
           
-          <div className="space-y-4">
+          <div className="p-6 space-y-4">
             {/* Input Section */}
             <div>
-              <label htmlFor="job-description" className="block text-sm font-medium mb-2">
+              <label htmlFor="job-description" className="block text-sm font-medium text-slate-700 mb-2">
                 Job Description
               </label>
               <textarea
@@ -106,7 +108,7 @@ export function JobsPage() {
                 value={jobDescription}
                 onChange={(e) => setJobDescription(e.target.value)}
                 placeholder="e.g., Broken sprinkler head in front yard, water leaking..."
-                className="w-full px-3 py-2 border rounded-md min-h-[100px]"
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-700 text-sm placeholder-slate-400 min-h-[100px] focus:border-teal-500 focus:ring-2 focus:ring-teal-100 focus:outline-none transition-all"
                 data-testid="job-description-input"
               />
             </div>
@@ -114,73 +116,112 @@ export function JobsPage() {
             <Button
               onClick={handleCategorizeJob}
               disabled={!jobDescription.trim() || isCategorizing}
-              className="w-full"
-              data-testid="categorize-btn"
+              className="w-full bg-teal-500 hover:bg-teal-600 text-white"
+              data-testid="analyze-btn"
             >
-              {isCategorizing ? 'Categorizing...' : 'Categorize Job'}
+              {isCategorizing ? 'Analyzing...' : 'Analyze Job'}
             </Button>
 
             {/* Error State */}
             {categorizeError && (
-              <Alert variant="destructive">
+              <Alert variant="destructive" className="border-l-4 border-red-400">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>{categorizeError}</AlertDescription>
               </Alert>
             )}
 
-            {/* Result Section */}
+            {/* AI Suggestion Section */}
             {categorization && !isCategorizing && (
-              <Card data-testid="categorization-result">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    Categorization Result
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">Category:</span>
-                    <Badge>{categorization.category}</Badge>
+              <div className="bg-teal-50 rounded-xl p-4 border border-teal-100" data-testid="ai-suggestion">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="bg-teal-100 p-2 rounded-full">
+                    <Sparkles className="h-4 w-4 text-teal-600" />
                   </div>
+                  <span className="font-semibold text-slate-800">AI Suggestion</span>
+                </div>
+                
+                <div className="space-y-3">
+                  {/* Category Badge */}
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">Confidence:</span>
-                    <Badge variant={categorization.confidence_score >= 70 ? 'default' : 'secondary'}>
-                      {categorization.confidence_score}%
-                    </Badge>
+                    <span className="text-sm font-medium text-slate-600">Category:</span>
+                    <Badge className="bg-teal-500 text-white">{categorization.category}</Badge>
                   </div>
+                  
+                  {/* Confidence Indicator */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-600">Confidence:</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full ${
+                            categorization.confidence_score >= 80 ? 'bg-emerald-500' : 
+                            categorization.confidence_score >= 60 ? 'bg-amber-500' : 'bg-red-500'
+                          }`}
+                          style={{ width: `${categorization.confidence_score}%` }}
+                        />
+                      </div>
+                      <span className={`text-sm font-medium ${
+                        categorization.confidence_score >= 80 ? 'text-emerald-600' : 
+                        categorization.confidence_score >= 60 ? 'text-amber-600' : 'text-red-600'
+                      }`}>
+                        {categorization.confidence_score}%
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Reasoning */}
                   <div>
-                    <span className="font-medium">Reasoning:</span>
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <span className="text-sm font-medium text-slate-600">Reasoning:</span>
+                    <p className="text-sm text-slate-500 mt-1">
                       {categorization.reasoning}
                     </p>
                   </div>
+                  
+                  {/* Suggested Services */}
                   {categorization.suggested_services.length > 0 && (
                     <div>
-                      <span className="font-medium">Suggested Services:</span>
+                      <span className="text-sm font-medium text-slate-600">Suggested Services:</span>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {categorization.suggested_services.map((service, idx) => (
-                          <Badge key={idx} variant="outline">{service}</Badge>
+                          <Badge key={idx} variant="outline" className="bg-white border-slate-200 text-slate-600">
+                            {service}
+                          </Badge>
                         ))}
                       </div>
                     </div>
                   )}
+                  
+                  {/* Review Warning */}
                   {categorization.needs_review && (
-                    <Alert>
-                      <AlertTriangle className="h-4 w-4" />
-                      <AlertDescription>
+                    <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg border border-amber-100">
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                      <span className="text-sm text-amber-700">
                         This categorization needs manual review due to low confidence.
-                      </AlertDescription>
-                    </Alert>
+                      </span>
+                    </div>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             )}
 
-            <div className="flex justify-end">
-              <Button variant="outline" onClick={handleCloseCategorization}>
-                <X className="h-4 w-4 mr-2" />
-                Close
+            {/* Footer Buttons */}
+            <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+              <Button 
+                variant="outline" 
+                onClick={handleCloseCategorization} 
+                className="border-slate-200 text-slate-700 hover:bg-slate-50"
+                data-testid="close-modal-btn"
+              >
+                Cancel
               </Button>
+              {categorization && (
+                <Button 
+                  className="bg-teal-500 hover:bg-teal-600 text-white"
+                  data-testid="apply-suggestion-btn"
+                >
+                  Apply Suggestion
+                </Button>
+              )}
             </div>
           </div>
         </DialogContent>

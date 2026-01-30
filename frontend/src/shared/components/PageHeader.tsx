@@ -13,11 +13,11 @@ export function PageHeader({ title, description, action }: PageHeaderProps) {
       data-testid="page-header"
     >
       <div>
-        <h1 className="text-2xl font-bold tracking-tight" data-testid="page-title">
+        <h1 className="text-2xl font-bold text-slate-800" data-testid="page-title">
           {title}
         </h1>
         {description && (
-          <div className="text-muted-foreground" data-testid="page-description">
+          <div className="text-slate-500 mt-1" data-testid="page-description">
             {description}
           </div>
         )}

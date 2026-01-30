@@ -127,22 +127,38 @@ export function ScheduleGenerationPage() {
   };
 
   return (
-    <div data-testid="schedule-generation-page" className="space-y-6">
+    <div data-testid="schedule-generation-page" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <PageHeader
         title="Generate Schedule"
-        description="Optimize routes and generate schedules for field staff"
+        description={`Optimize routes and generate schedules for ${format(selectedDate, 'EEEE, MMMM d, yyyy')}`}
       />
 
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* Date Selection Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Select Date</CardTitle>
-            <CardDescription>
-              Choose a date to generate the schedule
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      <div className="grid gap-8 grid-cols-1 lg:grid-cols-3">
+        {/* Left Column (2/3): Job Selection and Preview */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Jobs Ready to Schedule Preview */}
+          <JobsReadyToSchedulePreview
+            jobs={jobsData?.jobs ?? []}
+            isLoading={jobsLoading}
+            error={jobsError}
+            excludedJobIds={excludedJobIds}
+            onToggleExclude={handleToggleExclude}
+            onSelectAll={handleSelectAll}
+            onDeselectAll={handleDeselectAll}
+          />
+        </div>
+
+        {/* Right Column (1/3): Generation Controls */}
+        <div className="space-y-6">
+          {/* Date Selection Card */}
+          <Card className="sticky top-4 bg-white rounded-2xl shadow-sm border border-slate-100">
+            <CardHeader>
+              <CardTitle>Generate Schedule</CardTitle>
+              <CardDescription>
+                Select date and configure constraints
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -206,53 +222,37 @@ export function ScheduleGenerationPage() {
               </Button>
             </div>
           </CardContent>
-        </Card>
+          </Card>
 
-        {/* Capacity Card */}
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle>Capacity Overview</CardTitle>
-            <CardDescription>
-              Staff availability and job demand for {format(selectedDate, 'MMM d')}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+          {/* Capacity Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Capacity Overview</CardTitle>
+              <CardDescription>
+                Staff availability for {format(selectedDate, 'MMM d')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
             {capacityLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : capacity ? (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold" data-testid="available-staff">
                     {capacity.available_staff}
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    Available Staff
-                  </div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold" data-testid="total-staff">
-                    {capacity.total_staff}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Total Staff
+                  <div className="text-xs text-muted-foreground">
+                    Available
                   </div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold" data-testid="capacity-hours">
                     {Math.round(capacity.total_capacity_minutes / 60)}h
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    Total Capacity
-                  </div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold" data-testid="remaining-hours">
-                    {Math.round(capacity.remaining_capacity_minutes / 60)}h
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Remaining
+                  <div className="text-xs text-muted-foreground">
+                    Capacity
                   </div>
                 </div>
               </div>
@@ -263,21 +263,11 @@ export function ScheduleGenerationPage() {
             )}
           </CardContent>
         </Card>
+        </div>
       </div>
 
       {/* Scheduling Help Assistant */}
       <SchedulingHelpAssistant />
-
-      {/* Jobs Ready to Schedule Preview */}
-      <JobsReadyToSchedulePreview
-        jobs={jobsData?.jobs ?? []}
-        isLoading={jobsLoading}
-        error={jobsError}
-        excludedJobIds={excludedJobIds}
-        onToggleExclude={handleToggleExclude}
-        onSelectAll={handleSelectAll}
-        onDeselectAll={handleDeselectAll}
-      />
 
       {/* View Toggle and Results Section */}
       {results && (
@@ -285,21 +275,27 @@ export function ScheduleGenerationPage() {
           {/* View Toggle Buttons */}
           <div className="flex justify-between items-center">
             <ClearResultsButton onClear={() => setResults(null)} />
-            <div className="flex gap-2">
+            <div className="bg-slate-100 rounded-lg p-1 flex" data-testid="view-toggle">
               <Button
-                variant={viewMode === 'list' ? 'default' : 'outline'}
+                variant={viewMode === 'list' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setViewMode('list')}
                 data-testid="view-toggle-list"
+                className={cn(
+                  viewMode === 'list' && 'bg-white shadow-sm'
+                )}
               >
                 <List className="mr-2 h-4 w-4" />
                 List
               </Button>
               <Button
-                variant={viewMode === 'map' ? 'default' : 'outline'}
+                variant={viewMode === 'map' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setViewMode('map')}
                 data-testid="view-toggle-map"
+                className={cn(
+                  viewMode === 'map' && 'bg-white shadow-sm'
+                )}
               >
                 <Map className="mr-2 h-4 w-4" />
                 Map
@@ -325,7 +321,7 @@ export function ScheduleGenerationPage() {
 
       {/* Error Display */}
       {(generateMutation.error || previewMutation.error) && (
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-red-200 bg-red-50 rounded-2xl shadow-sm">
           <CardContent className="pt-6">
             <p className="text-red-800" data-testid="error-message">
               {generateMutation.error?.message ||

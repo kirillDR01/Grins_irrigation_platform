@@ -29,6 +29,7 @@ interface ScheduleMapProps {
   selectedJobId: string | null;
   onJobSelect: (jobId: string | null) => void;
   showRoutes: boolean;
+  isLoading?: boolean;
 }
 
 export function ScheduleMap({
@@ -36,6 +37,7 @@ export function ScheduleMap({
   selectedJobId,
   onJobSelect,
   showRoutes: initialShowRoutes,
+  isLoading = false,
 }: ScheduleMapProps) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [showRoutes, setShowRoutes] = useState(initialShowRoutes);
@@ -168,35 +170,50 @@ export function ScheduleMap({
         <MissingCoordsWarning count={missingCoordsCount} />
       )}
 
-      {/* Controls Row - always visible so user can toggle filters back */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        {/* Filters */}
-        <MapFilters
-          assignments={assignments}
-          visibleStaff={visibleStaff}
-          onStaffToggle={handleStaffToggle}
-        />
-
-        {/* Show Routes Toggle */}
-        <div className="flex items-center gap-2">
-          <Switch
-            id="show-routes"
-            checked={showRoutes}
-            onCheckedChange={setShowRoutes}
-            data-testid="show-routes-toggle"
-          />
-          <Label htmlFor="show-routes">Show Routes</Label>
-        </div>
-
-        {/* Map Controls */}
-        <MapControls onFitBounds={handleFitBounds} />
-      </div>
-
       {/* Map or Empty State */}
       {allFiltered ? (
         <MapEmptyState type="all-filtered" />
       ) : (
-        <div className="relative">
+        <div className="relative rounded-2xl overflow-hidden shadow-sm border border-slate-100">
+          {/* Loading Overlay */}
+          {isLoading && (
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-12 h-12 border-4 border-teal-200 border-t-teal-500 rounded-full animate-spin" />
+                <p className="text-slate-600 text-sm font-medium">Loading map...</p>
+              </div>
+            </div>
+          )}
+
+          {/* Filter Bar Overlay */}
+          <div className="absolute top-4 left-4 z-10">
+            <MapFilters
+              assignments={assignments}
+              visibleStaff={visibleStaff}
+              onStaffToggle={handleStaffToggle}
+            />
+          </div>
+
+          {/* Map Controls Overlay */}
+          <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
+            <MapControls onFitBounds={handleFitBounds} />
+            {/* Show Routes Toggle */}
+            <div className="flex items-center gap-2 bg-white rounded-lg shadow-md border border-slate-100 p-2">
+              <Switch
+                id="show-routes"
+                checked={showRoutes}
+                onCheckedChange={setShowRoutes}
+                data-testid="show-routes-toggle"
+              />
+              <Label htmlFor="show-routes" className="text-sm">Show Routes</Label>
+            </div>
+          </div>
+
+          {/* Legend Overlay */}
+          <div className="absolute bottom-4 left-4 z-10">
+            <MapLegend assignments={filteredAssignments} />
+          </div>
+
           <GoogleMap
             mapContainerStyle={containerStyle}
             center={DEFAULT_CENTER}
@@ -256,9 +273,6 @@ export function ScheduleMap({
           </GoogleMap>
         </div>
       )}
-
-      {/* Legend */}
-      <MapLegend assignments={filteredAssignments} />
 
       {/* Mobile Job Sheet */}
       {selectedJobInfo && (

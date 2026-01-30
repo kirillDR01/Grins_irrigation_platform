@@ -8,7 +8,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, MoreHorizontal, Calendar, DollarSign } from 'lucide-react';
+import { ArrowUpDown, MoreHorizontal, Search, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -71,6 +71,11 @@ function formatDate(dateStr: string): string {
   });
 }
 
+function isOverdue(dueDate: string, status: InvoiceStatus): boolean {
+  if (status === 'paid' || status === 'cancelled') return false;
+  return new Date(dueDate) < new Date();
+}
+
 export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [params, setParams] = useState<InvoiceListParams>({
@@ -78,6 +83,7 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
     page_size: 20,
   });
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
 
@@ -95,9 +101,10 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          className="text-slate-500 text-xs uppercase tracking-wider font-medium hover:bg-transparent hover:text-slate-700"
         >
           Invoice #
-          <ArrowUpDown className="ml-2 h-4 w-4" />
+          <ArrowUpDown className="ml-2 h-3 w-3" />
         </Button>
       ),
       cell: ({ row }) => {
@@ -105,7 +112,7 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
         return (
           <Link
             to={`/invoices/${invoice.id}`}
-            className="font-medium hover:underline"
+            className="font-medium text-slate-700 hover:text-teal-600 transition-colors"
             data-testid={`invoice-number-${invoice.id}`}
           >
             {invoice.invoice_number}
@@ -115,9 +122,13 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
     },
     {
       accessorKey: 'customer_id',
-      header: 'Customer',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
+          Customer
+        </span>
+      ),
       cell: ({ row }) => (
-        <span className="text-muted-foreground">
+        <span className="text-sm text-slate-600">
           {row.original.customer_id.slice(0, 8)}...
         </span>
       ),
@@ -128,22 +139,31 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          className="text-slate-500 text-xs uppercase tracking-wider font-medium hover:bg-transparent hover:text-slate-700"
         >
           Amount
-          <ArrowUpDown className="ml-2 h-4 w-4" />
+          <ArrowUpDown className="ml-2 h-3 w-3" />
         </Button>
       ),
       cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <DollarSign className="h-4 w-4 text-muted-foreground" />
-          <span className="font-medium">{formatCurrency(row.original.total_amount)}</span>
-        </div>
+        <span className="font-semibold text-slate-800">
+          {formatCurrency(row.original.total_amount)}
+        </span>
       ),
     },
     {
       accessorKey: 'status',
-      header: 'Status',
-      cell: ({ row }) => <InvoiceStatusBadge status={row.original.status} />,
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
+          Status
+        </span>
+      ),
+      cell: ({ row }) => (
+        <InvoiceStatusBadge 
+          status={row.original.status} 
+          data-testid="invoice-status-badge"
+        />
+      ),
     },
     {
       accessorKey: 'due_date',
@@ -151,20 +171,29 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          className="text-slate-500 text-xs uppercase tracking-wider font-medium hover:bg-transparent hover:text-slate-700"
         >
           Due Date
-          <ArrowUpDown className="ml-2 h-4 w-4" />
+          <ArrowUpDown className="ml-2 h-3 w-3" />
         </Button>
       ),
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-          <span>{formatDate(row.original.due_date)}</span>
-        </div>
-      ),
+      cell: ({ row }) => {
+        const invoice = row.original;
+        const overdue = isOverdue(invoice.due_date, invoice.status);
+        return (
+          <span className={`text-sm ${overdue ? 'text-red-500 font-medium' : 'text-slate-500'}`}>
+            {formatDate(invoice.due_date)}
+          </span>
+        );
+      },
     },
     {
       id: 'actions',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
+          Actions
+        </span>
+      ),
       cell: ({ row }) => {
         const invoice = row.original;
         return (
@@ -172,13 +201,13 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 p-0 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
                 data-testid={`invoice-actions-${invoice.id}`}
               >
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" data-testid="dropdown-menu">
               <DropdownMenuItem asChild>
                 <Link to={`/invoices/${invoice.id}`}>View Details</Link>
               </DropdownMenuItem>
@@ -193,7 +222,7 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
               {onDelete && invoice.status === 'draft' && (
                 <DropdownMenuItem
                   onClick={() => onDelete(invoice)}
-                  className="text-destructive"
+                  className="text-red-600 focus:text-red-600"
                 >
                   Cancel
                 </DropdownMenuItem>
@@ -226,9 +255,23 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
 
   return (
     <div data-testid="invoice-list">
-      {/* Filters */}
-      <div className="flex flex-wrap gap-4 mb-4" data-testid="invoice-filters">
-        <div className="w-48">
+      {/* Table Container with Design System Styling */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        {/* Table Toolbar */}
+        <div className="p-4 border-b border-slate-100 flex flex-wrap gap-4" data-testid="invoice-filters">
+          {/* Search Input */}
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Search invoices..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 bg-slate-50 border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+              data-testid="invoice-search"
+            />
+          </div>
+
+          {/* Status Filter */}
           <Select
             value={statusFilter}
             onValueChange={(value) => {
@@ -236,10 +279,13 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
               setParams((p) => ({ ...p, page: 1 }));
             }}
           >
-            <SelectTrigger data-testid="invoice-filter-status">
+            <SelectTrigger 
+              className="w-48 bg-white border-slate-200 rounded-lg text-sm"
+              data-testid="invoice-filter-status"
+            >
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent data-testid="status-filter-options">
               {STATUS_OPTIONS.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}
@@ -247,102 +293,120 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="flex items-center gap-2">
-          <Input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => {
-              setDateFrom(e.target.value);
-              setParams((p) => ({ ...p, page: 1 }));
-            }}
-            className="w-40"
-            data-testid="invoice-filter-date-from"
-            placeholder="From date"
-          />
-          <span className="text-muted-foreground">to</span>
-          <Input
-            type="date"
-            value={dateTo}
-            onChange={(e) => {
-              setDateTo(e.target.value);
-              setParams((p) => ({ ...p, page: 1 }));
-            }}
-            className="w-40"
-            data-testid="invoice-filter-date-to"
-            placeholder="To date"
-          />
-        </div>
-      </div>
 
-      {/* Table */}
-      <div className="rounded-md border overflow-x-auto">
-        <Table data-testid="invoice-table">
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} data-testid="invoice-row">
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
+          {/* Date Range Filters */}
+          <div className="flex items-center gap-2">
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => {
+                setDateFrom(e.target.value);
+                setParams((p) => ({ ...p, page: 1 }));
+              }}
+              className="w-40 bg-white border-slate-200 rounded-lg text-sm"
+              data-testid="invoice-filter-date-from"
+            />
+            <span className="text-slate-400 text-sm">to</span>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => {
+                setDateTo(e.target.value);
+                setParams((p) => ({ ...p, page: 1 }));
+              }}
+              className="w-40 bg-white border-slate-200 rounded-lg text-sm"
+              data-testid="invoice-filter-date-to"
+            />
+          </div>
+
+          {/* Filter Button */}
+          <Button 
+            variant="outline" 
+            className="bg-white hover:bg-slate-50 border-slate-200 text-slate-700 rounded-lg"
+          >
+            <Filter className="h-4 w-4 mr-2" />
+            Filter
+          </Button>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <Table data-testid="invoice-table">
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id} className="bg-slate-50/50 hover:bg-slate-50/50">
+                  {headerGroup.headers.map((header) => (
+                    <TableHead key={header.id} className="px-6 py-4">
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
                   ))}
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No invoices found.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Pagination */}
-      {data && data.total_pages > 1 && (
-        <div className="flex items-center justify-between py-4">
-          <div className="text-sm text-muted-foreground">
-            Showing {(params.page! - 1) * params.page_size! + 1} to{' '}
-            {Math.min(params.page! * params.page_size!, data.total)} of {data.total}{' '}
-            invoices
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setParams((p) => ({ ...p, page: p.page! - 1 }))}
-              disabled={params.page === 1}
-              data-testid="pagination-prev"
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setParams((p) => ({ ...p, page: p.page! + 1 }))}
-              disabled={params.page === data.total_pages}
-              data-testid="pagination-next"
-            >
-              Next
-            </Button>
-          </div>
+              ))}
+            </TableHeader>
+            <TableBody className="divide-y divide-slate-50">
+              {table.getRowModel().rows?.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow 
+                    key={row.id} 
+                    data-testid="invoice-row"
+                    className="hover:bg-slate-50/80 transition-colors"
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id} className="px-6 py-4">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="h-24 text-center text-slate-500">
+                    No invoices found.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </div>
-      )}
+
+        {/* Pagination */}
+        {data && data.total_pages > 1 && (
+          <div 
+            className="p-4 border-t border-slate-100 flex items-center justify-between"
+            data-testid="pagination"
+          >
+            <div className="text-sm text-slate-500">
+              Showing {(params.page! - 1) * params.page_size! + 1} to{' '}
+              {Math.min(params.page! * params.page_size!, data.total)} of {data.total}{' '}
+              invoices
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setParams((p) => ({ ...p, page: p.page! - 1 }))}
+                disabled={params.page === 1}
+                className="bg-white hover:bg-slate-50 border-slate-200 text-slate-700 rounded-lg disabled:opacity-50"
+                data-testid="pagination-prev"
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setParams((p) => ({ ...p, page: p.page! + 1 }))}
+                disabled={params.page === data.total_pages}
+                className="bg-white hover:bg-slate-50 border-slate-200 text-slate-700 rounded-lg disabled:opacity-50"
+                data-testid="pagination-next"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

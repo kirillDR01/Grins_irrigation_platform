@@ -110,38 +110,38 @@ export const JOB_STATUS_CONFIG: Record<
 > = {
   requested: {
     label: 'Requested',
-    color: 'text-yellow-800',
-    bgColor: 'bg-yellow-100',
+    color: 'text-amber-700',
+    bgColor: 'bg-amber-100',
   },
   approved: {
     label: 'Approved',
-    color: 'text-blue-800',
+    color: 'text-blue-700',
     bgColor: 'bg-blue-100',
   },
   scheduled: {
     label: 'Scheduled',
-    color: 'text-purple-800',
-    bgColor: 'bg-purple-100',
+    color: 'text-violet-700',
+    bgColor: 'bg-violet-100',
   },
   in_progress: {
     label: 'In Progress',
-    color: 'text-orange-800',
+    color: 'text-orange-700',
     bgColor: 'bg-orange-100',
   },
   completed: {
     label: 'Completed',
-    color: 'text-green-800',
-    bgColor: 'bg-green-100',
+    color: 'text-emerald-700',
+    bgColor: 'bg-emerald-100',
   },
   cancelled: {
     label: 'Cancelled',
-    color: 'text-red-800',
+    color: 'text-red-700',
     bgColor: 'bg-red-100',
   },
   closed: {
     label: 'Closed',
-    color: 'text-gray-800',
-    bgColor: 'bg-gray-100',
+    color: 'text-slate-500',
+    bgColor: 'bg-slate-100',
   },
 };
 

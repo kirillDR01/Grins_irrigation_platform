@@ -40,12 +40,12 @@ describe('ClearDayDialog', () => {
 
   it('displays appointment count', () => {
     render(<ClearDayDialog {...defaultProps} />);
-    expect(screen.getByText(/5 appointments will be deleted/)).toBeInTheDocument();
+    expect(screen.getByText(/5 appointments will be cleared/)).toBeInTheDocument();
   });
 
   it('displays singular appointment text for count of 1', () => {
     render(<ClearDayDialog {...defaultProps} appointmentCount={1} />);
-    expect(screen.getByText(/1 appointment will be deleted/)).toBeInTheDocument();
+    expect(screen.getByText(/1 appointment will be cleared/)).toBeInTheDocument();
   });
 
   it('displays affected jobs preview', () => {
@@ -84,10 +84,10 @@ describe('ClearDayDialog', () => {
     expect(screen.getByTestId('clear-day-cancel')).toHaveTextContent('Cancel');
   });
 
-  it('renders Clear Schedule button', () => {
+  it('renders Clear Day button', () => {
     render(<ClearDayDialog {...defaultProps} />);
     expect(screen.getByTestId('clear-day-confirm')).toBeInTheDocument();
-    expect(screen.getByTestId('clear-day-confirm')).toHaveTextContent('Clear Schedule');
+    expect(screen.getByTestId('clear-day-confirm')).toHaveTextContent('Clear Day');
   });
 
   it('calls onOpenChange when Cancel is clicked', () => {
@@ -97,7 +97,7 @@ describe('ClearDayDialog', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it('calls onConfirm when Clear Schedule is clicked', () => {
+  it('calls onConfirm when Clear Day is clicked', () => {
     const onConfirm = vi.fn();
     render(<ClearDayDialog {...defaultProps} onConfirm={onConfirm} />);
     fireEvent.click(screen.getByTestId('clear-day-confirm'));

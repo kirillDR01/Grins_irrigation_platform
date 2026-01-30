@@ -111,11 +111,13 @@ describe('OverdueInvoicesWidget', () => {
       error: null,
     } as ReturnType<typeof hooks.useOverdueInvoices>);
 
-    renderWithProviders(<OverdueInvoicesWidget />);
+    const { container } = renderWithProviders(<OverdueInvoicesWidget />);
 
     expect(screen.getByTestId('overdue-invoice-item-inv-1')).toBeInTheDocument();
     expect(screen.getByText('INV-2025-001')).toBeInTheDocument();
-    expect(screen.getByText(/\$150\.00/)).toBeInTheDocument();
+    // Check for amount in the item (font-bold text-red-600)
+    const amountElement = container.querySelector('.font-bold.text-red-600');
+    expect(amountElement).toHaveTextContent('$150.00');
   });
 
   it('shows view all link when more than 5 invoices', () => {
@@ -139,7 +141,7 @@ describe('OverdueInvoicesWidget', () => {
     expect(screen.getByText('View all 10 overdue invoices')).toBeInTheDocument();
   });
 
-  it('displays total count in header', () => {
+  it('displays total amount in header', () => {
     const response: PaginatedInvoiceResponse = {
       items: [mockInvoice],
       total: 3,
@@ -154,9 +156,12 @@ describe('OverdueInvoicesWidget', () => {
       error: null,
     } as ReturnType<typeof hooks.useOverdueInvoices>);
 
-    renderWithProviders(<OverdueInvoicesWidget />);
+    const { container } = renderWithProviders(<OverdueInvoicesWidget />);
 
-    expect(screen.getByText('(3)')).toBeInTheDocument();
+    // Check for total amount badge in header (bg-red-100 text-red-700)
+    const badge = container.querySelector('.bg-red-100.text-red-700');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent('$150.00');
   });
 
   it('has correct data-testid attributes', () => {
@@ -179,6 +184,7 @@ describe('OverdueInvoicesWidget', () => {
     expect(screen.getByTestId('overdue-invoices-widget')).toBeInTheDocument();
     expect(screen.getByTestId('overdue-invoice-item-inv-1')).toBeInTheDocument();
     expect(screen.getByTestId('overdue-invoice-link-inv-1')).toBeInTheDocument();
+    expect(screen.getByTestId('send-reminder-btn-inv-1')).toBeInTheDocument();
     expect(screen.getByTestId('view-overdue-btn-inv-1')).toBeInTheDocument();
   });
 });

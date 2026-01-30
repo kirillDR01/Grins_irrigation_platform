@@ -118,11 +118,11 @@ describe('RecentlyClearedSection', () => {
       expect(screen.getByTestId('recently-cleared-list')).toBeInTheDocument();
     });
 
-    const detailButtons = screen.getAllByTestId('view-clear-details-btn');
+    const detailButtons = screen.getAllByTestId('restore-job-btn');
     expect(detailButtons).toHaveLength(2);
   });
 
-  it('calls onViewDetails when View Details is clicked', async () => {
+  it('calls onViewDetails when Restore is clicked', async () => {
     vi.mocked(scheduleGenerationApi.getRecentClears).mockResolvedValue(
       mockRecentClears
     );
@@ -136,7 +136,7 @@ describe('RecentlyClearedSection', () => {
       expect(screen.getByTestId('recently-cleared-list')).toBeInTheDocument();
     });
 
-    const detailButtons = screen.getAllByTestId('view-clear-details-btn');
+    const detailButtons = screen.getAllByTestId('restore-job-btn');
     await userEvent.click(detailButtons[0]);
 
     expect(onViewDetails).toHaveBeenCalledWith('audit-1');
@@ -197,6 +197,6 @@ describe('RecentlyClearedSection', () => {
     expect(screen.getAllByTestId('recently-cleared-date')).toHaveLength(2);
     expect(screen.getAllByTestId('recently-cleared-count')).toHaveLength(2);
     expect(screen.getAllByTestId('recently-cleared-time')).toHaveLength(2);
-    expect(screen.getAllByTestId('view-clear-details-btn')).toHaveLength(2);
+    expect(screen.getAllByTestId('restore-job-btn')).toHaveLength(2);
   });
 });

@@ -10,12 +10,14 @@ describe('AILoadingState', () => {
 
   it('displays loading message', () => {
     render(<AILoadingState />);
-    expect(screen.getByText('AI is thinking...')).toBeInTheDocument();
+    // Check for one of the dynamic loading texts
+    const loadingText = screen.getByText(/Analyzing\.\.\.|Optimizing\.\.\.|Generating\.\.\./);
+    expect(loadingText).toBeInTheDocument();
   });
 
   it('renders with correct styling', () => {
     render(<AILoadingState />);
     const container = screen.getByTestId('ai-loading-state');
-    expect(container).toHaveClass('flex', 'items-center', 'justify-center');
+    expect(container).toHaveClass('flex', 'flex-col', 'items-center', 'justify-center', 'py-12');
   });
 });

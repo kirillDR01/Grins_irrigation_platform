@@ -10,16 +10,16 @@
  * - Redirect to dashboard on success
  *
  * Requirements: 19.1-19.7
+ * UI Redesign: Task 27.1-27.7
  */
 
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { User, Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
+import { User, Eye, EyeOff, AlertCircle, Loader2, Droplets } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from './AuthProvider';
 
 export function LoginPage() {
@@ -56,116 +56,135 @@ export function LoginPage() {
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center bg-gray-50 px-4"
+      className="flex min-h-screen items-center justify-center bg-slate-50 px-4"
       data-testid="login-page"
     >
-      <div className="w-full max-w-md space-y-8">
-        {/* Header */}
-        <div className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+      <div className="w-full max-w-md mx-auto space-y-8">
+        {/* Logo Section - Task 27.3 */}
+        <div className="flex flex-col items-center justify-center">
+          <div className="w-12 h-12 bg-teal-500 rounded-xl shadow-lg shadow-teal-500/30 flex items-center justify-center mb-4">
+            <Droplets className="w-7 h-7 text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-800 text-center">
             Grin's Irrigation
           </h1>
-          <p className="mt-2 text-sm text-gray-600">
-            Sign in to your account
-          </p>
         </div>
 
-        {/* Login Form */}
-        <form
-          onSubmit={handleSubmit}
-          className="mt-8 space-y-6 rounded-lg bg-white p-8 shadow"
-          data-testid="login-form"
-        >
-          {/* Error Alert */}
-          {error && (
-            <Alert variant="destructive" data-testid="login-error">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+        {/* Login Card - Task 27.2 */}
+        <div className="bg-white rounded-2xl shadow-lg p-8">
+          {/* Form Title - Task 27.4 */}
+          <h2 className="text-2xl font-bold text-slate-800 text-center mb-6">
+            Sign in to your account
+          </h2>
 
-          {/* Username Field */}
-          <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <Input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter your username"
-                className="pl-10"
-                required
-                disabled={isLoading}
-                data-testid="username-input"
-              />
-            </div>
-          </div>
-
-          {/* Password Field */}
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <div className="relative">
-              <Input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                className="pr-10"
-                required
-                disabled={isLoading}
-                data-testid="password-input"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                tabIndex={-1}
-                data-testid="password-toggle"
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Remember Me */}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="remember-me"
-              checked={rememberMe}
-              onCheckedChange={(checked) => setRememberMe(checked === true)}
-              disabled={isLoading}
-              data-testid="remember-me-checkbox"
-            />
-            <Label htmlFor="remember-me" className="text-sm font-normal">
-              Remember me
-            </Label>
-          </div>
-
-          {/* Submit Button */}
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={isLoading}
-            data-testid="login-btn"
+          {/* Login Form */}
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-6"
+            data-testid="login-form"
           >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Signing in...
-              </>
-            ) : (
-              'Sign In'
+            {/* Error Alert - Task 27.7: Left border accent style (red variant) */}
+            {error && (
+              <div 
+                className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-red-400 flex items-start gap-3"
+                data-testid="login-error"
+              >
+                <div className="bg-red-100 p-2 rounded-full">
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                </div>
+                <div>
+                  <p className="text-slate-800 font-medium">Error</p>
+                  <p className="text-slate-500 text-sm">{error}</p>
+                </div>
+              </div>
             )}
-          </Button>
-        </form>
+
+            {/* Email/Username Field - Task 27.5 */}
+            <div className="space-y-2">
+              <Label htmlFor="username" className="text-sm font-medium text-slate-700">
+                Username
+              </Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  id="username"
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Enter your username"
+                  className="pl-10"
+                  required
+                  disabled={isLoading}
+                  data-testid="username-input"
+                />
+              </div>
+            </div>
+
+            {/* Password Field - Task 27.5 */}
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm font-medium text-slate-700">
+                Password
+              </Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className="pr-10"
+                  required
+                  disabled={isLoading}
+                  data-testid="password-input"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  tabIndex={-1}
+                  data-testid="password-toggle"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Remember Me */}
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="remember-me"
+                checked={rememberMe}
+                onCheckedChange={(checked) => setRememberMe(checked === true)}
+                disabled={isLoading}
+                data-testid="remember-me-checkbox"
+              />
+              <Label htmlFor="remember-me" className="text-sm font-normal text-slate-600">
+                Remember me
+              </Label>
+            </div>
+
+            {/* Submit Button - Task 27.6: Primary button styling (teal-500) */}
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={isLoading}
+              data-testid="login-btn"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                'Sign In'
+              )}
+            </Button>
+          </form>
+        </div>
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ interface JobStatusBadgeProps {
   status: JobStatus;
   className?: string;
   showTooltip?: boolean;
+  'data-testid'?: string;
 }
 
 const STATUS_DESCRIPTIONS: Record<JobStatus, string> = {
@@ -23,18 +24,19 @@ export const JobStatusBadge = memo(function JobStatusBadge({
   status,
   className,
   showTooltip = false,
+  'data-testid': dataTestId,
 }: JobStatusBadgeProps) {
   const config = getJobStatusConfig(status);
 
   const badge = (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+        'inline-flex items-center rounded-full px-3 py-1 text-xs font-medium',
         config.bgColor,
         config.color,
         className
       )}
-      data-testid={`status-${status}`}
+      data-testid={dataTestId || `status-${status}`}
     >
       {config.label}
     </span>

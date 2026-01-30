@@ -6,7 +6,6 @@
 
 import { useNavigate } from 'react-router-dom';
 import { Settings, LogOut, ChevronDown } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,38 +44,46 @@ export function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          className="flex items-center gap-2"
+        <button
+          className="flex items-center gap-2 hover:bg-slate-100 rounded-lg p-1 transition-colors"
           data-testid="user-menu"
         >
-          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-            <span className="text-sm font-medium">{initials}</span>
+          {/* User avatar - teal-100 bg with teal-700 text, font-bold text-xs */}
+          <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-700 font-bold text-xs flex items-center justify-center">
+            {initials}
           </div>
-          <span className="text-sm hidden sm:inline">{user.name}</span>
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        </Button>
+          <span className="text-sm text-slate-700 hidden sm:inline">{user.name}</span>
+          <ChevronDown className="h-4 w-4 text-slate-400" />
+        </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56" data-testid="user-menu-dropdown">
-        <DropdownMenuLabel className="font-normal">
+      <DropdownMenuContent 
+        align="end" 
+        className="w-56 bg-white rounded-lg shadow-lg border border-slate-100" 
+        data-testid="user-menu-dropdown"
+      >
+        <DropdownMenuLabel className="font-normal px-3 py-2">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none" data-testid="user-menu-name">
+            <p className="text-sm font-medium text-slate-700 leading-none" data-testid="user-menu-name">
               {user.name}
             </p>
-            <p className="text-xs leading-none text-muted-foreground" data-testid="user-menu-email">
+            <p className="text-xs leading-none text-slate-400" data-testid="user-menu-email">
               {user.email || user.username}
             </p>
           </div>
         </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleSettings} data-testid="settings-btn">
+        <DropdownMenuSeparator className="bg-slate-100" />
+        <DropdownMenuItem 
+          onClick={handleSettings} 
+          className="px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer"
+          data-testid="settings-btn"
+        >
           <Settings className="mr-2 h-4 w-4" />
           <span>Settings</span>
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
+        <DropdownMenuSeparator className="bg-slate-100" />
         <DropdownMenuItem
           onClick={handleLogout}
-          className="text-destructive focus:text-destructive"
+          className="px-3 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
           data-testid="logout-btn"
         >
           <LogOut className="mr-2 h-4 w-4" />

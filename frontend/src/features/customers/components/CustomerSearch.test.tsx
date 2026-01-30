@@ -37,21 +37,21 @@ describe('CustomerSearch', () => {
     const onSearch = vi.fn();
     render(<CustomerSearch onSearch={onSearch} initialValue="test" />);
 
-    expect(screen.getByTestId('customer-search-clear')).toBeInTheDocument();
+    expect(screen.getByTestId('clear-search-btn')).toBeInTheDocument();
   });
 
   it('hides clear button when value is empty', () => {
     const onSearch = vi.fn();
     render(<CustomerSearch onSearch={onSearch} />);
 
-    expect(screen.queryByTestId('customer-search-clear')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('clear-search-btn')).not.toBeInTheDocument();
   });
 
   it('clears input when clear button is clicked', async () => {
     const onSearch = vi.fn();
     render(<CustomerSearch onSearch={onSearch} initialValue="test" />);
 
-    const clearButton = screen.getByTestId('customer-search-clear');
+    const clearButton = screen.getByTestId('clear-search-btn');
     fireEvent.click(clearButton);
 
     expect(screen.getByTestId('customer-search-input')).toHaveValue('');

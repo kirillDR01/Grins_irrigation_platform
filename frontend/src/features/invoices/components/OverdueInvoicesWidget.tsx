@@ -35,31 +35,42 @@ const OverdueItem = memo(function OverdueItem({ invoice }: OverdueItemProps) {
 
   return (
     <div
-      className="flex items-center justify-between py-2 border-b last:border-b-0"
+      className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-100"
       data-testid={`overdue-invoice-item-${invoice.id}`}
     >
       <div className="flex-1 min-w-0">
         <Link
           to={`/invoices/${invoice.id}`}
-          className="text-sm font-medium text-blue-600 hover:underline truncate block"
+          className="text-sm font-medium text-slate-700 hover:text-teal-600 truncate block"
           data-testid={`overdue-invoice-link-${invoice.id}`}
         >
           {invoice.invoice_number}
         </Link>
-        <p className="text-xs text-gray-500 truncate">
-          {formatCurrency(invoice.total_amount)} • {daysOverdue} days overdue
+        <p className="text-xs text-red-500 mt-0.5">
+          {daysOverdue} days overdue
         </p>
       </div>
-      <div className="flex items-center gap-2 ml-2">
-        <InvoiceStatusBadge status={invoice.status} />
-        <Button
-          size="sm"
-          variant="outline"
-          asChild
-          data-testid={`view-overdue-btn-${invoice.id}`}
-        >
-          <Link to={`/invoices/${invoice.id}`}>View</Link>
-        </Button>
+      <div className="flex items-center gap-3 ml-2">
+        <span className="font-bold text-red-600 text-sm">
+          {formatCurrency(invoice.total_amount)}
+        </span>
+        <div className="flex gap-2">
+          <button
+            className="text-red-600 hover:text-red-700 text-sm font-medium"
+            data-testid={`send-reminder-btn-${invoice.id}`}
+          >
+            Send Reminder
+          </button>
+          <Button
+            size="sm"
+            variant="ghost"
+            asChild
+            className="text-teal-600 hover:text-teal-700"
+            data-testid={`view-overdue-btn-${invoice.id}`}
+          >
+            <Link to={`/invoices/${invoice.id}`}>View</Link>
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -72,15 +83,18 @@ export const OverdueInvoicesWidget = memo(function OverdueInvoicesWidget({
 
   const invoices = data?.items ?? [];
   const totalOverdue = data?.total ?? 0;
+  const totalAmount = invoices.reduce((sum, inv) => sum + inv.total_amount, 0);
 
   return (
-    <Card className={className} data-testid="overdue-invoices-widget">
+    <Card className={`bg-white rounded-2xl shadow-sm border border-slate-100 ${className || ''}`} data-testid="overdue-invoices-widget">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-lg">
           <AlertCircle className="h-5 w-5 text-red-500" />
           Overdue Invoices
           {totalOverdue > 0 && (
-            <span className="text-sm font-normal text-red-600">({totalOverdue})</span>
+            <span className="ml-auto px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+              {formatCurrency(totalAmount)}
+            </span>
           )}
         </CardTitle>
       </CardHeader>
@@ -105,7 +119,7 @@ export const OverdueInvoicesWidget = memo(function OverdueInvoicesWidget({
 
         {!isLoading && !error && invoices.length === 0 && (
           <div
-            className="text-sm text-gray-500 py-4 text-center"
+            className="text-sm text-slate-500 py-4 text-center"
             data-testid="overdue-invoices-empty"
           >
             No overdue invoices
@@ -113,14 +127,14 @@ export const OverdueInvoicesWidget = memo(function OverdueInvoicesWidget({
         )}
 
         {!isLoading && !error && invoices.length > 0 && (
-          <div className="space-y-1">
+          <div className="space-y-3">
             {invoices.map((invoice) => (
               <OverdueItem key={invoice.id} invoice={invoice} />
             ))}
             {totalOverdue > 5 && (
               <Link
                 to="/invoices?status=overdue"
-                className="flex items-center text-sm text-blue-600 hover:underline pt-2"
+                className="flex items-center text-sm text-teal-600 hover:text-teal-700 pt-2"
                 data-testid="view-all-overdue-link"
               >
                 View all {totalOverdue} overdue invoices

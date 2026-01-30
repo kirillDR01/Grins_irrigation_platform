@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Send, Trash2, Loader2, ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
+import { Send, Trash2, Loader2, ChevronDown, ChevronUp, Sparkles, Lightbulb } from 'lucide-react';
 
 const SAMPLE_QUESTIONS = [
   'How should I handle jobs that need special equipment?',
@@ -48,12 +48,15 @@ export function SchedulingHelpAssistant() {
   };
 
   return (
-    <Card data-testid="scheduling-help-panel" className="w-full">
-      <CardHeader className="cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+    <Card data-testid="scheduling-help-panel" className="w-full bg-white rounded-2xl shadow-sm border border-slate-100">
+      <CardHeader 
+        className="cursor-pointer p-4 border-b border-slate-100 bg-teal-50 hover:bg-teal-100 transition-colors" 
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <HelpCircle className="h-5 w-5 text-muted-foreground" />
-            <CardTitle className="text-lg">Scheduling Help</CardTitle>
+            <Sparkles className="h-5 w-5 text-teal-600" />
+            <CardTitle className="text-lg font-bold text-slate-800">Scheduling Help</CardTitle>
           </div>
           <div className="flex items-center gap-2">
             {messages.length > 0 && (
@@ -66,11 +69,17 @@ export function SchedulingHelpAssistant() {
                 }}
                 disabled={messages.length === 0}
                 data-testid="help-clear-btn"
+                className="text-slate-400 hover:text-slate-600"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
             )}
-            <Button variant="ghost" size="sm" data-testid="help-toggle-btn">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              data-testid="help-toggle-btn"
+              className="text-slate-400 hover:text-slate-600"
+            >
               {isExpanded ? (
                 <ChevronUp className="h-4 w-4" />
               ) : (
@@ -82,31 +91,30 @@ export function SchedulingHelpAssistant() {
       </CardHeader>
 
       {isExpanded && (
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 p-4">
           {/* Error Display */}
           {error && (
-            <Alert variant="destructive" data-testid="help-error">
-              <AlertDescription>{error}</AlertDescription>
+            <Alert variant="destructive" data-testid="help-error" className="bg-red-50 border-red-100">
+              <AlertDescription className="text-red-600">{error}</AlertDescription>
             </Alert>
           )}
 
           {/* Sample Questions */}
           {messages.length === 0 && (
             <div className="space-y-2" data-testid="sample-questions">
-              <p className="text-sm text-muted-foreground">Common scheduling questions:</p>
+              <p className="text-sm text-slate-500">Common scheduling questions:</p>
               <div className="grid gap-2">
                 {SAMPLE_QUESTIONS.map((question, index) => (
-                  <Button
+                  <button
                     key={index}
-                    variant="outline"
-                    size="sm"
                     onClick={() => handleSampleClick(question)}
                     disabled={isLoading}
-                    className="justify-start text-left h-auto py-2"
-                    data-testid={`sample-question-${index}`}
+                    className="p-3 bg-slate-50 rounded-lg hover:bg-slate-100 cursor-pointer text-left text-sm text-slate-700 transition-colors flex items-start gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    data-testid={`suggestion-item`}
                   >
-                    {question}
-                  </Button>
+                    <Lightbulb className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <span>{question}</span>
+                  </button>
                 ))}
               </div>
             </div>
@@ -122,10 +130,10 @@ export function SchedulingHelpAssistant() {
                   data-testid={`help-message-${message.role}`}
                 >
                   <div
-                    className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                    className={`max-w-[80%] rounded-2xl px-4 py-3 ${
                       message.role === 'user'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted'
+                        ? 'bg-teal-500 text-white rounded-br-md'
+                        : 'bg-slate-100 text-slate-700 rounded-bl-md'
                     }`}
                   >
                     <p className="text-sm whitespace-pre-wrap">{message.content}</p>
@@ -137,8 +145,8 @@ export function SchedulingHelpAssistant() {
               ))}
               {isLoading && (
                 <div className="flex justify-start" data-testid="help-loading">
-                  <div className="bg-muted rounded-lg px-4 py-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                  <div className="bg-slate-100 rounded-2xl rounded-bl-md px-4 py-3">
+                    <Loader2 className="h-4 w-4 animate-spin text-teal-500" />
                   </div>
                 </div>
               )}
@@ -154,11 +162,13 @@ export function SchedulingHelpAssistant() {
               placeholder="Ask a scheduling question..."
               disabled={isLoading}
               data-testid="help-input"
+              className="flex-1 bg-slate-50 border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
             />
             <Button
               type="submit"
               disabled={!input.trim() || isLoading}
               data-testid="help-submit-btn"
+              className="bg-teal-500 hover:bg-teal-600 text-white p-3 rounded-xl"
             >
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

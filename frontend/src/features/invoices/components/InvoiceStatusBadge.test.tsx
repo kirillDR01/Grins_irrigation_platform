@@ -21,60 +21,60 @@ describe('InvoiceStatusBadge', () => {
     expect(screen.getByTestId(`invoice-status-${status}`)).toBeInTheDocument();
   });
 
-  it('renders draft status with gray badge', () => {
+  it('renders draft status with slate badge', () => {
     render(<InvoiceStatusBadge status="draft" />);
     const badge = screen.getByTestId('invoice-status-draft');
     expect(badge).toHaveTextContent('Draft');
-    expect(badge).toHaveClass('bg-gray-100', 'text-gray-800');
+    expect(badge).toHaveClass('bg-slate-100', 'text-slate-500');
   });
 
   it('renders sent status with blue badge', () => {
     render(<InvoiceStatusBadge status="sent" />);
     const badge = screen.getByTestId('invoice-status-sent');
     expect(badge).toHaveTextContent('Sent');
-    expect(badge).toHaveClass('bg-blue-100', 'text-blue-800');
+    expect(badge).toHaveClass('bg-blue-100', 'text-blue-700');
   });
 
-  it('renders paid status with green badge', () => {
+  it('renders paid status with emerald badge', () => {
     render(<InvoiceStatusBadge status="paid" />);
     const badge = screen.getByTestId('invoice-status-paid');
     expect(badge).toHaveTextContent('Paid');
-    expect(badge).toHaveClass('bg-green-100', 'text-green-800');
+    expect(badge).toHaveClass('bg-emerald-100', 'text-emerald-700');
   });
 
-  it('renders partial status with yellow badge', () => {
+  it('renders partial status with violet badge', () => {
     render(<InvoiceStatusBadge status="partial" />);
     const badge = screen.getByTestId('invoice-status-partial');
     expect(badge).toHaveTextContent('Partial');
-    expect(badge).toHaveClass('bg-yellow-100', 'text-yellow-800');
+    expect(badge).toHaveClass('bg-violet-100', 'text-violet-700');
   });
 
   it('renders overdue status with red badge', () => {
     render(<InvoiceStatusBadge status="overdue" />);
     const badge = screen.getByTestId('invoice-status-overdue');
     expect(badge).toHaveTextContent('Overdue');
-    expect(badge).toHaveClass('bg-red-100', 'text-red-800');
+    expect(badge).toHaveClass('bg-red-100', 'text-red-700');
   });
 
-  it('renders lien_warning status with orange badge', () => {
+  it('renders lien_warning status with amber badge', () => {
     render(<InvoiceStatusBadge status="lien_warning" />);
     const badge = screen.getByTestId('invoice-status-lien_warning');
     expect(badge).toHaveTextContent('Lien Warning');
-    expect(badge).toHaveClass('bg-orange-100', 'text-orange-800');
+    expect(badge).toHaveClass('bg-amber-100', 'text-amber-700');
   });
 
-  it('renders lien_filed status with dark red badge', () => {
+  it('renders lien_filed status with red badge', () => {
     render(<InvoiceStatusBadge status="lien_filed" />);
     const badge = screen.getByTestId('invoice-status-lien_filed');
     expect(badge).toHaveTextContent('Lien Filed');
-    expect(badge).toHaveClass('bg-red-200', 'text-red-900');
+    expect(badge).toHaveClass('bg-red-100', 'text-red-700');
   });
 
-  it('renders cancelled status with gray badge', () => {
+  it('renders cancelled status with slate badge', () => {
     render(<InvoiceStatusBadge status="cancelled" />);
     const badge = screen.getByTestId('invoice-status-cancelled');
     expect(badge).toHaveTextContent('Cancelled');
-    expect(badge).toHaveClass('bg-gray-100', 'text-gray-500');
+    expect(badge).toHaveClass('bg-slate-100', 'text-slate-500');
   });
 
   it('applies custom className', () => {

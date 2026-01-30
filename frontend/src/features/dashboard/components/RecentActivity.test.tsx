@@ -100,8 +100,7 @@ describe('RecentActivity', () => {
     render(<RecentActivity />, { wrapper: createWrapper() });
 
     expect(screen.getByTestId('activity-list')).toBeInTheDocument();
-    expect(screen.getByText('Job: Spring Startup')).toBeInTheDocument();
-    expect(screen.getByText('Test job description')).toBeInTheDocument();
+    expect(screen.getByText('Spring Startup')).toBeInTheDocument();
   });
 
   it('renders appointment activity items', () => {
@@ -128,7 +127,6 @@ describe('RecentActivity', () => {
 
     expect(screen.getByTestId('activity-list')).toBeInTheDocument();
     expect(screen.getByText('Appointment')).toBeInTheDocument();
-    expect(screen.getByText('Scheduled for 2025-01-22')).toBeInTheDocument();
   });
 
   it('displays status badges with correct colors', () => {
@@ -155,7 +153,7 @@ describe('RecentActivity', () => {
     render(<RecentActivity />, { wrapper: createWrapper() });
 
     const badge = screen.getByText('completed');
-    expect(badge).toHaveClass('bg-green-100', 'text-green-800');
+    expect(badge).toHaveClass('bg-emerald-100', 'text-emerald-700');
   });
 
   it('combines and sorts items by timestamp', () => {

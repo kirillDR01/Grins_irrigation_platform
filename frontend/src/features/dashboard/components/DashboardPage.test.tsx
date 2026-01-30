@@ -8,6 +8,9 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DashboardPage } from './DashboardPage';
 
+// Mock scrollIntoView for AIQueryChat component
+Element.prototype.scrollIntoView = vi.fn();
+
 // Mock the hooks
 vi.mock('../hooks', () => ({
   useDashboardMetrics: vi.fn(),
@@ -141,7 +144,7 @@ describe('DashboardPage', () => {
     render(<DashboardPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText('150')).toBeInTheDocument();
-    expect(screen.getByText('120 active')).toBeInTheDocument();
+    expect(screen.getByText('120 unread')).toBeInTheDocument();
   });
 
   it('displays today schedule card', () => {
@@ -269,7 +272,7 @@ describe('DashboardPage', () => {
     render(<DashboardPage />, { wrapper: createWrapper() });
 
     expect(screen.getByTestId('recent-activity-card')).toBeInTheDocument();
-    expect(screen.getByText('Recent Activity')).toBeInTheDocument();
+    expect(screen.getByText('Recent Jobs')).toBeInTheDocument();
   });
 
   it('has navigation buttons in header', () => {

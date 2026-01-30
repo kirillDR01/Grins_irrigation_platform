@@ -3,7 +3,7 @@
  * Uses manual cleanup to ensure Google Maps removes the polyline.
  */
 
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo, useState } from 'react';
 import { useGoogleMap } from '@react-google-maps/api';
 import type { ScheduleStaffAssignment } from '../../types';
 import { getStaffColor } from '../../utils/staffColors';
@@ -11,11 +11,13 @@ import { getStaffColor } from '../../utils/staffColors';
 interface RoutePolylineProps {
   assignment: ScheduleStaffAssignment;
   visible?: boolean;
+  selected?: boolean;
 }
 
-export function RoutePolyline({ assignment, visible = true }: RoutePolylineProps) {
+export function RoutePolyline({ assignment, visible = true, selected = false }: RoutePolylineProps) {
   const map = useGoogleMap();
   const polylineRef = useRef<google.maps.Polyline | null>(null);
+  const [isHovered, setIsHovered] = useState(false);
   const color = getStaffColor(assignment.staff_name);
 
   // Build path from start location through all jobs
@@ -47,30 +49,47 @@ export function RoutePolyline({ assignment, visible = true }: RoutePolylineProps
       return;
     }
 
+    // Determine styling based on state
+    const strokeWeight = selected ? 6 : isHovered ? 5 : 4;
+    const strokeOpacity = selected ? 0.8 : 0.6;
+
     // Create polyline if it doesn't exist
     if (!polylineRef.current) {
       polylineRef.current = new google.maps.Polyline({
         path,
         strokeColor: color,
-        strokeOpacity: 0.7,
-        strokeWeight: 3,
+        strokeOpacity,
+        strokeWeight,
         map: visible ? map : null,
+      });
+
+      // Add hover listeners
+      google.maps.event.addListener(polylineRef.current, 'mouseover', () => {
+        setIsHovered(true);
+      });
+      google.maps.event.addListener(polylineRef.current, 'mouseout', () => {
+        setIsHovered(false);
       });
     } else {
       // Update existing polyline
       polylineRef.current.setPath(path);
-      polylineRef.current.setOptions({ strokeColor: color });
+      polylineRef.current.setOptions({
+        strokeColor: color,
+        strokeOpacity,
+        strokeWeight,
+      });
       polylineRef.current.setMap(visible ? map : null);
     }
 
     // Cleanup on unmount - CRITICAL: setMap(null) removes from map
     return () => {
       if (polylineRef.current) {
+        google.maps.event.clearInstanceListeners(polylineRef.current);
         polylineRef.current.setMap(null);
         polylineRef.current = null;
       }
     };
-  }, [map, path, color, visible]);
+  }, [map, path, color, visible, selected, isHovered]);
 
   // Also update visibility when visible prop changes
   useEffect(() => {

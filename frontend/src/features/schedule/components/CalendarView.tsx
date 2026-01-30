@@ -18,6 +18,7 @@ import { getStaffColor, DEFAULT_COLOR } from '../utils/staffColors';
 import { appointmentStatusConfig } from '../types';
 import type { Appointment, AppointmentStatus } from '../types';
 import { LoadingSpinner } from '@/shared/components/LoadingSpinner';
+import './CalendarView.css';
 
 interface CalendarViewProps {
   onDateClick?: (date: Date) => void;
@@ -167,7 +168,10 @@ export function CalendarView({ onDateClick, onEventClick }: CalendarViewProps) {
   }
 
   return (
-    <div data-testid="calendar-view" className="p-4">
+    <div 
+      data-testid="calendar-view" 
+      className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+    >
       <FullCalendar
         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
         initialView="timeGridWeek"

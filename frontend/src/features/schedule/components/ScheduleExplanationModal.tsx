@@ -13,8 +13,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Sparkles, Loader2, AlertCircle } from 'lucide-react';
+import { Sparkles, Loader2, AlertCircle, Info, RefreshCw } from 'lucide-react';
 import { useScheduleExplanation } from '../hooks/useScheduleExplanation';
 import type { ScheduleGenerateResponse } from '../types';
 
@@ -48,77 +47,106 @@ export function ScheduleExplanationModal({
           variant="outline"
           onClick={handleOpen}
           data-testid="explain-schedule-btn"
+          className="gap-2"
         >
-          <Sparkles className="h-4 w-4 mr-2" />
+          <Sparkles className="h-4 w-4" />
           Explain This Schedule
         </Button>
       </DialogTrigger>
       <DialogContent
-        className="max-w-2xl max-h-[80vh] overflow-y-auto"
+        className="max-w-lg overflow-hidden"
         data-testid="schedule-explanation-modal"
       >
-        <DialogHeader>
-          <DialogTitle>Schedule Explanation</DialogTitle>
-          <DialogDescription>
-            AI-generated insights about this schedule's decisions and optimizations
-          </DialogDescription>
+        <DialogHeader className="p-6 border-b border-slate-100 bg-slate-50/50">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-full bg-teal-100 text-teal-600">
+              <Info className="h-5 w-5" />
+            </div>
+            <div>
+              <DialogTitle className="text-lg font-bold text-slate-800">
+                Why This Schedule?
+              </DialogTitle>
+              <DialogDescription className="text-slate-500 text-sm">
+                AI-generated insights about scheduling decisions
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="p-6 max-h-[60vh] overflow-y-auto">
           {isLoading && (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-muted-foreground">
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="w-12 h-12 border-4 border-teal-200 border-t-teal-500 rounded-full animate-spin" />
+              <span className="mt-4 text-slate-600">
                 Analyzing schedule...
               </span>
             </div>
           )}
 
           {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="flex items-center justify-between">
-                <span>{error}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRetry}
-                  data-testid="retry-explanation-btn"
-                >
-                  Retry
-                </Button>
-              </AlertDescription>
-            </Alert>
+            <div className="bg-red-50 rounded-xl p-6 border border-red-100">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-full bg-red-100 text-red-600 shrink-0">
+                  <AlertCircle className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium text-red-800">Unable to generate explanation</h4>
+                  <p className="text-sm text-red-600 mt-1">{error}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRetry}
+                    className="mt-3 bg-red-100 hover:bg-red-200 text-red-700 border-red-200"
+                    data-testid="retry-explanation-btn"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Retry
+                  </Button>
+                </div>
+              </div>
+            </div>
           )}
 
           {explanation && (
-            <>
+            <div className="space-y-4">
               {/* Main Explanation */}
-              <div className="prose prose-sm max-w-none">
-                <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                  {explanation.explanation}
-                </p>
+              <div className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap break-words">
+                {explanation.explanation}
               </div>
 
-              {/* Highlights */}
+              {/* Factors Section */}
               {explanation.highlights.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-semibold">Key Highlights</h4>
-                  <ul className="list-disc list-inside space-y-1">
+                <div className="bg-slate-50 rounded-lg p-4 mt-4">
+                  <h4 className="text-sm font-semibold text-slate-700 mb-3">
+                    Key Factors Considered
+                  </h4>
+                  <ul className="space-y-2">
                     {explanation.highlights.map((highlight, index) => (
                       <li
                         key={index}
-                        className="text-sm text-muted-foreground break-words"
+                        className="flex items-start gap-2 text-sm text-slate-600"
                         data-testid={`highlight-${index}`}
                       >
-                        {highlight}
+                        <span className="w-1.5 h-1.5 rounded-full bg-teal-500 mt-2 shrink-0" />
+                        <span className="break-words">{highlight}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
-            </>
+            </div>
           )}
+        </div>
+
+        <div className="p-6 border-t border-slate-100 bg-slate-50/50">
+          <Button
+            variant="secondary"
+            onClick={() => setOpen(false)}
+            className="w-full"
+            data-testid="close-explanation-btn"
+          >
+            Close
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

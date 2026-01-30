@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Popover,
   PopoverContent,
@@ -97,40 +96,45 @@ export function SearchableCustomerDropdown({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between"
+          className="w-full justify-between border-slate-200 rounded-lg bg-white text-slate-700 text-sm hover:bg-slate-50 focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
           disabled={disabled}
           data-testid="customer-dropdown"
         >
           {selectedCustomer ? (
-            <span className="truncate">
+            <span className="truncate font-medium text-slate-700">
               {selectedCustomer.first_name} {selectedCustomer.last_name} - {selectedCustomer.phone}
             </span>
           ) : (
-            <span className="text-muted-foreground">Select customer...</span>
+            <span className="text-slate-400">Select customer...</span>
           )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-slate-400" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[400px] p-0" align="start">
-        <div className="flex items-center border-b px-3">
-          <Input
+      <PopoverContent 
+        className="w-[400px] p-0 bg-white rounded-lg shadow-lg border border-slate-100" 
+        align="start"
+        data-testid="customer-dropdown-content"
+      >
+        <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
+          <Search className="h-4 w-4 text-slate-400" />
+          <input
             placeholder="Search by name, phone, or email..."
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="flex-1 bg-transparent border-0 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 rounded"
             data-testid="customer-search-input"
             autoFocus
           />
-          {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+          {isLoading && <Loader2 className="h-4 w-4 animate-spin text-teal-500" />}
         </div>
-        <div className="max-h-[300px] overflow-y-auto">
+        <div className="max-h-60 overflow-y-auto">
           {customers.length === 0 && searchQuery && !isLoading && (
-            <div className="py-6 text-center text-sm text-muted-foreground">
+            <div className="py-6 text-center text-sm text-slate-400 italic">
               No customers found
             </div>
           )}
           {customers.length === 0 && !searchQuery && (
-            <div className="py-6 text-center text-sm text-muted-foreground">
+            <div className="py-6 text-center text-sm text-slate-400">
               Start typing to search customers
             </div>
           )}
@@ -139,22 +143,24 @@ export function SearchableCustomerDropdown({
               key={customer.id}
               onClick={() => handleSelect(customer)}
               className={cn(
-                'relative flex w-full cursor-pointer select-none items-center gap-2 px-3 py-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground',
-                value === customer.id && 'bg-accent'
+                'relative flex w-full cursor-pointer select-none items-center gap-2 px-3 py-2 text-sm outline-none transition-colors',
+                value === customer.id 
+                  ? 'bg-teal-50 text-teal-700' 
+                  : 'hover:bg-slate-50 text-slate-700'
               )}
               data-testid={`customer-option-${customer.id}`}
             >
               <Check
                 className={cn(
-                  'h-4 w-4',
+                  'h-4 w-4 text-teal-600',
                   value === customer.id ? 'opacity-100' : 'opacity-0'
                 )}
               />
               <div className="flex flex-col items-start">
-                <span className="font-medium">
+                <span className="font-medium text-slate-700">
                   {customer.first_name} {customer.last_name}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-slate-400">
                   {customer.phone}
                   {customer.email && ` • ${customer.email}`}
                 </span>

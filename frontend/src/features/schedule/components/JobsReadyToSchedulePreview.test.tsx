@@ -106,7 +106,7 @@ describe('JobsReadyToSchedulePreview', () => {
       expect(screen.getByText('Bob Johnson')).toBeInTheDocument();
 
       // Summary should show all jobs selected
-      expect(screen.getByTestId('jobs-summary')).toHaveTextContent('3 jobs selected for scheduling');
+      expect(screen.getByTestId('jobs-summary')).toHaveTextContent('3 of 3 jobs selected');
     });
 
     it('correctly reflects excluded jobs in summary count', async () => {
@@ -131,10 +131,10 @@ describe('JobsReadyToSchedulePreview', () => {
       );
 
       // Initially all selected
-      expect(screen.getByTestId('jobs-summary')).toHaveTextContent('3 jobs selected for scheduling');
+      expect(screen.getByTestId('jobs-summary')).toHaveTextContent('3 of 3 jobs selected');
 
       // Exclude first job
-      const checkbox1 = screen.getByTestId('exclude-job-job-1');
+      const checkbox1 = screen.getByTestId('job-checkbox-job-1');
       await user.click(checkbox1);
       excludedJobIds.add('job-1');
 
@@ -149,8 +149,8 @@ describe('JobsReadyToSchedulePreview', () => {
         />
       );
 
-      // Should show 2 selected, 1 excluded
-      expect(screen.getByTestId('jobs-summary')).toHaveTextContent('2 jobs selected for scheduling (1 excluded)');
+      // Should show 2 selected out of 3 total
+      expect(screen.getByTestId('jobs-summary')).toHaveTextContent('2 of 3 jobs selected');
     });
 
     it('visually distinguishes excluded jobs', () => {
@@ -199,10 +199,10 @@ describe('JobsReadyToSchedulePreview', () => {
 
       // Verify initial state
       expect(screen.getByText('John Doe')).toBeInTheDocument();
-      expect(screen.getByTestId('jobs-summary')).toHaveTextContent('3 jobs selected');
+      expect(screen.getByTestId('jobs-summary')).toHaveTextContent('3 of 3 jobs selected');
 
       // Exclude job-1
-      const checkbox1 = screen.getByTestId('exclude-job-job-1');
+      const checkbox1 = screen.getByTestId('job-checkbox-job-1');
       await user.click(checkbox1);
       excludedJobIds = new Set(['job-1']);
 
@@ -216,7 +216,7 @@ describe('JobsReadyToSchedulePreview', () => {
         />
       );
 
-      expect(screen.getByTestId('jobs-summary')).toHaveTextContent('2 jobs selected');
+      expect(screen.getByTestId('jobs-summary')).toHaveTextContent('2 of 3 jobs selected');
 
       // Re-include job-1
       await user.click(checkbox1);
@@ -253,7 +253,7 @@ describe('JobsReadyToSchedulePreview', () => {
       );
 
       // Initially: 2 selected (job-1 excluded), 1 excluded
-      expect(screen.getByTestId('jobs-summary')).toHaveTextContent('2 jobs selected for scheduling (1 excluded)');
+      expect(screen.getByTestId('jobs-summary')).toHaveTextContent('2 of 3 jobs selected');
 
       // Verify all 3 jobs are visible initially
       expect(screen.getByText('John Doe')).toBeInTheDocument();
@@ -309,7 +309,7 @@ describe('JobsReadyToSchedulePreview', () => {
         />
       );
 
-      expect(screen.getByText(/No jobs available for scheduling/)).toBeInTheDocument();
+      expect(screen.getByText(/No jobs ready to schedule/)).toBeInTheDocument();
     });
   });
 });

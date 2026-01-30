@@ -55,13 +55,19 @@ export function GenerateInvoiceButton({ job, onSuccess }: GenerateInvoiceButtonP
       onClick={handleGenerateInvoice}
       disabled={isLoading}
       data-testid="generate-invoice-btn"
+      className="bg-teal-500 hover:bg-teal-600 text-white px-5 py-2.5 rounded-lg shadow-sm shadow-teal-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {isLoading ? (
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        <>
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          <span>Generating...</span>
+        </>
       ) : (
-        <FileText className="mr-2 h-4 w-4" />
+        <>
+          <FileText className="mr-2 h-4 w-4" />
+          <span>Generate Invoice</span>
+        </>
       )}
-      Generate Invoice
     </Button>
   );
 }

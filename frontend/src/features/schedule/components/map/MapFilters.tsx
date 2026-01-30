@@ -2,8 +2,6 @@
  * MapFilters component - Filter panel with staff toggles.
  */
 
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import type { ScheduleStaffAssignment } from '../../types';
 import { getStaffColor } from '../../utils/staffColors';
 
@@ -19,33 +17,30 @@ export function MapFilters({
   onStaffToggle,
 }: MapFiltersProps) {
   return (
-    <div data-testid="map-filters" className="flex flex-wrap items-center gap-4">
-      <span className="text-sm text-muted-foreground">Filter:</span>
-      {assignments.map((assignment) => (
-        <div
-          key={assignment.staff_id}
-          className="flex items-center space-x-2"
-          data-testid={`staff-filter-${assignment.staff_name}`}
-        >
-          <Switch
-            id={`staff-${assignment.staff_id}`}
-            checked={visibleStaff.has(assignment.staff_name)}
-            onCheckedChange={(checked) =>
-              onStaffToggle(assignment.staff_name, checked)
-            }
-          />
-          <div
-            className="w-3 h-3 rounded-full"
-            style={{ backgroundColor: getStaffColor(assignment.staff_name) }}
-          />
-          <Label
-            htmlFor={`staff-${assignment.staff_id}`}
-            className="text-sm font-normal cursor-pointer"
+    <div data-testid="map-filters" className="bg-white rounded-xl shadow-md border border-slate-100 p-2 flex gap-2">
+      {assignments.map((assignment) => {
+        const isActive = visibleStaff.has(assignment.staff_name);
+        return (
+          <button
+            key={assignment.staff_id}
+            onClick={() => onStaffToggle(assignment.staff_name, !isActive)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              isActive
+                ? 'bg-teal-100 text-teal-700'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+            data-testid={`staff-filter-${assignment.staff_name}`}
           >
-            {assignment.staff_name}
-          </Label>
-        </div>
-      ))}
+            <div className="flex items-center gap-2">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: getStaffColor(assignment.staff_name) }}
+              />
+              <span>{assignment.staff_name}</span>
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }

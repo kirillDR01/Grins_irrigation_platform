@@ -22,7 +22,8 @@ describe('JobSelectionControls', () => {
     );
 
     expect(screen.getByTestId('select-all-btn')).toBeInTheDocument();
-    expect(screen.getByText('Select All')).toBeInTheDocument();
+    // Check for the label text (there are multiple "Select All" elements)
+    expect(screen.getAllByText('Select All').length).toBeGreaterThan(0);
   });
 
   it('renders Deselect All link', () => {
@@ -77,7 +78,7 @@ describe('JobSelectionControls', () => {
       />
     );
 
-    expect(screen.getByText('2 of 3 selected')).toBeInTheDocument();
+    expect(screen.getByText('2 of 3 jobs selected')).toBeInTheDocument();
   });
 
   it('returns null when no jobs', () => {
@@ -106,5 +107,45 @@ describe('JobSelectionControls', () => {
     expect(screen.getByTestId('job-selection-controls')).toBeInTheDocument();
     expect(screen.getByTestId('select-all-btn')).toBeInTheDocument();
     expect(screen.getByTestId('deselect-all-btn')).toBeInTheDocument();
+  });
+
+  it('renders select all checkbox', () => {
+    render(
+      <JobSelectionControls
+        jobIds={mockJobIds}
+        excludedJobIds={new Set()}
+        onSelectAll={mockOnSelectAll}
+        onDeselectAll={mockOnDeselectAll}
+      />
+    );
+
+    expect(screen.getByTestId('select-all-checkbox')).toBeInTheDocument();
+  });
+
+  it('shows clear selection button when items are selected', () => {
+    render(
+      <JobSelectionControls
+        jobIds={mockJobIds}
+        excludedJobIds={new Set()}
+        onSelectAll={mockOnSelectAll}
+        onDeselectAll={mockOnDeselectAll}
+      />
+    );
+
+    expect(screen.getByTestId('clear-selection-btn')).toBeInTheDocument();
+  });
+
+  it('calls onDeselectAll when clear selection is clicked', () => {
+    render(
+      <JobSelectionControls
+        jobIds={mockJobIds}
+        excludedJobIds={new Set()}
+        onSelectAll={mockOnSelectAll}
+        onDeselectAll={mockOnDeselectAll}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('clear-selection-btn'));
+    expect(mockOnDeselectAll).toHaveBeenCalledTimes(1);
   });
 });
