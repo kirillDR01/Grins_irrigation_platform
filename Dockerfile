@@ -1,57 +1,40 @@
-# syntax=docker/dockerfile:1
-
 # ============================================================================
-# Build Stage: Install dependencies using official uv image
+# Grin's Irrigation Platform - Production Dockerfile
+# Compatible with Railway, Render, and other cloud platforms
 # ============================================================================
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
-WORKDIR /app
-
-# Enable bytecode compilation for faster startup
-ENV UV_COMPILE_BYTECODE=1
-
-# Copy dependency files first (better layer caching)
-COPY pyproject.toml uv.lock README.md ./
-
-# Install dependencies in separate layer (cached unless dependencies change)
-# Use cache mount for significant build speed improvements
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project --no-dev
-
-# Copy application code
-COPY . /app
-
-# Install project in non-editable mode (production-ready)
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-editable --no-dev
-
-# ============================================================================
-# Runtime Stage: Minimal production image
-# ============================================================================
 FROM python:3.12-slim-bookworm
 
-# Install runtime dependencies if needed
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     ca-certificates \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Install uv for fast package management
+RUN pip install uv
 
 # Create non-root user for security
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 WORKDIR /app
 
-# Copy virtual environment from builder
-COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
+# Copy dependency files first (better layer caching)
+COPY pyproject.toml uv.lock README.md ./
+
+# Install dependencies
+RUN uv sync --frozen --no-install-project --no-dev
 
 # Copy application code
-COPY --chown=appuser:appuser . /app
+COPY . /app
 
-# Create output directory with proper permissions
+# Install project
+RUN uv sync --frozen --no-editable --no-dev
+
+# Create output directories with proper permissions
 RUN mkdir -p /app/output /app/logs && \
-    chown -R appuser:appuser /app/output /app/logs
+    chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser
@@ -63,10 +46,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import sys; sys.exit(0)"
+    CMD curl -f http://localhost:8000/health || exit 1
 
 # Expose application port
 EXPOSE 8000
 
-# Run application
-CMD ["python", "src/grins_platform/main.py"]
+# Run application with uvicorn
+CMD ["uvicorn", "grins_platform.main:app", "--host", "0.0.0.0", "--port", "8000"]
