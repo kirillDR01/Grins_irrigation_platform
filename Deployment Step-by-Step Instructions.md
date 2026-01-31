@@ -149,15 +149,20 @@ Expected output shows the latest migration version (e.g., `20250626_100000`).
 | **Build Command** | `npm run build` |
 | **Output Directory** | `dist` |
 
-### 4.3 Add Environment Variable
+### 4.3 Add Environment Variables
+
+Add these environment variables in Vercel:
 
 | Name | Value |
 |------|-------|
 | `VITE_API_BASE_URL` | `https://YOUR-BACKEND-URL.up.railway.app` |
+| `VITE_GOOGLE_MAPS_API_KEY` | `AIzaSyAyB_Gbhgx7b2RHfCfprAuG_lP9Wsk3_TA` |
 
-**⚠️ NO trailing slash!**
-- ✅ Correct: `https://grinsirrigationplatform-production.up.railway.app`
-- ❌ Wrong: `https://grinsirrigationplatform-production.up.railway.app/`
+**⚠️ Important Notes:**
+- NO trailing slash on `VITE_API_BASE_URL`!
+  - ✅ Correct: `https://grinsirrigationplatform-production.up.railway.app`
+  - ❌ Wrong: `https://grinsirrigationplatform-production.up.railway.app/`
+- The Google Maps API key is required for the map view in the schedule page
 
 ### 4.4 Deploy
 
@@ -249,6 +254,7 @@ Expected: `{"items": [], "total": 0, "page": 1, "page_size": 20}`
 | Railway Backend | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (reference) |
 | Railway Backend | `CORS_ORIGINS` | `https://your-frontend.vercel.app` |
 | Vercel Frontend | `VITE_API_BASE_URL` | `https://your-backend.up.railway.app` |
+| Vercel Frontend | `VITE_GOOGLE_MAPS_API_KEY` | `AIzaSyAyB_Gbhgx7b2RHfCfprAuG_lP9Wsk3_TA` |
 
 ### Login Credentials
 
