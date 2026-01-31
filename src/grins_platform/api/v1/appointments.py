@@ -129,14 +129,30 @@ async def list_appointments(
         date_to=date_to,
         sort_by=sort_by,
         sort_order=sort_order,
+        include_relationships=True,
     )
 
     total_pages = math.ceil(total / page_size) if total > 0 else 0
 
     _endpoints.log_completed("list_appointments", count=len(appointments), total=total)
 
+    # Build response with extended fields from relationships
+    items: list[AppointmentResponse] = []
+    for a in appointments:
+        response = AppointmentResponse.model_validate(a)
+        # Add extended fields from relationships
+        if hasattr(a, "job") and a.job:
+            response.job_type = a.job.job_type
+            if hasattr(a.job, "customer") and a.job.customer:
+                response.customer_name = (
+                    f"{a.job.customer.first_name} {a.job.customer.last_name}"
+                )
+        if hasattr(a, "staff") and a.staff:
+            response.staff_name = a.staff.name
+        items.append(response)
+
     return AppointmentPaginatedResponse(
-        items=[AppointmentResponse.model_validate(a) for a in appointments],
+        items=items,
         total=total,
         page=page,
         page_size=page_size,

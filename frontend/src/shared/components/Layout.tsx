@@ -13,12 +13,12 @@ import {
   Droplets,
   Zap,
   FileText,
-  Search,
   Bell,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { UserMenu } from '@/features/auth';
+import { GlobalSearch } from './GlobalSearch';
 
 interface LayoutProps {
   children: ReactNode;
@@ -154,21 +154,6 @@ export function Layout({ children }: LayoutProps) {
           })}
         </nav>
 
-        {/* User Profile Card */}
-        <div
-          className="bg-slate-50 rounded-xl mx-4 mb-4 p-3 hover:bg-slate-100 transition-colors cursor-pointer"
-          data-testid="user-profile-card"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm bg-teal-100 flex items-center justify-center">
-              <span className="text-teal-700 font-bold text-sm">VG</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-medium text-slate-800">Viktor Grin</span>
-              <span className="text-xs text-slate-500">Owner</span>
-            </div>
-          </div>
-        </div>
       </aside>
 
       {/* Main content */}
@@ -201,19 +186,11 @@ export function Layout({ children }: LayoutProps) {
 
           {/* Global search input */}
           <div className="hidden lg:flex flex-1 max-w-md">
-            <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search customers, jobs, invoices..."
-                className="w-full bg-transparent border-none pl-10 pr-4 py-2 text-sm text-slate-600 placeholder-slate-400 focus:outline-none"
-                data-testid="global-search"
-              />
-            </div>
+            <GlobalSearch />
           </div>
 
-          {/* Spacer for mobile */}
-          <div className="flex-1 lg:hidden" />
+          {/* Spacer to push actions to far right */}
+          <div className="flex-1" />
 
           {/* Right side actions */}
           <div className="flex items-center gap-2">
@@ -231,14 +208,6 @@ export function Layout({ children }: LayoutProps) {
 
             {/* Vertical separator */}
             <div className="h-8 w-px bg-slate-200" data-testid="header-separator" />
-
-            {/* User avatar */}
-            <div
-              className="w-8 h-8 rounded-full bg-teal-100 text-teal-700 font-bold text-xs flex items-center justify-center cursor-pointer hover:bg-teal-200 transition-colors"
-              data-testid="user-avatar"
-            >
-              VG
-            </div>
 
             {/* User menu (hidden on mobile, shown on larger screens) */}
             <div className="hidden sm:block">

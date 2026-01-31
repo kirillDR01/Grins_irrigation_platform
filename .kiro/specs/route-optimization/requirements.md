@@ -86,6 +86,8 @@ The Route Optimization feature will provide one-click schedule generation that r
 6. WHEN schedule generation is already in progress for a date, THE System SHALL return HTTP 409 Conflict
 7. WHEN previewing a schedule, THE Schedule_Generator SHALL return proposed assignments without persisting them
 8. WHEN checking capacity for a date, THE System SHALL return available staff, total available minutes, and estimated job capacity
+9. WHEN applying a generated schedule, THE System SHALL delete any existing appointments for the same date (in 'scheduled' or 'confirmed' status) before creating new appointments to prevent overlapping appointments
+10. WHEN existing appointments are deleted during schedule application, THE System SHALL reset associated job statuses from 'scheduled' back to 'approved'
 
 ### Requirement 6: Hard Constraints
 

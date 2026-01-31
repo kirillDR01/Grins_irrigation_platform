@@ -23,6 +23,7 @@ import type {
   ScheduleClearResponse,
   ScheduleClearAuditResponse,
   ScheduleClearAuditDetailResponse,
+  ScheduleRestoreResponse,
 } from '../types';
 import type { PaginatedResponse } from '@/core/api';
 
@@ -188,6 +189,16 @@ export const scheduleGenerationApi = {
   async getClearDetails(auditId: string): Promise<ScheduleClearAuditDetailResponse> {
     const response = await apiClient.get<ScheduleClearAuditDetailResponse>(
       `${BASE_URL}/clear/${auditId}`
+    );
+    return response.data;
+  },
+
+  /**
+   * Restore a cleared schedule from audit data.
+   */
+  async restoreSchedule(auditId: string): Promise<ScheduleRestoreResponse> {
+    const response = await apiClient.post<ScheduleRestoreResponse>(
+      `${BASE_URL}/clear/${auditId}/restore`
     );
     return response.data;
   },

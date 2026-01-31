@@ -76,6 +76,10 @@ class AppointmentResponse(BaseModel):
     estimated_arrival: Optional[time] = None
     created_at: datetime
     updated_at: datetime
+    # Extended fields for display (populated from relationships)
+    job_type: Optional[str] = None
+    customer_name: Optional[str] = None
+    staff_name: Optional[str] = None
 
 
 class AppointmentListParams(BaseModel):

@@ -46,9 +46,9 @@ export function LoginPage() {
       await login({ username, password, remember_me: rememberMe });
       navigate(from, { replace: true });
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Invalid username or password';
-      setError(message);
+      // Always show a user-friendly message for login failures
+      // Don't expose technical details like "401" or "Request failed"
+      setError('Username or password is incorrect. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -83,18 +83,18 @@ export function LoginPage() {
             className="space-y-6"
             data-testid="login-form"
           >
-            {/* Error Alert - Task 27.7: Left border accent style (red variant) */}
+            {/* Error Alert - User-friendly error message with highlighted box */}
             {error && (
               <div 
-                className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-red-400 flex items-start gap-3"
+                className="bg-red-50 p-4 rounded-xl border border-red-200 flex items-start gap-3"
                 data-testid="login-error"
               >
-                <div className="bg-red-100 p-2 rounded-full">
+                <div className="bg-red-100 p-2 rounded-full flex-shrink-0">
                   <AlertCircle className="h-4 w-4 text-red-600" />
                 </div>
                 <div>
-                  <p className="text-slate-800 font-medium">Error</p>
-                  <p className="text-slate-500 text-sm">{error}</p>
+                  <p className="text-red-800 font-medium">Login Failed</p>
+                  <p className="text-red-600 text-sm mt-0.5">{error}</p>
                 </div>
               </div>
             )}

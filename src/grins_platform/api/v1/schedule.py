@@ -484,6 +484,9 @@ def apply_schedule(
     This endpoint takes the generated schedule assignments and creates
     actual appointment records in the database.
 
+    IMPORTANT: This will delete any existing appointments for the same date
+    before creating new ones to prevent overlapping appointments.
+
     Validates: Requirements 5.1, 5.8
     """
     endpoints.log_started(
@@ -493,6 +496,40 @@ def apply_schedule(
     )
 
     try:
+        # First, delete any existing appointments for this date to prevent overlaps
+        # Only delete appointments that are in 'scheduled' status (not started yet)
+        existing_appointments = (
+            db.query(Appointment)
+            .filter(
+                Appointment.scheduled_date == request.schedule_date,
+                Appointment.status.in_(["scheduled", "confirmed"]),
+            )
+            .all()
+        )
+
+        deleted_count = 0
+        deleted_job_ids: set[UUID] = set()
+        for existing in existing_appointments:
+            deleted_job_ids.add(existing.job_id)
+            db.delete(existing)
+            deleted_count += 1
+
+        if deleted_count > 0:
+            endpoints.log_started(
+                "apply_schedule_cleanup",
+                deleted_appointments=deleted_count,
+                schedule_date=str(request.schedule_date),
+            )
+
+        # Reset job status for deleted appointments back to approved
+        for job_id in deleted_job_ids:
+            job_record = db.execute(
+                select(Job).where(Job.id == job_id),
+            ).scalar_one_or_none()
+            if job_record and job_record.status == "scheduled":
+                job_record.status = "approved"
+                job_record.scheduled_at = None
+
         created_ids: list[UUID] = []
 
         for staff_assignment in request.assignments:
@@ -537,6 +574,9 @@ def apply_schedule(
             f"Successfully created {len(created_ids)} appointments "
             f"for {request.schedule_date}"
         )
+        if deleted_count > 0:
+            msg += f" (replaced {deleted_count} existing appointments)"
+
         response = ApplyScheduleResponse(
             success=True,
             schedule_date=request.schedule_date,
@@ -556,5 +596,6 @@ def apply_schedule(
         endpoints.log_completed(
             "apply_schedule",
             appointments_created=len(created_ids),
+            deleted_existing=deleted_count,
         )
         return response

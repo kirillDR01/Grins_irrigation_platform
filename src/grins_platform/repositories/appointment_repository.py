@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.appointment import Appointment
 from grins_platform.models.enums import AppointmentStatus  # noqa: TC001
+from grins_platform.models.job import Job
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -230,6 +231,7 @@ class AppointmentRepository(LoggerMixin):
         date_to: date | None = None,
         sort_by: str = "scheduled_date",
         sort_order: str = "asc",
+        include_relationships: bool = False,
     ) -> tuple[list[Appointment], int]:
         """List appointments with filtering and pagination.
 
@@ -243,6 +245,7 @@ class AppointmentRepository(LoggerMixin):
             date_to: Filter by scheduled_date <= date_to
             sort_by: Field to sort by
             sort_order: Sort order (asc/desc)
+            include_relationships: Whether to load related entities (job, staff)
 
         Returns:
             Tuple of (list of appointments, total count)
@@ -284,6 +287,13 @@ class AppointmentRepository(LoggerMixin):
         paginated_query = (
             base_query.order_by(sort_column).offset(offset).limit(page_size)
         )
+
+        # Include relationships if requested
+        if include_relationships:
+            paginated_query = paginated_query.options(
+                selectinload(Appointment.job).selectinload(Job.customer),
+                selectinload(Appointment.staff),
+            )
 
         result = await self.session.execute(paginated_query)
         appointments = list(result.scalars().all())

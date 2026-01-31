@@ -121,25 +121,38 @@ export function AppointmentList({ onAppointmentClick }: AppointmentListProps) {
     {
       accessorKey: 'job_id',
       header: 'Job',
-      cell: ({ row }) => (
-        <span className="text-sm text-slate-600">
-          #{row.original.job_id.slice(0, 8)}
-        </span>
-      ),
+      cell: ({ row }) => {
+        const jobType = row.original.job_type;
+        const customerName = row.original.customer_name;
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm font-medium text-slate-700">
+              {jobType ? jobType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Unknown Job'}
+            </span>
+            {customerName && (
+              <span className="text-xs text-slate-500">
+                {customerName}
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       accessorKey: 'staff_id',
       header: 'Staff',
       cell: ({ row }) => {
-        const staffId = row.original.staff_id;
-        const initials = staffId.slice(0, 2).toUpperCase();
+        const staffName = row.original.staff_name;
+        const initials = staffName 
+          ? staffName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+          : row.original.staff_id.slice(0, 2).toUpperCase();
         return (
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-600 font-semibold text-xs flex items-center justify-center">
               {initials}
             </div>
             <span className="text-sm text-slate-600">
-              {staffId.slice(0, 8)}...
+              {staffName || 'Unknown Staff'}
             </span>
           </div>
         );

@@ -1,10 +1,17 @@
-import { memo } from 'react';
+import { memo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, Clock, ChevronRight } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useLienDeadlines } from '../hooks';
 import { InvoiceStatusBadge } from './InvoiceStatusBadge';
 import type { Invoice } from '../types';
+
+// Helper to calculate days remaining
+function calculateDaysRemaining(dueDate: string, now: number): number {
+  return Math.ceil(
+    (new Date(dueDate).getTime() - now) / (1000 * 60 * 60 * 24)
+  );
+}
 
 interface LienDeadlinesWidgetProps {
   className?: string;
@@ -27,15 +34,16 @@ function formatDate(dateString: string): string {
 interface DeadlineItemProps {
   invoice: Invoice;
   deadlineType: '45-day' | '120-day';
+  currentTime: number;
 }
 
 const DeadlineItem = memo(function DeadlineItem({
   invoice,
   deadlineType,
+  currentTime,
 }: DeadlineItemProps) {
-  const daysRemaining = Math.ceil(
-    (new Date(invoice.due_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  );
+  const daysRemaining = calculateDaysRemaining(invoice.due_date, currentTime);
+  
   const isUrgent = daysRemaining < 7;
   const isWarning = daysRemaining >= 7 && daysRemaining < 30;
 
@@ -89,6 +97,9 @@ export const LienDeadlinesWidget = memo(function LienDeadlinesWidget({
   className,
 }: LienDeadlinesWidgetProps) {
   const { data, isLoading, error } = useLienDeadlines();
+  // eslint-disable-next-line react-hooks/purity -- Date.now() is intentionally called once per render for deadline calculations
+  const currentTimeRef = useRef(Date.now());
+  const currentTime = currentTimeRef.current;
 
   const approaching45Day = data?.approaching_45_day ?? [];
   const approaching120Day = data?.approaching_120_day ?? [];
@@ -147,6 +158,7 @@ export const LienDeadlinesWidget = memo(function LienDeadlinesWidget({
                       key={invoice.id}
                       invoice={invoice}
                       deadlineType="45-day"
+                      currentTime={currentTime}
                     />
                   ))}
                   {approaching45Day.length > 3 && (
@@ -177,6 +189,7 @@ export const LienDeadlinesWidget = memo(function LienDeadlinesWidget({
                       key={invoice.id}
                       invoice={invoice}
                       deadlineType="120-day"
+                      currentTime={currentTime}
                     />
                   ))}
                   {approaching120Day.length > 3 && (

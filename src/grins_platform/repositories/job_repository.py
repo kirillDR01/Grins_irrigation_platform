@@ -351,6 +351,7 @@ class JobRepository(LoggerMixin):
         priority_level: int | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
+        search: str | None = None,
         sort_by: str = "created_at",
         sort_order: str = "desc",
         include_deleted: bool = False,
@@ -368,6 +369,7 @@ class JobRepository(LoggerMixin):
             priority_level: Filter by priority
             date_from: Filter by created_at >= date_from
             date_to: Filter by created_at <= date_to
+            search: Search by job type or description
             sort_by: Field to sort by
             sort_order: Sort order (asc/desc)
             include_deleted: Whether to include soft-deleted jobs
@@ -377,7 +379,12 @@ class JobRepository(LoggerMixin):
 
         Validates: Requirement 6.1-6.9
         """
-        self.log_started("list_with_filters", page=page, page_size=page_size)
+        self.log_started(
+            "list_with_filters",
+            page=page,
+            page_size=page_size,
+            search=search,
+        )
 
         # Base query
         base_query = select(Job)
@@ -411,6 +418,14 @@ class JobRepository(LoggerMixin):
 
         if date_to is not None:
             base_query = base_query.where(Job.created_at <= date_to)
+
+        # Apply search filter (search by job_type or description)
+        if search is not None and search.strip():
+            search_term = f"%{search.strip().lower()}%"
+            base_query = base_query.where(
+                (func.lower(Job.job_type).like(search_term))
+                | (func.lower(Job.description).like(search_term)),
+            )
 
         # Get total count
         count_query = select(func.count()).select_from(base_query.subquery())

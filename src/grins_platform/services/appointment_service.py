@@ -281,6 +281,7 @@ class AppointmentService(LoggerMixin):
         date_to: date | None = None,
         sort_by: str = "scheduled_date",
         sort_order: str = "asc",
+        include_relationships: bool = True,
     ) -> tuple[list[Appointment], int]:
         """List appointments with filtering.
 
@@ -294,6 +295,7 @@ class AppointmentService(LoggerMixin):
             date_to: Filter by scheduled_date <= date_to
             sort_by: Field to sort by
             sort_order: Sort order (asc/desc)
+            include_relationships: Whether to load related entities (job, staff)
 
         Returns:
             Tuple of (list of appointments, total count)
@@ -312,6 +314,7 @@ class AppointmentService(LoggerMixin):
             date_to=date_to,
             sort_by=sort_by,
             sort_order=sort_order,
+            include_relationships=include_relationships,
         )
 
         self.log_completed("list_appointments", count=len(appointments), total=total)

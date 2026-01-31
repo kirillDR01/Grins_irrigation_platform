@@ -245,19 +245,21 @@ export function JobsPage() {
 
       {/* Job Detail Dialog */}
       <Dialog open={!!selectedJobId} onOpenChange={handleCloseDetail}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" aria-describedby="job-detail-description">
-          <DialogHeader>
-            <DialogTitle>Job Details</DialogTitle>
-            <p id="job-detail-description" className="text-sm text-muted-foreground">
-              View and manage job information.
-            </p>
-          </DialogHeader>
-          {selectedJobId && (
-            <JobDetail
-              jobId={selectedJobId}
-              onClose={handleCloseDetail}
-            />
-          )}
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto p-0" aria-describedby="job-detail-description">
+          <div className="sr-only">
+            <DialogHeader>
+              <DialogTitle>Job Details</DialogTitle>
+              <p id="job-detail-description">View and manage job information.</p>
+            </DialogHeader>
+          </div>
+          <div className="p-6">
+            {selectedJobId && (
+              <JobDetail
+                jobId={selectedJobId}
+                onClose={handleCloseDetail}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

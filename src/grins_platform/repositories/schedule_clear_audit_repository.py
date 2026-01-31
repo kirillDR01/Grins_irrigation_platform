@@ -116,3 +116,25 @@ class ScheduleClearAuditRepository(LoggerMixin):
 
         self.log_completed("find_since", count=len(audits))
         return audits
+
+    async def delete(self, audit_id: UUID) -> bool:
+        """Delete an audit record by ID.
+
+        Args:
+            audit_id: The audit record ID to delete
+
+        Returns:
+            True if deleted, False if not found
+        """
+        self.log_started("delete_audit", audit_id=str(audit_id))
+
+        audit = await self.get_by_id(audit_id)
+        if not audit:
+            self.log_completed("delete_audit", found=False)
+            return False
+
+        await self.session.delete(audit)
+        await self.session.flush()
+
+        self.log_completed("delete_audit", deleted=True)
+        return True

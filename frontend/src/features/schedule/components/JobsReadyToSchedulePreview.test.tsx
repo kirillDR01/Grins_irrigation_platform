@@ -6,18 +6,18 @@ import type { JobReadyToSchedule } from '../types';
 import type { ReactNode } from 'react';
 
 // Mock UI components
-vi.mock('@/shared/components/ui/card', () => ({
+vi.mock('@/components/ui/card', () => ({
   Card: ({ children, ...props }: { children: ReactNode; [key: string]: unknown }) => <div {...props}>{children}</div>,
   CardContent: ({ children, ...props }: { children: ReactNode; [key: string]: unknown }) => <div {...props}>{children}</div>,
   CardHeader: ({ children, ...props }: { children: ReactNode; [key: string]: unknown }) => <div {...props}>{children}</div>,
   CardTitle: ({ children, ...props }: { children: ReactNode; [key: string]: unknown }) => <h2 {...props}>{children}</h2>,
 }));
 
-vi.mock('@/shared/components/ui/badge', () => ({
+vi.mock('@/components/ui/badge', () => ({
   Badge: ({ children, ...props }: { children: ReactNode; [key: string]: unknown }) => <span {...props}>{children}</span>,
 }));
 
-vi.mock('@/shared/components/ui/checkbox', () => ({
+vi.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({ checked, onCheckedChange, ...props }: { checked?: boolean; onCheckedChange?: (checked: boolean) => void; [key: string]: unknown }) => (
     <input
       type="checkbox"
@@ -28,7 +28,7 @@ vi.mock('@/shared/components/ui/checkbox', () => ({
   ),
 }));
 
-vi.mock('@/shared/components/ui/select', () => ({
+vi.mock('@/components/ui/select', () => ({
   Select: ({ children, value, onValueChange }: { children: ReactNode; value?: string; onValueChange?: (value: string) => void }) => (
     <div data-value={value} data-onvaluechange={onValueChange?.toString()}>
       {children}
@@ -44,7 +44,7 @@ vi.mock('@/shared/components/ui/select', () => ({
   SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
 }));
 
-vi.mock('@/shared/components/ui/alert', () => ({
+vi.mock('@/components/ui/alert', () => ({
   Alert: ({ children, ...props }: { children: ReactNode; [key: string]: unknown }) => <div {...props}>{children}</div>,
   AlertDescription: ({ children, ...props }: { children: ReactNode; [key: string]: unknown }) => <div {...props}>{children}</div>,
 }));

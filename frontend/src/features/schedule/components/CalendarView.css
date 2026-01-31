@@ -1,4 +1,5 @@
 /* Calendar View Custom Styling */
+@reference "../../../index.css";
 
 /* Calendar Header (96.2) */
 .fc .fc-toolbar {
@@ -78,4 +79,14 @@
 
 .fc .fc-scrollgrid-section > * {
   @apply border-none;
+}
+
+
+/* Selected Day Event Highlighting */
+.fc .fc-event.selected-day-event {
+  @apply ring-2 ring-red-500 ring-offset-1 animate-pulse;
+}
+
+.fc .fc-event.selected-day-event:hover {
+  @apply opacity-100;
 }

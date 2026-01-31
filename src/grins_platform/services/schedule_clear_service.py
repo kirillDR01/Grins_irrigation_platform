@@ -1,14 +1,14 @@
 """Schedule Clear Service for clearing schedules and resetting jobs.
 
 This service handles the business logic for clearing schedules,
-creating audit logs, and resetting job statuses.
+creating audit logs, resetting job statuses, and restoring cleared schedules.
 
 Requirements: 3.1-3.7, 5.1-5.6, 6.1-6.5
 """
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, time
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -19,6 +19,7 @@ from grins_platform.schemas.schedule_clear import (
     ScheduleClearAuditDetailResponse,
     ScheduleClearAuditResponse,
     ScheduleClearResponse,
+    ScheduleRestoreResponse,
 )
 
 if TYPE_CHECKING:
@@ -244,3 +245,142 @@ class ScheduleClearService(LoggerMixin):
             serialized.append(data)
 
         return serialized
+
+    async def restore_schedule(
+        self,
+        audit_id: UUID,
+        restored_by: UUID | None = None,
+    ) -> ScheduleRestoreResponse:
+        """Restore a previously cleared schedule from audit data.
+
+        This method:
+        1. Gets the audit record with appointment data
+        2. Recreates appointments from the stored data
+        3. Updates job statuses back to 'scheduled'
+        4. Deletes the audit record after successful restore
+
+        Args:
+            audit_id: UUID of the audit record to restore from
+            restored_by: Staff ID who performed the restore
+
+        Returns:
+            ScheduleRestoreResponse with counts of restored items
+
+        Raises:
+            ScheduleClearAuditNotFoundError: If audit record not found
+        """
+        self.log_started(
+            "restore_schedule",
+            audit_id=str(audit_id),
+            restored_by=str(restored_by) if restored_by else None,
+        )
+
+        # Get the audit record
+        audit = await self.audit_repository.get_by_id(audit_id)
+        if not audit:
+            self.log_rejected(
+                "restore_schedule",
+                reason="audit_not_found",
+                audit_id=str(audit_id),
+            )
+            raise ScheduleClearAuditNotFoundError(audit_id)
+
+        appointments_restored = 0
+        jobs_updated = 0
+
+        # Recreate appointments from stored data
+        for apt_data in audit.appointments_data:
+            try:
+                # Parse time strings back to time objects
+                time_start = self._parse_time(apt_data.get("time_window_start", ""))
+                time_end = self._parse_time(apt_data.get("time_window_end", ""))
+                estimated_arrival = None
+                if apt_data.get("estimated_arrival"):
+                    estimated_arrival = self._parse_time(apt_data["estimated_arrival"])
+
+                # Parse date string back to date object
+                scheduled_date = datetime.strptime(
+                    apt_data.get("scheduled_date", ""),
+                    "%Y-%m-%d",
+                ).date()
+
+                # Create the appointment
+                _ = await self.appointment_repository.create(
+                    job_id=UUID(apt_data["job_id"]),
+                    staff_id=UUID(apt_data["staff_id"]),
+                    scheduled_date=scheduled_date,
+                    time_window_start=time_start,
+                    time_window_end=time_end,
+                    status=apt_data.get("status", "scheduled"),
+                    notes=apt_data.get("notes"),
+                    route_order=apt_data.get("route_order"),
+                    estimated_arrival=estimated_arrival,
+                )
+                appointments_restored += 1
+            except (ValueError, KeyError) as e:  # noqa: PERF203
+                self.log_failed(
+                    "restore_schedule",
+                    error=e,
+                    appointment_data=apt_data,
+                )
+                # Continue with other appointments even if one fails
+                continue
+
+        # Update job statuses back to 'scheduled'
+        for job_id_str in audit.jobs_reset:
+            try:
+                job_id = UUID(job_id_str) if isinstance(job_id_str, str) else job_id_str
+                _ = await self.job_repository.update(
+                    job_id=job_id,
+                    data={"status": JobStatus.SCHEDULED.value},
+                )
+                jobs_updated += 1
+            except (ValueError, KeyError) as e:  # noqa: PERF203
+                self.log_failed(
+                    "restore_schedule",
+                    error=e,
+                    job_id=str(job_id_str),
+                )
+                continue
+
+        # Delete the audit record after successful restore
+        _ = await self.audit_repository.delete(audit_id)
+
+        self.log_completed(
+            "restore_schedule",
+            audit_id=str(audit_id),
+            appointments_restored=appointments_restored,
+            jobs_updated=jobs_updated,
+        )
+
+        return ScheduleRestoreResponse(
+            audit_id=audit_id,
+            schedule_date=audit.schedule_date,
+            appointments_restored=appointments_restored,
+            jobs_updated=jobs_updated,
+            restored_at=datetime.now(),
+        )
+
+    def _parse_time(self, time_str: str) -> time:
+        """Parse a time string into a time object.
+
+        Args:
+            time_str: Time string in HH:MM:SS or HH:MM format
+
+        Returns:
+            time object
+        """
+        if not time_str:
+            return time(0, 0, 0)
+
+        # Handle different time formats
+        time_str = time_str.strip()
+        if len(time_str) == 5:  # HH:MM format
+            return datetime.strptime(time_str, "%H:%M").time()
+        if len(time_str) == 8:  # HH:MM:SS format
+            return datetime.strptime(time_str, "%H:%M:%S").time()
+        # Try to parse as full datetime and extract time
+        try:
+            return datetime.fromisoformat(time_str).time()
+        except ValueError:
+            return time(0, 0, 0)

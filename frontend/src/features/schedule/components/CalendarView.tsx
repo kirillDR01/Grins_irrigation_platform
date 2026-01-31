@@ -23,6 +23,10 @@ import './CalendarView.css';
 interface CalendarViewProps {
   onDateClick?: (date: Date) => void;
   onEventClick?: (appointmentId: string) => void;
+  /** Callback when the visible week changes */
+  onWeekChange?: (weekStart: Date) => void;
+  /** Currently selected date for highlighting */
+  selectedDate?: Date | null;
 }
 
 // Map appointment status to calendar event colors (fallback when no staff color)
@@ -50,7 +54,7 @@ function hexToLightBg(hex: string): string {
   return `rgb(${lightR}, ${lightG}, ${lightB})`;
 }
 
-export function CalendarView({ onDateClick, onEventClick }: CalendarViewProps) {
+export function CalendarView({ onDateClick, onEventClick, onWeekChange, selectedDate }: CalendarViewProps) {
   const [dateRange, setDateRange] = useState(() => {
     const today = new Date();
     const start = startOfWeek(today, { weekStartsOn: 0 });
@@ -94,16 +98,27 @@ export function CalendarView({ onDateClick, onEventClick }: CalendarViewProps) {
       (appointment) => appointment.status !== 'cancelled'
     );
 
+    // Format selected date for comparison
+    const selectedDateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : null;
+
     return activeAppointments.map((appointment) => {
       // Get staff name from mapping, then get color
       const staffName = staffIdToName[appointment.staff_id] || '';
       const staffColor = getStaffColor(staffName);
       
+      // Check if this event is on the selected date
+      const isOnSelectedDate = selectedDateStr === appointment.scheduled_date;
+      
       // Use staff color if available, otherwise fall back to status color
       const useStaffColor = staffColor !== DEFAULT_COLOR;
-      const colors = useStaffColor 
+      let colors = useStaffColor 
         ? { bg: hexToLightBg(staffColor), border: staffColor }
         : statusColors[appointment.status];
+      
+      // If on selected date, use red highlight to indicate "will be cleared"
+      if (isOnSelectedDate) {
+        colors = { bg: '#fee2e2', border: '#ef4444' }; // Red highlight
+      }
       
       const statusLabel = appointmentStatusConfig[appointment.status].label;
       const displayTitle = staffName 
@@ -120,22 +135,24 @@ export function CalendarView({ onDateClick, onEventClick }: CalendarViewProps) {
 
       return {
         id: appointment.id,
-        title: displayTitle,
+        title: isOnSelectedDate ? `⚠️ ${displayTitle}` : displayTitle,
         start: startDateTime,
         end: endDateTime,
         backgroundColor: colors.bg,
         borderColor: colors.border,
         textColor: '#1f2937',
+        classNames: isOnSelectedDate ? ['selected-day-event'] : [],
         extendedProps: {
           appointment,
           status: appointment.status,
           staffId: appointment.staff_id,
           staffName,
           jobId: appointment.job_id,
+          isOnSelectedDate,
         },
       };
     });
-  }, [weeklySchedule, staffIdToName]);
+  }, [weeklySchedule, staffIdToName, selectedDate]);
 
   const handleDateClick = useCallback(
     (arg: DateClickArg) => {
@@ -157,7 +174,12 @@ export function CalendarView({ onDateClick, onEventClick }: CalendarViewProps) {
       start: format(arg.start, 'yyyy-MM-dd'),
       end: format(arg.end, 'yyyy-MM-dd'),
     });
-  }, []);
+    // Notify parent of week change
+    if (onWeekChange) {
+      const weekStart = startOfWeek(arg.start, { weekStartsOn: 0 });
+      onWeekChange(weekStart);
+    }
+  }, [onWeekChange]);
 
   if (isLoadingSchedule || isLoadingStaff) {
     return (

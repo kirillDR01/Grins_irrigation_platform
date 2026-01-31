@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { User, Bell, Palette, Building2, Key, Shield, LogOut, Lock, Mail, Phone, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/core/providers";
+import { useAuth } from "@/features/auth";
 
 export function SettingsPage() {
   const [smsEnabled, setSmsEnabled] = useState(true);
@@ -14,7 +15,12 @@ export function SettingsPage() {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const { resolvedTheme, toggleTheme } = useTheme();
+  const { logout } = useAuth();
   const isDarkMode = resolvedTheme === 'dark';
+
+  const handleSignOut = async () => {
+    await logout();
+  };
 
   return (
     <div data-testid="settings-page" className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -358,6 +364,7 @@ export function SettingsPage() {
               variant="destructive" 
               size="sm"
               data-testid="logout-btn"
+              onClick={handleSignOut}
             >
               Sign Out
             </Button>

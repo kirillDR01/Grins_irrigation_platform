@@ -535,6 +535,7 @@ class TestAppointmentServiceList:
             date_to=None,
             sort_by="scheduled_date",
             sort_order="asc",
+            include_relationships=True,
         )
         assert appointments == mock_appointments
         assert total == 2
@@ -576,6 +577,7 @@ class TestAppointmentServiceList:
             date_to=None,
             sort_by="time_window_start",
             sort_order="desc",
+            include_relationships=True,
         )
         assert appointments == mock_appointments
         assert total == 1

@@ -27,6 +27,10 @@ export interface Appointment {
   estimated_arrival: string | null;
   created_at: string;
   updated_at: string;
+  // Extended fields for display (populated from relationships)
+  job_type: string | null;
+  customer_name: string | null;
+  staff_name: string | null;
 }
 
 export interface AppointmentCreate {
@@ -376,4 +380,12 @@ export interface ScheduleClearAuditResponse {
 export interface ScheduleClearAuditDetailResponse extends ScheduleClearAuditResponse {
   appointments_data: Record<string, unknown>[];
   jobs_reset: string[];
+}
+
+export interface ScheduleRestoreResponse {
+  audit_id: string;
+  schedule_date: string;
+  appointments_restored: number;
+  jobs_updated: number;
+  restored_at: string;
 }

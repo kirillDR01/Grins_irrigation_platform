@@ -443,6 +443,7 @@ class JobService(LoggerMixin):
         priority_level: int | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
+        search: str | None = None,
         sort_by: str = "created_at",
         sort_order: str = "desc",
     ) -> tuple[list[Job], int]:
@@ -459,6 +460,7 @@ class JobService(LoggerMixin):
             priority_level: Filter by priority
             date_from: Filter by created_at >= date_from
             date_to: Filter by created_at <= date_to
+            search: Search by job type or description
             sort_by: Field to sort by
             sort_order: Sort order (asc/desc)
 
@@ -467,7 +469,7 @@ class JobService(LoggerMixin):
 
         Validates: Requirement 6.1-6.9
         """
-        self.log_started("list_jobs", page=page, page_size=page_size)
+        self.log_started("list_jobs", page=page, page_size=page_size, search=search)
 
         jobs, total = await self.job_repository.list_with_filters(
             page=page,
@@ -480,6 +482,7 @@ class JobService(LoggerMixin):
             priority_level=priority_level,
             date_from=date_from,
             date_to=date_to,
+            search=search,
             sort_by=sort_by,
             sort_order=sort_order,
         )

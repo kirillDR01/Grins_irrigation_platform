@@ -3,3 +3,4 @@ export { PageHeader } from './PageHeader';
 export { StatusBadge } from './StatusBadge';
 export { LoadingSpinner, LoadingPage } from './LoadingSpinner';
 export { ErrorBoundary, ErrorMessage } from './ErrorBoundary';
+export { GlobalSearch } from './GlobalSearch';

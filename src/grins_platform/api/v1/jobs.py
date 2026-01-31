@@ -116,6 +116,10 @@ async def list_jobs(
         default=None,
         description="Filter jobs created before this date",
     ),
+    search: str | None = Query(
+        default=None,
+        description="Search by job type or description",
+    ),
     sort_by: str = Query(
         default="created_at",
         description="Field to sort by",
@@ -138,6 +142,7 @@ async def list_jobs(
             "status": status_filter.value if status_filter else None,
             "category": category.value if category else None,
             "customer_id": str(customer_id) if customer_id else None,
+            "search": search,
         },
     )
 
@@ -152,6 +157,7 @@ async def list_jobs(
         priority_level=priority_level,
         date_from=date_from,
         date_to=date_to,
+        search=search,
         sort_by=sort_by,
         sort_order=sort_order,
     )

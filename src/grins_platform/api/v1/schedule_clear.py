@@ -26,6 +26,7 @@ from grins_platform.schemas.schedule_clear import (
     ScheduleClearAuditResponse,
     ScheduleClearRequest,
     ScheduleClearResponse,
+    ScheduleRestoreResponse,
 )
 from grins_platform.services.schedule_clear_service import ScheduleClearService
 
@@ -154,6 +155,52 @@ async def get_clear_details(
     """
     try:
         return await service.get_clear_details(audit_id=audit_id)
+    except ScheduleClearAuditNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+
+
+@router.post(
+    "/{audit_id}/restore",
+    response_model=ScheduleRestoreResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Restore a cleared schedule",
+    description="Restore appointments from a cleared schedule audit record.",
+)
+async def restore_schedule(
+    audit_id: UUID,
+    current_user: ManagerOrAdminUser,
+    service: Annotated[ScheduleClearService, Depends(get_schedule_clear_service)],
+) -> ScheduleRestoreResponse:
+    """Restore a previously cleared schedule.
+
+    This endpoint:
+    - Recreates all appointments from the audit record
+    - Updates job statuses back to 'scheduled'
+    - Deletes the audit record after successful restore
+
+    Requires manager or admin role.
+
+    Args:
+        audit_id: UUID of the audit record to restore from
+        current_user: Authenticated manager or admin user
+        service: ScheduleClearService instance
+
+    Returns:
+        ScheduleRestoreResponse with counts of restored items
+
+    Raises:
+        HTTPException: 404 if audit record not found
+
+    Validates: Requirements 6.4-6.5
+    """
+    try:
+        return await service.restore_schedule(
+            audit_id=audit_id,
+            restored_by=current_user.id,
+        )
     except ScheduleClearAuditNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

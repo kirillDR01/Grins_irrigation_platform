@@ -13,6 +13,35 @@ This repository contains documentation and examples for Kiro development workflo
 
 ## Recent Activity
 
+## [2026-01-30 10:00] - BUGFIX: Schedule Generation Overlap Issue Fixed
+
+### What Was Accomplished
+
+Fixed a critical bug where applying a generated schedule multiple times for the same date created duplicate/overlapping appointments, resulting in staff being scheduled for multiple jobs simultaneously.
+
+### Technical Details
+
+**Root Cause:** The `apply_schedule` endpoint was creating new appointments without checking if appointments already existed for the same staff on the same date.
+
+**Evidence Found:** Database showed 33 appointments for 2026-01-28 with clear overlaps (e.g., Vas Tech: 07:01-08:26 AND 07:02-08:13).
+
+**Fix Implemented in `src/grins_platform/api/v1/schedule.py`:**
+1. Delete existing appointments for the same date (only 'scheduled' or 'confirmed' status)
+2. Reset associated job statuses from 'scheduled' back to 'approved'
+3. Create new appointments from the generated schedule
+4. Updated success message to indicate if existing appointments were replaced
+
+### Validation Completed
+- Generated and applied new schedule for 2026-01-30 - 17 appointments with NO overlaps
+- All quality checks passed: ruff, mypy, pyright (0 errors), pytest (205 tests passed)
+- Screenshots saved: `screenshots/schedule-no-overlaps.png`, `screenshots/schedule-day-view-no-overlaps.png`
+
+### Spec Updates
+- Added acceptance criteria 5.9 and 5.10 to `.kiro/specs/route-optimization/requirements.md`
+- Created `.kiro/specs/route-optimization/activity.md` to document the fix
+
+---
+
 ## [2026-01-29 03:33] - FEATURE: Phase 8 Implementation Complete - Invoice System & E2E Validation
 
 ### What Was Accomplished

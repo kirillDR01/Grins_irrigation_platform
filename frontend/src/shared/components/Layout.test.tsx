@@ -68,9 +68,8 @@ describe('Layout', () => {
       
       expect(screen.getByTestId('user-info')).toBeInTheDocument();
       expect(screen.getByText('Viktor')).toBeInTheDocument();
-      // There are two instances of 'VG': one in user menu and one in sidebar profile card
-      const vgTexts = screen.getAllByText('VG');
-      expect(vgTexts.length).toBeGreaterThanOrEqual(1);
+      // VG is only in the user menu now (sidebar profile card was removed)
+      expect(screen.getByText('VG')).toBeInTheDocument();
     });
   });
 
