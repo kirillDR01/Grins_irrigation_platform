@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { invoiceApi } from './invoiceApi';
 import { apiClient } from '@/core/api';
+import type { Invoice, InvoiceDetail, InvoiceStatus } from '../types';
 
 // Mock the API client
 vi.mock('@/core/api', () => ({
@@ -17,24 +18,38 @@ vi.mock('@/core/api', () => ({
   },
 }));
 
-const mockInvoice = {
+const mockInvoice: Invoice = {
   id: '123',
   invoice_number: 'INV-2025-0001',
   job_id: 'job-123',
   customer_id: 'cust-123',
-  amount: '150.00',
-  late_fee_amount: '0.00',
-  total_amount: '150.00',
-  status: 'draft',
+  amount: 150.0,
+  late_fee_amount: 0.0,
+  total_amount: 150.0,
+  status: 'draft' as InvoiceStatus,
   invoice_date: '2025-01-29',
   due_date: '2025-02-28',
   line_items: [],
+  payment_method: null,
+  payment_reference: null,
+  paid_at: null,
+  paid_amount: null,
+  reminder_count: 0,
+  last_reminder_sent: null,
+  lien_eligible: false,
+  lien_warning_sent: null,
+  lien_filed_date: null,
+  notes: null,
+  created_at: '2025-01-29T00:00:00Z',
+  updated_at: '2025-01-29T00:00:00Z',
 };
 
-const mockInvoiceDetail = {
+const mockInvoiceDetail: InvoiceDetail = {
   ...mockInvoice,
-  job: { id: 'job-123', job_type: 'spring_startup' },
-  customer: { id: 'cust-123', first_name: 'John', last_name: 'Doe' },
+  job_description: 'Spring startup',
+  customer_name: 'John Doe',
+  customer_phone: '6125551234',
+  customer_email: 'john@example.com',
 };
 
 describe('invoiceApi', () => {

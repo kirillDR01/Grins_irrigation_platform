@@ -4,7 +4,7 @@
 
 import { useMutation } from '@tanstack/react-query';
 import { scheduleGenerationApi } from '../api/scheduleGenerationApi';
-import type { ParseConstraintsRequest, ParseConstraintsResponse } from '../types';
+import type { ParseConstraintsRequest, ParseConstraintsResponse } from '../types/explanation';
 
 export function useConstraintParser() {
   return useMutation<ParseConstraintsResponse, Error, ParseConstraintsRequest>({

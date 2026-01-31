@@ -3,7 +3,6 @@
  * Displays AI-powered explanation for why a job couldn't be scheduled.
  */
 
-import { useState } from 'react';
 import { AlertCircle, Lightbulb, MapPin, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,19 +16,14 @@ interface UnassignedJobExplanationCardProps {
 export function UnassignedJobExplanationCard({
   job,
 }: UnassignedJobExplanationCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const { explanation, isLoading, error, refetch } = useUnassignedJobExplanation({
+  // Always fetch explanation when card is rendered
+  const { explanation } = useUnassignedJobExplanation({
     job,
-    enabled: isExpanded,
+    enabled: true,
   });
 
-  const handleToggle = () => {
-    if (!isExpanded && !explanation && !error) {
-      setIsExpanded(true);
-    } else {
-      setIsExpanded(!isExpanded);
-    }
-  };
+  // Get job_type from either property
+  const jobType = job.job_type || job.service_type;
 
   return (
     <div className="bg-amber-50 rounded-xl p-4 border border-amber-100" data-testid={`job-explanation-${job.job_id}`}>
@@ -46,7 +40,7 @@ export function UnassignedJobExplanationCard({
       {/* Job Info Section */}
       <div className="space-y-2 mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-slate-700">{job.job_type}</span>
+          <span className="text-sm font-medium text-slate-700">{jobType}</span>
           <span className="text-sm text-slate-500">•</span>
           <span className="text-sm text-slate-600">{job.customer_name}</span>
         </div>

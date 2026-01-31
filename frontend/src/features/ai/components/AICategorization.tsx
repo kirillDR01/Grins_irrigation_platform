@@ -38,7 +38,7 @@ export function AICategorization({
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
 
   if (isLoading) {
-    return <AILoadingState message="AI is categorizing jobs..." />;
+    return <AILoadingState />;
   }
 
   if (error) {
@@ -65,12 +65,6 @@ export function AICategorization({
     } else {
       onApproveAll?.();
     }
-  };
-
-  const getConfidenceColor = (score: number): string => {
-    if (score >= 0.85) return 'text-green-600';
-    if (score >= 0.70) return 'text-yellow-600';
-    return 'text-red-600';
   };
 
   const getConfidenceBadge = (score: number) => {

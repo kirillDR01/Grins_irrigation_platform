@@ -3,7 +3,7 @@
  */
 
 import { useMemo } from 'react';
-import type { ScheduleGenerateResponse, ScheduleStaffAssignment } from '../types';
+import type { ScheduleGenerateResponse } from '../types';
 import type { MapJob, MapRoute } from '../types/map';
 import { getStaffColor } from '../utils/staffColors';
 

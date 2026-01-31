@@ -44,7 +44,6 @@ export function ScheduleGenerationPage() {
   const [results, setResults] = useState<ScheduleGenerateResponse | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-  const [showRoutes, setShowRoutes] = useState(true);
   const [constraints, setConstraints] = useState<ParsedConstraint[]>([]);
   const [excludedJobIds, setExcludedJobIds] = useState<Set<string>>(new Set());
 
@@ -312,7 +311,7 @@ export function ScheduleGenerationPage() {
                 assignments={results.assignments}
                 selectedJobId={selectedJobId}
                 onJobSelect={setSelectedJobId}
-                showRoutes={showRoutes}
+                showRoutes={true}
               />
             </MapProvider>
           )}

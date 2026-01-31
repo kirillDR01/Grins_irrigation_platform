@@ -13,7 +13,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Sparkles, Loader2, AlertCircle, Info, RefreshCw } from 'lucide-react';
+import { Sparkles, AlertCircle, Info, RefreshCw } from 'lucide-react';
 import { useScheduleExplanation } from '../hooks/useScheduleExplanation';
 import type { ScheduleGenerateResponse } from '../types';
 

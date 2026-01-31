@@ -39,6 +39,9 @@ const mockAppointment = {
   notes: null,
   route_order: 1,
   estimated_arrival: '09:30:00',
+  job_type: null,
+  customer_name: null,
+  staff_name: null,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
 };

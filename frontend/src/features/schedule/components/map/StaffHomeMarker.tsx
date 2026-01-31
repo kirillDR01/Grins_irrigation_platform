@@ -52,7 +52,7 @@ function createHomeIcon(color: string): google.maps.Icon {
 }
 
 export function StaffHomeMarker({
-  staffId,
+  staffId: _staffId,
   staffName,
   lat,
   lng,

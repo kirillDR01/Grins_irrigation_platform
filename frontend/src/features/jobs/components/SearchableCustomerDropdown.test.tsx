@@ -113,6 +113,7 @@ describe('SearchableCustomerDropdown', () => {
       total: 1,
       page: 1,
       page_size: 20,
+      total_pages: 1,
     });
 
     render(<SearchableCustomerDropdown onChange={mockOnChange} />, {
@@ -135,6 +136,7 @@ describe('SearchableCustomerDropdown', () => {
       total: 3,
       page: 1,
       page_size: 20,
+      total_pages: 1,
     });
 
     render(<SearchableCustomerDropdown onChange={mockOnChange} />, {
@@ -159,6 +161,7 @@ describe('SearchableCustomerDropdown', () => {
       total: 0,
       page: 1,
       page_size: 20,
+      total_pages: 0,
     });
 
     render(<SearchableCustomerDropdown onChange={mockOnChange} />, {
@@ -199,6 +202,7 @@ describe('SearchableCustomerDropdown', () => {
         total: 1,
         page: 1,
         page_size: 20,
+        total_pages: 1,
       });
 
       // Mock get to return the customer when fetching by ID
@@ -246,6 +250,7 @@ describe('SearchableCustomerDropdown', () => {
       total: 3,
       page: 1,
       page_size: 20,
+      total_pages: 1,
     });
 
     render(<SearchableCustomerDropdown onChange={mockOnChange} />, {
@@ -272,6 +277,7 @@ describe('SearchableCustomerDropdown', () => {
       total: 3,
       page: 1,
       page_size: 20,
+      total_pages: 1,
     });
 
     render(<SearchableCustomerDropdown onChange={mockOnChange} />, {
@@ -321,6 +327,7 @@ describe('SearchableCustomerDropdown', () => {
       total: 3,
       page: 1,
       page_size: 20,
+      total_pages: 1,
     });
 
     render(<SearchableCustomerDropdown onChange={mockOnChange} />, {

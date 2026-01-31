@@ -5,11 +5,11 @@
 
 import { useState } from 'react';
 import { scheduleGenerationApi } from '../api/scheduleGenerationApi';
+import type { ScheduleGenerateResponse } from '../types';
 import type {
-  ScheduleGenerateResponse,
   ScheduleExplanationResponse,
   StaffAssignmentSummary,
-} from '../types';
+} from '../types/explanation';
 
 interface UseScheduleExplanationReturn {
   explanation: ScheduleExplanationResponse | null;

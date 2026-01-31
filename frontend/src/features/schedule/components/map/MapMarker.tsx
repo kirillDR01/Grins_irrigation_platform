@@ -3,13 +3,18 @@
  */
 
 import { Marker } from '@react-google-maps/api';
-import type { Clusterer } from '@googlemaps/markerclusterer';
+import type { Clusterer } from '@react-google-maps/marker-clusterer';
 import { useMemo } from 'react';
 import type { ScheduleJobAssignment } from '../../types';
 import { getStaffColor, DEFAULT_COLOR } from '../../utils/staffColors';
 
+// Extended job assignment with optional status
+interface ExtendedJobAssignment extends ScheduleJobAssignment {
+  status?: string;
+}
+
 interface MapMarkerProps {
-  job: ScheduleJobAssignment;
+  job: ExtendedJobAssignment;
   staffName: string | null;
   isSelected: boolean;
   onClick: () => void;

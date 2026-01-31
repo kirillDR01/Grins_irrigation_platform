@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { AlertCircle, FileText, Calendar, DollarSign, Calculator, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import type { EstimateResponse, SimilarJob } from '../types';
+import type { EstimateResponse, EstimateSimilarJob } from '../types';
 
 interface AIEstimateGeneratorProps {
   estimate: EstimateResponse | null;
@@ -92,7 +92,7 @@ export function AIEstimateGenerator({
             <div data-testid="similar-jobs">
               <h3 className="font-semibold text-slate-800 mb-2">Similar Completed Jobs</h3>
               <div className="space-y-2">
-                {estimate.similar_jobs.map((job: SimilarJob, idx: number) => (
+                {estimate.similar_jobs.map((job: EstimateSimilarJob, idx: number) => (
                   <div key={idx} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg">
                     <div>
                       <span className="text-sm text-slate-700">{job.service_type}</span>

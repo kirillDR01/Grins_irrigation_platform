@@ -4,14 +4,15 @@
 
 import { Plus, Minus, Crosshair, Maximize } from 'lucide-react';
 
-interface MapControlsProps {
+export interface MapControlsProps {
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onRecenter?: () => void;
   onFullscreen?: () => void;
+  onFitBounds?: () => void;
 }
 
-export function MapControls({ onZoomIn, onZoomOut, onRecenter, onFullscreen }: MapControlsProps) {
+export function MapControls({ onZoomIn, onZoomOut, onRecenter, onFullscreen, onFitBounds }: MapControlsProps) {
   return (
     <div className="flex flex-col gap-2" data-testid="map-controls">
       {onZoomIn && (
@@ -42,6 +43,16 @@ export function MapControls({ onZoomIn, onZoomOut, onRecenter, onFullscreen }: M
           aria-label="Recenter map"
         >
           <Crosshair className="h-5 w-5 text-slate-600" />
+        </button>
+      )}
+      {onFitBounds && (
+        <button
+          onClick={onFitBounds}
+          className="bg-white hover:bg-slate-50 p-2 rounded-lg shadow-md border border-slate-100 transition-colors"
+          data-testid="fit-bounds-btn"
+          aria-label="Fit all markers"
+        >
+          <Maximize className="h-5 w-5 text-slate-600" />
         </button>
       )}
       {onFullscreen && (

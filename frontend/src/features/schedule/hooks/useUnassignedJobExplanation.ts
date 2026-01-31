@@ -6,7 +6,6 @@ import { useQuery } from '@tanstack/react-query';
 import { scheduleGenerationApi } from '../api/scheduleGenerationApi';
 import type {
   UnassignedJobExplanationRequest,
-  UnassignedJobExplanationResponse,
 } from '../types/explanation';
 import type { UnassignedJobResponse } from '../types';
 

@@ -29,9 +29,15 @@ const mockStaff = {
   name: 'John Doe',
   phone: '6125551234',
   email: 'john@example.com',
-  role: 'tech',
+  role: 'tech' as const,
+  skill_level: 'senior' as const,
+  certifications: null,
+  availability_notes: null,
+  hourly_rate: null,
   is_active: true,
   is_available: true,
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-01T00:00:00Z',
 };
 
 const createWrapper = () => {

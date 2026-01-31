@@ -5,6 +5,7 @@ import type { CommunicationDraft } from '../types';
 
 const mockDraft: CommunicationDraft = {
   draft_id: 'draft-1',
+  customer_id: 'cust-123',
   customer_name: 'John Doe',
   customer_phone: '6125551234',
   message_type: 'appointment_confirmation',

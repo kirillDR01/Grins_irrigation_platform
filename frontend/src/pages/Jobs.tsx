@@ -35,10 +35,6 @@ export function JobsPage() {
   // Sync URL param with selected job - use id directly instead of effect
   const selectedJobId = id || null;
 
-  const handleJobClick = (jobId: string) => {
-    navigate(`/jobs/${jobId}`);
-  };
-
   const handleCloseDetail = () => {
     navigate('/jobs');
   };
@@ -79,7 +75,7 @@ export function JobsPage() {
         }
       />
 
-      <JobList onJobClick={handleJobClick} />
+      <JobList />
 
       {/* AI Categorize Dialog */}
       <Dialog open={showCategorizeDialog} onOpenChange={setShowCategorizeDialog}>

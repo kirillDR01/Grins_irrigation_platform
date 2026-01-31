@@ -6,7 +6,7 @@ import { customerApi } from '@/features/customers/api/customerApi';
 import { jobApi } from '@/features/jobs/api/jobApi';
 import type { Customer } from '@/features/customers/types';
 import type { Job } from '@/features/jobs/types';
-import { cn } from '@/lib/utils';
+import { cn } from '@/shared/utils/cn';
 
 interface SearchResult {
   type: 'customer' | 'job';

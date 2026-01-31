@@ -5,7 +5,7 @@
 import { InfoWindow } from '@react-google-maps/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Clock, MapPin, User, X, Navigation } from 'lucide-react';
+import { Clock, MapPin, X, Navigation } from 'lucide-react';
 import type { ScheduleJobAssignment } from '../../types';
 import { getStaffColor } from '../../utils/staffColors';
 

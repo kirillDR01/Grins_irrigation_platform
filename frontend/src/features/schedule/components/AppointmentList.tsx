@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { ChevronLeft, ChevronRight, Eye, MoreHorizontal, Clock, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MoreHorizontal, Clock, Calendar } from 'lucide-react';
 import { useAppointments } from '../hooks/useAppointments';
 import type { Appointment, AppointmentStatus, AppointmentListParams } from '../types';
 import { LoadingSpinner } from '@/shared/components/LoadingSpinner';

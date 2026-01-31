@@ -4,7 +4,6 @@ import { AlertCircle, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useOverdueInvoices } from '../hooks';
-import { InvoiceStatusBadge } from './InvoiceStatusBadge';
 import { LoadingSpinner } from '@/shared/components/LoadingSpinner';
 import type { Invoice } from '../types';
 

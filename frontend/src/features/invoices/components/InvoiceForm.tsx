@@ -497,7 +497,7 @@ export function InvoiceForm({
               Cancel
             </Button>
           )}
-          <Button type="submit" variant="primary" disabled={isPending} data-testid="submit-invoice-btn">
+          <Button type="submit" variant="default" disabled={isPending} data-testid="submit-invoice-btn">
             {isPending
               ? 'Saving...'
               : isEditing

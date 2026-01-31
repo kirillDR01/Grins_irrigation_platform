@@ -45,7 +45,7 @@ export function LoginPage() {
     try {
       await login({ username, password, remember_me: rememberMe });
       navigate(from, { replace: true });
-    } catch (err) {
+    } catch {
       // Always show a user-friendly message for login failures
       // Don't expose technical details like "401" or "Request failed"
       setError('Username or password is incorrect. Please try again.');

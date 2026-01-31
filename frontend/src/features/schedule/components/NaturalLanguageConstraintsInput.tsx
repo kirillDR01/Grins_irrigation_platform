@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useConstraintParser } from '../hooks/useConstraintParser';
-import type { ParsedConstraint } from '../types';
+import type { ParsedConstraint } from '../types/explanation';
 
 interface NaturalLanguageConstraintsInputProps {
   scheduleDate: string;
@@ -19,7 +19,7 @@ interface NaturalLanguageConstraintsInputProps {
 const EXAMPLE_CONSTRAINT = "e.g., 'No jobs before 9am' or 'Prioritize Eden Prairie'";
 
 export function NaturalLanguageConstraintsInput({
-  scheduleDate,
+  scheduleDate: _scheduleDate,
   onConstraintsChange,
 }: NaturalLanguageConstraintsInputProps) {
   const [inputText, setInputText] = useState('');
@@ -37,7 +37,7 @@ export function NaturalLanguageConstraintsInput({
       });
 
       const validConstraints = result.constraints.filter(
-        (c) => c.validation_errors.length === 0
+        (c) => !c.validation_errors || c.validation_errors.length === 0
       );
       setConstraints(validConstraints);
       const unparseableList = result.unparseable_text ? [result.unparseable_text] : [];
@@ -139,17 +139,17 @@ export function NaturalLanguageConstraintsInput({
       )}
 
       {/* Invalid Constraints */}
-      {constraints.some((c) => !c.is_valid) && (
+      {constraints.some((c) => c.validation_errors && c.validation_errors.length > 0) && (
         <Alert variant="destructive" data-testid="invalid-constraints-alert" className="bg-white rounded-xl shadow-sm border-l-4 border-l-amber-400 border-t-slate-100 border-r-slate-100 border-b-slate-100">
           <AlertCircle className="h-4 w-4 text-amber-500" />
           <AlertDescription>
             <p className="font-medium text-slate-800 mb-1">Invalid constraints:</p>
             <ul className="list-disc list-inside text-sm text-slate-500">
               {constraints
-                .filter((c) => !c.is_valid)
+                .filter((c) => c.validation_errors && c.validation_errors.length > 0)
                 .map((c, index) => (
                   <li key={index}>
-                    {c.description}: {c.validation_error}
+                    {c.description}: {c.validation_errors?.join(', ')}
                   </li>
                 ))}
             </ul>

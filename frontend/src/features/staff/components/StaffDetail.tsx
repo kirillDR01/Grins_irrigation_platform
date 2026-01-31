@@ -5,8 +5,6 @@ import {
   Mail,
   Edit,
   Trash2,
-  CheckCircle,
-  XCircle,
   Award,
   DollarSign,
   MapPin,
@@ -18,8 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { LoadingPage, ErrorMessage, PageHeader } from '@/shared/components';
+import { LoadingPage, ErrorMessage } from '@/shared/components';
 import { useStaffMember, useDeleteStaff, useUpdateStaffAvailability } from '../hooks';
 import type { StaffRole } from '../types';
 import { toast } from 'sonner';

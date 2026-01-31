@@ -7,52 +7,57 @@
  */
 
 // =============================================================================
-// Enums
+// Const Objects (replacing enums for erasableSyntaxOnly compatibility)
 // =============================================================================
 
-export enum AIActionType {
-  SCHEDULE_GENERATION = 'schedule_generation',
-  JOB_CATEGORIZATION = 'job_categorization',
-  COMMUNICATION_DRAFT = 'communication_draft',
-  ESTIMATE_GENERATION = 'estimate_generation',
-  BUSINESS_QUERY = 'business_query',
-}
+export const AIActionType = {
+  SCHEDULE_GENERATION: 'schedule_generation',
+  JOB_CATEGORIZATION: 'job_categorization',
+  COMMUNICATION_DRAFT: 'communication_draft',
+  ESTIMATE_GENERATION: 'estimate_generation',
+  BUSINESS_QUERY: 'business_query',
+} as const;
+export type AIActionType = (typeof AIActionType)[keyof typeof AIActionType];
 
-export enum AIEntityType {
-  JOB = 'job',
-  CUSTOMER = 'customer',
-  APPOINTMENT = 'appointment',
-  SCHEDULE = 'schedule',
-  COMMUNICATION = 'communication',
-  ESTIMATE = 'estimate',
-}
+export const AIEntityType = {
+  JOB: 'job',
+  CUSTOMER: 'customer',
+  APPOINTMENT: 'appointment',
+  SCHEDULE: 'schedule',
+  COMMUNICATION: 'communication',
+  ESTIMATE: 'estimate',
+} as const;
+export type AIEntityType = (typeof AIEntityType)[keyof typeof AIEntityType];
 
-export enum UserDecision {
-  APPROVED = 'approved',
-  REJECTED = 'rejected',
-  MODIFIED = 'modified',
-  PENDING = 'pending',
-}
+export const UserDecision = {
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+  MODIFIED: 'modified',
+  PENDING: 'pending',
+} as const;
+export type UserDecision = (typeof UserDecision)[keyof typeof UserDecision];
 
-export enum MessageType {
-  APPOINTMENT_CONFIRMATION = 'appointment_confirmation',
-  APPOINTMENT_REMINDER = 'appointment_reminder',
-  ON_THE_WAY = 'on_the_way',
-  ARRIVAL = 'arrival',
-  COMPLETION = 'completion',
-  INVOICE = 'invoice',
-  PAYMENT_REMINDER = 'payment_reminder',
-  CUSTOM = 'custom',
-}
+export const MessageType = {
+  APPOINTMENT_CONFIRMATION: 'appointment_confirmation',
+  APPOINTMENT_REMINDER: 'appointment_reminder',
+  ON_THE_WAY: 'on_the_way',
+  ARRIVAL: 'arrival',
+  COMPLETION: 'completion',
+  INVOICE: 'invoice',
+  PAYMENT_REMINDER: 'payment_reminder',
+  CUSTOM: 'custom',
+} as const;
+export type MessageType = (typeof MessageType)[keyof typeof MessageType];
 
-export enum DeliveryStatus {
-  PENDING = 'pending',
-  SCHEDULED = 'scheduled',
-  SENT = 'sent',
-  DELIVERED = 'delivered',
-  FAILED = 'failed',
-  CANCELLED = 'cancelled',
-}
+export const DeliveryStatus = {
+  PENDING: 'pending',
+  SCHEDULED: 'scheduled',
+  SENT: 'sent',
+  DELIVERED: 'delivered',
+  FAILED: 'failed',
+  CANCELLED: 'cancelled',
+} as const;
+export type DeliveryStatus = (typeof DeliveryStatus)[keyof typeof DeliveryStatus];
 
 // =============================================================================
 // Chat Types

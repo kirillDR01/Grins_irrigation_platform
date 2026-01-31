@@ -39,7 +39,7 @@ export function AICommunicationDrafts({
   onGenerateNew,
 }: AICommunicationDraftsProps) {
   if (isLoading) {
-    return <AILoadingState message="AI is drafting message..." />;
+    return <AILoadingState />;
   }
 
   if (error) {

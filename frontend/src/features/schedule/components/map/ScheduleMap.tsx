@@ -64,12 +64,6 @@ export function ScheduleMap({
     [assignments, visibleStaff]
   );
 
-  // Create a key suffix for route polylines to force re-render when filters change
-  const visibleStaffKey = useMemo(
-    () => Array.from(visibleStaff).sort().join(','),
-    [visibleStaff]
-  );
-
   // Count jobs missing coordinates
   const missingCoordsCount = useMemo(() => {
     let count = 0;

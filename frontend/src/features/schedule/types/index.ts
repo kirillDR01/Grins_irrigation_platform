@@ -191,12 +191,16 @@ export interface UnassignedJobResponse {
   job_id: string;
   customer_name: string;
   service_type: string;
+  job_type?: string;
+  address?: string;
   reason: string;
 }
 
 export interface ScheduleGenerateRequest {
   schedule_date: string;
   timeout_seconds?: number;
+  job_ids?: string[];
+  preview_only?: boolean;
   constraints?: Array<{
     type: string;
     description: string;
@@ -261,7 +265,21 @@ export interface ApplyScheduleResponse {
 // Schedule Explanation Types (for API)
 // =============================================================================
 
-export interface ScheduleExplanationRequest {
+// Re-export from explanation.ts for backward compatibility
+export type {
+  StaffAssignmentSummary,
+  ScheduleExplanationRequest,
+  ScheduleExplanationResponse,
+  UnassignedJobExplanationRequest,
+  UnassignedJobExplanationResponse,
+  ConstraintType,
+  ParsedConstraint,
+  ParseConstraintsRequest as ParseConstraintsRequestAlt,
+  ParseConstraintsResponse as ParseConstraintsResponseAlt,
+} from './explanation';
+
+// Keep these for backward compatibility with existing code
+export interface ScheduleExplanationRequestLegacy {
   schedule_date: string;
   staff_assignments: Array<{
     staff_name: string;
@@ -283,13 +301,13 @@ export interface ScheduleExplanationRequest {
   total_travel_minutes: number;
 }
 
-export interface ScheduleExplanationResponse {
+export interface ScheduleExplanationResponseLegacy {
   explanation: string;
   key_decisions: string[];
   optimization_notes: string[];
 }
 
-export interface UnassignedJobExplanationRequest {
+export interface UnassignedJobExplanationRequestLegacy {
   job_id: string;
   customer_name: string;
   job_type: string;
@@ -299,7 +317,7 @@ export interface UnassignedJobExplanationRequest {
   available_staff: string[];
 }
 
-export interface UnassignedJobExplanationResponse {
+export interface UnassignedJobExplanationResponseLegacy {
   explanation: string;
   suggestions: string[];
   alternative_dates: string[];
@@ -311,17 +329,22 @@ export interface ParseConstraintsRequest {
 }
 
 export interface ParseConstraintsResponse {
-  constraints: Array<{
-    type: string;
-    description: string;
-    staff_name?: string;
-    time_start?: string;
-    time_end?: string;
-    job_type?: string;
-    city?: string;
-    validation_errors?: string[];
-  }>;
+  constraints: ParsedConstraintItem[];
   raw_text: string;
+  unparseable_text?: string;
+}
+
+export interface ParsedConstraintItem {
+  type: string;
+  description: string;
+  staff_name?: string;
+  time_start?: string;
+  time_end?: string;
+  job_type?: string;
+  city?: string;
+  validation_errors: string[];
+  is_valid?: boolean;
+  validation_error?: string;
 }
 
 export interface JobReadyToSchedule {

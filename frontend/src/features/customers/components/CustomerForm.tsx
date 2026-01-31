@@ -37,13 +37,13 @@ const customerSchema = z.object({
     .max(20)
     .regex(/^[\d\s\-()]+$/, 'Invalid phone format'),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
-  is_priority: z.boolean().default(false),
-  is_red_flag: z.boolean().default(false),
-  is_slow_payer: z.boolean().default(false),
-  sms_opt_in: z.boolean().default(false),
-  email_opt_in: z.boolean().default(false),
+  is_priority: z.boolean(),
+  is_red_flag: z.boolean(),
+  is_slow_payer: z.boolean(),
+  sms_opt_in: z.boolean(),
+  email_opt_in: z.boolean(),
   lead_source: z.string().optional().nullable(),
-  custom_flags: z.array(z.string()).default([]),
+  custom_flags: z.array(z.string()),
 });
 
 type CustomerFormData = z.infer<typeof customerSchema>;

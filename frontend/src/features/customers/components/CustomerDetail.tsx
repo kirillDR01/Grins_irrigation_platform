@@ -281,7 +281,7 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
             isLoading={isDraftLoading}
             error={draftError ? new Error(draftError) : null}
             onSendNow={sendNow}
-            onScheduleLater={scheduleLater}
+            onScheduleLater={(draftId) => scheduleLater(draftId, '')}
           />
         </div>
       </div>

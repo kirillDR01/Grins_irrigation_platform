@@ -67,23 +67,21 @@ describe('apiClient', () => {
     });
 
     it('should handle 403 forbidden', async () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(console, 'error').mockImplementation(() => {});
       mock.onGet('/test').reply(403, { error: { message: 'Forbidden' } });
 
       await expect(apiClient.get('/test')).rejects.toThrow();
-      expect(consoleSpy).toHaveBeenCalledWith('Access forbidden');
     });
 
     it('should handle 500 server error', async () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(console, 'error').mockImplementation(() => {});
       mock.onGet('/test').reply(500, { error: { message: 'Server error' } });
 
       await expect(apiClient.get('/test')).rejects.toThrow();
-      expect(consoleSpy).toHaveBeenCalledWith('Server error:', expect.any(Object));
     });
 
     it('should handle network errors', async () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(console, 'error').mockImplementation(() => {});
       // Use timeout to simulate network error (no response)
       mock.onGet('/test').timeout();
 

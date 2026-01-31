@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Check, ChevronsUpDown, Loader2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,7 +26,7 @@ export function SearchableCustomerDropdown({
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [debounceTimeout, setDebounceTimeout] = useState<NodeJS.Timeout | null>(null);
+  const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Fetch selected customer details when value changes
   useEffect(() => {
@@ -59,16 +59,14 @@ export function SearchableCustomerDropdown({
     setSearchQuery(query);
 
     // Clear existing timeout
-    if (debounceTimeout) {
-      clearTimeout(debounceTimeout);
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
     }
 
     // Set new timeout for debounced search
-    const timeout = setTimeout(() => {
+    debounceTimeoutRef.current = setTimeout(() => {
       searchCustomers(query);
     }, 300);
-
-    setDebounceTimeout(timeout);
   };
 
   // Handle customer selection
@@ -83,11 +81,11 @@ export function SearchableCustomerDropdown({
   // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
-      if (debounceTimeout) {
-        clearTimeout(debounceTimeout);
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
       }
     };
-  }, [debounceTimeout]);
+  }, []);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

@@ -58,7 +58,6 @@ export function JobsReadyToSchedulePreview({
   }, [jobs, filterJobType, filterPriority, filterCity]);
 
   const selectedCount = filteredJobs.filter(j => !excludedJobIds.has(j.job_id)).length;
-  const excludedCount = filteredJobs.filter(j => excludedJobIds.has(j.job_id)).length;
 
   if (isLoading) {
     return (

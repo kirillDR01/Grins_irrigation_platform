@@ -34,6 +34,7 @@ const mockJob: Job = {
   final_amount: null,
   source: 'website',
   source_details: null,
+  payment_collected_on_site: false,
   requested_at: '2025-01-20T10:00:00Z',
   approved_at: null,
   scheduled_at: null,

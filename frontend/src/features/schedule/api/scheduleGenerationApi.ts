@@ -9,12 +9,6 @@ import type {
   ScheduleGenerateResponse,
   ScheduleCapacityResponse,
   ScheduleGenerationStatusResponse,
-  ScheduleExplanationRequest,
-  ScheduleExplanationResponse,
-  UnassignedJobExplanationRequest,
-  UnassignedJobExplanationResponse,
-  ParseConstraintsRequest,
-  ParseConstraintsResponse,
   JobsReadyToScheduleResponse,
   CustomerSearchResult,
   ApplyScheduleRequest,
@@ -25,6 +19,14 @@ import type {
   ScheduleClearAuditDetailResponse,
   ScheduleRestoreResponse,
 } from '../types';
+import type {
+  ScheduleExplanationRequest,
+  ScheduleExplanationResponse,
+  UnassignedJobExplanationRequest,
+  UnassignedJobExplanationResponse,
+  ParseConstraintsRequest,
+  ParseConstraintsResponse,
+} from '../types/explanation';
 import type { PaginatedResponse } from '@/core/api';
 
 const BASE_URL = '/schedule';
