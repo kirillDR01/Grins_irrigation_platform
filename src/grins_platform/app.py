@@ -7,6 +7,7 @@ with all routers, middleware, and exception handlers.
 Validates: Requirement 10.5-10.7
 """
 
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -76,17 +77,36 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
     )
 
-    # Configure CORS - must specify explicit origins when using credentials
+    # Configure CORS - read from environment variable or use defaults for local dev
+    # CORS_ORIGINS should be a comma-separated list of allowed origins
+    # Example: "https://grins-irrigation-platform.vercel.app,https://example.com"
+    cors_origins_env = os.getenv("CORS_ORIGINS", "")
+
+    # Default origins for local development
+    default_origins = [
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:3000",
+    ]
+
+    # Parse CORS_ORIGINS from environment (comma-separated)
+    if cors_origins_env:
+        env_origins = [
+            origin.strip() for origin in cors_origins_env.split(",") if origin.strip()
+        ]
+        # Combine environment origins with defaults
+        allowed_origins = env_origins + default_origins
+    else:
+        allowed_origins = default_origins
+
+    logger.info("app.cors_configured", origins=allowed_origins)
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:5173",
-            "http://localhost:5174",
-            "http://localhost:3000",
-            "http://127.0.0.1:5173",
-            "http://127.0.0.1:5174",
-            "http://127.0.0.1:3000",
-        ],
+        allow_origins=allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
