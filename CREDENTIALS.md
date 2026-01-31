@@ -29,7 +29,11 @@ Users are stored in the `staff` table in the PostgreSQL database. The authentica
 
 ### Database Initialization
 
-The default admin user is created via `scripts/init-db.sql` when the database is first initialized.
+The default admin user is created via Alembic migration when running `alembic upgrade head`:
+- Migration file: `src/grins_platform/migrations/versions/20250625_100000_seed_default_admin_user.py`
+- Uses `ON CONFLICT DO NOTHING` to be idempotent (safe to run multiple times)
+
+For local development, `scripts/init-db.sql` can also create the user.
 
 ### Creating Additional Users
 
@@ -52,7 +56,8 @@ Before deploying to production:
 
 ## Related Files
 
-- `scripts/init-db.sql` - Database initialization with default user
+- `src/grins_platform/migrations/versions/20250625_100000_seed_default_admin_user.py` - Migration that seeds default admin
+- `scripts/init-db.sql` - Database initialization (alternative method)
 - `src/grins_platform/services/auth_service.py` - Authentication service
 - `src/grins_platform/api/v1/auth.py` - Authentication API endpoints
 - `.env` - Environment variables (not committed to git)

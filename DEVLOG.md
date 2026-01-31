@@ -13,6 +13,82 @@ This repository contains documentation and examples for Kiro development workflo
 
 ## Recent Activity
 
+## [2026-01-31 14:30] - DEPLOYMENT: Railway Database Migrations Complete
+
+### What Was Accomplished
+
+Successfully ran all database migrations against the Railway PostgreSQL production database.
+
+#### Key Findings
+
+**Critical Discovery: Internal vs Public DATABASE_URL**
+
+Railway provides TWO database URLs:
+- `DATABASE_URL` → `postgres.railway.internal:5432` (only works from within Railway)
+- `DATABASE_PUBLIC_URL` → `*.proxy.rlwy.net:XXXXX` (works from anywhere)
+
+The `railway run` command injects the **internal** URL, which causes connection failures when running from a local machine:
+```
+socket.gaierror: [Errno 8] nodename nor servname provided, or not known
+```
+
+**Solution:** Always use `DATABASE_PUBLIC_URL` for local database operations.
+
+#### Migrations Applied
+
+All 19 migrations ran successfully:
+- 001_customers → Create customers table
+- 002_properties → Create properties table
+- 003_updated_at_trigger → Create updated_at trigger function
+- 004_service_offerings → Create service_offerings table
+- 005_jobs → Create jobs table
+- 006_job_status_history → Create job_status_history table
+- 007_staff → Create staff table
+- 008_appointments → Create appointments table
+- 009_staff_availability → Create staff_availability table
+- 010_route_optimization_fields → Add route optimization fields
+- 20250618_100000 → Add cancellation fields and waitlist table
+- 20250619_100000 → Add schedule_reassignment table
+- 20250620_100000 → Create ai_audit_log table
+- 20250620_100100 → Create ai_usage table
+- 20250620_100200 → Create sent_messages table
+- 20250621_100000 → Add staff authentication columns
+- 20250622_100000 → Create schedule_clear_audit table
+- 20250623_100000 → Create invoices table
+- 20250624_100000 → Add payment_collected_on_site column
+
+### Technical Details
+
+**Command Used:**
+```bash
+export DATABASE_URL="postgresql://postgres:***@nozomi.proxy.rlwy.net:36598/railway"
+uv run alembic upgrade head
+```
+
+**Verification:**
+```bash
+uv run alembic current
+# Output: 20250624_100000 (head)
+```
+
+### Files Modified
+
+- `DEPLOYMENT_INSTRUCTIONS.md` - Thoroughly updated with:
+  - Warning about internal vs public DATABASE_URL
+  - Corrected migration instructions using DATABASE_PUBLIC_URL
+  - Explanation of why `railway run` doesn't work for migrations
+  - Updated troubleshooting section
+  - Updated Railway CLI Quick Reference
+
+### Next Steps
+
+1. Deploy backend service to Railway (if not already done)
+2. Configure CORS_ORIGINS with Vercel frontend URL
+3. Verify frontend can connect to backend API
+4. Test full end-to-end functionality
+
+---
+
 ## [2026-01-30 22:00] - FEATURE: UI Redesign Complete - Phase 10 Finished
 
 ### What Was Accomplished

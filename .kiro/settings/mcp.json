@@ -11,7 +11,8 @@
         "git_status",
         "git_log",
         "git_diff",
-        "git_commit"
+        "git_commit",
+        "git_diff_unstaged"
       ]
     },
     "filesystem": {

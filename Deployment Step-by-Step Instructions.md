@@ -120,6 +120,7 @@ The migrations automatically create:
   - 4 technicians (Vas, Steven, Viktor Sr, Vitallik)
   - 10 service offerings (seasonal, repair, installation)
   - 9 sample jobs in various statuses
+  - **Staff availability for 30 days** (required for schedule generation)
 
 ### 3.4 Verify Migration Success
 

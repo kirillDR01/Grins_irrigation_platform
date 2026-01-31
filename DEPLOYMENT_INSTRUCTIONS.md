@@ -2,6 +2,74 @@
 
 **Follow these steps exactly in order. Check off each step as you complete it.**
 
+> **📚 For detailed architecture information and advanced configuration, see [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)**
+
+---
+
+## Architecture Overview
+
+Understanding the deployment architecture is crucial before starting:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           DEPLOYMENT ARCHITECTURE                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   ┌─────────────────┐         ┌─────────────────┐         ┌──────────────┐ │
+│   │                 │  HTTP   │                 │   SQL   │              │ │
+│   │    FRONTEND     │────────>│    BACKEND      │────────>│   DATABASE   │ │
+│   │    (Vercel)     │         │    (Railway)    │         │  (Railway)   │ │
+│   │                 │<────────│                 │<────────│              │ │
+│   │  React + Vite   │  JSON   │  FastAPI + uv   │  Data   │  PostgreSQL  │ │
+│   │                 │         │                 │         │              │ │
+│   └─────────────────┘         └─────────────────┘         └──────────────┘ │
+│          │                            │                          │         │
+│          │                            │                          │         │
+│   vercel.app URL              railway.app URL            Internal only     │
+│   (public)                    (public API)               (no direct access)│
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Concepts
+
+| Component | Platform | What It Does | Public Access |
+|-----------|----------|--------------|---------------|
+| **Frontend** | Vercel | React UI that users interact with | ✅ Yes - your main URL |
+| **Backend** | Railway | FastAPI server handling all business logic | ✅ Yes - API endpoints |
+| **Database** | Railway | PostgreSQL storing all data | ❌ No - only backend can access |
+
+### Data Flow
+
+1. **User** opens the frontend URL in their browser
+2. **Frontend** makes HTTP requests to the backend API
+3. **Backend** processes requests and queries the database
+4. **Database** returns data to the backend
+5. **Backend** sends JSON response to frontend
+6. **Frontend** displays the data to the user
+
+**Important:** The frontend NEVER connects directly to the database. All data flows through the backend API.
+
+---
+
+## Your Deployment URLs (Fill In As You Go)
+
+Track your URLs here as you complete each step:
+
+| Service | Your URL | Status |
+|---------|----------|--------|
+| **Railway Project** | `https://railway.app/project/_______________` | ⬜ |
+| **Backend API** | `https://________________.up.railway.app` | ⬜ |
+| **Frontend** | `https://________________.vercel.app` | ⬜ |
+| **API Docs** | `https://________________.up.railway.app/docs` | ⬜ |
+
+### Database URLs (Railway PostgreSQL)
+
+| Variable | Value | Use Case |
+|----------|-------|----------|
+| **DATABASE_URL** | `postgres.railway.internal:5432` | Backend service (internal) |
+| **DATABASE_PUBLIC_URL** | `________________.proxy.rlwy.net:_____` | Local migrations (external) |
+
 ---
 
 ## Prerequisites Checklist
@@ -11,6 +79,44 @@ Before starting, confirm you have:
 - [ ] Vercel account ✅ (you have this)
 - [ ] Railway account (create below)
 - [ ] Google Cloud account (for Maps API - can do later)
+
+---
+
+## Current State Assessment
+
+Before proceeding, assess what's already deployed. Check each item:
+
+### Railway (Backend Infrastructure)
+
+| Component | Check | Status |
+|-----------|-------|--------|
+| Railway account exists | Go to https://railway.app/dashboard | ⬜ Not started / ✅ Done |
+| Project created | See project in dashboard | ⬜ Not started / ✅ Done |
+| PostgreSQL database | Database service visible in project | ⬜ Not started / ✅ Done |
+| Backend service | Service named like `Grins_irrigation_platform` | ⬜ Not started / ✅ Done |
+| DATABASE_URL linked | Backend Variables tab shows DATABASE_URL | ⬜ Not started / ✅ Done |
+| Public domain generated | Backend Settings → Networking → Domain | ⬜ Not started / ✅ Done |
+| Migrations run | Tables exist in database | ⬜ Not started / ✅ Done |
+
+### Vercel (Frontend)
+
+| Component | Check | Status |
+|-----------|-------|--------|
+| Vercel account exists | Go to https://vercel.com/dashboard | ⬜ Not started / ✅ Done |
+| Project imported | See project in dashboard | ⬜ Not started / ✅ Done |
+| Root directory set to `frontend` | Project Settings → General | ⬜ Not started / ✅ Done |
+| VITE_API_BASE_URL set | Project Settings → Environment Variables | ⬜ Not started / ✅ Done |
+| Deployment successful | Green checkmark on latest deployment | ⬜ Not started / ✅ Done |
+
+### Connection (Frontend ↔ Backend)
+
+| Component | Check | Status |
+|-----------|-------|--------|
+| CORS_ORIGINS configured | Railway Backend Variables includes Vercel URL | ⬜ Not started / ✅ Done |
+| Frontend can reach backend | No CORS errors in browser console | ⬜ Not started / ✅ Done |
+| API calls work | Can create/view customers | ⬜ Not started / ✅ Done |
+
+**Skip to the appropriate step based on your current state.**
 
 ---
 
@@ -367,40 +473,111 @@ Double-check:
 
 **Time: 5-10 minutes**
 
-### 7.1 Option A: Run Migrations via Railway Shell (Recommended)
+Railway does NOT provide SSH or remote shell access to running containers in the traditional sense. Instead, use one of these methods to run migrations:
 
-1. Go to Railway → Your Backend Service
-2. Click **"Settings"** tab
-3. Scroll down to **"Service"** section
-4. Find **"Railway Shell"** or use the **"Connect"** button
-5. Run:
+### ⚠️ IMPORTANT: Internal vs Public DATABASE_URL
 
+Railway provides TWO database URLs:
+
+| Variable | Hostname | Accessible From |
+|----------|----------|-----------------|
+| `DATABASE_URL` | `postgres.railway.internal:5432` | **Only from Railway services** |
+| `DATABASE_PUBLIC_URL` | `*.proxy.rlwy.net:XXXXX` | **From anywhere (local machine, etc.)** |
+
+**When running migrations from your local machine, you MUST use `DATABASE_PUBLIC_URL`!**
+
+The internal URL (`postgres.railway.internal`) will NOT work from outside Railway's network.
+
+### 7.1 Option A: Run Migrations with Public DATABASE_URL (Recommended)
+
+**Step 1: Get your DATABASE_PUBLIC_URL from Railway**
+
+Using Railway CLI:
 ```bash
-alembic upgrade head
+# Install Railway CLI if not already installed
+brew install railway  # macOS
+
+# Login and link to your project
+railway login
+railway link
+
+# View all variables - look for DATABASE_PUBLIC_URL
+railway variables
 ```
 
-### 7.2 Option B: Run Migrations Locally
+Or from Railway Dashboard:
+1. Go to Railway → Your PostgreSQL service
+2. Click **"Variables"** tab
+3. Find **`DATABASE_PUBLIC_URL`** (NOT `DATABASE_URL`)
+4. Copy the value (looks like: `postgresql://postgres:password@*.proxy.rlwy.net:XXXXX/railway`)
 
-If Railway Shell isn't available, run migrations from your local machine:
-
-1. Get your Railway PostgreSQL connection string:
-   - Go to Railway → PostgreSQL service
-   - Click **"Connect"** tab
-   - Copy the **"Public URL"** (starts with `postgresql://`)
-
-2. Run locally:
+**Step 2: Run migrations locally**
 ```bash
-# Set the DATABASE_URL temporarily
-export DATABASE_URL="postgresql://postgres:your-password@your-host.railway.app:port/railway"
+# Set the PUBLIC DATABASE_URL (replace with your actual URL)
+export DATABASE_URL="postgresql://postgres:your-password@your-host.proxy.rlwy.net:PORT/railway"
 
 # Run migrations
 uv run alembic upgrade head
 ```
 
-### 7.3 Verify Migrations
+**Example output:**
+```
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 001_customers, Create customers table.
+INFO  [alembic.runtime.migration] Running upgrade 001_customers -> 002_properties, Create properties table.
+... (more migrations)
+```
+
+### 7.2 Option B: Why `railway run` Doesn't Work for Migrations
+
+You might think `railway run uv run alembic upgrade head` would work, but it **doesn't** because:
+
+1. `railway run` injects Railway's environment variables
+2. Railway provides the **internal** `DATABASE_URL` (`postgres.railway.internal`)
+3. This internal hostname is only resolvable from within Railway's network
+4. Your local machine cannot reach `postgres.railway.internal`
+
+**Error you'll see:**
+```
+socket.gaierror: [Errno 8] nodename nor servname provided, or not known
+```
+
+**Solution:** Always use `DATABASE_PUBLIC_URL` when running from your local machine.
+
+### 7.3 Option C: Add Migrations to Startup Command (Automatic)
+
+For automatic migrations on every deploy, modify your Railway start command:
+
+1. Go to Railway → Your Backend Service → **Settings** tab
+2. Find **"Start Command"** (or **"Custom Start Command"**)
+3. Set it to:
+```bash
+alembic upgrade head && uvicorn grins_platform.main:app --host 0.0.0.0 --port $PORT
+```
+
+**Pros:** Migrations run automatically on every deploy
+**Cons:** Adds startup time; if migration fails, service won't start
+
+**Note:** This works because the backend service runs INSIDE Railway's network, so it can use the internal `DATABASE_URL`.
+
+### 7.4 Verify Migrations
 
 After running migrations, verify tables were created:
 
+**Option A: Check Alembic Version**
+```bash
+# Using the PUBLIC DATABASE_URL
+export DATABASE_URL="postgresql://postgres:your-password@your-host.proxy.rlwy.net:PORT/railway"
+uv run alembic current
+
+# Expected output:
+# INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+# INFO  [alembic.runtime.migration] Will assume transactional DDL.
+# 20250624_100000 (head)
+```
+
+**Option B: Via Railway Data Tab**
 1. Go to Railway → PostgreSQL service
 2. Click **"Data"** tab
 3. You should see tables like:
@@ -410,7 +587,14 @@ After running migrations, verify tables were created:
    - `staff`
    - `appointments`
    - `service_offerings`
-   - etc.
+   - `invoices`
+   - `alembic_version`
+
+**Option C: Via psql (if installed)**
+```bash
+# Using the PUBLIC DATABASE_URL
+psql "postgresql://postgres:your-password@your-host.proxy.rlwy.net:PORT/railway" -c "\\dt"
+```
 
 ---
 
@@ -517,12 +701,19 @@ Your Grin's Irrigation Platform is now live:
 ### Database Issues
 
 **Problem: Tables don't exist**
-- Run migrations: `alembic upgrade head`
+- Run migrations: `uv run alembic upgrade head`
 - Check migration logs for errors
 
-**Problem: Connection refused**
-- Verify PostgreSQL service is running in Railway
-- Check `DATABASE_URL` format is correct
+**Problem: Connection refused / "nodename nor servname provided"**
+- **Most common cause:** Using the internal `DATABASE_URL` instead of `DATABASE_PUBLIC_URL`
+- The internal URL (`postgres.railway.internal`) only works from within Railway
+- Use `railway variables` to find `DATABASE_PUBLIC_URL` (looks like `*.proxy.rlwy.net:PORT`)
+- Export the PUBLIC URL: `export DATABASE_URL="postgresql://...@*.proxy.rlwy.net:PORT/railway"`
+
+**Problem: `railway run` fails with database connection error**
+- `railway run` injects the internal `DATABASE_URL` which doesn't work from your local machine
+- Don't use `railway run` for database operations
+- Instead, manually export `DATABASE_PUBLIC_URL` and run commands directly
 
 ---
 
@@ -547,3 +738,335 @@ After basic deployment is working:
 3. **AI Features**: Add `OPENAI_API_KEY` for AI assistant
 4. **SMS Notifications**: Add Twilio credentials for customer notifications
 5. **Monitoring**: Set up Railway alerts for downtime
+
+---
+
+## Railway CLI Quick Reference
+
+The Railway CLI is useful for managing your deployment:
+
+```bash
+# Installation
+brew install railway          # macOS
+npm install -g @railway/cli   # npm
+curl -fsSL https://railway.app/install.sh | sh  # curl
+
+# Authentication
+railway login                 # Login (opens browser)
+railway logout                # Logout
+
+# Project Management
+railway link                  # Link current directory to a Railway project
+railway status                # Show current project/environment status
+
+# View Environment Variables
+railway variables             # List ALL environment variables
+                              # Look for DATABASE_PUBLIC_URL for external access!
+
+# Logs and Monitoring
+railway logs                  # View service logs
+railway logs -f               # Follow logs in real-time
+
+# Environment Variables
+railway variables set KEY=value  # Set an environment variable
+
+# Deployments
+railway up                    # Deploy current directory
+railway redeploy              # Trigger a redeploy
+```
+
+### ⚠️ Important Note About `railway run`
+
+`railway run <command>` executes commands **locally** but injects Railway's environment variables. However, Railway provides the **internal** `DATABASE_URL` which uses `postgres.railway.internal` - this hostname is **NOT accessible from your local machine**.
+
+**For database operations from your local machine, always use `DATABASE_PUBLIC_URL`:**
+```bash
+# View all variables to find DATABASE_PUBLIC_URL
+railway variables
+
+# Then use it directly
+export DATABASE_URL="postgresql://postgres:password@*.proxy.rlwy.net:PORT/railway"
+uv run alembic upgrade head
+```
+
+
+---
+
+## Complete Deployment Guide: Railway Backend + Vercel Frontend
+
+This section provides a streamlined step-by-step guide for completing the deployment when you already have partial infrastructure in place.
+
+### Current State Assessment
+
+| Component | Status | Details |
+|-----------|--------|---------|
+| PostgreSQL Database | ✅ Deployed | On Railway, migrations complete |
+| FastAPI Backend Service | ⚠️ Exists but needs config | Missing DATABASE_URL, no public domain |
+| Vercel Frontend | ✅ Deployed | But pointing to localhost |
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              VERCEL                                      │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │  Frontend (React/Vite)                                           │   │
+│  │  URL: https://grins-irrigation-platform.vercel.app               │   │
+│  │  Env: VITE_API_BASE_URL = https://xxx.up.railway.app             │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ HTTPS API Calls
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              RAILWAY                                     │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │  Backend Service (FastAPI)                                       │   │
+│  │  URL: https://xxx.up.railway.app                                 │   │
+│  │  Env: DATABASE_URL, CORS_ORIGINS                                 │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                    │                                     │
+│                                    │ Internal Connection                 │
+│                                    ▼                                     │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │  PostgreSQL Database                                             │   │
+│  │  Internal: postgres.railway.internal:5432                        │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### STEP 1: Configure Backend Service on Railway (5 minutes)
+
+#### 1.1 Open Railway Dashboard
+
+Go to: https://railway.app/dashboard
+
+Click on your project: `zealous-heart`
+
+#### 1.2 Select the Backend Service
+
+You should see two services:
+- **Postgres** (database) ✅
+- **Grins_irrigation_platform** (backend) ← Click this one
+
+#### 1.3 Add DATABASE_URL Variable
+
+1. Click the **"Variables"** tab
+2. Click **"New Variable"**
+3. For the Name, type: `DATABASE_URL`
+4. Click **"Add Reference"** button (or the link icon)
+5. Select your Postgres database
+6. Choose `DATABASE_URL` from the dropdown
+7. Click **"Add"**
+
+This links your backend to the database using the internal URL (which works because both are on Railway).
+
+#### 1.4 Generate a Public Domain
+
+1. Click the **"Settings"** tab
+2. Scroll down to **"Networking"** section
+3. Click **"Generate Domain"**
+4. Railway will create a URL like: `https://grins-irrigation-platform-production.up.railway.app`
+
+**⚠️ COPY THIS URL - you'll need it for the next steps!**
+
+Your backend URL: `https://_____________________________.up.railway.app`
+
+#### 1.5 Trigger a Redeploy
+
+1. Click the **"Deployments"** tab
+2. Click the **"..."** menu on the latest deployment
+3. Click **"Redeploy"**
+4. Wait for the build to complete (2-5 minutes)
+
+#### 1.6 Verify Backend is Running
+
+Open a terminal and run:
+```bash
+curl https://YOUR-BACKEND-URL.up.railway.app/health
+```
+
+Expected response:
+```json
+{"status": "healthy", "service": "grins-platform-api", "version": "1.0.0"}
+```
+
+If you get this response, your backend is running! 🎉
+
+---
+
+### STEP 2: Configure CORS on Backend (2 minutes)
+
+CORS (Cross-Origin Resource Sharing) allows your Vercel frontend to make API calls to your Railway backend.
+
+#### 2.1 Get Your Vercel Frontend URL
+
+Your Vercel frontend URL is likely one of:
+- `https://grins-irrigation-platform.vercel.app`
+- `https://grins-irrigation-platform-YOUR-USERNAME.vercel.app`
+
+Check your Vercel dashboard to confirm the exact URL.
+
+#### 2.2 Add CORS_ORIGINS Variable on Railway
+
+1. Go to Railway → Grins_irrigation_platform service → **Variables** tab
+2. Click **"New Variable"**
+3. Name: `CORS_ORIGINS`
+4. Value: `https://YOUR-VERCEL-URL.vercel.app`
+   - Example: `https://grins-irrigation-platform.vercel.app`
+   - If you have multiple URLs (like preview deployments), separate with commas:
+     `https://grins-irrigation-platform.vercel.app,https://grins-irrigation-platform-git-main-YOUR-USERNAME.vercel.app`
+5. Click **"Add"**
+
+Railway will automatically redeploy after adding the variable.
+
+---
+
+### STEP 3: Configure Frontend on Vercel (5 minutes)
+
+#### 3.1 Open Vercel Dashboard
+
+Go to: https://vercel.com/dashboard
+
+Click on your project: `grins-irrigation-platform` (or similar name)
+
+#### 3.2 Update Environment Variables
+
+1. Click **"Settings"** tab
+2. Click **"Environment Variables"** in the left sidebar
+3. Find `VITE_API_BASE_URL` (or add it if it doesn't exist)
+4. Set the value to your Railway backend URL:
+   ```
+   https://YOUR-BACKEND-URL.up.railway.app
+   ```
+
+**⚠️ NO trailing slash!**
+- ✅ Correct: `https://grins-irrigation-platform-production.up.railway.app`
+- ❌ Wrong: `https://grins-irrigation-platform-production.up.railway.app/`
+
+5. Make sure it's enabled for **Production** (and optionally Preview/Development)
+6. Click **"Save"**
+
+#### 3.3 Redeploy Frontend
+
+After changing environment variables, you need to redeploy:
+
+1. Go to the **"Deployments"** tab
+2. Find the latest deployment
+3. Click the **"..."** menu
+4. Click **"Redeploy"**
+5. In the popup, check **"Use existing Build Cache"** is **OFF** (unchecked)
+6. Click **"Redeploy"**
+7. Wait for the build to complete (2-3 minutes)
+
+---
+
+### STEP 4: Test the Full System (5 minutes)
+
+#### 4.1 Test Backend Health
+
+```bash
+curl https://YOUR-BACKEND-URL.up.railway.app/health
+```
+
+Expected: `{"status": "healthy", ...}`
+
+#### 4.2 Test Backend API
+
+```bash
+curl https://YOUR-BACKEND-URL.up.railway.app/api/v1/customers
+```
+
+Expected: `{"items": [], "total": 0, "page": 1, "page_size": 20}`
+
+#### 4.3 Test Frontend
+
+1. Open your Vercel frontend URL in a browser
+2. Open Developer Tools (F12) → Console tab
+3. Look for any red errors
+
+**If you see CORS errors:**
+```
+Access to fetch at 'https://...' from origin 'https://...' has been blocked by CORS policy
+```
+
+This means:
+- The `CORS_ORIGINS` variable on Railway doesn't include your exact Vercel URL
+- Double-check the URL (no trailing slash, exact match)
+- Redeploy the backend after fixing
+
+#### 4.4 Test End-to-End
+
+1. Navigate to the Customers page
+2. Click "Add Customer"
+3. Fill in test data:
+   - First Name: Test
+   - Last Name: User
+   - Phone: 6125551234
+4. Click "Create"
+5. Verify the customer appears in the list
+
+**If this works, your deployment is complete! 🎉**
+
+---
+
+### Summary Checklist
+
+| Step | Action | Status |
+|------|--------|--------|
+| 1.1 | Open Railway Dashboard | ☐ |
+| 1.2 | Select Backend Service | ☐ |
+| 1.3 | Add DATABASE_URL (reference to Postgres) | ☐ |
+| 1.4 | Generate Public Domain | ☐ |
+| 1.5 | Redeploy Backend | ☐ |
+| 1.6 | Verify Backend Health | ☐ |
+| 2.1 | Get Vercel Frontend URL | ☐ |
+| 2.2 | Add CORS_ORIGINS on Railway | ☐ |
+| 3.1 | Open Vercel Dashboard | ☐ |
+| 3.2 | Set VITE_API_BASE_URL | ☐ |
+| 3.3 | Redeploy Frontend | ☐ |
+| 4.1 | Test Backend Health | ☐ |
+| 4.2 | Test Backend API | ☐ |
+| 4.3 | Test Frontend (no CORS errors) | ☐ |
+| 4.4 | Test End-to-End (create customer) | ☐ |
+
+---
+
+### Quick Reference: Your URLs
+
+Fill these in as you go:
+
+| Service | URL |
+|---------|-----|
+| Railway Backend | `https://________________________________.up.railway.app` |
+| Vercel Frontend | `https://________________________________.vercel.app` |
+| API Docs (Swagger) | `https://YOUR-BACKEND-URL.up.railway.app/docs` |
+
+---
+
+### Troubleshooting
+
+#### Backend won't start
+- Check Railway logs: Click on service → Deployments → Click on deployment → View logs
+- Common issue: DATABASE_URL not set correctly
+
+#### CORS errors in browser
+- Verify CORS_ORIGINS on Railway matches your exact Vercel URL
+- No trailing slashes
+- Redeploy backend after changes
+
+#### Frontend shows "Network Error"
+- Verify VITE_API_BASE_URL on Vercel is correct
+- Verify backend is running (test /health endpoint)
+- Redeploy frontend after changing env vars
+
+
+
+
+Make a note that we added database URL to Cleanse Irrigation Platform Service by adding this. DATABASE_URL ${{Postgres.DATABASE_URL}}
+
+grinsirrigationplatform-production.up.railway.app
+
+
