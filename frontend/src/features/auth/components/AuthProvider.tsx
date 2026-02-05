@@ -35,6 +35,7 @@ const defaultContextValue: AuthContextValue = {
   login: async () => {},
   logout: async () => {},
   refreshToken: async () => {},
+  updateUser: () => {},
 };
 
 const AuthContext = createContext<AuthContextValue>(defaultContextValue);
@@ -180,6 +181,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     scheduleTokenRefresh(response.expires_in);
   }, [scheduleTokenRefresh]);
 
+  // Update user in context (after profile update)
+  const updateUser = useCallback((updatedUser: User) => {
+    setUser(updatedUser);
+  }, []);
+
   const value: AuthContextValue = {
     user,
     isAuthenticated: !!user,
@@ -187,6 +193,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     login,
     logout,
     refreshToken,
+    updateUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

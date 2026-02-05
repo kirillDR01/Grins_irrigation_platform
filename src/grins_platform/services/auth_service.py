@@ -31,7 +31,7 @@ from grins_platform.models.enums import UserRole
 if TYPE_CHECKING:
     from grins_platform.models.staff import Staff
     from grins_platform.repositories.staff_repository import StaffRepository
-    from grins_platform.schemas.auth import ChangePasswordRequest
+    from grins_platform.schemas.auth import ChangePasswordRequest, UpdateProfileRequest
 
 # JWT Configuration
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-production")
@@ -466,6 +466,48 @@ class AuthService(LoggerMixin):
         _ = await self.repository.update_auth_fields(user_id, password_hash=new_hash)
 
         self.log_completed("change_password", user_id=str(user_id))
+
+    async def update_profile(
+        self,
+        user_id: UUID,
+        request: UpdateProfileRequest,
+    ) -> Staff:
+        """Update a user's profile information.
+
+        Args:
+            user_id: ID of the user to update
+            request: Profile update request
+
+        Returns:
+            Updated staff member
+
+        Raises:
+            UserNotFoundError: If user not found
+        """
+        self.log_started("update_profile", user_id=str(user_id))
+
+        staff = await self.repository.get_by_id(user_id)
+        if staff is None:
+            raise UserNotFoundError
+
+        # Build update dict from non-None fields
+        update_data: dict[str, Any] = {}
+        if request.name is not None:
+            update_data["name"] = request.name
+        if request.email is not None:
+            update_data["email"] = request.email
+        if request.phone is not None:
+            update_data["phone"] = request.phone
+
+        if update_data:
+            updated = await self.repository.update(user_id, update_data)
+            if updated is None:
+                raise UserNotFoundError
+            self.log_completed("update_profile", user_id=str(user_id))
+            return updated
+
+        self.log_completed("update_profile", user_id=str(user_id), no_changes=True)
+        return staff
 
     async def get_current_user(self, token: str) -> Staff:
         """Get the current user from an access token.

@@ -18,13 +18,13 @@ function getSystemTheme(): 'light' | 'dark' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-function getStoredTheme(): Theme {
-  if (typeof window === 'undefined') return 'system';
+function getStoredTheme(): Theme | null {
+  if (typeof window === 'undefined') return null;
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored === 'light' || stored === 'dark' || stored === 'system') {
     return stored;
   }
-  return 'system';
+  return null;
 }
 
 interface ThemeProviderProps {
@@ -32,12 +32,13 @@ interface ThemeProviderProps {
   defaultTheme?: Theme;
 }
 
-export function ThemeProvider({ children, defaultTheme = 'system' }: ThemeProviderProps) {
-  const [theme, setThemeState] = useState<Theme>(() => getStoredTheme() || defaultTheme);
+export function ThemeProvider({ children, defaultTheme = 'light' }: ThemeProviderProps) {
+  const [theme, setThemeState] = useState<Theme>(() => getStoredTheme() ?? defaultTheme);
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() => {
     const stored = getStoredTheme();
+    if (stored === null || stored === 'light') return 'light';
     if (stored === 'system') return getSystemTheme();
-    return stored === 'dark' ? 'dark' : 'light';
+    return 'dark';
   });
 
   useEffect(() => {

@@ -128,3 +128,11 @@ class ChangePasswordRequest(BaseModel):
             raise ValueError(_ERR_PASSWORD_NUMBER)
 
         return v
+
+
+class UpdateProfileRequest(BaseModel):
+    """Schema for updating user profile."""
+
+    name: str | None = Field(default=None, max_length=100, description="Full name")
+    email: EmailStr | None = Field(default=None, description="Email address")
+    phone: str | None = Field(default=None, max_length=20, description="Phone number")

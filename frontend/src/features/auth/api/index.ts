@@ -62,10 +62,25 @@ export async function changePassword(data: ChangePasswordRequest): Promise<void>
   await apiClient.post(`${AUTH_BASE}/change-password`, data);
 }
 
+/**
+ * Update user profile.
+ */
+export interface UpdateProfileRequest {
+  name?: string;
+  email?: string;
+  phone?: string;
+}
+
+export async function updateProfile(data: UpdateProfileRequest): Promise<User> {
+  const response = await apiClient.patch<User>(`${AUTH_BASE}/me`, data);
+  return response.data;
+}
+
 export const authApi = {
   login,
   logout,
   refreshAccessToken,
   getCurrentUser,
   changePassword,
+  updateProfile,
 };

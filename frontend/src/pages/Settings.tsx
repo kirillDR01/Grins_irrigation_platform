@@ -8,15 +8,44 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { User, Bell, Palette, Building2, Key, Shield, LogOut, Lock, Mail, Phone, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/core/providers";
 import { useAuth } from "@/features/auth";
+import { authApi } from "@/features/auth/api";
+import { toast } from "sonner";
 
 export function SettingsPage() {
+  const { user, logout, updateUser } = useAuth();
+  
+  // Profile form state - parse name into first/last
+  const nameParts = user?.name?.split(' ') ?? ['', ''];
+  const [firstName, setFirstName] = useState(nameParts[0] ?? '');
+  const [lastName, setLastName] = useState(nameParts.slice(1).join(' ') ?? '');
+  const [email, setEmail] = useState(user?.email ?? '');
+  const [phone, setPhone] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  
   const [smsEnabled, setSmsEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(true);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const { resolvedTheme, toggleTheme } = useTheme();
-  const { logout } = useAuth();
   const isDarkMode = resolvedTheme === 'dark';
+
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    try {
+      const fullName = `${firstName} ${lastName}`.trim();
+      const updatedUser = await authApi.updateProfile({
+        name: fullName || undefined,
+        email: email || undefined,
+        phone: phone || undefined,
+      });
+      updateUser(updatedUser);
+      toast.success("Profile updated successfully");
+    } catch {
+      toast.error("Failed to update profile");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleSignOut = async () => {
     await logout();
@@ -47,7 +76,7 @@ export function SettingsPage() {
           {/* Avatar Section */}
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-full bg-teal-100 text-teal-700 font-bold text-xl flex items-center justify-center dark:bg-teal-900/50 dark:text-teal-300">
-              VG
+              {firstName[0]?.toUpperCase() ?? ''}{lastName[0]?.toUpperCase() ?? ''}
             </div>
             <div>
               <Button variant="secondary" size="sm">Change Photo</Button>
@@ -61,16 +90,19 @@ export function SettingsPage() {
               <Label htmlFor="first-name" className="text-sm font-medium text-slate-700 dark:text-slate-300">First Name</Label>
               <Input 
                 id="first-name" 
-                data-testid="profile-name-input"
-                defaultValue="Viktor" 
+                data-testid="profile-first-name-input"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
                 placeholder="First name"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="last-name" className="text-sm font-medium text-slate-700 dark:text-slate-300">Last Name</Label>
               <Input 
-                id="last-name" 
-                defaultValue="Grin" 
+                id="last-name"
+                data-testid="profile-last-name-input"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
                 placeholder="Last name"
               />
             </div>
@@ -85,8 +117,10 @@ export function SettingsPage() {
                 <Input 
                   id="email" 
                   type="email"
+                  data-testid="profile-email-input"
                   className="pl-10"
-                  defaultValue="viktor@grins.com" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="Email address"
                 />
               </div>
@@ -98,8 +132,10 @@ export function SettingsPage() {
                 <Input 
                   id="phone" 
                   type="tel"
+                  data-testid="profile-phone-input"
                   className="pl-10"
-                  defaultValue="(612) 555-1234" 
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
                   placeholder="Phone number"
                 />
               </div>
@@ -107,7 +143,9 @@ export function SettingsPage() {
           </div>
 
           <div className="flex justify-end">
-            <Button>Save Changes</Button>
+            <Button onClick={handleSaveProfile} disabled={isSaving} data-testid="save-profile-btn">
+              {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
           </div>
         </CardContent>
       </Card>

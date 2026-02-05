@@ -28,6 +28,7 @@ from grins_platform.schemas.auth import (
     LoginRequest,
     LoginResponse,
     TokenResponse,
+    UpdateProfileRequest,
     UserResponse,
 )
 from grins_platform.services.auth_service import AuthService
@@ -239,6 +240,23 @@ async def change_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect",
         ) from e
+
+
+@router.patch(
+    "/me",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update profile",
+    description="Update the current user's profile information.",
+)
+async def update_profile(
+    request: UpdateProfileRequest,
+    current_user: CurrentActiveUser,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> UserResponse:
+    """Update current user's profile."""
+    updated_user = await auth_service.update_profile(current_user.id, request)
+    return _create_user_response(updated_user, auth_service)
 
 
 __all__ = ["router"]
