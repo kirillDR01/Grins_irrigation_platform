@@ -30,9 +30,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">95% </span>
+                <span class="strong">95.83% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>19/20</span>
+                <span class='fraction'>23/24</span>
             </div>
         
             
@@ -217,9 +217,21 @@
 <a name='L152'></a><a href='#L152'>152</a>
 <a name='L153'></a><a href='#L153'>153</a>
 <a name='L154'></a><a href='#L154'>154</a>
-<a name='L155'></a><a href='#L155'>155</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -255,7 +267,7 @@
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">35x</span>
@@ -263,6 +275,14 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">35x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -314,9 +334,15 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -371,6 +397,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
  * AIQueryChat Component
  * 
@@ -382,10 +410,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAIChat } from '../hooks/useAIChat';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Send, Trash2, Loader2 } from 'lucide-react';
+import { Send, Trash2, Loader2, Sparkles } from 'lucide-react';
 &nbsp;
 const EXAMPLE_QUERIES = [
   'How many jobs do we have scheduled today?',
@@ -417,27 +443,35 @@ export function AIQueryChat() {
   };
 &nbsp;
   return (
-    &lt;Card data-testid="ai-query-chat"&gt;
-      &lt;CardHeader&gt;
-        &lt;div className="flex items-center justify-between"&gt;
-          &lt;CardTitle&gt;AI Assistant&lt;/CardTitle&gt;
-          &lt;div className="flex items-center gap-2"&gt;
-            &lt;span className="text-sm text-muted-foreground" data-testid="message-count"&gt;
-              {messageCount} / 50 messages
-            &lt;/span&gt;
-            &lt;Button
-              variant="ghost"
-              size="sm"
-              onClick={clearChat}
-              disabled={messages.length === 0}
-              data-testid="ai-chat-clear"
-            &gt;
-              &lt;Trash2 className="h-4 w-4" /&gt;
-            &lt;/Button&gt;
-          &lt;/div&gt;
+    &lt;div 
+      className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col h-[600px]"
+      data-testid="ai-chat"
+    &gt;
+      {/* Chat Header */}
+      &lt;div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between"&gt;
+        &lt;div className="flex items-center gap-2"&gt;
+          &lt;Sparkles className="h-5 w-5 text-teal-500" /&gt;
+          &lt;h3 className="font-bold text-slate-800 text-lg"&gt;AI Assistant&lt;/h3&gt;
         &lt;/div&gt;
-      &lt;/CardHeader&gt;
-      &lt;CardContent className="space-y-4"&gt;
+        &lt;div className="flex items-center gap-2"&gt;
+          &lt;span className="text-sm text-slate-500" data-testid="message-count"&gt;
+            {messageCount} / 50 messages
+          &lt;/span&gt;
+          &lt;Button
+            variant="ghost"
+            size="sm"
+            onClick={clearChat}
+            disabled={messages.length === 0}
+            className="text-slate-400 hover:text-slate-600"
+            data-testid="ai-chat-clear"
+          &gt;
+            &lt;Trash2 className="h-4 w-4" /&gt;
+          &lt;/Button&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+&nbsp;
+      {/* Messages Container */}
+      &lt;div className="flex-1 overflow-y-auto p-4 space-y-4" data-testid="message-history"&gt;
         {/* Error Display */}
         {error &amp;&amp; (
           &lt;Alert variant="destructive" data-testid="ai-chat-error"&gt;
@@ -447,8 +481,8 @@ export function AIQueryChat() {
 &nbsp;
         {/* Example Queries */}
         {messages.length === 0 &amp;&amp; (
-          &lt;div className="space-y-2" data-testid="example-queries"&gt;
-            &lt;p className="text-sm text-muted-foreground"&gt;Try asking:&lt;/p&gt;
+          &lt;div className="space-y-3" data-testid="example-queries"&gt;
+            &lt;p className="text-sm text-slate-500"&gt;Try asking:&lt;/p&gt;
             &lt;div className="grid gap-2"&gt;
               {EXAMPLE_QUERIES.map((query, index) =&gt; (
                 &lt;Button
@@ -456,7 +490,7 @@ export function AIQueryChat() {
                   variant="outline"
                   size="sm"
                   onClick={() =&gt; handleExampleClick(query)}
-                  className="justify-start text-left h-auto py-2"
+                  className="justify-start text-left h-auto py-2 text-slate-600 hover:bg-slate-50 hover:text-slate-800"
                   data-testid={`example-query-${index}`}
                 &gt;
                   {query}
@@ -467,52 +501,60 @@ export function AIQueryChat() {
         )}
 &nbsp;
         {/* Message History */}
-        {messages.length &gt; 0 &amp;&amp; (
-          &lt;div className="space-y-4 max-h-96 overflow-y-auto" data-testid="message-history"&gt;
-            {messages.map((message, index) =&gt; (
-              &lt;div
-                key={index}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                data-testid={`message-${message.role}`}
-              &gt;
-                &lt;div
-                  className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                    message.role === 'user'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted'
-                  }`}
-                &gt;
-                  &lt;p className="text-sm whitespace-pre-wrap"&gt;{message.content}&lt;/p&gt;
-                  &lt;p className="text-xs opacity-70 mt-1"&gt;
-                    {message.timestamp.toLocaleTimeString()}
-                  &lt;/p&gt;
-                &lt;/div&gt;
-              &lt;/div&gt;
-            ))}
-            {isLoading &amp;&amp; (
-              &lt;div className="flex justify-start" data-testid="ai-chat-loading"&gt;
-                &lt;div className="bg-muted rounded-lg px-4 py-2"&gt;
-                  &lt;Loader2 className="h-4 w-4 animate-spin" /&gt;
-                &lt;/div&gt;
+        {messages.map((message, index) =&gt; (
+          &lt;div
+            key={index}
+            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            data-testid={message.role === 'user' ? 'user-message' : 'ai-message'}
+          &gt;
+            {message.role === 'assistant' &amp;&amp; (
+              &lt;div className="w-8 h-8 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center mr-2 flex-shrink-0"&gt;
+                &lt;Sparkles className="h-4 w-4" /&gt;
               &lt;/div&gt;
             )}
-            &lt;div ref={messagesEndRef} /&gt;
+            &lt;div
+              className={`max-w-[80%] px-4 py-3 ${
+                message.role === 'user'
+                  ? 'bg-teal-500 text-white rounded-2xl rounded-br-md ml-auto'
+                  : 'bg-slate-100 text-slate-700 rounded-2xl rounded-bl-md'
+              }`}
+            &gt;
+              &lt;p className="text-sm whitespace-pre-wrap"&gt;{message.content}&lt;/p&gt;
+              &lt;p className={`text-xs mt-1 ${message.role === 'user' ? 'text-teal-100' : 'text-slate-400'}`}&gt;
+                {message.timestamp.toLocaleTimeString()}
+              &lt;/p&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+        ))}
+        {isLoading &amp;&amp; (
+          &lt;div className="flex justify-start" data-testid="ai-chat-loading"&gt;
+            &lt;div className="w-8 h-8 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center mr-2 flex-shrink-0"&gt;
+              &lt;Sparkles className="h-4 w-4" /&gt;
+            &lt;/div&gt;
+            &lt;div className="bg-slate-100 rounded-2xl rounded-bl-md px-4 py-3"&gt;
+              &lt;Loader2 className="h-4 w-4 animate-spin text-teal-500" /&gt;
+            &lt;/div&gt;
           &lt;/div&gt;
         )}
+        &lt;div ref={messagesEndRef} /&gt;
+      &lt;/div&gt;
 &nbsp;
-        {/* Chat Input */}
+      {/* Input Container */}
+      &lt;div className="p-4 border-t border-slate-100 bg-white"&gt;
         &lt;form onSubmit={handleSubmit} className="flex gap-2"&gt;
-          &lt;Input
+          &lt;input
             value={input}
             onChange={(e) =&gt; setInput(e.target.value)}
             placeholder="Ask me anything about your business..."
             disabled={isLoading}
+            className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-700 placeholder-slate-400 focus:ring-2 focus:ring-teal-100 focus:border-teal-500 focus:outline-none"
             data-testid="ai-chat-input"
           /&gt;
           &lt;Button
             type="submit"
             disabled={!input.trim() || isLoading}
-            data-testid="ai-chat-submit"
+            className="bg-teal-500 hover:bg-teal-600 text-white p-3 rounded-xl"
+            data-testid="ai-send-btn"
           &gt;
             {isLoading ? (
               &lt;Loader2 className="h-4 w-4 animate-spin" /&gt;
@@ -521,8 +563,8 @@ export function AIQueryChat() {
             )}
           &lt;/Button&gt;
         &lt;/form&gt;
-      &lt;/CardContent&gt;
-    &lt;/Card&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
   );
 }
 &nbsp;</pre></td></tr></table></pre>
@@ -532,7 +574,7 @@ export function AIQueryChat() {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-29T09:06:41.182Z
+                at 2026-02-07T20:29:50.068Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

@@ -23,6 +23,7 @@ from grins_platform.database import get_db_session as db_session_generator
 from grins_platform.repositories.appointment_repository import AppointmentRepository
 from grins_platform.repositories.customer_repository import CustomerRepository
 from grins_platform.repositories.job_repository import JobRepository
+from grins_platform.repositories.lead_repository import LeadRepository
 from grins_platform.repositories.property_repository import PropertyRepository
 from grins_platform.repositories.service_offering_repository import (
     ServiceOfferingRepository,
@@ -188,11 +189,13 @@ async def get_dashboard_service(
     job_repository = JobRepository(session=session)
     staff_repository = StaffRepository(session=session)
     appointment_repository = AppointmentRepository(session=session)
+    lead_repository = LeadRepository(session=session)
     return DashboardService(
         customer_repository=customer_repository,
         job_repository=job_repository,
         staff_repository=staff_repository,
         appointment_repository=appointment_repository,
+        lead_repository=lead_repository,
     )
 
 

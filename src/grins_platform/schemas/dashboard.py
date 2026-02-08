@@ -33,6 +33,14 @@ class DashboardMetrics(BaseModel):
         description="Number of staff members currently available",
     )
     total_staff: int = Field(..., description="Total number of active staff members")
+    new_leads_today: int = Field(
+        default=0,
+        description="Number of new leads submitted today",
+    )
+    uncontacted_leads: int = Field(
+        default=0,
+        description="Number of leads with status 'new' (not yet contacted)",
+    )
 
     model_config = {"from_attributes": True}
 

@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>25/25</span>
+                <span class='fraction'>24/24</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">91.66% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>11/12</span>
+                <span class='fraction'>10/10</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>25/25</span>
+                <span class='fraction'>24/24</span>
             </div>
         
             
@@ -235,7 +235,26 @@
 <a name='L170'></a><a href='#L170'>170</a>
 <a name='L171'></a><a href='#L171'>171</a>
 <a name='L172'></a><a href='#L172'>172</a>
-<a name='L173'></a><a href='#L173'>173</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -284,7 +303,7 @@
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">8x</span>
@@ -331,7 +350,25 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">75x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -407,6 +444,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
  * LoginPage component for user authentication.
  *
@@ -419,16 +457,16 @@
  * - Redirect to dashboard on success
  *
  * Requirements: 19.1-19.7
+ * UI Redesign: Task 27.1-27.7
  */
 &nbsp;
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { User, Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
+import { User, Eye, EyeOff, AlertCircle, Loader2, Droplets } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from './AuthProvider';
 &nbsp;
 export function LoginPage() {
@@ -454,10 +492,10 @@ export function LoginPage() {
     try {
       await login({ username, password, remember_me: rememberMe });
       navigate(from, { replace: true });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : <span class="branch-1 cbranch-no" title="branch not covered" >'Invalid username or password';</span>
-      setError(message);
+    } catch {
+      // Always show a user-friendly message for login failures
+      // Don't expose technical details like "401" or "Request failed"
+      setError('Username or password is incorrect. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -465,116 +503,135 @@ export function LoginPage() {
 &nbsp;
   return (
     &lt;div
-      className="flex min-h-screen items-center justify-center bg-gray-50 px-4"
+      className="flex min-h-screen items-center justify-center bg-slate-50 px-4"
       data-testid="login-page"
     &gt;
-      &lt;div className="w-full max-w-md space-y-8"&gt;
-        {/* Header */}
-        &lt;div className="text-center"&gt;
-          &lt;h1 className="text-3xl font-bold tracking-tight text-gray-900"&gt;
+      &lt;div className="w-full max-w-md mx-auto space-y-8"&gt;
+        {/* Logo Section - Task 27.3 */}
+        &lt;div className="flex flex-col items-center justify-center"&gt;
+          &lt;div className="w-12 h-12 bg-teal-500 rounded-xl shadow-lg shadow-teal-500/30 flex items-center justify-center mb-4"&gt;
+            &lt;Droplets className="w-7 h-7 text-white" /&gt;
+          &lt;/div&gt;
+          &lt;h1 className="text-2xl font-bold text-slate-800 text-center"&gt;
             Grin's Irrigation
           &lt;/h1&gt;
-          &lt;p className="mt-2 text-sm text-gray-600"&gt;
-            Sign in to your account
-          &lt;/p&gt;
         &lt;/div&gt;
 &nbsp;
-        {/* Login Form */}
-        &lt;form
-          onSubmit={handleSubmit}
-          className="mt-8 space-y-6 rounded-lg bg-white p-8 shadow"
-          data-testid="login-form"
-        &gt;
-          {/* Error Alert */}
-          {error &amp;&amp; (
-            &lt;Alert variant="destructive" data-testid="login-error"&gt;
-              &lt;AlertCircle className="h-4 w-4" /&gt;
-              &lt;AlertTitle&gt;Error&lt;/AlertTitle&gt;
-              &lt;AlertDescription&gt;{error}&lt;/AlertDescription&gt;
-            &lt;/Alert&gt;
-          )}
+        {/* Login Card - Task 27.2 */}
+        &lt;div className="bg-white rounded-2xl shadow-lg p-8"&gt;
+          {/* Form Title - Task 27.4 */}
+          &lt;h2 className="text-2xl font-bold text-slate-800 text-center mb-6"&gt;
+            Sign in to your account
+          &lt;/h2&gt;
 &nbsp;
-          {/* Username Field */}
-          &lt;div className="space-y-2"&gt;
-            &lt;Label htmlFor="username"&gt;Username&lt;/Label&gt;
-            &lt;div className="relative"&gt;
-              &lt;User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" /&gt;
-              &lt;Input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) =&gt; setUsername(e.target.value)}
-                placeholder="Enter your username"
-                className="pl-10"
-                required
-                disabled={isLoading}
-                data-testid="username-input"
-              /&gt;
-            &lt;/div&gt;
-          &lt;/div&gt;
-&nbsp;
-          {/* Password Field */}
-          &lt;div className="space-y-2"&gt;
-            &lt;Label htmlFor="password"&gt;Password&lt;/Label&gt;
-            &lt;div className="relative"&gt;
-              &lt;Input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) =&gt; setPassword(e.target.value)}
-                placeholder="Enter your password"
-                className="pr-10"
-                required
-                disabled={isLoading}
-                data-testid="password-input"
-              /&gt;
-              &lt;button
-                type="button"
-                onClick={() =&gt; setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                tabIndex={-1}
-                data-testid="password-toggle"
-              &gt;
-                {showPassword ? (
-                  &lt;EyeOff className="h-4 w-4" /&gt;
-                ) : (
-                  &lt;Eye className="h-4 w-4" /&gt;
-                )}
-              &lt;/button&gt;
-            &lt;/div&gt;
-          &lt;/div&gt;
-&nbsp;
-          {/* Remember Me */}
-          &lt;div className="flex items-center space-x-2"&gt;
-            &lt;Checkbox
-              id="remember-me"
-              checked={rememberMe}
-              onCheckedChange={(checked) =&gt; setRememberMe(checked === true)}
-              disabled={isLoading}
-              data-testid="remember-me-checkbox"
-            /&gt;
-            &lt;Label htmlFor="remember-me" className="text-sm font-normal"&gt;
-              Remember me
-            &lt;/Label&gt;
-          &lt;/div&gt;
-&nbsp;
-          {/* Submit Button */}
-          &lt;Button
-            type="submit"
-            className="w-full"
-            disabled={isLoading}
-            data-testid="login-btn"
+          {/* Login Form */}
+          &lt;form
+            onSubmit={handleSubmit}
+            className="space-y-6"
+            data-testid="login-form"
           &gt;
-            {isLoading ? (
-              &lt;&gt;
-                &lt;Loader2 className="h-4 w-4 animate-spin" /&gt;
-                Signing in...
-              &lt;/&gt;
-            ) : (
-              'Sign In'
+            {/* Error Alert - User-friendly error message with highlighted box */}
+            {error &amp;&amp; (
+              &lt;div 
+                className="bg-red-50 p-4 rounded-xl border border-red-200 flex items-start gap-3"
+                data-testid="login-error"
+              &gt;
+                &lt;div className="bg-red-100 p-2 rounded-full flex-shrink-0"&gt;
+                  &lt;AlertCircle className="h-4 w-4 text-red-600" /&gt;
+                &lt;/div&gt;
+                &lt;div&gt;
+                  &lt;p className="text-red-800 font-medium"&gt;Login Failed&lt;/p&gt;
+                  &lt;p className="text-red-600 text-sm mt-0.5"&gt;{error}&lt;/p&gt;
+                &lt;/div&gt;
+              &lt;/div&gt;
             )}
-          &lt;/Button&gt;
-        &lt;/form&gt;
+&nbsp;
+            {/* Email/Username Field - Task 27.5 */}
+            &lt;div className="space-y-2"&gt;
+              &lt;Label htmlFor="username" className="text-sm font-medium text-slate-700"&gt;
+                Username
+              &lt;/Label&gt;
+              &lt;div className="relative"&gt;
+                &lt;User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /&gt;
+                &lt;Input
+                  id="username"
+                  type="text"
+                  value={username}
+                  onChange={(e) =&gt; setUsername(e.target.value)}
+                  placeholder="Enter your username"
+                  className="pl-10"
+                  required
+                  disabled={isLoading}
+                  data-testid="username-input"
+                /&gt;
+              &lt;/div&gt;
+            &lt;/div&gt;
+&nbsp;
+            {/* Password Field - Task 27.5 */}
+            &lt;div className="space-y-2"&gt;
+              &lt;Label htmlFor="password" className="text-sm font-medium text-slate-700"&gt;
+                Password
+              &lt;/Label&gt;
+              &lt;div className="relative"&gt;
+                &lt;Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) =&gt; setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className="pr-10"
+                  required
+                  disabled={isLoading}
+                  data-testid="password-input"
+                /&gt;
+                &lt;button
+                  type="button"
+                  onClick={() =&gt; setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  tabIndex={-1}
+                  data-testid="password-toggle"
+                &gt;
+                  {showPassword ? (
+                    &lt;EyeOff className="h-4 w-4" /&gt;
+                  ) : (
+                    &lt;Eye className="h-4 w-4" /&gt;
+                  )}
+                &lt;/button&gt;
+              &lt;/div&gt;
+            &lt;/div&gt;
+&nbsp;
+            {/* Remember Me */}
+            &lt;div className="flex items-center space-x-2"&gt;
+              &lt;Checkbox
+                id="remember-me"
+                checked={rememberMe}
+                onCheckedChange={(checked) =&gt; setRememberMe(checked === true)}
+                disabled={isLoading}
+                data-testid="remember-me-checkbox"
+              /&gt;
+              &lt;Label htmlFor="remember-me" className="text-sm font-normal text-slate-600"&gt;
+                Remember me
+              &lt;/Label&gt;
+            &lt;/div&gt;
+&nbsp;
+            {/* Submit Button - Task 27.6: Primary button styling (teal-500) */}
+            &lt;Button
+              type="submit"
+              className="w-full"
+              disabled={isLoading}
+              data-testid="login-btn"
+            &gt;
+              {isLoading ? (
+                &lt;&gt;
+                  &lt;Loader2 className="h-4 w-4 animate-spin" /&gt;
+                  Signing in...
+                &lt;/&gt;
+              ) : (
+                'Sign In'
+              )}
+            &lt;/Button&gt;
+          &lt;/form&gt;
+        &lt;/div&gt;
       &lt;/div&gt;
     &lt;/div&gt;
   );
@@ -586,7 +643,7 @@ export function LoginPage() {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-29T09:06:41.140Z
+                at 2026-02-07T20:29:50.011Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

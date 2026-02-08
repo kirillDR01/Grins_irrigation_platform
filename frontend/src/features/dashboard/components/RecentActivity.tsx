@@ -6,10 +6,12 @@
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Briefcase, Calendar, User } from 'lucide-react';
+import { Briefcase, Calendar, User, Funnel } from 'lucide-react';
 import { format } from 'date-fns';
 import { useJobs } from '@/features/jobs/hooks';
 import { useAppointments } from '@/features/schedule/hooks';
+import { useLeads } from '@/features/leads/hooks/useLeads';
+import { LEAD_SITUATION_LABELS } from '@/features/leads/types';
 
 export function RecentActivity() {
   const { data: jobsData, isLoading: jobsLoading } = useJobs({
@@ -21,8 +23,14 @@ export function RecentActivity() {
       page: 1,
       page_size: 5,
     });
+  const { data: leadsData, isLoading: leadsLoading } = useLeads({
+    page: 1,
+    page_size: 5,
+    sort_by: 'created_at',
+    sort_order: 'desc',
+  });
 
-  const isLoading = jobsLoading || appointmentsLoading;
+  const isLoading = jobsLoading || appointmentsLoading || leadsLoading;
 
   // Combine and sort recent items
   const recentItems = [
@@ -44,6 +52,15 @@ export function RecentActivity() {
       timestamp: apt.created_at,
       link: `/schedule?appointment=${apt.id}`,
     })),
+    ...(leadsData?.items ?? []).map((lead) => ({
+      id: lead.id,
+      type: 'lead' as const,
+      title: `New lead from ${lead.name}`,
+      description: LEAD_SITUATION_LABELS[lead.situation] ?? lead.situation,
+      status: lead.status,
+      timestamp: lead.created_at,
+      link: `/leads/${lead.id}`,
+    })),
   ]
     .sort(
       (a, b) =>
@@ -62,11 +79,19 @@ export function RecentActivity() {
       pending: 'bg-amber-100 text-amber-700',
       confirmed: 'bg-blue-100 text-blue-700',
       closed: 'bg-slate-100 text-slate-500',
+      // Lead statuses
+      new: 'bg-blue-100 text-blue-700',
+      contacted: 'bg-amber-100 text-amber-700',
+      qualified: 'bg-violet-100 text-violet-700',
+      converted: 'bg-emerald-100 text-emerald-700',
+      lost: 'bg-slate-100 text-slate-500',
+      spam: 'bg-red-100 text-red-700',
     };
     return colors[status] || 'bg-slate-100 text-slate-600';
   };
 
-  const getIcon = (type: 'job' | 'appointment') => {
+  const getIcon = (type: 'job' | 'appointment' | 'lead') => {
+    if (type === 'lead') return <Funnel className="h-4 w-4" />;
     return type === 'job' ? (
       <Briefcase className="h-4 w-4" />
     ) : (

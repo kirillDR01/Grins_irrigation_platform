@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from './Layout';
 
 // Mock the UserMenu component to avoid AuthProvider dependency
@@ -13,12 +14,26 @@ vi.mock('@/features/auth', () => ({
   ),
 }));
 
+// Create a fresh QueryClient for each test
+const createTestQueryClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: 0,
+      },
+    },
+  });
+
 // Wrapper component for tests
 const renderWithRouter = (ui: React.ReactElement, { route = '/' } = {}) => {
+  const queryClient = createTestQueryClient();
   return render(
-    <MemoryRouter initialEntries={[route]}>
-      {ui}
-    </MemoryRouter>
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[route]}>
+        {ui}
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 };
 
@@ -79,6 +94,7 @@ describe('Layout', () => {
       
       expect(screen.getByTestId('nav-dashboard')).toBeInTheDocument();
       expect(screen.getByTestId('nav-customers')).toBeInTheDocument();
+      expect(screen.getByTestId('nav-leads')).toBeInTheDocument();
       expect(screen.getByTestId('nav-jobs')).toBeInTheDocument();
       expect(screen.getByTestId('nav-schedule')).toBeInTheDocument();
       expect(screen.getByTestId('nav-staff')).toBeInTheDocument();
@@ -90,6 +106,7 @@ describe('Layout', () => {
       
       expect(screen.getByText('Dashboard')).toBeInTheDocument();
       expect(screen.getByText('Customers')).toBeInTheDocument();
+      expect(screen.getByText('Leads')).toBeInTheDocument();
       expect(screen.getByText('Jobs')).toBeInTheDocument();
       expect(screen.getByText('Schedule')).toBeInTheDocument();
       expect(screen.getByText('Staff')).toBeInTheDocument();
@@ -101,6 +118,7 @@ describe('Layout', () => {
       
       expect(screen.getByTestId('nav-dashboard')).toHaveAttribute('href', '/dashboard');
       expect(screen.getByTestId('nav-customers')).toHaveAttribute('href', '/customers');
+      expect(screen.getByTestId('nav-leads')).toHaveAttribute('href', '/leads');
       expect(screen.getByTestId('nav-jobs')).toHaveAttribute('href', '/jobs');
       expect(screen.getByTestId('nav-schedule')).toHaveAttribute('href', '/schedule');
       expect(screen.getByTestId('nav-staff')).toHaveAttribute('href', '/staff');

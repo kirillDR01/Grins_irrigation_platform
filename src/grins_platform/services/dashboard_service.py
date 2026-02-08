@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     )
     from grins_platform.repositories.customer_repository import CustomerRepository
     from grins_platform.repositories.job_repository import JobRepository
+    from grins_platform.repositories.lead_repository import LeadRepository
     from grins_platform.repositories.staff_repository import StaffRepository
 
 
@@ -57,6 +58,7 @@ class DashboardService(LoggerMixin):
         job_repository: JobRepository,
         staff_repository: StaffRepository,
         appointment_repository: AppointmentRepository,
+        lead_repository: LeadRepository | None = None,
     ) -> None:
         """Initialize service with repositories.
 
@@ -65,12 +67,14 @@ class DashboardService(LoggerMixin):
             job_repository: JobRepository for job data
             staff_repository: StaffRepository for staff data
             appointment_repository: AppointmentRepository for appointment data
+            lead_repository: LeadRepository for lead data (optional)
         """
         super().__init__()
         self.customer_repository = customer_repository
         self.job_repository = job_repository
         self.staff_repository = staff_repository
         self.appointment_repository = appointment_repository
+        self.lead_repository = lead_repository
 
     async def get_overview_metrics(self) -> DashboardMetrics:
         """Get overall dashboard metrics.
@@ -97,6 +101,13 @@ class DashboardService(LoggerMixin):
         total_staff = await self.staff_repository.count_active()
         available_staff = await self.staff_repository.count_available()
 
+        # Get lead counts (if lead_repository is available)
+        new_leads_today = 0
+        uncontacted_leads = 0
+        if self.lead_repository is not None:
+            new_leads_today = await self.lead_repository.count_new_today()
+            uncontacted_leads = await self.lead_repository.count_uncontacted()
+
         metrics = DashboardMetrics(
             total_customers=total_customers,
             active_customers=active_customers,
@@ -104,6 +115,8 @@ class DashboardService(LoggerMixin):
             today_appointments=today_appointments,
             available_staff=available_staff,
             total_staff=total_staff,
+            new_leads_today=new_leads_today,
+            uncontacted_leads=uncontacted_leads,
         )
 
         self.log_completed(

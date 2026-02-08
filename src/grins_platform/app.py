@@ -22,8 +22,11 @@ from grins_platform.database import get_database_manager
 from grins_platform.exceptions import (
     CustomerNotFoundError,
     DuplicateCustomerError,
+    InvalidLeadStatusTransitionError,
     InvalidStatusTransitionError,
     JobNotFoundError,
+    LeadAlreadyConvertedError,
+    LeadNotFoundError,
     PropertyCustomerMismatchError,
     PropertyNotFoundError,
     ServiceOfferingInactiveError,
@@ -403,6 +406,81 @@ def _register_exception_handlers(app: FastAPI) -> None:
                     "code": "SERVICE_OFFERING_INACTIVE",
                     "message": str(exc),
                     "service_id": str(exc.service_id),
+                },
+            },
+        )
+
+    # =========================================================================
+    # Lead Capture Exception Handlers
+    # =========================================================================
+
+    @app.exception_handler(LeadNotFoundError)  # type: ignore[untyped-decorator]
+    async def lead_not_found_handler(
+        request: Request,
+        exc: LeadNotFoundError,
+    ) -> JSONResponse:
+        """Handle LeadNotFoundError exceptions."""
+        logger.warning(
+            "api.exception.lead_not_found",
+            lead_id=str(exc.lead_id),
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "success": False,
+                "error": {
+                    "code": "LEAD_NOT_FOUND",
+                    "message": str(exc),
+                    "lead_id": str(exc.lead_id),
+                },
+            },
+        )
+
+    @app.exception_handler(LeadAlreadyConvertedError)  # type: ignore[untyped-decorator]
+    async def lead_already_converted_handler(
+        request: Request,
+        exc: LeadAlreadyConvertedError,
+    ) -> JSONResponse:
+        """Handle LeadAlreadyConvertedError exceptions."""
+        logger.warning(
+            "api.exception.lead_already_converted",
+            lead_id=str(exc.lead_id),
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "success": False,
+                "error": {
+                    "code": "LEAD_ALREADY_CONVERTED",
+                    "message": str(exc),
+                    "lead_id": str(exc.lead_id),
+                },
+            },
+        )
+
+    @app.exception_handler(InvalidLeadStatusTransitionError)  # type: ignore[untyped-decorator]
+    async def invalid_lead_status_transition_handler(
+        request: Request,
+        exc: InvalidLeadStatusTransitionError,
+    ) -> JSONResponse:
+        """Handle InvalidLeadStatusTransitionError exceptions."""
+        logger.warning(
+            "api.exception.invalid_lead_status_transition",
+            current_status=exc.current_status.value,
+            requested_status=exc.requested_status.value,
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "success": False,
+                "error": {
+                    "code": "INVALID_LEAD_STATUS_TRANSITION",
+                    "message": str(exc),
+                    "current_status": exc.current_status.value,
+                    "requested_status": exc.requested_status.value,
                 },
             },
         )

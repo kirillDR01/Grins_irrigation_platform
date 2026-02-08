@@ -9,6 +9,8 @@ export interface DashboardMetrics {
   today_appointments: number;
   available_staff: number;
   total_staff: number;
+  new_leads_today: number;
+  uncontacted_leads: number;
 }
 
 export interface RequestVolumeMetrics {

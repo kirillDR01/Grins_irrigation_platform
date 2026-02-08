@@ -17,11 +17,17 @@ vi.mock('@/features/schedule/hooks', () => ({
   useAppointments: vi.fn(),
 }));
 
+vi.mock('@/features/leads/hooks/useLeads', () => ({
+  useLeads: vi.fn(),
+}));
+
 import { useJobs } from '@/features/jobs/hooks';
 import { useAppointments } from '@/features/schedule/hooks';
+import { useLeads } from '@/features/leads/hooks/useLeads';
 
 const mockUseJobs = useJobs as ReturnType<typeof vi.fn>;
 const mockUseAppointments = useAppointments as ReturnType<typeof vi.fn>;
+const mockUseLeads = useLeads as ReturnType<typeof vi.fn>;
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -41,6 +47,11 @@ function createWrapper() {
 describe('RecentActivity', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default mock for useLeads (added during lead-capture feature)
+    mockUseLeads.mockReturnValue({
+      data: { items: [], total: 0 },
+      isLoading: false,
+    });
   });
 
   it('renders loading state when data is loading', () => {
@@ -49,6 +60,10 @@ describe('RecentActivity', () => {
       isLoading: true,
     });
     mockUseAppointments.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+    });
+    mockUseLeads.mockReturnValue({
       data: undefined,
       isLoading: true,
     });

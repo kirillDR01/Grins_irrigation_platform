@@ -24,7 +24,7 @@ from grins_platform.exceptions.auth import (
 if TYPE_CHECKING:
     from uuid import UUID
 
-    from grins_platform.models.enums import AppointmentStatus, JobStatus
+    from grins_platform.models.enums import AppointmentStatus, JobStatus, LeadStatus
 
 
 class CustomerError(Exception):
@@ -348,6 +348,70 @@ class InvalidInvoiceOperationError(FieldOperationsError):
         super().__init__(message)
 
 
+# ============================================================================
+# Lead Capture Exceptions
+# ============================================================================
+
+
+class LeadError(Exception):
+    """Base exception for lead operations."""
+
+
+class LeadNotFoundError(LeadError):
+    """Raised when a lead is not found.
+
+    Validates: Lead Capture Requirement 13.1
+    """
+
+    def __init__(self, lead_id: UUID) -> None:
+        """Initialize with lead ID.
+
+        Args:
+            lead_id: UUID of the lead that was not found
+        """
+        self.lead_id = lead_id
+        super().__init__(f"Lead not found: {lead_id}")
+
+
+class LeadAlreadyConvertedError(LeadError):
+    """Raised when attempting to convert an already-converted lead.
+
+    Validates: Lead Capture Requirement 13.2
+    """
+
+    def __init__(self, lead_id: UUID) -> None:
+        """Initialize with lead ID.
+
+        Args:
+            lead_id: UUID of the lead that is already converted
+        """
+        self.lead_id = lead_id
+        super().__init__(f"Lead already converted: {lead_id}")
+
+
+class InvalidLeadStatusTransitionError(LeadError):
+    """Raised when an invalid lead status transition is attempted.
+
+    Validates: Lead Capture Requirement 13.3
+    """
+
+    def __init__(
+        self, current_status: LeadStatus, requested_status: LeadStatus,
+    ) -> None:
+        """Initialize with status transition details.
+
+        Args:
+            current_status: The current lead status
+            requested_status: The requested new lead status
+        """
+        self.current_status = current_status
+        self.requested_status = requested_status
+        super().__init__(
+            f"Invalid lead status transition from {current_status.value} "
+            f"to {requested_status.value}",
+        )
+
+
 __all__ = [
     "AccountLockedError",
     "AppointmentNotFoundError",
@@ -359,10 +423,14 @@ __all__ = [
     "FieldOperationsError",
     "InvalidCredentialsError",
     "InvalidInvoiceOperationError",
+    "InvalidLeadStatusTransitionError",
     "InvalidStatusTransitionError",
     "InvalidTokenError",
     "InvoiceNotFoundError",
     "JobNotFoundError",
+    "LeadAlreadyConvertedError",
+    "LeadError",
+    "LeadNotFoundError",
     "PropertyCustomerMismatchError",
     "PropertyNotFoundError",
     "ScheduleClearAuditNotFoundError",
