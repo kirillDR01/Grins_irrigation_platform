@@ -5,6 +5,28 @@ Grin's Irrigation Platform — field service automation for residential/commerci
 
 ## Recent Activity
 
+## [2026-02-07 21:30] - BUGFIX: Lead Form CORS Error Diagnosis & Documentation
+
+### What Was Accomplished
+Diagnosed and documented the CORS error blocking lead form submissions from the Vercel landing page (`grins-irrigation.vercel.app`) to the Railway backend (`grins-platform-production.up.railway.app`). Created solution documentation for the deployment fix.
+
+### Technical Details
+- The browser's preflight `OPTIONS` request to `POST /api/v1/leads` was rejected because the backend's `CORS_ORIGINS` env var on Railway did not include `https://grins-irrigation.vercel.app`
+- Confirmed no code changes needed — `src/grins_platform/app.py` already reads `CORS_ORIGINS` as a comma-separated env var and merges with localhost defaults
+- Fix is purely a Railway environment variable update: add `https://grins-irrigation.vercel.app` to `CORS_ORIGINS`
+
+### Files Created
+- `LeadErrorSolution.md` — concise problem/solution/verification reference at workspace root
+- `docs/lead-form-cors-fix.md` — detailed guide with step-by-step Railway instructions, curl verification commands, environment variable reference, and troubleshooting section (created in prior session)
+
+### Decision Rationale
+Documented the fix as a standalone markdown file rather than a code change because the issue is a deployment configuration gap, not a code bug. The CORS middleware is already correctly implemented — it just needs the right origins configured in production.
+
+### Next Steps
+- Apply the fix: add `https://grins-irrigation.vercel.app` to `CORS_ORIGINS` on Railway
+- Verify with the curl commands in `LeadErrorSolution.md`
+- Consider adding rate limiting to the public `/api/v1/leads` endpoint
+
 ## [2026-02-07 20:10] - FEATURE: Lead Capture (Website Form Submission)
 
 ### What Was Accomplished
