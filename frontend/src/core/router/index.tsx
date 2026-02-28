@@ -31,6 +31,9 @@ const SettingsPage = lazy(() =>
 const InvoicesPage = lazy(() =>
   import('@/pages/Invoices').then((m) => ({ default: m.InvoicesPage }))
 );
+const LeadsPage = lazy(() =>
+  import('@/pages/Leads').then((m) => ({ default: m.LeadsPage }))
+);
 
 // Layout wrapper component with Suspense for lazy loaded pages
 function LayoutWrapper() {
@@ -78,6 +81,14 @@ export const router = createBrowserRouter([
       {
         path: 'customers/:id',
         element: <CustomersPage />,
+      },
+      {
+        path: 'leads',
+        element: <LeadsPage />,
+      },
+      {
+        path: 'leads/:id',
+        element: <LeadsPage />,
       },
       {
         path: 'jobs',

@@ -14,6 +14,7 @@ import {
   Zap,
   FileText,
   Bell,
+  Funnel,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -24,7 +25,7 @@ import {
 } from '@/components/ui/popover';
 import { UserMenu } from '@/features/auth';
 import { GlobalSearch } from './GlobalSearch';
-import { useJobsByStatus } from '@/features/dashboard/hooks';
+import { useJobsByStatus, useDashboardMetrics } from '@/features/dashboard/hooks';
 
 interface LayoutProps {
   children: ReactNode;
@@ -49,6 +50,12 @@ const navItems: NavItem[] = [
     href: '/customers',
     icon: <Users className="h-5 w-5" />,
     testId: 'nav-customers',
+  },
+  {
+    label: 'Leads',
+    href: '/leads',
+    icon: <Funnel className="h-5 w-5" />,
+    testId: 'nav-leads',
   },
   {
     label: 'Jobs',
@@ -93,10 +100,14 @@ export function Layout({ children }: LayoutProps) {
   const [notificationsSeen, setNotificationsSeen] = useState(false);
   const location = useLocation();
   const { data: jobsByStatus } = useJobsByStatus();
+  const { data: dashboardMetrics } = useDashboardMetrics();
   
   // Notification count = requested jobs (overnight requests)
   const notificationCount = jobsByStatus?.requested ?? 0;
   const showBadge = notificationCount > 0 && !notificationsSeen;
+
+  // Lead badge count = uncontacted leads
+  const uncontactedLeadsCount = dashboardMetrics?.uncontacted_leads ?? 0;
 
   return (
     <div className="min-h-screen bg-background" data-testid="layout">
@@ -161,6 +172,14 @@ export function Layout({ children }: LayoutProps) {
                 )}
                 {item.icon}
                 {item.label}
+                {item.testId === 'nav-leads' && uncontactedLeadsCount > 0 && (
+                  <span
+                    className="ml-auto inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-semibold text-white"
+                    data-testid="leads-badge"
+                  >
+                    {uncontactedLeadsCount > 99 ? '99+' : uncontactedLeadsCount}
+                  </span>
+                )}
               </Link>
             );
           })}

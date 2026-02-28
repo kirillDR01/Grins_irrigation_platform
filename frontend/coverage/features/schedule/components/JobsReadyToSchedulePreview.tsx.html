@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">90.47% </span>
+                <span class="strong">90% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>38/42</span>
+                <span class='fraction'>36/40</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">75.75% </span>
+                <span class="strong">70.96% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>25/33</span>
+                <span class='fraction'>22/31</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">94.11% </span>
+                <span class="strong">93.75% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>16/17</span>
+                <span class='fraction'>15/16</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">97.05% </span>
+                <span class="strong">96.96% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>33/34</span>
+                <span class='fraction'>32/33</span>
             </div>
         
             
@@ -275,7 +275,19 @@
 <a name='L210'></a><a href='#L210'>210</a>
 <a name='L211'></a><a href='#L211'>211</a>
 <a name='L212'></a><a href='#L212'>212</a>
-<a name='L213'></a><a href='#L213'>213</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a>
+<a name='L221'></a><a href='#L221'>221</a>
+<a name='L222'></a><a href='#L222'>222</a>
+<a name='L223'></a><a href='#L223'>223</a>
+<a name='L224'></a><a href='#L224'>224</a>
+<a name='L225'></a><a href='#L225'>225</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -334,7 +346,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">24x</span>
 <span class="cline-any cline-yes">24x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">11x</span>
@@ -386,10 +397,12 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -426,7 +439,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">16x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -487,13 +499,25 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { useState, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
-import { Badge } from '@/shared/components/ui/badge';
-import { Checkbox } from '@/shared/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription } from '@/shared/components/ui/alert';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { JobSelectionControls } from './JobSelectionControls';
 import type { JobReadyToSchedule } from '../types';
 &nbsp;
@@ -547,18 +571,17 @@ export function JobsReadyToSchedulePreview({
   }, [jobs, filterJobType, filterPriority, filterCity]);
 &nbsp;
   const selectedCount = filteredJobs.filter(j =&gt; !excludedJobIds.has(j.job_id)).length;
-  const excludedCount = filteredJobs.filter(j =&gt; excludedJobIds.has(j.job_id)).length;
 &nbsp;
   if (isLoading) {
     return (
-      &lt;Card data-testid="jobs-preview-section"&gt;
+      &lt;Card data-testid="jobs-ready-preview"&gt;
         &lt;CardHeader&gt;
-          &lt;CardTitle&gt;Jobs to Schedule&lt;/CardTitle&gt;
+          &lt;CardTitle&gt;Jobs Ready to Schedule&lt;/CardTitle&gt;
         &lt;/CardHeader&gt;
         &lt;CardContent&gt;
           &lt;div className="flex items-center justify-center py-8"&gt;
-            &lt;Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /&gt;
-            &lt;span className="ml-2 text-muted-foreground"&gt;Loading jobs...&lt;/span&gt;
+            &lt;Loader2 className="h-6 w-6 animate-spin text-slate-400" /&gt;
+            &lt;span className="ml-2 text-slate-500"&gt;Loading jobs...&lt;/span&gt;
           &lt;/div&gt;
         &lt;/CardContent&gt;
       &lt;/Card&gt;
@@ -567,9 +590,9 @@ export function JobsReadyToSchedulePreview({
 &nbsp;
   if (error) {
     return (
-      &lt;Card data-testid="jobs-preview-section"&gt;
+      &lt;Card data-testid="jobs-ready-preview"&gt;
         &lt;CardHeader&gt;
-          &lt;CardTitle&gt;Jobs to Schedule&lt;/CardTitle&gt;
+          &lt;CardTitle&gt;Jobs Ready to Schedule&lt;/CardTitle&gt;
         &lt;/CardHeader&gt;
         &lt;CardContent&gt;
           &lt;Alert variant="destructive"&gt;
@@ -585,16 +608,13 @@ export function JobsReadyToSchedulePreview({
 &nbsp;
   if (jobs.length === 0) {
     return (
-      &lt;Card data-testid="jobs-preview-section"&gt;
+      &lt;Card data-testid="jobs-ready-preview"&gt;
         &lt;CardHeader&gt;
-          &lt;CardTitle&gt;Jobs to Schedule&lt;/CardTitle&gt;
+          &lt;CardTitle&gt;Jobs Ready to Schedule&lt;/CardTitle&gt;
         &lt;/CardHeader&gt;
         &lt;CardContent&gt;
-          &lt;div className="text-center py-8 text-muted-foreground"&gt;
-            &lt;p&gt;No jobs available for scheduling on the selected date.&lt;/p&gt;
-            &lt;p className="text-sm mt-2"&gt;
-              Jobs with status "approved" or "requested" will appear here.
-            &lt;/p&gt;
+          &lt;div className="text-center py-8 text-slate-400 text-sm italic"&gt;
+            &lt;p&gt;No jobs ready to schedule&lt;/p&gt;
           &lt;/div&gt;
         &lt;/CardContent&gt;
       &lt;/Card&gt;
@@ -602,9 +622,14 @@ export function JobsReadyToSchedulePreview({
   }
 &nbsp;
   return (
-    &lt;Card data-testid="jobs-preview-section"&gt;
+    &lt;Card data-testid="jobs-ready-preview"&gt;
       &lt;CardHeader&gt;
-        &lt;CardTitle&gt;Jobs to Schedule&lt;/CardTitle&gt;
+        &lt;div className="flex items-center justify-between"&gt;
+          &lt;CardTitle&gt;Jobs Ready to Schedule&lt;/CardTitle&gt;
+          &lt;Badge className="bg-teal-100 text-teal-700 hover:bg-teal-100"&gt;
+            {jobs.length}
+          &lt;/Badge&gt;
+        &lt;/div&gt;
         &lt;div className="flex gap-2 mt-4"&gt;
           &lt;Select value={filterJobType} onValueChange={setFilterJobType}&gt;
             &lt;SelectTrigger className="w-[180px]"&gt;
@@ -645,9 +670,8 @@ export function JobsReadyToSchedulePreview({
       &lt;/CardHeader&gt;
       &lt;CardContent&gt;
         &lt;div className="mb-4 flex items-center justify-between" data-testid="jobs-summary"&gt;
-          &lt;p className="text-sm text-muted-foreground"&gt;
-            {selectedCount} jobs selected for scheduling
-            {excludedCount &gt; 0 &amp;&amp; ` (${excludedCount} excluded)`}
+          &lt;p className="text-sm text-slate-500"&gt;
+            {selectedCount} of {filteredJobs.length} jobs selected
           &lt;/p&gt;
           {onSelectAll &amp;&amp; <span class="branch-1 cbranch-no" title="branch not covered" >onDeselectAll &amp;&amp; (</span>
 <span class="branch-2 cbranch-no" title="branch not covered" >            &lt;JobSelectionControls</span>
@@ -659,42 +683,54 @@ export function JobsReadyToSchedulePreview({
           )}
         &lt;/div&gt;
 &nbsp;
-        &lt;div className="space-y-2 max-h-[400px] overflow-y-auto"&gt;
+        &lt;div className="space-y-3 max-h-[400px] overflow-y-auto"&gt;
           {filteredJobs.map(job =&gt; {
             const isExcluded = excludedJobIds.has(job.job_id);
             return (
               &lt;div
                 key={job.job_id}
                 data-testid={`job-preview-${job.job_id}`}
-                className={`flex items-start gap-3 p-3 border rounded-lg ${
-                  isExcluded ? 'opacity-50 bg-muted' : 'bg-background'
+                className={`flex items-center gap-4 p-3 bg-slate-50 rounded-lg ${
+                  isExcluded ? 'opacity-50' : ''
                 }`}
               &gt;
                 &lt;Checkbox
                   checked={!isExcluded}
                   onCheckedChange={() =&gt; onToggleExclude(job.job_id)}
-                  data-testid={`exclude-job-${job.job_id}`}
+                  data-testid={`job-checkbox-${job.job_id}`}
+                  className="data-[state=checked]:bg-teal-500 data-[state=checked]:border-teal-500"
                 /&gt;
                 &lt;div className="flex-1 min-w-0"&gt;
                   &lt;div className="flex items-center gap-2 mb-1"&gt;
-                    &lt;span className={`font-medium ${isExcluded ? 'line-through' : ''}`}&gt;
+                    &lt;span className={`font-medium text-slate-700 ${isExcluded ? 'line-through' : ''}`}&gt;
                       {job.customer_name}
                     &lt;/span&gt;
-                    &lt;Badge variant="outline"&gt;{job.job_type}&lt;/Badge&gt;
-                    &lt;Badge variant={job.priority === 'high' ? 'destructive' : 'secondary'}&gt;
-                      {job.priority}
-                    &lt;/Badge&gt;
+                    &lt;Badge variant="outline" className="text-xs"&gt;{job.job_type}&lt;/Badge&gt;
+                    {job.priority === 'high' ? (
+                      &lt;Badge className="bg-orange-50 text-orange-600 hover:bg-orange-50 text-xs"&gt;
+                        High
+                      &lt;/Badge&gt;
+                    ) : (
+                      &lt;Badge className="bg-slate-100 text-slate-500 hover:bg-slate-100 text-xs"&gt;
+                        Normal
+                      &lt;/Badge&gt;
+                    )}
                   &lt;/div&gt;
-                  &lt;div className="text-sm text-muted-foreground"&gt;
+                  &lt;div className="text-sm text-slate-500"&gt;
                     {job.city &amp;&amp; &lt;span&gt;{job.city} • &lt;/span&gt;}
                     &lt;span&gt;{job.estimated_duration_minutes} min&lt;/span&gt;
-                    {job.status &amp;&amp; &lt;span&gt; • {job.status}&lt;/span&gt;}
                   &lt;/div&gt;
                 &lt;/div&gt;
               &lt;/div&gt;
             );
           })}
         &lt;/div&gt;
+&nbsp;
+        {filteredJobs.length === 0 &amp;&amp; (
+<span class="branch-1 cbranch-no" title="branch not covered" >          &lt;div className="text-center py-8 text-slate-400 text-sm italic"&gt;</span>
+            No jobs ready to schedule
+          &lt;/div&gt;
+        )}
       &lt;/CardContent&gt;
     &lt;/Card&gt;
   );
@@ -706,7 +742,7 @@ export function JobsReadyToSchedulePreview({
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-29T09:06:41.140Z
+                at 2026-02-07T20:29:50.011Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

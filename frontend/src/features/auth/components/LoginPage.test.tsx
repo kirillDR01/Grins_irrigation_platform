@@ -127,7 +127,7 @@ describe('LoginPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('login-error')).toBeInTheDocument();
     });
-    expect(screen.getByText('Invalid username or password')).toBeInTheDocument();
+    expect(screen.getByText('Username or password is incorrect. Please try again.')).toBeInTheDocument();
   });
 
   it('calls login with correct credentials', async () => {

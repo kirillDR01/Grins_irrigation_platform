@@ -223,3 +223,58 @@ class PaymentMethod(str, Enum):
     VENMO = "venmo"
     ZELLE = "zelle"
     STRIPE = "stripe"
+
+
+# =============================================================================
+# Lead Capture Enums
+# =============================================================================
+
+
+class LeadStatus(str, Enum):
+    """Lead status enumeration for pipeline tracking.
+
+    Validates: Lead Capture Requirement 4.4
+    """
+
+    NEW = "new"
+    CONTACTED = "contacted"
+    QUALIFIED = "qualified"
+    CONVERTED = "converted"
+    LOST = "lost"
+    SPAM = "spam"
+
+
+class LeadSituation(str, Enum):
+    """Lead situation enumeration mapping to form dropdown options.
+
+    Validates: Lead Capture Requirement 4.5
+    """
+
+    NEW_SYSTEM = "new_system"
+    UPGRADE = "upgrade"
+    REPAIR = "repair"
+    EXPLORING = "exploring"
+
+
+VALID_LEAD_STATUS_TRANSITIONS: dict[
+    LeadStatus, set[LeadStatus],
+] = {
+    LeadStatus.NEW: {
+        LeadStatus.CONTACTED,
+        LeadStatus.QUALIFIED,
+        LeadStatus.LOST,
+        LeadStatus.SPAM,
+    },
+    LeadStatus.CONTACTED: {
+        LeadStatus.QUALIFIED,
+        LeadStatus.LOST,
+        LeadStatus.SPAM,
+    },
+    LeadStatus.QUALIFIED: {
+        LeadStatus.CONVERTED,
+        LeadStatus.LOST,
+    },
+    LeadStatus.CONVERTED: set(),  # terminal
+    LeadStatus.LOST: {LeadStatus.NEW},  # re-engagement
+    LeadStatus.SPAM: set(),  # terminal
+}

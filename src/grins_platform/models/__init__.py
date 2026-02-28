@@ -9,6 +9,7 @@ Phase 3 (Admin Dashboard): Appointment
 Phase 4 (Route Optimization): StaffAvailability
 Phase 6 (AI Assistant): AIAuditLog, AIUsage, SentMessage
 Phase 8 (Schedule Workflow): ScheduleClearAudit, Invoice
+Phase 9 (Lead Capture): Lead
 """
 
 from grins_platform.models.ai_audit_log import AIAuditLog
@@ -22,7 +23,9 @@ from grins_platform.models.enums import (
     JobCategory,
     JobSource,
     JobStatus,
+    LeadSituation,
     LeadSource,
+    LeadStatus,
     PaymentMethod,
     PricingModel,
     PropertyType,
@@ -34,6 +37,7 @@ from grins_platform.models.enums import (
 from grins_platform.models.invoice import Invoice
 from grins_platform.models.job import Job
 from grins_platform.models.job_status_history import JobStatusHistory
+from grins_platform.models.lead import Lead
 from grins_platform.models.property import Property
 from grins_platform.models.schedule_clear_audit import ScheduleClearAudit
 from grins_platform.models.sent_message import SentMessage
@@ -60,7 +64,11 @@ __all__ = [
     "JobSource",
     "JobStatus",
     "JobStatusHistory",
+    # Phase 9: Lead Capture
+    "Lead",
+    "LeadSituation",
     "LeadSource",
+    "LeadStatus",
     "PaymentMethod",
     "PricingModel",
     "Property",

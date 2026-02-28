@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">90.24% </span>
+                <span class="strong">90% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>37/41</span>
+                <span class='fraction'>36/40</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">90.24% </span>
+                <span class="strong">90% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>37/41</span>
+                <span class='fraction'>36/40</span>
             </div>
         
             
@@ -231,8 +231,11 @@
 <a name='L166'></a><a href='#L166'>166</a>
 <a name='L167'></a><a href='#L167'>167</a>
 <a name='L168'></a><a href='#L168'>168</a>
-<a name='L169'></a><a href='#L169'>169</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -302,8 +305,6 @@
 <span class="cline-any cline-yes">8x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">42x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">85x</span>
@@ -316,14 +317,19 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">85x</span>
-<span class="cline-any cline-yes">57x</span>
-<span class="cline-any cline-yes">57x</span>
-<span class="cline-any cline-yes">42x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">9x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">85x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -399,10 +405,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { useState, useEffect, useCallback } from 'react';
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { useState, useEffect, useCallback, useRef } from 'react';
+import { Check, ChevronsUpDown, Loader2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Popover,
   PopoverContent,
@@ -428,7 +435,7 @@ export function SearchableCustomerDropdown({
   const [customers, setCustomers] = useState&lt;Customer[]&gt;([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState&lt;Customer | null&gt;(null);
-  const [debounceTimeout, setDebounceTimeout] = useState&lt;NodeJS.Timeout | null&gt;(null);
+  const debounceTimeoutRef = useRef&lt;ReturnType&lt;typeof setTimeout&gt; | null&gt;(null);
 &nbsp;
   // Fetch selected customer details when value changes
   useEffect(() =&gt; {
@@ -461,16 +468,14 @@ export function SearchableCustomerDropdown({
     setSearchQuery(query);
 &nbsp;
     // Clear existing timeout
-    if (debounceTimeout) {
-      clearTimeout(debounceTimeout);
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
     }
 &nbsp;
     // Set new timeout for debounced search
-    const timeout = setTimeout(() =&gt; {
+    debounceTimeoutRef.current = setTimeout(() =&gt; {
       searchCustomers(query);
     }, 300);
-&nbsp;
-    setDebounceTimeout(timeout);
   };
 &nbsp;
   // Handle customer selection
@@ -485,11 +490,11 @@ export function SearchableCustomerDropdown({
   // Cleanup timeout on unmount
   useEffect(() =&gt; {
     return () =&gt; {
-      if (debounceTimeout) {
-        clearTimeout(debounceTimeout);
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
       }
     };
-  }, [debounceTimeout]);
+  }, []);
 &nbsp;
   return (
     &lt;Popover open={open} onOpenChange={setOpen}&gt;
@@ -498,40 +503,45 @@ export function SearchableCustomerDropdown({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between"
+          className="w-full justify-between border-slate-200 rounded-lg bg-white text-slate-700 text-sm hover:bg-slate-50 focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
           disabled={disabled}
           data-testid="customer-dropdown"
         &gt;
           {selectedCustomer ? (
-            &lt;span className="truncate"&gt;
+            &lt;span className="truncate font-medium text-slate-700"&gt;
               {selectedCustomer.first_name} {selectedCustomer.last_name} - {selectedCustomer.phone}
             &lt;/span&gt;
           ) : (
-            &lt;span className="text-muted-foreground"&gt;Select customer...&lt;/span&gt;
+            &lt;span className="text-slate-400"&gt;Select customer...&lt;/span&gt;
           )}
-          &lt;ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" /&gt;
+          &lt;ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-slate-400" /&gt;
         &lt;/Button&gt;
       &lt;/PopoverTrigger&gt;
-      &lt;PopoverContent className="w-[400px] p-0" align="start"&gt;
-        &lt;div className="flex items-center border-b px-3"&gt;
-          &lt;Input
+      &lt;PopoverContent 
+        className="w-[400px] p-0 bg-white rounded-lg shadow-lg border border-slate-100" 
+        align="start"
+        data-testid="customer-dropdown-content"
+      &gt;
+        &lt;div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2"&gt;
+          &lt;Search className="h-4 w-4 text-slate-400" /&gt;
+          &lt;input
             placeholder="Search by name, phone, or email..."
             value={searchQuery}
             onChange={(e) =&gt; handleSearchChange(e.target.value)}
-            className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="flex-1 bg-transparent border-0 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 rounded"
             data-testid="customer-search-input"
             autoFocus
           /&gt;
-          {isLoading &amp;&amp; <span class="branch-1 cbranch-no" title="branch not covered" >&lt;Loader2 className="h-4 w-4 animate-spin" /&gt;}</span>
+          {isLoading &amp;&amp; <span class="branch-1 cbranch-no" title="branch not covered" >&lt;Loader2 className="h-4 w-4 animate-spin text-teal-500" /&gt;}</span>
         &lt;/div&gt;
-        &lt;div className="max-h-[300px] overflow-y-auto"&gt;
+        &lt;div className="max-h-60 overflow-y-auto"&gt;
           {customers.length === 0 &amp;&amp; searchQuery &amp;&amp; !isLoading &amp;&amp; (
-            &lt;div className="py-6 text-center text-sm text-muted-foreground"&gt;
+            &lt;div className="py-6 text-center text-sm text-slate-400 italic"&gt;
               No customers found
             &lt;/div&gt;
           )}
           {customers.length === 0 &amp;&amp; !searchQuery &amp;&amp; (
-            &lt;div className="py-6 text-center text-sm text-muted-foreground"&gt;
+            &lt;div className="py-6 text-center text-sm text-slate-400"&gt;
               Start typing to search customers
             &lt;/div&gt;
           )}
@@ -540,22 +550,24 @@ export function SearchableCustomerDropdown({
               key={customer.id}
               onClick={() =&gt; handleSelect(customer)}
               className={cn(
-                'relative flex w-full cursor-pointer select-none items-center gap-2 px-3 py-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground',
-                value === customer.id &amp;&amp; <span class="branch-1 cbranch-no" title="branch not covered" >'bg-accent'</span>
+                'relative flex w-full cursor-pointer select-none items-center gap-2 px-3 py-2 text-sm outline-none transition-colors',
+                value === customer.id 
+                  ? <span class="branch-0 cbranch-no" title="branch not covered" >'bg-teal-50 text-teal-700' </span>
+                  : 'hover:bg-slate-50 text-slate-700'
               )}
               data-testid={`customer-option-${customer.id}`}
             &gt;
               &lt;Check
                 className={cn(
-                  'h-4 w-4',
+                  'h-4 w-4 text-teal-600',
                   value === customer.id ? <span class="branch-0 cbranch-no" title="branch not covered" >'opacity-100' : '</span>opacity-0'
                 )}
               /&gt;
               &lt;div className="flex flex-col items-start"&gt;
-                &lt;span className="font-medium"&gt;
+                &lt;span className="font-medium text-slate-700"&gt;
                   {customer.first_name} {customer.last_name}
                 &lt;/span&gt;
-                &lt;span className="text-xs text-muted-foreground"&gt;
+                &lt;span className="text-xs text-slate-400"&gt;
                   {customer.phone}
                   {customer.email &amp;&amp; ` • ${customer.email}`}
                 &lt;/span&gt;
@@ -574,7 +586,7 @@ export function SearchableCustomerDropdown({
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-29T09:06:41.182Z
+                at 2026-02-07T20:29:50.068Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

@@ -182,7 +182,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">30x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -197,7 +197,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">30x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -207,7 +207,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">30x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -230,7 +230,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">80x</span>
+<span class="cline-any cline-yes">96x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -243,7 +243,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">162x</span>
+<span class="cline-any cline-yes">192x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -256,7 +256,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">353x</span>
+<span class="cline-any cline-yes">391x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -299,7 +299,7 @@ function Table({ className, ...props }: React.ComponentProps&lt;"table"&gt;) {
   return (
     &lt;div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className="relative w-full overflow-hidden bg-white rounded-2xl shadow-sm border border-slate-100"
     &gt;
       &lt;table
         data-slot="table"
@@ -314,7 +314,7 @@ function TableHeader({ className, ...props }: React.ComponentProps&lt;"thead"&gt
   return (
     &lt;thead
       data-slot="table-header"
-      className={cn("[&amp;_tr]:border-b", className)}
+      className={cn("bg-slate-50/50 [&amp;_tr]:border-b", className)}
       {...props}
     /&gt;
   )
@@ -324,7 +324,7 @@ function TableBody({ className, ...props }: React.ComponentProps&lt;"tbody"&gt;)
   return (
     &lt;tbody
       data-slot="table-body"
-      className={cn("[&amp;_tr:last-child]:border-0", className)}
+      className={cn("divide-y divide-slate-50 [&amp;_tr:last-child]:border-0", className)}
       {...props}
     /&gt;
   )
@@ -348,7 +348,7 @@ function TableRow({ className, ...props }: React.ComponentProps&lt;"tr"&gt;) {
     &lt;tr
       data-slot="table-row"
       className={cn(
-        "hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors",
+        "hover:bg-slate-50/80 data-[state=selected]:bg-muted border-b transition-colors",
         className
       )}
       {...props}
@@ -361,7 +361,7 @@ function TableHead({ className, ...props }: React.ComponentProps&lt;"th"&gt;) {
     &lt;th
       data-slot="table-head"
       className={cn(
-        "text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap [&amp;:has([role=checkbox])]:pr-0 [&amp;&gt;[role=checkbox]]:translate-y-[2px]",
+        "text-slate-500 text-xs uppercase tracking-wider font-medium px-6 py-4 text-left align-middle whitespace-nowrap [&amp;:has([role=checkbox])]:pr-0 [&amp;&gt;[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}
@@ -374,7 +374,7 @@ function TableCell({ className, ...props }: React.ComponentProps&lt;"td"&gt;) {
     &lt;td
       data-slot="table-cell"
       className={cn(
-        "p-2 align-middle whitespace-nowrap [&amp;:has([role=checkbox])]:pr-0 [&amp;&gt;[role=checkbox]]:translate-y-[2px]",
+        "px-6 py-4 align-middle whitespace-nowrap [&amp;:has([role=checkbox])]:pr-0 [&amp;&gt;[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}
@@ -412,7 +412,7 @@ export {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-29T09:06:41.140Z
+                at 2026-02-07T20:29:50.011Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

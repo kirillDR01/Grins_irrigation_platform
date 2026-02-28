@@ -51,19 +51,22 @@ describe('ClearDayDialog', () => {
   it('displays affected jobs preview', () => {
     render(<ClearDayDialog {...defaultProps} />);
     expect(screen.getByTestId('affected-jobs-list')).toBeInTheDocument();
-    expect(screen.getByText(/John Doe - Spring Startup/)).toBeInTheDocument();
-    expect(screen.getByText(/Jane Smith - Winterization/)).toBeInTheDocument();
-    expect(screen.getByText(/Bob Wilson - Repair/)).toBeInTheDocument();
+    expect(screen.getByText('John Doe')).toBeInTheDocument();
+    expect(screen.getByText('Spring Startup')).toBeInTheDocument();
+    expect(screen.getByText('Jane Smith')).toBeInTheDocument();
+    expect(screen.getByText('Winterization')).toBeInTheDocument();
+    expect(screen.getByText('Bob Wilson')).toBeInTheDocument();
+    expect(screen.getByText('Repair')).toBeInTheDocument();
   });
 
   it('shows "and X more" for many jobs', () => {
-    const manyJobs = Array.from({ length: 8 }, (_, i) => ({
+    const manyJobs = Array.from({ length: 11 }, (_, i) => ({
       job_id: String(i + 1),
       customer_name: `Customer ${i + 1}`,
       service_type: 'Service',
     }));
     render(<ClearDayDialog {...defaultProps} affectedJobs={manyJobs} />);
-    expect(screen.getByText(/and 3 more.../)).toBeInTheDocument();
+    expect(screen.getByText(/and 3 more appointments\.\.\./)).toBeInTheDocument();
   });
 
   it('displays status reset notice', () => {
