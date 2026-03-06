@@ -396,7 +396,9 @@ class InvalidLeadStatusTransitionError(LeadError):
     """
 
     def __init__(
-        self, current_status: LeadStatus, requested_status: LeadStatus,
+        self,
+        current_status: LeadStatus,
+        requested_status: LeadStatus,
     ) -> None:
         """Initialize with status transition details.
 

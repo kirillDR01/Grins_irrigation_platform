@@ -105,7 +105,7 @@ export function LeadsList() {
         </span>
       ),
       cell: ({ row }) => (
-        <span className="text-sm text-slate-600">{row.original.zip_code}</span>
+        <span className="text-sm text-slate-600">{row.original.zip_code ?? 'N/A'}</span>
       ),
     },
     {

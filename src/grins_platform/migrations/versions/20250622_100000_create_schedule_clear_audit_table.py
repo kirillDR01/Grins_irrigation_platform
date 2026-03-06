@@ -82,9 +82,11 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Drop schedule_clear_audit table."""
     op.drop_index(
-        "ix_schedule_clear_audit_cleared_at", table_name="schedule_clear_audit",
+        "ix_schedule_clear_audit_cleared_at",
+        table_name="schedule_clear_audit",
     )
     op.drop_index(
-        "ix_schedule_clear_audit_schedule_date", table_name="schedule_clear_audit",
+        "ix_schedule_clear_audit_schedule_date",
+        table_name="schedule_clear_audit",
     )
     op.drop_table("schedule_clear_audit")

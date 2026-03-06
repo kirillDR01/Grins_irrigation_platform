@@ -280,3 +280,124 @@ async def authenticated_client() -> AsyncGenerator[AsyncClient, None]:
         # Add mock authentication token
         ac.headers.update({"Authorization": "Bearer test-token"})
         yield ac
+
+
+# =============================================================================
+# Google Sheet Submission Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def sample_sheet_row() -> list[str]:
+    """A complete 19-column Google Sheet row."""
+    return [
+        "2025-01-15 10:30:00",  # timestamp (A)
+        "Yes",  # spring_startup (B)
+        "",  # fall_blowout (C)
+        "",  # summer_tuneup (D)
+        "",  # repair_existing (E)
+        "",  # new_system_install (F)
+        "",  # addition_to_system (G)
+        "",  # additional_services_info (H)
+        "ASAP",  # date_work_needed_by (I)
+        "Jane Smith",  # name (J)
+        "6125559876",  # phone (K)
+        "jane@example.com",  # email (L)
+        "Eden Prairie",  # city (M)
+        "456 Oak Ave",  # address (N)
+        "Large backyard",  # additional_info (O)
+        "new",  # client_type (P)
+        "residential",  # property_type (Q)
+        "Google",  # referral_source (R)
+        "",  # landscape_hardscape (S)
+    ]
+
+
+@pytest.fixture
+def sample_sheet_row_factory() -> Generator[
+    ...,
+    None,
+    None,
+]:
+    """Factory for generating varied sheet rows."""
+    counter = 0
+
+    def _create(
+        client_type: str = "new",
+        name: str | None = None,
+        phone: str | None = None,
+        services: dict[str, str] | None = None,
+    ) -> list[str]:
+        nonlocal counter
+        counter += 1
+        row = [""] * 19
+        row[0] = f"2025-01-{counter:02d} 10:00:00"
+        row[9] = name or f"Test User {counter}"
+        row[10] = phone or f"612555{counter:04d}"
+        row[11] = f"test{counter}@example.com"
+        row[12] = "Eden Prairie"
+        row[15] = client_type
+        row[16] = "residential"
+        if services:
+            service_idx = {
+                "spring_startup": 1,
+                "fall_blowout": 2,
+                "summer_tuneup": 3,
+                "repair_existing": 4,
+                "new_system_install": 5,
+                "addition_to_system": 6,
+            }
+            for key, val in services.items():
+                idx = service_idx.get(key, -1)
+                if idx >= 0:
+                    row[idx] = val
+        return row
+
+    yield _create  # type: ignore[misc]
+
+
+@pytest.fixture
+def mock_sheets_service() -> AsyncMock:
+    """Create a mock GoogleSheetsService."""
+    return AsyncMock()
+
+
+@pytest.fixture
+def mock_sheets_repository() -> AsyncMock:
+    """Create a mock GoogleSheetSubmissionRepository."""
+    return AsyncMock()
+
+
+@pytest.fixture
+def sample_submission_model(sample_sheet_row: list[str]) -> MagicMock:
+    """Create a mock GoogleSheetSubmission model instance."""
+    sub = MagicMock()
+    sub.id = uuid.uuid4()
+    sub.sheet_row_number = 2
+    sub.timestamp = sample_sheet_row[0]
+    sub.spring_startup = sample_sheet_row[1]
+    sub.fall_blowout = sample_sheet_row[2]
+    sub.summer_tuneup = sample_sheet_row[3]
+    sub.repair_existing = sample_sheet_row[4]
+    sub.new_system_install = sample_sheet_row[5]
+    sub.addition_to_system = sample_sheet_row[6]
+    sub.additional_services_info = sample_sheet_row[7]
+    sub.date_work_needed_by = sample_sheet_row[8]
+    sub.name = sample_sheet_row[9]
+    sub.phone = sample_sheet_row[10]
+    sub.email = sample_sheet_row[11]
+    sub.city = sample_sheet_row[12]
+    sub.address = sample_sheet_row[13]
+    sub.additional_info = sample_sheet_row[14]
+    sub.client_type = sample_sheet_row[15]
+    sub.property_type = sample_sheet_row[16]
+    sub.referral_source = sample_sheet_row[17]
+    sub.landscape_hardscape = sample_sheet_row[18]
+    sub.processing_status = "imported"
+    sub.processing_error = None
+    sub.lead_id = None
+    sub.lead = None
+    sub.imported_at = datetime.now()
+    sub.created_at = datetime.now()
+    sub.updated_at = datetime.now()
+    return sub

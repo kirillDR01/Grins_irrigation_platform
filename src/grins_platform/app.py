@@ -35,12 +35,15 @@ from grins_platform.exceptions import (
     ValidationError,
 )
 from grins_platform.log_config import get_logger
+from grins_platform.services.google_sheets_config import GoogleSheetsSettings
+from grins_platform.services.google_sheets_poller import GoogleSheetsPoller
+from grins_platform.services.google_sheets_service import GoogleSheetsService
 
 logger = get_logger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: ARG001 - Required by FastAPI lifespan protocol
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan manager for startup and shutdown events.
 
     Args:
@@ -54,12 +57,39 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: ARG001 - Requi
     db_manager = get_database_manager()
     health = await db_manager.health_check()
     logger.info("app.startup_database_check", **health)
+
+    # Google Sheets poller
+    poller: GoogleSheetsPoller | None = None
+    try:
+        settings = GoogleSheetsSettings()
+        if settings.is_configured:
+            service = GoogleSheetsService(submission_repo=None, lead_repo=None)
+            poller = GoogleSheetsPoller(
+                service=service,
+                db_manager=db_manager,
+                spreadsheet_id=settings.google_sheets_spreadsheet_id,
+                sheet_name=settings.google_sheets_sheet_name,
+                poll_interval=settings.google_sheets_poll_interval_seconds,
+                key_path=settings.google_service_account_key_path,
+            )
+            await poller.start()
+            logger.info("app.sheets_poller_started")
+        else:
+            logger.info("app.sheets_poller_skipped", reason="not configured")
+    except Exception as e:
+        logger.warning("app.sheets_poller_startup_failed", error=str(e))
+        poller = None
+
+    app.state.sheets_poller = poller
     logger.info("app.startup_completed")
 
     yield
 
     # Shutdown
     logger.info("app.shutdown_started")
+    if app.state.sheets_poller is not None:
+        await app.state.sheets_poller.stop()
+        logger.info("app.sheets_poller_stopped")
     await db_manager.close()
     logger.info("app.shutdown_completed")
 

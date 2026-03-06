@@ -257,7 +257,8 @@ class LeadSituation(str, Enum):
 
 
 VALID_LEAD_STATUS_TRANSITIONS: dict[
-    LeadStatus, set[LeadStatus],
+    LeadStatus,
+    set[LeadStatus],
 ] = {
     LeadStatus.NEW: {
         LeadStatus.CONTACTED,

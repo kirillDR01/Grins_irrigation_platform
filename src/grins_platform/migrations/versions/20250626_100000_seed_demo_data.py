@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """Seed demo data for demonstration purposes.
 
 Revision ID: 20250626_100000
@@ -31,7 +32,7 @@ TECH_PASSWORD_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.S3vZ3vZ3vZ3v
 
 def upgrade() -> None:
     """Seed demo data for demonstration purposes."""
-    
+
     # ==========================================================================
     # 1. SEED SERVICE OFFERINGS
     # ==========================================================================
@@ -47,21 +48,21 @@ def upgrade() -> None:
             ('Spring Startup', 'seasonal', 'Activate and test irrigation system for spring season. Includes zone testing, head adjustment, and leak inspection.', 75.00, 5.00, 'zone_based', 30, 5, 1, '["standard_tools"]', false, true),
             ('Summer Tune-Up', 'seasonal', 'Mid-season system check and optimization. Adjust heads, check coverage, optimize watering schedule.', 65.00, 4.00, 'zone_based', 25, 4, 1, '["standard_tools"]', false, true),
             ('Winterization', 'seasonal', 'Prepare irrigation system for winter. Blow out lines with compressed air, drain backflow preventer.', 85.00, 6.00, 'zone_based', 35, 5, 1, '["compressor", "standard_tools"]', false, true),
-            
+
             -- Repair Services
             ('Sprinkler Head Replacement', 'repair', 'Replace broken or malfunctioning sprinkler heads. Price per head.', 50.00, NULL, 'flat', 20, NULL, 1, '["standard_tools"]', false, true),
             ('Valve Repair', 'repair', 'Diagnose and repair zone valve issues. Includes solenoid replacement if needed.', 125.00, NULL, 'flat', 45, NULL, 1, '["standard_tools", "valve_parts"]', false, true),
             ('Pipe Repair', 'repair', 'Repair broken or leaking pipes. Price varies by complexity.', 150.00, NULL, 'hourly', 60, NULL, 1, '["pipe_puller", "standard_tools"]', true, true),
             ('System Diagnostic', 'diagnostic', 'Full system diagnostic to identify issues. First hour included, additional time billed hourly.', 100.00, NULL, 'hourly', 60, NULL, 1, '["standard_tools", "diagnostic_tools"]', false, true),
-            
+
             -- Installation Services
             ('New Zone Installation', 'installation', 'Install new irrigation zone. Includes trenching, pipe, heads, and valve.', 700.00, NULL, 'custom', 240, NULL, 2, '["pipe_puller", "trencher", "standard_tools"]', true, true),
             ('Drip Irrigation Setup', 'installation', 'Install drip irrigation for gardens and landscaping beds.', 350.00, NULL, 'custom', 120, NULL, 1, '["standard_tools", "drip_supplies"]', true, true),
             ('Full System Installation', 'installation', 'Complete irrigation system installation for new properties.', 700.00, 700.00, 'zone_based', 480, 60, 2, '["pipe_puller", "trencher", "standard_tools", "utility_trailer"]', true, true)
-            
+
             ON CONFLICT DO NOTHING;
-            """
-        )
+            """,
+        ),
     )
 
     # ==========================================================================
@@ -81,28 +82,28 @@ def upgrade() -> None:
              '["irrigation_certified", "backflow_certified"]', true, 35.00, true,
              '["compressor", "pipe_puller"]', '123 Tech Lane', 'Eden Prairie', 44.8547, -93.4708,
              'vas', :password_hash, true),
-            
+
             -- Lead Technician - Steven
             ('Steven Miller', '6125552002', 'steven@grins-irrigations.com', 'tech', 'lead',
              '["irrigation_certified", "backflow_certified", "landscaping_certified"]', true, 40.00, true,
              '["compressor", "pipe_puller", "trencher"]', '456 Service Rd', 'Plymouth', 45.0105, -93.4555,
              'steven', :password_hash, true),
-            
+
             -- Junior Technician - Dad
             ('Viktor Sr', '6125552003', 'viktor.sr@grins-irrigations.com', 'tech', 'junior',
              '["irrigation_certified"]', true, 28.00, true,
              '["standard_tools"]', '789 Helper Ave', 'Maple Grove', 45.0724, -93.4557,
              NULL, NULL, false),
-            
+
             -- Part-time Technician - Vitallik
             ('Vitallik Petrov', '6125552004', 'vitallik@grins-irrigations.com', 'tech', 'senior',
              '["irrigation_certified", "landscaping_certified"]', true, 32.00, true,
              '["compressor", "standard_tools"]', '321 Seasonal St', 'Brooklyn Park', 45.0941, -93.3563,
              'vitallik', :password_hash, true)
-             
+
             ON CONFLICT DO NOTHING;
-            """
-        ).bindparams(password_hash=TECH_PASSWORD_HASH)
+            """,
+        ).bindparams(password_hash=TECH_PASSWORD_HASH),
     )
 
     # ==========================================================================
@@ -119,46 +120,46 @@ def upgrade() -> None:
             -- Priority customer - long-time client
             ('John', 'Anderson', '6125551001', 'john.anderson@email.com', 'active',
              true, false, false, false, true, true, 'referral'),
-            
+
             -- Regular customer
             ('Sarah', 'Johnson', '6125551002', 'sarah.j@email.com', 'active',
              false, false, false, false, true, false, 'google'),
-            
+
             -- New customer from website
             ('Michael', 'Williams', '6125551003', 'mwilliams@email.com', 'active',
              false, false, false, true, true, true, 'website'),
-            
+
             -- Commercial customer - priority
             ('Twin Cities Landscaping', 'LLC', '6125551004', 'info@tcllandscaping.com', 'active',
              true, false, false, false, true, true, 'referral'),
-            
+
             -- Slow payer - flagged
             ('Robert', 'Davis', '6125551005', 'rdavis@email.com', 'active',
              false, false, true, false, false, false, 'google'),
-            
+
             -- Red flag customer
             ('Karen', 'Thompson', '6125551006', NULL, 'active',
              false, true, false, false, false, false, 'word_of_mouth'),
-            
+
             -- Regular residential
             ('David', 'Martinez', '6125551007', 'david.m@email.com', 'active',
              false, false, false, false, true, true, 'referral'),
-            
+
             -- New customer
             ('Emily', 'Garcia', '6125551008', 'emily.garcia@email.com', 'active',
              false, false, false, true, true, true, 'website'),
-            
+
             -- Long-time customer
             ('James', 'Wilson', '6125551009', 'jwilson@email.com', 'active',
              false, false, false, false, true, false, 'word_of_mouth'),
-            
+
             -- Commercial property manager
             ('Sunrise Property Management', 'Inc', '6125551010', 'maintenance@sunriseprop.com', 'active',
              true, false, false, false, true, true, 'referral')
-             
+
             ON CONFLICT DO NOTHING;
-            """
-        )
+            """,
+        ),
     )
 
     # ==========================================================================
@@ -172,7 +173,7 @@ def upgrade() -> None:
                 latitude, longitude, zone_count, system_type, property_type,
                 is_primary, access_instructions, gate_code, has_dogs, special_notes
             )
-            SELECT 
+            SELECT
                 c.id,
                 p.address,
                 p.city,
@@ -213,8 +214,8 @@ def upgrade() -> None:
             ) AS p(phone, address, city, zip_code, latitude, longitude, zone_count, system_type, property_type, access_instructions, gate_code, has_dogs, special_notes)
             WHERE c.phone = p.phone
             ON CONFLICT DO NOTHING;
-            """
-        )
+            """,
+        ),
     )
 
     # ==========================================================================
@@ -228,7 +229,7 @@ def upgrade() -> None:
                 description, estimated_duration_minutes, priority_level,
                 weather_sensitive, staffing_required, quoted_amount, source
             )
-            SELECT 
+            SELECT
                 c.id as customer_id,
                 p.id as property_id,
                 j.job_type,
@@ -265,77 +266,77 @@ def upgrade() -> None:
             ) AS j(phone, job_type, category, status, description, estimated_duration_minutes, priority_level, weather_sensitive, staffing_required, quoted_amount, source)
             WHERE c.phone = j.phone
             ON CONFLICT DO NOTHING;
-            """
-        )
+            """,
+        ),
     )
 
 
 def downgrade() -> None:
     """Remove demo data.
-    
+
     Note: This will cascade delete related records due to foreign key constraints.
     """
     # Delete jobs first (depends on customers and properties)
     op.execute(
         text(
             """
-            DELETE FROM jobs 
+            DELETE FROM jobs
             WHERE customer_id IN (
-                SELECT id FROM customers 
-                WHERE phone IN ('6125551001', '6125551002', '6125551003', '6125551004', 
+                SELECT id FROM customers
+                WHERE phone IN ('6125551001', '6125551002', '6125551003', '6125551004',
                                '6125551005', '6125551006', '6125551007', '6125551008',
                                '6125551009', '6125551010')
             );
-            """
-        )
+            """,
+        ),
     )
-    
+
     # Delete properties (depends on customers)
     op.execute(
         text(
             """
-            DELETE FROM properties 
+            DELETE FROM properties
             WHERE customer_id IN (
-                SELECT id FROM customers 
-                WHERE phone IN ('6125551001', '6125551002', '6125551003', '6125551004', 
+                SELECT id FROM customers
+                WHERE phone IN ('6125551001', '6125551002', '6125551003', '6125551004',
                                '6125551005', '6125551006', '6125551007', '6125551008',
                                '6125551009', '6125551010')
             );
-            """
-        )
+            """,
+        ),
     )
-    
+
     # Delete demo customers
     op.execute(
         text(
             """
-            DELETE FROM customers 
-            WHERE phone IN ('6125551001', '6125551002', '6125551003', '6125551004', 
+            DELETE FROM customers
+            WHERE phone IN ('6125551001', '6125551002', '6125551003', '6125551004',
                            '6125551005', '6125551006', '6125551007', '6125551008',
                            '6125551009', '6125551010');
-            """
-        )
+            """,
+        ),
     )
-    
+
     # Delete demo staff (keep admin)
     op.execute(
         text(
             """
-            DELETE FROM staff 
+            DELETE FROM staff
             WHERE phone IN ('6125552001', '6125552002', '6125552003', '6125552004');
-            """
-        )
+            """,
+        ),
     )
-    
+
     # Delete demo service offerings
     op.execute(
         text(
             """
-            DELETE FROM service_offerings 
+            DELETE FROM service_offerings
             WHERE name IN ('Spring Startup', 'Summer Tune-Up', 'Winterization',
                           'Sprinkler Head Replacement', 'Valve Repair', 'Pipe Repair',
-                          'System Diagnostic', 'New Zone Installation', 
+                          'System Diagnostic', 'New Zone Installation',
                           'Drip Irrigation Setup', 'Full System Installation');
-            """
-        )
+            """,
+        ),
     )

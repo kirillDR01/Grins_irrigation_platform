@@ -76,7 +76,8 @@ class TestAuthServicePasswordHashing:
     """
 
     def test_hash_password_produces_bcrypt_hash(
-        self, auth_service: AuthService,
+        self,
+        auth_service: AuthService,
     ) -> None:
         """Test _hash_password produces valid bcrypt hash."""
         with patch(
@@ -89,7 +90,8 @@ class TestAuthServicePasswordHashing:
             assert len(hashed) == 60
 
     def test_hash_password_calls_pwd_context(
-        self, auth_service: AuthService,
+        self,
+        auth_service: AuthService,
     ) -> None:
         """Test _hash_password calls pwd_context.hash."""
         with patch(
@@ -149,7 +151,8 @@ class TestAuthServiceTokenGeneration:
         assert payload["type"] == "access"
 
     def test_create_access_token_custom_expiration(
-        self, auth_service: AuthService,
+        self,
+        auth_service: AuthService,
     ) -> None:
         """Test _create_access_token with custom expiration."""
         user_id = uuid4()
@@ -175,7 +178,8 @@ class TestAuthServiceTokenGeneration:
         assert payload["type"] == "refresh"
 
     def test_create_refresh_token_custom_expiration(
-        self, auth_service: AuthService,
+        self,
+        auth_service: AuthService,
     ) -> None:
         """Test _create_refresh_token with custom expiration."""
         user_id = uuid4()
@@ -209,7 +213,9 @@ class TestAuthServiceTokenVerification:
         user_id = uuid4()
         # Create token that expired 1 hour ago
         token = auth_service._create_access_token(
-            user_id, UserRole.ADMIN, timedelta(hours=-1),
+            user_id,
+            UserRole.ADMIN,
+            timedelta(hours=-1),
         )
 
         with pytest.raises(TokenExpiredError):
@@ -329,10 +335,13 @@ class TestAuthServiceAuthenticate:
         mock_staff_repository.find_by_username.return_value = mock_staff
         mock_staff_repository.update_auth_fields.return_value = None
 
-        with patch(
-            "grins_platform.services.auth_service.pwd_context.verify",
-            return_value=False,
-        ), pytest.raises(InvalidCredentialsError):
+        with (
+            patch(
+                "grins_platform.services.auth_service.pwd_context.verify",
+                return_value=False,
+            ),
+            pytest.raises(InvalidCredentialsError),
+        ):
             await auth_service.authenticate("testuser", "WrongPassword")
 
         # Verify failed login was recorded
@@ -370,7 +379,8 @@ class TestAuthServiceAuthenticate:
             return_value=True,
         ):
             staff, access_token, _, _ = await auth_service.authenticate(
-                "testuser", VALID_PASSWORD,
+                "testuser",
+                VALID_PASSWORD,
             )
 
         assert staff == mock_staff
@@ -396,10 +406,13 @@ class TestAuthServiceAccountLockout:
         mock_staff_repository.find_by_username.return_value = mock_staff
         mock_staff_repository.update_auth_fields.return_value = None
 
-        with patch(
-            "grins_platform.services.auth_service.pwd_context.verify",
-            return_value=False,
-        ), pytest.raises(InvalidCredentialsError):
+        with (
+            patch(
+                "grins_platform.services.auth_service.pwd_context.verify",
+                return_value=False,
+            ),
+            pytest.raises(InvalidCredentialsError),
+        ):
             await auth_service.authenticate("testuser", "WrongPassword")
 
         # Verify counter was incremented
@@ -418,10 +431,13 @@ class TestAuthServiceAccountLockout:
         mock_staff_repository.find_by_username.return_value = mock_staff
         mock_staff_repository.update_auth_fields.return_value = None
 
-        with patch(
-            "grins_platform.services.auth_service.pwd_context.verify",
-            return_value=False,
-        ), pytest.raises(InvalidCredentialsError):
+        with (
+            patch(
+                "grins_platform.services.auth_service.pwd_context.verify",
+                return_value=False,
+            ),
+            pytest.raises(InvalidCredentialsError),
+        ):
             await auth_service.authenticate("testuser", "WrongPassword")
 
         # Verify account was locked
@@ -580,12 +596,15 @@ class TestAuthServiceChangePassword:
             new_password="NewValidPass456",
         )
 
-        with patch(
-            "grins_platform.services.auth_service.pwd_context.verify",
-            return_value=True,
-        ), patch(
-            "grins_platform.services.auth_service.pwd_context.hash",
-            return_value="$2b$12$newhash",
+        with (
+            patch(
+                "grins_platform.services.auth_service.pwd_context.verify",
+                return_value=True,
+            ),
+            patch(
+                "grins_platform.services.auth_service.pwd_context.hash",
+                return_value="$2b$12$newhash",
+            ),
         ):
             await auth_service.change_password(mock_staff.id, request)
 
@@ -625,10 +644,13 @@ class TestAuthServiceChangePassword:
             new_password="NewPass456",
         )
 
-        with patch(
-            "grins_platform.services.auth_service.pwd_context.verify",
-            return_value=False,
-        ), pytest.raises(InvalidCredentialsError):
+        with (
+            patch(
+                "grins_platform.services.auth_service.pwd_context.verify",
+                return_value=False,
+            ),
+            pytest.raises(InvalidCredentialsError),
+        ):
             await auth_service.change_password(mock_staff.id, request)
 
     @pytest.mark.asyncio
@@ -681,7 +703,9 @@ class TestAuthServiceGetCurrentUser:
         """Test getting current user with expired token."""
         user_id = uuid4()
         expired_token = auth_service._create_access_token(
-            user_id, UserRole.ADMIN, timedelta(hours=-1),
+            user_id,
+            UserRole.ADMIN,
+            timedelta(hours=-1),
         )
 
         with pytest.raises(TokenExpiredError):

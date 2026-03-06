@@ -126,7 +126,8 @@ class TestGetCurrentUser:
 
     @pytest.mark.asyncio
     async def test_returns_user_with_valid_token(
-        self, mock_staff: MagicMock,
+        self,
+        mock_staff: MagicMock,
     ) -> None:
         """Test get_current_user returns user with valid token."""
         mock_request = MagicMock()
@@ -136,7 +137,9 @@ class TestGetCurrentUser:
         mock_auth_service.get_current_user.return_value = mock_staff
 
         result = await get_current_user(
-            mock_request, mock_credentials, mock_auth_service,
+            mock_request,
+            mock_credentials,
+            mock_auth_service,
         )
 
         assert result == mock_staff
@@ -212,7 +215,8 @@ class TestGetCurrentActiveUser:
 
     @pytest.mark.asyncio
     async def test_raises_403_for_inactive_user(
-        self, mock_inactive_staff: MagicMock,
+        self,
+        mock_inactive_staff: MagicMock,
     ) -> None:
         """Test get_current_active_user raises 403 for inactive user."""
         with pytest.raises(HTTPException) as exc_info:
@@ -280,7 +284,8 @@ class TestRequireRolesDecorator:
 
     @pytest.mark.asyncio
     async def test_allows_user_with_required_role(
-        self, mock_admin_staff: MagicMock,
+        self,
+        mock_admin_staff: MagicMock,
     ) -> None:
         """Test decorator allows user with required role."""
 
@@ -295,7 +300,8 @@ class TestRequireRolesDecorator:
 
     @pytest.mark.asyncio
     async def test_allows_user_with_one_of_multiple_roles(
-        self, mock_manager_staff: MagicMock,
+        self,
+        mock_manager_staff: MagicMock,
     ) -> None:
         """Test decorator allows user with one of multiple allowed roles."""
 
@@ -310,7 +316,8 @@ class TestRequireRolesDecorator:
 
     @pytest.mark.asyncio
     async def test_denies_user_without_required_role(
-        self, mock_staff: MagicMock,
+        self,
+        mock_staff: MagicMock,
     ) -> None:
         """Test decorator denies user without required role."""
 
@@ -368,7 +375,8 @@ class TestRolePermissionHierarchy:
 
     @pytest.mark.asyncio
     async def test_admin_has_all_permissions(
-        self, mock_admin_staff: MagicMock,
+        self,
+        mock_admin_staff: MagicMock,
     ) -> None:
         """Test admin can access all role-protected endpoints."""
         # Admin can access admin-only
@@ -381,7 +389,8 @@ class TestRolePermissionHierarchy:
 
     @pytest.mark.asyncio
     async def test_manager_has_subset_of_admin(
-        self, mock_manager_staff: MagicMock,
+        self,
+        mock_manager_staff: MagicMock,
     ) -> None:
         """Test manager has subset of admin permissions."""
         # Manager can access manager-or-admin

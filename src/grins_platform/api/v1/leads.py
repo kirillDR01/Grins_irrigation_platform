@@ -104,8 +104,7 @@ async def _get_lead_service(
     status_code=status.HTTP_201_CREATED,
     summary="Submit a lead from public form",
     description=(
-        "Public endpoint for website form submissions. "
-        "No authentication required."
+        "Public endpoint for website form submissions. No authentication required."
     ),
 )
 async def submit_lead(
@@ -137,8 +136,7 @@ async def submit_lead(
     response_model=PaginatedLeadResponse,
     summary="List leads",
     description=(
-        "List leads with filtering, sorting, and pagination. "
-        "Admin auth required."
+        "List leads with filtering, sorting, and pagination. Admin auth required."
     ),
 )
 async def list_leads(
@@ -245,8 +243,7 @@ async def update_lead(
     response_model=LeadConversionResponse,
     summary="Convert lead to customer",
     description=(
-        "Convert a lead to a customer and optionally "
-        "create a job. Admin auth required."
+        "Convert a lead to a customer and optionally create a job. Admin auth required."
     ),
 )
 async def convert_lead(

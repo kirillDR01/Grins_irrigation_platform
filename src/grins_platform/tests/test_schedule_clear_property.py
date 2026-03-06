@@ -59,9 +59,12 @@ def create_mock_job(
     return job
 
 
-def create_service_with_mocks() -> (
-    tuple[ScheduleClearService, AsyncMock, AsyncMock, AsyncMock]
-):
+def create_service_with_mocks() -> tuple[
+    ScheduleClearService,
+    AsyncMock,
+    AsyncMock,
+    AsyncMock,
+]:
     """Create service with fresh mock repositories."""
     mock_appointment_repo = AsyncMock()
     mock_job_repo = AsyncMock()
@@ -313,7 +316,8 @@ class TestJobStatusResetCorrectnessProperty:
 
         for appt in appointments:
             job = create_mock_job(
-                job_id=appt.job_id, status=JobStatus.IN_PROGRESS.value,
+                job_id=appt.job_id,
+                status=JobStatus.IN_PROGRESS.value,
             )
             mock_job_repo.get_by_id.return_value = job
 
@@ -366,14 +370,16 @@ class TestJobStatusResetCorrectnessProperty:
         assert len(call_kwargs["jobs_reset"]) == 0
 
     @given(
-        status=st.sampled_from([
-            JobStatus.REQUESTED.value,
-            JobStatus.APPROVED.value,
-            JobStatus.IN_PROGRESS.value,
-            JobStatus.COMPLETED.value,
-            JobStatus.CLOSED.value,
-            JobStatus.CANCELLED.value,
-        ]),
+        status=st.sampled_from(
+            [
+                JobStatus.REQUESTED.value,
+                JobStatus.APPROVED.value,
+                JobStatus.IN_PROGRESS.value,
+                JobStatus.COMPLETED.value,
+                JobStatus.CLOSED.value,
+                JobStatus.CANCELLED.value,
+            ],
+        ),
     )
     @settings(max_examples=20, deadline=10000)
     @pytest.mark.asyncio

@@ -178,28 +178,35 @@ class InvoiceResponse(BaseModel):
     due_date: date = Field(description="Payment due date")
     status: InvoiceStatus = Field(description="Invoice status")
     payment_method: PaymentMethod | None = Field(
-        default=None, description="Method of payment",
+        default=None,
+        description="Method of payment",
     )
     payment_reference: str | None = Field(
-        default=None, description="Payment reference/transaction ID",
+        default=None,
+        description="Payment reference/transaction ID",
     )
     paid_at: datetime | None = Field(
-        default=None, description="Timestamp when payment was received",
+        default=None,
+        description="Timestamp when payment was received",
     )
     paid_amount: Decimal | None = Field(default=None, description="Amount paid so far")
     reminder_count: int = Field(description="Number of reminders sent")
     last_reminder_sent: datetime | None = Field(
-        default=None, description="Timestamp of last reminder",
+        default=None,
+        description="Timestamp of last reminder",
     )
     lien_eligible: bool = Field(description="Whether job type is lien-eligible")
     lien_warning_sent: datetime | None = Field(
-        default=None, description="Timestamp of 45-day lien warning",
+        default=None,
+        description="Timestamp of 45-day lien warning",
     )
     lien_filed_date: date | None = Field(
-        default=None, description="Date lien was filed",
+        default=None,
+        description="Date lien was filed",
     )
     line_items: list[InvoiceLineItem] | None = Field(
-        default=None, description="Invoice line items",
+        default=None,
+        description="Invoice line items",
     )
     notes: str | None = Field(default=None, description="Optional notes")
     created_at: datetime = Field(description="Record creation timestamp")
@@ -213,16 +220,20 @@ class InvoiceDetailResponse(InvoiceResponse):
     """
 
     job_description: str | None = Field(
-        default=None, description="Job description",
+        default=None,
+        description="Job description",
     )
     customer_name: str | None = Field(
-        default=None, description="Customer full name",
+        default=None,
+        description="Customer full name",
     )
     customer_phone: str | None = Field(
-        default=None, description="Customer phone number",
+        default=None,
+        description="Customer phone number",
     )
     customer_email: str | None = Field(
-        default=None, description="Customer email address",
+        default=None,
+        description="Customer email address",
     )
 
 
@@ -287,7 +298,8 @@ class LienDeadlineInvoice(BaseModel):
     invoice_number: str = Field(description="Unique invoice number")
     customer_id: UUID = Field(description="Reference to the customer")
     customer_name: str | None = Field(
-        default=None, description="Customer full name",
+        default=None,
+        description="Customer full name",
     )
     amount: Decimal = Field(description="Invoice amount")
     total_amount: Decimal = Field(description="Total amount due")

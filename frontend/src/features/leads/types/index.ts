@@ -11,7 +11,7 @@ export interface Lead extends BaseEntity {
   name: string;
   phone: string;
   email: string | null;
-  zip_code: string;
+  zip_code: string | null;
   situation: LeadSituation;
   notes: string | null;
   source_site: string;

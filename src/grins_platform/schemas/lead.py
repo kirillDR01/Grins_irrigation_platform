@@ -177,7 +177,7 @@ class LeadResponse(BaseModel):
     name: str
     phone: str
     email: str | None
-    zip_code: str
+    zip_code: str | None
     situation: LeadSituation
     notes: str | None
     source_site: str

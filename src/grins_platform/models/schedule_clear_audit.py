@@ -34,10 +34,12 @@ class ScheduleClearAudit(Base):
     )
     schedule_date: Mapped[date] = mapped_column(Date(), nullable=False)
     appointments_data: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSONB(), nullable=False,
+        JSONB(),
+        nullable=False,
     )
     jobs_reset: Mapped[list[UUID]] = mapped_column(
-        ARRAY(PGUUID(as_uuid=True)), nullable=False,
+        ARRAY(PGUUID(as_uuid=True)),
+        nullable=False,
     )
     appointment_count: Mapped[int] = mapped_column(Integer(), nullable=False)
     cleared_by: Mapped[UUID | None] = mapped_column(

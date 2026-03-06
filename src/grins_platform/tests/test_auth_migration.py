@@ -82,7 +82,8 @@ class TestAuthenticationMigration:
         assert str(columns["password_hash"]["type"]).startswith("VARCHAR")
 
     def test_staff_table_has_is_login_enabled_column(
-        self, sync_engine: Engine,
+        self,
+        sync_engine: Engine,
     ) -> None:
         """Test that staff table has is_login_enabled column after migration."""
         inspector = inspect(sync_engine)
@@ -103,15 +104,16 @@ class TestAuthenticationMigration:
         assert "TIMESTAMP" in str(columns["last_login"]["type"]).upper()
 
     def test_staff_table_has_failed_login_attempts_column(
-        self, sync_engine: Engine,
+        self,
+        sync_engine: Engine,
     ) -> None:
         """Test that staff table has failed_login_attempts column after migration."""
         inspector = inspect(sync_engine)
         columns = {col["name"]: col for col in inspector.get_columns("staff")}
 
-        assert (
-            "failed_login_attempts" in columns
-        ), "failed_login_attempts column should exist"
+        assert "failed_login_attempts" in columns, (
+            "failed_login_attempts column should exist"
+        )
         assert columns["failed_login_attempts"]["nullable"] is False
         assert str(columns["failed_login_attempts"]["type"]).upper() == "INTEGER"
 
@@ -140,7 +142,8 @@ class TestAuthenticationMigration:
         assert username_index["unique"] is True, "Username index should be unique"
 
     def test_is_login_enabled_default_value(
-        self, sync_session: Session,
+        self,
+        sync_session: Session,
     ) -> None:
         """Test that is_login_enabled defaults to FALSE."""
         # Query the column default from information_schema
@@ -159,7 +162,8 @@ class TestAuthenticationMigration:
         assert "false" in str(row[0]).lower()
 
     def test_failed_login_attempts_default_value(
-        self, sync_session: Session,
+        self,
+        sync_session: Session,
     ) -> None:
         """Test that failed_login_attempts defaults to 0."""
         result = sync_session.execute(

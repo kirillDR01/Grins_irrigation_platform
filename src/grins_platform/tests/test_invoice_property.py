@@ -56,7 +56,9 @@ class TestInvoiceNumberProperty:
     )
     @settings(max_examples=50)
     def test_different_sequences_produce_different_numbers(
-        self, seq1: int, seq2: int,
+        self,
+        seq1: int,
+        seq2: int,
     ) -> None:
         """Property: Different sequences produce different invoice numbers."""
         if seq1 == seq2:
@@ -75,7 +77,10 @@ class TestInvoiceNumberProperty:
     )
     @settings(max_examples=50)
     def test_different_years_produce_different_numbers(
-        self, year1: int, year2: int, sequence: int,
+        self,
+        year1: int,
+        year2: int,
+        sequence: int,
     ) -> None:
         """Property: Same sequence in different years produces different numbers."""
         if year1 == year2:
@@ -96,7 +101,8 @@ class TestInvoiceNumberProperty:
     )
     @settings(max_examples=30)
     def test_unique_sequences_produce_unique_numbers(
-        self, sequences: list[int],
+        self,
+        sequences: list[int],
     ) -> None:
         """Property: A set of unique sequences produces unique invoice numbers."""
         year = date.today().year
@@ -147,7 +153,9 @@ class TestPaymentRecordingProperty:
     )
     @settings(max_examples=100)
     def test_payment_status_determination(
-        self, total_amount: Decimal, payment_amount: Decimal,
+        self,
+        total_amount: Decimal,
+        payment_amount: Decimal,
     ) -> None:
         """Property: Payment status is correctly determined based on amounts."""
         # Simulate payment recording logic
@@ -195,7 +203,9 @@ class TestPaymentRecordingProperty:
     )
     @settings(max_examples=50)
     def test_partial_payment_results_in_partial(
-        self, total_amount: Decimal, underpayment_factor: Decimal,
+        self,
+        total_amount: Decimal,
+        underpayment_factor: Decimal,
     ) -> None:
         """Property: Paying less than total results in 'partial' status."""
         payment_amount = total_amount * underpayment_factor
@@ -222,7 +232,9 @@ class TestPaymentRecordingProperty:
     )
     @settings(max_examples=50)
     def test_overpayment_results_in_paid(
-        self, total_amount: Decimal, overpayment: Decimal,
+        self,
+        total_amount: Decimal,
+        overpayment: Decimal,
     ) -> None:
         """Property: Paying more than total still results in 'paid' status."""
         payment_amount = total_amount + overpayment
@@ -253,7 +265,9 @@ class TestPaymentRecordingProperty:
     )
     @settings(max_examples=50)
     def test_cumulative_payments_status(
-        self, payments: list[Decimal], total_amount: Decimal,
+        self,
+        payments: list[Decimal],
+        total_amount: Decimal,
     ) -> None:
         """Property: Cumulative payments correctly determine final status."""
         cumulative_paid = sum(payments)
@@ -280,21 +294,25 @@ class TestLienEligibilityProperty:
     """
 
     # Define lien-eligible job types (from invoice_service.py)
-    LIEN_ELIGIBLE_TYPES: frozenset[str] = frozenset({
-        "installation",
-        "major_repair",
-        "new_system",
-        "system_expansion",
-    })
+    LIEN_ELIGIBLE_TYPES: frozenset[str] = frozenset(
+        {
+            "installation",
+            "major_repair",
+            "new_system",
+            "system_expansion",
+        },
+    )
 
-    NON_LIEN_ELIGIBLE_TYPES: frozenset[str] = frozenset({
-        "spring_startup",
-        "winterization",
-        "tune_up",
-        "repair",
-        "diagnostic",
-        "maintenance",
-    })
+    NON_LIEN_ELIGIBLE_TYPES: frozenset[str] = frozenset(
+        {
+            "spring_startup",
+            "winterization",
+            "tune_up",
+            "repair",
+            "diagnostic",
+            "maintenance",
+        },
+    )
 
     def is_lien_eligible(self, job_type: str) -> bool:
         """Determine if a job type is lien-eligible."""
@@ -318,7 +336,9 @@ class TestLienEligibilityProperty:
     )
     @settings(max_examples=30)
     def test_lien_eligibility_is_case_insensitive(
-        self, job_type: str, case_variant: str,
+        self,
+        job_type: str,
+        case_variant: str,
     ) -> None:
         """Property: Lien eligibility check is case-insensitive."""
         if case_variant == "lower":

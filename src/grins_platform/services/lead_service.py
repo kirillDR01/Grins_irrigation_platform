@@ -290,7 +290,8 @@ class LeadService(LoggerMixin):
 
             # Validate transition
             valid_transitions = VALID_LEAD_STATUS_TRANSITIONS.get(
-                current_status_enum, set(),
+                current_status_enum,
+                set(),
             )
             if new_status_enum not in valid_transitions:
                 raise InvalidLeadStatusTransitionError(
@@ -299,10 +300,7 @@ class LeadService(LoggerMixin):
                 )
 
             # Auto-set contacted_at
-            if (
-                new_status_enum == LeadStatus.CONTACTED
-                and lead.contacted_at is None
-            ):
+            if new_status_enum == LeadStatus.CONTACTED and lead.contacted_at is None:
                 update_data["contacted_at"] = datetime.now(tz=timezone.utc)
 
             # Auto-set converted_at

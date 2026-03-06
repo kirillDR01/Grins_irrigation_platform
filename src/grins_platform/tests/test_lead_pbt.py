@@ -51,6 +51,7 @@ phone_chars = st.sampled_from(
 # Generate phone-like strings of varying length
 phone_strings = st.text(alphabet=phone_chars, min_size=1, max_size=25)
 
+
 # Generate strings that will normalize to valid 10-digit phones.
 # Instead of filtering random strings (too many rejects), we compose
 # valid 10-digit sequences with random formatting inserted.
@@ -82,7 +83,9 @@ lead_statuses = st.sampled_from(list(LeadStatus))
 
 # Name-like strings: 1-4 words of alphabetic characters
 word = st.text(
-    alphabet=st.sampled_from(list("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")),
+    alphabet=st.sampled_from(
+        list("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+    ),
     min_size=1,
     max_size=15,
 )
@@ -160,7 +163,9 @@ class TestStatusTransitionValidity:
     @given(current=lead_statuses, target=lead_statuses)
     @settings(max_examples=100)
     def test_transition_map_consistency(
-        self, current: LeadStatus, target: LeadStatus,
+        self,
+        current: LeadStatus,
+        target: LeadStatus,
     ) -> None:
         """PBT: Property 2 — Status transition validity.
 
@@ -186,7 +191,9 @@ class TestStatusTransitionValidity:
     @given(current=lead_statuses, target=lead_statuses)
     @settings(max_examples=100)
     def test_all_statuses_present_in_transition_map(
-        self, current: LeadStatus, target: LeadStatus,  # noqa: ARG002
+        self,
+        current: LeadStatus,
+        target: LeadStatus,  # noqa: ARG002
     ) -> None:
         """Every LeadStatus has an entry in the transition map.
 
@@ -207,14 +214,19 @@ class TestDuplicateDetectionCorrectness:
     """
 
     @given(
-        existing_status=st.sampled_from([
-            LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.QUALIFIED,
-        ]),
+        existing_status=st.sampled_from(
+            [
+                LeadStatus.NEW,
+                LeadStatus.CONTACTED,
+                LeadStatus.QUALIFIED,
+            ],
+        ),
     )
     @settings(max_examples=50)
     @pytest.mark.asyncio
     async def test_active_duplicate_does_not_increase_count(
-        self, existing_status: LeadStatus,
+        self,
+        existing_status: LeadStatus,
     ) -> None:
         """PBT: Property 3 — Active duplicate updates, doesn't create.
 
@@ -255,14 +267,19 @@ class TestDuplicateDetectionCorrectness:
         repo.update.assert_called_once()
 
     @given(
-        existing_status=st.sampled_from([
-            LeadStatus.CONVERTED, LeadStatus.LOST, LeadStatus.SPAM,
-        ]),
+        existing_status=st.sampled_from(
+            [
+                LeadStatus.CONVERTED,
+                LeadStatus.LOST,
+                LeadStatus.SPAM,
+            ],
+        ),
     )
     @settings(max_examples=50)
     @pytest.mark.asyncio
     async def test_terminal_status_creates_new_lead(
-        self, existing_status: LeadStatus,  # noqa: ARG002
+        self,
+        existing_status: LeadStatus,  # noqa: ARG002
     ) -> None:
         """PBT: Property 3 — Terminal/lost status allows new lead creation.
 
@@ -403,7 +420,8 @@ class TestHoneypotTransparency:
     @settings(max_examples=50)
     @pytest.mark.asyncio
     async def test_honeypot_filled_returns_success_without_storing(
-        self, honeypot_value: str,
+        self,
+        honeypot_value: str,
     ) -> None:
         """PBT: Property 6 — Non-empty honeypot returns success but doesn't store.
 
@@ -476,7 +494,8 @@ class TestHoneypotTransparency:
     @settings(max_examples=50)
     @pytest.mark.asyncio
     async def test_response_shape_identical(
-        self, honeypot_value: str,
+        self,
+        honeypot_value: str,
     ) -> None:
         """PBT: Property 6 — Response shape is identical for bot vs real.
 

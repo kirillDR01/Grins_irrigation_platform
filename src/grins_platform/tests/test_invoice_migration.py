@@ -114,7 +114,8 @@ class TestInvoicesTableMigration:
         assert columns["customer_id"]["nullable"] is False
 
     def test_invoices_table_has_invoice_number_column(
-        self, sync_engine: Engine,
+        self,
+        sync_engine: Engine,
     ) -> None:
         """Test that invoices table has invoice_number column (unique)."""
         inspector = inspect(sync_engine)
@@ -400,7 +401,8 @@ class TestInvoiceNumberSequence:
         assert row is not None, "invoice_number_seq sequence should exist"
 
     def test_sequence_returns_incrementing_values(
-        self, sync_session: Session,
+        self,
+        sync_session: Session,
     ) -> None:
         """Test that sequence returns incrementing values."""
         result1 = sync_session.execute(
@@ -484,15 +486,16 @@ class TestPaymentCollectedOnSiteMigration:
     """Test suite for payment_collected_on_site migration (20250624_100000)."""
 
     def test_jobs_table_has_payment_collected_on_site_column(
-        self, sync_engine: Engine,
+        self,
+        sync_engine: Engine,
     ) -> None:
         """Test that jobs table has payment_collected_on_site column."""
         inspector = inspect(sync_engine)
         columns = {col["name"]: col for col in inspector.get_columns("jobs")}
 
-        assert (
-            "payment_collected_on_site" in columns
-        ), "payment_collected_on_site column should exist"
+        assert "payment_collected_on_site" in columns, (
+            "payment_collected_on_site column should exist"
+        )
         assert columns["payment_collected_on_site"]["nullable"] is False
         assert str(columns["payment_collected_on_site"]["type"]).upper() == "BOOLEAN"
 

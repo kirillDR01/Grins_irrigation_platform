@@ -520,7 +520,9 @@ class StaffRepository(LoggerMixin):
             self.log_completed("update_auth_fields", staff_id=str(staff_id))
         else:
             self.log_completed(
-                "update_auth_fields", staff_id=str(staff_id), found=False,
+                "update_auth_fields",
+                staff_id=str(staff_id),
+                found=False,
             )
 
         return staff

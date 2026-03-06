@@ -203,9 +203,7 @@ class LeadRepository(LoggerMixin):
         # Apply pagination
         offset = (params.page - 1) * params.page_size
         paginated_query = (
-            base_query.order_by(sort_column)
-            .offset(offset)
-            .limit(params.page_size)
+            base_query.order_by(sort_column).offset(offset).limit(params.page_size)
         )
 
         result = await self.session.execute(paginated_query)
@@ -236,10 +234,7 @@ class LeadRepository(LoggerMixin):
         update_data["updated_at"] = datetime.now(tz=timezone.utc)
 
         stmt = (
-            update(Lead)
-            .where(Lead.id == lead_id)
-            .values(**update_data)
-            .returning(Lead)
+            update(Lead).where(Lead.id == lead_id).values(**update_data).returning(Lead)
         )
 
         result = await self.session.execute(stmt)

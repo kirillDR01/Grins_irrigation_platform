@@ -72,7 +72,9 @@ class TestPasswordHashingProperty:
     )
     @settings(max_examples=30, deadline=10000)
     def test_different_passwords_produce_different_hashes(
-        self, password1: str, password2: str,
+        self,
+        password1: str,
+        password2: str,
     ) -> None:
         """Property: Different passwords produce different hashes.
 
@@ -110,7 +112,9 @@ class TestPasswordHashingProperty:
     )
     @settings(max_examples=30, deadline=10000)
     def test_wrong_password_verify_returns_false(
-        self, password: str, wrong_password: str,
+        self,
+        password: str,
+        wrong_password: str,
     ) -> None:
         """Property: verify(wrong_password, hash) returns False.
 
@@ -195,44 +199,50 @@ class TestRolePermissionHierarchyProperty:
     """
 
     # Define permission hierarchy as frozensets (immutable)
-    ADMIN_PERMISSIONS: frozenset[str] = frozenset({
-        "view_customers",
-        "edit_customers",
-        "delete_customers",
-        "view_jobs",
-        "edit_jobs",
-        "delete_jobs",
-        "view_invoices",
-        "edit_invoices",
-        "delete_invoices",
-        "send_lien_warning",
-        "file_lien",
-        "view_staff",
-        "edit_staff",
-        "delete_staff",
-        "clear_schedule",
-        "view_reports",
-        "manage_settings",
-    })
+    ADMIN_PERMISSIONS: frozenset[str] = frozenset(
+        {
+            "view_customers",
+            "edit_customers",
+            "delete_customers",
+            "view_jobs",
+            "edit_jobs",
+            "delete_jobs",
+            "view_invoices",
+            "edit_invoices",
+            "delete_invoices",
+            "send_lien_warning",
+            "file_lien",
+            "view_staff",
+            "edit_staff",
+            "delete_staff",
+            "clear_schedule",
+            "view_reports",
+            "manage_settings",
+        },
+    )
 
-    MANAGER_PERMISSIONS: frozenset[str] = frozenset({
-        "view_customers",
-        "edit_customers",
-        "view_jobs",
-        "edit_jobs",
-        "view_invoices",
-        "edit_invoices",
-        "view_staff",
-        "clear_schedule",
-        "view_reports",
-    })
+    MANAGER_PERMISSIONS: frozenset[str] = frozenset(
+        {
+            "view_customers",
+            "edit_customers",
+            "view_jobs",
+            "edit_jobs",
+            "view_invoices",
+            "edit_invoices",
+            "view_staff",
+            "clear_schedule",
+            "view_reports",
+        },
+    )
 
-    TECH_PERMISSIONS: frozenset[str] = frozenset({
-        "view_customers",
-        "view_jobs",
-        "edit_jobs",  # Can update job status
-        "view_invoices",
-    })
+    TECH_PERMISSIONS: frozenset[str] = frozenset(
+        {
+            "view_customers",
+            "view_jobs",
+            "edit_jobs",  # Can update job status
+            "view_invoices",
+        },
+    )
 
     def get_permissions_for_role(self, role: UserRole) -> frozenset[str]:
         """Get permissions for a given role."""
@@ -286,7 +296,9 @@ class TestRolePermissionHierarchyProperty:
     )
     @settings(max_examples=20)
     def test_permission_transitivity(
-        self, role1: UserRole, role2: UserRole,
+        self,
+        role1: UserRole,
+        role2: UserRole,
     ) -> None:
         """Property: If role1 >= role2 in hierarchy, role1 has all role2 permissions."""
         role_order = {UserRole.ADMIN: 3, UserRole.MANAGER: 2, UserRole.TECH: 1}

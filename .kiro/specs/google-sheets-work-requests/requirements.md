@@ -65,6 +65,7 @@ The Grins Irrigation Platform receives service requests through a Google Form th
 8. WHEN a Lead is successfully created or linked, THE Poller SHALL update the submission's Processing_Status to `lead_created` and set the `lead_id` foreign key
 9. WHEN creating a Lead from a submission where the name field (Col J) is empty or blank, THE Poller SHALL use "Unknown" as the fallback name value
 10. WHEN creating a Lead from a submission where the phone field (Col K) is empty, invalid, or cannot be normalized, THE Poller SHALL use "0000000000" as the fallback phone value
+11. WHEN creating a Lead from a submission, THE Poller SHALL set `source_site` to the string `"google_sheets"`, which is compatible with the existing `leads.source_site` free-form `String(100)` column — no enum or constraint change is required
 
 ### Requirement 4: Schema Migration for Nullable Zip Code
 
@@ -76,6 +77,7 @@ The Grins Irrigation Platform receives service requests through a Google Form th
 2. WHEN a Lead is created via the public form submission endpoint (POST /api/v1/leads), THE LeadSubmission schema SHALL continue to require and validate a 5-digit zip_code
 3. WHEN a Lead is created from a Google Sheet submission, THE Poller SHALL set zip_code to NULL
 4. THE LeadResponse Pydantic schema SHALL be updated to allow zip_code to be `str | None` so the API can return null zip codes for leads created from Google Sheet submissions without serialization errors
+5. BEFORE the migration is applied, ALL existing code that references `lead.zip_code` (display formatting, string operations, template rendering) SHALL be audited to confirm it handles `None` values safely; any code that assumes `zip_code` is always a non-null string SHALL be updated
 
 ### Requirement 5: Admin API Endpoints for Sheet Submissions
 
@@ -90,6 +92,7 @@ The Grins Irrigation Platform receives service requests through a Google Form th
 5. IF an authenticated admin requests POST /api/v1/sheet-submissions/{id}/create-lead for a submission that already has a linked Lead, THEN THE API SHALL return a 409 Conflict error with a descriptive message
 6. WHEN an authenticated admin requests POST /api/v1/sheet-submissions/trigger-sync, THE API SHALL immediately execute one poll cycle and return the count of new rows imported
 7. IF an unauthenticated request is made to any sheet-submissions endpoint, THEN THE API SHALL return a 401 Unauthorized error
+8. WHEN an admin triggers POST /api/v1/sheet-submissions/trigger-sync while the Poller is already mid-cycle (either from a scheduled poll or another manual trigger), THE API SHALL serialize access using an asyncio Lock so that only one poll cycle executes at a time; the second request SHALL wait for the in-progress cycle to complete before starting a new one, preventing race conditions on `get_max_row_number()`
 
 ### Requirement 6: Work Requests Tab (Frontend)
 
@@ -107,6 +110,7 @@ The Grins Irrigation Platform receives service requests through a Google Form th
 8. THE Work_Requests_Tab SHALL display a "Trigger Sync" button in the page header that calls POST /api/v1/sheet-submissions/trigger-sync and displays a notification with the count of new rows imported
 9. THE Work_Requests_Tab SHALL display the current sync status (last sync timestamp and poller running state) in the page header area
 10. THE Work_Requests_Tab SHALL provide a text search input that filters submissions by name, phone, email, or address
+11. THE Work_Requests_Tab navigation item SHALL be inserted into the sidebar `navItems` array immediately after the "Leads" entry (index 3 in the current array: Dashboard, Customers, Leads, **Work Requests**, Jobs, Schedule, ...) and SHALL use the `ClipboardList` icon from lucide-react with `data-testid="nav-work-requests"`
 
 ### Requirement 7: Manual Lead Creation from Work Requests
 
@@ -132,6 +136,7 @@ The Grins Irrigation Platform receives service requests through a Google Form th
 4. IF the Service_Account key file is missing or contains invalid credentials, THEN THE Poller SHALL log an error with a descriptive message and not start the polling loop
 5. WHEN the access token refresh fails, THE Poller SHALL log an error and retry token acquisition on the next poll cycle
 6. WHEN processing an individual row fails, THE Poller SHALL mark that submission as `error`, log the failure with row context, and continue processing remaining rows
+7. WHEN the Poller processes a batch of rows, EACH row SHALL be processed within its own database transaction (commit per row) so that a failure on row K does not roll back successfully processed rows before it
 
 ### Requirement 9: Configuration
 
@@ -143,3 +148,103 @@ The Grins Irrigation Platform receives service requests through a Google Form th
 2. THE Poller SHALL read the sheet tab name from the `GOOGLE_SHEETS_SHEET_NAME` environment variable with a default value of "Form Responses 1"
 3. THE Poller SHALL read the poll interval from the `GOOGLE_SHEETS_POLL_INTERVAL_SECONDS` environment variable with a default value of 60 seconds
 4. THE Poller SHALL read the service account key file path from the `GOOGLE_SERVICE_ACCOUNT_KEY_PATH` environment variable
+
+### Requirement 10: Code Quality Gates
+
+**User Story:** As a developer, I want all code for this feature to pass the project's mandatory quality checks, so that the codebase remains consistent and maintainable.
+
+#### Acceptance Criteria
+
+1. ALL Python code for this feature SHALL pass `uv run ruff check src/` with zero violations
+2. ALL Python code for this feature SHALL pass `uv run ruff format --check src/` with zero formatting differences
+3. ALL Python code for this feature SHALL pass `uv run mypy src/` with zero type errors
+4. ALL Python code for this feature SHALL pass `uv run pyright src/` with zero type errors
+5. ALL Python functions SHALL include type hints for all parameters and return types; no implicit `Any` types are permitted
+6. ALL Python code SHALL follow PEP 8 conventions via Ruff with 88-character line limits and Google-style docstrings
+
+### Requirement 11: Structured Logging
+
+**User Story:** As a platform operator, I want all components of this feature to emit structured log events following the project's logging conventions, so that I can monitor and debug the system effectively.
+
+#### Acceptance Criteria
+
+1. THE GoogleSheetsService class SHALL extend LoggerMixin with `DOMAIN = "sheets"` and emit structured log events using `self.log_started()`, `self.log_completed()`, `self.log_failed()`, and `self.log_rejected()` for all public methods
+2. THE GoogleSheetSubmissionRepository class SHALL extend LoggerMixin with `DOMAIN = "database"` and emit structured log events for all CRUD operations
+3. THE GoogleSheetsPoller SHALL use `get_logger(__name__)` and emit structured log events following the pattern `{domain}.{component}.{action}_{state}` for all lifecycle events (start, stop, poll, auth, errors)
+4. THE sheet-submissions API endpoints SHALL use `DomainLogger.api_event()` with `set_request_id()` / `clear_request_id()` correlation for all request handling, following the project's API endpoint pattern
+5. ALL log events SHALL follow the naming convention `{domain}.{component}.{action}_{state}` (e.g., `sheets.poller.poll_started`, `sheets.service.lead_created`, `database.submission_repository.create_completed`)
+6. THE Poller SHALL NOT log service account key contents, JWT assertions, access tokens, or any authentication secrets
+
+### Requirement 12: Three-Tier Testing
+
+**User Story:** As a developer, I want comprehensive tests at all three tiers (unit, functional, integration) following the project's testing standards, so that correctness is verified at every level.
+
+#### Acceptance Criteria
+
+1. ALL unit tests SHALL be placed in `tests/unit/` and decorated with `@pytest.mark.unit`, with all dependencies mocked
+2. ALL functional tests SHALL be placed in `tests/functional/` and decorated with `@pytest.mark.functional`, using a real database
+3. ALL integration tests SHALL be placed in `tests/integration/` and decorated with `@pytest.mark.integration`, testing the full system
+4. Unit test functions SHALL follow the naming convention `test_{method}_with_{condition}_returns_{expected}`
+5. Functional test functions SHALL follow the naming convention `test_{workflow}_as_user_would_experience`
+6. Integration test functions SHALL follow the naming convention `test_{feature}_works_with_existing_{component}`
+7. ALL tests SHALL pass via `uv run pytest -v` with zero failures before the feature is considered complete
+8. Shared test fixtures for this feature (sample_sheet_row, sample_submission, mock_sheets_service, mock_sheets_repository) SHALL be added to the appropriate conftest.py files
+
+### Requirement 13: Frontend Testing and data-testid Conventions
+
+**User Story:** As a developer, I want frontend components to include proper data-testid attributes and comprehensive tests, so that components are testable and agent-browser validation scripts can target elements reliably.
+
+#### Acceptance Criteria
+
+1. ALL frontend components SHALL include `data-testid` attributes following the project convention: pages use `work-requests-page`, tables use `work-requests-table`, rows use `work-request-row`, forms use `work-request-form`, buttons use `{action}-work-request-btn` (e.g., `create-lead-btn`, `trigger-sync-btn`), nav items use `nav-work-requests`, and status badges use `status-{value}`
+2. Frontend component tests SHALL be co-located with their components (e.g., `WorkRequestsList.test.tsx` alongside `WorkRequestsList.tsx`)
+3. Frontend component tests SHALL achieve minimum coverage targets: Components 80%+, Hooks 85%+, Utils 90%+
+4. Frontend tests SHALL use Vitest + React Testing Library with QueryProvider wrapper for components that use TanStack Query hooks
+5. Frontend tests SHALL verify loading states, error states, empty states, and data rendering for all list and detail components
+
+### Requirement 14: Agent-Browser End-to-End Validation
+
+**User Story:** As a developer, I want agent-browser validation scripts for the Work Requests feature, so that the full user workflow can be verified end-to-end in a real browser.
+
+#### Acceptance Criteria
+
+1. AN agent-browser validation script SHALL verify the Work Requests list page loads, the table is visible, and the sync status bar displays
+2. AN agent-browser validation script SHALL verify the Trigger Sync button triggers a sync and displays a notification with the import count
+3. AN agent-browser validation script SHALL verify clicking a table row navigates to the detail view showing all 19 submission fields
+4. AN agent-browser validation script SHALL verify the Create Lead button appears for submissions without a linked lead, and that clicking it creates a lead and shows a success notification
+5. AN agent-browser validation script SHALL verify that submissions with a linked lead display a link to the lead detail view instead of a Create Lead button
+6. AN agent-browser validation script SHALL verify the filter controls (Processing_Status, Client_Type, text search) filter the table correctly
+
+### Requirement 15: Cross-Feature Integration and Backward Compatibility
+
+**User Story:** As a developer, I want to verify that this feature integrates correctly with the existing Leads system and does not break existing functionality.
+
+#### Acceptance Criteria
+
+1. WHEN a Lead is created from a Google Sheet submission, THE Lead SHALL appear in the existing GET /api/v1/leads endpoint results and be included in dashboard metrics
+2. THE migration making `leads.zip_code` nullable SHALL NOT break existing leads that have non-null zip_code values; existing LeadResponse serialization SHALL continue to work unchanged
+3. THE migration SHALL include a tested downgrade path that restores the NOT NULL constraint after backfilling null zip_codes with a placeholder value
+4. AN integration test SHALL verify that leads created via Google Sheets (with null zip_code) and leads created via the public form (with valid zip_code) coexist and are both returned correctly by the Leads API
+5. THE existing LeadSubmission schema validation SHALL continue to reject submissions with missing or invalid zip_code values, confirming the public form contract is not weakened
+
+### Requirement 16: Security
+
+**User Story:** As a platform operator, I want the Google Sheets integration to follow security best practices, so that credentials and sensitive data are protected.
+
+#### Acceptance Criteria
+
+1. THE Poller SHALL NOT log the contents of the service account key file, JWT assertions, or access tokens at any log level
+2. THE Poller SHALL verify that the service account key file exists and is readable before attempting to parse it; if the file is missing or unreadable, THE Poller SHALL log an error with a descriptive message (without revealing the full file path in production logs) and not start
+3. ALL sheet-submissions API endpoints SHALL require admin authentication via the existing `require_admin` dependency
+4. THE Google Sheets API access token SHALL be stored only in memory and never persisted to disk or database
+
+### Requirement 17: Enum and Schema Compatibility
+
+**User Story:** As a developer, I want the Google Sheets integration to be compatible with all existing enums and schemas, so that no runtime errors occur from mismatched values.
+
+#### Acceptance Criteria
+
+1. THE `source_site` value `"google_sheets"` SHALL be compatible with the existing `leads.source_site` column, which is a free-form `String(100)` with no enum constraint — no schema migration or enum addition is required for this field
+2. THE `LeadSituation` enum values used by `map_situation()` — `NEW_SYSTEM`, `UPGRADE`, `REPAIR`, `EXPLORING` — SHALL match the existing `LeadSituation` enum defined in `models/enums.py` exactly (verified: these values exist as `new_system`, `upgrade`, `repair`, `exploring`)
+3. THE `safe_normalize_phone()` function SHALL wrap the existing `normalize_phone()` function (from `schemas/customer.py`) in a try/except block, catching the `ValueError` it raises on invalid input, and returning `"0000000000"` as the fallback — it SHALL NOT duplicate the normalization logic
+4. THE `LeadStatus.NEW` value used for auto-created leads SHALL match the existing enum value `"new"` in `models/enums.py` (verified: this value exists)

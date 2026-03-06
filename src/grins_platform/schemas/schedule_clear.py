@@ -62,7 +62,8 @@ class ScheduleClearAuditDetailResponse(ScheduleClearAuditResponse):
     """
 
     appointments_data: list[dict[str, Any]] = Field(
-        ..., description="Serialized appointment data",
+        ...,
+        description="Serialized appointment data",
     )
     jobs_reset: list[UUID] = Field(..., description="List of job IDs that were reset")
 
@@ -76,9 +77,11 @@ class ScheduleRestoreResponse(BaseModel):
     audit_id: UUID = Field(..., description="ID of the audit record that was restored")
     schedule_date: date = Field(..., description="Date that was restored")
     appointments_restored: int = Field(
-        ..., description="Number of appointments restored",
+        ...,
+        description="Number of appointments restored",
     )
     jobs_updated: int = Field(
-        ..., description="Number of jobs updated back to scheduled",
+        ...,
+        description="Number of jobs updated back to scheduled",
     )
     restored_at: datetime = Field(..., description="Timestamp of the restore operation")

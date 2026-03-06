@@ -21,6 +21,7 @@ from grins_platform.api.v1.properties import router as properties_router
 from grins_platform.api.v1.schedule import router as schedule_router
 from grins_platform.api.v1.schedule_clear import router as schedule_clear_router
 from grins_platform.api.v1.services import router as services_router
+from grins_platform.api.v1.sheet_submissions import router as sheet_submissions_router
 from grins_platform.api.v1.sms import (
     communications_router,
     router as sms_router,
@@ -142,6 +143,13 @@ api_router.include_router(
 api_router.include_router(
     communications_router,
     tags=["communications"],
+)
+
+# Include Sheet Submissions endpoints
+api_router.include_router(
+    sheet_submissions_router,
+    prefix="/sheet-submissions",
+    tags=["sheet-submissions"],
 )
 
 __all__ = ["api_router"]

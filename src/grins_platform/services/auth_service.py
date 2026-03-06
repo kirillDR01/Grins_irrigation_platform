@@ -53,7 +53,8 @@ class BcryptContext:
     def hash(self, password: str) -> str:
         """Hash a password using bcrypt."""
         return bcrypt.hashpw(
-            password.encode("utf-8"), bcrypt.gensalt(rounds=BCRYPT_ROUNDS),
+            password.encode("utf-8"),
+            bcrypt.gensalt(rounds=BCRYPT_ROUNDS),
         ).decode("utf-8")
 
     def verify(self, password: str, hashed: str) -> bool:
@@ -239,9 +240,13 @@ class AuthService(LoggerMixin):
         """
         if staff.locked_until is None:
             return False
-        # Use naive UTC datetime for comparison with database TIMESTAMP WITHOUT TIME ZONE
+        # Use naive UTC datetime for comparison with
+        # database TIMESTAMP WITHOUT TIME ZONE
         now_utc = datetime.now(UTC).replace(tzinfo=None)
-        return bool(now_utc < staff.locked_until)
+        locked = staff.locked_until
+        if locked is not None and locked.tzinfo is not None:
+            locked = locked.replace(tzinfo=None)
+        return bool(now_utc < locked)
 
     async def _handle_failed_login(self, staff: Staff) -> None:
         """Handle a failed login attempt.

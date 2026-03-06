@@ -114,8 +114,7 @@ class TestChangePasswordRequest:
             )
         errors = exc_info.value.errors()
         assert any(
-            "at least 8 characters" in str(e.get("msg", "")).lower()
-            for e in errors
+            "at least 8 characters" in str(e.get("msg", "")).lower() for e in errors
         )
 
     def test_password_missing_uppercase_rejected(self) -> None:
@@ -126,10 +125,7 @@ class TestChangePasswordRequest:
                 new_password="lowercase1",  # No uppercase
             )
         errors = exc_info.value.errors()
-        assert any(
-            "uppercase" in str(e.get("msg", "")).lower()
-            for e in errors
-        )
+        assert any("uppercase" in str(e.get("msg", "")).lower() for e in errors)
 
     def test_password_missing_lowercase_rejected(self) -> None:
         """Test password without lowercase letter is rejected."""
@@ -139,10 +135,7 @@ class TestChangePasswordRequest:
                 new_password="UPPERCASE1",  # No lowercase
             )
         errors = exc_info.value.errors()
-        assert any(
-            "lowercase" in str(e.get("msg", "")).lower()
-            for e in errors
-        )
+        assert any("lowercase" in str(e.get("msg", "")).lower() for e in errors)
 
     def test_password_missing_number_rejected(self) -> None:
         """Test password without number is rejected."""
@@ -152,10 +145,7 @@ class TestChangePasswordRequest:
                 new_password="NoNumberHere",  # No number
             )
         errors = exc_info.value.errors()
-        assert any(
-            "number" in str(e.get("msg", "")).lower()
-            for e in errors
-        )
+        assert any("number" in str(e.get("msg", "")).lower() for e in errors)
 
     def test_password_exactly_8_chars_valid(self) -> None:
         """Test password with exactly 8 characters is valid."""

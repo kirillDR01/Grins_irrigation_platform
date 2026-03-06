@@ -66,15 +66,22 @@ class Staff(Base):
 
     # Authentication fields (Requirements 15.1-15.8)
     username: Mapped[str | None] = mapped_column(
-        String(50), unique=True, nullable=True, index=True,
+        String(50),
+        unique=True,
+        nullable=True,
+        index=True,
     )
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_login_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="false",
+        Boolean,
+        nullable=False,
+        server_default="false",
     )
     last_login: Mapped[datetime | None] = mapped_column(nullable=True)
     failed_login_attempts: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="0",
+        Integer,
+        nullable=False,
+        server_default="0",
     )
     locked_until: Mapped[datetime | None] = mapped_column(nullable=True)
 

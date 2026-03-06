@@ -6,3 +6,4 @@ export { ScheduleGeneratePage } from './ScheduleGenerate';
 export { StaffPage } from './Staff';
 export { InvoicesPage } from './Invoices';
 export { SettingsPage } from './Settings';
+export { WorkRequestsPage } from './WorkRequests';

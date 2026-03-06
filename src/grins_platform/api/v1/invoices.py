@@ -117,13 +117,16 @@ async def list_invoices(
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
     status_filter: InvoiceStatus | None = Query(
-        default=None, alias="status", description="Filter by status",
+        default=None,
+        alias="status",
+        description="Filter by status",
     ),
     customer_id: UUID | None = Query(default=None, description="Filter by customer"),
     date_from: str | None = Query(default=None, description="Filter from date"),
     date_to: str | None = Query(default=None, description="Filter to date"),
     lien_eligible: bool | None = Query(
-        default=None, description="Filter by lien eligibility",
+        default=None,
+        description="Filter by lien eligibility",
     ),
     sort_by: str = Query(default="created_at", description="Sort field"),
     sort_order: str = Query(default="desc", description="Sort order (asc/desc)"),

@@ -99,7 +99,8 @@ class CommunicationTools(LoggerMixin):
                     "tech_name": appointment_data.get("tech_name", "our technician"),
                     "eta": appointment_data.get("eta", "30"),
                     "work_summary": appointment_data.get(
-                        "work_summary", "Work completed",
+                        "work_summary",
+                        "Work completed",
                     ),
                     "amount": appointment_data.get("amount", "0.00"),
                 },

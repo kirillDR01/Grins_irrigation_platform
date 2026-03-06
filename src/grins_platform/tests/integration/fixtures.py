@@ -404,8 +404,12 @@ def sample_lien_eligible_invoice(
     invoice.lien_warning_sent = None
     invoice.lien_filed_date = None
     invoice.line_items = [
-        {"description": "New irrigation system - 8 zones", "quantity": 1,
-         "unit_price": "5000.00", "total": "5000.00"},
+        {
+            "description": "New irrigation system - 8 zones",
+            "quantity": 1,
+            "unit_price": "5000.00",
+            "total": "5000.00",
+        },
     ]
     invoice.notes = "Installation job - lien eligible"
     invoice.created_at = datetime.now(timezone.utc) - timedelta(days=50)
@@ -546,10 +550,12 @@ async def auth_client_admin() -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         # Add mock admin authentication
-        ac.headers.update({
-            "Authorization": "Bearer admin-test-token",
-            "X-CSRF-Token": "test-csrf-token",
-        })
+        ac.headers.update(
+            {
+                "Authorization": "Bearer admin-test-token",
+                "X-CSRF-Token": "test-csrf-token",
+            },
+        )
         yield ac
 
 
@@ -559,10 +565,12 @@ async def auth_client_manager() -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         # Add mock manager authentication
-        ac.headers.update({
-            "Authorization": "Bearer manager-test-token",
-            "X-CSRF-Token": "test-csrf-token",
-        })
+        ac.headers.update(
+            {
+                "Authorization": "Bearer manager-test-token",
+                "X-CSRF-Token": "test-csrf-token",
+            },
+        )
         yield ac
 
 
@@ -572,10 +580,12 @@ async def auth_client_tech() -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         # Add mock tech authentication
-        ac.headers.update({
-            "Authorization": "Bearer tech-test-token",
-            "X-CSRF-Token": "test-csrf-token",
-        })
+        ac.headers.update(
+            {
+                "Authorization": "Bearer tech-test-token",
+                "X-CSRF-Token": "test-csrf-token",
+            },
+        )
         yield ac
 
 

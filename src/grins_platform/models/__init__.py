@@ -10,6 +10,7 @@ Phase 4 (Route Optimization): StaffAvailability
 Phase 6 (AI Assistant): AIAuditLog, AIUsage, SentMessage
 Phase 8 (Schedule Workflow): ScheduleClearAudit, Invoice
 Phase 9 (Lead Capture): Lead
+Phase 10 (Google Sheets): GoogleSheetSubmission
 """
 
 from grins_platform.models.ai_audit_log import AIAuditLog
@@ -34,6 +35,7 @@ from grins_platform.models.enums import (
     StaffRole,
     SystemType,
 )
+from grins_platform.models.google_sheet_submission import GoogleSheetSubmission
 from grins_platform.models.invoice import Invoice
 from grins_platform.models.job import Job
 from grins_platform.models.job_status_history import JobStatusHistory
@@ -55,6 +57,8 @@ __all__ = [
     # Phase 1: Customer Management
     "Customer",
     "CustomerStatus",
+    # Phase 10: Google Sheets
+    "GoogleSheetSubmission",
     # Phase 8: Invoice Management
     "Invoice",
     "InvoiceStatus",

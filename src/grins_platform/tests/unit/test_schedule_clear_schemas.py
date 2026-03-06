@@ -71,7 +71,7 @@ class TestScheduleClearRequest:
 
     def test_notes_with_special_characters(self) -> None:
         """Test notes can contain special characters."""
-        notes = "Customer's request: \"Cancel all\" & reschedule\nNew line"
+        notes = 'Customer\'s request: "Cancel all" & reschedule\nNew line'
         data = ScheduleClearRequest(schedule_date=date(2025, 1, 15), notes=notes)
         assert data.notes == notes
 
@@ -199,6 +199,7 @@ class TestScheduleClearAuditResponse:
 
     def test_audit_response_from_attributes(self) -> None:
         """Test audit response can be created from ORM model attributes."""
+
         # Simulate ORM model with attributes
         class MockAudit:
             id = uuid4()

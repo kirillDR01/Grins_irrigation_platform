@@ -67,7 +67,7 @@ class Lead(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     phone: Mapped[str] = mapped_column(String(20), nullable=False)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    zip_code: Mapped[str] = mapped_column(String(10), nullable=False)
+    zip_code: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     situation: Mapped[str] = mapped_column(String(50), nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     source_site: Mapped[str] = mapped_column(

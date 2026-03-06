@@ -22,6 +22,9 @@ from sqlalchemy.ext.asyncio import (
 from grins_platform.database import get_db_session as db_session_generator
 from grins_platform.repositories.appointment_repository import AppointmentRepository
 from grins_platform.repositories.customer_repository import CustomerRepository
+from grins_platform.repositories.google_sheet_submission_repository import (
+    GoogleSheetSubmissionRepository,
+)
 from grins_platform.repositories.job_repository import JobRepository
 from grins_platform.repositories.lead_repository import LeadRepository
 from grins_platform.repositories.property_repository import PropertyRepository
@@ -32,6 +35,7 @@ from grins_platform.repositories.staff_repository import StaffRepository
 from grins_platform.services.appointment_service import AppointmentService
 from grins_platform.services.customer_service import CustomerService
 from grins_platform.services.dashboard_service import DashboardService
+from grins_platform.services.google_sheets_service import GoogleSheetsService
 from grins_platform.services.job_service import JobService
 from grins_platform.services.property_service import PropertyService
 from grins_platform.services.service_offering_service import ServiceOfferingService
@@ -215,14 +219,42 @@ async def get_staff_availability_service(
     return StaffAvailabilityService(session=session)
 
 
+async def get_google_sheet_submission_repository(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> GoogleSheetSubmissionRepository:
+    """Get GoogleSheetSubmissionRepository dependency.
+
+    Args:
+        session: Database session from dependency injection
+
+    Returns:
+        GoogleSheetSubmissionRepository instance
+    """
+    return GoogleSheetSubmissionRepository(session=session)
+
+
+async def get_sheets_service() -> GoogleSheetsService:
+    """Get GoogleSheetsService for API use.
+
+    The service is stateless — repos are created per-call inside
+    each service method using the session parameter.
+
+    Returns:
+        GoogleSheetsService instance
+    """
+    return GoogleSheetsService(submission_repo=None, lead_repo=None)
+
+
 __all__ = [
     "get_appointment_service",
     "get_customer_service",
     "get_dashboard_service",
     "get_db_session",
+    "get_google_sheet_submission_repository",
     "get_job_service",
     "get_property_service",
     "get_service_offering_service",
+    "get_sheets_service",
     "get_staff_availability_service",
     "get_staff_service",
 ]

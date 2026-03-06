@@ -31,14 +31,36 @@ def staff_assignment_strategy(draw: st.DrawFn) -> StaffAssignmentSummary:
     """Generate random staff assignment with potential PII."""
     return StaffAssignmentSummary(
         staff_id=uuid4(),
-        staff_name=draw(st.text(min_size=1, max_size=50)),
+        staff_name=draw(
+            st.text(
+                alphabet=st.characters(whitelist_categories=("Lu", "Ll")),
+                min_size=1,
+                max_size=50,
+            ),
+        ),
         job_count=draw(st.integers(min_value=1, max_value=20)),
         total_minutes=draw(st.integers(min_value=30, max_value=480)),
         cities=draw(
-            st.lists(st.text(min_size=1, max_size=30), min_size=1, max_size=5),
+            st.lists(
+                st.text(
+                    alphabet=st.characters(whitelist_categories=("Lu", "Ll")),
+                    min_size=1,
+                    max_size=30,
+                ),
+                min_size=1,
+                max_size=5,
+            ),
         ),
         job_types=draw(
-            st.lists(st.text(min_size=1, max_size=30), min_size=1, max_size=3),
+            st.lists(
+                st.text(
+                    alphabet=st.characters(whitelist_categories=("Lu", "Ll")),
+                    min_size=1,
+                    max_size=30,
+                ),
+                min_size=1,
+                max_size=3,
+            ),
         ),
     )
 

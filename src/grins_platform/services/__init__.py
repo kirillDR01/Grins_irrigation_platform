@@ -9,6 +9,7 @@ from grins_platform.services.appointment_service import AppointmentService
 from grins_platform.services.auth_service import AuthService
 from grins_platform.services.customer_service import CustomerService
 from grins_platform.services.dashboard_service import DashboardService
+from grins_platform.services.google_sheets_service import GoogleSheetsService
 from grins_platform.services.invoice_service import (
     InvalidInvoiceOperationError,
     InvoiceNotFoundError,
@@ -28,6 +29,7 @@ __all__ = [
     "AuthService",
     "CustomerService",
     "DashboardService",
+    "GoogleSheetsService",
     "InvalidInvoiceOperationError",
     "InvoiceNotFoundError",
     "InvoiceService",

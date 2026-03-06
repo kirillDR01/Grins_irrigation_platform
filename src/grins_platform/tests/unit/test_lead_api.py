@@ -87,12 +87,11 @@ async def public_client(
     mock_lead_service: AsyncMock,
 ) -> AsyncGenerator[AsyncClient, None]:
     """Client for public endpoints (no auth override)."""
-    app.dependency_overrides[_get_lead_service] = (
-        lambda: mock_lead_service
-    )
+    app.dependency_overrides[_get_lead_service] = lambda: mock_lead_service
     transport = ASGITransport(app=app)
     async with AsyncClient(
-        transport=transport, base_url="http://test",
+        transport=transport,
+        base_url="http://test",
     ) as ac:
         yield ac
     app.dependency_overrides.clear()
@@ -104,18 +103,13 @@ async def admin_client(
     mock_admin_user: MagicMock,
 ) -> AsyncGenerator[AsyncClient, None]:
     """Client with admin auth for protected endpoints."""
-    app.dependency_overrides[_get_lead_service] = (
-        lambda: mock_lead_service
-    )
-    app.dependency_overrides[get_current_user] = (
-        lambda: mock_admin_user
-    )
-    app.dependency_overrides[get_current_active_user] = (
-        lambda: mock_admin_user
-    )
+    app.dependency_overrides[_get_lead_service] = lambda: mock_lead_service
+    app.dependency_overrides[get_current_user] = lambda: mock_admin_user
+    app.dependency_overrides[get_current_active_user] = lambda: mock_admin_user
     transport = ASGITransport(app=app)
     async with AsyncClient(
-        transport=transport, base_url="http://test",
+        transport=transport,
+        base_url="http://test",
     ) as ac:
         yield ac
     app.dependency_overrides.clear()
@@ -138,12 +132,10 @@ class TestSubmitLead:
     ) -> None:
         """Test successful lead submission."""
         lead_id = uuid.uuid4()
-        mock_lead_service.submit_lead.return_value = (
-            LeadSubmissionResponse(
-                success=True,
-                message="Thank you!",
-                lead_id=lead_id,
-            )
+        mock_lead_service.submit_lead.return_value = LeadSubmissionResponse(
+            success=True,
+            message="Thank you!",
+            lead_id=lead_id,
         )
 
         response = await public_client.post(
@@ -187,11 +179,9 @@ class TestSubmitLead:
         mock_lead_service: AsyncMock,
     ) -> None:
         """Test honeypot-filled submission still returns 201."""
-        mock_lead_service.submit_lead.return_value = (
-            LeadSubmissionResponse(
-                success=True,
-                lead_id=None,
-            )
+        mock_lead_service.submit_lead.return_value = LeadSubmissionResponse(
+            success=True,
+            lead_id=None,
         )
 
         response = await public_client.post(
@@ -224,14 +214,12 @@ class TestListLeads:
         mock_lead_service: AsyncMock,
     ) -> None:
         """Test listing leads with pagination."""
-        mock_lead_service.list_leads.return_value = (
-            PaginatedLeadResponse(
-                items=[],
-                total=0,
-                page=1,
-                page_size=20,
-                total_pages=0,
-            )
+        mock_lead_service.list_leads.return_value = PaginatedLeadResponse(
+            items=[],
+            total=0,
+            page=1,
+            page_size=20,
+            total_pages=0,
         )
 
         response = await admin_client.get("/api/v1/leads")
@@ -248,14 +236,12 @@ class TestListLeads:
         mock_lead_service: AsyncMock,
     ) -> None:
         """Test listing leads with status filter."""
-        mock_lead_service.list_leads.return_value = (
-            PaginatedLeadResponse(
-                items=[],
-                total=0,
-                page=1,
-                page_size=20,
-                total_pages=0,
-            )
+        mock_lead_service.list_leads.return_value = PaginatedLeadResponse(
+            items=[],
+            total=0,
+            page=1,
+            page_size=20,
+            total_pages=0,
         )
 
         response = await admin_client.get(
@@ -293,9 +279,7 @@ class TestGetLead:
         _sample_lead_response: dict[str, object],
     ) -> None:
         """Test getting a lead by ID."""
-        mock_lead_service.get_lead.return_value = (
-            LeadResponse(**_sample_lead_response)
-        )
+        mock_lead_service.get_lead.return_value = LeadResponse(**_sample_lead_response)
 
         lead_id = _sample_lead_response["id"]
         response = await admin_client.get(
@@ -314,9 +298,7 @@ class TestGetLead:
     ) -> None:
         """Test getting non-existent lead returns 404."""
         lead_id = uuid.uuid4()
-        mock_lead_service.get_lead.side_effect = (
-            LeadNotFoundError(lead_id)
-        )
+        mock_lead_service.get_lead.side_effect = LeadNotFoundError(lead_id)
 
         response = await admin_client.get(
             f"/api/v1/leads/{lead_id}",
@@ -346,9 +328,7 @@ class TestUpdateLead:
             **_sample_lead_response,
             "status": LeadStatus.CONTACTED,
         }
-        mock_lead_service.update_lead.return_value = (
-            LeadResponse(**updated)
-        )
+        mock_lead_service.update_lead.return_value = LeadResponse(**updated)
 
         lead_id = _sample_lead_response["id"]
         response = await admin_client.patch(
@@ -366,11 +346,9 @@ class TestUpdateLead:
     ) -> None:
         """Test invalid status transition returns 400."""
         lead_id = uuid.uuid4()
-        mock_lead_service.update_lead.side_effect = (
-            InvalidLeadStatusTransitionError(
-                LeadStatus.CONVERTED,
-                LeadStatus.NEW,
-            )
+        mock_lead_service.update_lead.side_effect = InvalidLeadStatusTransitionError(
+            LeadStatus.CONVERTED,
+            LeadStatus.NEW,
         )
 
         response = await admin_client.patch(
@@ -401,12 +379,10 @@ class TestConvertLead:
         customer_id = uuid.uuid4()
         job_id = uuid.uuid4()
 
-        mock_lead_service.convert_lead.return_value = (
-            LeadConversionResponse(
-                lead_id=lead_id,
-                customer_id=customer_id,
-                job_id=job_id,
-            )
+        mock_lead_service.convert_lead.return_value = LeadConversionResponse(
+            lead_id=lead_id,
+            customer_id=customer_id,
+            job_id=job_id,
         )
 
         response = await admin_client.post(
@@ -427,9 +403,7 @@ class TestConvertLead:
     ) -> None:
         """Test converting already-converted lead returns 400."""
         lead_id = uuid.uuid4()
-        mock_lead_service.convert_lead.side_effect = (
-            LeadAlreadyConvertedError(lead_id)
-        )
+        mock_lead_service.convert_lead.side_effect = LeadAlreadyConvertedError(lead_id)
 
         response = await admin_client.post(
             f"/api/v1/leads/{lead_id}/convert",
@@ -472,9 +446,7 @@ class TestDeleteLead:
     ) -> None:
         """Test deleting non-existent lead returns 404."""
         lead_id = uuid.uuid4()
-        mock_lead_service.delete_lead.side_effect = (
-            LeadNotFoundError(lead_id)
-        )
+        mock_lead_service.delete_lead.side_effect = LeadNotFoundError(lead_id)
 
         response = await admin_client.delete(
             f"/api/v1/leads/{lead_id}",

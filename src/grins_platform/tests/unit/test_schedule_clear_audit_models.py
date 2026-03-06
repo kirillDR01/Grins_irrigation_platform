@@ -295,7 +295,7 @@ class TestScheduleClearAuditJsonSerialization:
         appointment_data = [
             {
                 "id": str(uuid4()),
-                "notes": "Customer's address: 123 \"Main\" St & Oak Ave",
+                "notes": 'Customer\'s address: 123 "Main" St & Oak Ave',
                 "description": "Fix leak\nReplace valve\tCheck pressure",
             },
         ]

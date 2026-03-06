@@ -313,7 +313,7 @@ export function LeadDetail() {
                   </div>
                   <div>
                     <p className="text-xs text-slate-400">Zip Code</p>
-                    <p className="font-medium text-slate-700">{lead.zip_code}</p>
+                    <p className="font-medium text-slate-700">{lead.zip_code ?? 'N/A'}</p>
                   </div>
                 </div>
               </div>
