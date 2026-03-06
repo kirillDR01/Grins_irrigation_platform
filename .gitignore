@@ -87,3 +87,4 @@ tmp/
 
 # # Credentials documentation (contains sensitive info)
 # CREDENTIALS.md
+.vercel
