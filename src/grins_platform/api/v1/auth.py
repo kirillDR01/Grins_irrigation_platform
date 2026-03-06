@@ -7,6 +7,7 @@ including login, logout, token refresh, and password management.
 Validates: Requirements 14.1-14.8, 16.8, 18.1-18.8
 """
 
+import os
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
@@ -39,6 +40,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 REFRESH_TOKEN_COOKIE = "refresh_token"
 CSRF_TOKEN_COOKIE = "csrf_token"
 COOKIE_MAX_AGE = 7 * 24 * 60 * 60  # 7 days in seconds
+# Only set Secure flag in production (HTTPS); HTTP localhost needs Secure=False
+_IS_PRODUCTION = os.getenv("ENVIRONMENT", "development") == "production"
+COOKIE_SECURE = _IS_PRODUCTION
 
 
 def _create_user_response(staff: Staff, auth_service: AuthService) -> UserResponse:
@@ -102,7 +106,7 @@ async def login(
         key=REFRESH_TOKEN_COOKIE,
         value=refresh_token,
         httponly=True,
-        secure=True,
+        secure=COOKIE_SECURE,
         samesite="lax",
         max_age=COOKIE_MAX_AGE,
         path="/",
@@ -113,7 +117,7 @@ async def login(
         key=CSRF_TOKEN_COOKIE,
         value=csrf_token,
         httponly=False,
-        secure=True,
+        secure=COOKIE_SECURE,
         samesite="lax",
         max_age=COOKIE_MAX_AGE,
         path="/",
@@ -145,7 +149,7 @@ async def logout(response: Response) -> None:
     response.delete_cookie(
         key=REFRESH_TOKEN_COOKIE,
         path="/",
-        secure=True,
+        secure=COOKIE_SECURE,
         samesite="lax",
     )
 
@@ -153,7 +157,7 @@ async def logout(response: Response) -> None:
     response.delete_cookie(
         key=CSRF_TOKEN_COOKIE,
         path="/",
-        secure=True,
+        secure=COOKIE_SECURE,
         samesite="lax",
     )
 
