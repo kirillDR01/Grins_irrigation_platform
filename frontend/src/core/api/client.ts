@@ -7,6 +7,7 @@ import type { ApiError } from './types';
 export const apiClient: AxiosInstance = axios.create({
   baseURL: `${config.apiBaseUrl}/api/${config.apiVersion}`,
   timeout: 30000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },

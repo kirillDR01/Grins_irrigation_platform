@@ -43,6 +43,9 @@ COOKIE_MAX_AGE = 7 * 24 * 60 * 60  # 7 days in seconds
 # Only set Secure flag in production (HTTPS); HTTP localhost needs Secure=False
 _IS_PRODUCTION = os.getenv("ENVIRONMENT", "development") == "production"
 COOKIE_SECURE = _IS_PRODUCTION
+# Cross-origin deployments (e.g. Vercel frontend + Railway backend) require
+# SameSite=None so cookies are sent on cross-origin requests. Locally, "lax" is fine.
+COOKIE_SAMESITE: str = "none" if _IS_PRODUCTION else "lax"
 
 
 def _create_user_response(staff: Staff, auth_service: AuthService) -> UserResponse:
@@ -107,7 +110,7 @@ async def login(
         value=refresh_token,
         httponly=True,
         secure=COOKIE_SECURE,
-        samesite="lax",
+        samesite=COOKIE_SAMESITE,
         max_age=COOKIE_MAX_AGE,
         path="/",
     )
@@ -118,7 +121,7 @@ async def login(
         value=csrf_token,
         httponly=False,
         secure=COOKIE_SECURE,
-        samesite="lax",
+        samesite=COOKIE_SAMESITE,
         max_age=COOKIE_MAX_AGE,
         path="/",
     )
@@ -150,7 +153,7 @@ async def logout(response: Response) -> None:
         key=REFRESH_TOKEN_COOKIE,
         path="/",
         secure=COOKIE_SECURE,
-        samesite="lax",
+        samesite=COOKIE_SAMESITE,
     )
 
     # Clear CSRF token cookie
@@ -158,7 +161,7 @@ async def logout(response: Response) -> None:
         key=CSRF_TOKEN_COOKIE,
         path="/",
         secure=COOKIE_SECURE,
-        samesite="lax",
+        samesite=COOKIE_SAMESITE,
     )
 
 
