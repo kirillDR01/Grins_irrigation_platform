@@ -129,6 +129,25 @@ class TestServiceAccountKeyLoading:
         assert poller._sa_email == _SA_KEY["client_email"]
         assert poller._sa_private_key == _SA_KEY["private_key"]
 
+    def test_loads_from_json_env_var(self) -> None:
+        poller = _make_poller(key_path="")
+        poller._key_json = json.dumps(_SA_KEY)
+        poller._load_service_account_key()
+
+        assert poller._sa_email == _SA_KEY["client_email"]
+        assert poller._sa_private_key == _SA_KEY["private_key"]
+
+    def test_json_env_var_takes_precedence_over_file(self, tmp_path: Path) -> None:
+        key_file = tmp_path / "sa.json"
+        other_key = {**_SA_KEY, "client_email": "other@proj.iam.gserviceaccount.com"}
+        key_file.write_text(json.dumps(other_key))
+
+        poller = _make_poller(key_path=str(key_file))
+        poller._key_json = json.dumps(_SA_KEY)
+        poller._load_service_account_key()
+
+        assert poller._sa_email == _SA_KEY["client_email"]
+
     def test_missing_file_raises(self) -> None:
         poller = _make_poller(key_path="/nonexistent/sa.json")
         with pytest.raises(FileNotFoundError):

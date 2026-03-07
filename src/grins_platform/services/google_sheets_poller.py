@@ -63,6 +63,7 @@ class GoogleSheetsPoller:
         sheet_name: str = "Form Responses 1",
         poll_interval: int = 60,
         key_path: str = "",
+        key_json: str = "",
     ) -> None:
         super().__init__()
         self._service = service
@@ -71,6 +72,7 @@ class GoogleSheetsPoller:
         self._sheet_name = sheet_name
         self._poll_interval = poll_interval
         self._key_path = key_path
+        self._key_json = key_json
 
         self._running = False
         self._task: asyncio.Task[None] | None = None
@@ -142,9 +144,12 @@ class GoogleSheetsPoller:
     # ------------------------------------------------------------------
 
     def _load_service_account_key(self) -> None:
-        """Load service account credentials from key file."""
-        with Path(self._key_path).open() as f:
-            data: dict[str, Any] = json.load(f)
+        """Load service account credentials from JSON env var or key file."""
+        if self._key_json:
+            data: dict[str, Any] = json.loads(self._key_json)
+        else:
+            with Path(self._key_path).open() as f:
+                data = json.load(f)
         self._sa_email = data["client_email"]
         self._sa_private_key = data["private_key"]
         # Never log key contents

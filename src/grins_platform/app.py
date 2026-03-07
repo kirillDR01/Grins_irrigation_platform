@@ -71,6 +71,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 sheet_name=settings.google_sheets_sheet_name,
                 poll_interval=settings.google_sheets_poll_interval_seconds,
                 key_path=settings.google_service_account_key_path,
+                key_json=settings.google_service_account_key_json,
             )
             await poller.start()
             logger.info("app.sheets_poller_started")
