@@ -32,7 +32,6 @@ class GoogleSheetSubmissionResponse(BaseModel):
     email: str | None
     city: str | None
     address: str | None
-    additional_info: str | None
     client_type: str | None
     property_type: str | None
     referral_source: str | None

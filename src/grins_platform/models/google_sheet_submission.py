@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 class GoogleSheetSubmission(Base):
     """Google Sheet submission record.
 
-    Stores all 19 columns from the Google Form response sheet
+    Stores all 18 columns from the Google Form response sheet
     as nullable strings, plus processing metadata and lead linkage.
     """
 
@@ -42,7 +42,7 @@ class GoogleSheetSubmission(Base):
         unique=True,
     )
 
-    # 19 sheet columns — all nullable strings
+    # 18 sheet columns — all nullable strings
     timestamp: Mapped[str | None] = mapped_column(String(255), nullable=True)
     spring_startup: Mapped[str | None] = mapped_column(String(255), nullable=True)
     fall_blowout: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -69,7 +69,6 @@ class GoogleSheetSubmission(Base):
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     city: Mapped[str | None] = mapped_column(String(255), nullable=True)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
-    additional_info: Mapped[str | None] = mapped_column(Text, nullable=True)
     client_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     property_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     referral_source: Mapped[str | None] = mapped_column(Text, nullable=True)

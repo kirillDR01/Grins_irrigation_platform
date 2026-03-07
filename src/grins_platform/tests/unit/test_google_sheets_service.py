@@ -59,7 +59,6 @@ def _make_submission(
         "date_work_needed_by",
         "city",
         "address",
-        "additional_info",
         "property_type",
         "referral_source",
         "landscape_hardscape",
@@ -117,7 +116,7 @@ class TestProcessRow:
         mock_session: AsyncMock,
         sample_sheet_row: list[str],
     ) -> None:
-        sample_sheet_row[15] = "existing"
+        sample_sheet_row[14] = "existing"
         mock_sub = _make_submission(processing_status="imported")
         updated_sub = _make_submission(processing_status="skipped")
 
@@ -174,7 +173,7 @@ class TestProcessRow:
         mock_session: AsyncMock,
         sample_sheet_row: list[str],
     ) -> None:
-        sample_sheet_row[15] = ""
+        sample_sheet_row[14] = ""
         mock_sub = _make_submission()
         updated_sub = _make_submission(processing_status="skipped")
 

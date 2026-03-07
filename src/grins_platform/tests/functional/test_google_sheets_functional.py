@@ -58,7 +58,6 @@ def _make_submission(
         "date_work_needed_by",
         "city",
         "address",
-        "additional_info",
         "property_type",
         "referral_source",
         "landscape_hardscape",
@@ -334,10 +333,10 @@ class TestErrorIsolation:
         poller._access_token = "valid-token"
         poller._token_expiry = 9999999999.0
 
-        row_a = [""] * 19
-        row_b = [""] * 19
+        row_a = [""] * 18
+        row_b = [""] * 18
         row_b[9] = "Good User"
-        row_b[15] = "new"
+        row_b[14] = "new"
 
         sheet_response = MagicMock()
         sheet_response.status_code = 200
@@ -403,7 +402,7 @@ class TestUniqueConstraintEnforcement:
         sheet_response.json.return_value = {
             "values": [
                 ["Timestamp"],
-                [""] * 19,  # row 2 — duplicate
+                [""] * 18,  # row 2 — duplicate
             ],
         }
 

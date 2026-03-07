@@ -297,7 +297,7 @@ class GoogleSheetsPoller:
         url = (
             f"https://sheets.googleapis.com/v4/spreadsheets/"
             f"{self._spreadsheet_id}/values/"
-            f"{self._sheet_name}!A:S"
+            f"{self._sheet_name}!A:R"
         )
         try:
             async with httpx.AsyncClient(timeout=30.0) as c:

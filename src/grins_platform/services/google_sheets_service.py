@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
     from grins_platform.models.google_sheet_submission import GoogleSheetSubmission
 
-EXPECTED_COLUMNS = 19
+EXPECTED_COLUMNS = 18
 
 
 class GoogleSheetsService(LoggerMixin):
@@ -77,14 +77,13 @@ class GoogleSheetsService(LoggerMixin):
             email=padded[11] or None,
             city=padded[12] or None,
             address=padded[13] or None,
-            additional_info=padded[14] or None,
-            client_type=padded[15] or None,
-            property_type=padded[16] or None,
-            referral_source=padded[17] or None,
-            landscape_hardscape=padded[18] or None,
+            client_type=padded[14] or None,
+            property_type=padded[15] or None,
+            referral_source=padded[16] or None,
+            landscape_hardscape=padded[17] or None,
         )
 
-        client_type = (padded[15].strip().lower()) if padded[15] else ""
+        client_type = (padded[14].strip().lower()) if padded[14] else ""
 
         if client_type == "new":
             phone = self.safe_normalize_phone(padded[10])
@@ -276,9 +275,8 @@ class GoogleSheetsService(LoggerMixin):
             (7, "Additional services"),
             (12, "City"),
             (13, "Address"),
-            (14, "Additional info"),
-            (18, "Landscape/Hardscape"),
-            (17, "Referral source"),
+            (17, "Landscape/Hardscape"),
+            (16, "Referral source"),
         ]
         for idx, label in field_map:
             if row[idx].strip():
@@ -308,14 +306,14 @@ class GoogleSheetsService(LoggerMixin):
 
 
 def pad_row(row: list[str]) -> list[str]:
-    """Pad a row to exactly 19 columns, truncating extras."""
+    """Pad a row to exactly 18 columns, truncating extras."""
     if len(row) >= EXPECTED_COLUMNS:
         return row[:EXPECTED_COLUMNS]
     return row + [""] * (EXPECTED_COLUMNS - len(row))
 
 
 def _submission_to_row(submission: GoogleSheetSubmission) -> list[str]:
-    """Convert a submission model back to a 19-element row list for helpers."""
+    """Convert a submission model back to an 18-element row list for helpers."""
     return [
         submission.timestamp or "",
         submission.spring_startup or "",
@@ -331,7 +329,6 @@ def _submission_to_row(submission: GoogleSheetSubmission) -> list[str]:
         submission.email or "",
         submission.city or "",
         submission.address or "",
-        submission.additional_info or "",
         submission.client_type or "",
         submission.property_type or "",
         submission.referral_source or "",

@@ -66,7 +66,6 @@ def _make_submission_dict(**overrides: object) -> dict[str, object]:
         "email": "jane@example.com",
         "city": "Minneapolis",
         "address": "123 Main St",
-        "additional_info": None,
         "client_type": "New Client",
         "property_type": "Residential",
         "referral_source": "Google",

@@ -81,7 +81,6 @@ def _make_submission_mock(
         "date_work_needed_by",
         "city",
         "address",
-        "additional_info",
         "property_type",
         "referral_source",
         "landscape_hardscape",

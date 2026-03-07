@@ -1,6 +1,6 @@
 """Property-based tests for Google Sheets service.
 
-Property 1: Row padding produces exactly 19 columns.
+Property 1: Row padding produces exactly 18 columns.
 Property 2: New submission invariants.
 Property 3: Client type determines lead creation.
 Property 4: Situation mapping priority.
@@ -47,35 +47,35 @@ from grins_platform.services.google_sheets_service import (
 
 @pytest.mark.unit
 class TestRowPaddingProperty:
-    """Property 1: Row padding produces exactly 19 columns.
+    """Property 1: Row padding produces exactly 18 columns.
 
-    For any list of strings with length between 0 and 19 (inclusive),
-    padding the row should produce a list of exactly 19 elements where
+    For any list of strings with length between 0 and 18 (inclusive),
+    padding the row should produce a list of exactly 18 elements where
     the original values are preserved in order and any added values are
     empty strings.
     """
 
-    @given(row=st.lists(st.text(max_size=50), min_size=0, max_size=19))
+    @given(row=st.lists(st.text(max_size=50), min_size=0, max_size=18))
     @settings(max_examples=200)
-    def test_pad_row_always_produces_19_columns(self, row: list[str]) -> None:
+    def test_pad_row_always_produces_18_columns(self, row: list[str]) -> None:
         result = pad_row(row)
         assert len(result) == EXPECTED_COLUMNS
 
-    @given(row=st.lists(st.text(max_size=50), min_size=0, max_size=19))
+    @given(row=st.lists(st.text(max_size=50), min_size=0, max_size=18))
     @settings(max_examples=200)
     def test_pad_row_preserves_original_values(self, row: list[str]) -> None:
         result = pad_row(row)
         for i, val in enumerate(row):
             assert result[i] == val
 
-    @given(row=st.lists(st.text(max_size=50), min_size=0, max_size=18))
+    @given(row=st.lists(st.text(max_size=50), min_size=0, max_size=17))
     @settings(max_examples=200)
     def test_pad_row_fills_with_empty_strings(self, row: list[str]) -> None:
         result = pad_row(row)
         for i in range(len(row), EXPECTED_COLUMNS):
             assert result[i] == ""
 
-    @given(row=st.lists(st.text(max_size=50), min_size=20, max_size=30))
+    @given(row=st.lists(st.text(max_size=50), min_size=19, max_size=30))
     @settings(max_examples=100)
     def test_pad_row_truncates_extra_columns(self, row: list[str]) -> None:
         result = pad_row(row)
@@ -98,7 +98,7 @@ def _build_row(
     new_system: str,
     addition: str,
 ) -> list[str]:
-    """Build a 19-element row with service columns at indices 1-6."""
+    """Build an 18-element row with service columns at indices 1-6."""
     row = [""] * EXPECTED_COLUMNS
     row[1], row[2], row[3] = seasonal
     row[4] = repair
@@ -208,13 +208,12 @@ class TestSituationMappingPriorityProperty:
 # Service columns: 1 (Spring Startup), 2 (Fall Blowout), 3 (Summer Tuneup),
 #                  4 (Repair), 5 (New System Install), 6 (Addition to System)
 # Field map: 7 (Additional services), 8 (Date needed by), 12 (City),
-#            13 (Address), 14 (Additional info), 17 (Referral source),
-#            18 (Landscape/Hardscape)
-_NOTES_RELEVANT_INDICES = [1, 2, 3, 4, 5, 6, 7, 8, 12, 13, 14, 17, 18]
+#            13 (Address), 16 (Referral source), 17 (Landscape/Hardscape)
+_NOTES_RELEVANT_INDICES = [1, 2, 3, 4, 5, 6, 7, 8, 12, 13, 16, 17]
 
 
 def _make_notes_row(values: dict[int, str]) -> list[str]:
-    """Build a 19-element row with specific index values."""
+    """Build an 18-element row with specific index values."""
     row = [""] * EXPECTED_COLUMNS
     for idx, val in values.items():
         row[idx] = val
@@ -225,7 +224,7 @@ def _make_notes_row(values: dict[int, str]) -> list[str]:
 class TestNotesAggregationProperty:
     """Property 5: Notes aggregation contains all non-empty fields.
 
-    For any row of 19 strings, aggregate_notes() output contains every
+    For any row of 18 strings, aggregate_notes() output contains every
     non-empty, non-whitespace value from the relevant columns. If all
     relevant fields are empty, the result is an empty string.
     """
@@ -362,11 +361,11 @@ _new_variant = st.tuples(
 
 
 def _make_row_with_client_type(client_type: str) -> list[str]:
-    """Build a 19-element row with a given client_type at index 15 and valid phone."""
+    """Build an 18-element row with a given client_type at index 14 and valid phone."""
     row = [""] * EXPECTED_COLUMNS
     row[9] = "Test Name"
     row[10] = "6125551234"
-    row[15] = client_type
+    row[14] = client_type
     return row
 
 
@@ -475,7 +474,7 @@ def _run_process_row_with_existing_lead(
     row = [""] * EXPECTED_COLUMNS
     row[9] = "Test Name"
     row[10] = phone
-    row[15] = "New"
+    row[14] = "New"
 
     sub_id = uuid4()
     existing_lead_id = uuid4()
@@ -1124,7 +1123,6 @@ _COLUMN_NAMES = [
     "email",
     "city",
     "address",
-    "additional_info",
     "client_type",
     "property_type",
     "referral_source",
@@ -1201,7 +1199,7 @@ class TestNewSubmissionInvariantsProperty:
         # sheet_row_number matches
         assert create_kwargs["sheet_row_number"] == row_number
 
-        # All 19 columns: empty string → None, non-empty → original value
+        # All 18 columns: empty string → None, non-empty → original value
         for i, col_name in enumerate(_COLUMN_NAMES):
             expected = row[i] if row[i] else None
             assert create_kwargs[col_name] == expected, (
@@ -1303,7 +1301,7 @@ class TestSheetCreatedLeadsHaveNullZipCodeProperty:
         row[9] = name
         row[10] = phone
         row[11] = email or ""
-        row[15] = "new"
+        row[14] = "new"
 
         mock_submission = MagicMock()
         mock_submission.id = uuid4()
@@ -1377,7 +1375,6 @@ class TestSheetCreatedLeadsHaveNullZipCodeProperty:
             "date_work_needed_by",
             "city",
             "address",
-            "additional_info",
             "client_type",
             "property_type",
             "referral_source",

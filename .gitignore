@@ -88,3 +88,6 @@ tmp/
 # # Credentials documentation (contains sensitive info)
 # CREDENTIALS.md
 .vercel
+
+# Google service account keys
+grins-irrigation-*.json

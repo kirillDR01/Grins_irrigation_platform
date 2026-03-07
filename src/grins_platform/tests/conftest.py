@@ -289,7 +289,7 @@ async def authenticated_client() -> AsyncGenerator[AsyncClient, None]:
 
 @pytest.fixture
 def sample_sheet_row() -> list[str]:
-    """A complete 19-column Google Sheet row."""
+    """A complete 18-column Google Sheet row."""
     return [
         "2025-01-15 10:30:00",  # timestamp (A)
         "Yes",  # spring_startup (B)
@@ -305,11 +305,10 @@ def sample_sheet_row() -> list[str]:
         "jane@example.com",  # email (L)
         "Eden Prairie",  # city (M)
         "456 Oak Ave",  # address (N)
-        "Large backyard",  # additional_info (O)
-        "new",  # client_type (P)
-        "residential",  # property_type (Q)
-        "Google",  # referral_source (R)
-        "",  # landscape_hardscape (S)
+        "new",  # client_type (O)
+        "residential",  # property_type (P)
+        "Google",  # referral_source (Q)
+        "",  # landscape_hardscape (R)
     ]
 
 
@@ -330,14 +329,14 @@ def sample_sheet_row_factory() -> Generator[
     ) -> list[str]:
         nonlocal counter
         counter += 1
-        row = [""] * 19
+        row = [""] * 18
         row[0] = f"2025-01-{counter:02d} 10:00:00"
         row[9] = name or f"Test User {counter}"
         row[10] = phone or f"612555{counter:04d}"
         row[11] = f"test{counter}@example.com"
         row[12] = "Eden Prairie"
-        row[15] = client_type
-        row[16] = "residential"
+        row[14] = client_type
+        row[15] = "residential"
         if services:
             service_idx = {
                 "spring_startup": 1,
@@ -388,11 +387,10 @@ def sample_submission_model(sample_sheet_row: list[str]) -> MagicMock:
     sub.email = sample_sheet_row[11]
     sub.city = sample_sheet_row[12]
     sub.address = sample_sheet_row[13]
-    sub.additional_info = sample_sheet_row[14]
-    sub.client_type = sample_sheet_row[15]
-    sub.property_type = sample_sheet_row[16]
-    sub.referral_source = sample_sheet_row[17]
-    sub.landscape_hardscape = sample_sheet_row[18]
+    sub.client_type = sample_sheet_row[14]
+    sub.property_type = sample_sheet_row[15]
+    sub.referral_source = sample_sheet_row[16]
+    sub.landscape_hardscape = sample_sheet_row[17]
     sub.processing_status = "imported"
     sub.processing_error = None
     sub.lead_id = None

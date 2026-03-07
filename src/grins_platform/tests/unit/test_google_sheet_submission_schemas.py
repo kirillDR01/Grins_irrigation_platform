@@ -42,7 +42,6 @@ def _mock_submission(**overrides: object) -> MagicMock:
         "email": "john@example.com",
         "city": "Minneapolis",
         "address": "123 Main St",
-        "additional_info": None,
         "client_type": "New Client",
         "property_type": "Residential",
         "referral_source": "Google",
@@ -108,8 +107,8 @@ class TestGoogleSheetSubmissionResponse:
         assert resp.lead_id == lid
         assert resp.processing_status == "lead_created"
 
-    def test_all_19_sheet_columns_present(self) -> None:
-        """Test all 19 sheet columns are in the response."""
+    def test_all_18_sheet_columns_present(self) -> None:
+        """Test all 18 sheet columns are in the response."""
         sheet_cols = [
             "timestamp",
             "spring_startup",
@@ -125,7 +124,6 @@ class TestGoogleSheetSubmissionResponse:
             "email",
             "city",
             "address",
-            "additional_info",
             "client_type",
             "property_type",
             "referral_source",
