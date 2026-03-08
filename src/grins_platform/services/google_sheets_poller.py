@@ -259,7 +259,8 @@ class GoogleSheetsPoller:
             rows[start_idx:],
             start=start_idx + 1,
         ):
-            # 1-based row number matching sheet position
+            # 1-based row number (historically offset by +1; kept for
+            # backward-compatibility with existing database row numbers).
             row_number = i + 1
             if row_number <= max_row:
                 continue
@@ -299,10 +300,13 @@ class GoogleSheetsPoller:
         token: str,
     ) -> list[list[str]]:
         """Fetch all rows from the configured sheet range."""
+        # Quote sheet name with single quotes for A1 notation — required when
+        # the name contains spaces, parentheses, or other special characters.
+        quoted_name = f"'{self._sheet_name}'"
         url = (
             f"https://sheets.googleapis.com/v4/spreadsheets/"
             f"{self._spreadsheet_id}/values/"
-            f"{self._sheet_name}!A:R"
+            f"{quoted_name}!A:R"
         )
         try:
             async with httpx.AsyncClient(timeout=30.0) as c:

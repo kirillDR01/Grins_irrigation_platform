@@ -6,7 +6,9 @@ import {
   useReactTable,
   type ColumnDef,
 } from '@tanstack/react-table';
+import axios from 'axios';
 import { Phone, Mail, Inbox, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import {
@@ -214,7 +216,32 @@ export function WorkRequestsList() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => triggerSync.mutate()}
+          onClick={() => {
+            triggerSync.mutate(undefined, {
+              onSuccess: (data) => {
+                if (data.new_rows_imported > 0) {
+                  toast.success('Sync Complete', {
+                    description: `${data.new_rows_imported} new row${data.new_rows_imported === 1 ? '' : 's'} imported from Google Sheets.`,
+                  });
+                } else {
+                  toast.info('Sync Complete', {
+                    description: 'No new rows found in Google Sheets.',
+                  });
+                }
+              },
+              onError: (err) => {
+                let message = 'Sync failed';
+                if (axios.isAxiosError(err)) {
+                  message = err.response?.data?.detail
+                    ?? err.response?.data?.error?.message
+                    ?? err.message;
+                } else if (err instanceof Error) {
+                  message = err.message;
+                }
+                toast.error('Sync Failed', { description: message });
+              },
+            });
+          }}
           disabled={triggerSync.isPending}
           data-testid="trigger-sync-btn"
         >
