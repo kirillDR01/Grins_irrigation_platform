@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import delete, func, or_, select, update
 
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.google_sheet_submission import GoogleSheetSubmission
@@ -51,6 +51,16 @@ class GoogleSheetSubmissionRepository(LoggerMixin):
             found=submission is not None,
         )
         return submission
+
+    async def delete_all(self) -> int:
+        """Delete all submission records. Returns the number deleted."""
+        self.log_started("delete_all")
+        stmt = delete(GoogleSheetSubmission)
+        result = await self.session.execute(stmt)
+        count = result.rowcount
+        await self.session.flush()
+        self.log_completed("delete_all", deleted=count)
+        return count
 
     async def get_max_row_number(self) -> int:
         """Get the highest sheet_row_number, or 0 if no rows exist."""

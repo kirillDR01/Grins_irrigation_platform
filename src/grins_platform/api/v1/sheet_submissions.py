@@ -20,6 +20,9 @@ from grins_platform.api.v1.auth_dependencies import (
     AdminUser,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
 from grins_platform.api.v1.dependencies import get_db_session, get_sheets_service
+from grins_platform.repositories.google_sheet_submission_repository import (
+    GoogleSheetSubmissionRepository,
+)
 from grins_platform.log_config import DomainLogger, get_logger
 from grins_platform.schemas.google_sheet_submission import (
     GoogleSheetSubmissionResponse,
@@ -99,6 +102,51 @@ async def trigger_sync(
         logger,
         "trigger_sync",
         "completed",
+        new_rows_imported=new_rows,
+    )
+    return TriggerSyncResponse(new_rows_imported=new_rows)
+
+
+# =============================================================================
+# POST /reset-sync — clear all submissions and reimport from scratch
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/reset-sync",
+    response_model=TriggerSyncResponse,
+    summary="Reset and resync all submissions",
+)
+async def reset_sync(
+    _current_user: AdminUser,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> TriggerSyncResponse:
+    """Delete all existing submissions and reimport from Google Sheets.
+
+    Useful when the sheet structure changes or stale data blocks new imports.
+    """
+    DomainLogger.api_event(logger, "reset_sync", "started")
+
+    # Delete all existing submissions
+    sub_repo = GoogleSheetSubmissionRepository(session)
+    deleted = await sub_repo.delete_all()
+    await session.commit()
+    DomainLogger.api_event(logger, "reset_sync", "deleted_old", count=deleted)
+
+    # Trigger a fresh sync
+    poller = getattr(request.app.state, "sheets_poller", None)
+    if poller is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Sheets poller is not running",
+        )
+    new_rows = await poller.trigger_sync()
+    DomainLogger.api_event(
+        logger,
+        "reset_sync",
+        "completed",
+        deleted=deleted,
         new_rows_imported=new_rows,
     )
     return TriggerSyncResponse(new_rows_imported=new_rows)
