@@ -32,6 +32,11 @@ if TYPE_CHECKING:
 
 EXPECTED_COLUMNS = 18
 
+# The Google Sheet has 20 columns (A-T), but the internal data model uses 18.
+# Column R ("Score") and S ("Email Address" duplicate) are not needed.
+# Column T ("Landscape/Hardscape") maps to internal index 17.
+_SHEET_COLUMNS = 20
+
 
 class GoogleSheetsService(LoggerMixin):
     """Business logic for Google Sheet submission processing."""
@@ -59,7 +64,7 @@ class GoogleSheetsService(LoggerMixin):
         sub_repo = GoogleSheetSubmissionRepository(session)
         lead_repo = LeadRepository(session)
 
-        padded = pad_row(row)
+        padded = pad_row(remap_sheet_row(row))
 
         submission = await sub_repo.create(
             sheet_row_number=row_number,
@@ -303,6 +308,22 @@ class GoogleSheetsService(LoggerMixin):
             return normalize_phone(raw_phone)
         except ValueError:
             return "0000000000"
+
+
+def remap_sheet_row(raw_row: list[str]) -> list[str]:
+    """Remap a raw Google Sheet row (up to 20 columns A-T) to 18-column internal format.
+
+    The sheet layout diverges from the internal model at column R:
+      A-Q (indices 0-16)  → map directly to internal indices 0-16
+      R   (index 17)      → "Score" — skipped
+      S   (index 18)      → duplicate email — skipped
+      T   (index 19)      → "Landscape/Hardscape" → internal index 17
+    """
+    # Pad to 20 so we can safely index
+    padded = raw_row + [""] * max(0, _SHEET_COLUMNS - len(raw_row))
+    result = padded[:17]  # A-Q unchanged (indices 0-16)
+    result.append(padded[19] if len(padded) > 19 else "")  # T → internal 17
+    return result
 
 
 def pad_row(row: list[str]) -> list[str]:

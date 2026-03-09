@@ -38,13 +38,19 @@ _TOKEN_EXPIRY_BUFFER = 100  # seconds before expiry to trigger refresh
 
 
 def detect_header_row(rows: list[list[str]]) -> int:
-    """Return the start index for data rows, skipping header if detected.
+    """Return the start index for data rows, skipping all header/title rows.
 
-    Checks if the first row's first cell contains "Timestamp"
-    (case-insensitive, stripped). Returns 1 to skip header, 0 otherwise.
+    Scans the first several rows looking for one whose first cell contains
+    "Timestamp" (case-insensitive, stripped).  Returns the index *after* that
+    row so callers can iterate over data rows only.
+
+    Handles sheets that have a title/category row before the actual header
+    (e.g. row 0 = "Irrigation SERVICES", row 1 = "Timestamp ...").
     """
-    if rows and rows[0] and rows[0][0].strip().lower() == "timestamp":
-        return 1
+    scan_limit = min(len(rows), 5)
+    for idx in range(scan_limit):
+        if rows[idx] and rows[idx][0].strip().lower() == "timestamp":
+            return idx + 1
     return 0
 
 
@@ -306,7 +312,7 @@ class GoogleSheetsPoller:
         url = (
             f"https://sheets.googleapis.com/v4/spreadsheets/"
             f"{self._spreadsheet_id}/values/"
-            f"{quoted_name}!A:R"
+            f"{quoted_name}!A:T"
         )
         try:
             async with httpx.AsyncClient(timeout=30.0) as c:
