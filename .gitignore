@@ -57,6 +57,13 @@ dmypy.json
 *.swo
 *~
 
+# Node
+node_modules/
+
+# Claude Code skills (embedded repos)
+excalidraw-diagram-skill/
+.claude/skills/
+
 # OS generated files
 .DS_Store
 .DS_Store?
