@@ -1,0 +1,768 @@
+# Implementation Plan: Service Package Purchases
+
+## Overview
+
+This plan implements the end-to-end service package purchase pipeline: Stripe integration, agreement lifecycle management, seasonal job generation, compliance audit trails, background job scheduling, email notifications, lead service enhancements, and frontend features. Backend uses Python/FastAPI/SQLAlchemy following vertical slice architecture. Frontend uses React 19/TypeScript with TanStack Query.
+
+## Tasks
+
+- [x] 1. Database foundation — enums, models, and migrations
+  - [x] 1.1 Create new enums (AgreementStatus, PaymentStatus, PackageType, BillingFrequency, DisclosureType, WebhookProcessingStatus, EmailType, IntakeTag, LeadSourceExtended)
+    - Add to `src/grins_platform/models/enums.py` or a new `agreements/models.py`
+    - _Requirements: 1.1, 2.1, 3.1, 7.1, 29.1, 33.1, 44.1, 47.1_
+  - [x] 1.2 Create ServiceAgreementTier model and migration with seed data
+    - Define SQLAlchemy model with all fields per design (id, name, slug, description, package_type, annual_price, billing_frequency, included_services, perks, stripe_product_id, stripe_price_id, is_active, display_order, created_at, updated_at)
+    - Unique constraint on slug
+    - Alembic migration to create table and seed 6 tier records (Essential/Professional/Premium × Residential/Commercial)
+    - _Requirements: 1.1, 1.2, 1.3_
+  - [x] 1.3 Create ServiceAgreement model and migration
+    - Define SQLAlchemy model with all fields per design (agreement_number, customer_id FK, tier_id FK, property_id FK, stripe fields, status, dates, auto_renew, cancellation fields, payment fields, renewal fields, consent fields, notice tracking fields, notes, timestamps)
+    - Unique constraint on agreement_number
+    - Indexes on customer_id, tier_id, status, payment_status, renewal_date
+    - _Requirements: 2.1, 2.2, 2.5_
+  - [x] 1.4 Create AgreementStatusLog model and migration
+    - Define SQLAlchemy model (id, agreement_id FK, old_status, new_status, changed_by FK, reason, metadata JSONB, created_at)
+    - Index on agreement_id
+    - _Requirements: 3.1_
+  - [x] 1.5 Create StripeWebhookEvent model and migration
+    - Define SQLAlchemy model (id, stripe_event_id unique, event_type, processing_status, error_message, event_data JSONB, processed_at)
+    - Index on stripe_event_id
+    - _Requirements: 7.1_
+  - [x] 1.6 Create DisclosureRecord model and migration
+    - Define SQLAlchemy model (id, agreement_id FK nullable, customer_id FK nullable, disclosure_type, sent_at, sent_via, recipient_email, recipient_phone, content_hash, content_snapshot, consent_token indexed, delivery_confirmed, created_at)
+    - INSERT-ONLY enforcement (no update/delete)
+    - Indexes on agreement_id, customer_id, (disclosure_type, sent_at), consent_token
+    - _Requirements: 33.1, 33.2, 33.3, 33.4_
+  - [x] 1.7 Create SmsConsentRecord model and migration
+    - Define SQLAlchemy model with all fields per design (phone_number, consent_type, consent_given, consent_timestamp, consent_method, consent_language_shown, opt_out fields, consent_token indexed, etc.)
+    - INSERT-ONLY enforcement (no update/delete)
+    - Indexes on phone_number, customer_id, consent_token
+    - _Requirements: 29.1, 29.2, 29.3, 29.4_
+  - [x] 1.8 Create EmailSuppressionList model and migration
+    - Define SQLAlchemy model (id, email unique, customer_id FK nullable, suppressed_at, reason)
+    - Permanent — no expiration
+    - _Requirements: 67.5, 67.7_
+  - [x] 1.9 Create Job model extensions migration
+    - Add service_agreement_id (FK to service_agreements, nullable), target_start_date (DATE, nullable), target_end_date (DATE, nullable) to jobs table
+    - _Requirements: 4.1, 4.2_
+  - [x] 1.10 Create Customer model extensions migration
+    - Add stripe_customer_id (VARCHAR unique when not null, indexed), terms_accepted, terms_accepted_at, terms_version, sms_opt_in_at, sms_opt_in_source, sms_consent_language_version, preferred_service_times (JSONB), internal_notes, email_opt_in_at, email_opt_out_at, email_opt_in_source
+    - Set email_opt_in_at=NULL for existing records
+    - _Requirements: 28.1, 28.3, 68.1, 68.4_
+  - [x] 1.11 Create Lead model extensions migration
+    - Add lead_source (VARCHAR NOT NULL default 'website', indexed), source_detail (VARCHAR nullable), intake_tag (VARCHAR nullable, indexed), sms_consent (BOOLEAN default false), terms_accepted (BOOLEAN default false)
+    - Set lead_source='website' for existing records, sms_consent=false, terms_accepted=false
+    - _Requirements: 44.1, 44.2, 44.3, 44.4, 47.1, 47.2, 47.3, 56.1, 56.2, 56.3_
+  - [x] 1.12 Create WorkRequest model extensions migration
+    - Add promoted_to_lead_id (FK to leads, nullable), promoted_at (TIMESTAMP nullable)
+    - _Requirements: 52.3, 52.4_
+
+- [x] 2. Checkpoint — Verify all migrations run cleanly
+  - Ensure all migrations apply without errors, verify table schemas match design, confirm seed data present. Ask the user if questions arise.
+
+- [x] 3. Stripe configuration and webhook infrastructure
+  - [x] 3.1 Add Stripe configuration to core settings
+    - Add STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PUBLISHABLE_KEY, STRIPE_CUSTOMER_PORTAL_URL, STRIPE_TAX_ENABLED (bool, default true) to `core/config.py`
+    - Log warning if STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET missing at startup (don't crash)
+    - Add `stripe` package to pyproject.toml
+    - _Requirements: 27.1, 27.2, 27.3, 27.4, 27.5, 39A.6_
+  - [x] 3.2 Implement StripeWebhookEvent repository
+    - Create `agreements/repository.py` (or extend) with methods: `get_by_stripe_event_id`, `create_event_record`
+    - _Requirements: 7.1, 7.2, 7.3_
+  - [x] 3.3 Implement webhook endpoint and event router
+    - Create `POST /api/v1/webhooks/stripe` endpoint in `agreements/routes.py`
+    - Verify Stripe signature using raw request body + STRIPE_WEBHOOK_SECRET; return HTTP 400 on failure
+    - Deduplicate via stripe_webhook_events table; return HTTP 200 with "already_processed" for duplicates
+    - Route to event-specific handlers: checkout.session.completed, invoice.paid, invoice.payment_failed, invoice.upcoming, customer.subscription.updated, customer.subscription.deleted
+    - Return HTTP 200 within 5 seconds regardless of outcome
+    - Exclude from CSRF middleware
+    - Structured logging: `stripe.webhook.{event_type}_{status}`
+    - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 7.2, 7.3_
+  - [x] 3.4 Write unit tests for webhook endpoint and idempotency
+    - Test signature verification (valid, invalid, missing)
+    - Test duplicate event skipping
+    - Test event routing to correct handlers
+    - Test HTTP 200 returned for all outcomes
+    - _Requirements: 6.1–6.7, 7.1–7.3, 40.1_
+  - [x] 3.5 Write property test for webhook idempotency
+    - **Property 6: Webhook Idempotency**
+    - For any Stripe event processed twice (same stripe_event_id), second processing is skipped, system state identical, record exists
+    - **Validates: Requirements 7.2, 7.3**
+
+- [x] 4. Agreement service — core lifecycle logic
+  - [x] 4.1 Implement AgreementRepository
+    - Create `agreements/repository.py` with CRUD methods: create, get_by_id (with joins to customer, tier, jobs, status logs), list with filters (status, tier_id, customer_id, payment_status, expiring_soon), get_renewal_pipeline, get_failed_payments, get_annual_notice_due
+    - _Requirements: 19.1, 19.2, 20.2, 20.3, 37.1_
+  - [x] 4.2 Implement AgreementTierRepository
+    - Methods: list_active, get_by_id, get_by_slug_and_type
+    - _Requirements: 1.4, 19.6, 19.7_
+  - [x] 4.3 Implement Agreement_Service with status transitions and LoggerMixin
+    - `DOMAIN = "agreements"`, use LoggerMixin
+    - `create_agreement(customer_id, tier_id, stripe_data)` — creates with PENDING status, locks annual_price from tier
+    - `transition_status(agreement_id, new_status, actor, reason)` — validates against VALID_TRANSITIONS map, creates AgreementStatusLog, rejects invalid transitions with descriptive error
+    - `generate_agreement_number()` — format AGR-YYYY-NNN with sequential counter per year
+    - `approve_renewal(agreement_id, staff_id)` — records approval fields
+    - `reject_renewal(agreement_id, staff_id)` — calls Stripe cancel_at_period_end, transitions to EXPIRED at term end
+    - `cancel_agreement(agreement_id, reason)` — cancels APPROVED jobs, computes prorated refund (annual_price × remaining_visits / total_visits), preserves SCHEDULED/IN_PROGRESS/COMPLETED jobs
+    - Enforce no mid-season tier changes: reject tier_id change while ACTIVE
+    - _Requirements: 2.3, 2.4, 5.1, 5.2, 5.3, 8.4, 8.6, 14.1, 14.2, 14.3, 14.4, 17.2, 17.3, 18.1_
+  - [x] 4.4 Write unit tests for Agreement_Service
+    - Test all valid status transitions succeed and produce AgreementStatusLog
+    - Test all invalid status transitions rejected with descriptive error
+    - Test agreement number generation format AGR-YYYY-NNN and sequentiality
+    - Test annual_price locked from tier at creation
+    - Test renewal approval/rejection
+    - Test cancellation: APPROVED jobs cancelled, SCHEDULED/IN_PROGRESS/COMPLETED preserved, prorated refund computed
+    - Test mid-season tier change rejection
+    - _Requirements: 5.1, 5.2, 5.3, 2.3, 2.4, 14.2, 14.3, 14.4, 17.2, 17.3, 18.1, 40.1_
+  - [x] 4.5 Write property test for status transition validity
+    - **Property 4: Status Transition Validity**
+    - For any (current_status, target_status) pair, accept iff target is in valid transitions map; all invalid rejected with descriptive error; every accepted transition produces AgreementStatusLog
+    - **Validates: Requirements 5.1, 5.2, 3.2**
+  - [x] 4.6 Write property test for agreement number format
+    - **Property 3: Agreement Number Format and Sequentiality**
+    - For any generated agreement number, matches `^AGR-\d{4}-\d{3}$` with current year; sequential portion strictly increasing within same year
+    - **Validates: Requirements 2.3**
+  - [x] 4.7 Write property test for annual price lock
+    - **Property 11: Annual Price Lock at Purchase**
+    - For any ServiceAgreement, annual_price at creation remains unchanged regardless of tier price modifications
+    - **Validates: Requirements 2.4**
+  - [x] 4.8 Write property test for prorated refund calculation
+    - **Property 12: Prorated Refund Calculation**
+    - For any cancelled agreement, cancellation_refund_amount = annual_price × (remaining_visits / total_visits)
+    - **Validates: Requirements 14.4**
+  - [x] 4.9 Write property test for cancellation job preservation
+    - **Property 13: Cancellation Preserves Non-APPROVED Jobs**
+    - For any cancelled agreement, APPROVED jobs cancelled; SCHEDULED/IN_PROGRESS/COMPLETED jobs unchanged
+    - **Validates: Requirements 14.2, 14.3**
+
+- [x] 5. Job generator
+  - [x] 5.1 Implement Job_Generator service
+    - Create `agreements/job_generator.py` with LoggerMixin, `DOMAIN = "agreements"`
+    - `generate_jobs(agreement)` — creates seasonal jobs based on tier's included_services
+    - Essential: 2 jobs (Spring Startup Apr 1-30, Fall Winterization Oct 1-31)
+    - Professional: 3 jobs (Spring Startup Apr 1-30, Mid-Season Inspection Jul 1-31, Fall Winterization Oct 1-31)
+    - Premium: 7 jobs (Spring Startup Apr 1-30, Monthly Visit May-Sep, Fall Winterization Oct 1-31)
+    - All jobs: status=APPROVED, category=READY_TO_SCHEDULE, linked via service_agreement_id, customer_id, property_id (when available)
+    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7_
+  - [x] 5.2 Write unit tests for Job_Generator
+    - Test correct job count per tier (2, 3, 7)
+    - Test correct date ranges per job type
+    - Test all jobs have status APPROVED, category READY_TO_SCHEDULE
+    - Test linking to agreement, customer, property
+    - _Requirements: 9.1–9.7, 40.1_
+  - [x] 5.3 Write property test for job generation count and date ranges
+    - **Property 1: Job Generation Produces Correct Count and Non-Overlapping Date Ranges**
+    - For any valid tier, produces exactly tier-specified number of jobs (2/3/7), each with valid target_start_date ≤ target_end_date, no overlapping date ranges
+    - **Validates: Requirements 9.1, 9.2, 9.3**
+  - [x] 5.4 Write property test for generated job invariants
+    - **Property 2: Generated Job Invariants**
+    - For any generated job: status=APPROVED, category=READY_TO_SCHEDULE, non-null service_agreement_id matching source agreement, non-null customer_id, matching property_id when agreement has one
+    - **Validates: Requirements 9.4, 9.5, 9.6, 9.7**
+
+- [x] 6. Checkpoint — Verify core backend services
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 7. Compliance service
+  - [x] 7.1 Implement Compliance_Service
+    - Create `agreements/compliance_service.py` with LoggerMixin, `DOMAIN = "compliance"`
+    - `create_disclosure(type, agreement_id, customer_id, content, sent_via)` — creates DisclosureRecord with content_hash (SHA-256)
+    - `create_sms_consent(phone, consent_given, method, language_shown, token)` — creates SmsConsentRecord
+    - `link_orphaned_records(consent_token, customer_id, agreement_id)` — bridges pre-checkout records to post-purchase entities
+    - `get_compliance_status(agreement_id)` — returns which disclosures are recorded/missing
+    - `get_annual_notice_due()` — returns ACTIVE agreements where last_annual_notice_sent is NULL or year < current year
+    - _Requirements: 33.1, 33.2, 29.1, 29.2, 8.7, 30.2, 30.3, 34.1, 34.2, 34.3, 35.1, 35.2, 36.1, 36.2, 37.1, 37.2, 37.3, 38.1, 38.2, 38.3_
+  - [x] 7.2 Write unit tests for Compliance_Service
+    - Test disclosure record creation for each disclosure type
+    - Test SMS consent record creation
+    - Test orphaned record linkage via consent_token
+    - Test compliance status computation (missing/present disclosures)
+    - Test annual notice due query logic
+    - Test INSERT-ONLY enforcement (no update/delete)
+    - _Requirements: 33.1–33.4, 29.1–29.4, 34.1–34.3, 35.1–35.3, 36.1–36.2, 37.1–37.3, 40.1_
+  - [x] 7.3 Write property test for consent token linkage
+    - **Property 7: Consent Token Linkage**
+    - For any pre-checkout consent flow followed by checkout.session.completed with same consent_token, orphaned records (customer_id IS NULL) are linked to new Customer and ServiceAgreement
+    - **Validates: Requirements 8.7, 30.4**
+  - [x] 7.4 Write property test for compliance disclosure completeness
+    - **Property 8: Compliance Disclosure Completeness**
+    - For any ACTIVE agreement through full lifecycle: PRE_SALE + CONFIRMATION exist; PENDING_RENEWAL → RENEWAL_NOTICE exists; CANCELLED → CANCELLATION_CONF exists
+    - **Validates: Requirements 34.1, 34.3, 35.1, 36.1**
+  - [x] 7.5 Write property test for immutable compliance and consent records
+    - **Property 14: Immutable Compliance and Consent Records**
+    - For any existing disclosure_record or sms_consent_record, UPDATE and DELETE operations fail; opt-outs recorded as new rows with consent_given=false
+    - **Validates: Requirements 29.2, 33.2**
+  - [x] 7.6 Write property test for pre-checkout consent validation
+    - **Property 15: Pre-Checkout Consent Validation**
+    - For any request where sms_consent=false OR terms_accepted=false → HTTP 422, no records created; both true → sms_consent_record + PRE_SALE disclosure_record created with same consent_token
+    - **Validates: Requirements 30.2, 30.3, 30.5**
+
+- [x] 8. Email service
+  - [x] 8.1 Implement Email_Service in shared/
+    - Create `shared/email_service.py` with LoggerMixin, `DOMAIN = "email"`
+    - Add EMAIL_API_KEY, COMPANY_PHYSICAL_ADDRESS to core config; log warning if missing
+    - Add `jinja2` package to pyproject.toml
+    - Email classification: TRANSACTIONAL (noreply@) vs COMMERCIAL (info@/marketing@)
+    - Methods: send_welcome_email, send_confirmation_email, send_renewal_notice, send_annual_notice, send_cancellation_confirmation, send_lead_confirmation
+    - Compliance emails: zero promotional content, transactional sender, no unsubscribe link
+    - Commercial emails: physical address, unsubscribe link, ad identification, accurate From header
+    - Check suppression list + email_opt_in before COMMERCIAL sends
+    - Refuse COMMERCIAL if COMPANY_PHYSICAL_ADDRESS not configured (log critical)
+    - If EMAIL_API_KEY missing: create disclosure records with sent_via="pending", delivery_confirmed=false
+    - Structured logging: `email.{component}.{action}_{state}`
+    - _Requirements: 39B.1, 39B.2, 39B.3, 39B.4, 39B.5, 39B.6, 39B.7, 39B.8, 39B.9, 39B.10, 39C.1, 39C.2, 39C.3, 39C.4, 67.1, 67.2, 67.3, 67.5, 67.6, 67.7, 67.10, 70.1, 70.2, 70.3_
+  - [x] 8.2 Create Jinja2 email templates
+    - Create `templates/emails/` directory with: welcome.html, confirmation.html, renewal_notice.html, annual_notice.html, cancellation_conf.html, lead_confirmation.html
+    - All templates include Grins Irrigation business name, contact info, Stripe Customer Portal link
+    - Compliance templates: zero promotional content
+    - _Requirements: 39B.3, 39B.4, 39B.5, 39B.6, 39B.9, 39C.2_
+  - [x] 8.3 Implement unsubscribe endpoint and token generation
+    - `GET /api/v1/email/unsubscribe` — public, accepts signed token, decodes customer_id + email, sets email_opt_in=false, records email_opt_out_at, adds to suppression list, renders confirmation page
+    - `generate_unsubscribe_token(customer_id, email)` — signed (HMAC/JWT), 30-day minimum validity
+    - _Requirements: 67.4, 67.6, 67.8_
+  - [x] 8.4 Write unit tests for Email_Service
+    - Test correct email sent for each compliance event
+    - Test template rendering
+    - Test delivery status handling
+    - Test skip behavior when EMAIL_API_KEY unavailable
+    - Test commercial email suppression list check
+    - Test COMPANY_PHYSICAL_ADDRESS missing behavior (refuse commercial)
+    - Test unsubscribe token generation and validation
+    - _Requirements: 39B.1–39B.10, 39C.1–39C.4, 67.1–67.10, 70.1–70.4, 40.1_
+  - [x] 8.5 Write property test for email classification correctness
+    - **Property 9: Email Classification Correctness**
+    - For any compliance email template (CONFIRMATION, RENEWAL_NOTICE, ANNUAL_NOTICE, CANCELLATION_CONF): zero promotional elements, transactional sender, no unsubscribe link
+    - **Validates: Requirements 67.1, 70.1, 70.2, 70.3**
+  - [x] 8.6 Write property test for suppression list enforcement
+    - **Property 10: Suppression List Enforcement**
+    - For any customer on suppression list, Email_Service never sends COMMERCIAL email; suppression entry never auto-removed
+    - **Validates: Requirements 67.5, 67.7**
+
+- [x] 9. Checkout and onboarding services
+  - [x] 9.1 Implement Checkout_Service
+    - Create `agreements/checkout_service.py` with LoggerMixin, `DOMAIN = "checkout"`
+    - `create_checkout_session(tier, type, consent_token, utm_params)` — validates consent_token (< 2 hours), validates tier (exists, is_active, stripe_price_id not null), creates Stripe Checkout Session with subscription mode, phone_number_collection, billing_address_collection, consent_collection, automatic_tax (gated on STRIPE_TAX_ENABLED), metadata (consent_token, package_tier, package_type, utm params), subscription_data metadata, success_url, cancel_url
+    - Returns Stripe Checkout URL
+    - _Requirements: 31.1, 31.2, 31.3, 31.4, 31.5, 31.6, 31.7, 31.8, 39A.4_
+  - [x] 9.2 Implement pre-checkout consent endpoint
+    - `POST /api/v1/onboarding/pre-checkout-consent` — public, rate-limited (5/IP/min)
+    - Validates sms_consent AND terms_accepted both true (HTTP 422 if not)
+    - Creates sms_consent_record + PRE_SALE disclosure_record with shared consent_token
+    - Returns consent_token UUID
+    - _Requirements: 30.1, 30.2, 30.3, 30.4, 30.5_
+  - [x] 9.3 Implement checkout session creation endpoint
+    - `POST /api/v1/checkout/create-session` — public, rate-limited (5/IP/min)
+    - Calls Checkout_Service.create_checkout_session
+    - _Requirements: 31.1, 31.7_
+  - [x] 9.4 Implement Onboarding_Service
+    - Create `agreements/onboarding_service.py` with LoggerMixin, `DOMAIN = "onboarding"`
+    - `verify_session(session_id)` — verifies Stripe session, returns customer/package info; HTTP 404 if not found
+    - `complete_onboarding(session_id, property_data)` — creates/updates Property, links to agreement + jobs, updates Customer.preferred_service_times; HTTP 404 if agreement not found
+    - _Requirements: 32.1, 32.2, 32.3, 32.4, 32.5, 32.6, 32.7_
+  - [x] 9.5 Implement onboarding endpoints
+    - `GET /api/v1/onboarding/verify-session` — public, accepts session_id query param
+    - `POST /api/v1/onboarding/complete` — public, rate-limited
+    - _Requirements: 32.1, 32.2_
+  - [x] 9.6 Write unit tests for Checkout_Service and Onboarding_Service
+    - Test session creation with valid inputs
+    - Test consent_token validation (valid, expired > 2 hours, missing)
+    - Test tier lookup (active, inactive, missing, null stripe_price_id → HTTP 503)
+    - Test automatic_tax configuration
+    - Test session verification (valid, not found, not completed)
+    - Test property creation (same_as_billing true/false)
+    - Test agreement + jobs property_id update
+    - _Requirements: 30.1–30.5, 31.1–31.8, 32.1–32.7, 40.1_
+  - [x] 9.7 Write property test for inactive tier exclusion
+    - **Property 22: Inactive Tier Exclusion**
+    - For any tier with is_active=false, checkout session creation and agreement creation reject with appropriate error
+    - **Validates: Requirements 1.4**
+
+- [x] 10. Webhook event handlers
+  - [x] 10.1 Implement checkout.session.completed handler
+    - Extract customer email from Stripe session, match existing Customer by email or create new
+    - Update stripe_customer_id on existing customer
+    - Create ServiceAgreement with PENDING status, locked annual_price
+    - Trigger Job_Generator for seasonal jobs
+    - Link orphaned consent/disclosure records via consent_token
+    - Create PRE_SALE + CONFIRMATION disclosure records
+    - Set email_opt_in_at, email_opt_in_source on Customer
+    - Send welcome email + confirmation email via Email_Service
+    - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 28.2, 34.1, 34.2, 34.3, 39B.3, 39C.1, 39C.2, 68.2_
+  - [x] 10.2 Implement invoice.paid handler
+    - First invoice: transition PENDING → ACTIVE
+    - Renewal invoice: transition to ACTIVE, update end_date/renewal_date, trigger Job_Generator for next season
+    - Update last_payment_date, last_payment_amount, payment_status=CURRENT
+    - _Requirements: 10.1, 10.2, 10.3_
+  - [x] 10.3 Implement invoice.payment_failed handler
+    - Transition to PAST_DUE, set payment_status=PAST_DUE
+    - If already PAST_DUE with retries exhausted: transition to PAUSED, set payment_status=FAILED
+    - _Requirements: 11.1, 11.2_
+  - [x] 10.4 Implement invoice.upcoming handler
+    - Transition to PENDING_RENEWAL
+    - Create RENEWAL_NOTICE disclosure record
+    - Send renewal notice email via Email_Service
+    - Update last_renewal_notice_sent
+    - _Requirements: 13.1, 13.2, 35.1, 35.2, 35.3, 39B.4_
+  - [x] 10.5 Implement customer.subscription.updated handler
+    - Update stripe_subscription_id and changed metadata
+    - Transition status if Stripe status changed (e.g., past_due → active)
+    - Handle payment method update recovery: PAUSED → ACTIVE, clear pause_reason
+    - Update auto_renew based on cancel_at_period_end flag
+    - Idempotent: skip if local state already matches
+    - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
+  - [x] 10.6 Implement customer.subscription.deleted handler
+    - Transition to CANCELLED
+    - Cancel APPROVED jobs, preserve SCHEDULED/IN_PROGRESS/COMPLETED
+    - Compute prorated refund amount
+    - Create CANCELLATION_CONF disclosure record
+    - Send cancellation confirmation email
+    - _Requirements: 14.1, 14.2, 14.3, 14.4, 36.1, 36.2, 39B.6_
+  - [x] 10.7 Write unit tests for all webhook handlers
+    - Test checkout.session.completed: new customer creation, existing customer match, agreement creation, job generation, consent token linkage, email sending
+    - Test invoice.paid: first invoice activation, renewal with new jobs
+    - Test invoice.payment_failed: PAST_DUE transition, escalation to PAUSED
+    - Test invoice.upcoming: PENDING_RENEWAL transition, disclosure creation
+    - Test subscription.updated: status sync, payment recovery, cancel_at_period_end sync, idempotency
+    - Test subscription.deleted: cancellation, job cancellation, refund computation, disclosure
+    - _Requirements: 8.1–8.7, 10.1–10.3, 11.1–11.2, 12.1–12.5, 13.1–13.3, 14.1–14.4, 40.1_
+
+- [x] 11. Metrics service
+  - [x] 11.1 Implement Metrics_Service
+    - Create `agreements/metrics_service.py` with LoggerMixin, `DOMAIN = "agreements"`
+    - Compute: active agreement count, MRR (SUM annual_price/12 for ACTIVE), ARPA (MRR/active count), renewal rate (trailing 90 days), churn rate (trailing 90 days), past-due amount
+    - _Requirements: 20.1_
+  - [x] 11.2 Write unit tests for Metrics_Service
+    - Test MRR calculation with various agreement sets
+    - Test ARPA calculation
+    - Test renewal rate and churn rate
+    - Test past-due amount
+    - _Requirements: 20.1, 40.1_
+  - [x] 11.3 Write property test for MRR calculation correctness
+    - **Property 5: MRR Calculation Correctness**
+    - For any set of agreements with varying statuses and prices, MRR = sum(annual_price/12) for exactly ACTIVE agreements; ARPA = MRR / active count
+    - **Validates: Requirements 20.1**
+
+- [x] 12. Checkpoint — Verify all backend services and webhook handlers
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 13. Background job scheduler and jobs
+  - [x] 13.1 Implement APScheduler infrastructure
+    - Add `apscheduler` package to pyproject.toml
+    - Create `core/scheduler.py` with PostgreSQL job store
+    - Start scheduler on FastAPI lifespan startup, graceful shutdown on shutdown
+    - Structured logging for job execution start/completion
+    - _Requirements: 16.1, 16.2, 16.4_
+  - [x] 13.2 Implement escalate_failed_payments background job
+    - Daily job: query PAST_DUE agreements ≥ 7 days → call Stripe pause_collection, transition to PAUSED, set pause_reason
+    - Query PAUSED agreements ≥ 14 days → call Stripe cancel subscription, transition to CANCELLED
+    - Log each escalation with agreement_id, step (day_7_pause/day_21_cancel), Stripe response
+    - _Requirements: 15.1, 15.2, 15.3, 15.4_
+  - [x] 13.3 Implement check_upcoming_renewals background job
+    - Daily at 9 AM: query agreements approaching renewal_date, trigger urgency alerts
+    - _Requirements: 16.3_
+  - [x] 13.4 Implement send_annual_notices background job
+    - Daily in January: query ACTIVE agreements needing annual notices (last_annual_notice_sent NULL or year < current)
+    - Send annual notice email via Email_Service
+    - Create ANNUAL_NOTICE disclosure record, update last_annual_notice_sent
+    - _Requirements: 16.3, 37.2, 37.3, 39B.5_
+  - [x] 13.5 Implement cleanup_orphaned_consent_records background job
+    - Weekly: mark consent records > 30 days with no linked customer as abandoned
+    - _Requirements: 16.3_
+  - [x] 13.6 Register all scheduled jobs at startup
+    - Register escalate_failed_payments (daily), check_upcoming_renewals (daily 9AM), send_annual_notices (daily January), cleanup_orphaned_consent_records (weekly)
+    - _Requirements: 16.3_
+  - [x] 13.7 Write unit tests for background jobs
+    - Test escalate_failed_payments: Day 7 pause, Day 21 cancel, Stripe API calls, logging
+    - Test send_annual_notices: correct query, email sending, disclosure creation
+    - Test cleanup_orphaned_consent_records: correct age threshold
+    - _Requirements: 15.1–15.4, 16.1–16.4, 40.1_
+  - [x] 13.8 Write property test for failed payment escalation timeline
+    - **Property 23: Failed Payment Escalation Timeline**
+    - For any agreement PAST_DUE ≥ 7 days → transitions to PAUSED; PAUSED ≥ 14 days → transitions to CANCELLED
+    - **Validates: Requirements 15.2, 15.3**
+
+- [x] 14. Lead service extensions
+  - [x] 14.1 Extend Lead_Service with source tracking and intake tagging
+    - Modify `leads/service.py` to accept lead_source, source_detail, intake_tag on creation
+    - Default lead_source to WEBSITE when omitted
+    - Default intake_tag to SCHEDULE for website form submissions, NULL for from-call
+    - _Requirements: 45.1, 45.2, 48.1, 48.2, 48.3_
+  - [x] 14.2 Implement from-call endpoint
+    - `POST /api/v1/leads/from-call` — authenticated, admin-only
+    - Accepts name, phone, email, zip_code, situation, notes, lead_source (default PHONE_CALL), intake_tag (default NULL)
+    - source_detail defaults to "Inbound call" when not provided
+    - _Requirements: 45.4, 45.5_
+  - [x] 14.3 Extend GET /api/v1/leads with source and intake tag filters
+    - Add lead_source multi-select filter (comma-separated)
+    - Add intake_tag filter (SCHEDULE, FOLLOW_UP, NULL)
+    - _Requirements: 45.3, 48.4_
+  - [x] 14.4 Implement follow-up queue endpoint
+    - `GET /api/v1/leads/follow-up-queue` — authenticated, admin-only, paginated
+    - Query: intake_tag=FOLLOW_UP AND status IN (NEW, CONTACTED, QUALIFIED), sorted by created_at ASC
+    - Include computed time_since_created (hours)
+    - _Requirements: 50.1, 50.2, 50.3, 50.4_
+  - [x] 14.5 Extend PATCH /api/v1/leads/{id} for intake_tag changes
+    - Allow changing intake_tag field
+    - _Requirements: 48.5_
+  - [x] 14.6 Implement work request auto-promotion
+    - All work request submissions → create Lead (new and existing clients)
+    - Set lead_source=GOOGLE_FORM, source_detail based on client type
+    - Update WorkRequest with promoted_to_lead_id and promoted_at
+    - Synchronous during work request creation
+    - _Requirements: 52.1, 52.2, 52.5_
+  - [x] 14.7 Implement SMS and email lead confirmations
+    - SMS confirmation: gated on sms_consent=true AND phone present; message per design; skip + log if conditions not met
+    - Email confirmation: sent when email present; skip + log if no email
+    - Add LEAD_CONFIRMATION to MessageType enum
+    - _Requirements: 54.1, 54.2, 54.3, 54.4, 55.1, 55.2, 55.3_
+  - [x] 14.8 Implement consent field carry-over on lead-to-customer conversion
+    - sms_consent=true → carry to Customer, create sms_consent_record with consent_method="lead_form"
+    - terms_accepted=true → carry to Customer, set terms_accepted_at
+    - email consent carry-over per design
+    - _Requirements: 57.1, 57.2, 57.3, 68.3_
+  - [x] 14.9 Implement lead metrics by source endpoint
+    - `GET /api/v1/leads/metrics/by-source` — returns lead counts grouped by lead_source for configurable date range (default trailing 30 days)
+    - _Requirements: 61.3_
+  - [x] 14.10 Write unit tests for Lead_Service extensions
+    - Test creation with all LeadSource values
+    - Test intake tag defaulting (SCHEDULE for website, NULL for from-call)
+    - Test follow-up queue filtering and sorting
+    - Test work request auto-promotion for new and existing clients
+    - Test SMS confirmation with consent gating
+    - Test email confirmation with email presence check
+    - Test consent carry-over during conversion
+    - _Requirements: 45.1–45.5, 48.1–48.5, 50.1–50.4, 52.1–52.5, 54.1–54.4, 55.1–55.3, 57.1–57.3, 63.1_
+  - [x] 14.11 Write property test for follow-up queue correctness
+    - **Property 16: Follow-Up Queue Correctness**
+    - For any set of leads, follow-up queue returns exactly those with intake_tag=FOLLOW_UP AND status IN (NEW, CONTACTED, QUALIFIED), sorted by created_at ASC
+    - **Validates: Requirements 50.1, 50.2**
+  - [x] 14.12 Write property test for lead source defaulting
+    - **Property 17: Lead Source Defaulting**
+    - POST /api/v1/leads without explicit lead_source → defaults to WEBSITE; POST /api/v1/leads/from-call without explicit lead_source → defaults to PHONE_CALL
+    - **Validates: Requirements 45.2, 45.4**
+  - [x] 14.13 Write property test for intake tag defaulting
+    - **Property 18: Intake Tag Defaulting**
+    - Website form without explicit intake_tag → defaults to SCHEDULE; from-call without explicit intake_tag → remains NULL
+    - **Validates: Requirements 48.2, 48.3**
+  - [x] 14.14 Write property test for SMS confirmation consent gating
+    - **Property 19: SMS Confirmation Consent Gating**
+    - SMS sent iff phone present AND sms_consent=true; otherwise skipped and logged
+    - **Validates: Requirements 54.1, 54.3, 54.4**
+  - [x] 14.15 Write property test for consent carry-over on conversion
+    - **Property 20: Consent Field Carry-Over on Conversion**
+    - Lead with sms_consent=true → Customer has sms_consent + sms_consent_record; lead with terms_accepted=true → Customer has terms_accepted + terms_accepted_at
+    - **Validates: Requirements 57.2, 57.3**
+  - [x] 14.16 Write property test for lead metrics by source accuracy
+    - **Property 21: Lead Metrics by Source Accuracy**
+    - For any set of leads in a date range, sum of all group counts = total leads in range
+    - **Validates: Requirements 61.3**
+
+- [x] 15. Checkpoint — Verify background jobs and lead service
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 16. Admin API endpoints — agreements, compliance, dashboard
+  - [x] 16.1 Implement agreement CRUD API endpoints
+    - `GET /api/v1/agreements` — paginated, filterable by status, tier_id, customer_id, payment_status, expiring_soon
+    - `GET /api/v1/agreements/{id}` — detail with customer, tier, jobs, status logs
+    - `PATCH /api/v1/agreements/{id}/status` — validates transition, updates status
+    - `POST /api/v1/agreements/{id}/approve-renewal` — records approval
+    - `POST /api/v1/agreements/{id}/reject-renewal` — records rejection, triggers Stripe cancel_at_period_end
+    - `GET /api/v1/agreement-tiers` — list active tiers
+    - `GET /api/v1/agreement-tiers/{id}` — tier detail
+    - All admin endpoints authenticated
+    - _Requirements: 19.1, 19.2, 19.3, 19.4, 19.5, 19.6, 19.7_
+  - [x] 16.2 Implement agreement metrics and queue endpoints
+    - `GET /api/v1/agreements/metrics` — active count, MRR, ARPA, renewal rate, churn rate, past-due amount
+    - `GET /api/v1/agreements/renewal-pipeline` — PENDING_RENEWAL sorted by renewal_date ASC
+    - `GET /api/v1/agreements/failed-payments` — PAST_DUE/FAILED payment_status
+    - `GET /api/v1/agreements/annual-notice-due` — ACTIVE agreements needing annual notice
+    - _Requirements: 20.1, 20.2, 20.3, 37.1_
+  - [x] 16.3 Implement compliance audit API endpoints
+    - `GET /api/v1/agreements/{id}/compliance` — disclosure records for agreement, sorted by sent_at DESC
+    - `GET /api/v1/compliance/customer/{customer_id}` — all disclosures for customer across agreements, sorted by sent_at DESC
+    - _Requirements: 38.1, 38.2, 38.3_
+  - [x] 16.4 Extend dashboard summary endpoint
+    - Extend `GET /api/v1/dashboard/summary` with: active agreement count, MRR, renewal pipeline count, failed payment count + dollar amount, new leads count, follow-up queue count, leads awaiting contact oldest age
+    - _Requirements: 21.1, 62.1_
+  - [x] 16.5 Implement Pydantic schemas for all agreement endpoints
+    - Request/response schemas for agreements, tiers, metrics, compliance, dashboard extension
+    - _Requirements: 19.1–19.7, 20.1–20.3, 38.1–38.3_
+  - [x] 16.6 Write unit tests for API endpoints
+    - Test agreement list with all filter combinations
+    - Test agreement detail response structure
+    - Test status transition endpoint (valid + invalid)
+    - Test renewal approve/reject
+    - Test metrics computation
+    - Test compliance audit responses
+    - Test dashboard summary extension
+    - _Requirements: 19.1–19.7, 20.1–20.3, 21.1, 37.1, 38.1–38.3, 62.1, 40.1_
+
+- [x] 17. Backend functional tests
+  - [x] 17.1 Write functional tests for agreement lifecycle
+    - Full lifecycle: PENDING → ACTIVE → PENDING_RENEWAL → ACTIVE (renewal)
+    - Checkout webhook → customer + agreement + jobs creation pipeline
+    - Failed payment escalation: ACTIVE → PAST_DUE → PAUSED → CANCELLED
+    - Renewal approval and rejection workflows
+    - Seasonal job generation with correct linking
+    - Portal payment recovery: PAUSED → ACTIVE via subscription.updated
+    - Compliance email dispatch pipeline
+    - _Requirements: 40.2_
+  - [x] 17.2 Write functional tests for lead service
+    - Lead creation with source and intake tag persisted
+    - Follow-up queue endpoint returning correct filtered/sorted results
+    - Work request auto-promotion creating linked lead records
+    - PATCH intake_tag changing tag and updating follow-up queue
+    - Lead consent fields carrying over to customer on conversion
+    - _Requirements: 63.2_
+
+- [x] 18. Backend integration tests
+  - [x] 18.1 Write integration tests for agreement APIs
+    - Stripe webhook endpoint with simulated payloads and signature verification
+    - Agreement CRUD endpoints with filtering and pagination
+    - Metrics API returning correct computed values
+    - Dashboard summary extension with agreement + lead data
+    - _Requirements: 40.3_
+  - [x] 18.2 Write integration tests for lead APIs
+    - GET /api/v1/leads with lead_source multi-select filter
+    - GET /api/v1/leads with intake_tag filter
+    - POST /api/v1/leads/from-call with authentication
+    - GET /api/v1/leads/follow-up-queue with pagination
+    - GET /api/v1/leads/metrics/by-source with date range
+    - GET /api/v1/dashboard/summary including lead metrics
+    - _Requirements: 63.3_
+
+- [x] 19. Checkpoint — Full backend verification
+  - Run `uv run ruff check --fix src/`, `uv run ruff format src/`, `uv run mypy src/`, `uv run pyright src/`, `uv run pytest -v`
+  - All quality checks must pass with zero errors
+  - Ensure all tests pass, ask the user if questions arise.
+  - _Requirements: 43.1, 43.2, 43.3, 43.4, 43.7, 43.8_
+
+- [x] 20. Frontend — Agreements feature slice setup and types
+  - [x] 20.1 Create agreements feature slice structure and types
+    - Create `frontend/src/features/agreements/` directory structure: api/, components/, hooks/, types/, index.ts
+    - Define TypeScript types: Agreement, AgreementTier, AgreementStatus, PaymentStatus, AgreementStatusLog, AgreementMetrics, DisclosureRecord
+    - Define TanStack Query key factory (agreementKeys, tierKeys)
+    - _Requirements: 22.1_
+  - [x] 20.2 Implement agreements API client
+    - Create `agreementsApi.ts` with functions: listAgreements, getAgreement, updateAgreementStatus, approveRenewal, rejectRenewal, getMetrics, getRenewalPipeline, getFailedPayments, listTiers, getTier, getCompliance, getCustomerCompliance
+    - _Requirements: 19.1–19.7, 20.1–20.3, 38.1–38.2_
+  - [x] 20.3 Implement TanStack Query hooks
+    - useAgreements, useAgreement, useAgreementMetrics, useRenewalPipeline, useFailedPayments, useUpdateAgreementStatus, useApproveRenewal, useRejectRenewal
+    - Proper cache invalidation on mutations
+    - _Requirements: 22.1, 41.2_
+
+- [x] 21. Frontend — Service Agreements tab
+  - [x] 21.1 Implement BusinessMetricsCards component
+    - KPI cards: Active Agreements (count + trend), MRR (currency + MoM change), Renewal Rate (%), Churn Rate (%), Past Due Amount ($)
+    - `data-testid` per convention
+    - _Requirements: 22.2_
+  - [x] 21.2 Implement MrrChart and TierDistributionChart components
+    - MRR Over Time: Recharts LineChart, trailing 12 months
+    - Agreements by Tier: Recharts BarChart/PieChart, active count per tier
+    - Add `recharts` to frontend package.json
+    - _Requirements: 22.3, 22.4_
+  - [x] 21.3 Implement AgreementsList component
+    - Status filter tabs: All, Active, Pending, Pending Renewal, Past Due, Expiring Soon, Cancelled, Expired
+    - Table columns: Agreement Number, Customer Name (linked), Tier, Package Type, Status (badge), Annual Price, Start Date, Renewal Date, Jobs Progress
+    - Pagination
+    - Loading, error, empty states
+    - _Requirements: 22.5, 22.6_
+  - [x] 21.4 Implement operational queue components
+    - RenewalPipelineQueue: PENDING_RENEWAL agreements, Approve/Reject buttons, urgency alerts (7 days, 1 day)
+    - FailedPaymentsQueue: PAST_DUE/PAUSED agreements, Resume/Cancel buttons
+    - UnscheduledVisitsQueue: APPROVED Seasonal_Jobs grouped by month/service type, link to Schedule tab
+    - OnboardingIncompleteQueue: PENDING agreements with no property_id
+    - Collapsible sections below main table
+    - _Requirements: 23.1, 23.2, 23.3, 23.4, 17.1, 17.5, 17.6_
+  - [x] 21.5 Register Agreements tab in navigation
+    - Add "Agreements" tab to admin dashboard navigation
+    - Wire route to AgreementsList page with metrics, charts, table, and queues
+    - _Requirements: 22.1_
+
+- [x] 22. Frontend — Agreement Detail view
+  - [x] 22.1 Implement AgreementDetail component
+    - Info section: tier name, package type, status badge, annual price, dates, auto_renew, property address, customer name (linked)
+    - Jobs timeline with visual indicators (completed ✓, scheduled 📅, upcoming ○)
+    - Jobs progress summary ("X of Y visits completed")
+    - Status log: chronological AgreementStatusLog entries
+    - Admin notes: editable text field
+    - _Requirements: 24.1, 24.2, 24.3, 24.4, 24.5_
+  - [x] 22.2 Implement context-sensitive action buttons
+    - ACTIVE: Pause, Cancel buttons
+    - PAUSED: Resume, Cancel buttons
+    - PENDING_RENEWAL: Approve Renewal, Reject Renewal buttons
+    - Cancel requires cancellation reason before submitting
+    - _Requirements: 24.6, 24.7, 24.8, 24.9_
+  - [x] 22.3 Implement external links and compliance section
+    - "View in Stripe Dashboard" link (opens Stripe subscription)
+    - "Customer Portal" link (opens STRIPE_CUSTOMER_PORTAL_URL)
+    - ComplianceLog component: chronological disclosure records with type badge, sent_at, sent_via, delivery_confirmed
+    - Compliance status summary: PRE_SALE, CONFIRMATION, RENEWAL_NOTICE, ANNUAL_NOTICE with recorded/missing/overdue indicators
+    - Warning indicators for missing/overdue disclosures
+    - _Requirements: 24.10, 24.11, 39.1, 39.2, 39.3, 39.4_
+
+- [x] 23. Frontend — Dashboard widgets
+  - [x] 23.1 Implement subscription dashboard widgets
+    - Active Agreements widget: count + trend indicator vs prior month
+    - MRR widget: current value + month-over-month change
+    - Renewal Pipeline widget: count of PENDING_RENEWAL, links to Agreements tab
+    - Failed Payments widget: count + total $ at risk, links to Agreements tab
+    - _Requirements: 25.1, 25.2, 25.3, 25.4_
+  - [x] 23.2 Implement lead dashboard widgets
+    - Leads Awaiting Contact widget: count of NEW leads, time since oldest, links to Leads tab; `data-testid="widget-leads-awaiting-contact"`
+    - Follow-Up Queue widget: count of FOLLOW_UP leads (active statuses), links to Leads tab; `data-testid="widget-follow-up-queue"`
+    - Leads by Source chart: Recharts pie/bar chart, trailing 30 days; `data-testid="widget-leads-by-source"`
+    - _Requirements: 59.1, 59.2, 59.3, 59.4, 60.1, 60.2, 60.3, 61.1, 61.2, 61.4_
+
+- [x] 24. Frontend — Jobs tab extensions
+  - [x] 24.1 Implement Jobs tab subscription enhancements
+    - Subscription source badge on jobs with non-null service_agreement_id
+    - Target date range columns (target_start_date, target_end_date)
+    - Target date range filter (date range picker)
+    - Subscription source type filter
+    - _Requirements: 26.1, 26.2, 26.3, 26.4_
+
+- [x] 25. Frontend — Leads tab extensions
+  - [x] 25.1 Implement LeadSourceBadge and source filter
+    - LeadSourceBadge: distinct color per source channel; `data-testid="lead-source-{value}"`
+    - Lead source filter: multi-select dropdown for filtering by one or more lead_source values
+    - source_detail displayed on Lead Detail view
+    - _Requirements: 46.1, 46.2, 46.3, 46.4_
+  - [x] 25.2 Implement IntakeTagBadge and quick-filter tabs
+    - IntakeTagBadge: green=SCHEDULE, orange=FOLLOW_UP, gray=untagged; `data-testid="intake-tag-{value}"`
+    - Quick-filter tabs above leads table: All, Schedule, Follow Up
+    - _Requirements: 49.1, 49.2, 49.3, 49.4_
+  - [x] 25.3 Implement Follow-Up Queue panel
+    - Collapsible panel above main leads table
+    - Each lead: name, phone, situation, time since created, urgency indicator (yellow 2-12h, red 12+h)
+    - One-click actions: "Move to Schedule" (PATCH intake_tag=SCHEDULE), "Mark Lost" (status=LOST), "Add Notes"
+    - `data-testid="follow-up-queue"` (container), `data-testid="follow-up-lead-{id}"` (rows)
+    - _Requirements: 51.1, 51.2, 51.3, 51.4, 51.5_
+  - [x] 25.4 Implement consent indicators on lead rows
+    - SMS icon: green ✓ (sms_consent=true) / gray — (false); `data-testid="sms-consent-{id}"`
+    - Terms icon: green ✓ (terms_accepted=true) / gray — (false); `data-testid="terms-accepted-{id}"`
+    - Full consent status on Lead Detail view
+    - _Requirements: 58.1, 58.2, 58.3_
+  - [x] 25.5 Implement Work Requests tab enhancements
+    - "Promoted to Lead" badge on rows with non-null promoted_to_lead_id
+    - Clickable link to lead detail view
+    - promoted_at timestamp displayed
+    - _Requirements: 53.1, 53.2, 53.3_
+
+- [x] 26. Frontend — Leads API and hooks extensions
+  - [x] 26.1 Extend leads API client and hooks
+    - Add lead_source and intake_tag filter params to list query
+    - Add useFollowUpQueue hook
+    - Add useLeadMetricsBySource hook
+    - Add from-call creation function
+    - Add intake_tag mutation support
+    - _Requirements: 45.3, 48.4, 50.1, 61.3_
+
+- [x] 27. Checkpoint — Verify all frontend components render
+  - Ensure all frontend components compile without TypeScript errors
+  - Run `npx tsc --noEmit` and `npx eslint src/ --max-warnings 0` with zero errors
+  - Ensure all tests pass, ask the user if questions arise.
+  - _Requirements: 43.5, 43.6_
+
+- [x] 28. Frontend component tests
+  - [x] 28.1 Write component tests for Agreements tab
+    - AgreementsList: status tab filtering, table rendering, pagination, loading/error/empty states
+    - BusinessMetricsCards: KPI values, trend indicators
+    - MrrChart: chart rendering with data
+    - TierDistributionChart: chart rendering
+    - RenewalPipelineQueue: approve/reject actions, urgency alerts at 7 days and 1 day
+    - FailedPaymentsQueue: resume/cancel actions
+    - UnscheduledVisitsQueue: grouping by month, link to schedule
+    - OnboardingIncompleteQueue: send reminder action
+    - _Requirements: 41.1, 41.4_
+  - [x] 28.2 Write component tests for Agreement Detail
+    - Info display, jobs timeline, status action buttons per status, compliance log, admin notes
+    - Cancellation reason required before submit
+    - Loading/error/empty states
+    - _Requirements: 41.1, 41.3, 41.4_
+  - [x] 28.3 Write hook tests for agreement hooks
+    - useAgreements, useAgreement, useAgreementMetrics, useRenewalPipeline, useFailedPayments, useUpdateAgreementStatus, useApproveRenewal, useRejectRenewal
+    - _Requirements: 41.2_
+  - [x] 28.4 Write component tests for Dashboard widgets
+    - Active agreements, MRR, renewal pipeline, failed payments widgets
+    - Leads awaiting contact, follow-up queue, leads by source widgets
+    - _Requirements: 41.1_
+  - [x] 28.5 Write component tests for Leads tab extensions
+    - LeadSourceBadge: correct color per source
+    - IntakeTagBadge: green/orange/gray per tag
+    - Follow-Up Queue section: leads sorted by age, urgency indicators, one-click actions
+    - Leads table with source filter dropdown and intake tag quick-filter tabs
+    - Work Requests tab with promoted-to-lead badges and links
+    - Lead Detail view with source_detail and consent indicators
+    - _Requirements: 64.1_
+  - [x] 28.6 Write component tests for Jobs tab extensions
+    - Subscription source badge display
+    - Target date columns render
+    - _Requirements: 41.1_
+
+- [x] 29. Agent-browser UI validation scripts
+  - [x] 29.1 Write agent-browser scripts for Agreements tab
+    - Page loads without errors, KPI cards render, charts render, status filter tabs clickable and filter table, agreement table renders with correct columns, row click navigates to detail
+    - _Requirements: 42.1_
+  - [x] 29.2 Write agent-browser scripts for Agreement Detail view
+    - Info section renders, jobs timeline renders, compliance log renders, action buttons visible per status, action buttons trigger modals/state changes
+    - _Requirements: 42.2_
+  - [x] 29.3 Write agent-browser scripts for Operational Queues
+    - Renewal pipeline with approve/reject, failed payments with resume/cancel, unscheduled visits grouped by month, onboarding incomplete with reminder, urgency alerts at 7 days
+    - _Requirements: 42.3_
+  - [x] 29.4 Write agent-browser scripts for Dashboard modifications
+    - Active Agreements widget, MRR widget, Renewal Pipeline widget, Failed Payments widget render with data
+    - Lead widgets render
+    - _Requirements: 42.4_
+  - [x] 29.5 Write agent-browser scripts for Jobs tab modifications
+    - Subscription badge, target date columns, date range filter, source filter
+    - _Requirements: 42.5_
+  - [x] 29.6 Write agent-browser scripts for Leads tab modifications
+    - Source badges, source filter, intake tag badges, quick-filter tabs, follow-up queue panel, consent indicators
+    - _Requirements: 42.5_
+
+- [x] 30. Final checkpoint — Full quality gate
+  - Run all backend quality checks: `uv run ruff check --fix src/`, `uv run ruff format src/`, `uv run mypy src/`, `uv run pyright src/`, `uv run pytest -v`
+  - Run all frontend quality checks: `npx eslint src/ --max-warnings 0`, `npx tsc --noEmit`, `npm test`
+  - All checks must pass with zero errors/violations
+  - Ensure all tests pass, ask the user if questions arise.
+  - _Requirements: 40.5, 40.6, 41.5, 41.6, 42.6, 43.1–43.8_
+
+- [x] 31. Generate deployment instructions document
+  - [x] 31.1 Generate deployment-instructions/service-package-purchases.md
+    - Database Changes: table names, migration file names, execution order, seed commands
+    - Environment Variables: name, description, example, required/optional (Railway + Vercel)
+    - New Dependencies: Python packages + npm packages with versions
+    - Stripe Configuration: webhook URL/events, products/prices, portal, tax, invoice.upcoming timing
+    - Infrastructure Changes: APScheduler, email service, DNS records
+    - Deployment Order: migrations → seed → backend → frontend
+    - Post-Deployment Verification: CLI commands + agent-browser scripts per Req 65
+    - Rollback Instructions: Alembic downgrade, env var removal, webhook deactivation, APScheduler cleanup
+    - Extract all values from actual implemented source code — no placeholders
+    - _Requirements: 66.1, 66.2, 66.3, 66.4, 66.5, 66.6, 66.7, 66.8, 66.9, 66.10, 66.11_
+
+- [ ] 32. End-to-end application testing (e2e-test skill)
+  - Run the comprehensive e2e-test skill (`.claude/skills/e2e-test/SKILL.md`) which launches parallel sub-agents to research the codebase, then uses agent-browser to test every user journey
+  - [ ] 32.1 Phase 1 — Parallel research: application structure & user journeys, database schema & data flows, bug hunting
+  - [ ] 32.2 Phase 2 — Start the application and verify it loads in agent-browser
+  - [ ] 32.3 Phase 3 — Execute all user journey tests with screenshots, database validation, and issue fixing
+    - Agreements tab: KPI cards, charts, status filter tabs, table, row navigation to detail
+    - Agreement Detail: info section, jobs timeline, compliance log, action buttons per status
+    - Operational queues: renewal pipeline approve/reject, failed payments resume/cancel, unscheduled visits, onboarding incomplete
+    - Dashboard: subscription widgets (Active Agreements, MRR, Renewal Pipeline, Failed Payments) and lead widgets (Awaiting Contact, Follow-Up Queue, Leads by Source)
+    - Jobs tab: subscription source badge, target date columns, filters
+    - Leads tab: source badges, source filter, intake tag badges, quick-filter tabs, follow-up queue panel, consent indicators
+    - Work Requests tab: promoted-to-lead badges
+  - [ ] 32.4 Phase 4 — Responsive testing across viewports (mobile 375×812, tablet 768×1024, desktop 1440×900)
+  - [ ] 32.5 Phase 5 — Cleanup and generate e2e test report
+
+## Notes
+
+- All tasks are mandatory — none are optional
+- Each task references specific requirements for traceability
+- Checkpoints ensure incremental validation at key milestones
+- Property tests validate universal correctness properties from the design document (23 properties total)
+- Unit tests validate specific examples and edge cases
+- Backend uses Python/FastAPI/SQLAlchemy with structured logging (LoggerMixin)
+- Frontend uses React 19/TypeScript with TanStack Query v5 and Recharts
+- All code must pass quality gates: Ruff, MyPy, Pyright, pytest (backend); ESLint, tsc, Vitest (frontend)

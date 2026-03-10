@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Service Agreement Confirmation</title></head>
+<body>
+<h1>Service Agreement Confirmation</h1>
+<p>Dear {{ customer_name }},</p>
+<p>This confirms your {{ tier_name }} service agreement with {{ business_name }}. Per Minnesota Statute 325G.56–325G.62, please review the following terms:</p>
+<h2>Auto-Renewal Terms</h2>
+<ol>
+  <li><strong>Continuation:</strong> Your service continues automatically until you terminate it.</li>
+  <li><strong>Cancellation Policy:</strong> You may cancel at any time via the <a href="{{ portal_url }}">Stripe Customer Portal</a>, by calling {{ business_phone }}, or by emailing {{ business_email }}.</li>
+  <li><strong>Recurring Charge:</strong> ${{ annual_price }} billed {{ billing_frequency }}.</li>
+  <li><strong>Renewal Term:</strong> Your agreement renews for successive one-year terms{% if renewal_date %} (next renewal: {{ renewal_date }}){% endif %}.</li>
+  <li><strong>Minimum Purchase:</strong> No minimum purchase obligations beyond the subscription price.</li>
+</ol>
+<h2>Included Services</h2>
+<ul>
+{% for svc in included_services %}
+  <li>{{ svc.get('service_type', svc) if svc is mapping else svc }}</li>
+{% endfor %}
+</ul>
+<p>Manage your subscription: <a href="{{ portal_url }}">Stripe Customer Portal</a></p>
+<p>Questions? Contact us at {{ business_phone }} or {{ business_email }}.</p>
+<p>— {{ business_name }}</p>
+</body>
+</html>

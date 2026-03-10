@@ -20,6 +20,7 @@ const mockJobs: Job[] = [
     customer_id: '123e4567-e89b-12d3-a456-426614174001',
     property_id: null,
     service_offering_id: null,
+    service_agreement_id: null,
     job_type: 'spring_startup',
     category: 'ready_to_schedule',
     status: 'requested',
@@ -35,6 +36,8 @@ const mockJobs: Job[] = [
     source: 'website',
     source_details: null,
     payment_collected_on_site: false,
+    target_start_date: null,
+    target_end_date: null,
     requested_at: '2025-01-20T10:00:00Z',
     approved_at: null,
     scheduled_at: null,
@@ -49,6 +52,7 @@ const mockJobs: Job[] = [
     customer_id: '123e4567-e89b-12d3-a456-426614174003',
     property_id: null,
     service_offering_id: null,
+    service_agreement_id: null,
     job_type: 'repair',
     category: 'requires_estimate',
     status: 'in_progress',
@@ -64,6 +68,8 @@ const mockJobs: Job[] = [
     source: 'phone',
     source_details: null,
     payment_collected_on_site: false,
+    target_start_date: null,
+    target_end_date: null,
     requested_at: '2025-01-19T14:00:00Z',
     approved_at: '2025-01-19T15:00:00Z',
     scheduled_at: '2025-01-20T09:00:00Z',
@@ -74,6 +80,39 @@ const mockJobs: Job[] = [
     updated_at: '2025-01-20T09:30:00Z',
   },
 ];
+
+const mockSubscriptionJob: Job = {
+  id: '123e4567-e89b-12d3-a456-426614174010',
+  customer_id: '123e4567-e89b-12d3-a456-426614174001',
+  property_id: null,
+  service_offering_id: null,
+  service_agreement_id: 'agr-001',
+  job_type: 'spring_startup',
+  category: 'ready_to_schedule',
+  status: 'approved',
+  description: 'Subscription spring startup',
+  estimated_duration_minutes: 60,
+  priority_level: 0,
+  weather_sensitive: false,
+  staffing_required: 1,
+  equipment_required: null,
+  materials_required: null,
+  quoted_amount: null,
+  final_amount: null,
+  source: 'website',
+  source_details: null,
+  payment_collected_on_site: false,
+  target_start_date: '2025-04-01',
+  target_end_date: '2025-04-30',
+  requested_at: '2025-01-20T10:00:00Z',
+  approved_at: '2025-01-20T10:00:00Z',
+  scheduled_at: null,
+  started_at: null,
+  completed_at: null,
+  closed_at: null,
+  created_at: '2025-01-20T10:00:00Z',
+  updated_at: '2025-01-20T10:00:00Z',
+};
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -301,5 +340,117 @@ describe('JobList', () => {
     await user.click(screen.getByText('Delete'));
 
     expect(onDelete).toHaveBeenCalledWith(mockJobs[0]);
+  });
+
+  describe('Subscription extensions', () => {
+    it('displays subscription source badge for jobs with service_agreement_id', async () => {
+      vi.mocked(jobApi.list).mockResolvedValue({
+        items: [mockSubscriptionJob],
+        total: 1,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<JobList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId(`subscription-badge-${mockSubscriptionJob.id}`)).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Sub')).toBeInTheDocument();
+    });
+
+    it('does not display subscription badge for standalone jobs', async () => {
+      vi.mocked(jobApi.list).mockResolvedValue({
+        items: mockJobs,
+        total: 2,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<JobList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('job-table')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId(`subscription-badge-${mockJobs[0].id}`)).not.toBeInTheDocument();
+      expect(screen.queryByTestId(`subscription-badge-${mockJobs[1].id}`)).not.toBeInTheDocument();
+    });
+
+    it('renders target date columns for jobs with target dates', async () => {
+      vi.mocked(jobApi.list).mockResolvedValue({
+        items: [mockSubscriptionJob],
+        total: 1,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<JobList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId(`target-dates-${mockSubscriptionJob.id}`)).toBeInTheDocument();
+      });
+
+      // Should show a date range with a separator
+      const targetDatesEl = screen.getByTestId(`target-dates-${mockSubscriptionJob.id}`);
+      expect(targetDatesEl.textContent).toContain('–');
+    });
+
+    it('renders dash for jobs without target dates', async () => {
+      vi.mocked(jobApi.list).mockResolvedValue({
+        items: mockJobs,
+        total: 2,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<JobList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('job-table')).toBeInTheDocument();
+      });
+
+      // Jobs without target dates should not have target-dates testid
+      expect(screen.queryByTestId(`target-dates-${mockJobs[0].id}`)).not.toBeInTheDocument();
+    });
+
+    it('renders source type filter dropdown', async () => {
+      vi.mocked(jobApi.list).mockResolvedValue({
+        items: mockJobs,
+        total: 2,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<JobList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('source-type-filter')).toBeInTheDocument();
+      });
+    });
+
+    it('renders target date filter button', async () => {
+      vi.mocked(jobApi.list).mockResolvedValue({
+        items: mockJobs,
+        total: 2,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<JobList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('target-date-filter')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Target dates')).toBeInTheDocument();
+    });
   });
 });

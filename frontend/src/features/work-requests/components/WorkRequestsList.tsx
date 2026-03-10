@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   flexRender,
   getCoreRowModel,
@@ -7,7 +7,7 @@ import {
   type ColumnDef,
 } from '@tanstack/react-table';
 import axios from 'axios';
-import { Phone, Mail, Inbox, RefreshCw } from 'lucide-react';
+import { Phone, Mail, Inbox, RefreshCw, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -142,6 +142,30 @@ export function WorkRequestsList() {
       cell: ({ row }) => (
         <ProcessingStatusBadge status={row.original.processing_status} />
       ),
+    },
+    {
+      id: 'promoted',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
+          Lead
+        </span>
+      ),
+      cell: ({ row }) => {
+        const wr = row.original;
+        if (!wr.promoted_to_lead_id) return null;
+        return (
+          <Link
+            to={`/leads/${wr.promoted_to_lead_id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 rounded-full bg-green-100 text-green-800 px-2.5 py-0.5 text-xs font-medium hover:bg-green-200 transition-colors"
+            data-testid={`promoted-badge-${wr.id}`}
+            title={wr.promoted_at ? `Promoted ${new Date(wr.promoted_at).toLocaleDateString()}` : 'Promoted to Lead'}
+          >
+            <UserPlus className="h-3 w-3" />
+            Lead
+          </Link>
+        );
+      },
     },
     {
       accessorKey: 'date_work_needed_by',

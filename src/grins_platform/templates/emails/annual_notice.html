@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Annual Notice</title></head>
+<body>
+<h1>Annual Notice — Your Service Agreement</h1>
+<p>Dear {{ customer_name }},</p>
+<p>Per Minnesota Statute 325G.59, this is your annual notice regarding your {{ business_name }} {{ tier_name }} service agreement.</p>
+<h2>Current Terms</h2>
+<ul>
+  <li><strong>Plan:</strong> {{ tier_name }}</li>
+  <li><strong>Annual Price:</strong> ${{ annual_price }}</li>
+  <li><strong>Auto-Renewal:</strong> Your service continues automatically until you terminate it.</li>
+</ul>
+{% if included_services %}
+<h2>Included Services</h2>
+<ul>
+{% for svc in included_services %}
+  <li>{{ svc.get('service_type', svc) if svc is mapping else svc }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+<h2>How to Terminate or Manage Your Subscription</h2>
+<p>You may cancel or manage your subscription at any time:</p>
+<ul>
+  <li><a href="{{ portal_url }}">Stripe Customer Portal</a></li>
+  <li>Phone: {{ business_phone }}</li>
+  <li>Email: {{ business_email }}</li>
+</ul>
+<p>— {{ business_name }}</p>
+</body>
+</html>

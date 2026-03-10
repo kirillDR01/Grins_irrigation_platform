@@ -45,6 +45,8 @@ The platform currently has zero Stripe integration, no service agreement trackin
 - **Lead_Confirmation**: An automated SMS and/or email message sent immediately after a lead is created, confirming receipt of the customer's request. SMS is gated on sms_consent per TCPA requirements
 - **Lead_Service**: The backend service responsible for lead creation, source tracking, intake tagging, follow-up queue queries, and lead-to-customer conversion
 - **Leads_Dashboard**: The frontend Leads tab in the admin dashboard, including the leads table, source filters, intake tag filters, and the Follow-Up Queue section
+- **Email_Service**: The backend component responsible for sending transactional and commercial emails via a third-party provider (e.g., Resend, SendGrid). Transactional emails (confirmations, compliance notices) are sent from a noreply@ address; commercial emails require CAN-SPAM compliance (physical address, unsubscribe link)
+- **MN_Sales_Tax**: Minnesota state sales tax (6.875% base rate plus applicable local taxes) that applies to irrigation services. Collected via Stripe Tax at checkout
 
 ## Requirements
 
@@ -179,7 +181,9 @@ The platform currently has zero Stripe integration, no service agreement trackin
 
 1. WHEN a customer.subscription.updated event is received, THE Agreement_Service SHALL update the ServiceAgreement's stripe_subscription_id and any changed subscription metadata fields
 2. WHEN a customer.subscription.updated event indicates the subscription status has changed (e.g., from past_due to active after a successful retry), THE Agreement_Service SHALL transition the ServiceAgreement status accordingly and log the change in AgreementStatusLog with the Stripe event ID in metadata
-3. THE Webhook_Handler SHALL treat customer.subscription.updated as idempotent — if the local ServiceAgreement already reflects the updated state, no changes SHALL be made
+3. WHEN a customer.subscription.updated event indicates the customer updated their payment method via the Stripe Customer Portal and a previously failed payment succeeds, THE Agreement_Service SHALL transition the ServiceAgreement from PAUSED to ACTIVE, set payment_status to CURRENT, clear pause_reason, and resume normal job generation
+4. WHEN a customer.subscription.updated event indicates the subscription's cancel_at_period_end flag has changed, THE Agreement_Service SHALL update the ServiceAgreement's auto_renew field accordingly (cancel_at_period_end=true maps to auto_renew=false, and vice versa)
+5. THE Webhook_Handler SHALL treat customer.subscription.updated as idempotent — if the local ServiceAgreement already reflects the updated state, no changes SHALL be made
 
 ### Requirement 13: Invoice Upcoming Handler
 
@@ -396,7 +400,7 @@ The platform currently has zero Stripe integration, no service agreement trackin
 1. THE Platform SHALL expose a POST /api/v1/checkout/create-session endpoint (public, rate-limited to 5 requests per IP per minute) that accepts: package_tier, package_type, consent_token (UUID), and utm_params (optional object with source, medium, campaign)
 2. THE create-session endpoint SHALL look up the ServiceAgreementTier by package_tier and package_type, validate it exists and is_active, and use its stripe_price_id to create the Stripe Checkout Session
 3. THE create-session endpoint SHALL validate that the consent_token matches a recent Disclosure_Record (created within the last 2 hours) before creating the Checkout Session
-4. THE create-session endpoint SHALL create a Stripe Checkout Session in subscription mode with: the tier's stripe_price_id, phone_number_collection enabled, billing_address_collection required, consent_collection with terms_of_service required, and custom_text acknowledging the auto-renewing subscription
+4. THE create-session endpoint SHALL create a Stripe Checkout Session in subscription mode with: the tier's stripe_price_id, phone_number_collection enabled, billing_address_collection required, consent_collection with terms_of_service required, automatic_tax enabled (to collect MN state and local sales tax via Stripe Tax), and custom_text acknowledging the auto-renewing subscription
 5. THE create-session endpoint SHALL embed the consent_token, package_tier, and package_type in both the session metadata and subscription_data.metadata, and embed utm_source, utm_medium, and utm_campaign in the session metadata
 6. THE create-session endpoint SHALL set the success_url to the landing page with a session_id parameter (`?session_id={CHECKOUT_SESSION_ID}`) and the cancel_url to the service packages page
 7. THE create-session endpoint SHALL return the Stripe Checkout Session URL for client-side redirect
@@ -487,6 +491,47 @@ The platform currently has zero Stripe integration, no service agreement trackin
 3. THE Agreement_Detail_View SHALL display a compliance status summary indicating whether all required disclosures are up to date: PRE_SALE recorded (yes/no), CONFIRMATION sent (yes/no), last RENEWAL_NOTICE date, last ANNUAL_NOTICE date
 4. WHEN a required disclosure is missing or overdue (e.g., no ANNUAL_NOTICE in the current calendar year for an ACTIVE agreement), THE Agreement_Detail_View SHALL display a warning indicator on the compliance status summary
 
+### Requirement 39A: Stripe Tax and MN Sales Tax Configuration
+
+**User Story:** As an Admin, I want the platform to collect Minnesota state and local sales tax on service package purchases via Stripe Tax, so that the business complies with MN tax obligations on taxable irrigation services.
+
+#### Acceptance Criteria
+
+1. THE Platform SHALL document that Stripe Tax must be enabled in the Stripe Dashboard (Settings → Tax) with the business origin address set to the company's physical address in Minnesota
+2. THE Platform SHALL document that a Minnesota tax registration must be added to the Stripe Tax configuration with the business's MN Tax ID (obtained from the Minnesota Department of Revenue)
+3. THE Platform SHALL document that the tax behavior on all Stripe Prices must be set to "exclusive" (tax added on top of the listed price), so that the displayed tier prices ($170, $250, $700, $225, $375, $850) remain the base price and tax is calculated and added at checkout
+4. THE Platform SHALL configure the Checkout Session creation (Requirement 31) with `automatic_tax: { enabled: true }` so that Stripe Tax calculates and collects the applicable MN state tax (6.875%) plus any local taxes based on the customer's billing address
+5. THE Platform SHALL document that the landing page pricing cards should display "+ applicable tax" alongside the annual price to set customer expectations before checkout
+6. THE Platform SHALL read an optional STRIPE_TAX_ENABLED environment variable (boolean, default true) to allow disabling automatic tax collection in test environments where Stripe Tax is not configured
+
+### Requirement 39B: Email Service for Compliance Notification Delivery
+
+**User Story:** As an Admin, I want the platform to send compliance-required emails to customers at key lifecycle events (purchase confirmation, renewal notice, annual notice, cancellation confirmation), so that the business actually delivers the notifications that MN Stat. 325G.56–325G.62 requires and the disclosure records accurately reflect sent communications.
+
+#### Acceptance Criteria
+
+1. THE Platform SHALL integrate an email sending service (e.g., Resend, SendGrid) as a backend dependency, configured via an EMAIL_API_KEY environment variable
+2. THE Platform SHALL configure a transactional email sender address (e.g., noreply@grinsirrigation.com) for compliance and operational emails, and document that SPF, DKIM, and DMARC DNS records must be configured for the sending domain
+3. THE Email_Service SHALL send a CONFIRMATION email immediately after a checkout.session.completed event is processed, containing all 5 MN-required auto-renewal terms: (a) the service continues until the consumer terminates it, (b) the cancellation policy with Stripe Customer Portal link, phone number (952) 818-1020, and email info@grinsirrigation.com, (c) the recurring charge amount and billing frequency, (d) the renewal term length, and (e) any minimum purchase obligations
+4. THE Email_Service SHALL send a RENEWAL_NOTICE email when an invoice.upcoming event transitions an agreement to PENDING_RENEWAL, containing: the renewal date, renewal price, cancellation instructions (Stripe Customer Portal link, phone, email), and a summary of services provided during the current term (completed job names and dates)
+5. THE Email_Service SHALL send an ANNUAL_NOTICE email when the send_annual_notices background job identifies ACTIVE agreements needing annual notices, containing: the current terms of the service and instructions on how to terminate or manage the subscription via the Stripe Customer Portal
+6. THE Email_Service SHALL send a CANCELLATION_CONF email when a customer.subscription.deleted event is processed, containing: the cancellation effective date, the reason (if provided), confirmation that remaining scheduled visits will be honored, and the prorated refund amount (if applicable)
+7. WHEN the Email_Service sends a compliance email, THE Compliance_Service SHALL create the corresponding Disclosure_Record with sent_via set to "email", recipient_email set to the customer's email, and delivery_confirmed updated based on the email provider's delivery status callback
+8. IF the EMAIL_API_KEY environment variable is missing at startup, THEN THE Platform SHALL log a warning indicating that email delivery is not configured, and compliance disclosure records SHALL still be created with sent_via set to "pending" and delivery_confirmed set to false
+9. THE Email_Service SHALL use Jinja2 HTML email templates stored in the backend codebase, with each compliance email template including the Grins Irrigation business name, contact information, and Stripe Customer Portal link
+10. THE Email_Service SHALL log every email send attempt using structured logging with the recipient email (masked), email type, disclosure_type, and delivery status following the `{domain}.{component}.{action}_{state}` pattern (e.g., `email.compliance.renewal_notice_sent`)
+
+### Requirement 39C: Welcome Email on Purchase
+
+**User Story:** As an Admin, I want the system to send a welcome email immediately after a customer purchases a service package, so that the customer receives a written confirmation of their subscription with all relevant details and next steps.
+
+#### Acceptance Criteria
+
+1. WHEN a checkout.session.completed event is processed and a ServiceAgreement is created, THE Email_Service SHALL send a welcome email to the customer's email address with subject line "Welcome to Grins Irrigation [tier_name] Plan!"
+2. THE welcome email SHALL include: the subscription tier name and package type, the annual price, the start date, a list of included services from the tier's included_services definition, a link to the Stripe Customer Portal for managing billing, a link to the post-purchase onboarding form (with session_id) for providing property details, and contact information (phone and email)
+3. THE welcome email SHALL be distinct from the MN compliance CONFIRMATION email (Requirement 39B AC3) — the welcome email is a customer-friendly overview while the CONFIRMATION email contains the legally required auto-renewal terms. Both SHALL be sent, either as two separate emails or as a single combined email that includes all MN-required terms alongside the welcome content
+4. IF the customer's email address is not available from the Stripe session, THE Email_Service SHALL skip the welcome email and log a warning using structured logging
+
 
 ### Requirement 40: Backend Testing
 
@@ -494,8 +539,8 @@ The platform currently has zero Stripe integration, no service agreement trackin
 
 #### Acceptance Criteria
 
-1. THE Platform SHALL include unit tests (`@pytest.mark.unit`) with mocked dependencies for: Agreement_Service (all status transitions, renewal approval/rejection, tier change rejection), Webhook_Handler (all 6 event types, signature verification, idempotency), Job_Generator (correct job counts and date ranges per tier), Metrics_Service (MRR, ARPA, renewal rate, churn rate calculations), Compliance_Service (disclosure record creation for each disclosure type), Checkout_Service (session creation, consent_token validation, tier lookup), and Onboarding_Service (session verification, property creation, consent_token linkage)
-2. THE Platform SHALL include functional tests (`@pytest.mark.functional`) with a real database for: full agreement lifecycle (PENDING → ACTIVE → PENDING_RENEWAL → ACTIVE), checkout webhook → customer + agreement + jobs creation pipeline, failed payment escalation (ACTIVE → PAST_DUE → PAUSED → CANCELLED), renewal approval and rejection workflows, and seasonal job generation with correct linking
+1. THE Platform SHALL include unit tests (`@pytest.mark.unit`) with mocked dependencies for: Agreement_Service (all status transitions, renewal approval/rejection, tier change rejection), Webhook_Handler (all 6 event types, signature verification, idempotency), Job_Generator (correct job counts and date ranges per tier), Metrics_Service (MRR, ARPA, renewal rate, churn rate calculations), Compliance_Service (disclosure record creation for each disclosure type), Checkout_Service (session creation, consent_token validation, tier lookup, automatic_tax configuration), Onboarding_Service (session verification, property creation, consent_token linkage), and Email_Service (correct email sent for each compliance event, template rendering, delivery status handling, skip behavior when email is unavailable)
+2. THE Platform SHALL include functional tests (`@pytest.mark.functional`) with a real database for: full agreement lifecycle (PENDING → ACTIVE → PENDING_RENEWAL → ACTIVE), checkout webhook → customer + agreement + jobs creation pipeline, failed payment escalation (ACTIVE → PAST_DUE → PAUSED → CANCELLED), renewal approval and rejection workflows, seasonal job generation with correct linking, Portal payment recovery (PAUSED → ACTIVE via subscription.updated), and compliance email dispatch pipeline (checkout → welcome email + confirmation email, renewal → renewal notice email, cancellation → cancellation confirmation email)
 3. THE Platform SHALL include integration tests (`@pytest.mark.integration`) for: Stripe webhook endpoint receiving simulated Stripe payloads with signature verification, agreement CRUD API endpoints with filtering and pagination, metrics API returning correct computed values, and dashboard summary extension including agreement data
 4. THE Platform SHALL include property-based tests (Hypothesis) for: job generation logic (given any valid tier, the correct number of jobs with valid non-overlapping date ranges are produced), agreement number generation (format AGR-YYYY-NNN is always valid and sequential), status transition validation (only valid transitions succeed, all invalid transitions are rejected), and MRR calculation (sum of annual_price / 12 for any set of active agreements equals the reported MRR)
 5. ALL backend tests SHALL pass with zero failures before the feature is considered complete
@@ -773,7 +818,7 @@ The platform currently has zero Stripe integration, no service agreement trackin
 
 1. WHEN the backend is deployed to Railway, THE Platform SHALL verify via CLI that all Alembic migrations have run successfully and the database schema matches the expected state (all new tables: service_agreement_tiers, service_agreements, agreement_status_logs, stripe_webhook_events, disclosure_records, sms_consent_records exist with correct columns)
 2. WHEN the backend is deployed to Railway, THE Platform SHALL verify via CLI that the 6 ServiceAgreementTier seed records are present in the database with correct names, prices, and included_services definitions
-3. WHEN the backend is deployed to Railway, THE Platform SHALL verify via CLI that all required environment variables are configured: DATABASE_URL, REDIS_URL, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PUBLISHABLE_KEY, and any feature-specific variables (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, SENDGRID_API_KEY where applicable)
+3. WHEN the backend is deployed to Railway, THE Platform SHALL verify via CLI that all required environment variables are configured: DATABASE_URL, REDIS_URL, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PUBLISHABLE_KEY, EMAIL_API_KEY, and any feature-specific variables (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN where applicable)
 4. WHEN the backend is deployed to Railway, THE Platform SHALL verify via CLI that the /api/v1/health endpoint returns HTTP 200 with database and Redis connectivity confirmed
 5. WHEN the frontend is deployed to Vercel, THE Platform SHALL verify via CLI that the deployment status is "Ready" and the production URL is accessible
 6. WHEN the frontend is deployed to Vercel, THE Platform SHALL verify via CLI that all required environment variables are configured: VITE_API_BASE_URL (pointing to the Railway backend URL), VITE_STRIPE_PUBLISHABLE_KEY, and any feature-specific frontend variables
@@ -794,10 +839,65 @@ The platform currently has zero Stripe integration, no service agreement trackin
 2. THE deployment instructions document SHALL include a "Database Changes" section listing every new SQLAlchemy model table name, every Alembic migration file name (extracted from `src/grins_platform/migrations/versions/`), the execution order of migrations, and any seed data commands required (including the 6 ServiceAgreementTier seed records)
 3. THE deployment instructions document SHALL include an "Environment Variables" section listing every new environment variable required on Railway (backend) and Vercel (frontend), with the variable name, description, example value, and whether the variable is required or optional
 4. THE deployment instructions document SHALL include a "New Dependencies" section listing every Python package added to `pyproject.toml` and every npm package added to `frontend/package.json` during this feature, with version constraints
-5. THE deployment instructions document SHALL include a "Stripe Configuration" section documenting: webhook endpoint URL and events to subscribe to, Stripe product and price creation steps for the 6 ServiceAgreementTier records, customer portal configuration for click-to-cancel compliance, and the `invoice.upcoming` webhook timing configuration (30 days before renewal)
-6. THE deployment instructions document SHALL include an "Infrastructure Changes" section documenting APScheduler setup with PostgreSQL job store, all registered background jobs (escalate_failed_payments, check_upcoming_renewals, send_annual_notices, cleanup_orphaned_consent_records) with their schedules, and any Redis configuration changes
+5. THE deployment instructions document SHALL include a "Stripe Configuration" section documenting: webhook endpoint URL and events to subscribe to, Stripe product and price creation steps for the 6 ServiceAgreementTier records, customer portal configuration for click-to-cancel compliance, the `invoice.upcoming` webhook timing configuration (30 days before renewal), and Stripe Tax configuration (enable Stripe Tax, add MN tax registration with MN Tax ID, set tax behavior to "exclusive" on all Prices)
+6. THE deployment instructions document SHALL include an "Infrastructure Changes" section documenting APScheduler setup with PostgreSQL job store, all registered background jobs (escalate_failed_payments, check_upcoming_renewals, send_annual_notices, cleanup_orphaned_consent_records) with their schedules, email service configuration (API key, sending domain, SPF/DKIM/DMARC DNS records), and any Redis configuration changes
 7. THE deployment instructions document SHALL include a "Deployment Order" section specifying the required sequence of deployment steps (backend migrations first, seed data, backend deploy, frontend deploy) with explicit instructions for each step
 8. THE deployment instructions document SHALL include a "Post-Deployment Verification" section referencing Requirement 65's acceptance criteria and providing the specific CLI commands and agent-browser scripts to execute each verification check
 9. THE deployment instructions document SHALL include a "Rollback Instructions" section documenting how to revert each deployment step: Alembic downgrade commands for each migration in reverse order, environment variable removal list, Stripe webhook deactivation steps, APScheduler job removal, and frontend redeployment to the previous version
 10. THE deployment instructions document SHALL extract all table names, migration file names, environment variable names, dependency versions, and Stripe event types from the actual implemented source code rather than using placeholder values
 11. IF the deployment instructions document references a migration, table, environment variable, or dependency that does not exist in the implemented code, THEN THE document generation process SHALL flag the discrepancy as a warning in the document
+
+### Requirement 67: CAN-SPAM Email Compliance Infrastructure
+
+**User Story:** As an Admin, I want the email service to enforce CAN-SPAM compliance for any commercial or marketing emails, so that the business avoids penalties (up to $53,088 per violating email) and maintains customer trust when sending promotional content alongside transactional compliance emails.
+
+#### Acceptance Criteria
+
+1. THE Email_Service SHALL classify every outbound email as either TRANSACTIONAL (appointment confirmations, invoices, receipts, subscription confirmations, renewal notices without promotional content, onboarding reminders, failed payment notices) or COMMERCIAL (seasonal reminders, promotional offers, review requests, renewal notices with upsell content, newsletters), and apply CAN-SPAM requirements only to COMMERCIAL emails
+2. THE Email_Service SHALL use separate sender identities for transactional emails (noreply@grinsirrigation.com) and commercial emails (info@grinsirrigation.com or marketing@grinsirrigation.com) to protect transactional email deliverability from commercial opt-out issues
+3. THE Email_Service SHALL inject the following into every COMMERCIAL email template: the company physical postal address (configurable via COMPANY_PHYSICAL_ADDRESS environment variable), a working unsubscribe link (single-click, no login required, functional for at least 30 days after send), identification as an advertisement/promotional email, and accurate "From" header identifying Grin's Irrigation
+4. THE Platform SHALL expose a GET /api/v1/email/unsubscribe endpoint (public, no auth) that accepts a signed token parameter, decodes it to identify the customer, sets customer.email_opt_in to false, records email_opt_out_at timestamp, adds the email to a permanent suppression list, and renders a confirmation page stating "You've been unsubscribed from marketing emails. You'll still receive transactional emails (invoices, appointment confirmations)."
+5. THE Email_Service SHALL check the suppression list and customer.email_opt_in status before sending any COMMERCIAL email, and skip sending with a structured log entry if the recipient is suppressed or opted out
+6. THE Email_Service SHALL generate signed, time-limited unsubscribe tokens via a generate_unsubscribe_token(customer_id, email) method, with tokens remaining valid for at least 30 days per CAN-SPAM requirements
+7. THE Platform SHALL store email suppression list entries permanently (no expiration) — once a customer unsubscribes from commercial emails, their email address SHALL never receive commercial emails again unless they explicitly re-subscribe
+8. THE Platform SHALL honor email opt-out requests within 10 business days of receipt, with a target of same-day automatic processing
+9. THE Platform SHALL retain email consent records (opt-in date, method, source), campaign archives (copy of each email sent), and send logs (recipient, date, subject, email type) for a minimum of 5 years, and email suppression/opt-out lists permanently
+10. IF the COMPANY_PHYSICAL_ADDRESS environment variable is not configured, THEN THE Email_Service SHALL refuse to send COMMERCIAL emails and log a critical warning indicating that CAN-SPAM compliance cannot be met without a physical address
+
+### Requirement 68: Customer Email Consent Tracking — Model Extensions
+
+**User Story:** As an Admin, I want customer records to track email marketing consent status with timestamps and audit trail, so that the system can enforce CAN-SPAM opt-out requirements and provide defensible proof of consent status.
+
+#### Acceptance Criteria
+
+1. THE Platform SHALL add the following fields to the Customer model: email_opt_in_at (TIMESTAMP, nullable — when email marketing consent was given), email_opt_out_at (TIMESTAMP, nullable — when the customer unsubscribed from marketing emails), and email_opt_in_source (VARCHAR(50), nullable — "web_form", "lead_form", "stripe_checkout", "verbal", "import")
+2. WHEN a Customer record is created from a checkout.session.completed webhook, THE Webhook_Handler SHALL set email_opt_in to true, email_opt_in_at to the current timestamp, and email_opt_in_source to "stripe_checkout" (since completing a purchase implies a service relationship)
+3. WHEN a Lead with an email address converts to a Customer, THE Lead_Service SHALL carry the email consent status to the Customer record and set email_opt_in_at and email_opt_in_source accordingly
+4. THE Platform SHALL apply a database migration that sets email_opt_in_at to NULL and email_opt_out_at to NULL for all existing Customer records (preserving the existing email_opt_in boolean value)
+
+### Requirement 69: ADA / Accessibility Compliance for Purchase Flow
+
+**User Story:** As an Admin, I want all customer-facing pages in the purchase flow (pre-checkout modal, post-purchase onboarding form) to meet WCAG 2.2 Level AA accessibility standards, so that the business minimizes legal risk from ADA web accessibility lawsuits and ensures all customers can complete the purchase process.
+
+#### Acceptance Criteria
+
+1. THE Platform SHALL ensure that the pre-checkout consent modal uses proper semantic HTML: heading hierarchy (h1 > h2 > h3 with no skipped levels), landmark roles (dialog role on the modal), all form inputs associated with visible labels (not placeholder-only), required fields marked with aria-required="true" and a visual indicator, and form validation errors announced via ARIA live regions
+2. THE Platform SHALL ensure that the pre-checkout consent modal is fully keyboard navigable: focus is trapped within the modal while open, the modal can be closed with the Escape key, Tab order follows the visual/logical order, and all interactive elements (checkboxes, buttons, links) have visible focus indicators
+3. THE Platform SHALL ensure that the post-purchase onboarding form meets the same semantic HTML and keyboard navigation standards as the pre-checkout modal (AC1 and AC2)
+4. THE Platform SHALL ensure that all customer-facing pages in the purchase flow meet WCAG 2.2 Level AA color contrast requirements: 4.5:1 minimum contrast ratio for normal text, 3:1 for large text (18px+ or 14px+ bold), and color is never the sole indicator of status or information (icons or text labels accompany color indicators)
+5. THE Platform SHALL ensure that all interactive elements in the purchase flow have minimum touch targets of 44x44 pixels for mobile accessibility
+6. THE Platform SHALL ensure that the "Continue to Checkout" button in the pre-checkout modal uses a descriptive accessible label (e.g., "Continue to Checkout — [tier_name] Plan, $[price]/year") rather than a generic label, and announces its disabled state to screen readers when consent checkboxes are not checked
+7. THE Platform SHALL ensure that the Stripe Customer Portal link included in compliance emails and the agreement detail view opens in a way that is announced to screen readers (e.g., via aria-label indicating "Opens in new tab" or equivalent)
+8. THE Platform SHALL document that before launch, the following accessibility validation steps must be completed: run WAVE accessibility checker on the pre-checkout modal and post-purchase onboarding form, complete a keyboard-only navigation test of the full purchase flow, and test with VoiceOver (macOS) or a comparable screen reader
+9. THE Platform SHALL include agent-browser validation scripts that verify accessibility basics: all form inputs have associated labels (no orphaned inputs), all images have alt attributes, focus is visible on interactive elements, and the modal traps focus correctly
+
+### Requirement 70: Compliance Email Content — No Promotional Mixing
+
+**User Story:** As an Admin, I want the system to enforce strict separation between transactional/compliance emails and promotional content, so that compliance emails (MN auto-renewal notices, TCPA-related confirmations) are never reclassified as commercial emails due to mixed promotional content, which would trigger additional CAN-SPAM requirements and risk deliverability issues.
+
+#### Acceptance Criteria
+
+1. THE Email_Service SHALL enforce that compliance email templates (CONFIRMATION, RENEWAL_NOTICE, ANNUAL_NOTICE, CANCELLATION_CONF) contain zero promotional content — no upsell offers, no discount codes, no "upgrade your plan" calls to action, and no links to promotional landing pages
+2. THE Email_Service SHALL use the transactional sender identity (noreply@grinsirrigation.com) for all compliance emails, never the commercial sender identity
+3. THE Email_Service SHALL NOT include an unsubscribe link in compliance/transactional emails, since these are legally required communications that customers cannot opt out of receiving (though a "Manage your subscription" link to the Stripe Customer Portal is permitted as it facilitates the service relationship)
+4. IF a future requirement requests adding promotional content to a compliance email template, THE Platform SHALL instead send the promotional content as a separate COMMERCIAL email with full CAN-SPAM compliance (unsubscribe link, physical address, ad identification), preserving the transactional classification of the compliance email

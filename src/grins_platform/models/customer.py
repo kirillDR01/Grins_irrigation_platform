@@ -4,14 +4,14 @@ Customer SQLAlchemy model.
 This module defines the Customer model with all fields, relationships,
 and behaviors as specified in the design document.
 
-Validates: Requirement 1.1, 1.6, 1.8
+Validates: Requirement 1.1, 1.6, 1.8, 28.1, 28.3, 68.1, 68.4
 """
 
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, String, func
+from sqlalchemy import Boolean, DateTime, String, Text, func
 from sqlalchemy.dialects.postgresql import (
     JSON,
     UUID as PGUUID,
@@ -103,6 +103,63 @@ class Customer(Base):
     lead_source: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     lead_source_details: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSON,
+        nullable=True,
+    )
+
+    # Stripe Integration (Requirement 28.1, 28.3)
+    stripe_customer_id: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+
+    # Terms Acceptance (Requirement 28.1)
+    terms_accepted: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+    terms_accepted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    terms_version: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
+    # SMS Consent Tracking (Requirement 28.1)
+    sms_opt_in_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    sms_opt_in_source: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+    sms_consent_language_version: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
+    # Service Preferences (Requirement 28.1)
+    preferred_service_times: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    # Staff-only Notes (Requirement 28.1)
+    internal_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Email Opt-in Tracking (Requirement 68.1, 68.4)
+    email_opt_in_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    email_opt_out_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    email_opt_in_source: Mapped[Optional[str]] = mapped_column(
+        String(50),
         nullable=True,
     )
 

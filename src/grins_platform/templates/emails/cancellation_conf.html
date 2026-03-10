@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Cancellation Confirmation</title></head>
+<body>
+<h1>Service Agreement Cancellation Confirmation</h1>
+<p>Dear {{ customer_name }},</p>
+<p>This confirms the cancellation of your {{ business_name }} service agreement.</p>
+<h2>Cancellation Details</h2>
+<ul>
+  <li><strong>Effective Date:</strong> {{ cancellation_date }}</li>
+  {% if cancellation_reason %}<li><strong>Reason:</strong> {{ cancellation_reason }}</li>{% endif %}
+  {% if refund_amount and refund_amount != '0.00' %}<li><strong>Prorated Refund:</strong> ${{ refund_amount }}</li>{% endif %}
+</ul>
+<p>Any remaining scheduled visits will be honored as planned.</p>
+<p>Questions? Contact us at {{ business_phone }} or {{ business_email }}.</p>
+<p>— {{ business_name }}</p>
+</body>
+</html>

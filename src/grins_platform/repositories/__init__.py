@@ -5,6 +5,10 @@ This module provides repository classes for data access operations,
 following the repository pattern for clean separation of concerns.
 """
 
+from grins_platform.repositories.agreement_repository import AgreementRepository
+from grins_platform.repositories.agreement_tier_repository import (
+    AgreementTierRepository,
+)
 from grins_platform.repositories.ai_audit_log_repository import AIAuditLogRepository
 from grins_platform.repositories.ai_usage_repository import AIUsageRepository
 from grins_platform.repositories.appointment_repository import AppointmentRepository
@@ -20,10 +24,15 @@ from grins_platform.repositories.service_offering_repository import (
     ServiceOfferingRepository,
 )
 from grins_platform.repositories.staff_repository import StaffRepository
+from grins_platform.repositories.stripe_webhook_event_repository import (
+    StripeWebhookEventRepository,
+)
 
 __all__ = [
     "AIAuditLogRepository",
     "AIUsageRepository",
+    "AgreementRepository",
+    "AgreementTierRepository",
     "AppointmentRepository",
     "CustomerRepository",
     "InvoiceRepository",
@@ -33,4 +42,5 @@ __all__ = [
     "SentMessageRepository",
     "ServiceOfferingRepository",
     "StaffRepository",
+    "StripeWebhookEventRepository",
 ]

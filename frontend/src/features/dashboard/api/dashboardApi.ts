@@ -6,11 +6,13 @@
 import { apiClient } from '@/core/api/client';
 import type {
   DashboardMetrics,
+  DashboardSummaryExtension,
   RequestVolumeMetrics,
   ScheduleOverview,
   PaymentStatusOverview,
   JobsByStatusResponse,
   TodayScheduleResponse,
+  LeadMetricsBySourceResponse,
 } from '../types';
 
 const BASE_PATH = '/dashboard';
@@ -22,6 +24,16 @@ export const dashboardApi = {
   getMetrics: async (): Promise<DashboardMetrics> => {
     const response = await apiClient.get<DashboardMetrics>(
       `${BASE_PATH}/metrics`
+    );
+    return response.data;
+  },
+
+  /**
+   * Get extended dashboard summary with agreement and lead metrics.
+   */
+  getSummary: async (): Promise<DashboardSummaryExtension> => {
+    const response = await apiClient.get<DashboardSummaryExtension>(
+      `${BASE_PATH}/summary`
     );
     return response.data;
   },
@@ -77,6 +89,16 @@ export const dashboardApi = {
   getTodaySchedule: async (): Promise<TodayScheduleResponse> => {
     const response = await apiClient.get<TodayScheduleResponse>(
       `${BASE_PATH}/today-schedule`
+    );
+    return response.data;
+  },
+
+  /**
+   * Get lead metrics grouped by source (trailing 30 days by default).
+   */
+  getLeadMetricsBySource: async (): Promise<LeadMetricsBySourceResponse> => {
+    const response = await apiClient.get<LeadMetricsBySourceResponse>(
+      '/leads/metrics/by-source'
     );
     return response.data;
   },

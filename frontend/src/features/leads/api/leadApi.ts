@@ -6,6 +6,10 @@ import type {
   LeadConversionRequest,
   LeadConversionResponse,
   PaginatedLeadResponse,
+  PaginatedFollowUpResponse,
+  FromCallRequest,
+  LeadMetricsBySourceResponse,
+  LeadMetricsBySourceParams,
 } from '../types';
 
 const BASE_PATH = '/leads';
@@ -25,7 +29,7 @@ export const leadApi = {
     return response.data;
   },
 
-  // Update lead (status, assignment, notes)
+  // Update lead (status, assignment, notes, intake_tag)
   update: async (id: string, data: LeadUpdate): Promise<Lead> => {
     const response = await apiClient.patch<Lead>(`${BASE_PATH}/${id}`, data);
     return response.data;
@@ -43,5 +47,28 @@ export const leadApi = {
   // Delete lead
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`${BASE_PATH}/${id}`);
+  },
+
+  // Follow-up queue
+  followUpQueue: async (): Promise<PaginatedFollowUpResponse> => {
+    const response = await apiClient.get<PaginatedFollowUpResponse>(
+      `${BASE_PATH}/follow-up-queue`
+    );
+    return response.data;
+  },
+
+  // Create lead from phone call (admin-only)
+  createFromCall: async (data: FromCallRequest): Promise<Lead> => {
+    const response = await apiClient.post<Lead>(`${BASE_PATH}/from-call`, data);
+    return response.data;
+  },
+
+  // Get lead metrics grouped by source
+  metricsBySource: async (params?: LeadMetricsBySourceParams): Promise<LeadMetricsBySourceResponse> => {
+    const response = await apiClient.get<LeadMetricsBySourceResponse>(
+      `${BASE_PATH}/metrics/by-source`,
+      { params }
+    );
+    return response.data;
   },
 };

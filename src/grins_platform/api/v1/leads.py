@@ -34,18 +34,24 @@ from grins_platform.repositories.service_offering_repository import (
 )
 from grins_platform.repositories.staff_repository import StaffRepository
 from grins_platform.schemas.lead import (
+    FromCallSubmission,
     LeadConversionRequest,
     LeadConversionResponse,
     LeadListParams,
+    LeadMetricsBySourceResponse,
     LeadResponse,
     LeadSubmission,
     LeadSubmissionResponse,
     LeadUpdate,
+    PaginatedFollowUpQueueResponse,
     PaginatedLeadResponse,
 )
+from grins_platform.services.compliance_service import ComplianceService
 from grins_platform.services.customer_service import CustomerService
+from grins_platform.services.email_service import EmailService
 from grins_platform.services.job_service import JobService
 from grins_platform.services.lead_service import LeadService
+from grins_platform.services.sms_service import SMSService
 
 router = APIRouter()
 
@@ -90,6 +96,9 @@ async def _get_lead_service(
         customer_service=customer_service,
         job_service=job_service,
         staff_repository=staff_repository,
+        sms_service=SMSService(session=session),
+        email_service=EmailService(),
+        compliance_service=ComplianceService(session=session),
     )
 
 
@@ -127,6 +136,35 @@ async def submit_lead(
 
 
 # =============================================================================
+# POST /api/v1/leads/from-call — Admin auth required
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/from-call",
+    response_model=LeadResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create lead from phone call",
+    description="Admin-only endpoint for creating leads from inbound calls.",
+)
+async def create_from_call(
+    data: FromCallSubmission,
+    _current_user: CurrentActiveUser,
+    service: Annotated[LeadService, Depends(_get_lead_service)],
+) -> LeadResponse:
+    """Create a lead from an inbound phone call.
+
+    Validates: Requirement 45.4, 45.5
+    """
+    _endpoints.log_started("create_from_call")
+
+    result = await service.create_from_call(data)
+
+    _endpoints.log_completed("create_from_call", lead_id=str(result.id))
+    return result
+
+
+# =============================================================================
 # GET /api/v1/leads — Admin auth required
 # =============================================================================
 
@@ -149,14 +187,27 @@ async def list_leads(
     search: str | None = Query(default=None),
     date_from: str | None = Query(default=None),
     date_to: str | None = Query(default=None),
+    lead_source: str | None = Query(
+        default=None,
+        description="Comma-separated lead sources",
+    ),
+    intake_tag: str | None = Query(
+        default=None,
+        description="Intake tag filter",
+    ),
     sort_by: str = Query(default="created_at"),
     sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
 ) -> PaginatedLeadResponse:
     """List leads with filtering and pagination.
 
-    Validates: Requirement 5.1-5.5
+    Validates: Requirement 5.1-5.5, 45.3, 48.4
     """
     _endpoints.log_started("list_leads", page=page, page_size=page_size)
+
+    # Parse comma-separated lead_source into list
+    lead_source_list: list[str] | None = None
+    if lead_source:
+        lead_source_list = [s.strip() for s in lead_source.split(",") if s.strip()]
 
     params = LeadListParams(
         page=page,
@@ -166,6 +217,8 @@ async def list_leads(
         search=search,
         date_from=datetime.fromisoformat(date_from) if date_from else None,
         date_to=datetime.fromisoformat(date_to) if date_to else None,
+        lead_source=lead_source_list,
+        intake_tag=intake_tag,
         sort_by=sort_by,
         sort_order=sort_order,
     )
@@ -173,6 +226,79 @@ async def list_leads(
     result = await service.list_leads(params)
 
     _endpoints.log_completed("list_leads", total=result.total)
+    return result
+
+
+# =============================================================================
+# GET /api/v1/leads/follow-up-queue — Admin auth required
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/follow-up-queue",
+    response_model=PaginatedFollowUpQueueResponse,
+    summary="Get follow-up queue",
+    description=(
+        "Paginated queue of leads tagged for follow-up with active status. "
+        "Admin auth required."
+    ),
+)
+async def get_follow_up_queue(
+    _current_user: CurrentActiveUser,
+    service: Annotated[LeadService, Depends(_get_lead_service)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+) -> PaginatedFollowUpQueueResponse:
+    """Get follow-up queue.
+
+    Validates: Requirement 50.1, 50.2, 50.3, 50.4
+    """
+    _endpoints.log_started("get_follow_up_queue", page=page, page_size=page_size)
+
+    result = await service.get_follow_up_queue(page=page, page_size=page_size)
+
+    _endpoints.log_completed("get_follow_up_queue", total=result.total)
+    return result
+
+
+# =============================================================================
+# GET /api/v1/leads/metrics/by-source — Admin auth required
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/metrics/by-source",
+    response_model=LeadMetricsBySourceResponse,
+    summary="Get lead metrics by source",
+    description=(
+        "Returns lead counts grouped by lead_source for a configurable date range. "
+        "Defaults to trailing 30 days. Admin auth required."
+    ),
+)
+async def get_lead_metrics_by_source(
+    _current_user: CurrentActiveUser,
+    service: Annotated[LeadService, Depends(_get_lead_service)],
+    date_from: datetime | None = Query(
+        default=None,
+        description="Start date (ISO 8601)",
+    ),
+    date_to: datetime | None = Query(
+        default=None,
+        description="End date (ISO 8601)",
+    ),
+) -> LeadMetricsBySourceResponse:
+    """Get lead metrics grouped by source.
+
+    Validates: Requirement 61.3
+    """
+    _endpoints.log_started("get_lead_metrics_by_source")
+
+    result = await service.get_metrics_by_source(
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+    _endpoints.log_completed("get_lead_metrics_by_source", total=result.total)
     return result
 
 

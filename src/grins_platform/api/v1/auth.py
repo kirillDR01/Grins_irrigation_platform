@@ -8,7 +8,10 @@ Validates: Requirements 14.1-14.8, 16.8, 18.1-18.8
 """
 
 import os
-from typing import Annotated
+from typing import (
+    Annotated,
+    Literal as _Lit,
+)
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 
@@ -46,7 +49,7 @@ _IS_LOCAL = _ENV == "development" and not os.getenv("RAILWAY_ENVIRONMENT")
 COOKIE_SECURE = not _IS_LOCAL
 # Cross-origin deployments (e.g. Vercel frontend + Railway backend) require
 # SameSite=None so cookies are sent on cross-origin requests. Locally, "lax" is fine.
-COOKIE_SAMESITE: str = "lax" if _IS_LOCAL else "none"
+COOKIE_SAMESITE: _Lit["lax", "strict", "none"] = "lax" if _IS_LOCAL else "none"
 
 
 def _create_user_response(staff: Staff, auth_service: AuthService) -> UserResponse:

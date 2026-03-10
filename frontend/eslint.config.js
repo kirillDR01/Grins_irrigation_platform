@@ -22,6 +22,30 @@ export default defineConfig([
     rules: {
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      // TanStack Table, React Hook Form, and similar libraries return non-memoizable
+      // values by design. This is informational, not a bug.
+      'react-hooks/incompatible-library': 'off',
+    },
+  },
+  // shadcn/ui components export variants alongside components — expected pattern
+  {
+    files: ['**/components/ui/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  // Providers export hooks alongside components — expected pattern
+  {
+    files: ['**/*Provider*.{ts,tsx}', '**/router/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  // Badge components export helper maps/constants alongside components
+  {
+    files: ['**/*Badge*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
     },
   },
 ])

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { LeadDetail } from './LeadDetail';
@@ -54,6 +53,11 @@ const baseLead: Lead = {
   customer_id: null,
   contacted_at: null,
   converted_at: null,
+  lead_source: 'website',
+  source_detail: null,
+  intake_tag: 'schedule',
+  sms_consent: true,
+  terms_accepted: true,
   created_at: '2025-01-20T10:00:00Z',
   updated_at: '2025-01-20T10:00:00Z',
 };
@@ -355,5 +359,104 @@ describe('LeadDetail', () => {
 
     // Converted timestamp label (use getAllByText since "Converted" also appears in status badge)
     expect(screen.getAllByText('Converted').length).toBeGreaterThanOrEqual(2);
+  });
+
+  // ---- Source detail display ----
+
+  it('renders source_detail when present', async () => {
+    const leadWithSourceDetail: Lead = {
+      ...baseLead,
+      source_detail: 'Google Ads Spring Campaign',
+    };
+    vi.mocked(leadApi.getById).mockResolvedValue(leadWithSourceDetail);
+
+    render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Source Detail')).toBeInTheDocument();
+    expect(screen.getByText('Google Ads Spring Campaign')).toBeInTheDocument();
+  });
+
+  it('does not render source_detail section when null', async () => {
+    vi.mocked(leadApi.getById).mockResolvedValue(baseLead); // source_detail is null
+
+    render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Source Detail')).not.toBeInTheDocument();
+  });
+
+  // ---- Lead source badge on detail ----
+
+  it('renders lead source badge on detail view', async () => {
+    vi.mocked(leadApi.getById).mockResolvedValue(baseLead);
+
+    render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('lead-source-website')).toBeInTheDocument();
+  });
+
+  // ---- Intake tag badge on detail ----
+
+  it('renders intake tag badge on detail view', async () => {
+    vi.mocked(leadApi.getById).mockResolvedValue(baseLead); // intake_tag='schedule'
+
+    render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('intake-tag-schedule')).toBeInTheDocument();
+  });
+
+  // ---- Consent indicators on detail ----
+
+  it('renders consent indicators as "Given"/"Accepted" when true', async () => {
+    vi.mocked(leadApi.getById).mockResolvedValue(baseLead); // sms_consent=true, terms_accepted=true
+
+    render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+    });
+
+    const smsConsent = screen.getByTestId('sms-consent-lead-001');
+    expect(smsConsent).toHaveTextContent('Given');
+
+    const termsAccepted = screen.getByTestId('terms-accepted-lead-001');
+    expect(termsAccepted).toHaveTextContent('Accepted');
+  });
+
+  it('renders consent indicators as "Not given"/"Not accepted" when false', async () => {
+    const leadNoConsent: Lead = {
+      ...baseLead,
+      id: 'lead-no-consent',
+      sms_consent: false,
+      terms_accepted: false,
+    };
+    vi.mocked(leadApi.getById).mockResolvedValue(leadNoConsent);
+
+    render(<LeadDetail />, { wrapper: createWrapper('lead-no-consent') });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+    });
+
+    const smsConsent = screen.getByTestId('sms-consent-lead-no-consent');
+    expect(smsConsent).toHaveTextContent('Not given');
+
+    const termsAccepted = screen.getByTestId('terms-accepted-lead-no-consent');
+    expect(termsAccepted).toHaveTextContent('Not accepted');
   });
 });

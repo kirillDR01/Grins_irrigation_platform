@@ -57,7 +57,7 @@ class GoogleSheetSubmissionRepository(LoggerMixin):
         self.log_started("delete_all")
         stmt = delete(GoogleSheetSubmission)
         result = await self.session.execute(stmt)
-        count = result.rowcount
+        count: int = result.rowcount  # type: ignore[assignment]
         await self.session.flush()
         self.log_completed("delete_all", deleted=count)
         return count

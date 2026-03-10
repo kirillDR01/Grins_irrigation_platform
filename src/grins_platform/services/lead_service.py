@@ -10,7 +10,7 @@ Validates: Requirements 1-8, 13, 15
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from math import ceil
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -23,30 +23,42 @@ from grins_platform.exceptions import (
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import (
     VALID_LEAD_STATUS_TRANSITIONS,
+    IntakeTag,
     LeadSituation,
     LeadSource,
+    LeadSourceExtended,
     LeadStatus,
 )
+from grins_platform.schemas.ai import MessageType
 from grins_platform.schemas.customer import CustomerCreate
 from grins_platform.schemas.job import JobCreate
 from grins_platform.schemas.lead import (
+    FollowUpQueueItem,
+    FromCallSubmission,
     LeadConversionRequest,
     LeadConversionResponse,
     LeadListParams,
+    LeadMetricsBySourceResponse,
     LeadResponse,
+    LeadSourceCount,
     LeadSubmission,
     LeadSubmissionResponse,
     LeadUpdate,
+    PaginatedFollowUpQueueResponse,
     PaginatedLeadResponse,
 )
 
 if TYPE_CHECKING:
     from uuid import UUID
 
+    from grins_platform.models.lead import Lead
     from grins_platform.repositories.lead_repository import LeadRepository
     from grins_platform.repositories.staff_repository import StaffRepository
+    from grins_platform.services.compliance_service import ComplianceService
     from grins_platform.services.customer_service import CustomerService
+    from grins_platform.services.email_service import EmailService
     from grins_platform.services.job_service import JobService
+    from grins_platform.services.sms_service import SMSService
 
 
 class LeadService(LoggerMixin):
@@ -81,6 +93,9 @@ class LeadService(LoggerMixin):
         customer_service: CustomerService,
         job_service: JobService,
         staff_repository: StaffRepository,
+        sms_service: SMSService | None = None,
+        email_service: EmailService | None = None,
+        compliance_service: ComplianceService | None = None,
     ) -> None:
         """Initialize service with dependencies.
 
@@ -89,12 +104,18 @@ class LeadService(LoggerMixin):
             customer_service: CustomerService for customer creation
             job_service: JobService for job creation
             staff_repository: StaffRepository for staff validation
+            sms_service: Optional SMSService for SMS confirmations
+            email_service: Optional EmailService for email confirmations
+            compliance_service: Optional ComplianceService for consent records
         """
         super().__init__()
         self.lead_repository = lead_repository
         self.customer_service = customer_service
         self.job_service = job_service
         self.staff_repository = staff_repository
+        self.sms_service = sms_service
+        self.email_service = email_service
+        self.compliance_service = compliance_service
 
     @staticmethod
     def split_name(full_name: str) -> tuple[str, str]:
@@ -116,6 +137,101 @@ class LeadService(LoggerMixin):
         last_name = parts[1] if len(parts) > 1 else ""
         return first_name, last_name
 
+    async def _send_sms_confirmation(self, lead: Lead) -> None:
+        """Send SMS confirmation for a new lead.
+
+        Gated on sms_consent=true AND phone present. Skips and logs
+        if conditions not met or service unavailable.
+
+        Validates: Requirements 54.1, 54.2, 54.3, 54.4
+        """
+        if not self.sms_service:
+            self.logger.info(
+                "lead.sms_confirmation.skipped",
+                lead_id=str(lead.id),
+                reason="sms_service_unavailable",
+            )
+            return
+
+        if not lead.sms_consent:
+            self.logger.info(
+                "lead.sms_confirmation.skipped",
+                lead_id=str(lead.id),
+                reason="no_sms_consent",
+            )
+            return
+
+        if not lead.phone:
+            self.logger.info(
+                "lead.sms_confirmation.skipped",
+                lead_id=str(lead.id),
+                reason="no_phone",
+            )
+            return
+
+        first_name, _ = self.split_name(lead.name)
+        message = (
+            f"Hi {first_name}! Your request has been received by "
+            "Grins Irrigation. We'll be in touch within 2 hours "
+            "during business hours."
+        )
+
+        try:
+            _ = await self.sms_service.send_message(
+                customer_id=lead.id,
+                phone=lead.phone,
+                message=message,
+                message_type=MessageType.LEAD_CONFIRMATION,
+                sms_opt_in=True,
+            )
+            self.logger.info(
+                "lead.sms_confirmation.sent",
+                lead_id=str(lead.id),
+            )
+        except Exception as e:
+            self.logger.warning(
+                "lead.sms_confirmation.failed",
+                lead_id=str(lead.id),
+                error=str(e),
+            )
+
+    def _send_email_confirmation(self, lead: Lead) -> None:
+        """Send email confirmation for a new lead.
+
+        Sent when lead has an email address. Skips and logs if no email
+        or service unavailable.
+
+        Validates: Requirements 55.1, 55.2, 55.3
+        """
+        if not self.email_service:
+            self.logger.info(
+                "lead.email_confirmation.skipped",
+                lead_id=str(lead.id),
+                reason="email_service_unavailable",
+            )
+            return
+
+        if not lead.email:
+            self.logger.info(
+                "lead.email_confirmation.skipped",
+                lead_id=str(lead.id),
+                reason="no_email",
+            )
+            return
+
+        try:
+            _ = self.email_service.send_lead_confirmation(lead)
+            self.logger.info(
+                "lead.email_confirmation.sent",
+                lead_id=str(lead.id),
+            )
+        except Exception as e:
+            self.logger.warning(
+                "lead.email_confirmation.failed",
+                lead_id=str(lead.id),
+                error=str(e),
+            )
+
     async def submit_lead(self, data: LeadSubmission) -> LeadSubmissionResponse:
         """Process a public form submission.
 
@@ -132,7 +248,7 @@ class LeadService(LoggerMixin):
         Returns:
             LeadSubmissionResponse with success status and lead_id
 
-        Validates: Requirements 1, 2, 3, 15.1, 15.4
+        Validates: Requirements 1, 2, 3, 15.1, 15.4, 45.1, 45.2, 48.1, 48.2
         """
         # Step 1: Honeypot check
         if data.website is not None and data.website != "":
@@ -149,6 +265,17 @@ class LeadService(LoggerMixin):
         # Step 2: Check for duplicate by phone + active status
         existing_lead = await self.lead_repository.get_by_phone_and_active_status(
             data.phone,
+        )
+
+        # Resolve lead_source and intake_tag defaults
+        lead_source = (
+            data.lead_source.value
+            if data.lead_source
+            else LeadSourceExtended.WEBSITE.value
+        )
+        source_detail = data.source_detail
+        intake_tag = (
+            data.intake_tag.value if data.intake_tag else IntakeTag.SCHEDULE.value
         )
 
         if existing_lead is not None:
@@ -194,6 +321,9 @@ class LeadService(LoggerMixin):
             notes=data.notes,
             source_site=data.source_site,
             status=LeadStatus.NEW.value,
+            lead_source=lead_source,
+            source_detail=source_detail,
+            intake_tag=intake_tag,
         )
 
         # Step 5: Log (no PII)
@@ -203,11 +333,59 @@ class LeadService(LoggerMixin):
             source_site=data.source_site,
         )
 
+        # Step 6: Send confirmations (Req 54, 55)
+        await self._send_sms_confirmation(lead)
+        self._send_email_confirmation(lead)
+
         return LeadSubmissionResponse(
             success=True,
             message="Thank you! We'll be in touch within 24 hours.",
             lead_id=lead.id,
         )
+
+    async def create_from_call(self, data: FromCallSubmission) -> LeadResponse:
+        """Create a lead from an inbound phone call (admin-only).
+
+        Args:
+            data: FromCallSubmission schema with call data
+
+        Returns:
+            LeadResponse with created lead data
+
+        Validates: Requirements 45.4, 45.5
+        """
+        self.log_started("create_from_call")
+
+        lead_source = data.lead_source.value
+        source_detail = data.source_detail if data.source_detail else "Inbound call"
+        intake_tag = data.intake_tag.value if data.intake_tag else None
+
+        lead = await self.lead_repository.create(
+            name=data.name,
+            phone=data.phone,
+            email=data.email,
+            zip_code=data.zip_code,
+            situation=data.situation.value,
+            notes=data.notes,
+            source_site="admin",
+            status=LeadStatus.NEW.value,
+            lead_source=lead_source,
+            source_detail=source_detail,
+            intake_tag=intake_tag,
+        )
+
+        self.logger.info(
+            "lead.from_call_created",
+            lead_id=str(lead.id),
+        )
+
+        # Send confirmations (Req 54, 55)
+        await self._send_sms_confirmation(lead)
+        self._send_email_confirmation(lead)
+
+        self.log_completed("create_from_call", lead_id=str(lead.id))
+        response: LeadResponse = LeadResponse.model_validate(lead)
+        return response
 
     async def get_lead(self, lead_id: UUID) -> LeadResponse:
         """Get a single lead by ID.
@@ -317,6 +495,10 @@ class LeadService(LoggerMixin):
             if not staff:
                 raise StaffNotFoundError(update_data["assigned_to"])
 
+        # Convert intake_tag enum to string for storage
+        if "intake_tag" in update_data and update_data["intake_tag"] is not None:
+            update_data["intake_tag"] = update_data["intake_tag"].value
+
         # Perform update
         updated_lead = await self.lead_repository.update(lead_id, update_data)
 
@@ -339,6 +521,11 @@ class LeadService(LoggerMixin):
     ) -> LeadConversionResponse:
         """Convert a lead to a customer and optionally a job.
 
+        Carries over consent fields from lead to customer:
+        - sms_consent=true → sms_opt_in + sms_consent_record
+        - terms_accepted=true → terms_accepted + terms_accepted_at
+        - email present → email_opt_in_at + email_opt_in_source
+
         Args:
             lead_id: UUID of the lead to convert
             data: LeadConversionRequest with conversion options
@@ -350,7 +537,7 @@ class LeadService(LoggerMixin):
             LeadNotFoundError: If lead not found
             LeadAlreadyConvertedError: If lead is already converted
 
-        Validates: Requirement 7, 15.3
+        Validates: Requirement 7, 15.3, 57.1, 57.2, 57.3, 68.3
         """
         # Step 1: Fetch lead
         lead = await self.lead_repository.get_by_id(lead_id)
@@ -378,10 +565,42 @@ class LeadService(LoggerMixin):
             phone=lead.phone,
             email=lead.email,
             lead_source=LeadSource.WEBSITE,
+            sms_opt_in=lead.sms_consent,
         )
         customer = await self.customer_service.create_customer(customer_data)
 
-        # Step 5: Optionally create job
+        # Step 5: Carry over consent fields (Req 57.1, 57.2, 57.3, 68.3)
+        now = datetime.now(tz=timezone.utc)
+        consent_updates: dict[str, Any] = {}
+
+        if lead.sms_consent:
+            consent_updates["sms_opt_in_at"] = now
+            consent_updates["sms_opt_in_source"] = "lead_form"
+            # Create sms_consent_record via ComplianceService
+            if self.compliance_service:
+                await self.compliance_service.create_sms_consent(
+                    phone=lead.phone,
+                    consent_given=True,
+                    method="lead_form",
+                    language_shown="Standard SMS consent from lead form",
+                    customer_id=customer.id,
+                )
+
+        if lead.terms_accepted:
+            consent_updates["terms_accepted"] = True
+            consent_updates["terms_accepted_at"] = now
+
+        if lead.email:
+            consent_updates["email_opt_in_at"] = now
+            consent_updates["email_opt_in_source"] = "lead_form"
+
+        if consent_updates:
+            await self.customer_service.repository.update(
+                customer.id,
+                consent_updates,
+            )
+
+        # Step 6: Optionally create job
         job_id = None
         if data.create_job:
             # Map situation to job type and description
@@ -401,7 +620,7 @@ class LeadService(LoggerMixin):
             job = await self.job_service.create_job(job_data)
             job_id = job.id
 
-        # Step 6: Update lead
+        # Step 7: Update lead
         await self.lead_repository.update(
             lead_id,
             {
@@ -411,12 +630,14 @@ class LeadService(LoggerMixin):
             },
         )
 
-        # Step 7: Log conversion (no PII)
+        # Step 8: Log conversion (no PII)
         self.logger.info(
             "lead.converted",
             lead_id=str(lead_id),
             customer_id=str(customer.id),
             job_id=str(job_id) if job_id else None,
+            sms_consent_carried=lead.sms_consent,
+            terms_carried=lead.terms_accepted,
         )
 
         return LeadConversionResponse(
@@ -444,6 +665,54 @@ class LeadService(LoggerMixin):
 
         await self.lead_repository.delete(lead_id)
 
+    async def get_follow_up_queue(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> PaginatedFollowUpQueueResponse:
+        """Get paginated follow-up queue.
+
+        Returns leads with intake_tag=FOLLOW_UP and active status,
+        sorted by created_at ASC, with computed time_since_created.
+
+        Args:
+            page: Page number (1-based)
+            page_size: Items per page
+
+        Returns:
+            PaginatedFollowUpQueueResponse
+
+        Validates: Requirements 50.1, 50.2, 50.3, 50.4
+        """
+        self.log_started("get_follow_up_queue", page=page, page_size=page_size)
+
+        leads, total = await self.lead_repository.get_follow_up_queue(
+            page=page,
+            page_size=page_size,
+        )
+
+        now = datetime.now(tz=timezone.utc)
+        items: list[FollowUpQueueItem] = []
+        for lead in leads:
+            created = lead.created_at
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            hours = (now - created).total_seconds() / 3600.0
+            lead_data = FollowUpQueueItem.model_validate(lead)
+            lead_data.time_since_created = round(hours, 1)
+            items.append(lead_data)
+
+        total_pages = ceil(total / page_size) if total > 0 else 0
+
+        self.log_completed("get_follow_up_queue", count=len(items), total=total)
+        return PaginatedFollowUpQueueResponse(
+            items=items,
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+
     async def get_dashboard_metrics(self) -> dict[str, int]:
         """Get lead metrics for dashboard integration.
 
@@ -459,3 +728,41 @@ class LeadService(LoggerMixin):
             "new_leads_today": new_leads_today,
             "uncontacted_leads": uncontacted_leads,
         }
+
+    async def get_metrics_by_source(
+        self,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> LeadMetricsBySourceResponse:
+        """Get lead counts grouped by source for a date range.
+
+        Args:
+            date_from: Start of date range. Defaults to 30 days ago.
+            date_to: End of date range. Defaults to now.
+
+        Returns:
+            LeadMetricsBySourceResponse with counts per source
+
+        Validates: Requirement 61.3
+        """
+        self.log_started("get_metrics_by_source")
+
+        now = datetime.now(tz=timezone.utc)
+        effective_to = date_to or now
+        effective_from = date_from or (now - timedelta(days=30))
+
+        rows = await self.lead_repository.count_by_source(
+            effective_from,
+            effective_to,
+        )
+
+        items = [LeadSourceCount(lead_source=src, count=cnt) for src, cnt in rows]
+        total = sum(item.count for item in items)
+
+        self.log_completed("get_metrics_by_source", total=total, groups=len(items))
+        return LeadMetricsBySourceResponse(
+            items=items,
+            total=total,
+            date_from=effective_from,
+            date_to=effective_to,
+        )

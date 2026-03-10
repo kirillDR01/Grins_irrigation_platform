@@ -8,7 +8,8 @@ import {
   type ColumnDef,
   type SortingState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, MoreHorizontal, Search } from 'lucide-react';
+import { ArrowUpDown, MoreHorizontal, Search, FileText, CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -33,6 +34,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { LoadingPage, ErrorMessage } from '@/shared/components';
 import { useJobs } from '../hooks';
 import { JobStatusBadge } from './JobStatusBadge';
@@ -44,6 +51,11 @@ interface JobListProps {
   onDelete?: (job: Job) => void;
   onStatusChange?: (job: Job, status: JobStatus) => void;
   customerId?: string;
+}
+
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return '—';
+  return format(new Date(dateStr), 'MMM d, yyyy');
 }
 
 export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobListProps) {
@@ -73,13 +85,25 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
       cell: ({ row }) => {
         const job = row.original;
         return (
-          <Link
-            to={`/jobs/${job.id}`}
-            className="text-sm font-medium text-slate-700 hover:text-teal-600 transition-colors"
-            data-testid={`job-type-${job.id}`}
-          >
-            {formatJobType(job.job_type)}
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/jobs/${job.id}`}
+              className="text-sm font-medium text-slate-700 hover:text-teal-600 transition-colors"
+              data-testid={`job-type-${job.id}`}
+            >
+              {formatJobType(job.job_type)}
+            </Link>
+            {job.service_agreement_id && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-600 border border-indigo-100"
+                data-testid={`subscription-badge-${job.id}`}
+                title="Subscription job"
+              >
+                <FileText className="h-3 w-3" />
+                Sub
+              </span>
+            )}
+          </div>
         );
       },
     },
@@ -116,6 +140,28 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
             : 'Needs Estimate'}
         </span>
       ),
+    },
+    {
+      accessorKey: 'target_start_date',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
+          Target Dates
+        </span>
+      ),
+      cell: ({ row }) => {
+        const job = row.original;
+        if (!job.target_start_date) {
+          return <span className="text-sm text-slate-400 italic">—</span>;
+        }
+        return (
+          <span className="text-sm text-slate-600" data-testid={`target-dates-${job.id}`}>
+            {formatDate(job.target_start_date)}
+            {job.target_end_date && job.target_end_date !== job.target_start_date
+              ? ` – ${formatDate(job.target_end_date)}`
+              : ''}
+          </span>
+        );
+      },
     },
     {
       accessorKey: 'priority_level',
@@ -331,6 +377,119 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
               <SelectItem value="requires_estimate">Requires Estimate</SelectItem>
             </SelectContent>
           </Select>
+
+          {/* Subscription Source Filter */}
+          <Select
+            value={
+              params.has_service_agreement === true
+                ? 'subscription'
+                : params.has_service_agreement === false
+                  ? 'standalone'
+                  : 'all'
+            }
+            onValueChange={(value) =>
+              setParams((p) => ({
+                ...p,
+                has_service_agreement:
+                  value === 'subscription' ? true : value === 'standalone' ? false : undefined,
+                page: 1,
+              }))
+            }
+          >
+            <SelectTrigger className="w-[160px]" data-testid="source-type-filter">
+              <SelectValue placeholder="Source" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Sources</SelectItem>
+              <SelectItem value="subscription">Subscription</SelectItem>
+              <SelectItem value="standalone">Standalone</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Target Date Range Filter */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-[200px] justify-start text-left font-normal"
+                data-testid="target-date-filter"
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {params.target_date_from || params.target_date_to ? (
+                  <span className="text-sm">
+                    {params.target_date_from
+                      ? format(new Date(params.target_date_from + 'T00:00:00'), 'MMM d')
+                      : '...'}
+                    {' – '}
+                    {params.target_date_to
+                      ? format(new Date(params.target_date_to + 'T00:00:00'), 'MMM d')
+                      : '...'}
+                  </span>
+                ) : (
+                  <span className="text-sm text-muted-foreground">Target dates</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-4" align="start">
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-500">From</label>
+                  <Calendar
+                    mode="single"
+                    selected={
+                      params.target_date_from
+                        ? new Date(params.target_date_from + 'T00:00:00')
+                        : undefined
+                    }
+                    onSelect={(date) =>
+                      setParams((p) => ({
+                        ...p,
+                        target_date_from: date ? format(date, 'yyyy-MM-dd') : undefined,
+                        page: 1,
+                      }))
+                    }
+                    data-testid="target-date-from-calendar"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-500">To</label>
+                  <Calendar
+                    mode="single"
+                    selected={
+                      params.target_date_to
+                        ? new Date(params.target_date_to + 'T00:00:00')
+                        : undefined
+                    }
+                    onSelect={(date) =>
+                      setParams((p) => ({
+                        ...p,
+                        target_date_to: date ? format(date, 'yyyy-MM-dd') : undefined,
+                        page: 1,
+                      }))
+                    }
+                    data-testid="target-date-to-calendar"
+                  />
+                </div>
+                {(params.target_date_from || params.target_date_to) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full"
+                    onClick={() =>
+                      setParams((p) => ({
+                        ...p,
+                        target_date_from: undefined,
+                        target_date_to: undefined,
+                        page: 1,
+                      }))
+                    }
+                  >
+                    Clear dates
+                  </Button>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Table */}

@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -76,6 +76,33 @@ class Lead(Base):
         server_default="residential",
     )
 
+    # Source attribution and intake routing (Req 44.1, 47.1, 56.1)
+    lead_source: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        server_default="website",
+    )
+    source_detail: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    intake_tag: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
+    # Consent fields (Req 56.2, 56.3)
+    sms_consent: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
+    terms_accepted: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
+
     # Status tracking
     status: Mapped[str] = mapped_column(
         String(20),
@@ -136,6 +163,8 @@ class Lead(Base):
         Index("idx_leads_status", "status"),
         Index("idx_leads_created_at", "created_at"),
         Index("idx_leads_zip_code", "zip_code"),
+        Index("idx_leads_lead_source", "lead_source"),
+        Index("idx_leads_intake_tag", "intake_tag"),
     )
 
     def __repr__(self) -> str:
@@ -208,6 +237,11 @@ class Lead(Base):
             "situation": self.situation,
             "notes": self.notes,
             "source_site": self.source_site,
+            "lead_source": self.lead_source,
+            "source_detail": self.source_detail,
+            "intake_tag": self.intake_tag,
+            "sms_consent": self.sms_consent,
+            "terms_accepted": self.terms_accepted,
             "status": self.status,
             "assigned_to": str(self.assigned_to) if self.assigned_to else None,
             "customer_id": str(self.customer_id) if self.customer_id else None,

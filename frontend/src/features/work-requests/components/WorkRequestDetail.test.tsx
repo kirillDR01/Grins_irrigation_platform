@@ -46,6 +46,8 @@ const baseRequest: WorkRequest = {
   imported_at: '2026-01-15T12:00:00Z',
   created_at: '2026-01-15T12:00:00Z',
   updated_at: '2026-01-15T12:00:00Z',
+  promoted_to_lead_id: null,
+  promoted_at: null,
 };
 
 function renderWithRoute(id: string = 'wr-001') {
@@ -249,5 +251,49 @@ describe('WorkRequestDetail', () => {
     await waitFor(() => {
       expect(screen.getByText('#2')).toBeInTheDocument();
     });
+  });
+
+  // ---- Promoted-to-Lead section ----
+
+  it('shows promoted-to-lead link when promoted_to_lead_id is set', async () => {
+    vi.mocked(workRequestApi.getById).mockResolvedValue({
+      ...baseRequest,
+      promoted_to_lead_id: 'lead-abc',
+      promoted_at: '2026-01-15T13:00:00Z',
+    });
+    renderWithRoute();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('promoted-lead-link')).toBeInTheDocument();
+    });
+
+    const link = screen.getByTestId('promoted-lead-link');
+    expect(link).toHaveAttribute('href', '/leads/lead-abc');
+    expect(screen.getByText('View Promoted Lead')).toBeInTheDocument();
+  });
+
+  it('shows promoted_at timestamp when present', async () => {
+    vi.mocked(workRequestApi.getById).mockResolvedValue({
+      ...baseRequest,
+      promoted_to_lead_id: 'lead-abc',
+      promoted_at: '2026-01-15T13:00:00Z',
+    });
+    renderWithRoute();
+
+    await waitFor(() => {
+      expect(screen.getByText('Promoted to Lead')).toBeInTheDocument();
+    });
+  });
+
+  it('does not show promoted section when promoted_to_lead_id is null', async () => {
+    vi.mocked(workRequestApi.getById).mockResolvedValue(baseRequest);
+    renderWithRoute();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('work-request-detail')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId('promoted-lead-link')).not.toBeInTheDocument();
+    expect(screen.queryByText('Promoted to Lead')).not.toBeInTheDocument();
   });
 });

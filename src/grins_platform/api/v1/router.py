@@ -8,15 +8,24 @@ Validates: Requirement 10.5-10.7
 
 from fastapi import APIRouter
 
+from grins_platform.api.v1.agreements import (
+    compliance_router,
+    dashboard_ext_router,
+    router as agreements_router,
+    tier_router as agreement_tiers_router,
+)
 from grins_platform.api.v1.ai import router as ai_router
 from grins_platform.api.v1.appointments import router as appointments_router
 from grins_platform.api.v1.auth import router as auth_router
+from grins_platform.api.v1.checkout import router as checkout_router
 from grins_platform.api.v1.conflict_resolution import router as conflict_router
 from grins_platform.api.v1.customers import router as customers_router
 from grins_platform.api.v1.dashboard import router as dashboard_router
+from grins_platform.api.v1.email import router as email_router
 from grins_platform.api.v1.invoices import router as invoices_router
 from grins_platform.api.v1.jobs import router as jobs_router
 from grins_platform.api.v1.leads import router as leads_router
+from grins_platform.api.v1.onboarding import router as onboarding_router
 from grins_platform.api.v1.properties import router as properties_router
 from grins_platform.api.v1.schedule import router as schedule_router
 from grins_platform.api.v1.schedule_clear import router as schedule_clear_router
@@ -29,6 +38,7 @@ from grins_platform.api.v1.sms import (
 from grins_platform.api.v1.staff import router as staff_router
 from grins_platform.api.v1.staff_availability import router as staff_availability_router
 from grins_platform.api.v1.staff_reassignment import router as reassignment_router
+from grins_platform.api.v1.webhooks import router as webhooks_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -150,6 +160,54 @@ api_router.include_router(
     sheet_submissions_router,
     prefix="/sheet-submissions",
     tags=["sheet-submissions"],
+)
+
+# Include Stripe Webhook endpoints (excluded from CSRF)
+api_router.include_router(
+    webhooks_router,
+    tags=["webhooks"],
+)
+
+# Include Onboarding endpoints (public pre-checkout consent)
+api_router.include_router(
+    onboarding_router,
+    tags=["onboarding"],
+)
+
+# Include Checkout endpoints (public Stripe session creation)
+api_router.include_router(
+    checkout_router,
+    tags=["checkout"],
+)
+
+# Include Email endpoints (public unsubscribe)
+api_router.include_router(
+    email_router,
+    tags=["email"],
+)
+
+# Include Agreement endpoints (authenticated)
+api_router.include_router(
+    agreements_router,
+    tags=["agreements"],
+)
+
+# Include Agreement Tier endpoints (authenticated)
+api_router.include_router(
+    agreement_tiers_router,
+    tags=["agreement-tiers"],
+)
+
+# Include Compliance endpoints (authenticated)
+api_router.include_router(
+    compliance_router,
+    tags=["compliance"],
+)
+
+# Include Dashboard extension endpoints (authenticated)
+api_router.include_router(
+    dashboard_ext_router,
+    tags=["dashboard"],
 )
 
 __all__ = ["api_router"]

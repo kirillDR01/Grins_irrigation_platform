@@ -154,7 +154,7 @@ class LeadRepository(LoggerMixin):
         Returns:
             Tuple of (list of leads, total count)
 
-        Validates: Requirement 5.1-5.5
+        Validates: Requirement 5.1-5.5, 45.3, 48.4
         """
         self.log_started(
             "list_with_filters",
@@ -177,6 +177,17 @@ class LeadRepository(LoggerMixin):
 
         if params.date_to is not None:
             base_query = base_query.where(Lead.created_at <= params.date_to)
+
+        # Lead source multi-select filter (Req 45.3)
+        if params.lead_source is not None and len(params.lead_source) > 0:
+            base_query = base_query.where(Lead.lead_source.in_(params.lead_source))
+
+        # Intake tag filter (Req 48.4) — supports "null" for untagged
+        if params.intake_tag is not None:
+            if params.intake_tag == "null":
+                base_query = base_query.where(Lead.intake_tag.is_(None))
+            else:
+                base_query = base_query.where(Lead.intake_tag == params.intake_tag)
 
         # Search on name or phone (case-insensitive)
         if params.search:
@@ -268,6 +279,56 @@ class LeadRepository(LoggerMixin):
 
         self.log_completed("delete", lead_id=str(lead_id))
 
+    async def get_follow_up_queue(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[Lead], int]:
+        """Get leads in the follow-up queue.
+
+        Returns leads with intake_tag=FOLLOW_UP and status in
+        (NEW, CONTACTED, QUALIFIED), sorted by created_at ASC.
+
+        Args:
+            page: Page number (1-based)
+            page_size: Items per page
+
+        Returns:
+            Tuple of (list of leads, total count)
+
+        Validates: Requirement 50.1, 50.2, 50.3, 50.4
+        """
+        self.log_started("get_follow_up_queue", page=page, page_size=page_size)
+
+        active_statuses = [
+            LeadStatus.NEW.value,
+            LeadStatus.CONTACTED.value,
+            LeadStatus.QUALIFIED.value,
+        ]
+
+        base_query = (
+            select(Lead)
+            .where(Lead.intake_tag == "follow_up")
+            .where(Lead.status.in_(active_statuses))
+        )
+
+        # Count
+        count_query = select(func.count()).select_from(base_query.subquery())
+        total_result = await self.session.execute(count_query)
+        total = total_result.scalar() or 0
+
+        # Paginate, sorted by created_at ASC
+        offset = (page - 1) * page_size
+        paginated_query = (
+            base_query.order_by(Lead.created_at.asc()).offset(offset).limit(page_size)
+        )
+
+        result = await self.session.execute(paginated_query)
+        leads = list(result.scalars().all())
+
+        self.log_completed("get_follow_up_queue", count=len(leads), total=total)
+        return leads, total
+
     async def count_new_today(self) -> int:
         """Count leads created today with status 'new'.
 
@@ -322,3 +383,35 @@ class LeadRepository(LoggerMixin):
 
         self.log_completed("count_uncontacted", count=count)
         return count
+
+    async def count_by_source(
+        self,
+        date_from: datetime,
+        date_to: datetime,
+    ) -> list[tuple[str, int]]:
+        """Count leads grouped by lead_source within a date range.
+
+        Args:
+            date_from: Start of date range (inclusive)
+            date_to: End of date range (inclusive)
+
+        Returns:
+            List of (lead_source, count) tuples
+
+        Validates: Requirement 61.3
+        """
+        self.log_started("count_by_source")
+
+        stmt = (
+            select(Lead.lead_source, func.count())
+            .where(Lead.created_at >= date_from)
+            .where(Lead.created_at <= date_to)
+            .group_by(Lead.lead_source)
+            .order_by(func.count().desc())
+        )
+
+        result = await self.session.execute(stmt)
+        rows = [(str(row[0]), int(row[1])) for row in result.all()]
+
+        self.log_completed("count_by_source", groups=len(rows))
+        return rows

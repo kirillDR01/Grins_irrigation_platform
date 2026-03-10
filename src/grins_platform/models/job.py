@@ -7,12 +7,12 @@ in the Grin's Irrigation Platform.
 Validates: Requirements 2.1-2.12, 4.1-4.9
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
-from sqlalchemy import JSON, Boolean, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import JSON, Boolean, Date, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from grins_platform.models.property import Property
     from grins_platform.models.schedule_waitlist import ScheduleWaitlist
     from grins_platform.models.sent_message import SentMessage
+    from grins_platform.models.service_agreement import ServiceAgreement
     from grins_platform.models.service_offering import ServiceOffering
 
 
@@ -100,6 +101,10 @@ class Job(Base):
         ForeignKey("service_offerings.id"),
         nullable=True,
     )
+    service_agreement_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("service_agreements.id"),
+        nullable=True,
+    )
 
     # Job Details (Requirement 2.1)
     job_type: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -126,6 +131,10 @@ class Job(Base):
         nullable=False,
         server_default="false",
     )
+
+    # Target date range for agreement-generated jobs (Requirements 4.1, 4.2)
+    target_start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    target_end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Requirements (Requirement 2.8)
     staffing_required: Mapped[int] = mapped_column(
@@ -181,6 +190,10 @@ class Job(Base):
         back_populates="jobs",
     )
     service_offering: Mapped["ServiceOffering | None"] = relationship("ServiceOffering")
+    service_agreement: Mapped["ServiceAgreement | None"] = relationship(
+        "ServiceAgreement",
+        back_populates="jobs",
+    )
     status_history: Mapped[list["JobStatusHistory"]] = relationship(
         "JobStatusHistory",
         back_populates="job",
@@ -273,6 +286,9 @@ class Job(Base):
             "service_offering_id": str(self.service_offering_id)
             if self.service_offering_id
             else None,
+            "service_agreement_id": str(self.service_agreement_id)
+            if self.service_agreement_id
+            else None,
             "job_type": self.job_type,
             "category": self.category,
             "status": self.status,
@@ -300,6 +316,12 @@ class Job(Base):
             else None,
             "closed_at": self.closed_at.isoformat() if self.closed_at else None,
             "is_deleted": self.is_deleted,
+            "target_start_date": self.target_start_date.isoformat()
+            if self.target_start_date
+            else None,
+            "target_end_date": self.target_end_date.isoformat()
+            if self.target_end_date
+            else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

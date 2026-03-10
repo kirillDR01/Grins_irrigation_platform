@@ -54,6 +54,9 @@ def mock_job():
     job.payment_collected_on_site = False
     job.source = None
     job.source_details = None
+    job.service_agreement_id = None
+    job.target_start_date = None
+    job.target_end_date = None
     job.requested_at = datetime.now()
     job.approved_at = None
     job.scheduled_at = None

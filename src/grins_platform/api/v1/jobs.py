@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 from datetime import (
+    date,
     datetime,
 )
 from decimal import Decimal
@@ -120,6 +121,18 @@ async def list_jobs(
         default=None,
         description="Search by job type or description",
     ),
+    has_service_agreement: bool | None = Query(
+        default=None,
+        description="Filter by subscription source",
+    ),
+    target_date_from: date | None = Query(
+        default=None,
+        description="Filter by target_start_date >= this date",
+    ),
+    target_date_to: date | None = Query(
+        default=None,
+        description="Filter by target_start_date <= this date",
+    ),
     sort_by: str = Query(
         default="created_at",
         description="Field to sort by",
@@ -158,6 +171,9 @@ async def list_jobs(
         date_from=date_from,
         date_to=date_to,
         search=search,
+        has_service_agreement=has_service_agreement,
+        target_date_from=target_date_from,
+        target_date_to=target_date_to,
         sort_by=sort_by,
         sort_order=sort_order,
     )

@@ -352,6 +352,9 @@ class JobRepository(LoggerMixin):
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         search: str | None = None,
+        has_service_agreement: bool | None = None,
+        target_date_from: date | None = None,
+        target_date_to: date | None = None,
         sort_by: str = "created_at",
         sort_order: str = "desc",
         include_deleted: bool = False,
@@ -370,6 +373,9 @@ class JobRepository(LoggerMixin):
             date_from: Filter by created_at >= date_from
             date_to: Filter by created_at <= date_to
             search: Search by job type or description
+            has_service_agreement: Filter by subscription source
+            target_date_from: Filter by target_start_date >= date
+            target_date_to: Filter by target_start_date <= date
             sort_by: Field to sort by
             sort_order: Sort order (asc/desc)
             include_deleted: Whether to include soft-deleted jobs
@@ -426,6 +432,19 @@ class JobRepository(LoggerMixin):
                 (func.lower(Job.job_type).like(search_term))
                 | (func.lower(Job.description).like(search_term)),
             )
+
+        # Apply subscription source filter
+        if has_service_agreement is True:
+            base_query = base_query.where(Job.service_agreement_id.isnot(None))
+        elif has_service_agreement is False:
+            base_query = base_query.where(Job.service_agreement_id.is_(None))
+
+        # Apply target date range filters
+        if target_date_from is not None:
+            base_query = base_query.where(Job.target_start_date >= target_date_from)
+
+        if target_date_to is not None:
+            base_query = base_query.where(Job.target_start_date <= target_date_to)
 
         # Get total count
         count_query = select(func.count()).select_from(base_query.subquery())

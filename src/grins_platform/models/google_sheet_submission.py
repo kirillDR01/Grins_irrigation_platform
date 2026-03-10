@@ -87,6 +87,17 @@ class GoogleSheetSubmission(Base):
         nullable=True,
     )
 
+    # Lead promotion tracking (Req 52.3, 52.4)
+    promoted_to_lead_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("leads.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    promoted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
     # Timestamps
     imported_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -105,10 +116,15 @@ class GoogleSheetSubmission(Base):
         onupdate=func.now(),
     )
 
-    # Relationship
+    # Relationships
     lead: Mapped["Lead | None"] = relationship(
         "Lead",
         foreign_keys=[lead_id],
+        lazy="selectin",
+    )
+    promoted_to_lead: Mapped["Lead | None"] = relationship(
+        "Lead",
+        foreign_keys=[promoted_to_lead_id],
         lazy="selectin",
     )
 

@@ -49,6 +49,8 @@ const baseRequest: WorkRequest = {
   imported_at: '2026-01-15T12:00:00Z',
   created_at: '2026-01-15T12:00:00Z',
   updated_at: '2026-01-15T12:00:00Z',
+  promoted_to_lead_id: null,
+  promoted_at: null,
 };
 
 const mockRequests: WorkRequest[] = [
@@ -66,6 +68,8 @@ const mockRequests: WorkRequest[] = [
     imported_at: '2026-01-16T08:00:00Z',
     created_at: '2026-01-16T08:00:00Z',
     updated_at: '2026-01-16T08:00:00Z',
+    promoted_to_lead_id: 'lead-001',
+    promoted_at: '2026-01-16T08:05:00Z',
   },
 ];
 
@@ -288,5 +292,51 @@ describe('WorkRequestsList', () => {
     await waitFor(() => {
       expect(screen.getByTestId('submission-count')).toHaveTextContent('1 submission total');
     });
+  });
+
+  // ---- Promoted-to-Lead badge tests ----
+
+  it('renders promoted-to-lead badge for work requests with promoted_to_lead_id', async () => {
+    vi.mocked(workRequestApi.list).mockResolvedValue(mockPaginated);
+
+    render(<WorkRequestsList />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('work-request-row')).toHaveLength(2);
+    });
+
+    // wr-002 has promoted_to_lead_id
+    expect(screen.getByTestId('promoted-badge-wr-002')).toBeInTheDocument();
+    expect(screen.getByTestId('promoted-badge-wr-002')).toHaveTextContent('Lead');
+
+    // wr-001 does NOT have promoted_to_lead_id
+    expect(screen.queryByTestId('promoted-badge-wr-001')).not.toBeInTheDocument();
+  });
+
+  it('promoted badge links to lead detail', async () => {
+    vi.mocked(workRequestApi.list).mockResolvedValue(mockPaginated);
+
+    render(<WorkRequestsList />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('promoted-badge-wr-002')).toBeInTheDocument();
+    });
+
+    const badge = screen.getByTestId('promoted-badge-wr-002');
+    expect(badge.closest('a')).toHaveAttribute('href', '/leads/lead-001');
+  });
+
+  it('promoted badge shows promoted_at in title', async () => {
+    vi.mocked(workRequestApi.list).mockResolvedValue(mockPaginated);
+
+    render(<WorkRequestsList />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('promoted-badge-wr-002')).toBeInTheDocument();
+    });
+
+    const badge = screen.getByTestId('promoted-badge-wr-002');
+    // Title should contain "Promoted" text
+    expect(badge.closest('a')?.getAttribute('title')).toContain('Promoted');
   });
 });

@@ -74,3 +74,26 @@ export interface TodayScheduleResponse {
   upcoming_appointments: number;
   cancelled_appointments: number;
 }
+
+export interface DashboardSummaryExtension {
+  active_agreement_count: number;
+  mrr: number;
+  renewal_pipeline_count: number;
+  failed_payment_count: number;
+  failed_payment_amount: number;
+  new_leads_count: number;
+  follow_up_queue_count: number;
+  leads_awaiting_contact_oldest_age_hours: number | null;
+}
+
+export interface LeadSourceCount {
+  lead_source: string;
+  count: number;
+}
+
+export interface LeadMetricsBySourceResponse {
+  items: LeadSourceCount[];
+  total: number;
+  date_from: string;
+  date_to: string;
+}

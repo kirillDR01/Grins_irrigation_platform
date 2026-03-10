@@ -11,6 +11,7 @@ import type { Lead } from '../types';
 vi.mock('../api/leadApi', () => ({
   leadApi: {
     list: vi.fn(),
+    followUpQueue: vi.fn(),
   },
 }));
 
@@ -39,6 +40,11 @@ const mockLeads: Lead[] = [
     customer_id: null,
     contacted_at: null,
     converted_at: null,
+    lead_source: 'website',
+    source_detail: null,
+    intake_tag: 'schedule',
+    sms_consent: true,
+    terms_accepted: true,
     created_at: '2025-01-20T10:00:00Z',
     updated_at: '2025-01-20T10:00:00Z',
   },
@@ -56,6 +62,11 @@ const mockLeads: Lead[] = [
     customer_id: null,
     contacted_at: '2025-01-21T09:00:00Z',
     converted_at: null,
+    lead_source: 'phone_call',
+    source_detail: 'Inbound call',
+    intake_tag: null,
+    sms_consent: false,
+    terms_accepted: false,
     created_at: '2025-01-19T14:00:00Z',
     updated_at: '2025-01-21T09:00:00Z',
   },
@@ -82,6 +93,13 @@ function createWrapper() {
 describe('LeadsList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(leadApi.followUpQueue).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 20,
+      total_pages: 0,
+    });
   });
 
   it('renders loading state initially', () => {
@@ -123,9 +141,13 @@ describe('LeadsList', () => {
     expect(screen.getByText('6125551234')).toBeInTheDocument();
     expect(screen.getByText('6125555678')).toBeInTheDocument();
 
-    // Zip codes visible
-    expect(screen.getByText('55424')).toBeInTheDocument();
-    expect(screen.getByText('55305')).toBeInTheDocument();
+    // Source badges visible
+    expect(screen.getByTestId('lead-source-website')).toBeInTheDocument();
+    expect(screen.getByTestId('lead-source-phone_call')).toBeInTheDocument();
+
+    // Consent indicators visible
+    expect(screen.getByTestId('sms-consent-lead-001')).toBeInTheDocument();
+    expect(screen.getByTestId('terms-accepted-lead-001')).toBeInTheDocument();
 
     // Total count shown
     expect(screen.getByText('2 leads total')).toBeInTheDocument();
@@ -183,7 +205,7 @@ describe('LeadsList', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/leads/lead-001');
   });
 
-  it('renders filter controls', async () => {
+  it('renders filter controls with source filter and intake tabs', async () => {
     vi.mocked(leadApi.list).mockResolvedValue({
       items: mockLeads,
       total: 2,
@@ -206,6 +228,15 @@ describe('LeadsList', () => {
 
     // Situation filter present
     expect(screen.getByTestId('lead-situation-filter')).toBeInTheDocument();
+
+    // Source filter present
+    expect(screen.getByTestId('lead-source-filter')).toBeInTheDocument();
+
+    // Intake tag tabs present
+    expect(screen.getByTestId('intake-tag-tabs')).toBeInTheDocument();
+    expect(screen.getByTestId('intake-tab-all')).toBeInTheDocument();
+    expect(screen.getByTestId('intake-tab-schedule')).toBeInTheDocument();
+    expect(screen.getByTestId('intake-tab-follow_up')).toBeInTheDocument();
   });
 
   it('renders pagination controls when data exists', async () => {

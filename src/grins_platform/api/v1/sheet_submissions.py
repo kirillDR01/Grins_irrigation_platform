@@ -20,10 +20,10 @@ from grins_platform.api.v1.auth_dependencies import (
     AdminUser,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
 from grins_platform.api.v1.dependencies import get_db_session, get_sheets_service
+from grins_platform.log_config import DomainLogger, get_logger
 from grins_platform.repositories.google_sheet_submission_repository import (
     GoogleSheetSubmissionRepository,
 )
-from grins_platform.log_config import DomainLogger, get_logger
 from grins_platform.schemas.google_sheet_submission import (
     GoogleSheetSubmissionResponse,
     PaginatedSubmissionResponse,

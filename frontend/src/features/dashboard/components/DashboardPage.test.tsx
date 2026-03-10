@@ -14,8 +14,10 @@ Element.prototype.scrollIntoView = vi.fn();
 // Mock the hooks
 vi.mock('../hooks', () => ({
   useDashboardMetrics: vi.fn(),
+  useDashboardSummary: vi.fn(),
   useTodaySchedule: vi.fn(),
   useJobsByStatus: vi.fn(),
+  useLeadMetricsBySource: vi.fn(),
 }));
 
 // Mock the jobs and schedule hooks used by RecentActivity
@@ -33,11 +35,13 @@ vi.mock('@/features/schedule/hooks', () => ({
   })),
 }));
 
-import { useDashboardMetrics, useTodaySchedule, useJobsByStatus } from '../hooks';
+import { useDashboardMetrics, useTodaySchedule, useJobsByStatus, useDashboardSummary, useLeadMetricsBySource } from '../hooks';
 
 const mockUseDashboardMetrics = useDashboardMetrics as ReturnType<typeof vi.fn>;
 const mockUseTodaySchedule = useTodaySchedule as ReturnType<typeof vi.fn>;
 const mockUseJobsByStatus = useJobsByStatus as ReturnType<typeof vi.fn>;
+const mockUseDashboardSummary = useDashboardSummary as ReturnType<typeof vi.fn>;
+const mockUseLeadMetricsBySource = useLeadMetricsBySource as ReturnType<typeof vi.fn>;
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -57,6 +61,35 @@ function createWrapper() {
 describe('DashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default mock for subscription widgets (loaded, no data issues)
+    mockUseDashboardSummary.mockReturnValue({
+      data: {
+        active_agreement_count: 10,
+        mrr: 2500,
+        renewal_pipeline_count: 3,
+        failed_payment_count: 1,
+        failed_payment_amount: 150,
+        new_leads_count: 5,
+        follow_up_queue_count: 2,
+        leads_awaiting_contact_oldest_age_hours: 4.5,
+      },
+      isLoading: false,
+      error: null,
+    });
+    // Default mock for lead metrics by source
+    mockUseLeadMetricsBySource.mockReturnValue({
+      data: {
+        items: [
+          { lead_source: 'website', count: 10 },
+          { lead_source: 'phone_call', count: 5 },
+        ],
+        total: 15,
+        date_from: '2026-02-08',
+        date_to: '2026-03-10',
+      },
+      isLoading: false,
+      error: null,
+    });
   });
 
   it('renders loading state when data is loading', () => {

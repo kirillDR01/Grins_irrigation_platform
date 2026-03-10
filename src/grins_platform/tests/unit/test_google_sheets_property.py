@@ -39,9 +39,11 @@ from grins_platform.models.enums import LeadSituation
 from grins_platform.schemas.customer import normalize_phone
 from grins_platform.schemas.google_sheet_submission import PaginatedSubmissionResponse
 from grins_platform.services.google_sheets_service import (
+    _SHEET_COLUMNS,
     EXPECTED_COLUMNS,
     GoogleSheetsService,
     pad_row,
+    remap_sheet_row,
 )
 
 
@@ -418,15 +420,14 @@ def _run_process_row(client_type: str) -> list[dict[str, object]]:
 
 @pytest.mark.unit
 class TestClientTypeDeterminesLeadCreationProperty:
-    """Property 3: Client type determines lead creation.
+    """Property 3: All submissions auto-promoted to leads.
 
-    For any submission, if client_type (trimmed, lowercased) equals "new",
-    then processing should result in processing_status = "lead_created"
-    and a non-null lead_id. If client_type is anything other than "new"
-    (including empty, null, or "existing"), then processing should result
-    in processing_status = "skipped" and lead_id remaining null.
+    For any submission regardless of client_type, processing should result
+    in processing_status = "lead_created" with promoted_to_lead_id set.
+    New clients get source_detail "New client work request", others get
+    "Existing client work request".
 
-    Validates: Requirements 3.1, 3.2, 3.8
+    Validates: Requirements 52.1, 52.2, 52.5
     """
 
     @given(client_type=_new_variant)
@@ -447,14 +448,17 @@ class TestClientTypeDeterminesLeadCreationProperty:
         ),
     )
     @settings(max_examples=200)
-    def test_non_new_client_type_results_in_skipped(
+    def test_non_new_client_type_also_creates_lead(
         self,
         client_type: str,
     ) -> None:
-        """client_type not 'new' (any text) → processing_status = skipped."""
+        """client_type not 'new' → still auto-promoted to lead_created."""
         updates = _run_process_row(client_type)
-        assert any(u.get("processing_status") == "skipped" for u in updates), (
-            f"Expected skipped for client_type={client_type!r}, got {updates}"
+        assert any(u.get("processing_status") == "lead_created" for u in updates), (
+            f"Expected lead_created for client_type={client_type!r}, got {updates}"
+        )
+        assert any(u.get("promoted_to_lead_id") is not None for u in updates), (
+            f"Expected promoted_to_lead_id set for client_type={client_type!r}"
         )
 
 
@@ -1150,8 +1154,8 @@ class TestNewSubmissionInvariantsProperty:
                 alphabet=st.characters(blacklist_categories=["Cs"]),
                 max_size=30,
             ),
-            min_size=EXPECTED_COLUMNS,
-            max_size=EXPECTED_COLUMNS,
+            min_size=_SHEET_COLUMNS,
+            max_size=_SHEET_COLUMNS,
         ),
         row_number=st.integers(min_value=2, max_value=100_000),
     )
@@ -1199,9 +1203,10 @@ class TestNewSubmissionInvariantsProperty:
         # sheet_row_number matches
         assert create_kwargs["sheet_row_number"] == row_number
 
-        # All 18 columns: empty string → None, non-empty → original value
+        # Compare against the remapped row (20-col sheet → 18-col internal)
+        remapped = pad_row(remap_sheet_row(row))
         for i, col_name in enumerate(_COLUMN_NAMES):
-            expected = row[i] if row[i] else None
+            expected = remapped[i] if remapped[i] else None
             assert create_kwargs[col_name] == expected, (
                 f"Column {col_name} (idx {i}): "
                 f"expected {expected!r}, "
@@ -1440,6 +1445,11 @@ class TestSheetCreatedLeadsHaveNullZipCodeProperty:
         lead.situation = situation.value
         lead.notes = None
         lead.source_site = "google_sheets"
+        lead.lead_source = "google_form"
+        lead.source_detail = None
+        lead.intake_tag = None
+        lead.sms_consent = False
+        lead.terms_accepted = False
         lead.status = "new"
         lead.assigned_to = None
         lead.customer_id = None

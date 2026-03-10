@@ -8,6 +8,7 @@ Validates: Requirement 10.5-10.7
 """
 
 import os
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -35,9 +36,12 @@ from grins_platform.exceptions import (
     ValidationError,
 )
 from grins_platform.log_config import get_logger
+from grins_platform.scheduler import get_scheduler
+from grins_platform.services.background_jobs import register_scheduled_jobs
 from grins_platform.services.google_sheets_config import GoogleSheetsSettings
 from grins_platform.services.google_sheets_poller import GoogleSheetsPoller
 from grins_platform.services.google_sheets_service import GoogleSheetsService
+from grins_platform.services.stripe_config import StripeSettings
 
 logger = get_logger(__name__)
 
@@ -57,6 +61,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     db_manager = get_database_manager()
     health = await db_manager.health_check()
     logger.info("app.startup_database_check", **health)
+
+    # Stripe configuration check
+    stripe_settings = StripeSettings()
+    stripe_settings.log_configuration_status()
 
     # Google Sheets poller
     poller: GoogleSheetsPoller | None = None
@@ -82,12 +90,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         poller = None
 
     app.state.sheets_poller = poller
+
+    # Background scheduler
+    bg_scheduler = get_scheduler()
+    try:
+        register_scheduled_jobs(bg_scheduler)
+        bg_scheduler.start()
+        logger.info("app.scheduler_started")
+    except Exception as e:
+        logger.warning("app.scheduler_startup_failed", error=str(e))
+
     logger.info("app.startup_completed")
 
     yield
 
     # Shutdown
     logger.info("app.shutdown_started")
+    try:
+        bg_scheduler.shutdown(wait=False)
+        logger.info("app.scheduler_stopped")
+    except Exception as e:
+        logger.warning("app.scheduler_shutdown_failed", error=str(e))
     if app.state.sheets_poller is not None:
         await app.state.sheets_poller.stop()
         logger.info("app.sheets_poller_stopped")
@@ -143,8 +166,6 @@ def create_app() -> FastAPI:
     regex_patterns = [o for o in allowed_origins if "*" in o]
 
     # Build a combined regex from wildcard patterns (e.g. "https://app-*-team.vercel.app")
-    import re
-
     origin_regex: str | None = None
     if regex_patterns:
         # Convert glob-style * to regex .* and escape the rest

@@ -21,6 +21,7 @@ export interface Job extends BaseEntity {
   customer_id: string;
   property_id: string | null;
   service_offering_id: string | null;
+  service_agreement_id: string | null;
   job_type: string;
   category: JobCategory;
   status: JobStatus;
@@ -36,6 +37,8 @@ export interface Job extends BaseEntity {
   source: JobSource | null;
   source_details: Record<string, unknown> | null;
   payment_collected_on_site: boolean;
+  target_start_date: string | null;
+  target_end_date: string | null;
   requested_at: string | null;
   approved_at: string | null;
   scheduled_at: string | null;
@@ -99,6 +102,9 @@ export interface JobListParams extends PaginationParams {
   date_from?: string;
   date_to?: string;
   search?: string;
+  has_service_agreement?: boolean;
+  target_date_from?: string;
+  target_date_to?: string;
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
 }

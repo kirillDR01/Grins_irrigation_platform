@@ -8,3 +8,5 @@ export type { MetricsCardProps, MetricsCardVariant } from './MetricsCard';
 export { RecentActivity } from './RecentActivity';
 export { TechnicianAvailability } from './TechnicianAvailability';
 export { CommunicationsQueue } from './CommunicationsQueue';
+export { SubscriptionDashboardWidgets } from './SubscriptionDashboardWidgets';
+export { LeadDashboardWidgets } from './LeadDashboardWidgets';

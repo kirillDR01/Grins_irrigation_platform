@@ -105,12 +105,18 @@ class TestProcessRow:
             result = await service.process_row(sample_sheet_row, 2, mock_session)
 
         lead_repo.create.assert_awaited_once()
+        create_kwargs = lead_repo.create.call_args[1]
+        assert create_kwargs["lead_source"] == "google_form"
+        assert create_kwargs["source_detail"] == "New client work request"
         sub_repo.update.assert_awaited()
+        update_kwargs = sub_repo.update.call_args[0][1]
+        assert update_kwargs["promoted_to_lead_id"] == mock_lead.id
+        assert update_kwargs["promoted_at"] is not None
         assert result.processing_status == "lead_created"
         assert result.lead_id == mock_lead.id
 
     @pytest.mark.asyncio
-    async def test_existing_client_skipped(
+    async def test_existing_client_creates_lead(
         self,
         service: GoogleSheetsService,
         mock_session: AsyncMock,
@@ -118,7 +124,12 @@ class TestProcessRow:
     ) -> None:
         sample_sheet_row[14] = "existing"
         mock_sub = _make_submission(processing_status="imported")
-        updated_sub = _make_submission(processing_status="skipped")
+        mock_lead = MagicMock()
+        mock_lead.id = uuid4()
+        updated_sub = _make_submission(
+            lead_id=mock_lead.id,
+            processing_status="lead_created",
+        )
 
         with patch(_SUB_REPO) as sub_cls, patch(_LEAD_REPO) as lead_cls:
             sub_repo = sub_cls.return_value
@@ -127,12 +138,16 @@ class TestProcessRow:
             sub_repo.get_by_id = AsyncMock(return_value=updated_sub)
 
             lead_repo = lead_cls.return_value
-            lead_repo.create = AsyncMock()
+            lead_repo.get_by_phone_and_active_status = AsyncMock(return_value=None)
+            lead_repo.create = AsyncMock(return_value=mock_lead)
 
             result = await service.process_row(sample_sheet_row, 2, mock_session)
 
-        lead_repo.create.assert_not_awaited()
-        assert result.processing_status == "skipped"
+        lead_repo.create.assert_awaited_once()
+        create_kwargs = lead_repo.create.call_args[1]
+        assert create_kwargs["lead_source"] == "google_form"
+        assert create_kwargs["source_detail"] == "Existing client work request"
+        assert result.processing_status == "lead_created"
 
     @pytest.mark.asyncio
     async def test_new_client_duplicate_phone_links_existing_lead(
@@ -167,7 +182,7 @@ class TestProcessRow:
         assert result.lead_id == existing_lead.id
 
     @pytest.mark.asyncio
-    async def test_empty_client_type_skipped(
+    async def test_empty_client_type_creates_lead(
         self,
         service: GoogleSheetsService,
         mock_session: AsyncMock,
@@ -175,17 +190,30 @@ class TestProcessRow:
     ) -> None:
         sample_sheet_row[14] = ""
         mock_sub = _make_submission()
-        updated_sub = _make_submission(processing_status="skipped")
+        mock_lead = MagicMock()
+        mock_lead.id = uuid4()
+        updated_sub = _make_submission(
+            lead_id=mock_lead.id,
+            processing_status="lead_created",
+        )
 
-        with patch(_SUB_REPO) as sub_cls, patch(_LEAD_REPO):
+        with patch(_SUB_REPO) as sub_cls, patch(_LEAD_REPO) as lead_cls:
             sub_repo = sub_cls.return_value
             sub_repo.create = AsyncMock(return_value=mock_sub)
             sub_repo.update = AsyncMock()
             sub_repo.get_by_id = AsyncMock(return_value=updated_sub)
 
+            lead_repo = lead_cls.return_value
+            lead_repo.get_by_phone_and_active_status = AsyncMock(return_value=None)
+            lead_repo.create = AsyncMock(return_value=mock_lead)
+
             result = await service.process_row(sample_sheet_row, 2, mock_session)
 
-        assert result.processing_status == "skipped"
+        lead_repo.create.assert_awaited_once()
+        create_kwargs = lead_repo.create.call_args[1]
+        assert create_kwargs["lead_source"] == "google_form"
+        assert create_kwargs["source_detail"] == "Existing client work request"
+        assert result.processing_status == "lead_created"
 
     @pytest.mark.asyncio
     async def test_name_fallback_to_unknown(

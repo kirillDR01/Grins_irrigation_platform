@@ -279,3 +279,149 @@ VALID_LEAD_STATUS_TRANSITIONS: dict[
     LeadStatus.LOST: {LeadStatus.NEW},  # re-engagement
     LeadStatus.SPAM: set(),  # terminal
 }
+
+
+# =============================================================================
+# Service Package Purchases Enums
+# =============================================================================
+
+
+class AgreementStatus(str, Enum):
+    """Service agreement lifecycle status.
+
+    Validates: Requirement 2.1, 5.1
+    """
+
+    PENDING = "pending"
+    ACTIVE = "active"
+    PAST_DUE = "past_due"
+    PAUSED = "paused"
+    PENDING_RENEWAL = "pending_renewal"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"
+
+
+class AgreementPaymentStatus(str, Enum):
+    """Payment status for service agreements.
+
+    Validates: Requirement 2.1
+    """
+
+    CURRENT = "current"
+    PAST_DUE = "past_due"
+    FAILED = "failed"
+
+
+class PackageType(str, Enum):
+    """Package type for service agreement tiers.
+
+    Validates: Requirement 1.1
+    """
+
+    RESIDENTIAL = "residential"
+    COMMERCIAL = "commercial"
+
+
+class BillingFrequency(str, Enum):
+    """Billing frequency for service agreement tiers.
+
+    Validates: Requirement 1.1
+    """
+
+    ANNUAL = "annual"
+
+
+class DisclosureType(str, Enum):
+    """Disclosure record types for MN auto-renewal compliance.
+
+    Validates: Requirement 33.1
+    """
+
+    PRE_SALE = "pre_sale"
+    CONFIRMATION = "confirmation"
+    RENEWAL_NOTICE = "renewal_notice"
+    ANNUAL_NOTICE = "annual_notice"
+    MATERIAL_CHANGE = "material_change"
+    CANCELLATION_CONF = "cancellation_conf"
+
+
+class WebhookProcessingStatus(str, Enum):
+    """Stripe webhook event processing status.
+
+    Validates: Requirement 7.1
+    """
+
+    PENDING = "pending"
+    PROCESSED = "processed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
+class EmailType(str, Enum):
+    """Email classification for CAN-SPAM compliance.
+
+    Validates: Requirement 39B.1
+    """
+
+    TRANSACTIONAL = "transactional"
+    COMMERCIAL = "commercial"
+
+
+class IntakeTag(str, Enum):
+    """Lead intake routing disposition.
+
+    Validates: Requirement 47.1
+    """
+
+    SCHEDULE = "schedule"
+    FOLLOW_UP = "follow_up"
+
+
+class LeadSourceExtended(str, Enum):
+    """Extended lead source channels for attribution.
+
+    Validates: Requirement 44.1
+    """
+
+    WEBSITE = "website"
+    GOOGLE_FORM = "google_form"
+    PHONE_CALL = "phone_call"
+    TEXT_MESSAGE = "text_message"
+    GOOGLE_AD = "google_ad"
+    SOCIAL_MEDIA = "social_media"
+    QR_CODE = "qr_code"
+    EMAIL_CAMPAIGN = "email_campaign"
+    TEXT_CAMPAIGN = "text_campaign"
+    REFERRAL = "referral"
+    OTHER = "other"
+
+
+VALID_AGREEMENT_STATUS_TRANSITIONS: dict[
+    AgreementStatus,
+    set[AgreementStatus],
+] = {
+    AgreementStatus.PENDING: {AgreementStatus.ACTIVE, AgreementStatus.CANCELLED},
+    AgreementStatus.ACTIVE: {
+        AgreementStatus.PAST_DUE,
+        AgreementStatus.PENDING_RENEWAL,
+        AgreementStatus.CANCELLED,
+        AgreementStatus.EXPIRED,
+        AgreementStatus.PAUSED,
+    },
+    AgreementStatus.PAST_DUE: {
+        AgreementStatus.ACTIVE,
+        AgreementStatus.PAUSED,
+        AgreementStatus.CANCELLED,
+    },
+    AgreementStatus.PAUSED: {
+        AgreementStatus.ACTIVE,
+        AgreementStatus.CANCELLED,
+    },
+    AgreementStatus.PENDING_RENEWAL: {
+        AgreementStatus.ACTIVE,
+        AgreementStatus.EXPIRED,
+        AgreementStatus.CANCELLED,
+    },
+    AgreementStatus.CANCELLED: set(),  # terminal
+    AgreementStatus.EXPIRED: {AgreementStatus.ACTIVE},  # win-back re-subscription
+}

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Welcome to {{ business_name }}</title></head>
+<body>
+<h1>Welcome to {{ business_name }} {{ tier_name }} Plan!</h1>
+<p>Dear {{ customer_name }},</p>
+<p>Thank you for choosing {{ business_name }}! Your {{ tier_name }} ({{ package_type }}) subscription is now active.</p>
+<h2>Subscription Details</h2>
+<ul>
+  <li><strong>Plan:</strong> {{ tier_name }} ({{ package_type }})</li>
+  <li><strong>Annual Price:</strong> ${{ annual_price }}</li>
+  {% if start_date %}<li><strong>Start Date:</strong> {{ start_date }}</li>{% endif %}
+</ul>
+<h2>Included Services</h2>
+<ul>
+{% for svc in included_services %}
+  <li>{{ svc.get('service_type', svc) if svc is mapping else svc }}{% if svc is mapping and svc.get('description') %} — {{ svc.description }}{% endif %}</li>
+{% endfor %}
+</ul>
+<h2>Next Steps</h2>
+<p>Please complete your property details so we can schedule your visits:</p>
+{% if session_id %}<p><a href="{{ portal_url }}">Manage Your Subscription</a></p>{% endif %}
+<p>Questions? Contact us at {{ business_phone }} or {{ business_email }}.</p>
+<p>— {{ business_name }}</p>
+</body>
+</html>

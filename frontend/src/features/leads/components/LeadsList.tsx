@@ -6,7 +6,7 @@ import {
   useReactTable,
   type ColumnDef,
 } from '@tanstack/react-table';
-import { Phone, Inbox } from 'lucide-react';
+import { Phone, Inbox, MessageSquare, FileCheck } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,8 +20,10 @@ import {
 import { LoadingPage, ErrorMessage } from '@/shared/components';
 import { useLeads } from '../hooks/useLeads';
 import { LeadStatusBadge } from './LeadStatusBadge';
-import { LeadSituationBadge } from './LeadSituationBadge';
+import { LeadSourceBadge } from './LeadSourceBadge';
+import { IntakeTagBadge } from './IntakeTagBadge';
 import { LeadFilters } from './LeadFilters';
+import { FollowUpQueue } from './FollowUpQueue';
 import type { Lead, LeadListParams } from '../types';
 
 export function LeadsList() {
@@ -78,14 +80,25 @@ export function LeadsList() {
       ),
     },
     {
-      accessorKey: 'situation',
+      id: 'lead_source',
       header: () => (
         <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
-          Situation
+          Source
         </span>
       ),
       cell: ({ row }) => (
-        <LeadSituationBadge situation={row.original.situation} />
+        <LeadSourceBadge source={row.original.lead_source} />
+      ),
+    },
+    {
+      id: 'intake_tag',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
+          Intake
+        </span>
+      ),
+      cell: ({ row }) => (
+        <IntakeTagBadge tag={row.original.intake_tag} />
       ),
     },
     {
@@ -98,14 +111,31 @@ export function LeadsList() {
       cell: ({ row }) => <LeadStatusBadge status={row.original.status} />,
     },
     {
-      accessorKey: 'zip_code',
+      id: 'consent',
       header: () => (
         <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
-          Zip Code
+          Consent
         </span>
       ),
       cell: ({ row }) => (
-        <span className="text-sm text-slate-600">{row.original.zip_code ?? 'N/A'}</span>
+        <div className="flex items-center gap-2">
+          <span
+            title={row.original.sms_consent ? 'SMS consent given' : 'No SMS consent'}
+            data-testid={`sms-consent-${row.original.id}`}
+          >
+            <MessageSquare
+              className={`h-4 w-4 ${row.original.sms_consent ? 'text-green-500' : 'text-gray-300'}`}
+            />
+          </span>
+          <span
+            title={row.original.terms_accepted ? 'Terms accepted' : 'Terms not accepted'}
+            data-testid={`terms-accepted-${row.original.id}`}
+          >
+            <FileCheck
+              className={`h-4 w-4 ${row.original.terms_accepted ? 'text-green-500' : 'text-gray-300'}`}
+            />
+          </span>
+        </div>
       ),
     },
     {
@@ -123,23 +153,6 @@ export function LeadsList() {
           </span>
         );
       },
-    },
-    {
-      accessorKey: 'assigned_to',
-      header: () => (
-        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
-          Assigned To
-        </span>
-      ),
-      cell: ({ row }) => (
-        <span className="text-sm text-slate-600">
-          {row.original.assigned_to ? (
-            row.original.assigned_to
-          ) : (
-            <span className="text-slate-400 italic">Unassigned</span>
-          )}
-        </span>
-      ),
     },
   ];
 
@@ -170,6 +183,9 @@ export function LeadsList() {
           )}
         </div>
       </div>
+
+      {/* Follow-Up Queue Panel */}
+      <FollowUpQueue />
 
       {/* Filters */}
       <LeadFilters params={params} onChange={handleFilterChange} />

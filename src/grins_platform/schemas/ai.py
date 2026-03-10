@@ -60,6 +60,7 @@ class MessageType(str, Enum):
     COMPLETION = "completion"
     INVOICE = "invoice"
     PAYMENT_REMINDER = "payment_reminder"
+    LEAD_CONFIRMATION = "lead_confirmation"
     CUSTOM = "custom"
 
 

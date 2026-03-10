@@ -26,6 +26,8 @@ import { useDashboardMetrics, useTodaySchedule, useJobsByStatus } from '../hooks
 import { MetricsCard } from './MetricsCard';
 import { RecentActivity } from './RecentActivity';
 import { TechnicianAvailability } from './TechnicianAvailability';
+import { SubscriptionDashboardWidgets } from './SubscriptionDashboardWidgets';
+import { LeadDashboardWidgets } from './LeadDashboardWidgets';
 import { AIQueryChat } from '@/features/ai/components/AIQueryChat';
 import { MorningBriefing } from '@/features/ai/components/MorningBriefing';
 import { OverdueInvoicesWidget, LienDeadlinesWidget } from '@/features/invoices';
@@ -100,6 +102,12 @@ export function DashboardPage() {
 
           {/* Morning Briefing */}
           <MorningBriefing />
+
+          {/* Subscription Widgets */}
+          <SubscriptionDashboardWidgets />
+
+          {/* Lead Widgets */}
+          <LeadDashboardWidgets />
 
           {/* Metrics Cards */}
           <div

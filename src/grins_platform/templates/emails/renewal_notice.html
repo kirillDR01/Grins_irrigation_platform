@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Renewal Notice</title></head>
+<body>
+<h1>Service Agreement Renewal Notice</h1>
+<p>Dear {{ customer_name }},</p>
+<p>Your {{ business_name }} service agreement is approaching renewal.</p>
+<h2>Renewal Details</h2>
+<ul>
+  <li><strong>Renewal Date:</strong> {{ renewal_date }}</li>
+  <li><strong>Renewal Price:</strong> ${{ annual_price }}</li>
+</ul>
+<h2>Cancellation Instructions</h2>
+<p>If you do not wish to renew, you may cancel before the renewal date:</p>
+<ul>
+  <li><a href="{{ portal_url }}">Stripe Customer Portal</a></li>
+  <li>Phone: {{ business_phone }}</li>
+  <li>Email: {{ business_email }}</li>
+</ul>
+{% if completed_jobs %}
+<h2>Services Provided This Term</h2>
+<ul>
+{% for job in completed_jobs %}
+  <li>{{ job.get('name', '') }}{% if job.get('date') %} — {{ job.date }}{% endif %}</li>
+{% endfor %}
+</ul>
+{% endif %}
+<p>Manage your subscription: <a href="{{ portal_url }}">Stripe Customer Portal</a></p>
+<p>— {{ business_name }}</p>
+</body>
+</html>

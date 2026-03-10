@@ -47,6 +47,11 @@ def _make_lead_mock(
     situation: str = LeadSituation.NEW_SYSTEM.value,
     notes: str | None = None,
     source_site: str = "residential",
+    lead_source: str = "website",
+    source_detail: str | None = None,
+    intake_tag: str | None = "schedule",
+    sms_consent: bool = False,
+    terms_accepted: bool = False,
     status: str = LeadStatus.NEW.value,
     assigned_to: None | object = None,
     customer_id: None | object = None,
@@ -63,6 +68,11 @@ def _make_lead_mock(
     lead.situation = situation
     lead.notes = notes
     lead.source_site = source_site
+    lead.lead_source = lead_source
+    lead.source_detail = source_detail
+    lead.intake_tag = intake_tag
+    lead.sms_consent = sms_consent
+    lead.terms_accepted = terms_accepted
     lead.status = status
     lead.assigned_to = assigned_to
     lead.customer_id = customer_id

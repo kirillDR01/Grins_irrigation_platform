@@ -10,7 +10,7 @@ Validates: Requirement 2.1-2.12, 3.1-3.7, 4.1-4.10, 5.1-5.7, 6.1-6.9, 7.1-7.4
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING, ClassVar
 
@@ -444,6 +444,9 @@ class JobService(LoggerMixin):
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         search: str | None = None,
+        has_service_agreement: bool | None = None,
+        target_date_from: date | None = None,
+        target_date_to: date | None = None,
         sort_by: str = "created_at",
         sort_order: str = "desc",
     ) -> tuple[list[Job], int]:
@@ -461,6 +464,9 @@ class JobService(LoggerMixin):
             date_from: Filter by created_at >= date_from
             date_to: Filter by created_at <= date_to
             search: Search by job type or description
+            has_service_agreement: Filter by subscription source
+            target_date_from: Filter by target_start_date >= date
+            target_date_to: Filter by target_start_date <= date
             sort_by: Field to sort by
             sort_order: Sort order (asc/desc)
 
@@ -483,6 +489,9 @@ class JobService(LoggerMixin):
             date_from=date_from,
             date_to=date_to,
             search=search,
+            has_service_agreement=has_service_agreement,
+            target_date_from=target_date_from,
+            target_date_to=target_date_to,
             sort_by=sort_by,
             sort_order=sort_order,
         )

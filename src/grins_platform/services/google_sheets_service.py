@@ -1,19 +1,20 @@
 """Google Sheets service for business logic operations.
 
-Processes Google Sheet submission rows, creates leads for new clients,
-and provides listing/detail access to submissions.
+Processes Google Sheet submission rows, creates leads for all submissions
+(auto-promotion), and provides listing/detail access to submissions.
 
-Validates: Requirements 3.1-3.11, 11.1, 17.2-17.4
+Validates: Requirements 3.1-3.11, 11.1, 17.2-17.4, 52.1, 52.2, 52.5
 """
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from math import ceil
 from typing import TYPE_CHECKING
 from uuid import UUID
 
 from grins_platform.log_config import LoggerMixin
-from grins_platform.models.enums import LeadSituation
+from grins_platform.models.enums import IntakeTag, LeadSituation, LeadSourceExtended
 from grins_platform.repositories.google_sheet_submission_repository import (
     GoogleSheetSubmissionRepository,
 )
@@ -58,7 +59,14 @@ class GoogleSheetsService(LoggerMixin):
         row_number: int,
         session: AsyncSession,
     ) -> GoogleSheetSubmission:
-        """Process a single sheet row: store submission and optionally create lead."""
+        """Process a sheet row: store submission and create lead.
+
+        All work request submissions are auto-promoted to Leads regardless of
+        client type. The submission is updated with promoted_to_lead_id and
+        promoted_at for tracking.
+
+        Validates: Requirements 52.1, 52.2, 52.5
+        """
         self.log_started("process_row", row_number=row_number)
 
         sub_repo = GoogleSheetSubmissionRepository(session)
@@ -89,55 +97,52 @@ class GoogleSheetsService(LoggerMixin):
         )
 
         client_type = (padded[14].strip().lower()) if padded[14] else ""
+        is_new = client_type == "new"
+        source_detail = (
+            "New client work request" if is_new else "Existing client work request"
+        )
 
-        if client_type == "new":
-            phone = self.safe_normalize_phone(padded[10])
-            existing_lead = await lead_repo.get_by_phone_and_active_status(phone)
+        phone = self.safe_normalize_phone(padded[10])
+        existing_lead = await lead_repo.get_by_phone_and_active_status(phone)
 
-            if existing_lead:
-                self.logger.info(
-                    "sheets.googlesheetservice.lead_linked_existing",
-                    submission_id=str(submission.id),
-                    existing_lead_id=str(existing_lead.id),
-                    phone=phone,
-                )
-                await sub_repo.update(
-                    submission.id,
-                    {
-                        "processing_status": "lead_created",
-                        "lead_id": existing_lead.id,
-                    },
-                )
-            else:
-                lead = await lead_repo.create(
-                    name=self.normalize_name(padded[9]),
-                    phone=phone,
-                    email=padded[11].strip() or None,
-                    zip_code=None,
-                    situation=self.map_situation(padded).value,
-                    notes=self.aggregate_notes(padded) or None,
-                    source_site="google_sheets",
-                )
-                self.logger.info(
-                    "sheets.googlesheetservice.lead_created",
-                    submission_id=str(submission.id),
-                    lead_id=str(lead.id),
-                    phone=phone,
-                )
-                await sub_repo.update(
-                    submission.id,
-                    {"processing_status": "lead_created", "lead_id": lead.id},
-                )
-        else:
+        if existing_lead:
+            lead_id = existing_lead.id
             self.logger.info(
-                "sheets.googlesheetservice.lead_skipped",
+                "sheets.googlesheetservice.lead_linked_existing",
                 submission_id=str(submission.id),
-                client_type=client_type or "empty",
+                existing_lead_id=str(existing_lead.id),
+                phone=phone,
             )
-            await sub_repo.update(
-                submission.id,
-                {"processing_status": "skipped"},
+        else:
+            lead = await lead_repo.create(
+                name=self.normalize_name(padded[9]),
+                phone=phone,
+                email=padded[11].strip() or None,
+                zip_code=None,
+                situation=self.map_situation(padded).value,
+                notes=self.aggregate_notes(padded) or None,
+                source_site="google_sheets",
+                lead_source=LeadSourceExtended.GOOGLE_FORM.value,
+                source_detail=source_detail,
+                intake_tag=IntakeTag.SCHEDULE.value,
             )
+            lead_id = lead.id
+            self.logger.info(
+                "sheets.googlesheetservice.lead_created",
+                submission_id=str(submission.id),
+                lead_id=str(lead.id),
+                phone=phone,
+            )
+
+        await sub_repo.update(
+            submission.id,
+            {
+                "processing_status": "lead_created",
+                "lead_id": lead_id,
+                "promoted_to_lead_id": lead_id,
+                "promoted_at": datetime.now(tz=timezone.utc),
+            },
+        )
 
         updated = await sub_repo.get_by_id(submission.id)
         self.log_completed(
@@ -153,7 +158,12 @@ class GoogleSheetsService(LoggerMixin):
         submission_id: UUID,
         session: AsyncSession,
     ) -> GoogleSheetSubmission:
-        """Manually create a lead from an existing submission."""
+        """Manually create a lead from an existing submission.
+
+        Also sets promoted_to_lead_id and promoted_at for tracking.
+
+        Validates: Requirements 52.1, 52.2, 52.5
+        """
         self.log_started(
             "create_lead_from_submission",
             submission_id=str(submission_id),
@@ -171,14 +181,19 @@ class GoogleSheetsService(LoggerMixin):
             msg = "Submission already has a linked lead"
             raise ValueError(msg)
 
+        client_type = (
+            (submission.client_type.strip().lower()) if submission.client_type else ""
+        )
+        is_new = client_type == "new"
+        source_detail = (
+            "New client work request" if is_new else "Existing client work request"
+        )
+
         phone = self.safe_normalize_phone(submission.phone or "")
         existing_lead = await lead_repo.get_by_phone_and_active_status(phone)
 
         if existing_lead:
-            await sub_repo.update(
-                submission_id,
-                {"processing_status": "lead_created", "lead_id": existing_lead.id},
-            )
+            lead_id = existing_lead.id
         else:
             row = _submission_to_row(submission)
             lead = await lead_repo.create(
@@ -189,11 +204,21 @@ class GoogleSheetsService(LoggerMixin):
                 situation=self.map_situation(row).value,
                 notes=self.aggregate_notes(row) or None,
                 source_site="google_sheets",
+                lead_source=LeadSourceExtended.GOOGLE_FORM.value,
+                source_detail=source_detail,
+                intake_tag=IntakeTag.SCHEDULE.value,
             )
-            await sub_repo.update(
-                submission_id,
-                {"processing_status": "lead_created", "lead_id": lead.id},
-            )
+            lead_id = lead.id
+
+        await sub_repo.update(
+            submission_id,
+            {
+                "processing_status": "lead_created",
+                "lead_id": lead_id,
+                "promoted_to_lead_id": lead_id,
+                "promoted_at": datetime.now(tz=timezone.utc),
+            },
+        )
 
         updated = await sub_repo.get_by_id(submission_id)
         self.log_completed(

@@ -11,6 +11,7 @@ import { dashboardApi } from '../api/dashboardApi';
 export const dashboardKeys = {
   all: ['dashboard'] as const,
   metrics: () => [...dashboardKeys.all, 'metrics'] as const,
+  summary: () => [...dashboardKeys.all, 'summary'] as const,
   requestVolume: (params?: { start_date?: string; end_date?: string }) =>
     [...dashboardKeys.all, 'requestVolume', params] as const,
   scheduleOverview: (date?: string) =>
@@ -18,6 +19,7 @@ export const dashboardKeys = {
   paymentStatus: () => [...dashboardKeys.all, 'paymentStatus'] as const,
   jobsByStatus: () => [...dashboardKeys.all, 'jobsByStatus'] as const,
   todaySchedule: () => [...dashboardKeys.all, 'todaySchedule'] as const,
+  leadMetricsBySource: () => [...dashboardKeys.all, 'leadMetricsBySource'] as const,
 };
 
 /**
@@ -27,8 +29,20 @@ export function useDashboardMetrics() {
   return useQuery({
     queryKey: dashboardKeys.metrics(),
     queryFn: dashboardApi.getMetrics,
-    staleTime: 30 * 1000, // 30 seconds
-    refetchInterval: 60 * 1000, // Refetch every minute
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+  });
+}
+
+/**
+ * Hook to fetch extended dashboard summary (agreements + leads).
+ */
+export function useDashboardSummary() {
+  return useQuery({
+    queryKey: dashboardKeys.summary(),
+    queryFn: dashboardApi.getSummary,
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
   });
 }
 
@@ -90,5 +104,16 @@ export function useTodaySchedule() {
     queryFn: dashboardApi.getTodaySchedule,
     staleTime: 30 * 1000, // 30 seconds
     refetchInterval: 60 * 1000, // Refetch every minute
+  });
+}
+
+/**
+ * Hook to fetch lead metrics grouped by source (trailing 30 days).
+ */
+export function useLeadMetricsBySource() {
+  return useQuery({
+    queryKey: dashboardKeys.leadMetricsBySource(),
+    queryFn: dashboardApi.getLeadMetricsBySource,
+    staleTime: 5 * 60 * 1000,
   });
 }

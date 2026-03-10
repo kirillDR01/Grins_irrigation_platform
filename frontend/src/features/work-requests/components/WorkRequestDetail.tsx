@@ -229,6 +229,28 @@ export function WorkRequestDetail() {
                   </div>
                 </>
               )}
+
+              {request.promoted_to_lead_id && (
+                <>
+                  <Separator className="bg-slate-100" />
+                  <div>
+                    <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Promoted to Lead</p>
+                    {request.promoted_at && (
+                      <p className="text-xs text-slate-500 mb-2">{formatDate(request.promoted_at)}</p>
+                    )}
+                    <Link
+                      to={`/leads/${request.promoted_to_lead_id}`}
+                      data-testid="promoted-lead-link"
+                      className="flex items-center gap-2 p-3 bg-teal-50 rounded-xl hover:bg-teal-100 transition-colors group"
+                    >
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-teal-800">View Promoted Lead</p>
+                      </div>
+                      <ExternalLink className="h-4 w-4 text-teal-600" />
+                    </Link>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>

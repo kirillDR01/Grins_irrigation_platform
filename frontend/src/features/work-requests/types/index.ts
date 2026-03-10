@@ -35,6 +35,8 @@ export interface WorkRequest {
   imported_at: string;
   created_at: string;
   updated_at: string;
+  promoted_to_lead_id: string | null;
+  promoted_at: string | null;
 }
 
 // Sync status from poller

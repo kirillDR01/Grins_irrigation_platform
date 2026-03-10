@@ -238,7 +238,6 @@ describe('JobsReadyToSchedulePreview', () => {
     });
 
     it('filters do not affect excluded job tracking', async () => {
-      const user = userEvent.setup();
       const excludedJobIds = new Set(['job-1']);
       const onToggleExclude = () => {};
 

@@ -27,6 +27,8 @@ import {
   Loader2,
   User,
   Briefcase,
+  MessageSquare,
+  FileCheck,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -46,6 +48,8 @@ import { LoadingPage, ErrorMessage, PageHeader } from '@/shared/components';
 import { useLead, useUpdateLead, useDeleteLead } from '../hooks';
 import { LeadStatusBadge } from './LeadStatusBadge';
 import { LeadSituationBadge } from './LeadSituationBadge';
+import { LeadSourceBadge } from './LeadSourceBadge';
+import { IntakeTagBadge } from './IntakeTagBadge';
 import { ConvertLeadDialog } from './ConvertLeadDialog';
 import type { LeadStatus } from '../types';
 import { LEAD_STATUS_LABELS } from '../types';
@@ -345,6 +349,35 @@ export function LeadDetail() {
                     <p className="font-medium text-slate-700">{lead.source_site}</p>
                   </div>
                 </div>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-slate-100 rounded-lg">
+                    <Globe className="h-5 w-5 text-slate-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Lead Source</p>
+                    <LeadSourceBadge source={lead.lead_source} />
+                  </div>
+                </div>
+                {lead.source_detail && (
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-slate-100 rounded-lg">
+                      <Globe className="h-5 w-5 text-slate-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400">Source Detail</p>
+                      <p className="font-medium text-slate-700">{lead.source_detail}</p>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-slate-100 rounded-lg">
+                    <Briefcase className="h-5 w-5 text-slate-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Intake Tag</p>
+                    <IntakeTagBadge tag={lead.intake_tag} />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -365,6 +398,40 @@ export function LeadDetail() {
                 </div>
               </>
             )}
+
+            {/* Consent Status */}
+            <Separator className="bg-slate-100" />
+            <div>
+              <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">
+                Consent Status
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${lead.sms_consent ? 'bg-green-100' : 'bg-gray-100'}`}>
+                    <MessageSquare className={`h-5 w-5 ${lead.sms_consent ? 'text-green-600' : 'text-gray-400'}`} />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">SMS Consent</p>
+                    <p className={`text-sm font-medium ${lead.sms_consent ? 'text-green-700' : 'text-gray-500'}`}
+                       data-testid={`sms-consent-${lead.id}`}>
+                      {lead.sms_consent ? 'Given' : 'Not given'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${lead.terms_accepted ? 'bg-green-100' : 'bg-gray-100'}`}>
+                    <FileCheck className={`h-5 w-5 ${lead.terms_accepted ? 'text-green-600' : 'text-gray-400'}`} />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Terms Accepted</p>
+                    <p className={`text-sm font-medium ${lead.terms_accepted ? 'text-green-700' : 'text-gray-500'}`}
+                       data-testid={`terms-accepted-${lead.id}`}>
+                      {lead.terms_accepted ? 'Accepted' : 'Not accepted'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {/* Converted Links */}
             {lead.status === 'converted' && (

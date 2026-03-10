@@ -414,15 +414,91 @@ class InvalidLeadStatusTransitionError(LeadError):
         )
 
 
+class AgreementError(Exception):
+    """Base exception for agreement operations."""
+
+
+class AgreementNotFoundError(AgreementError):
+    """Raised when a service agreement is not found."""
+
+    def __init__(self, agreement_id: UUID) -> None:
+        """Initialize with agreement ID."""
+        self.agreement_id = agreement_id
+        super().__init__(f"Agreement not found: {agreement_id}")
+
+
+class InvalidAgreementStatusTransitionError(AgreementError):
+    """Raised when an invalid agreement status transition is attempted.
+
+    Validates: Requirement 5.2
+    """
+
+    def __init__(self, current_status: str, requested_status: str) -> None:
+        """Initialize with status transition details."""
+        self.current_status = current_status
+        self.requested_status = requested_status
+        super().__init__(
+            f"Invalid agreement status transition from '{current_status}' "
+            f"to '{requested_status}'",
+        )
+
+
+class MidSeasonTierChangeError(AgreementError):
+    """Raised when a tier change is attempted on an active agreement.
+
+    Validates: Requirement 18.1
+    """
+
+    def __init__(self, agreement_id: UUID) -> None:
+        """Initialize with agreement ID."""
+        self.agreement_id = agreement_id
+        super().__init__(
+            f"Tier changes are not permitted while agreement {agreement_id} "
+            f"is ACTIVE. Tier changes are only allowed at renewal.",
+        )
+
+
+class InactiveTierError(AgreementError):
+    """Raised when an inactive tier is used for agreement creation.
+
+    Validates: Requirement 1.4
+    """
+
+    def __init__(self, tier_id: UUID) -> None:
+        """Initialize with tier ID."""
+        self.tier_id = tier_id
+        super().__init__(f"Tier {tier_id} is inactive and cannot be used")
+
+
+class ConsentValidationError(AgreementError):
+    """Raised when pre-checkout consent validation fails.
+
+    Validates: Requirement 30.5
+    """
+
+    def __init__(self, missing_fields: list[str]) -> None:
+        """Initialize with missing consent fields."""
+        self.missing_fields = missing_fields
+        super().__init__(
+            f"Pre-checkout consent validation failed: {', '.join(missing_fields)} "
+            f"must be true",
+        )
+
+
 __all__ = [
     "AccountLockedError",
+    "AgreementError",
+    "AgreementNotFoundError",
     "AppointmentNotFoundError",
     "AuthenticationError",
     "BulkOperationError",
+    "ConsentValidationError",
     "CustomerError",
     "CustomerNotFoundError",
     "DuplicateCustomerError",
     "FieldOperationsError",
+    "InactiveTierError",
+    "InvalidAgreementStatusTransitionError",
     "InvalidCredentialsError",
     "InvalidInvoiceOperationError",
     "InvalidLeadStatusTransitionError",
@@ -433,6 +509,7 @@ __all__ = [
     "LeadAlreadyConvertedError",
     "LeadError",
     "LeadNotFoundError",
+    "MidSeasonTierChangeError",
     "PropertyCustomerMismatchError",
     "PropertyNotFoundError",
     "ScheduleClearAuditNotFoundError",

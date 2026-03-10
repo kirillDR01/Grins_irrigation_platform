@@ -9,7 +9,7 @@ Validates: Requirements 2.1-2.12, 4.1-4.10, 5.1-5.7, 6.1-6.9
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -260,6 +260,18 @@ class JobResponse(BaseModel):
     source_details: dict[str, Any] | None = Field(
         default=None,
         description="Source details",
+    )
+    service_agreement_id: UUID | None = Field(
+        default=None,
+        description="Reference to the service agreement",
+    )
+    target_start_date: date | None = Field(
+        default=None,
+        description="Target start date for agreement-generated jobs",
+    )
+    target_end_date: date | None = Field(
+        default=None,
+        description="Target end date for agreement-generated jobs",
     )
     requested_at: datetime | None = Field(
         default=None,

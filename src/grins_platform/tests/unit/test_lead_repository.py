@@ -330,6 +330,88 @@ class TestLeadRepositoryListWithFilters:
         assert total == 1
 
     @pytest.mark.asyncio
+    async def test_list_with_lead_source_filter(
+        self,
+        repository: LeadRepository,
+        mock_session: AsyncMock,
+    ) -> None:
+        """Test listing leads filtered by lead_source multi-select.
+
+        Validates: Requirement 45.3
+        """
+        mock_lead = MagicMock(spec=Lead)
+
+        mock_count_result = MagicMock()
+        mock_count_result.scalar.return_value = 1
+
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_lead]
+        mock_list_result = MagicMock()
+        mock_list_result.scalars.return_value = mock_scalars
+
+        mock_session.execute.side_effect = [mock_count_result, mock_list_result]
+
+        params = LeadListParams(lead_source=["website", "phone_call"])
+        leads, total = await repository.list_with_filters(params)
+
+        assert len(leads) == 1
+        assert total == 1
+
+    @pytest.mark.asyncio
+    async def test_list_with_intake_tag_filter(
+        self,
+        repository: LeadRepository,
+        mock_session: AsyncMock,
+    ) -> None:
+        """Test listing leads filtered by intake_tag.
+
+        Validates: Requirement 48.4
+        """
+        mock_lead = MagicMock(spec=Lead)
+
+        mock_count_result = MagicMock()
+        mock_count_result.scalar.return_value = 1
+
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_lead]
+        mock_list_result = MagicMock()
+        mock_list_result.scalars.return_value = mock_scalars
+
+        mock_session.execute.side_effect = [mock_count_result, mock_list_result]
+
+        params = LeadListParams(intake_tag="follow_up")
+        leads, total = await repository.list_with_filters(params)
+
+        assert len(leads) == 1
+        assert total == 1
+
+    @pytest.mark.asyncio
+    async def test_list_with_intake_tag_null_filter(
+        self,
+        repository: LeadRepository,
+        mock_session: AsyncMock,
+    ) -> None:
+        """Test listing leads filtered by intake_tag=null (untagged).
+
+        Validates: Requirement 48.4
+        """
+        mock_count_result = MagicMock()
+        mock_count_result.scalar.return_value = 0
+
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = []
+        mock_list_result = MagicMock()
+        mock_list_result.scalars.return_value = mock_scalars
+
+        mock_session.execute.side_effect = [mock_count_result, mock_list_result]
+
+        params = LeadListParams(intake_tag="null")
+        leads, total = await repository.list_with_filters(params)
+
+        assert len(leads) == 0
+        assert total == 0
+
+    @pytest.mark.asyncio
     async def test_list_pagination(
         self,
         repository: LeadRepository,
