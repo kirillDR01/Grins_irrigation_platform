@@ -138,9 +138,26 @@ def create_app() -> FastAPI:
 
     logger.info("app.cors_configured", origins=allowed_origins)
 
+    # Separate exact origins from regex patterns (entries containing *)
+    exact_origins = [o for o in allowed_origins if "*" not in o]
+    regex_patterns = [o for o in allowed_origins if "*" in o]
+
+    # Build a combined regex from wildcard patterns (e.g. "https://app-*-team.vercel.app")
+    import re
+
+    origin_regex: str | None = None
+    if regex_patterns:
+        # Convert glob-style * to regex .* and escape the rest
+        regex_parts = []
+        for pattern in regex_patterns:
+            escaped = re.escape(pattern).replace(r"\*", ".*")
+            regex_parts.append(escaped)
+        origin_regex = "^(" + "|".join(regex_parts) + ")$"
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=allowed_origins,
+        allow_origins=exact_origins,
+        allow_origin_regex=origin_regex,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

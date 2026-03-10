@@ -40,12 +40,13 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 REFRESH_TOKEN_COOKIE = "refresh_token"
 CSRF_TOKEN_COOKIE = "csrf_token"
 COOKIE_MAX_AGE = 7 * 24 * 60 * 60  # 7 days in seconds
-# Only set Secure flag in production (HTTPS); HTTP localhost needs Secure=False
-_IS_PRODUCTION = os.getenv("ENVIRONMENT", "development") == "production"
-COOKIE_SECURE = _IS_PRODUCTION
+# Only set Secure flag in local development (HTTP); deployed envs use HTTPS
+_ENV = os.getenv("ENVIRONMENT", "development")
+_IS_LOCAL = _ENV == "development" and not os.getenv("RAILWAY_ENVIRONMENT")
+COOKIE_SECURE = not _IS_LOCAL
 # Cross-origin deployments (e.g. Vercel frontend + Railway backend) require
 # SameSite=None so cookies are sent on cross-origin requests. Locally, "lax" is fine.
-COOKIE_SAMESITE: str = "none" if _IS_PRODUCTION else "lax"
+COOKIE_SAMESITE: str = "lax" if _IS_LOCAL else "none"
 
 
 def _create_user_response(staff: Staff, auth_service: AuthService) -> UserResponse:
