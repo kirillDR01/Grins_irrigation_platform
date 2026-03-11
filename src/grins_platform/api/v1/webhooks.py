@@ -36,11 +36,14 @@ from grins_platform.repositories.stripe_webhook_event_repository import (
 )
 from grins_platform.schemas.customer import CustomerCreate
 from grins_platform.services.agreement_service import AgreementService
+from grins_platform.services.ai.security import validate_twilio_signature
 from grins_platform.services.compliance_service import ComplianceService
 from grins_platform.services.customer_service import CustomerService
 from grins_platform.services.email_service import EmailService
 from grins_platform.services.job_generator import JobGenerator
+from grins_platform.services.sms_service import SMSService
 from grins_platform.services.stripe_config import StripeSettings
+from grins_platform.services.surcharge_calculator import SurchargeCalculator
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -191,6 +194,13 @@ class StripeWebhookHandler(LoggerMixin):
         tier_slug = metadata.get("package_tier", "")
         package_type = metadata.get("package_type", "residential")
 
+        # Extract surcharge and consent metadata (Req 3.14, 2.5)
+        meta_zone_count = int(metadata.get("zone_count", "1") or "1")
+        meta_has_lake_pump = metadata.get("has_lake_pump", "false").lower() == "true"
+        meta_email_marketing_consent = (
+            metadata.get("email_marketing_consent", "false").lower() == "true"
+        )
+
         # Build services
         customer_repo = CustomerRepository(self.session)
         agreement_repo = AgreementRepository(self.session)
@@ -262,6 +272,30 @@ class StripeWebhookHandler(LoggerMixin):
             tier_id=tier.id,
             stripe_data=stripe_data,
         )
+
+        # Populate surcharge fields on agreement (Req 3.14)
+        surcharge_breakdown = SurchargeCalculator.calculate(
+            tier_slug=tier_slug,
+            package_type=package_type,
+            zone_count=meta_zone_count,
+            has_lake_pump=meta_has_lake_pump,
+            base_price=tier.annual_price,
+        )
+        _ = await agreement_repo.update(
+            agreement,
+            {
+                "zone_count": meta_zone_count,
+                "has_lake_pump": meta_has_lake_pump,
+                "base_price": tier.annual_price,
+                "annual_price": surcharge_breakdown.total,
+            },
+        )
+
+        # Carry email_marketing_consent to customer (Req 2.5)
+        if meta_email_marketing_consent and not customer.email_opt_in:
+            customer.email_opt_in = True
+            customer.email_opt_in_at = now  # type: ignore[assignment]
+            customer.email_opt_in_source = "checkout_marketing_consent"  # type: ignore[assignment]
 
         # 4. Generate seasonal jobs (Req 8.5)
         _ = await job_gen.generate_jobs(agreement)
@@ -814,4 +848,62 @@ async def stripe_webhook(
         content=f'{{"status": "{result["status"]}"}}',
         status_code=status.HTTP_200_OK,
         media_type="application/json",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Twilio inbound SMS webhook — routes to SMS_Service.handle_inbound()
+# Validates: Requirement 8.1
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/twilio-inbound",
+    status_code=status.HTTP_200_OK,
+    summary="Handle inbound SMS from Twilio",
+    description=(
+        "Receives inbound SMS from Twilio, processes STOP keywords and "
+        "informal opt-out phrases via SMS_Service.handle_inbound()."
+    ),
+)
+async def twilio_inbound(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Handle inbound SMS webhook from Twilio.
+
+    Validates Twilio signature, extracts From/Body/MessageSid,
+    and routes to SMS_Service.handle_inbound().
+
+    Validates: Requirement 8.1
+    """
+    signature = request.headers.get("X-Twilio-Signature", "")
+    url = str(request.url)
+    form_data = await request.form()
+    params = dict(form_data)
+
+    if not validate_twilio_signature(url, params, signature):
+        return Response(
+            content='{"error": "Invalid Twilio signature"}',
+            status_code=status.HTTP_403_FORBIDDEN,
+            media_type="application/json",
+        )
+
+    from_phone = str(form_data.get("From", ""))
+    body = str(form_data.get("Body", ""))
+    message_sid = str(form_data.get("MessageSid", ""))
+
+    sms_service = SMSService(db)
+    result = await sms_service.handle_inbound(from_phone, body, message_sid)
+
+    logger.info(
+        "twilio.inbound.processed",
+        action=result.get("action"),
+        from_phone=from_phone,
+    )
+
+    return Response(
+        content="<Response></Response>",
+        status_code=status.HTTP_200_OK,
+        media_type="application/xml",
     )

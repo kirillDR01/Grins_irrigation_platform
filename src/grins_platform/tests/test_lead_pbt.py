@@ -243,6 +243,7 @@ class TestDuplicateDetectionCorrectness:
 
         repo = AsyncMock()
         repo.get_by_phone_and_active_status = AsyncMock(return_value=existing)
+        repo.get_recent_by_phone_or_email = AsyncMock(return_value=None)
         repo.update = AsyncMock(return_value=existing)
 
         service = LeadService(
@@ -291,6 +292,7 @@ class TestDuplicateDetectionCorrectness:
 
         repo = AsyncMock()
         repo.get_by_phone_and_active_status = AsyncMock(return_value=None)
+        repo.get_recent_by_phone_or_email = AsyncMock(return_value=None)
         repo.create = AsyncMock(return_value=new_lead)
 
         service = LeadService(
@@ -465,6 +467,7 @@ class TestHoneypotTransparency:
 
         repo = AsyncMock()
         repo.get_by_phone_and_active_status = AsyncMock(return_value=None)
+        repo.get_recent_by_phone_or_email = AsyncMock(return_value=None)
         repo.create = AsyncMock(return_value=new_lead)
 
         service = LeadService(
@@ -507,6 +510,7 @@ class TestHoneypotTransparency:
         # Setup for real submission
         real_repo = AsyncMock()
         real_repo.get_by_phone_and_active_status = AsyncMock(return_value=None)
+        real_repo.get_recent_by_phone_or_email = AsyncMock(return_value=None)
         real_repo.create = AsyncMock(return_value=new_lead)
 
         real_service = LeadService(

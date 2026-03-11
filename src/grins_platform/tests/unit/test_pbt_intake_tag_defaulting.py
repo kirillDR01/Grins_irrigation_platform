@@ -88,6 +88,7 @@ class TestIntakeTagDefaultingProperty:
 
         mock_lead = _make_mock_lead(intake_tag=IntakeTag.SCHEDULE.value)
         mock_repo = AsyncMock()
+        mock_repo.get_recent_by_phone_or_email = AsyncMock(return_value=None)
         mock_repo.get_by_phone_and_active_status = AsyncMock(return_value=None)
         mock_repo.create = AsyncMock(return_value=mock_lead)
 
@@ -123,6 +124,7 @@ class TestIntakeTagDefaultingProperty:
 
         mock_lead = _make_mock_lead(intake_tag=explicit_tag.value)
         mock_repo = AsyncMock()
+        mock_repo.get_recent_by_phone_or_email = AsyncMock(return_value=None)
         mock_repo.get_by_phone_and_active_status = AsyncMock(return_value=None)
         mock_repo.create = AsyncMock(return_value=mock_lead)
 
@@ -160,6 +162,7 @@ class TestIntakeTagDefaultingProperty:
 
         mock_lead = _make_mock_lead(intake_tag=None)
         mock_repo = AsyncMock()
+        mock_repo.get_recent_by_phone_or_email = AsyncMock(return_value=None)
         mock_repo.create = AsyncMock(return_value=mock_lead)
 
         service = _build_service(mock_repo)
@@ -194,6 +197,7 @@ class TestIntakeTagDefaultingProperty:
 
         mock_lead = _make_mock_lead(intake_tag=explicit_tag.value)
         mock_repo = AsyncMock()
+        mock_repo.get_recent_by_phone_or_email = AsyncMock(return_value=None)
         mock_repo.create = AsyncMock(return_value=mock_lead)
 
         service = _build_service(mock_repo)

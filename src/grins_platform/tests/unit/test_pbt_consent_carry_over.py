@@ -47,6 +47,7 @@ def _make_lead(
     lead.intake_tag = "schedule"
     lead.sms_consent = sms_consent
     lead.terms_accepted = terms_accepted
+    lead.email_marketing_consent = False
     lead.status = LeadStatus.NEW.value
     lead.assigned_to = None
     lead.customer_id = None

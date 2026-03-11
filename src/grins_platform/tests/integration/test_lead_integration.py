@@ -63,6 +63,7 @@ def mock_lead_repo() -> AsyncMock:
     repo.count_new_today = AsyncMock(return_value=0)
     repo.count_uncontacted = AsyncMock(return_value=0)
     repo.get_by_phone_and_active_status = AsyncMock(return_value=None)
+    repo.get_recent_by_phone_or_email = AsyncMock(return_value=None)
     return repo
 
 

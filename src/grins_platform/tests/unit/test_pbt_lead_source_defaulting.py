@@ -86,6 +86,7 @@ class TestLeadSourceDefaultingProperty:
 
         mock_lead = _make_mock_lead(lead_source=LeadSourceExtended.WEBSITE.value)
         mock_repo = AsyncMock()
+        mock_repo.get_recent_by_phone_or_email = AsyncMock(return_value=None)
         mock_repo.get_by_phone_and_active_status = AsyncMock(return_value=None)
         mock_repo.create = AsyncMock(return_value=mock_lead)
 
@@ -121,6 +122,7 @@ class TestLeadSourceDefaultingProperty:
 
         mock_lead = _make_mock_lead(lead_source=explicit_source.value)
         mock_repo = AsyncMock()
+        mock_repo.get_recent_by_phone_or_email = AsyncMock(return_value=None)
         mock_repo.get_by_phone_and_active_status = AsyncMock(return_value=None)
         mock_repo.create = AsyncMock(return_value=mock_lead)
 
@@ -158,6 +160,7 @@ class TestLeadSourceDefaultingProperty:
 
         mock_lead = _make_mock_lead(lead_source=LeadSourceExtended.PHONE_CALL.value)
         mock_repo = AsyncMock()
+        mock_repo.get_recent_by_phone_or_email = AsyncMock(return_value=None)
         mock_repo.create = AsyncMock(return_value=mock_lead)
 
         service = _build_service(mock_repo)
@@ -192,6 +195,7 @@ class TestLeadSourceDefaultingProperty:
 
         mock_lead = _make_mock_lead(lead_source=explicit_source.value)
         mock_repo = AsyncMock()
+        mock_repo.get_recent_by_phone_or_email = AsyncMock(return_value=None)
         mock_repo.create = AsyncMock(return_value=mock_lead)
 
         service = _build_service(mock_repo)

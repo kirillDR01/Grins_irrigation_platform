@@ -57,6 +57,7 @@ def _make_lead_mock(
     customer_id: None | object = None,
     contacted_at: datetime | None = None,
     converted_at: datetime | None = None,
+    email_marketing_consent: bool = False,
 ) -> MagicMock:
     """Create a mock Lead object with given attributes."""
     lead = MagicMock()
@@ -73,6 +74,7 @@ def _make_lead_mock(
     lead.intake_tag = intake_tag
     lead.sms_consent = sms_consent
     lead.terms_accepted = terms_accepted
+    lead.email_marketing_consent = email_marketing_consent
     lead.status = status
     lead.assigned_to = assigned_to
     lead.customer_id = customer_id
@@ -134,7 +136,9 @@ class TestSubmitLead:
 
     @pytest.fixture
     def mock_lead_repo(self) -> AsyncMock:
-        return AsyncMock()
+        repo = AsyncMock()
+        repo.get_recent_by_phone_or_email.return_value = None
+        return repo
 
     @pytest.fixture
     def mock_customer_service(self) -> AsyncMock:

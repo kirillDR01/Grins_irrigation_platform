@@ -41,6 +41,10 @@ _PREMIUM_JOBS: list[tuple[str, str, int, int]] = [
     ("fall_winterization", "Fall system winterization and blowout", 10, 10),
 ]
 
+_WINTERIZATION_ONLY_JOBS: list[tuple[str, str, int, int]] = [
+    ("fall_winterization", "Fall system winterization and blowout", 10, 10),
+]
+
 _TIER_JOB_MAP: dict[str, list[tuple[str, str, int, int]]] = {
     "Essential": _ESSENTIAL_JOBS,
     "Professional": _PROFESSIONAL_JOBS,
@@ -80,13 +84,20 @@ class JobGenerator(LoggerMixin):
         Validates: Requirements 9.1-9.7
         """
         tier_name = agreement.tier.name
+        tier_slug: str = agreement.tier.slug
         self.log_started(
             "generate_jobs",
             agreement_id=str(agreement.id),
             tier_name=tier_name,
+            tier_slug=tier_slug,
         )
 
-        job_specs = _TIER_JOB_MAP.get(tier_name)
+        # Winterization-only tiers detected by slug prefix
+        if tier_slug.startswith("winterization-only-"):
+            job_specs: list[tuple[str, str, int, int]] | None = _WINTERIZATION_ONLY_JOBS
+        else:
+            job_specs = _TIER_JOB_MAP.get(tier_name)
+
         if not job_specs:
             self.log_failed(
                 "generate_jobs",

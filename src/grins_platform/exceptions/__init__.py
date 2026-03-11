@@ -414,6 +414,22 @@ class InvalidLeadStatusTransitionError(LeadError):
         )
 
 
+class DuplicateLeadError(LeadError):
+    """Raised when a duplicate lead is submitted within 24 hours.
+
+    Validates: Integration Gap Requirement 6.3
+    """
+
+    def __init__(self) -> None:
+        """Initialize with standard duplicate message."""
+        self.detail = "duplicate_lead"
+        self.message = (
+            "A request with this contact information was recently submitted. "
+            "We'll be in touch soon."
+        )
+        super().__init__(self.message)
+
+
 class AgreementError(Exception):
     """Base exception for agreement operations."""
 
@@ -496,6 +512,7 @@ __all__ = [
     "CustomerError",
     "CustomerNotFoundError",
     "DuplicateCustomerError",
+    "DuplicateLeadError",
     "FieldOperationsError",
     "InactiveTierError",
     "InvalidAgreementStatusTransitionError",

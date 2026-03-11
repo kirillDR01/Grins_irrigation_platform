@@ -14,7 +14,10 @@ from datetime import datetime, timedelta, timezone
 from math import ceil
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from sqlalchemy import select
+
 from grins_platform.exceptions import (
+    DuplicateLeadError,
     InvalidLeadStatusTransitionError,
     LeadAlreadyConvertedError,
     LeadNotFoundError,
@@ -29,6 +32,7 @@ from grins_platform.models.enums import (
     LeadSourceExtended,
     LeadStatus,
 )
+from grins_platform.models.sms_consent_record import SmsConsentRecord
 from grins_platform.schemas.ai import MessageType
 from grins_platform.schemas.customer import CustomerCreate
 from grins_platform.schemas.job import JobCreate
@@ -237,10 +241,14 @@ class LeadService(LoggerMixin):
 
         Steps:
         1. Check honeypot — if filled, return fake 201 without storing
-        2. Check for duplicate by phone + active status
-        3. If duplicate found: update existing lead (merge fields)
-        4. If no duplicate: create new lead with status "new"
-        5. Log lead.submitted event (lead_id + source_site only, no PII)
+        2. Check for duplicate by phone OR email within 24 hours
+        3. If duplicate found within 24h: raise DuplicateLeadError (409)
+        4. Check for existing active lead by phone (merge behavior)
+        5. If active duplicate found: update existing lead (merge fields)
+        6. If no duplicate: create new lead with status "new"
+        7. Create SmsConsentRecord for the lead
+        8. Log lead.submitted event (lead_id + source_site only, no PII)
+        9. Send confirmations
 
         Args:
             data: LeadSubmission schema with form data
@@ -248,7 +256,11 @@ class LeadService(LoggerMixin):
         Returns:
             LeadSubmissionResponse with success status and lead_id
 
-        Validates: Requirements 1, 2, 3, 15.1, 15.4, 45.1, 45.2, 48.1, 48.2
+        Raises:
+            DuplicateLeadError: If matching lead submitted within 24 hours
+
+        Validates: Requirements 1, 2, 3, 6.1-6.4, 7.1-7.4,
+            15.1, 15.4, 45.1, 45.2, 48.1, 48.2
         """
         # Step 1: Honeypot check
         if data.website is not None and data.website != "":
@@ -262,7 +274,20 @@ class LeadService(LoggerMixin):
                 lead_id=None,
             )
 
-        # Step 2: Check for duplicate by phone + active status
+        # Step 2: 24-hour duplicate detection by phone OR email
+        recent_dup = await self.lead_repository.get_recent_by_phone_or_email(
+            phone=data.phone,
+            email=data.email,
+        )
+        if recent_dup is not None:
+            self.logger.info(
+                "lead.duplicate_detected",
+                existing_lead_id=str(recent_dup.id),
+                source_site=data.source_site,
+            )
+            raise DuplicateLeadError()
+
+        # Step 3: Check for existing active lead by phone (merge behavior)
         existing_lead = await self.lead_repository.get_by_phone_and_active_status(
             data.phone,
         )
@@ -279,21 +304,18 @@ class LeadService(LoggerMixin):
         )
 
         if existing_lead is not None:
-            # Step 3: Update existing lead (merge fields)
+            # Step 4: Update existing lead (merge fields)
             update_data: dict[str, Any] = {}
 
-            # Merge email: only if new email is not None and existing is None
             if data.email is not None and existing_lead.email is None:
                 update_data["email"] = data.email
 
-            # Merge notes: append if both exist
             if data.notes is not None:
                 if existing_lead.notes:
                     update_data["notes"] = f"{existing_lead.notes}\n{data.notes}"
                 else:
                     update_data["notes"] = data.notes
 
-            # Update situation if different
             if data.situation.value != existing_lead.situation:
                 update_data["situation"] = data.situation.value
 
@@ -311,7 +333,7 @@ class LeadService(LoggerMixin):
                 lead_id=existing_lead.id,
             )
 
-        # Step 4: Create new lead
+        # Step 5: Create new lead with new fields
         lead = await self.lead_repository.create(
             name=data.name,
             phone=data.phone,
@@ -324,16 +346,22 @@ class LeadService(LoggerMixin):
             lead_source=lead_source,
             source_detail=source_detail,
             intake_tag=intake_tag,
+            sms_consent=data.sms_consent,
+            email_marketing_consent=data.email_marketing_consent,
+            page_url=data.page_url,
         )
 
-        # Step 5: Log (no PII)
+        # Step 6: Create SmsConsentRecord for the lead
+        await self._create_lead_consent_record(lead, data)
+
+        # Step 7: Log (no PII)
         self.logger.info(
             "lead.submitted",
             lead_id=str(lead.id),
             source_site=data.source_site,
         )
 
-        # Step 6: Send confirmations (Req 54, 55)
+        # Step 8: Send confirmations (Req 54, 55)
         await self._send_sms_confirmation(lead)
         self._send_email_confirmation(lead)
 
@@ -342,6 +370,90 @@ class LeadService(LoggerMixin):
             message="Thank you! We'll be in touch within 24 hours.",
             lead_id=lead.id,
         )
+
+    async def _create_lead_consent_record(
+        self,
+        lead: Lead,
+        data: LeadSubmission,
+    ) -> None:
+        """Create SmsConsentRecord for a newly created lead.
+
+        Validates: Requirements 7.1, 7.3, 7.4
+        """
+        if not self.compliance_service:
+            self.logger.info(
+                "lead.consent_record.skipped",
+                lead_id=str(lead.id),
+                reason="compliance_service_unavailable",
+            )
+            return
+
+        try:
+            await self.compliance_service.create_sms_consent(
+                phone=lead.phone,
+                consent_given=data.sms_consent,
+                method="lead_form",
+                language_shown="Standard SMS consent from lead form",
+                lead_id=lead.id,
+                ip_address=data.consent_ip,
+                user_agent=data.consent_user_agent,
+            )
+            # Store consent_form_version if provided
+            if data.consent_language_version:
+                await self.compliance_service.validate_consent_language_version(
+                    data.consent_language_version,
+                )
+            self.logger.info(
+                "lead.consent_record.created",
+                lead_id=str(lead.id),
+                consent_given=data.sms_consent,
+            )
+        except Exception as e:
+            self.logger.warning(
+                "lead.consent_record.failed",
+                lead_id=str(lead.id),
+                error=str(e),
+            )
+
+    async def _update_consent_record_customer_id(
+        self,
+        lead_id: UUID,
+        customer_id: UUID,
+    ) -> None:
+        """Update SmsConsentRecord customer_id for a converted lead.
+
+        Finds existing SmsConsentRecord by lead_id and sets customer_id.
+        No duplicate record is created.
+
+        Validates: Requirement 7.5
+        """
+        if not self.compliance_service:
+            return
+
+        try:
+            stmt = select(SmsConsentRecord).where(
+                SmsConsentRecord.lead_id == lead_id,  # type: ignore[arg-type]
+            )
+            result = await self.compliance_service.session.execute(stmt)
+            records = list(result.scalars().all())
+
+            for record in records:
+                record.customer_id = customer_id  # type: ignore[assignment]
+
+            if records:
+                await self.compliance_service.session.flush()
+                self.logger.info(
+                    "lead.consent_record.customer_linked",
+                    lead_id=str(lead_id),
+                    customer_id=str(customer_id),
+                    records_updated=len(records),
+                )
+        except Exception as e:
+            self.logger.warning(
+                "lead.consent_record.customer_link_failed",
+                lead_id=str(lead_id),
+                error=str(e),
+            )
 
     async def create_from_call(self, data: FromCallSubmission) -> LeadResponse:
         """Create a lead from an inbound phone call (admin-only).
@@ -569,7 +681,7 @@ class LeadService(LoggerMixin):
         )
         customer = await self.customer_service.create_customer(customer_data)
 
-        # Step 5: Carry over consent fields (Req 57.1, 57.2, 57.3, 68.3)
+        # Step 5: Carry over consent fields (Req 57.1, 57.2, 57.3, 68.3, 2.3, 7.5)
         now = datetime.now(tz=timezone.utc)
         consent_updates: dict[str, Any] = {}
 
@@ -594,11 +706,21 @@ class LeadService(LoggerMixin):
             consent_updates["email_opt_in_at"] = now
             consent_updates["email_opt_in_source"] = "lead_form"
 
+        # Carry email_marketing_consent to customer (Req 2.3)
+        if lead.email_marketing_consent:
+            consent_updates["email_opt_in"] = True
+            consent_updates["email_opt_in_at"] = now
+            consent_updates["email_opt_in_source"] = "lead_form"
+
         if consent_updates:
             await self.customer_service.repository.update(
                 customer.id,
                 consent_updates,
             )
+
+        # Update existing SmsConsentRecord (by lead_id) to set customer_id (Req 7.5)
+        if self.compliance_service:
+            await self._update_consent_record_customer_id(lead.id, customer.id)
 
         # Step 6: Optionally create job
         job_id = None

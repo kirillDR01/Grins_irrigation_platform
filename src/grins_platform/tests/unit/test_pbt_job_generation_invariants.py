@@ -29,6 +29,13 @@ tiers = st.sampled_from(TIER_NAMES)
 optional_property_id = st.one_of(st.just(None), st.builds(uuid4))
 
 
+_TIER_NAME_TO_SLUG: dict[str, str] = {
+    "Essential": "essential-residential",
+    "Professional": "professional-residential",
+    "Premium": "premium-residential",
+}
+
+
 def _make_agreement(tier_name: str, property_id: object = None) -> MagicMock:
     agr = MagicMock()
     agr.id = uuid4()
@@ -36,6 +43,7 @@ def _make_agreement(tier_name: str, property_id: object = None) -> MagicMock:
     agr.property_id = property_id
     agr.tier = MagicMock()
     agr.tier.name = tier_name
+    agr.tier.slug = _TIER_NAME_TO_SLUG.get(tier_name, tier_name.lower())
     return agr
 
 

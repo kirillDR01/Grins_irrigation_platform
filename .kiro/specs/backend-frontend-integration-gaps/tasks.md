@@ -1,0 +1,374 @@
+# Implementation Plan: Backend-Frontend Integration Gaps
+
+## Overview
+
+This plan implements 11 integration gaps between the existing service-package-purchases backend and the Phase One Frontend spec. Changes span database migrations, model modifications, new components (Surcharge_Calculator, Onboarding_Reminder_Job, ConsentLanguageVersion), service modifications (Compliance_Service TCPA fix, Checkout_Service surcharges, Lead_Service duplicate detection + consent records, SMS_Service STOP keywords + time window), API endpoint updates, webhook handler updates, and Job_Generator winterization-only support. All code is Python/FastAPI/SQLAlchemy following the existing vertical slice architecture.
+
+## Tasks
+
+- [x] 1. Database migrations — new columns, new tables, seed data
+  - [x] 1.1 Create migration: Add `email_marketing_consent` and `page_url` columns to `leads` table
+    - Add `email_marketing_consent` (BOOLEAN, NOT NULL, default false) — set false for existing rows
+    - Add `page_url` (VARCHAR(2048), nullable) — set NULL for existing rows
+    - Add composite index `idx_leads_email_created_at` on `(email, created_at)` for duplicate detection
+    - _Requirements: 2.1, 5.1_
+  - [x] 1.2 Create migration: Add new columns to `service_agreements` table
+    - Add `zone_count` (INTEGER, nullable)
+    - Add `has_lake_pump` (BOOLEAN, NOT NULL, default false)
+    - Add `base_price` (DECIMAL(10,2), nullable)
+    - Add `onboarding_reminder_sent_at` (TIMESTAMP with timezone, nullable)
+    - Add `onboarding_reminder_count` (INTEGER, NOT NULL, default 0)
+    - _Requirements: 3.13, 10.6_
+  - [x] 1.3 Create migration: Add `lead_id` foreign key to `sms_consent_records` table
+    - Add `lead_id` (UUID, FK → leads.id, nullable)
+    - Add index `ix_sms_consent_records_lead_id` on `lead_id`
+    - _Requirements: 7.2_
+  - [x] 1.4 Create migration: Create `consent_language_versions` table and seed v1.0 record
+    - Create table with columns: `id` (UUID PK), `version` (VARCHAR(20) UNIQUE NOT NULL), `consent_text` (TEXT NOT NULL), `effective_date` (DATE NOT NULL), `deprecated_date` (DATE nullable), `created_at` (TIMESTAMP NOT NULL default now())
+    - Seed initial record: version="v1.0", consent_text=current TCPA disclosure, effective_date=migration date, deprecated_date=NULL
+    - _Requirements: 11.1, 11.2, 11.3_
+  - [x] 1.5 Create migration: Seed winterization-only tier records into `service_agreement_tiers`
+    - Insert "Winterization Only Residential" (slug `winterization-only-residential`, package_type RESIDENTIAL, annual_price $80.00, included_services with 1 "Fall Winterization" entry frequency 1, display_order 7, is_active=true, stripe_product_id=NULL, stripe_price_id=NULL)
+    - Insert "Winterization Only Commercial" (slug `winterization-only-commercial`, package_type COMMERCIAL, annual_price $100.00, included_services with 1 "Fall Winterization" entry frequency 1, display_order 8, is_active=true, stripe_product_id=NULL, stripe_price_id=NULL)
+    - _Requirements: 4.1_
+
+- [x] 2. Update SQLAlchemy models to reflect migration changes
+  - [x] 2.1 Update Lead model with new fields
+    - Add `email_marketing_consent` (Boolean, default=False) and `page_url` (String(2048), nullable=True) to the Lead SQLAlchemy model
+    - _Requirements: 2.1, 5.1_
+  - [x] 2.2 Update ServiceAgreement model with new fields
+    - Add `zone_count` (Integer, nullable), `has_lake_pump` (Boolean, default=False), `base_price` (Numeric(10,2), nullable), `onboarding_reminder_sent_at` (DateTime(timezone=True), nullable), `onboarding_reminder_count` (Integer, default=0)
+    - _Requirements: 3.13, 10.6_
+  - [x] 2.3 Update SmsConsentRecord model with `lead_id` foreign key
+    - Add `lead_id` (UUID, ForeignKey("leads.id"), nullable=True) and relationship to Lead
+    - _Requirements: 7.2_
+  - [x] 2.4 Create ConsentLanguageVersion model
+    - New SQLAlchemy model in `models/` with fields: `id` (UUID PK), `version` (String(20) unique), `consent_text` (Text), `effective_date` (Date), `deprecated_date` (Date nullable), `created_at` (DateTime)
+    - _Requirements: 11.1_
+
+- [x] 3. Checkpoint — Verify migrations and models
+  - Ensure all migrations run cleanly, models match migration columns, and all tests pass. Ask the user if questions arise.
+
+
+- [x] 4. Implement Surcharge_Calculator (new pure utility)
+  - [x] 4.1 Create `services/surcharge_calculator.py` with `SurchargeBreakdown` dataclass and `SurchargeCalculator.calculate()` static method
+    - Implement frozen dataclass `SurchargeBreakdown` with `base_price`, `zone_surcharge`, `lake_pump_surcharge`, and `total` property
+    - Implement `RATES` dict keyed by `(tier_category, package_type)` with zone_rate and lake_pump_rate tuples
+    - Implement `calculate()` as a pure static method: determine tier_category from slug prefix, look up rates, compute zone surcharge as `rate × max(0, zone_count - 9)` when zone_count ≥ 10 else 0, compute lake_pump surcharge from rate if has_lake_pump else 0
+    - _Requirements: 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10_
+  - [x] 4.2 Write property tests for Surcharge_Calculator
+    - [x] 4.2.1 Property 5: Zone surcharge formula — generate random (tier_category, package_type, zone_count, has_lake_pump, base_price) tuples, verify zone_surcharge equals `rate × max(0, zone_count - 9)` and is zero when zone_count < 10
+      - **Property 5: Surcharge_Calculator zone surcharge formula**
+      - **Validates: Requirements 3.2, 3.3, 3.6, 3.7, 3.10**
+    - [x] 4.2.2 Property 6: Lake pump surcharge — generate random inputs, verify lake_pump_surcharge equals rate when has_lake_pump=true and zero when false
+      - **Property 6: Surcharge_Calculator lake pump surcharge**
+      - **Validates: Requirements 3.4, 3.5, 3.8, 3.9**
+    - [x] 4.2.3 Property 7: Total is sum of parts — for any valid inputs, verify total == base_price + zone_surcharge + lake_pump_surcharge
+      - **Property 7: Surcharge_Calculator total is sum of parts**
+      - **Validates: Requirements 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10**
+  - [x] 4.3 Write unit tests for Surcharge_Calculator
+    - Test specific examples for each tier/package combination with known expected values
+    - Test edge cases: zone_count=1 (no surcharge), zone_count=9 (no surcharge), zone_count=10 (surcharge for 1 zone), zone_count=100+
+    - Test all 4 rate table entries: standard-residential, standard-commercial, winterization-only-residential, winterization-only-commercial
+    - Test has_lake_pump=true and false for each combination
+    - _Requirements: 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10_
+
+- [x] 5. Fix Compliance_Service TCPA consent validation
+  - [x] 5.1 Modify `process_pre_checkout_consent` in `services/compliance_service.py`
+    - Remove `sms_consent` from the validation gate — only `terms_accepted` is required
+    - When `terms_accepted=false`, raise `ConsentValidationError(["terms_accepted"])` returning HTTP 422
+    - When `terms_accepted=true`, always create `SmsConsentRecord` with `consent_given` matching the request's `sms_consent` value (true or false)
+    - Add `email_marketing_consent: bool = False` parameter, store in session metadata via consent_token linkage
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.4_
+  - [x] 5.2 Add `validate_consent_language_version()` method to Compliance_Service
+    - Query `consent_language_versions` table for the given version string
+    - Return True if version exists and `deprecated_date` is NULL
+    - Log warning if version not found or deprecated, but do not raise
+    - Call during `SmsConsentRecord` creation when `consent_form_version` is provided
+    - _Requirements: 11.4, 11.5_
+  - [x] 5.3 Write property tests for Compliance_Service TCPA fix
+    - [x] 5.3.1 Property 1: Pre-checkout consent only requires terms_accepted — generate random (sms_consent, terms_accepted) boolean pairs, verify rejected iff terms_accepted=false
+      - **Property 1: Pre-checkout consent only requires terms_accepted**
+      - **Validates: Requirements 1.1, 1.2**
+    - [x] 5.3.2 Property 2: SmsConsentRecord mirrors sms_consent value — for requests with terms_accepted=true, verify SmsConsentRecord.consent_given == sms_consent
+      - **Property 2: SmsConsentRecord mirrors sms_consent value**
+      - **Validates: Requirements 1.3, 1.4**
+    - [x] 5.3.3 Property 18: Consent version validation is non-blocking — generate random version strings, verify unknown/deprecated versions log warning but don't block SmsConsentRecord creation
+      - **Property 18: Consent version validation is non-blocking**
+      - **Validates: Requirements 11.4, 11.5**
+  - [x] 5.4 Write unit tests for Compliance_Service TCPA fix
+    - Test `sms_consent=false, terms_accepted=true` → accepted (the key TCPA fix)
+    - Test `sms_consent=false, terms_accepted=false` → rejected with 422
+    - Test `sms_consent=true, terms_accepted=true` → accepted with consent_given=true
+    - Test `email_marketing_consent` is stored in metadata
+    - Test consent version validation: valid version, deprecated version, unknown version
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 11.4, 11.5_
+
+- [x] 6. Implement ConsentLanguageVersion repository
+  - [x] 6.1 Create `repositories/consent_language_version_repository.py`
+    - Implement `get_by_version(version: str) -> ConsentLanguageVersion | None`
+    - Implement `get_active_version() -> ConsentLanguageVersion | None` — latest non-deprecated version
+    - Implement `create(version, consent_text, effective_date) -> ConsentLanguageVersion`
+    - No `update` or `delete` methods (append-only enforcement)
+    - _Requirements: 11.1, 11.3_
+
+- [x] 7. Checkpoint — Verify Surcharge_Calculator, Compliance_Service fix, and ConsentLanguageVersion
+  - Ensure all tests pass, ask the user if questions arise.
+
+
+- [x] 8. Modify Lead_Service — duplicate detection, consent records, new fields
+  - [x] 8.1 Add duplicate lead detection to `submit_lead()` in `services/lead_service.py`
+    - Before creating a lead, query for existing leads with matching `phone` OR `email` (if provided) created within the last 24 hours
+    - If found, raise `DuplicateLeadError` → HTTP 409 with `{"detail": "duplicate_lead", "message": "A request with this contact information was recently submitted. We'll be in touch soon."}`
+    - Use existing `idx_leads_phone` index + new composite index `idx_leads_email_created_at`
+    - _Requirements: 6.1, 6.2, 6.3, 6.4_
+  - [x] 8.2 Add SmsConsentRecord creation to `submit_lead()` in `services/lead_service.py`
+    - After creating the Lead, create an `SmsConsentRecord` with `consent_given` = lead's `sms_consent`, `consent_method` = `"lead_form"`, `customer_id` = NULL, `lead_id` = new lead's ID
+    - Store `consent_ip_address`, `consent_user_agent`, `consent_form_version` from request if provided
+    - _Requirements: 7.1, 7.3, 7.4_
+  - [x] 8.3 Add new fields to lead creation in `submit_lead()`
+    - Accept and store `email_marketing_consent`, `page_url`, `consent_ip`, `consent_user_agent`, `consent_language_version` from request
+    - _Requirements: 2.2, 5.2_
+  - [x] 8.4 Update lead-to-customer conversion in `convert_lead()`
+    - If lead has `email_marketing_consent=true`, set customer's `email_opt_in=true`, `email_opt_in_at=now()`, `email_opt_in_source="lead_form"`
+    - Update existing `SmsConsentRecord` (by `lead_id`) to set `customer_id` to the new customer's ID (no duplicate record)
+    - _Requirements: 2.3, 7.5_
+  - [x] 8.5 Write property tests for Lead_Service
+    - [x] 8.5.1 Property 3: Lead field persistence round-trip — generate random lead data with varying email_marketing_consent and page_url, verify stored values match submitted values
+      - **Property 3: Lead field persistence round-trip**
+      - **Validates: Requirements 2.2, 5.2**
+    - [x] 8.5.2 Property 9: Duplicate lead detection within 24-hour window — generate two lead submissions with matching phone or email within 24h, verify second is rejected (409) and lead count unchanged
+      - **Property 9: Duplicate lead detection within 24-hour window**
+      - **Validates: Requirements 6.1, 6.2, 6.3, 6.4**
+    - [x] 8.5.3 Property 10: SmsConsentRecord created at lead submission — for any lead creation, verify SmsConsentRecord has consent_given matching sms_consent, consent_method="lead_form", customer_id=NULL, lead_id matching lead, and metadata fields matching request
+      - **Property 10: SmsConsentRecord created at lead submission**
+      - **Validates: Requirements 7.1, 7.3, 7.4**
+    - [x] 8.5.4 Property 4: Email marketing consent carries over on lead conversion — generate leads with random email_marketing_consent, convert to customer, verify email_opt_in, email_opt_in_source, email_opt_in_at
+      - **Property 4: Email marketing consent carries over on lead conversion**
+      - **Validates: Requirements 2.3**
+    - [x] 8.5.5 Property 11: SmsConsentRecord customer_id updated on lead conversion — verify existing SmsConsentRecord's customer_id is updated to new Customer's ID, no duplicate record created
+      - **Property 11: SmsConsentRecord customer_id updated on lead conversion**
+      - **Validates: Requirements 7.5**
+  - [x] 8.6 Write unit tests for Lead_Service duplicate detection and consent records
+    - Test duplicate detection: same phone within 24h → 409
+    - Test duplicate detection: same email within 24h → 409
+    - Test duplicate detection: same phone after 24h → allowed
+    - Test duplicate detection: different phone and email → allowed
+    - Test SmsConsentRecord creation with all metadata fields
+    - Test lead conversion: email_marketing_consent=true → customer email_opt_in=true
+    - Test lead conversion: SmsConsentRecord customer_id updated
+    - _Requirements: 2.2, 2.3, 5.2, 6.1, 6.2, 6.3, 6.4, 7.1, 7.3, 7.4, 7.5_
+
+- [x] 9. Checkpoint — Verify Lead_Service changes
+  - Ensure all tests pass, ask the user if questions arise.
+
+
+- [x] 10. Modify SMS_Service — STOP keyword processing, consent check, time window enforcement
+  - [x] 10.1 Implement STOP keyword processing in `handle_inbound()` in `services/sms_service.py`
+    - Define exact keyword set: STOP, QUIT, CANCEL, UNSUBSCRIBE, END, REVOKE (case-insensitive, full body or standalone word match)
+    - On exact match: create `SmsConsentRecord` with `consent_given=false`, `opt_out_method="text_stop"`, `opt_out_timestamp=now()`
+    - Send confirmation SMS: "You've been unsubscribed from Grins Irrigation texts. Reply START to re-subscribe."
+    - Set `opt_out_confirmation_sent=true` on the SmsConsentRecord
+    - _Requirements: 8.1, 8.2, 8.3, 8.4_
+  - [x] 10.2 Implement informal opt-out flagging in `handle_inbound()`
+    - Define informal phrases: "stop texting me", "take me off the list", "no more texts", "opt out", "don't text me"
+    - On informal match (but no exact keyword): flag for admin review (log + create admin notification), do NOT auto-process opt-out
+    - _Requirements: 8.5_
+  - [x] 10.3 Implement `check_sms_consent(phone: str) -> bool` method
+    - Query most recent `SmsConsentRecord` for the phone number ordered by `created_at DESC`
+    - Return `consent_given` value from the most recent record
+    - Call before every automated SMS send; skip sending if consent_given=false
+    - _Requirements: 8.6_
+  - [x] 10.4 Implement `enforce_time_window(phone: str, message: str, message_type: str) -> datetime | None` method
+    - Check current time in `America/Chicago` timezone using `zoneinfo.ZoneInfo`
+    - If between 8:00 AM and 9:00 PM CT: return None (send immediately)
+    - Otherwise: compute next 8:00 AM CT, log deferral with structured logging (original send time, scheduled delivery time, recipient phone), return scheduled datetime
+    - Apply to all automated messages; skip for admin-initiated manual messages (check `message_type` parameter)
+    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
+  - [x] 10.5 Wire consent check and time window into existing SMS send methods
+    - Before sending any automated SMS, call `check_sms_consent()` — skip if opted out
+    - Before sending any automated SMS, call `enforce_time_window()` — defer if outside window
+    - Ensure admin-initiated manual messages bypass time window
+    - _Requirements: 8.6, 9.4, 9.5_
+  - [x] 10.6 Write property tests for SMS_Service
+    - [x] 10.6.1 Property 12: Exact opt-out keyword triggers automatic opt-out — generate messages with exact keywords (various casing, whitespace), verify SmsConsentRecord created with consent_given=false, opt_out_method="text_stop", opt_out_confirmation_sent=true
+      - **Property 12: Exact opt-out keyword triggers automatic opt-out**
+      - **Validates: Requirements 8.1, 8.2, 8.3, 8.4**
+    - [x] 10.6.2 Property 13: Informal opt-out language flags for admin review — generate messages with informal phrases but no exact keywords, verify flagged for admin review and no opt-out SmsConsentRecord created
+      - **Property 13: Informal opt-out language flags for admin review**
+      - **Validates: Requirements 8.5**
+    - [x] 10.6.3 Property 14: Consent check blocks sending to opted-out numbers — generate phone numbers with various consent histories, verify send/skip decision based on most recent record
+      - **Property 14: Consent check blocks sending to opted-out numbers**
+      - **Validates: Requirements 8.6**
+    - [x] 10.6.4 Property 15: SMS time window enforcement — generate random datetime values across all hours, verify deferral for times outside 8AM-9PM CT and immediate send within window
+      - **Property 15: SMS time window enforcement**
+      - **Validates: Requirements 9.2**
+    - [x] 10.6.5 Property 16: Manual messages bypass time window — generate admin-initiated manual messages at various times, verify no deferral regardless of time
+      - **Property 16: Manual messages bypass time window**
+      - **Validates: Requirements 9.5**
+  - [x] 10.7 Write unit tests for SMS_Service STOP keywords and time window
+    - Test each exact keyword individually (STOP, QUIT, CANCEL, UNSUBSCRIBE, END, REVOKE) with various casing
+    - Test informal phrases: "stop texting me", "take me off the list", "no more texts"
+    - Test consent check: opted-out phone → skip, opted-in phone → send
+    - Test time window boundaries: 7:59 AM CT (defer), 8:00 AM CT (send), 8:59 PM CT (send), 9:00 PM CT (defer)
+    - Test manual message bypasses time window
+    - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 9.1, 9.2, 9.3, 9.4, 9.5_
+
+- [x] 11. Checkpoint — Verify SMS_Service changes
+  - Ensure all tests pass, ask the user if questions arise.
+
+
+- [x] 12. Modify Checkout_Service — surcharge integration and new fields
+  - [x] 12.1 Update `create_checkout_session()` signature and logic in `services/checkout_service.py`
+    - Add parameters: `zone_count: int = 1`, `has_lake_pump: bool = False`, `email_marketing_consent: bool = False`
+    - After tier validation, call `SurchargeCalculator.calculate(tier_slug, package_type, zone_count, has_lake_pump, base_price)` to get surcharge breakdown
+    - Build Stripe line items: base tier price (from `stripe_price_id`) + zone surcharge (ad-hoc `price_data`, only if > 0) + lake pump surcharge (ad-hoc `price_data`, only if > 0)
+    - Store `zone_count`, `has_lake_pump`, `email_marketing_consent` in Stripe session metadata and subscription metadata
+    - Recognize winterization-only tier slugs and apply winterization-only surcharge rates
+    - _Requirements: 3.1, 3.11, 3.12, 4.4_
+  - [x] 12.2 Write unit tests for Checkout_Service surcharge integration
+    - Test create_checkout_session with zone_count=12, has_lake_pump=true for residential tier → 3 Stripe line items
+    - Test create_checkout_session with zone_count=5, has_lake_pump=false → 1 Stripe line item (base only)
+    - Test winterization-only tier uses correct surcharge rates
+    - Test metadata includes zone_count, has_lake_pump, email_marketing_consent
+    - _Requirements: 3.1, 3.11, 3.12, 4.4_
+
+- [x] 13. Modify webhook handler — populate new ServiceAgreement fields
+  - [x] 13.1 Update `checkout.session.completed` handler to populate new fields
+    - Extract `zone_count`, `has_lake_pump`, `email_marketing_consent` from Stripe session metadata
+    - Set `zone_count`, `has_lake_pump`, `base_price` on the ServiceAgreement record (base_price = tier's base price before surcharges, annual_price = total including surcharges)
+    - Carry `email_marketing_consent` to Customer's `email_opt_in` field if true
+    - _Requirements: 3.14, 2.5_
+  - [x] 13.2 Write unit tests for webhook handler updates
+    - Test checkout.session.completed with zone_count=15, has_lake_pump=true in metadata → ServiceAgreement fields populated correctly
+    - Test base_price vs annual_price distinction
+    - Test email_marketing_consent=true → Customer email_opt_in=true
+    - _Requirements: 3.14, 2.5_
+
+- [x] 14. Modify Job_Generator — winterization-only tier support
+  - [x] 14.1 Add winterization-only tier handling to `services/job_generator.py`
+    - Add `_WINTERIZATION_ONLY_JOBS` mapping: 1 job — "Fall Winterization" with target_start_date October 1, target_end_date October 31
+    - Detect winterization-only tiers by checking `tier.slug.startswith("winterization-only-")`
+    - Route to winterization-only job list when detected
+    - Ensure existing tier job generation is not affected (regression safety)
+    - _Requirements: 4.2_
+  - [x] 14.2 Write property test for Job_Generator winterization-only
+    - [x] 14.2.1 Property 8: Winterization-only tier generates exactly 1 job — generate winterization-only agreements with random customer/property data, verify exactly 1 job with job_type="fall_winterization", target_start_date=Oct 1, target_end_date=Oct 31
+      - **Property 8: Winterization-only tier generates exactly 1 job**
+      - **Validates: Requirements 4.2**
+  - [x] 14.3 Write unit tests for Job_Generator winterization-only
+    - Test winterization-only residential → 1 job with correct type and dates
+    - Test winterization-only commercial → 1 job with correct type and dates
+    - Test existing tiers still generate correct job counts (regression)
+    - _Requirements: 4.2_
+
+- [x] 15. Checkpoint — Verify Checkout_Service, webhook handler, and Job_Generator
+  - Ensure all tests pass, ask the user if questions arise.
+
+
+- [x] 16. Implement Onboarding_Reminder_Job (new background job)
+  - [x] 16.1 Create `services/onboarding_reminder_job.py` with `OnboardingReminderJob` class
+    - Extend `LoggerMixin` with `DOMAIN = "onboarding"`
+    - Implement `run()` method: query ServiceAgreements where status IN ('active', 'pending') AND property_id IS NULL
+    - For each agreement, compute hours since `created_at`
+    - T+24h (reminder_count=0): Send SMS reminder with onboarding link via SMS_Service, increment `onboarding_reminder_count`, set `onboarding_reminder_sent_at`
+    - T+72h (reminder_count=1): Send second SMS reminder
+    - T+7d (reminder_count=2): Create admin notification (no SMS)
+    - Gate all SMS sends on `SMS_Service.check_sms_consent(phone)` and `SMS_Service.enforce_time_window()`
+    - Log each reminder action with structured logging: agreement_id, reminder step (24h_sms, 72h_sms, 7d_admin_alert), delivery outcome
+    - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
+  - [x] 16.2 Register job in `background_jobs.py`
+    - Add `remind_incomplete_onboarding_job` to the existing APScheduler `BackgroundScheduler` singleton
+    - Schedule with cron trigger: `hour=10` (10 AM UTC ≈ morning CT), `id="remind_incomplete_onboarding"`, `replace_existing=True`
+    - _Requirements: 10.1_
+  - [x] 16.3 Write property test for Onboarding_Reminder_Job
+    - [x] 16.3.1 Property 17: Onboarding reminder scheduling — generate agreements with random created_at timestamps and reminder_count values, verify correct action (SMS at T+24h if count=0, SMS at T+72h if count=1, admin notification at T+7d if count=2, no action if elapsed time hasn't reached next threshold)
+      - **Property 17: Onboarding reminder scheduling**
+      - **Validates: Requirements 10.2, 10.3, 10.4**
+  - [x] 16.4 Write unit tests for Onboarding_Reminder_Job
+    - Test agreement at T+23h, reminder_count=0 → no action
+    - Test agreement at T+24h, reminder_count=0 → SMS reminder sent
+    - Test agreement at T+72h, reminder_count=1 → second SMS sent
+    - Test agreement at T+7d, reminder_count=2 → admin notification created
+    - Test agreement with property_id set → skipped entirely
+    - Test SMS send gated on consent check (opted-out customer → no SMS)
+    - Test SMS send gated on time window enforcement
+    - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6_
+
+- [x] 17. Checkpoint — Verify Onboarding_Reminder_Job
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 18. Update API endpoint schemas and wiring
+  - [x] 18.1 Update `POST /api/v1/onboarding/pre-checkout-consent` request schema
+    - Make `sms_consent=false` accepted without error (schema already accepts boolean, but remove any validation that rejects false)
+    - Add optional `email_marketing_consent` field (boolean, default false) to request schema
+    - Wire to updated Compliance_Service.process_pre_checkout_consent
+    - _Requirements: 1.1, 1.2, 2.4_
+  - [x] 18.2 Update `POST /api/v1/checkout/create-session` request schema
+    - Add required `zone_count` field (integer, min 1) to request schema
+    - Add optional `has_lake_pump` field (boolean, default false) to request schema
+    - Add optional `email_marketing_consent` field (boolean, default false) to request schema
+    - Wire to updated Checkout_Service.create_checkout_session
+    - _Requirements: 3.1_
+  - [x] 18.3 Update `POST /api/v1/leads` request schema and error handling
+    - Add optional `email_marketing_consent` field (boolean, default false)
+    - Add optional `page_url` field (string, max 2048 chars)
+    - Add optional `consent_ip` field (string)
+    - Add optional `consent_user_agent` field (string)
+    - Add optional `consent_language_version` field (string)
+    - Add HTTP 409 error response for duplicate leads: `{"detail": "duplicate_lead", "message": "..."}`
+    - Wire to updated Lead_Service.submit_lead
+    - _Requirements: 2.2, 5.2, 6.3_
+  - [x] 18.4 Update or create `POST /api/v1/webhooks/twilio-inbound` endpoint
+    - Receive inbound SMS from Twilio (From, Body, MessageSid fields)
+    - Route to SMS_Service.handle_inbound()
+    - Return TwiML or HTTP 200
+    - _Requirements: 8.1_
+  - [x] 18.5 Create `DuplicateLeadError` exception class
+    - Add to feature or shared exceptions module
+    - Map to HTTP 409 with `{"detail": "duplicate_lead", "message": "A request with this contact information was recently submitted. We'll be in touch soon."}`
+    - _Requirements: 6.3_
+
+- [x] 19. Checkpoint — Verify all API endpoint changes
+  - Ensure all tests pass, ask the user if questions arise.
+
+
+- [x] 20. Integration tests — end-to-end API flows
+  - [x] 20.1 Write integration tests for pre-checkout consent TCPA fix
+    - Test full flow: POST pre-checkout-consent with sms_consent=false, terms_accepted=true → 200, SmsConsentRecord created with consent_given=false
+    - Test full flow: POST pre-checkout-consent with sms_consent=false, terms_accepted=false → 422
+    - Test email_marketing_consent passed through to metadata
+    - Place in `tests/integration/test_integration_gaps_api.py`
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.4_
+  - [x] 20.2 Write integration tests for checkout session with surcharges
+    - Test full flow: POST create-session with zone_count=12, has_lake_pump=true → Stripe session created with 3 line items
+    - Test full flow: POST create-session with zone_count=5, has_lake_pump=false → Stripe session with 1 line item
+    - Test winterization-only tier with surcharges
+    - _Requirements: 3.1, 3.2, 3.11, 3.12, 4.4_
+  - [x] 20.3 Write integration tests for lead creation with new fields and duplicate detection
+    - Test full flow: POST /leads with email_marketing_consent, page_url, consent metadata → lead created with all fields, SmsConsentRecord created
+    - Test full flow: POST /leads twice with same phone within 24h → second returns 409
+    - Test full flow: POST /leads twice with same email within 24h → second returns 409
+    - _Requirements: 2.2, 5.2, 6.1, 6.2, 6.3, 7.1, 7.3, 7.4_
+  - [x] 20.4 Write integration tests for inbound SMS opt-out processing
+    - Test full flow: POST twilio-inbound with Body="STOP" → SmsConsentRecord created, confirmation sent
+    - Test full flow: POST twilio-inbound with Body="stop texting me" → flagged for admin review
+    - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
+  - [x] 20.5 Write integration tests for webhook handler with new fields
+    - Test checkout.session.completed with zone_count, has_lake_pump, email_marketing_consent in metadata → ServiceAgreement and Customer fields populated
+    - _Requirements: 3.14, 2.5_
+
+- [x] 21. Final checkpoint — Ensure all tests pass
+  - Run full test suite: `uv run pytest -v`
+  - Run quality checks: `uv run ruff check --fix src/ && uv run mypy src/ && uv run pyright src/`
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Notes
+
+- All tasks are required — none are optional
+- Each task references specific requirements for traceability
+- Property tests validate universal correctness properties from the design document (Properties 1-18)
+- Unit tests validate specific examples and edge cases
+- Integration tests validate end-to-end API flows
+- Checkpoints ensure incremental validation between major phases
+- All code follows existing patterns: LoggerMixin for services, structlog for logging, three-tier testing, type hints on all functions

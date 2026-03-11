@@ -23,9 +23,17 @@ from grins_platform.services.job_generator import JobGenerator
 # =============================================================================
 
 
+_TIER_NAME_TO_SLUG: dict[str, str] = {
+    "Essential": "essential-residential",
+    "Professional": "professional-residential",
+    "Premium": "premium-residential",
+}
+
+
 def _make_agreement(
     *,
     tier_name: str = "Essential",
+    tier_slug: str | None = None,
     customer_id=None,
     property_id=None,
     agreement_id=None,
@@ -36,6 +44,7 @@ def _make_agreement(
     agr.property_id = property_id
     agr.tier = MagicMock()
     agr.tier.name = tier_name
+    agr.tier.slug = tier_slug or _TIER_NAME_TO_SLUG.get(tier_name, tier_name.lower())
     return agr
 
 

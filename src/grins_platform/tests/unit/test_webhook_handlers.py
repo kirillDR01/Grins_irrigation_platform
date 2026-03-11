@@ -513,6 +513,546 @@ class TestCheckoutSessionCompleted:
 
 
 # =============================================================================
+# checkout.session.completed — surcharge & metadata field population
+# Validates: Requirements 3.14, 2.5
+# =============================================================================
+
+
+class TestCheckoutCompletedNewFields:
+    """Tests for new field population in _handle_checkout_completed."""
+
+    @staticmethod
+    def _setup_checkout_mocks(
+        mock_cust_repo_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+        *,
+        tier_annual_price: Decimal = Decimal("599.00"),
+        customer_email_opt_in: bool = False,
+    ) -> tuple[MagicMock, MagicMock, AsyncMock, MagicMock]:
+        """Set up common mocks for checkout tests.
+
+        Returns (customer, tier, agr_repo, agreement).
+        """
+        customer = MagicMock()
+        customer.id = uuid4()
+        customer.stripe_customer_id = "cus_existing"
+        customer.email_opt_in_at = (
+            datetime.now(timezone.utc) if customer_email_opt_in else None
+        )
+        customer.email_opt_in = customer_email_opt_in
+        customer.email_opt_in_source = (
+            "stripe_checkout" if customer_email_opt_in else None
+        )
+
+        cust_repo = AsyncMock()
+        cust_repo.find_by_email.return_value = [customer]
+        mock_cust_repo_cls.return_value = cust_repo
+
+        tier = MagicMock()
+        tier.id = uuid4()
+        tier.name = "Essential"
+        tier.annual_price = tier_annual_price
+        tier.is_active = True
+        tier_repo = AsyncMock()
+        tier_repo.get_by_slug_and_type.return_value = tier
+        mock_tier_repo_cls.return_value = tier_repo
+
+        agreement = _make_agreement(status=AgreementStatus.PENDING.value)
+        agr_svc = AsyncMock()
+        agr_svc.create_agreement.return_value = agreement
+        mock_agr_svc_cls.return_value = agr_svc
+
+        agr_repo = AsyncMock()
+        agr_repo.update.return_value = agreement
+        mock_agr_repo_cls.return_value = agr_repo
+
+        mock_compliance_cls.return_value = AsyncMock()
+
+        job_gen = AsyncMock()
+        job_gen.generate_jobs.return_value = []
+        mock_job_gen_cls.return_value = job_gen
+
+        email_svc = MagicMock()
+        email_svc.send_confirmation_email.return_value = {
+            "content": "c",
+            "sent_via": "email",
+            "sent": True,
+        }
+        email_svc.send_welcome_email.return_value = {"sent": True}
+        mock_email_cls.return_value = email_svc
+
+        return customer, tier, agr_repo, agreement
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.SurchargeCalculator")
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_surcharge_fields_populated_with_zone_and_lake_pump(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+        mock_surcharge_cls: MagicMock,
+    ) -> None:
+        """zone_count=15, has_lake_pump=true populates agreement fields correctly."""
+        handler, _session = _make_handler()
+
+        _customer, _tier, agr_repo, _agreement = self._setup_checkout_mocks(
+            mock_cust_repo_cls,
+            mock_agr_repo_cls,
+            mock_tier_repo_cls,
+            mock_agr_svc_cls,
+            mock_compliance_cls,
+            mock_job_gen_cls,
+            mock_email_cls,
+            tier_annual_price=Decimal("599.00"),
+        )
+
+        # Mock SurchargeCalculator
+        mock_breakdown = MagicMock()
+        mock_breakdown.total = Decimal("749.00")
+        mock_surcharge_cls.calculate.return_value = mock_breakdown
+
+        event = _make_event(
+            "checkout.session.completed",
+            {
+                "customer_details": {"email": "test@example.com"},
+                "customer": "cus_existing",
+                "subscription": "sub_1",
+                "metadata": {
+                    "package_tier": "essential",
+                    "package_type": "residential",
+                    "zone_count": "15",
+                    "has_lake_pump": "true",
+                    "email_marketing_consent": "false",
+                },
+            },
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        mock_surcharge_cls.calculate.assert_called_once_with(
+            tier_slug="essential",
+            package_type="residential",
+            zone_count=15,
+            has_lake_pump=True,
+            base_price=Decimal("599.00"),
+        )
+        # Verify agreement_repo.update called with surcharge fields
+        agr_repo.update.assert_called_once()
+        update_args = agr_repo.update.call_args
+        update_dict = update_args[0][1]
+        assert update_dict["zone_count"] == 15
+        assert update_dict["has_lake_pump"] is True
+        assert update_dict["base_price"] == Decimal("599.00")
+        assert update_dict["annual_price"] == Decimal("749.00")
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.SurchargeCalculator")
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_no_surcharges_when_low_zone_count(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+        mock_surcharge_cls: MagicMock,
+    ) -> None:
+        """zone_count=5, has_lake_pump=false → base_price equals annual_price."""
+        handler, _session = _make_handler()
+
+        _customer, _tier, agr_repo, _agreement = self._setup_checkout_mocks(
+            mock_cust_repo_cls,
+            mock_agr_repo_cls,
+            mock_tier_repo_cls,
+            mock_agr_svc_cls,
+            mock_compliance_cls,
+            mock_job_gen_cls,
+            mock_email_cls,
+            tier_annual_price=Decimal("599.00"),
+        )
+
+        mock_breakdown = MagicMock()
+        mock_breakdown.total = Decimal("599.00")
+        mock_surcharge_cls.calculate.return_value = mock_breakdown
+
+        event = _make_event(
+            "checkout.session.completed",
+            {
+                "customer_details": {"email": "test@example.com"},
+                "customer": "cus_existing",
+                "subscription": "sub_2",
+                "metadata": {
+                    "package_tier": "essential",
+                    "package_type": "residential",
+                    "zone_count": "5",
+                    "has_lake_pump": "false",
+                },
+            },
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        update_dict = agr_repo.update.call_args[0][1]
+        assert update_dict["zone_count"] == 5
+        assert update_dict["has_lake_pump"] is False
+        assert update_dict["base_price"] == Decimal("599.00")
+        assert update_dict["annual_price"] == Decimal("599.00")
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.SurchargeCalculator")
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_base_price_vs_annual_price_distinction(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+        mock_surcharge_cls: MagicMock,
+    ) -> None:
+        """base_price is tier price, annual_price includes surcharges."""
+        handler, _session = _make_handler()
+
+        _customer, _tier, agr_repo, _agreement = self._setup_checkout_mocks(
+            mock_cust_repo_cls,
+            mock_agr_repo_cls,
+            mock_tier_repo_cls,
+            mock_agr_svc_cls,
+            mock_compliance_cls,
+            mock_job_gen_cls,
+            mock_email_cls,
+            tier_annual_price=Decimal("299.00"),
+        )
+
+        mock_breakdown = MagicMock()
+        mock_breakdown.total = Decimal("449.00")  # 299 + surcharges
+        mock_surcharge_cls.calculate.return_value = mock_breakdown
+
+        event = _make_event(
+            "checkout.session.completed",
+            {
+                "customer_details": {"email": "test@example.com"},
+                "customer": "cus_existing",
+                "subscription": "sub_3",
+                "metadata": {
+                    "package_tier": "essential",
+                    "package_type": "residential",
+                    "zone_count": "12",
+                    "has_lake_pump": "true",
+                },
+            },
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        update_dict = agr_repo.update.call_args[0][1]
+        assert update_dict["base_price"] == Decimal("299.00")
+        assert update_dict["annual_price"] == Decimal("449.00")
+        assert update_dict["base_price"] != update_dict["annual_price"]
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.SurchargeCalculator")
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_email_marketing_consent_true_sets_customer_opt_in(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+        mock_surcharge_cls: MagicMock,
+    ) -> None:
+        """email_marketing_consent=true sets opt_in for
+        existing customer who opted out.
+        """
+        handler, _session = _make_handler()
+
+        # Existing customer who previously had email_opt_in_at set but opted out
+        customer, _tier, _agr_repo, _agreement = self._setup_checkout_mocks(
+            mock_cust_repo_cls,
+            mock_agr_repo_cls,
+            mock_tier_repo_cls,
+            mock_agr_svc_cls,
+            mock_compliance_cls,
+            mock_job_gen_cls,
+            mock_email_cls,
+            customer_email_opt_in=False,
+        )
+        # Customer has email_opt_in_at set (existing) but email_opt_in=False (opted out)
+        customer.email_opt_in = False
+        customer.email_opt_in_at = datetime.now(timezone.utc)
+        customer.email_opt_in_source = "previous"
+
+        mock_breakdown = MagicMock()
+        mock_breakdown.total = Decimal("599.00")
+        mock_surcharge_cls.calculate.return_value = mock_breakdown
+
+        event = _make_event(
+            "checkout.session.completed",
+            {
+                "customer_details": {"email": "test@example.com"},
+                "customer": "cus_existing",
+                "subscription": "sub_4",
+                "metadata": {
+                    "package_tier": "essential",
+                    "package_type": "residential",
+                    "email_marketing_consent": "true",
+                },
+            },
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        assert customer.email_opt_in is True
+        assert customer.email_opt_in_source == "checkout_marketing_consent"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.SurchargeCalculator")
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_email_marketing_consent_false_does_not_change_opt_in(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+        mock_surcharge_cls: MagicMock,
+    ) -> None:
+        """email_marketing_consent=false does not override existing opt-out."""
+        handler, _session = _make_handler()
+
+        # Existing customer who opted out — email_opt_in_at set, email_opt_in=False
+        customer, _tier, _agr_repo, _agreement = self._setup_checkout_mocks(
+            mock_cust_repo_cls,
+            mock_agr_repo_cls,
+            mock_tier_repo_cls,
+            mock_agr_svc_cls,
+            mock_compliance_cls,
+            mock_job_gen_cls,
+            mock_email_cls,
+            customer_email_opt_in=False,
+        )
+        customer.email_opt_in = False
+        customer.email_opt_in_at = datetime.now(timezone.utc)
+        customer.email_opt_in_source = "previous"
+
+        mock_breakdown = MagicMock()
+        mock_breakdown.total = Decimal("599.00")
+        mock_surcharge_cls.calculate.return_value = mock_breakdown
+
+        event = _make_event(
+            "checkout.session.completed",
+            {
+                "customer_details": {"email": "test@example.com"},
+                "customer": "cus_existing",
+                "subscription": "sub_5",
+                "metadata": {
+                    "package_tier": "essential",
+                    "package_type": "residential",
+                    "email_marketing_consent": "false",
+                },
+            },
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        # email_opt_in should remain False since marketing consent is false
+        assert customer.email_opt_in is False
+        assert customer.email_opt_in_source == "previous"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.SurchargeCalculator")
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_winterization_only_tier_uses_correct_slug(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+        mock_surcharge_cls: MagicMock,
+    ) -> None:
+        """Winterization-only tier slug is passed to SurchargeCalculator."""
+        handler, _session = _make_handler()
+
+        _customer, _tier, _agr_repo, _agreement = self._setup_checkout_mocks(
+            mock_cust_repo_cls,
+            mock_agr_repo_cls,
+            mock_tier_repo_cls,
+            mock_agr_svc_cls,
+            mock_compliance_cls,
+            mock_job_gen_cls,
+            mock_email_cls,
+            tier_annual_price=Decimal("80.00"),
+        )
+
+        mock_breakdown = MagicMock()
+        mock_breakdown.total = Decimal("80.00")
+        mock_surcharge_cls.calculate.return_value = mock_breakdown
+
+        event = _make_event(
+            "checkout.session.completed",
+            {
+                "customer_details": {"email": "test@example.com"},
+                "customer": "cus_existing",
+                "subscription": "sub_6",
+                "metadata": {
+                    "package_tier": "winterization-only-residential",
+                    "package_type": "residential",
+                    "zone_count": "5",
+                    "has_lake_pump": "false",
+                },
+            },
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        mock_surcharge_cls.calculate.assert_called_once_with(
+            tier_slug="winterization-only-residential",
+            package_type="residential",
+            zone_count=5,
+            has_lake_pump=False,
+            base_price=Decimal("80.00"),
+        )
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.SurchargeCalculator")
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_missing_metadata_defaults(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+        mock_surcharge_cls: MagicMock,
+    ) -> None:
+        """Missing metadata defaults to zone_count=1,
+        has_lake_pump=false, email_marketing_consent=false.
+        """
+        handler, _session = _make_handler()
+
+        _customer, _tier, agr_repo, _agreement = self._setup_checkout_mocks(
+            mock_cust_repo_cls,
+            mock_agr_repo_cls,
+            mock_tier_repo_cls,
+            mock_agr_svc_cls,
+            mock_compliance_cls,
+            mock_job_gen_cls,
+            mock_email_cls,
+        )
+
+        mock_breakdown = MagicMock()
+        mock_breakdown.total = Decimal("599.00")
+        mock_surcharge_cls.calculate.return_value = mock_breakdown
+
+        event = _make_event(
+            "checkout.session.completed",
+            {
+                "customer_details": {"email": "test@example.com"},
+                "customer": "cus_existing",
+                "subscription": "sub_7",
+                "metadata": {
+                    "package_tier": "essential",
+                    "package_type": "residential",
+                    # No zone_count, has_lake_pump, or email_marketing_consent
+                },
+            },
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        mock_surcharge_cls.calculate.assert_called_once_with(
+            tier_slug="essential",
+            package_type="residential",
+            zone_count=1,
+            has_lake_pump=False,
+            base_price=Decimal("599.00"),
+        )
+        update_dict = agr_repo.update.call_args[0][1]
+        assert update_dict["zone_count"] == 1
+        assert update_dict["has_lake_pump"] is False
+
+
+# =============================================================================
 # invoice.paid
 # =============================================================================
 

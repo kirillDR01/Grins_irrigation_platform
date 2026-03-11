@@ -62,6 +62,12 @@ class CreateCheckoutSessionRequest(BaseModel):
     tier_id: UUID = Field(..., description="Service agreement tier ID")
     package_type: str = Field(..., description="Package type (residential/commercial)")
     consent_token: UUID = Field(..., description="Pre-checkout consent token")
+    zone_count: int = Field(default=1, ge=1, description="Number of irrigation zones")
+    has_lake_pump: bool = Field(default=False, description="Property has a lake pump")
+    email_marketing_consent: bool = Field(
+        default=False,
+        description="Email marketing consent",
+    )
     utm_params: dict[str, str] | None = Field(
         default=None,
         description="UTM tracking parameters",
@@ -131,6 +137,9 @@ async def create_checkout_session(
             tier_id=data.tier_id,
             package_type=data.package_type,
             consent_token=data.consent_token,
+            zone_count=data.zone_count,
+            has_lake_pump=data.has_lake_pump,
+            email_marketing_consent=data.email_marketing_consent,
             utm_params=data.utm_params,
             success_url=data.success_url,
             cancel_url=data.cancel_url,

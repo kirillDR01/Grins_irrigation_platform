@@ -12,6 +12,9 @@ from grins_platform.repositories.agreement_tier_repository import (
 from grins_platform.repositories.ai_audit_log_repository import AIAuditLogRepository
 from grins_platform.repositories.ai_usage_repository import AIUsageRepository
 from grins_platform.repositories.appointment_repository import AppointmentRepository
+from grins_platform.repositories.consent_language_version_repository import (
+    ConsentLanguageVersionRepository,
+)
 from grins_platform.repositories.customer_repository import CustomerRepository
 from grins_platform.repositories.invoice_repository import InvoiceRepository
 from grins_platform.repositories.job_repository import JobRepository
@@ -34,6 +37,7 @@ __all__ = [
     "AgreementRepository",
     "AgreementTierRepository",
     "AppointmentRepository",
+    "ConsentLanguageVersionRepository",
     "CustomerRepository",
     "InvoiceRepository",
     "JobRepository",

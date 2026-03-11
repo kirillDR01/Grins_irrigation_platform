@@ -1,11 +1,12 @@
 """Property test for pre-checkout consent validation.
 
-Property 15: Pre-Checkout Consent Validation
-For any request where sms_consent=false OR terms_accepted=false →
-ConsentValidationError, no records created; both true → sms_consent_record +
-PRE_SALE disclosure_record created with same consent_token.
+Property 15: Pre-Checkout Consent Validation (TCPA-compliant)
+Only terms_accepted=false triggers ConsentValidationError.
+sms_consent=false is accepted per TCPA (purchase not conditioned on SMS consent).
+When terms_accepted=true → sms_consent_record + PRE_SALE disclosure_record
+created with same consent_token, consent_given matching sms_consent value.
 
-Validates: Requirements 30.2, 30.3, 30.5
+Validates: Requirements 1.1, 1.2, 1.3, 1.4, 30.2, 30.3
 """
 
 from __future__ import annotations
@@ -64,7 +65,7 @@ def _mock_session() -> AsyncMock:
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestPreCheckoutConsentValidationProperty:
-    """Property 15: Pre-Checkout Consent Validation."""
+    """Property 15: Pre-Checkout Consent Validation (TCPA-compliant)."""
 
     @given(
         phone=phones,
@@ -78,7 +79,7 @@ class TestPreCheckoutConsentValidationProperty:
         language: str,
         content: str,
     ) -> None:
-        """sms_consent=false AND terms_accepted=false → error, no records."""
+        """sms_consent=false AND terms_accepted=false → error (terms), no records."""
         session = _mock_session()
         svc = ComplianceService(session)
 
@@ -91,8 +92,9 @@ class TestPreCheckoutConsentValidationProperty:
                 phone=phone,
             )
 
-        assert "sms_consent" in exc_info.value.missing_fields
+        # Only terms_accepted triggers rejection per TCPA fix
         assert "terms_accepted" in exc_info.value.missing_fields
+        assert "sms_consent" not in exc_info.value.missing_fields
         assert len(session.added) == 0  # type: ignore[attr-defined]
 
     @given(
@@ -101,28 +103,28 @@ class TestPreCheckoutConsentValidationProperty:
         content=disclosure_contents,
     )
     @settings(max_examples=30)
-    async def test_sms_false_terms_true_raises_no_records(
+    async def test_sms_false_terms_true_creates_records(
         self,
         phone: str,
         language: str,
         content: str,
     ) -> None:
-        """sms_consent=false, terms_accepted=true → error, no records."""
+        """sms_consent=false, terms_accepted=true → accepted, consent_given=false."""
         session = _mock_session()
         svc = ComplianceService(session)
 
-        with pytest.raises(ConsentValidationError) as exc_info:
-            await svc.process_pre_checkout_consent(
-                sms_consent=False,
-                terms_accepted=True,
-                consent_language=language,
-                disclosure_content=content,
-                phone=phone,
-            )
+        _token, sms_rec, _disc_rec = await svc.process_pre_checkout_consent(
+            sms_consent=False,
+            terms_accepted=True,
+            consent_language=language,
+            disclosure_content=content,
+            phone=phone,
+        )
 
-        assert "sms_consent" in exc_info.value.missing_fields
-        assert "terms_accepted" not in exc_info.value.missing_fields
-        assert len(session.added) == 0  # type: ignore[attr-defined]
+        assert len(session.added) == 2  # type: ignore[attr-defined]
+        assert isinstance(sms_rec, SmsConsentRecord)
+        assert sms_rec.consent_given is False
+        assert sms_rec.phone_number == phone
 
     @given(
         phone=phones,
@@ -161,7 +163,7 @@ class TestPreCheckoutConsentValidationProperty:
         content=disclosure_contents,
     )
     @settings(max_examples=50)
-    async def test_any_false_field_rejects_with_no_records(
+    async def test_terms_false_rejects_with_no_records(
         self,
         sms_consent: bool,
         terms_accepted: bool,
@@ -169,23 +171,31 @@ class TestPreCheckoutConsentValidationProperty:
         language: str,
         content: str,
     ) -> None:
-        """For any combination where either is false → error, no records."""
-        if sms_consent and terms_accepted:
-            return  # Skip valid case — tested separately
-
+        """Only terms_accepted=false triggers rejection, regardless of sms_consent."""
         session = _mock_session()
         svc = ComplianceService(session)
 
-        with pytest.raises(ConsentValidationError):
-            await svc.process_pre_checkout_consent(
+        if not terms_accepted:
+            with pytest.raises(ConsentValidationError):
+                await svc.process_pre_checkout_consent(
+                    sms_consent=sms_consent,
+                    terms_accepted=terms_accepted,
+                    consent_language=language,
+                    disclosure_content=content,
+                    phone=phone,
+                )
+            assert len(session.added) == 0  # type: ignore[attr-defined]
+        else:
+            # terms_accepted=true always succeeds regardless of sms_consent
+            _token, sms_rec, _disc_rec = await svc.process_pre_checkout_consent(
                 sms_consent=sms_consent,
                 terms_accepted=terms_accepted,
                 consent_language=language,
                 disclosure_content=content,
                 phone=phone,
             )
-
-        assert len(session.added) == 0  # type: ignore[attr-defined]
+            assert len(session.added) == 2  # type: ignore[attr-defined]
+            assert sms_rec.consent_given is sms_consent
 
     @given(
         phone=phones,

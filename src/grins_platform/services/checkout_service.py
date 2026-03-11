@@ -9,6 +9,7 @@ Validates: Requirements 31.1, 31.2, 31.3, 31.4, 31.5, 31.6, 31.7, 31.8, 39A.4
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 import stripe
@@ -17,6 +18,7 @@ from sqlalchemy import select
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.sms_consent_record import SmsConsentRecord
 from grins_platform.services.stripe_config import StripeSettings
+from grins_platform.services.surcharge_calculator import SurchargeCalculator
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -171,6 +173,9 @@ class CheckoutService(LoggerMixin):
         package_type: str,
         consent_token: UUID,
         *,
+        zone_count: int = 1,
+        has_lake_pump: bool = False,
+        email_marketing_consent: bool = False,
         utm_params: dict[str, str] | None = None,
         success_url: str = "",
         cancel_url: str = "",
@@ -178,39 +183,86 @@ class CheckoutService(LoggerMixin):
         """Create a Stripe Checkout Session for subscription purchase.
 
         Validates consent_token (< 2 hours), tier (exists, active, has
-        stripe_price_id), then creates a Stripe Checkout Session with
-        subscription mode.
+        stripe_price_id), computes surcharges, then creates a Stripe
+        Checkout Session with subscription mode.
 
         Returns the Stripe Checkout URL.
 
-        Validates: Requirements 31.1, 31.2, 31.3, 31.4, 31.5, 31.6, 31.7, 31.8, 39A.4
+        Validates: Requirements 3.1, 3.11, 3.12, 4.4, 31.1-31.8, 39A.4
         """
         self.log_started(
             "create_checkout_session",
             tier_id=str(tier_id),
             package_type=package_type,
             consent_token=str(consent_token),
+            zone_count=zone_count,
+            has_lake_pump=has_lake_pump,
         )
 
         await self._validate_consent_token(consent_token)
         tier = await self._validate_tier(tier_id)
+
+        # Compute surcharges
+        breakdown = SurchargeCalculator.calculate(
+            tier_slug=tier.slug,
+            package_type=package_type,
+            zone_count=zone_count,
+            has_lake_pump=has_lake_pump,
+            base_price=Decimal(str(tier.annual_price)),
+        )
 
         # Build metadata
         metadata: dict[str, str] = {
             "consent_token": str(consent_token),
             "package_tier": tier.slug,
             "package_type": package_type,
+            "zone_count": str(zone_count),
+            "has_lake_pump": str(has_lake_pump).lower(),
+            "email_marketing_consent": str(email_marketing_consent).lower(),
         }
         if utm_params:
             for key, value in utm_params.items():
                 metadata[f"utm_{key}"] = value
+
+        # Build Stripe line items: base price + optional surcharges
+        line_items: list[dict[str, Any]] = [
+            {"price": tier.stripe_price_id, "quantity": 1},
+        ]
+
+        if breakdown.zone_surcharge > 0:
+            line_items.append(
+                {
+                    "price_data": {
+                        "currency": "usd",
+                        "product_data": {
+                            "name": f"Zone surcharge ({zone_count - 9} extra zones)",
+                        },
+                        "unit_amount": int(breakdown.zone_surcharge * 100),
+                        "recurring": {"interval": "year"},
+                    },
+                    "quantity": 1,
+                },
+            )
+
+        if breakdown.lake_pump_surcharge > 0:
+            line_items.append(
+                {
+                    "price_data": {
+                        "currency": "usd",
+                        "product_data": {"name": "Lake pump surcharge"},
+                        "unit_amount": int(breakdown.lake_pump_surcharge * 100),
+                        "recurring": {"interval": "year"},
+                    },
+                    "quantity": 1,
+                },
+            )
 
         # Build Stripe Checkout Session params
         stripe.api_key = self.stripe_settings.stripe_secret_key
 
         session_params: dict[str, Any] = {
             "mode": "subscription",
-            "line_items": [{"price": tier.stripe_price_id, "quantity": 1}],
+            "line_items": line_items,
             "phone_number_collection": {"enabled": True},
             "billing_address_collection": "required",
             "consent_collection": {
@@ -236,5 +288,6 @@ class CheckoutService(LoggerMixin):
             "create_checkout_session",
             session_id=checkout_session.id,
             tier_slug=tier.slug,
+            total=str(breakdown.total),
         )
         return checkout_url

@@ -50,6 +50,7 @@ def _make_lead_mock(
     terms_accepted: bool = False,
     status: str = LeadStatus.NEW.value,
     created_at: datetime | None = None,
+    email_marketing_consent: bool = False,
 ) -> MagicMock:
     lead = MagicMock()
     lead.id = lead_id or uuid4()
@@ -65,6 +66,7 @@ def _make_lead_mock(
     lead.intake_tag = intake_tag
     lead.sms_consent = sms_consent
     lead.terms_accepted = terms_accepted
+    lead.email_marketing_consent = email_marketing_consent
     lead.status = status
     lead.assigned_to = None
     lead.customer_id = None
@@ -110,6 +112,7 @@ class TestLeadSourceTracking:
         """Lead submission without explicit lead_source defaults to WEBSITE."""
         repo = AsyncMock()
         repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = _make_lead_mock()
         svc = _build_service(lead_repo=repo)
 
@@ -129,6 +132,7 @@ class TestLeadSourceTracking:
         """Lead submission with explicit lead_source uses provided value."""
         repo = AsyncMock()
         repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = _make_lead_mock()
         svc = _build_service(lead_repo=repo)
 
@@ -159,6 +163,7 @@ class TestLeadSourceTracking:
         """Lead submission accepts every LeadSourceExtended value."""
         repo = AsyncMock()
         repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = _make_lead_mock()
         svc = _build_service(lead_repo=repo)
 
@@ -244,6 +249,7 @@ class TestIntakeTagDefaulting:
         """Website form submission defaults intake_tag to SCHEDULE."""
         repo = AsyncMock()
         repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = _make_lead_mock()
         svc = _build_service(lead_repo=repo)
 
@@ -263,6 +269,7 @@ class TestIntakeTagDefaulting:
         """Website form with explicit FOLLOW_UP intake_tag uses it."""
         repo = AsyncMock()
         repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = _make_lead_mock()
         svc = _build_service(lead_repo=repo)
 
@@ -402,6 +409,7 @@ class TestSmsConfirmationGating:
         lead = _make_lead_mock(sms_consent=True, phone="6125550100")
         repo = AsyncMock()
         repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = lead
         sms = AsyncMock()
         svc = _build_service(lead_repo=repo, sms_service=sms)
@@ -422,6 +430,7 @@ class TestSmsConfirmationGating:
         lead = _make_lead_mock(sms_consent=False, phone="6125550100")
         repo = AsyncMock()
         repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = lead
         sms = AsyncMock()
         svc = _build_service(lead_repo=repo, sms_service=sms)
@@ -442,6 +451,7 @@ class TestSmsConfirmationGating:
         lead = _make_lead_mock(sms_consent=True, phone="")
         repo = AsyncMock()
         repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = lead
         sms = AsyncMock()
         svc = _build_service(lead_repo=repo, sms_service=sms)
@@ -462,6 +472,7 @@ class TestSmsConfirmationGating:
         lead = _make_lead_mock(sms_consent=True, phone="6125550100")
         repo = AsyncMock()
         repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = lead
         svc = _build_service(lead_repo=repo, sms_service=None)
 
@@ -480,6 +491,7 @@ class TestSmsConfirmationGating:
         lead = _make_lead_mock(sms_consent=True, phone="6125550100")
         repo = AsyncMock()
         repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = lead
         sms = AsyncMock()
         sms.send_message.side_effect = RuntimeError("Twilio down")
@@ -530,6 +542,7 @@ class TestEmailConfirmation:
         lead = _make_lead_mock(email="test@example.com")
         repo = AsyncMock()
         repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = lead
         email_svc = MagicMock()
         svc = _build_service(lead_repo=repo, email_service=email_svc)
@@ -550,6 +563,7 @@ class TestEmailConfirmation:
         lead = _make_lead_mock(email=None)
         repo = AsyncMock()
         repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = lead
         email_svc = MagicMock()
         svc = _build_service(lead_repo=repo, email_service=email_svc)
@@ -570,6 +584,7 @@ class TestEmailConfirmation:
         lead = _make_lead_mock(email="test@example.com")
         repo = AsyncMock()
         repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = lead
         svc = _build_service(lead_repo=repo, email_service=None)
 
@@ -588,6 +603,7 @@ class TestEmailConfirmation:
         lead = _make_lead_mock(email="test@example.com")
         repo = AsyncMock()
         repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = lead
         email_svc = MagicMock()
         email_svc.send_lead_confirmation.side_effect = RuntimeError("SMTP down")
@@ -856,6 +872,7 @@ class TestWorkRequestAutoPromotion:
         """Lead created with GOOGLE_FORM source is accepted."""
         repo = AsyncMock()
         repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = _make_lead_mock(
             lead_source=LeadSourceExtended.GOOGLE_FORM.value,
         )

@@ -54,6 +54,10 @@ def _make_lead(**overrides: Any) -> MagicMock:
     lead.intake_tag = overrides.get("intake_tag", "schedule")
     lead.sms_consent = overrides.get("sms_consent", False)
     lead.terms_accepted = overrides.get("terms_accepted", False)
+    lead.email_marketing_consent = overrides.get(
+        "email_marketing_consent",
+        False,
+    )
     lead.status = overrides.get("status", LeadStatus.NEW.value)
     lead.assigned_to = overrides.get("assigned_to")
     lead.customer_id = overrides.get("customer_id")
@@ -113,6 +117,7 @@ class TestLeadCreationSourceAndTag:
             intake_tag=IntakeTag.SCHEDULE.value,
         )
         repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = created
 
         data = LeadSubmission(
@@ -161,6 +166,7 @@ class TestLeadCreationSourceAndTag:
             intake_tag=IntakeTag.FOLLOW_UP.value,
         )
         repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = created
 
         data = LeadSubmission(
@@ -292,6 +298,7 @@ class TestWorkRequestAutoPromotion:
 
             lead_repo = AsyncMock(spec=LeadRepository)
             lead_repo.get_by_phone_and_active_status.return_value = None
+            lead_repo.get_recent_by_phone_or_email.return_value = None
             lead_repo.create.return_value = lead_mock
 
             mp.setattr(
@@ -359,6 +366,7 @@ class TestWorkRequestAutoPromotion:
 
             lead_repo = AsyncMock(spec=LeadRepository)
             lead_repo.get_by_phone_and_active_status.return_value = None
+            lead_repo.get_recent_by_phone_or_email.return_value = None
             lead_repo.create.return_value = lead_mock
 
             mp.setattr(

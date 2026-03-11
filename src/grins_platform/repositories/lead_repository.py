@@ -9,7 +9,7 @@ Validates: Requirement 4, 5, 8
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
@@ -138,6 +138,51 @@ class LeadRepository(LoggerMixin):
 
         self.log_completed(
             "get_by_phone_and_active_status",
+            found=lead is not None,
+        )
+        return lead
+
+    async def get_recent_by_phone_or_email(
+        self,
+        phone: str,
+        email: str | None,
+        hours: int = 24,
+    ) -> Lead | None:
+        """Find a lead with matching phone OR email created within given hours.
+
+        Used for 24-hour duplicate detection window.
+
+        Args:
+            phone: Normalized phone number
+            email: Email address (optional)
+            hours: Lookback window in hours (default 24)
+
+        Returns:
+            Lead instance or None if not found
+
+        Validates: Integration Gap Requirement 6.1, 6.2
+        """
+        self.log_started("get_recent_by_phone_or_email")
+
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
+
+        conditions = [Lead.phone == phone]
+        if email:
+            conditions.append(Lead.email == email)
+
+        stmt = (
+            select(Lead)
+            .where(Lead.created_at >= cutoff)
+            .where(or_(*conditions))
+            .order_by(Lead.created_at.desc())
+            .limit(1)
+        )
+
+        result = await self.session.execute(stmt)
+        lead: Lead | None = result.scalar_one_or_none()
+
+        self.log_completed(
+            "get_recent_by_phone_or_email",
             found=lead is not None,
         )
         return lead

@@ -78,6 +78,10 @@ class PreCheckoutConsentRequest(BaseModel):
         default=_DEFAULT_DISCLOSURE_CONTENT,
         description="Disclosure content shown to user",
     )
+    email_marketing_consent: bool = Field(
+        default=False,
+        description="Email marketing consent",
+    )
 
 
 class PreCheckoutConsentResponse(BaseModel):
@@ -201,6 +205,7 @@ async def pre_checkout_consent(
             phone=data.phone,
             ip_address=client_ip,
             user_agent=request.headers.get("user-agent"),
+            email_marketing_consent=data.email_marketing_consent,
         )
     except ConsentValidationError as exc:
         _endpoints.log_rejected(

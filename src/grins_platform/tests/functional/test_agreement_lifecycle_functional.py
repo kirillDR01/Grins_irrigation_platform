@@ -232,7 +232,7 @@ class TestCheckoutWebhookPipeline:
         self,
         mock_cust_repo_cls: MagicMock,
         mock_cust_svc_cls: MagicMock,
-        _mock_agr_repo_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
         mock_tier_repo_cls: MagicMock,
         mock_agr_svc_cls: MagicMock,
         mock_compliance_cls: MagicMock,
@@ -241,6 +241,10 @@ class TestCheckoutWebhookPipeline:
     ) -> None:
         """Checkout webhook creates full pipeline."""
         handler, _session = _make_handler()
+
+        # Agreement repo — async mock so update() can be awaited
+        agr_repo = AsyncMock()
+        mock_agr_repo_cls.return_value = agr_repo
 
         # Customer repo — no existing customer
         cust_repo = AsyncMock()

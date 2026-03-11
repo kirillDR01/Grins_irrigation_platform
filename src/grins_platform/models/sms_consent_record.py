@@ -7,7 +7,7 @@ Validates: Requirements 29.1, 29.2, 29.3, 29.4
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
 from sqlalchemy import (
@@ -20,9 +20,12 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from grins_platform.database import Base
+
+if TYPE_CHECKING:
+    from grins_platform.models.lead import Lead
 
 
 class SmsConsentRecord(Base):
@@ -40,6 +43,7 @@ class SmsConsentRecord(Base):
         Index("ix_sms_consent_records_phone_number", "phone_number"),
         Index("ix_sms_consent_records_customer_id", "customer_id"),
         Index("ix_sms_consent_records_consent_token", "consent_token"),
+        Index("ix_sms_consent_records_lead_id", "lead_id"),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -50,6 +54,11 @@ class SmsConsentRecord(Base):
     customer_id: Mapped[Optional[UUID]] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("customers.id"),
+        nullable=True,
+    )
+    lead_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("leads.id"),
         nullable=True,
     )
     phone_number: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -98,6 +107,13 @@ class SmsConsentRecord(Base):
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+
+    # Relationships
+    lead: Mapped[Optional["Lead"]] = relationship(
+        "Lead",
+        foreign_keys=[lead_id],
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:

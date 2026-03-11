@@ -19,6 +19,7 @@ from sqlalchemy.orm import selectinload
 
 from grins_platform.exceptions import ConsentValidationError
 from grins_platform.log_config import LoggerMixin
+from grins_platform.models.consent_language_version import ConsentLanguageVersion
 from grins_platform.models.disclosure_record import DisclosureRecord
 from grins_platform.models.enums import AgreementStatus, DisclosureType
 from grins_platform.models.service_agreement import ServiceAgreement
@@ -115,6 +116,7 @@ class ComplianceService(LoggerMixin):
         token: UUID | None = None,
         *,
         customer_id: UUID | None = None,
+        lead_id: UUID | None = None,
         consent_type: str = "marketing",
         ip_address: str | None = None,
         user_agent: str | None = None,
@@ -131,6 +133,7 @@ class ComplianceService(LoggerMixin):
 
         record = SmsConsentRecord(
             customer_id=customer_id,
+            lead_id=lead_id,
             phone_number=phone,
             consent_type=consent_type,
             consent_given=consent_given,
@@ -360,6 +363,42 @@ class ComplianceService(LoggerMixin):
         )
         return records
 
+    async def validate_consent_language_version(
+        self,
+        version: str,
+    ) -> bool:
+        """Validate that a consent language version exists and is not deprecated.
+
+        Returns True if version exists and deprecated_date is NULL.
+        Logs warning if not found or deprecated, but does not raise.
+
+        Validates: Requirements 11.4, 11.5
+        """
+        stmt = select(ConsentLanguageVersion).where(
+            ConsentLanguageVersion.version == version,
+        )
+        result = await self.session.execute(stmt)
+        record = result.scalar_one_or_none()
+
+        if record is None:
+            self.logger.warning(
+                "compliance.complianceservice.validate_consent_language_version_warning",
+                version=version,
+                reason="version_not_found",
+            )
+            return False
+
+        if record.deprecated_date is not None:
+            self.logger.warning(
+                "compliance.complianceservice.validate_consent_language_version_warning",
+                version=version,
+                reason="version_deprecated",
+                deprecated_date=str(record.deprecated_date),
+            )
+            return False
+
+        return True
+
     async def process_pre_checkout_consent(
         self,
         *,
@@ -371,48 +410,55 @@ class ComplianceService(LoggerMixin):
         consent_method: str = "web_form",
         ip_address: str | None = None,
         user_agent: str | None = None,
+        email_marketing_consent: bool = False,
+        consent_form_version: str | None = None,
     ) -> tuple[UUID, SmsConsentRecord, DisclosureRecord]:
         """Validate and process pre-checkout consent.
 
-        Validates both sms_consent and terms_accepted are true, then creates
-        an sms_consent_record and PRE_SALE disclosure_record with a shared
-        consent_token.
+        Only terms_accepted is required. sms_consent=false is accepted
+        (TCPA: purchase cannot be conditioned on SMS consent).
+        Always creates an SmsConsentRecord with consent_given matching
+        the request's sms_consent value.
 
-        Raises ConsentValidationError if either field is false.
+        Raises ConsentValidationError if terms_accepted is false.
 
-        Validates: Requirements 30.2, 30.3, 30.5
+        Validates: Requirements 1.1, 1.2, 1.3, 1.4, 2.4, 11.4, 11.5
         """
         self.log_started(
             "process_pre_checkout_consent",
             sms_consent=sms_consent,
             terms_accepted=terms_accepted,
+            email_marketing_consent=email_marketing_consent,
         )
 
-        # Validate both consent fields
-        missing: list[str] = []
-        if not sms_consent:
-            missing.append("sms_consent")
+        # Only terms_accepted is required — sms_consent is optional per TCPA
         if not terms_accepted:
-            missing.append("terms_accepted")
-        if missing:
             self.log_rejected(
                 "process_pre_checkout_consent",
                 reason="consent_validation_failed",
-                missing_fields=missing,
+                missing_fields=["terms_accepted"],
             )
-            raise ConsentValidationError(missing)
+            raise ConsentValidationError(["terms_accepted"])
+
+        # Validate consent language version if provided (non-blocking)
+        if consent_form_version:
+            _ = await self.validate_consent_language_version(consent_form_version)
 
         consent_token = uuid4()
 
         sms_record = await self.create_sms_consent(
             phone=phone,
-            consent_given=True,
+            consent_given=sms_consent,
             method=consent_method,
             language_shown=consent_language,
             token=consent_token,
             ip_address=ip_address,
             user_agent=user_agent,
         )
+        # Store consent_form_version on the record if provided
+        if consent_form_version:
+            sms_record.consent_form_version = consent_form_version
+            await self.session.flush()
 
         disclosure_record = await self.create_disclosure(
             disclosure_type=DisclosureType.PRE_SALE,
@@ -426,5 +472,6 @@ class ComplianceService(LoggerMixin):
         self.log_completed(
             "process_pre_checkout_consent",
             consent_token=str(consent_token),
+            email_marketing_consent=email_marketing_consent,
         )
         return consent_token, sms_record, disclosure_record

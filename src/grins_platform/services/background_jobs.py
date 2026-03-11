@@ -26,6 +26,7 @@ from grins_platform.models.service_agreement import ServiceAgreement
 from grins_platform.models.sms_consent_record import SmsConsentRecord
 from grins_platform.services.compliance_service import ComplianceService
 from grins_platform.services.email_service import EmailService
+from grins_platform.services.onboarding_reminder_job import OnboardingReminderJob
 from grins_platform.services.stripe_config import StripeSettings
 
 if TYPE_CHECKING:
@@ -313,6 +314,7 @@ _escalator = FailedPaymentEscalator()
 _renewal_checker = UpcomingRenewalChecker()
 _annual_sender = AnnualNoticeSender()
 _orphan_cleaner = OrphanedConsentCleaner()
+_onboarding_reminder = OnboardingReminderJob()
 
 
 async def escalate_failed_payments_job() -> None:
@@ -333,6 +335,11 @@ async def send_annual_notices_job() -> None:
 async def cleanup_orphaned_consent_records_job() -> None:
     """Entry point for the cleanup_orphaned_consent_records scheduled job."""
     await _orphan_cleaner.run()
+
+
+async def remind_incomplete_onboarding_job() -> None:
+    """Entry point for the onboarding reminder scheduled job."""
+    await _onboarding_reminder.run()
 
 
 def register_scheduled_jobs(scheduler: BackgroundScheduler) -> None:
@@ -377,6 +384,15 @@ def register_scheduled_jobs(scheduler: BackgroundScheduler) -> None:
         replace_existing=True,
     )
 
+    scheduler.add_job(
+        remind_incomplete_onboarding_job,
+        "cron",
+        hour=10,
+        minute=0,
+        id="remind_incomplete_onboarding",
+        replace_existing=True,
+    )
+
     logger.info(
         "scheduler.jobs.registered",
         jobs=[
@@ -384,5 +400,6 @@ def register_scheduled_jobs(scheduler: BackgroundScheduler) -> None:
             "check_upcoming_renewals",
             "send_annual_notices",
             "cleanup_orphaned_consent_records",
+            "remind_incomplete_onboarding",
         ],
     )

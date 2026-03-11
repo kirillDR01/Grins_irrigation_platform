@@ -17,6 +17,7 @@ from grins_platform.models.agreement_status_log import AgreementStatusLog
 from grins_platform.models.ai_audit_log import AIAuditLog
 from grins_platform.models.ai_usage import AIUsage
 from grins_platform.models.appointment import Appointment
+from grins_platform.models.consent_language_version import ConsentLanguageVersion
 from grins_platform.models.customer import Customer
 from grins_platform.models.disclosure_record import DisclosureRecord
 from grins_platform.models.email_suppression_list import EmailSuppressionList
@@ -75,6 +76,7 @@ __all__ = [
     "Appointment",
     "AppointmentStatus",
     "BillingFrequency",
+    "ConsentLanguageVersion",
     # Phase 1: Customer Management
     "Customer",
     "CustomerStatus",

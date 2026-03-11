@@ -42,12 +42,14 @@ def _make_tier(
     slug: str = "essential-residential",
     is_active: bool = True,
     stripe_price_id: str | None = "price_test_123",
+    annual_price: str = "299.00",
 ) -> MagicMock:
     tier = MagicMock()
     tier.id = tier_id or uuid4()
     tier.slug = slug
     tier.is_active = is_active
     tier.stripe_price_id = stripe_price_id
+    tier.annual_price = annual_price
     return tier
 
 
@@ -618,3 +620,144 @@ class TestCompleteOnboarding:
         assert job1.property_id == prop_mock.id
         assert job2.property_id == prop_mock.id
         assert job3.property_id == prop_mock.id
+
+
+# =============================================================================
+# CheckoutService — Surcharge Integration (Task 12)
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestCheckoutSessionSurcharges:
+    """Tests for surcharge line items in Stripe Checkout Session.
+
+    Validates: Requirements 3.1, 3.11, 3.12, 4.4
+    """
+
+    @pytest.mark.asyncio
+    @patch("grins_platform.services.checkout_service.stripe.checkout.Session.create")
+    async def test_surcharges_create_extra_line_items(
+        self,
+        mock_create: MagicMock,
+    ) -> None:
+        """zone_count=12, has_lake_pump=true -> 3 Stripe line items."""
+        tier = _make_tier(slug="essential-residential", annual_price="299.00")
+        tier_repo = AsyncMock()
+        tier_repo.get_by_id = AsyncMock(return_value=tier)
+        ts = datetime.now(timezone.utc) - timedelta(minutes=5)
+        session = _mock_session_with_consent(ts)
+
+        mock_create.return_value = MagicMock(id="cs_1", url="https://x.com")
+
+        svc = _make_checkout_service(session=session, tier_repo=tier_repo)
+        await svc.create_checkout_session(
+            tier_id=tier.id,
+            package_type="residential",
+            consent_token=uuid4(),
+            zone_count=12,
+            has_lake_pump=True,
+        )
+
+        call_kwargs = mock_create.call_args[1]
+        items = call_kwargs["line_items"]
+        assert len(items) == 3
+        # Base price
+        assert items[0]["price"] == "price_test_123"
+        # Zone surcharge: 3 extra zones x $7.50 = $22.50 = 2250 cents
+        assert items[1]["price_data"]["unit_amount"] == 2250
+        # Lake pump surcharge: $175.00 = 17500 cents
+        assert items[2]["price_data"]["unit_amount"] == 17500
+
+    @pytest.mark.asyncio
+    @patch("grins_platform.services.checkout_service.stripe.checkout.Session.create")
+    async def test_no_surcharges_single_line_item(self, mock_create: MagicMock) -> None:
+        """zone_count=5, has_lake_pump=false → 1 Stripe line item (base only)."""
+        tier = _make_tier(slug="essential-residential", annual_price="299.00")
+        tier_repo = AsyncMock()
+        tier_repo.get_by_id = AsyncMock(return_value=tier)
+        ts = datetime.now(timezone.utc) - timedelta(minutes=5)
+        session = _mock_session_with_consent(ts)
+
+        mock_create.return_value = MagicMock(id="cs_1", url="https://x.com")
+
+        svc = _make_checkout_service(session=session, tier_repo=tier_repo)
+        await svc.create_checkout_session(
+            tier_id=tier.id,
+            package_type="residential",
+            consent_token=uuid4(),
+            zone_count=5,
+            has_lake_pump=False,
+        )
+
+        call_kwargs = mock_create.call_args[1]
+        items = call_kwargs["line_items"]
+        assert len(items) == 1
+        assert items[0]["price"] == "price_test_123"
+
+    @pytest.mark.asyncio
+    @patch("grins_platform.services.checkout_service.stripe.checkout.Session.create")
+    async def test_winterization_only_tier_uses_correct_rates(
+        self,
+        mock_create: MagicMock,
+    ) -> None:
+        """Winterization-only tier uses winterization surcharge rates."""
+        tier = _make_tier(
+            slug="winterization-only-residential",
+            annual_price="80.00",
+        )
+        tier_repo = AsyncMock()
+        tier_repo.get_by_id = AsyncMock(return_value=tier)
+        ts = datetime.now(timezone.utc) - timedelta(minutes=5)
+        session = _mock_session_with_consent(ts)
+
+        mock_create.return_value = MagicMock(id="cs_1", url="https://x.com")
+
+        svc = _make_checkout_service(session=session, tier_repo=tier_repo)
+        await svc.create_checkout_session(
+            tier_id=tier.id,
+            package_type="residential",
+            consent_token=uuid4(),
+            zone_count=11,
+            has_lake_pump=True,
+        )
+
+        call_kwargs = mock_create.call_args[1]
+        items = call_kwargs["line_items"]
+        assert len(items) == 3
+        # Zone surcharge: 2 extra zones x $5.00 = $10.00 = 1000 cents
+        assert items[1]["price_data"]["unit_amount"] == 1000
+        # Lake pump surcharge: $75.00 = 7500 cents
+        assert items[2]["price_data"]["unit_amount"] == 7500
+
+    @pytest.mark.asyncio
+    @patch("grins_platform.services.checkout_service.stripe.checkout.Session.create")
+    async def test_metadata_includes_new_fields(self, mock_create: MagicMock) -> None:
+        """Metadata includes zone_count, has_lake_pump, email_marketing_consent."""
+        tier = _make_tier()
+        tier_repo = AsyncMock()
+        tier_repo.get_by_id = AsyncMock(return_value=tier)
+        ts = datetime.now(timezone.utc) - timedelta(minutes=5)
+        session = _mock_session_with_consent(ts)
+
+        mock_create.return_value = MagicMock(id="cs_1", url="https://x.com")
+
+        svc = _make_checkout_service(session=session, tier_repo=tier_repo)
+        await svc.create_checkout_session(
+            tier_id=tier.id,
+            package_type="residential",
+            consent_token=uuid4(),
+            zone_count=15,
+            has_lake_pump=True,
+            email_marketing_consent=True,
+        )
+
+        call_kwargs = mock_create.call_args[1]
+        meta = call_kwargs["metadata"]
+        assert meta["zone_count"] == "15"
+        assert meta["has_lake_pump"] == "true"
+        assert meta["email_marketing_consent"] == "true"
+        # Also in subscription_data metadata
+        sub_meta = call_kwargs["subscription_data"]["metadata"]
+        assert sub_meta["zone_count"] == "15"
+        assert sub_meta["has_lake_pump"] == "true"
+        assert sub_meta["email_marketing_consent"] == "true"

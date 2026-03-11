@@ -98,6 +98,31 @@ class LeadSubmission(BaseModel):
         default=None,
         description="Honeypot field — must be empty",
     )
+    sms_consent: bool = Field(
+        default=False,
+        description="SMS consent from form",
+    )
+    email_marketing_consent: bool = Field(
+        default=False,
+        description="Email marketing consent",
+    )
+    page_url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="Source page URL",
+    )
+    consent_ip: str | None = Field(
+        default=None,
+        description="IP address at time of consent",
+    )
+    consent_user_agent: str | None = Field(
+        default=None,
+        description="User agent at time of consent",
+    )
+    consent_language_version: str | None = Field(
+        default=None,
+        description="Consent language version identifier",
+    )
 
     @field_validator("phone")  # type: ignore[misc,untyped-decorator]
     @classmethod

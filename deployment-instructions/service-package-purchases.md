@@ -332,7 +332,8 @@ bash scripts/agent-browser/validate-leads-tab-modifications.sh
 
 ---
 
-## 9. Rollback Instructions
+# DO NOT RUN BELOW STEPS THIS IS ONLY FOR MANUAL REFERENCE NOT FOR EXECUTION
+<!-- ## 9. Rollback Instructions
 
 ### Step 1: Deactivate Stripe Webhook
 
@@ -367,4 +368,4 @@ Remove from Vercel:
 
 ### Step 5: Redeploy
 
-Deploy the previous backend and frontend versions without the service-package-purchases feature code.
+Deploy the previous backend and frontend versions without the service-package-purchases feature code. -->

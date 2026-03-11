@@ -23,6 +23,7 @@ from grins_platform.database import get_database_manager
 from grins_platform.exceptions import (
     CustomerNotFoundError,
     DuplicateCustomerError,
+    DuplicateLeadError,
     InvalidLeadStatusTransitionError,
     InvalidStatusTransitionError,
     JobNotFoundError,
@@ -551,6 +552,24 @@ def _register_exception_handlers(app: FastAPI) -> None:
                     "current_status": exc.current_status.value,
                     "requested_status": exc.requested_status.value,
                 },
+            },
+        )
+
+    @app.exception_handler(DuplicateLeadError)  # type: ignore[untyped-decorator]
+    async def duplicate_lead_handler(
+        request: Request,
+        exc: DuplicateLeadError,
+    ) -> JSONResponse:
+        """Handle DuplicateLeadError exceptions — HTTP 409."""
+        logger.warning(
+            "api.exception.duplicate_lead",
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "detail": exc.detail,
+                "message": exc.message,
             },
         )
 

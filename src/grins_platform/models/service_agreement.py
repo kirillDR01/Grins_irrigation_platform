@@ -118,6 +118,18 @@ class ServiceAgreement(Base):
 
     # Price (locked at purchase time — Req 2.4)
     annual_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    base_price: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2),
+        nullable=True,
+    )
+
+    # Surcharge fields (Req 3.13)
+    zone_count: Mapped[Optional[int]] = mapped_column(nullable=True)
+    has_lake_pump: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
 
     # Payment
     payment_status: Mapped[str] = mapped_column(
@@ -178,6 +190,16 @@ class ServiceAgreement(Base):
 
     # Notes
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Onboarding reminder tracking (Req 10.6)
+    onboarding_reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    onboarding_reminder_count: Mapped[int] = mapped_column(
+        nullable=False,
+        server_default="0",
+    )
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

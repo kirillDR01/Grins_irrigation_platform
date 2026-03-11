@@ -26,6 +26,13 @@ TIER_EXPECTED_COUNTS = {"Essential": 2, "Professional": 3, "Premium": 7}
 tiers = st.sampled_from(list(TIER_EXPECTED_COUNTS.keys()))
 
 
+_TIER_NAME_TO_SLUG: dict[str, str] = {
+    "Essential": "essential-residential",
+    "Professional": "professional-residential",
+    "Premium": "premium-residential",
+}
+
+
 def _make_agreement(tier_name: str) -> MagicMock:
     agr = MagicMock()
     agr.id = uuid4()
@@ -33,6 +40,7 @@ def _make_agreement(tier_name: str) -> MagicMock:
     agr.property_id = uuid4()
     agr.tier = MagicMock()
     agr.tier.name = tier_name
+    agr.tier.slug = _TIER_NAME_TO_SLUG.get(tier_name, tier_name.lower())
     return agr
 
 

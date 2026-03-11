@@ -102,6 +102,17 @@ class Lead(Base):
         nullable=False,
         server_default="false",
     )
+    email_marketing_consent: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
+
+    # Source page URL (Req 5.1)
+    page_url: Mapped[Optional[str]] = mapped_column(
+        String(2048),
+        nullable=True,
+    )
 
     # Status tracking
     status: Mapped[str] = mapped_column(
@@ -165,6 +176,7 @@ class Lead(Base):
         Index("idx_leads_zip_code", "zip_code"),
         Index("idx_leads_lead_source", "lead_source"),
         Index("idx_leads_intake_tag", "intake_tag"),
+        Index("idx_leads_email_created_at", "email", "created_at"),
     )
 
     def __repr__(self) -> str:
@@ -242,6 +254,8 @@ class Lead(Base):
             "intake_tag": self.intake_tag,
             "sms_consent": self.sms_consent,
             "terms_accepted": self.terms_accepted,
+            "email_marketing_consent": self.email_marketing_consent,
+            "page_url": self.page_url,
             "status": self.status,
             "assigned_to": str(self.assigned_to) if self.assigned_to else None,
             "customer_id": str(self.customer_id) if self.customer_id else None,
