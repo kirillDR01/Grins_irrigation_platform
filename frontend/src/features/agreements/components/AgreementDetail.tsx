@@ -45,9 +45,9 @@ function formatDate(d: string | null | undefined): string {
   return new Date(d).toLocaleDateString();
 }
 
-function formatCurrency(amount: number | null | undefined): string {
+function formatCurrency(amount: number | string | null | undefined): string {
   if (amount == null) return '—';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(amount));
 }
 
 function jobStatusIcon(status: string) {

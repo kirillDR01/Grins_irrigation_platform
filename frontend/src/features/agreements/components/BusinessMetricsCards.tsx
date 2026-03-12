@@ -11,17 +11,17 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-function formatCurrency(value: number): string {
+function formatCurrency(value: number | string): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(value);
+  }).format(Number(value));
 }
 
-function formatPercent(value: number): string {
-  return `${value.toFixed(1)}%`;
+function formatPercent(value: number | string): string {
+  return `${Number(value).toFixed(1)}%`;
 }
 
 interface KpiCardProps {

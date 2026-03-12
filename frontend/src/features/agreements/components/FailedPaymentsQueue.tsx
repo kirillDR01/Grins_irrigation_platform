@@ -10,8 +10,8 @@ import type { AgreementStatus } from '../types';
 import { cn } from '@/lib/utils';
 import { Play, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+function formatCurrency(amount: number | string): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(amount));
 }
 
 export function FailedPaymentsQueue() {

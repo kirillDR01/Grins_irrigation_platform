@@ -12,13 +12,13 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
-function formatCurrency(value: number): string {
+function formatCurrency(value: number | string): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(value);
+  }).format(Number(value));
 }
 
 export function MrrChart() {
