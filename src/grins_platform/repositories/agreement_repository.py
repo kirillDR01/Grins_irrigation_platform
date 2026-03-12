@@ -77,6 +77,40 @@ class AgreementRepository(LoggerMixin):
         )
         return agreement
 
+    async def get_by_stripe_customer_id(
+        self,
+        stripe_customer_id: str,
+    ) -> ServiceAgreement | None:
+        """Get a ServiceAgreement by Stripe customer ID with eager loads.
+
+        Fallback lookup when subscription_id is unavailable (newer Stripe API).
+        Returns the most recently created agreement for the customer.
+        """
+        self.log_started(
+            "get_by_stripe_customer_id",
+            stripe_customer_id=stripe_customer_id,
+        )
+        stmt = (
+            select(ServiceAgreement)
+            .options(
+                selectinload(ServiceAgreement.customer),
+                selectinload(ServiceAgreement.tier),
+                selectinload(ServiceAgreement.jobs),
+                selectinload(ServiceAgreement.status_logs),
+                selectinload(ServiceAgreement.property),
+            )
+            .where(ServiceAgreement.stripe_customer_id == stripe_customer_id)
+            .order_by(ServiceAgreement.created_at.desc())
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        agreement: ServiceAgreement | None = result.scalar_one_or_none()
+        self.log_completed(
+            "get_by_stripe_customer_id",
+            found=agreement is not None,
+        )
+        return agreement
+
     async def get_by_id(self, agreement_id: UUID) -> ServiceAgreement | None:
         """Get a ServiceAgreement by ID with joins to customer, tier, jobs, status logs.
 

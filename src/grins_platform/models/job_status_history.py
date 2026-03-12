@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -56,7 +56,10 @@ class JobStatusHistory(Base):
     new_status: Mapped[str] = mapped_column(String(50), nullable=False)
 
     # Timestamp (Requirement 7.1)
-    changed_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
 
     # User tracking (Requirement 7.3 - for future implementation)
     changed_by: Mapped[UUID | None] = mapped_column(nullable=True)

@@ -12,7 +12,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
-from sqlalchemy import JSON, Boolean, Integer, Numeric, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -77,13 +77,19 @@ class Staff(Base):
         nullable=False,
         server_default="false",
     )
-    last_login: Mapped[datetime | None] = mapped_column(nullable=True)
+    last_login: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     failed_login_attempts: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
         server_default="0",
     )
-    locked_until: Mapped[datetime | None] = mapped_column(nullable=True)
+    locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     # Role and skills (Requirements 8.2, 8.3)
     role: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -134,8 +140,12 @@ class Staff(Base):
     )
 
     # Timestamps (Requirement 8.7)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
     )

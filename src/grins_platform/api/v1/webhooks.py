@@ -169,6 +169,43 @@ class StripeWebhookHandler(LoggerMixin):
             )
 
     # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_subscription_id(obj: dict[str, Any]) -> str:
+        """Extract subscription ID from a Stripe invoice or session object.
+
+        Handles three formats:
+        1. Legacy: obj["subscription"] is a string ID
+        2. Expanded object: obj["subscription"] is a dict with "id"
+        3. New (2025-03-31+): obj["parent"]["subscription_details"]["subscription"]
+
+        Returns:
+            Subscription ID string, or empty string if not found.
+        """
+        # 1. Legacy string field
+        sub = obj.get("subscription")
+        if isinstance(sub, str) and sub:
+            return sub
+        # 2. Expanded object
+        if isinstance(sub, dict):
+            sub_id = sub.get("id", "")
+            if sub_id:
+                return str(sub_id)
+        # 3. New parent.subscription_details.subscription path
+        parent = obj.get("parent")
+        if isinstance(parent, dict):
+            sub_details = parent.get("subscription_details")
+            if isinstance(sub_details, dict):
+                nested_sub = sub_details.get("subscription", "")
+                if isinstance(nested_sub, str) and nested_sub:
+                    return nested_sub
+                if isinstance(nested_sub, dict):
+                    return str(nested_sub.get("id", ""))
+        return ""
+
+    # ------------------------------------------------------------------
     # checkout.session.completed handler
     # Validates: Requirements 8.1-8.7, 28.2, 34.1-34.3, 39B.3,
     # 39C.1, 39C.2, 68.2
@@ -388,20 +425,31 @@ class StripeWebhookHandler(LoggerMixin):
         )
 
         invoice_obj = event["data"]["object"]
-        subscription_id: str = invoice_obj.get("subscription", "") or ""
-        if not subscription_id:
-            self.log_completed(
-                "webhook_invoice_paid",
-                skipped="no_subscription_id",
-            )
-            return
+        subscription_id = self._extract_subscription_id(invoice_obj)
 
         agreement_repo = AgreementRepository(self.session)
         tier_repo = AgreementTierRepository(self.session)
         agreement_svc = AgreementService(agreement_repo, tier_repo)
         job_gen = JobGenerator(self.session)
 
-        agreement = await agreement_repo.get_by_stripe_subscription_id(subscription_id)
+        # Look up agreement: try subscription_id first, then customer_id fallback
+        agreement = None
+        if subscription_id:
+            agreement = await agreement_repo.get_by_stripe_subscription_id(
+                subscription_id,
+            )
+        if not agreement:
+            stripe_cust_id: str = invoice_obj.get("customer", "") or ""
+            if stripe_cust_id:
+                agreement = await agreement_repo.get_by_stripe_customer_id(
+                    stripe_cust_id,
+                )
+                if agreement:
+                    self.log_started(
+                        "webhook_invoice_paid_fallback",
+                        lookup="stripe_customer_id",
+                        stripe_customer_id=stripe_cust_id,
+                    )
         if not agreement:
             self.log_failed(
                 "webhook_invoice_paid",
@@ -478,23 +526,29 @@ class StripeWebhookHandler(LoggerMixin):
         )
 
         invoice_obj = event["data"]["object"]
-        subscription_id: str = invoice_obj.get("subscription", "") or ""
-        if not subscription_id:
-            self.log_completed(
-                "webhook_invoice_payment_failed",
-                skipped="no_subscription_id",
-            )
-            return
+        subscription_id = self._extract_subscription_id(invoice_obj)
 
         agreement_repo = AgreementRepository(self.session)
         tier_repo = AgreementTierRepository(self.session)
         agreement_svc = AgreementService(agreement_repo, tier_repo)
 
-        agreement = await agreement_repo.get_by_stripe_subscription_id(subscription_id)
+        agreement = None
+        if subscription_id:
+            agreement = await agreement_repo.get_by_stripe_subscription_id(
+                subscription_id,
+            )
+        if not agreement:
+            stripe_cust_id_fail: str = invoice_obj.get("customer", "") or ""
+            if stripe_cust_id_fail:
+                agreement = await agreement_repo.get_by_stripe_customer_id(
+                    stripe_cust_id_fail,
+                )
         if not agreement:
             self.log_failed(
                 "webhook_invoice_payment_failed",
-                error=ValueError(f"No agreement for subscription {subscription_id}"),
+                error=ValueError(
+                    f"No agreement for subscription={subscription_id}",
+                ),
             )
             return
 
@@ -551,13 +605,7 @@ class StripeWebhookHandler(LoggerMixin):
         )
 
         invoice_obj = event["data"]["object"]
-        subscription_id: str = invoice_obj.get("subscription", "") or ""
-        if not subscription_id:
-            self.log_completed(
-                "webhook_invoice_upcoming",
-                skipped="no_subscription_id",
-            )
-            return
+        subscription_id = self._extract_subscription_id(invoice_obj)
 
         agreement_repo = AgreementRepository(self.session)
         tier_repo = AgreementTierRepository(self.session)
@@ -565,14 +613,22 @@ class StripeWebhookHandler(LoggerMixin):
         compliance_svc = ComplianceService(self.session)
         email_svc = EmailService()
 
-        agreement = await agreement_repo.get_by_stripe_subscription_id(
-            subscription_id,
-        )
+        agreement = None
+        if subscription_id:
+            agreement = await agreement_repo.get_by_stripe_subscription_id(
+                subscription_id,
+            )
+        if not agreement:
+            stripe_cust_id_upcoming: str = invoice_obj.get("customer", "") or ""
+            if stripe_cust_id_upcoming:
+                agreement = await agreement_repo.get_by_stripe_customer_id(
+                    stripe_cust_id_upcoming,
+                )
         if not agreement:
             self.log_failed(
                 "webhook_invoice_upcoming",
                 error=ValueError(
-                    f"No agreement for subscription {subscription_id}",
+                    f"No agreement for subscription={subscription_id}",
                 ),
             )
             return

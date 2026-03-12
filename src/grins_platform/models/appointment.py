@@ -11,7 +11,7 @@ from datetime import date, datetime, time
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from sqlalchemy import Date, ForeignKey, Integer, String, Text, Time
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, Time
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -98,8 +98,14 @@ class Appointment(Base):
     )
 
     # Execution Tracking
-    arrived_at: Mapped[datetime | None] = mapped_column(nullable=True)
-    completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    arrived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     # Notes
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -109,8 +115,12 @@ class Appointment(Base):
     estimated_arrival: Mapped[time | None] = mapped_column(Time, nullable=True)
 
     # Record Timestamps
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
     )
@@ -120,7 +130,10 @@ class Appointment(Base):
         String(500),
         nullable=True,
     )
-    cancelled_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     rescheduled_from_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("appointments.id"),
         nullable=True,
