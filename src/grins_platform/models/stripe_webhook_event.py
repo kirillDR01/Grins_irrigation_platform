@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Optional
 from uuid import UUID
 
-from sqlalchemy import JSON, Index, String, Text, func
+from sqlalchemy import JSON, DateTime, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -55,7 +55,9 @@ class StripeWebhookEvent(Base):
         JSON,
         nullable=True,
     )
-    processed_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    processed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
 
     def __repr__(self) -> str:
         """Return string representation."""

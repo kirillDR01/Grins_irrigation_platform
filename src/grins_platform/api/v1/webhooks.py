@@ -119,7 +119,16 @@ class StripeWebhookHandler(LoggerMixin):
             )
             await self.session.commit()
         except Exception as e:
-            await self.repo.mark_failed(event_record, str(e))
+            await self.session.rollback()
+            # Re-create event record after rollback (original was rolled back)
+            failed_record = await self.repo.create_event_record(
+                stripe_event_id=event_id,
+                event_type=event_type,
+                event_data=dict(event),
+                processing_status="failed",
+            )
+            failed_record.error_message = str(e)
+            failed_record.processed_at = datetime.now(timezone.utc)
             self.log_failed(
                 f"webhook_{event_type.replace('.', '_')}",
                 error=e,

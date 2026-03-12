@@ -30,7 +30,7 @@ def upgrade() -> None:
         op.execute(
             f"UPDATE service_agreement_tiers "
             f"SET stripe_product_id = '{product_id}', stripe_price_id = '{price_id}' "
-            f"WHERE slug = '{slug}'"
+            f"WHERE slug = '{slug}'",
         )
 
 
@@ -40,5 +40,5 @@ def downgrade() -> None:
         op.execute(
             f"UPDATE service_agreement_tiers "
             f"SET stripe_product_id = NULL, stripe_price_id = NULL "
-            f"WHERE slug = '{slug}'"
+            f"WHERE slug = '{slug}'",
         )

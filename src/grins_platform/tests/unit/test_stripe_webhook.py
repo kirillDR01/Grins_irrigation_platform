@@ -164,8 +164,13 @@ class TestWebhookFailureHandling:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_handler_exception_marks_event_failed(self) -> None:
-        """When a handler raises, event is marked failed and status returned."""
+    async def test_handler_exception_records_failure(self) -> None:
+        """When a handler raises, session is rolled back, a new failed event
+        record is created, and error status is returned.
+
+        After BUG #10 fix: handler calls session.rollback() then creates a
+        fresh event record with processing_status='failed'.
+        """
         session = AsyncMock()
         handler = StripeWebhookHandler(session)
         event = _make_stripe_event(event_type="checkout.session.completed")
@@ -173,7 +178,11 @@ class TestWebhookFailureHandling:
         handler.repo = AsyncMock()
         handler.repo.get_by_stripe_event_id.return_value = None
         event_record = MagicMock()
-        handler.repo.create_event_record.return_value = event_record
+        failed_record = MagicMock()
+        handler.repo.create_event_record.side_effect = [
+            event_record,
+            failed_record,
+        ]
 
         # Make the internal handler raise
         handler._handle_checkout_completed = AsyncMock(  # type: ignore[method-assign]
@@ -184,7 +193,8 @@ class TestWebhookFailureHandling:
 
         assert result["status"] == "failed"
         assert "boom" in result["error"]
-        handler.repo.mark_failed.assert_called_once()
+        session.rollback.assert_awaited_once()
+        assert handler.repo.create_event_record.await_count == 2
         session.commit.assert_called_once()
 
 
