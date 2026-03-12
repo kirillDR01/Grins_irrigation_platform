@@ -23,6 +23,9 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from grins_platform.repositories.agreement_repository import AgreementRepository
+    from grins_platform.repositories.agreement_tier_repository import (
+        AgreementTierRepository,
+    )
     from grins_platform.repositories.property_repository import PropertyRepository
 
 
@@ -59,6 +62,14 @@ class VerifiedSessionInfo:
     package_tier: str
     package_type: str
     payment_status: str
+    already_completed: bool = False
+    stripe_customer_portal_url: str = ""
+    services_included: list[str] | None = None
+
+    def __post_init__(self) -> None:
+        """Default services_included to empty list."""
+        if self.services_included is None:
+            self.services_included = []
 
 
 class OnboardingService(LoggerMixin):
@@ -74,6 +85,7 @@ class OnboardingService(LoggerMixin):
         session: AsyncSession,
         agreement_repo: AgreementRepository,
         property_repo: PropertyRepository,
+        tier_repo: AgreementTierRepository | None = None,
         stripe_settings: StripeSettings | None = None,
     ) -> None:
         """Initialize with database session and repositories."""
@@ -81,6 +93,7 @@ class OnboardingService(LoggerMixin):
         self.session = session
         self.agreement_repo = agreement_repo
         self.property_repo = property_repo
+        self.tier_repo = tier_repo
         self.stripe_settings = stripe_settings or StripeSettings()
 
     async def verify_session(self, session_id: str) -> VerifiedSessionInfo:
@@ -120,18 +133,47 @@ class OnboardingService(LoggerMixin):
                 "country": addr.country or "",
             }
 
+        # Check if onboarding already completed (property linked to agreement)
+        already_completed = False
+        subscription_id = checkout_session.subscription
+        if subscription_id:
+            agreement = await self._find_agreement_by_subscription(
+                str(subscription_id),
+            )
+            if agreement and agreement.property_id is not None:
+                already_completed = True
+
+        # Get portal URL from settings
+        portal_url = self.stripe_settings.stripe_customer_portal_url
+
+        # Look up tier for included_services descriptions
+        services_included: list[str] = []
+        tier_slug = metadata.get("package_tier", "")
+        pkg_type = metadata.get("package_type", "")
+        if self.tier_repo and tier_slug and pkg_type:
+            tier = await self.tier_repo.get_by_slug_and_type(tier_slug, pkg_type)
+            if tier and tier.included_services:
+                services_included = [
+                    svc.get("description", "")
+                    for svc in tier.included_services
+                    if svc.get("description")
+                ]
+
         info = VerifiedSessionInfo(
             customer_name=(customer_details.name or "") if customer_details else "",
             email=(customer_details.email or "") if customer_details else "",
             phone=(customer_details.phone or "") if customer_details else "",
             billing_address=billing_address,
-            package_tier=metadata.get("package_tier", ""),
-            package_type=metadata.get("package_type", ""),
+            package_tier=tier_slug,
+            package_type=pkg_type,
             payment_status=(
                 str(checkout_session.payment_status)
                 if checkout_session.payment_status
                 else ""
             ),
+            already_completed=already_completed,
+            stripe_customer_portal_url=portal_url,
+            services_included=services_included,
         )
 
         self.log_completed("verify_session", session_id=session_id)

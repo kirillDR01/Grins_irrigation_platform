@@ -59,28 +59,28 @@ class ConsentTokenNotFoundError(CheckoutError):
 class TierNotFoundError(CheckoutError):
     """Raised when tier does not exist."""
 
-    def __init__(self, tier_id: UUID) -> None:
-        """Initialize with missing tier ID."""
-        super().__init__(f"Tier not found: {tier_id}")
-        self.tier_id = tier_id
+    def __init__(self, slug: str) -> None:
+        """Initialize with missing tier slug."""
+        super().__init__(f"Tier not found: {slug}")
+        self.slug = slug
 
 
 class TierInactiveError(CheckoutError):
     """Raised when tier is inactive."""
 
-    def __init__(self, tier_id: UUID) -> None:
-        """Initialize with inactive tier ID."""
-        super().__init__(f"Tier is inactive: {tier_id}")
-        self.tier_id = tier_id
+    def __init__(self, slug: str) -> None:
+        """Initialize with inactive tier slug."""
+        super().__init__(f"Tier is inactive: {slug}")
+        self.slug = slug
 
 
 class TierNotConfiguredError(CheckoutError):
     """Raised when tier has no stripe_price_id (HTTP 503)."""
 
-    def __init__(self, tier_id: UUID) -> None:
-        """Initialize with unconfigured tier ID."""
-        super().__init__(f"Tier not configured for Stripe: {tier_id}")
-        self.tier_id = tier_id
+    def __init__(self, slug: str) -> None:
+        """Initialize with unconfigured tier slug."""
+        super().__init__(f"Tier not configured for Stripe: {slug}")
+        self.slug = slug
 
 
 class CheckoutService(LoggerMixin):
@@ -135,41 +135,42 @@ class CheckoutService(LoggerMixin):
             )
             raise ConsentTokenExpiredError(consent_token)
 
-    async def _validate_tier(self, tier_id: UUID) -> ServiceAgreementTier:
+    async def _validate_tier(self, slug: str, package_type: str) -> ServiceAgreementTier:
         """Validate tier exists, is active, and has stripe_price_id.
 
         Validates: Requirements 31.3, 31.4
         """
-        tier = await self.tier_repo.get_by_id(tier_id)
+        tier = await self.tier_repo.get_by_slug_and_type(slug, package_type)
         if not tier:
             self.log_rejected(
                 "validate_tier",
                 reason="not_found",
-                tier_id=str(tier_id),
+                slug=slug,
+                package_type=package_type,
             )
-            raise TierNotFoundError(tier_id)
+            raise TierNotFoundError(slug)
 
         if not tier.is_active:
             self.log_rejected(
                 "validate_tier",
                 reason="inactive",
-                tier_id=str(tier_id),
+                slug=slug,
             )
-            raise TierInactiveError(tier_id)
+            raise TierInactiveError(slug)
 
         if not tier.stripe_price_id:
             self.log_rejected(
                 "validate_tier",
                 reason="no_stripe_price_id",
-                tier_id=str(tier_id),
+                slug=slug,
             )
-            raise TierNotConfiguredError(tier_id)
+            raise TierNotConfiguredError(slug)
 
         return tier
 
     async def create_checkout_session(
         self,
-        tier_id: UUID,
+        package_tier: str,
         package_type: str,
         consent_token: UUID,
         *,
@@ -192,7 +193,7 @@ class CheckoutService(LoggerMixin):
         """
         self.log_started(
             "create_checkout_session",
-            tier_id=str(tier_id),
+            package_tier=package_tier,
             package_type=package_type,
             consent_token=str(consent_token),
             zone_count=zone_count,
@@ -200,7 +201,7 @@ class CheckoutService(LoggerMixin):
         )
 
         await self._validate_consent_token(consent_token)
-        tier = await self._validate_tier(tier_id)
+        tier = await self._validate_tier(package_tier, package_type)
 
         # Compute surcharges
         breakdown = SurchargeCalculator.calculate(

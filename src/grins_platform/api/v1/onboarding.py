@@ -16,6 +16,9 @@ from grins_platform.api.v1.dependencies import get_db_session
 from grins_platform.exceptions import ConsentValidationError
 from grins_platform.log_config import LoggerMixin, get_logger
 from grins_platform.repositories.agreement_repository import AgreementRepository
+from grins_platform.repositories.agreement_tier_repository import (
+    AgreementTierRepository,
+)
 from grins_platform.repositories.property_repository import PropertyRepository
 from grins_platform.services.compliance_service import ComplianceService
 from grins_platform.services.onboarding_service import (
@@ -100,6 +103,9 @@ class VerifySessionResponse(BaseModel):
     package_tier: str
     package_type: str
     payment_status: str
+    already_completed: bool = False
+    stripe_customer_portal_url: str = ""
+    services_included: list[str] = []
 
 
 class CompleteOnboardingRequest(BaseModel):
@@ -154,6 +160,7 @@ def _build_onboarding_service(db: AsyncSession) -> OnboardingService:
         session=db,
         agreement_repo=AgreementRepository(session=db),
         property_repo=PropertyRepository(session=db),
+        tier_repo=AgreementTierRepository(session=db),
     )
 
 
@@ -274,6 +281,9 @@ async def verify_session(
         package_tier=info.package_tier,
         package_type=info.package_type,
         payment_status=info.payment_status,
+        already_completed=info.already_completed,
+        stripe_customer_portal_url=info.stripe_customer_portal_url,
+        services_included=info.services_included,
     )
 
 

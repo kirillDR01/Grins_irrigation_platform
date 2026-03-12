@@ -87,7 +87,7 @@ class TestInactiveTierExclusionProperty:
         """Checkout session creation rejects any inactive tier."""
         tier = _make_inactive_tier(slug, price)
         tier_repo = AsyncMock()
-        tier_repo.get_by_id = AsyncMock(return_value=tier)
+        tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
 
         svc = CheckoutService(
             session=_mock_session_with_consent(),
@@ -100,7 +100,7 @@ class TestInactiveTierExclusionProperty:
 
         with pytest.raises(TierInactiveError):
             await svc.create_checkout_session(
-                tier_id=tier.id,
+                package_tier=tier.slug,
                 package_type="residential",
                 consent_token=uuid4(),
             )

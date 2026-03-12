@@ -161,40 +161,40 @@ class TestTierValidation:
     async def test_active_tier_with_price_passes(self) -> None:
         tier = _make_tier()
         tier_repo = AsyncMock()
-        tier_repo.get_by_id = AsyncMock(return_value=tier)
+        tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
         svc = _make_checkout_service(tier_repo=tier_repo)
 
-        result = await svc._validate_tier(tier.id)
+        result = await svc._validate_tier(tier.slug, "residential")
         assert result is tier
 
     @pytest.mark.asyncio
     async def test_missing_tier_raises(self) -> None:
         tier_repo = AsyncMock()
-        tier_repo.get_by_id = AsyncMock(return_value=None)
+        tier_repo.get_by_slug_and_type = AsyncMock(return_value=None)
         svc = _make_checkout_service(tier_repo=tier_repo)
 
         with pytest.raises(TierNotFoundError):
-            await svc._validate_tier(uuid4())
+            await svc._validate_tier("nonexistent", "residential")
 
     @pytest.mark.asyncio
     async def test_inactive_tier_raises(self) -> None:
         tier = _make_tier(is_active=False)
         tier_repo = AsyncMock()
-        tier_repo.get_by_id = AsyncMock(return_value=tier)
+        tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
         svc = _make_checkout_service(tier_repo=tier_repo)
 
         with pytest.raises(TierInactiveError):
-            await svc._validate_tier(tier.id)
+            await svc._validate_tier(tier.slug, "residential")
 
     @pytest.mark.asyncio
     async def test_tier_without_stripe_price_id_raises(self) -> None:
         tier = _make_tier(stripe_price_id=None)
         tier_repo = AsyncMock()
-        tier_repo.get_by_id = AsyncMock(return_value=tier)
+        tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
         svc = _make_checkout_service(tier_repo=tier_repo)
 
         with pytest.raises(TierNotConfiguredError):
-            await svc._validate_tier(tier.id)
+            await svc._validate_tier(tier.slug, "residential")
 
 
 # =============================================================================
@@ -211,7 +211,7 @@ class TestCreateCheckoutSession:
     async def test_creates_session_with_valid_inputs(self, mock_create) -> None:
         tier = _make_tier()
         tier_repo = AsyncMock()
-        tier_repo.get_by_id = AsyncMock(return_value=tier)
+        tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
 
         ts = datetime.now(timezone.utc) - timedelta(minutes=10)
         session = _mock_session_with_consent(ts)
@@ -226,7 +226,7 @@ class TestCreateCheckoutSession:
             tier_repo=tier_repo,
         )
         url = await svc.create_checkout_session(
-            tier_id=tier.id,
+            package_tier=tier.slug,
             package_type="residential",
             consent_token=uuid4(),
             success_url="https://example.com/success",
@@ -245,7 +245,7 @@ class TestCreateCheckoutSession:
     async def test_automatic_tax_enabled(self, mock_create) -> None:
         tier = _make_tier()
         tier_repo = AsyncMock()
-        tier_repo.get_by_id = AsyncMock(return_value=tier)
+        tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
         ts = datetime.now(timezone.utc) - timedelta(minutes=5)
         session = _mock_session_with_consent(ts)
 
@@ -257,7 +257,7 @@ class TestCreateCheckoutSession:
             stripe_settings=_make_stripe_settings(tax_enabled=True),
         )
         await svc.create_checkout_session(
-            tier_id=tier.id,
+            package_tier=tier.slug,
             package_type="residential",
             consent_token=uuid4(),
         )
@@ -270,7 +270,7 @@ class TestCreateCheckoutSession:
     async def test_automatic_tax_disabled(self, mock_create) -> None:
         tier = _make_tier()
         tier_repo = AsyncMock()
-        tier_repo.get_by_id = AsyncMock(return_value=tier)
+        tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
         ts = datetime.now(timezone.utc) - timedelta(minutes=5)
         session = _mock_session_with_consent(ts)
 
@@ -282,7 +282,7 @@ class TestCreateCheckoutSession:
             stripe_settings=_make_stripe_settings(tax_enabled=False),
         )
         await svc.create_checkout_session(
-            tier_id=tier.id,
+            package_tier=tier.slug,
             package_type="residential",
             consent_token=uuid4(),
         )
@@ -295,7 +295,7 @@ class TestCreateCheckoutSession:
     async def test_utm_params_included_in_metadata(self, mock_create) -> None:
         tier = _make_tier()
         tier_repo = AsyncMock()
-        tier_repo.get_by_id = AsyncMock(return_value=tier)
+        tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
         ts = datetime.now(timezone.utc) - timedelta(minutes=5)
         session = _mock_session_with_consent(ts)
 
@@ -303,7 +303,7 @@ class TestCreateCheckoutSession:
 
         svc = _make_checkout_service(session=session, tier_repo=tier_repo)
         await svc.create_checkout_session(
-            tier_id=tier.id,
+            package_tier=tier.slug,
             package_type="residential",
             consent_token=uuid4(),
             utm_params={"source": "google", "medium": "cpc"},
@@ -349,9 +349,16 @@ class TestVerifySession:
                 "package_type": "residential",
             },
             payment_status="paid",
+            subscription="sub_test_123",
         )
 
-        svc = _make_onboarding_service()
+        # Mock session.execute for _find_agreement_by_subscription
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        svc = _make_onboarding_service(session=mock_session)
         info = await svc.verify_session("cs_test_123")
 
         assert info.customer_name == "John Doe"
@@ -359,6 +366,7 @@ class TestVerifySession:
         assert info.package_tier == "essential-residential"
         assert info.payment_status == "paid"
         assert info.billing_address["city"] == "Minneapolis"
+        assert info.already_completed is False
 
     @pytest.mark.asyncio
     @patch(
@@ -643,7 +651,7 @@ class TestCheckoutSessionSurcharges:
         """zone_count=12, has_lake_pump=true -> 3 Stripe line items."""
         tier = _make_tier(slug="essential-residential", annual_price="299.00")
         tier_repo = AsyncMock()
-        tier_repo.get_by_id = AsyncMock(return_value=tier)
+        tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
         ts = datetime.now(timezone.utc) - timedelta(minutes=5)
         session = _mock_session_with_consent(ts)
 
@@ -651,7 +659,7 @@ class TestCheckoutSessionSurcharges:
 
         svc = _make_checkout_service(session=session, tier_repo=tier_repo)
         await svc.create_checkout_session(
-            tier_id=tier.id,
+            package_tier=tier.slug,
             package_type="residential",
             consent_token=uuid4(),
             zone_count=12,
@@ -674,7 +682,7 @@ class TestCheckoutSessionSurcharges:
         """zone_count=5, has_lake_pump=false → 1 Stripe line item (base only)."""
         tier = _make_tier(slug="essential-residential", annual_price="299.00")
         tier_repo = AsyncMock()
-        tier_repo.get_by_id = AsyncMock(return_value=tier)
+        tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
         ts = datetime.now(timezone.utc) - timedelta(minutes=5)
         session = _mock_session_with_consent(ts)
 
@@ -682,7 +690,7 @@ class TestCheckoutSessionSurcharges:
 
         svc = _make_checkout_service(session=session, tier_repo=tier_repo)
         await svc.create_checkout_session(
-            tier_id=tier.id,
+            package_tier=tier.slug,
             package_type="residential",
             consent_token=uuid4(),
             zone_count=5,
@@ -706,7 +714,7 @@ class TestCheckoutSessionSurcharges:
             annual_price="80.00",
         )
         tier_repo = AsyncMock()
-        tier_repo.get_by_id = AsyncMock(return_value=tier)
+        tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
         ts = datetime.now(timezone.utc) - timedelta(minutes=5)
         session = _mock_session_with_consent(ts)
 
@@ -714,7 +722,7 @@ class TestCheckoutSessionSurcharges:
 
         svc = _make_checkout_service(session=session, tier_repo=tier_repo)
         await svc.create_checkout_session(
-            tier_id=tier.id,
+            package_tier=tier.slug,
             package_type="residential",
             consent_token=uuid4(),
             zone_count=11,
@@ -735,7 +743,7 @@ class TestCheckoutSessionSurcharges:
         """Metadata includes zone_count, has_lake_pump, email_marketing_consent."""
         tier = _make_tier()
         tier_repo = AsyncMock()
-        tier_repo.get_by_id = AsyncMock(return_value=tier)
+        tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
         ts = datetime.now(timezone.utc) - timedelta(minutes=5)
         session = _mock_session_with_consent(ts)
 
@@ -743,7 +751,7 @@ class TestCheckoutSessionSurcharges:
 
         svc = _make_checkout_service(session=session, tier_repo=tier_repo)
         await svc.create_checkout_session(
-            tier_id=tier.id,
+            package_tier=tier.slug,
             package_type="residential",
             consent_token=uuid4(),
             zone_count=15,

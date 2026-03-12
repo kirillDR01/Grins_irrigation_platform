@@ -393,6 +393,7 @@ class LeadSourceExtended(str, Enum):
     EMAIL_CAMPAIGN = "email_campaign"
     TEXT_CAMPAIGN = "text_campaign"
     REFERRAL = "referral"
+    YARD_SIGN = "yard_sign"
     OTHER = "other"
 
 

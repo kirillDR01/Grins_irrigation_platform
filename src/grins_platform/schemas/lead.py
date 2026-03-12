@@ -102,6 +102,10 @@ class LeadSubmission(BaseModel):
         default=False,
         description="SMS consent from form",
     )
+    terms_accepted: bool = Field(
+        default=False,
+        description="Terms of service accepted",
+    )
     email_marketing_consent: bool = Field(
         default=False,
         description="Email marketing consent",

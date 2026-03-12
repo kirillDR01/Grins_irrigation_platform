@@ -190,7 +190,7 @@ class TestCheckoutSessionWithSurcharges:
             response = await public_client.post(
                 "/api/v1/checkout/create-session",
                 json={
-                    "tier_id": str(uuid.uuid4()),
+                    "package_tier": "essential-residential",
                     "package_type": "residential",
                     "consent_token": str(uuid.uuid4()),
                     "zone_count": 12,
@@ -223,7 +223,7 @@ class TestCheckoutSessionWithSurcharges:
             response = await public_client.post(
                 "/api/v1/checkout/create-session",
                 json={
-                    "tier_id": str(uuid.uuid4()),
+                    "package_tier": "essential-residential",
                     "package_type": "residential",
                     "consent_token": str(uuid.uuid4()),
                     "zone_count": 5,
@@ -251,7 +251,7 @@ class TestCheckoutSessionWithSurcharges:
             response = await public_client.post(
                 "/api/v1/checkout/create-session",
                 json={
-                    "tier_id": str(uuid.uuid4()),
+                    "package_tier": "essential-residential",
                     "package_type": "residential",
                     "consent_token": str(uuid.uuid4()),
                     "zone_count": 15,

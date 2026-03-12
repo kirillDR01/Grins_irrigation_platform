@@ -59,7 +59,7 @@ def _check_rate_limit(ip: str) -> bool:
 class CreateCheckoutSessionRequest(BaseModel):
     """Request body for creating a Stripe checkout session."""
 
-    tier_id: UUID = Field(..., description="Service agreement tier ID")
+    package_tier: str = Field(..., description="Service tier slug (e.g. essential-residential)")
     package_type: str = Field(..., description="Package type (residential/commercial)")
     consent_token: UUID = Field(..., description="Pre-checkout consent token")
     zone_count: int = Field(default=1, ge=1, description="Number of irrigation zones")
@@ -127,14 +127,14 @@ async def create_checkout_session(
             content={"detail": "Rate limit exceeded. Try again later."},
         )
 
-    _endpoints.log_started("create_checkout_session", tier_id=str(data.tier_id))
+    _endpoints.log_started("create_checkout_session", package_tier=data.package_tier)
 
     tier_repo = AgreementTierRepository(session=db)
     service = CheckoutService(session=db, tier_repo=tier_repo)
 
     try:
         checkout_url = await service.create_checkout_session(
-            tier_id=data.tier_id,
+            package_tier=data.package_tier,
             package_type=data.package_type,
             consent_token=data.consent_token,
             zone_count=data.zone_count,
