@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { UnscheduledVisitsQueue } from './UnscheduledVisitsQueue';
@@ -20,6 +20,36 @@ function wrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
+const mockJobs = [
+  {
+    id: 'j1',
+    job_type: 'spring_startup',
+    status: 'approved',
+    target_start_date: '2026-03-15',
+    target_end_date: '2026-04-30',
+    estimated_duration_minutes: 90,
+    priority_level: 0,
+  },
+  {
+    id: 'j2',
+    job_type: 'spring_startup',
+    status: 'approved',
+    target_start_date: '2026-03-15',
+    target_end_date: '2026-04-30',
+    estimated_duration_minutes: 60,
+    priority_level: 1,
+  },
+  {
+    id: 'j3',
+    job_type: 'fall_winterization',
+    status: 'approved',
+    target_start_date: null,
+    target_end_date: null,
+    estimated_duration_minutes: null,
+    priority_level: 0,
+  },
+];
+
 describe('UnscheduledVisitsQueue', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -34,26 +64,69 @@ describe('UnscheduledVisitsQueue', () => {
     expect(screen.getByText(/all visits are scheduled/i)).toBeInTheDocument();
   });
 
-  it('renders grouped jobs by type', () => {
+  it('renders grouped jobs by type with formatted names', () => {
     vi.mocked(useJobsReadyToSchedule).mockReturnValue({
-      data: {
-        items: [
-          { id: 'j1', job_type: 'Spring Startup', status: 'approved' },
-          { id: 'j2', job_type: 'Spring Startup', status: 'approved' },
-          { id: 'j3', job_type: 'Fall Winterization', status: 'approved' },
-        ],
-      },
+      data: { items: mockJobs },
       isLoading: false,
       error: null,
     } as unknown as ReturnType<typeof useJobsReadyToSchedule>);
 
     render(<UnscheduledVisitsQueue />, { wrapper });
     expect(screen.getByTestId('unscheduled-visits-queue')).toBeInTheDocument();
+    // formatJobType converts snake_case to Title Case
     expect(screen.getByText('Spring Startup')).toBeInTheDocument();
     expect(screen.getByText('Fall Winterization')).toBeInTheDocument();
-    // Schedule links
-    expect(screen.getByTestId('schedule-link-Spring Startup')).toBeInTheDocument();
-    expect(screen.getByTestId('schedule-link-Fall Winterization')).toBeInTheDocument();
+    expect(screen.getByTestId('schedule-link-spring_startup')).toBeInTheDocument();
+    expect(screen.getByTestId('schedule-link-fall_winterization')).toBeInTheDocument();
+  });
+
+  it('expands group to show individual jobs', () => {
+    vi.mocked(useJobsReadyToSchedule).mockReturnValue({
+      data: { items: mockJobs },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof useJobsReadyToSchedule>);
+
+    render(<UnscheduledVisitsQueue />, { wrapper });
+
+    // Individual jobs should not be visible yet
+    expect(screen.queryByTestId('unscheduled-job-j1')).not.toBeInTheDocument();
+
+    // Click the Spring Startup group to expand
+    fireEvent.click(screen.getByTestId('unscheduled-toggle-spring_startup'));
+
+    // Now individual jobs should appear
+    expect(screen.getByTestId('unscheduled-job-j1')).toBeInTheDocument();
+    expect(screen.getByTestId('unscheduled-job-j2')).toBeInTheDocument();
+    // Fall winterization jobs should not be expanded
+    expect(screen.queryByTestId('unscheduled-job-j3')).not.toBeInTheDocument();
+  });
+
+  it('individual jobs link to job detail page', () => {
+    vi.mocked(useJobsReadyToSchedule).mockReturnValue({
+      data: { items: mockJobs },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof useJobsReadyToSchedule>);
+
+    render(<UnscheduledVisitsQueue />, { wrapper });
+    fireEvent.click(screen.getByTestId('unscheduled-toggle-spring_startup'));
+
+    const jobLink = screen.getByTestId('unscheduled-job-j1');
+    expect(jobLink).toHaveAttribute('href', '/jobs/j1');
+  });
+
+  it('shows priority badge for high-priority jobs', () => {
+    vi.mocked(useJobsReadyToSchedule).mockReturnValue({
+      data: { items: mockJobs },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof useJobsReadyToSchedule>);
+
+    render(<UnscheduledVisitsQueue />, { wrapper });
+    fireEvent.click(screen.getByTestId('unscheduled-toggle-spring_startup'));
+
+    expect(screen.getByText('High')).toBeInTheDocument();
   });
 
   it('renders error state', () => {
@@ -69,17 +142,12 @@ describe('UnscheduledVisitsQueue', () => {
 
   it('shows count badge', () => {
     vi.mocked(useJobsReadyToSchedule).mockReturnValue({
-      data: {
-        items: [
-          { id: 'j1', job_type: 'Spring Startup', status: 'approved' },
-        ],
-      },
+      data: { items: [mockJobs[0]] },
       isLoading: false,
       error: null,
     } as unknown as ReturnType<typeof useJobsReadyToSchedule>);
 
     render(<UnscheduledVisitsQueue />, { wrapper });
-    // The header count badge and the group count both show 1
     const badges = screen.getAllByText('1');
     expect(badges.length).toBeGreaterThanOrEqual(1);
   });
