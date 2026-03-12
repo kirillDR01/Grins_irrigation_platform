@@ -73,12 +73,16 @@ class TestSmsConsentGatingProperty:
     )
     @settings(max_examples=50)
     @pytest.mark.asyncio
-    async def test_sms_sent_iff_consent_and_phone(
+    async def test_sms_never_sent_for_leads(
         self,
         sms_consent: bool,
         phone: str,
     ) -> None:
-        """SMS sent only when sms_consent=true AND phone is non-empty."""
+        """SMS is never sent for leads (deferred due to FK constraint).
+
+        After BUG #11/12/13 fix: _send_sms_confirmation logs intent
+        but never calls sms_service.send_message() for leads.
+        """
         lead = _make_lead(sms_consent=sms_consent, phone=phone)
         sms = AsyncMock()
 
@@ -89,11 +93,8 @@ class TestSmsConsentGatingProperty:
 
         await service._send_sms_confirmation(lead)
 
-        should_send = sms_consent and bool(phone)
-        if should_send:
-            sms.send_message.assert_awaited_once()
-        else:
-            sms.send_message.assert_not_awaited()
+        # send_message is never called for leads regardless of consent
+        sms.send_message.assert_not_awaited()
 
     @given(
         sms_consent=st.booleans(),
@@ -123,15 +124,14 @@ class TestSmsConsentGatingProperty:
     )
     @settings(max_examples=20)
     @pytest.mark.asyncio
-    async def test_failure_does_not_propagate(
+    async def test_deferred_sms_does_not_raise(
         self,
         sms_consent: bool,
         phone: str,
     ) -> None:
-        """SMS send failure is caught and logged, never propagated."""
+        """Deferred SMS confirmation never raises, never calls send_message."""
         lead = _make_lead(sms_consent=sms_consent, phone=phone)
         sms = AsyncMock()
-        sms.send_message.side_effect = RuntimeError("twilio down")
 
         service = _build_service(
             lead_repo=AsyncMock(),
@@ -140,4 +140,4 @@ class TestSmsConsentGatingProperty:
 
         # Should not raise
         await service._send_sms_confirmation(lead)
-        sms.send_message.assert_awaited_once()
+        sms.send_message.assert_not_awaited()

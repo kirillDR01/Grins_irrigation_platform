@@ -693,3 +693,100 @@ class TestConsentCarryOver:
 
         # SMS consent record created
         compliance.create_sms_consent.assert_called_once()
+
+
+# =============================================================================
+# Lead with SMS consent full flow — BUG #11/12/13 fix
+# =============================================================================
+
+
+@pytest.mark.functional
+@pytest.mark.asyncio
+class TestLeadWithSmsConsentFullFlow:
+    """Test that leads with sms_consent=True persist without SMS sending.
+
+    Previously, sms_service.send_message() created a SentMessage with
+    customer_id=lead.id (FK violation) and message_type='lead_confirmation'
+    (CHECK violation), silently rolling back the entire lead record.
+
+    After fix: sms_service.send_message() is NOT called for leads.
+    """
+
+    async def test_lead_with_sms_consent_persists_through_service(self) -> None:
+        """Lead with sms_consent=True is created and persists — no send_message."""
+        sms_svc = AsyncMock()
+        compliance = AsyncMock()
+        repo = AsyncMock()
+        repo.get_recent_by_phone_or_email.return_value = None
+        repo.get_by_phone_and_active_status.return_value = None
+
+        created_lead = _make_lead(
+            sms_consent=True,
+            phone="6125550001",
+            name="SMS Fix Test",
+        )
+        repo.create.return_value = created_lead
+
+        svc, _, _, _ = _build_service(
+            lead_repo=repo,
+            sms_service=sms_svc,
+            compliance_service=compliance,
+        )
+
+        data = LeadSubmission(
+            name="SMS Fix Test",
+            phone="6125550001",
+            zip_code="55401",
+            situation=LeadSituation.NEW_SYSTEM,
+            sms_consent=True,
+            source_site="residential",
+        )
+
+        result = await svc.submit_lead(data)
+
+        # Lead was created successfully
+        assert result.success is True
+        assert result.lead_id == created_lead.id
+        repo.create.assert_awaited_once()
+
+        # SMS service.send_message was NOT called (the fix)
+        sms_svc.send_message.assert_not_awaited()
+
+        # Consent record was still created
+        compliance.create_sms_consent.assert_awaited_once()
+
+    async def test_lead_without_sms_consent_also_persists(self) -> None:
+        """Lead with sms_consent=False also persists — no send_message."""
+        sms_svc = AsyncMock()
+        compliance = AsyncMock()
+        repo = AsyncMock()
+        repo.get_recent_by_phone_or_email.return_value = None
+        repo.get_by_phone_and_active_status.return_value = None
+
+        created_lead = _make_lead(
+            sms_consent=False,
+            phone="6125550002",
+            name="No SMS Test",
+        )
+        repo.create.return_value = created_lead
+
+        svc, _, _, _ = _build_service(
+            lead_repo=repo,
+            sms_service=sms_svc,
+            compliance_service=compliance,
+        )
+
+        data = LeadSubmission(
+            name="No SMS Test",
+            phone="6125550002",
+            zip_code="55401",
+            situation=LeadSituation.EXPLORING,
+            sms_consent=False,
+            source_site="residential",
+        )
+
+        result = await svc.submit_lead(data)
+
+        assert result.success is True
+        assert result.lead_id == created_lead.id
+        sms_svc.send_message.assert_not_awaited()

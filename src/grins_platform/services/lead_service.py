@@ -33,7 +33,6 @@ from grins_platform.models.enums import (
     LeadStatus,
 )
 from grins_platform.models.sms_consent_record import SmsConsentRecord
-from grins_platform.schemas.ai import MessageType
 from grins_platform.schemas.customer import CustomerCreate
 from grins_platform.schemas.job import JobCreate
 from grins_platform.schemas.lead import (
@@ -142,10 +141,12 @@ class LeadService(LoggerMixin):
         return first_name, last_name
 
     async def _send_sms_confirmation(self, lead: Lead) -> None:
-        """Send SMS confirmation for a new lead.
+        """Log SMS confirmation intent for leads.
 
-        Gated on sms_consent=true AND phone present. Skips and logs
-        if conditions not met or service unavailable.
+        Note: SentMessage requires customer_id FK (not lead_id),
+        so we skip SentMessage creation for leads. SMS will be sent
+        when Twilio integration is production-ready and lead messaging
+        is properly modeled.
 
         Validates: Requirements 54.1, 54.2, 54.3, 54.4
         """
@@ -173,31 +174,14 @@ class LeadService(LoggerMixin):
             )
             return
 
-        first_name, _ = self.split_name(lead.name)
-        message = (
-            f"Hi {first_name}! Your request has been received by "
-            "Grins Irrigation. We'll be in touch within 2 hours "
-            "during business hours."
+        # Log intent — actual SMS send deferred until Twilio integration
+        # is production-ready and SentMessage supports lead_id
+        self.logger.info(
+            "lead.sms_confirmation.deferred",
+            lead_id=str(lead.id),
+            phone_last4=lead.phone[-4:] if len(lead.phone) >= 4 else "****",
+            reason="sent_message_requires_customer_id",
         )
-
-        try:
-            _ = await self.sms_service.send_message(
-                customer_id=lead.id,
-                phone=lead.phone,
-                message=message,
-                message_type=MessageType.LEAD_CONFIRMATION,
-                sms_opt_in=True,
-            )
-            self.logger.info(
-                "lead.sms_confirmation.sent",
-                lead_id=str(lead.id),
-            )
-        except Exception as e:
-            self.logger.warning(
-                "lead.sms_confirmation.failed",
-                lead_id=str(lead.id),
-                error=str(e),
-            )
 
     def _send_email_confirmation(self, lead: Lead) -> None:
         """Send email confirmation for a new lead.

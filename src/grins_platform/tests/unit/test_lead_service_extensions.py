@@ -404,8 +404,12 @@ class TestSmsConfirmationGating:
     """Tests for SMS confirmation consent gating on lead creation."""
 
     @pytest.mark.asyncio
-    async def test_sms_sent_when_consent_and_phone_present(self) -> None:
-        """SMS sent when sms_consent=true AND phone present."""
+    async def test_sms_deferred_when_consent_and_phone_present(self) -> None:
+        """SMS deferred (not sent) when sms_consent=true AND phone present.
+
+        After BUG #11/12/13 fix: leads bypass sms_service.send_message()
+        because SentMessage requires customer_id FK, not lead_id.
+        """
         lead = _make_lead_mock(sms_consent=True, phone="6125550100")
         repo = AsyncMock()
         repo.get_by_phone_and_active_status.return_value = None
@@ -422,7 +426,7 @@ class TestSmsConfirmationGating:
         )
         await svc.submit_lead(data)
 
-        sms.send_message.assert_awaited_once()
+        sms.send_message.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_sms_skipped_when_no_consent(self) -> None:
@@ -508,8 +512,11 @@ class TestSmsConfirmationGating:
         assert result.success is True
 
     @pytest.mark.asyncio
-    async def test_from_call_sends_sms_when_consent(self) -> None:
-        """From-call also sends SMS when consent is given."""
+    async def test_from_call_defers_sms_when_consent(self) -> None:
+        """From-call defers SMS (not sent) when consent is given.
+
+        After BUG #11/12/13 fix: leads bypass sms_service.send_message().
+        """
         lead = _make_lead_mock(sms_consent=True, phone="6125550200")
         repo = AsyncMock()
         repo.create.return_value = lead
@@ -524,7 +531,7 @@ class TestSmsConfirmationGating:
         )
         await svc.create_from_call(data)
 
-        sms.send_message.assert_awaited_once()
+        sms.send_message.assert_not_awaited()
 
 
 # =============================================================================
