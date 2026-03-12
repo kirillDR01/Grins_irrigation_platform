@@ -51,5 +51,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Expose application port
 EXPOSE 8000
 
-# Run application with uvicorn
-CMD ["uvicorn", "grins_platform.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run migrations then start application
+CMD ["sh", "-c", "alembic upgrade head && uvicorn grins_platform.main:app --host 0.0.0.0 --port 8000"]
