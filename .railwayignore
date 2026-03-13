@@ -1,0 +1,51 @@
+# Virtual environments
+.venv/
+venv/
+
+# Frontend (admin dashboard — deployed separately on Vercel)
+frontend/
+
+# Node modules
+node_modules/
+
+# Type checking and linting caches
+.mypy_cache/
+.ruff_cache/
+.pyright/
+
+# Claude Code
+.claude/
+
+# Diagrams and screenshots
+excalidraw-diagram-skill/
+screenshots/
+
+# Git
+.git/
+
+# Testing
+.pytest_cache/
+.hypothesis/
+htmlcov/
+coverage.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+
+# Documentation
+docs/
+Markdown/
+*.md
+!README.md
+
+# Kiro
+.kiro/
+
+# Local env
+.env
+.env.*
+!.env.example
