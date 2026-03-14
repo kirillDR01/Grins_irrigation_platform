@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy import select
 
 from grins_platform.database import get_db_session as get_db
+from grins_platform.exceptions import DuplicateCustomerError
 from grins_platform.log_config import LoggerMixin, get_logger
 from grins_platform.models.enums import (
     VALID_AGREEMENT_STATUS_TRANSITIONS,
@@ -36,7 +37,7 @@ from grins_platform.repositories.customer_repository import CustomerRepository
 from grins_platform.repositories.stripe_webhook_event_repository import (
     StripeWebhookEventRepository,
 )
-from grins_platform.schemas.customer import CustomerCreate
+from grins_platform.schemas.customer import CustomerCreate, normalize_phone
 from grins_platform.services.agreement_service import AgreementService
 from grins_platform.services.ai.security import validate_twilio_signature
 from grins_platform.services.compliance_service import ComplianceService
@@ -261,7 +262,7 @@ class StripeWebhookHandler(LoggerMixin):
         email_svc = EmailService()
         job_gen = JobGenerator(self.session)
 
-        # 1. Find or create customer by email (Req 8.1, 8.2, 8.3)
+        # 1. Find or create customer by email, then phone (Req 8.1, 8.2, 8.3)
         customer = None
         if customer_email:
             existing = await customer_repo.find_by_email(customer_email)
@@ -271,24 +272,62 @@ class StripeWebhookHandler(LoggerMixin):
         now = datetime.now(timezone.utc)
 
         if customer is None:
-            # Extract name from session
+            # Extract name and phone from session
             cust_details: dict[str, Any] = session_obj.get("customer_details", {}) or {}
             full_name = str(cust_details.get("name", "") or "")
             parts = full_name.strip().split(maxsplit=1)
             first_name = parts[0] if parts else "Customer"
             last_name = parts[1] if len(parts) > 1 else ""
-            phone = str(cust_details.get("phone", "") or "")
+            phone_raw = str(cust_details.get("phone", "") or "")
 
-            create_data = CustomerCreate(
-                first_name=first_name,
-                last_name=last_name,
-                phone=phone or f"000{event['id'][-7:]}",
-                email=customer_email or None,
-            )
-            cust_svc = CustomerService(customer_repo)
-            cust_resp = await cust_svc.create_customer(create_data)
-            customer = await customer_repo.get_by_id(cust_resp.id)
-            assert customer is not None
+            # Normalize phone and try phone-based lookup before creating
+            normalized_phone = ""
+            if phone_raw:
+                try:
+                    normalized_phone = normalize_phone(phone_raw)
+                    existing_by_phone = await customer_repo.find_by_phone(
+                        normalized_phone,
+                    )
+                    if existing_by_phone:
+                        customer = existing_by_phone
+                        self.log_started(
+                            "webhook_customer_matched_by_phone",
+                            customer_id=str(customer.id),
+                        )
+                        # Update email if customer doesn't have one
+                        if customer_email and not customer.email:
+                            customer.email = customer_email  # type: ignore[assignment]
+                except ValueError:
+                    self.log_started(
+                        "webhook_phone_normalize_failed",
+                        phone_raw=phone_raw[-4:] if phone_raw else "",
+                    )
+
+            if customer is None:
+                create_data = CustomerCreate(
+                    first_name=first_name,
+                    last_name=last_name,
+                    phone=normalized_phone or phone_raw or f"000{event['id'][-7:]}",
+                    email=customer_email or None,
+                )
+                try:
+                    cust_svc = CustomerService(customer_repo)
+                    cust_resp = await cust_svc.create_customer(create_data)
+                    customer = await customer_repo.get_by_id(cust_resp.id)
+                    assert customer is not None
+                except DuplicateCustomerError:
+                    # Race condition safety net
+                    self.log_started(
+                        "webhook_customer_duplicate_fallback",
+                        phone=normalized_phone[-4:]
+                        if normalized_phone
+                        else "unknown",
+                    )
+                    customer = await customer_repo.find_by_phone(
+                        normalized_phone or phone_raw,
+                    )
+                    if customer is None:
+                        raise
 
         # Update stripe_customer_id (Req 8.3, 28.2)
         if stripe_customer_id and customer.stripe_customer_id != stripe_customer_id:

@@ -106,9 +106,10 @@ class TestCheckoutSessionCompleted:
         """New customer is created when email doesn't match existing."""
         handler, _session = _make_handler()
 
-        # Customer repo: no existing customer
+        # Customer repo: no existing customer by email or phone
         cust_repo = AsyncMock()
         cust_repo.find_by_email.return_value = []
+        cust_repo.find_by_phone.return_value = None
         new_customer = MagicMock()
         new_customer.id = uuid4()
         new_customer.stripe_customer_id = None
@@ -264,6 +265,107 @@ class TestCheckoutSessionCompleted:
         assert result["status"] == "processed"
         # stripe_customer_id should be updated
         assert existing_customer.stripe_customer_id == "cus_456"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerService")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_existing_customer_matched_by_phone_when_email_differs(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_cust_svc_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+    ) -> None:
+        """Existing customer is matched by phone when email differs (BUG #18)."""
+        handler, _session = _make_handler()
+
+        # Customer repo: no email match, but phone match
+        existing_customer = MagicMock()
+        existing_customer.id = uuid4()
+        existing_customer.stripe_customer_id = "cus_old"
+        existing_customer.email = "old@example.com"
+        existing_customer.email_opt_in_at = None
+        existing_customer.email_opt_in = False
+
+        cust_repo = AsyncMock()
+        cust_repo.find_by_email.return_value = []
+        cust_repo.find_by_phone.return_value = existing_customer
+        mock_cust_repo_cls.return_value = cust_repo
+
+        # Customer service should NOT be called (no create needed)
+        cust_svc = AsyncMock()
+        mock_cust_svc_cls.return_value = cust_svc
+
+        # Tier repo
+        tier = MagicMock()
+        tier.id = uuid4()
+        tier.name = "Essential"
+        tier.annual_price = Decimal("170.00")
+        tier.is_active = True
+        tier_repo = AsyncMock()
+        tier_repo.get_by_slug_and_type.return_value = tier
+        mock_tier_repo_cls.return_value = tier_repo
+
+        # Agreement service
+        agreement = _make_agreement(status=AgreementStatus.PENDING.value)
+        agr_svc = AsyncMock()
+        agr_svc.create_agreement.return_value = agreement
+        mock_agr_svc_cls.return_value = agr_svc
+        mock_agr_repo_cls.return_value = AsyncMock()
+
+        mock_compliance_cls.return_value = AsyncMock()
+
+        job_gen = AsyncMock()
+        job_gen.generate_jobs.return_value = []
+        mock_job_gen_cls.return_value = job_gen
+
+        email_svc = MagicMock()
+        email_svc.send_confirmation_email.return_value = {
+            "content": "c",
+            "sent_via": "email",
+            "sent": True,
+        }
+        email_svc.send_welcome_email.return_value = {"sent": True}
+        mock_email_cls.return_value = email_svc
+
+        event = _make_event(
+            "checkout.session.completed",
+            {
+                "customer_details": {
+                    "email": "different@example.com",
+                    "name": "Jane Doe",
+                    "phone": "+16125551234",
+                },
+                "customer": "cus_new_stripe",
+                "subscription": "sub_new",
+                "metadata": {
+                    "consent_token": str(uuid4()),
+                    "package_tier": "essential",
+                    "package_type": "residential",
+                },
+            },
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        # Customer should be reused, NOT created
+        cust_svc.create_customer.assert_not_called()
+        # Phone lookup should have been called with normalized phone
+        cust_repo.find_by_phone.assert_called_once_with("6125551234")
+        # stripe_customer_id should be updated to the new one
+        assert existing_customer.stripe_customer_id == "cus_new_stripe"
 
     @pytest.mark.unit
     @pytest.mark.asyncio
