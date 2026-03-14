@@ -256,8 +256,8 @@ function ComplianceLog({ records, agreementStatus, lastAnnualNoticeSent }: { rec
     (a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime(),
   );
 
-  // Check which disclosure types are present
-  const presentTypes = new Set(records.map((r) => r.disclosure_type));
+  // Check which disclosure types are present (normalize to uppercase for comparison)
+  const presentTypes = new Set(records.map((r) => r.disclosure_type.toUpperCase()));
   const requiredTypes: DisclosureType[] = ['PRE_SALE', 'CONFIRMATION'];
   const allTypes: DisclosureType[] = ['PRE_SALE', 'CONFIRMATION', 'RENEWAL_NOTICE', 'ANNUAL_NOTICE', 'CANCELLATION_CONF'];
 
@@ -320,8 +320,8 @@ function ComplianceLog({ records, agreementStatus, lastAnnualNoticeSent }: { rec
           <div className="space-y-2">
             {sorted.map((rec) => (
               <div key={rec.id} className="flex items-center gap-2 text-sm" data-testid={`disclosure-${rec.id}`}>
-                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${DISCLOSURE_COLORS[rec.disclosure_type]}`}>
-                  {DISCLOSURE_LABELS[rec.disclosure_type]}
+                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${DISCLOSURE_COLORS[rec.disclosure_type.toUpperCase() as DisclosureType] ?? 'bg-slate-100 text-slate-500'}`}>
+                  {DISCLOSURE_LABELS[rec.disclosure_type.toUpperCase() as DisclosureType] ?? rec.disclosure_type}
                 </span>
                 <span className="text-slate-500">{formatDate(rec.sent_at)}</span>
                 <span className="text-xs text-slate-400">via {rec.sent_via}</span>
