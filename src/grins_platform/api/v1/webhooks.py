@@ -243,6 +243,9 @@ class StripeWebhookHandler(LoggerMixin):
         # Extract surcharge and consent metadata (Req 3.14, 2.5)
         meta_zone_count = int(metadata.get("zone_count", "1") or "1")
         meta_has_lake_pump = metadata.get("has_lake_pump", "false").lower() == "true"
+        meta_has_rpz_backflow = (
+            metadata.get("has_rpz_backflow", "false").lower() == "true"
+        )
         meta_email_marketing_consent = (
             metadata.get("email_marketing_consent", "false").lower() == "true"
         )
@@ -326,12 +329,14 @@ class StripeWebhookHandler(LoggerMixin):
             zone_count=meta_zone_count,
             has_lake_pump=meta_has_lake_pump,
             base_price=tier.annual_price,
+            has_rpz_backflow=meta_has_rpz_backflow,
         )
         _ = await agreement_repo.update(
             agreement,
             {
                 "zone_count": meta_zone_count,
                 "has_lake_pump": meta_has_lake_pump,
+                "has_rpz_backflow": meta_has_rpz_backflow,
                 "base_price": tier.annual_price,
                 "annual_price": surcharge_breakdown.total,
             },

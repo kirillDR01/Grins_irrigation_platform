@@ -1,4 +1,4 @@
-"""Surcharge calculator for zone count and lake pump pricing.
+"""Surcharge calculator for zone count, lake pump, and RPZ/backflow pricing.
 
 Pure utility — no DB access, no side effects.
 
@@ -19,16 +19,23 @@ class SurchargeBreakdown:
         base_price: Tier base price before surcharges.
         zone_surcharge: Additional cost for zones >= 10.
         lake_pump_surcharge: Additional cost for lake pump systems.
+        rpz_backflow_surcharge: Additional cost for RPZ/backflow service.
     """
 
     base_price: Decimal
     zone_surcharge: Decimal
     lake_pump_surcharge: Decimal
+    rpz_backflow_surcharge: Decimal = Decimal(0)
 
     @property
     def total(self) -> Decimal:
         """Total price including all surcharges."""
-        return self.base_price + self.zone_surcharge + self.lake_pump_surcharge
+        return (
+            self.base_price
+            + self.zone_surcharge
+            + self.lake_pump_surcharge
+            + self.rpz_backflow_surcharge
+        )
 
 
 # (zone_rate_per_extra_zone, lake_pump_flat_rate)
@@ -38,6 +45,8 @@ _RATES: dict[tuple[str, str], tuple[Decimal, Decimal]] = {
     ("winterization-only", "residential"): (Decimal("5.00"), Decimal("75.00")),
     ("winterization-only", "commercial"): (Decimal("10.00"), Decimal("100.00")),
 }
+
+_RPZ_BACKFLOW_RATE = Decimal("50.00")
 
 _ZONE_THRESHOLD = 10
 _INCLUDED_ZONES = 9
@@ -56,6 +65,8 @@ class SurchargeCalculator:
         zone_count: int,
         has_lake_pump: bool,
         base_price: Decimal,
+        *,
+        has_rpz_backflow: bool = False,
     ) -> SurchargeBreakdown:
         """Calculate surcharges for a given tier configuration.
 
@@ -65,6 +76,7 @@ class SurchargeCalculator:
             zone_count: Number of irrigation zones (>= 1).
             has_lake_pump: Whether property has a lake pump.
             base_price: Tier base annual price.
+            has_rpz_backflow: Whether property has RPZ/backflow device.
 
         Returns:
             SurchargeBreakdown with computed surcharges.
@@ -89,8 +101,11 @@ class SurchargeCalculator:
 
         lake_pump_surcharge = lake_pump_rate if has_lake_pump else Decimal(0)
 
+        rpz_backflow_surcharge = _RPZ_BACKFLOW_RATE if has_rpz_backflow else Decimal(0)
+
         return SurchargeBreakdown(
             base_price=base_price,
             zone_surcharge=zone_surcharge,
             lake_pump_surcharge=lake_pump_surcharge,
+            rpz_backflow_surcharge=rpz_backflow_surcharge,
         )

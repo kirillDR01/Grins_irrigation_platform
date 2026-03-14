@@ -648,7 +648,7 @@ class TestCheckoutSessionSurcharges:
         self,
         mock_create: MagicMock,
     ) -> None:
-        """zone_count=12, has_lake_pump=true -> 3 Stripe line items."""
+        """zone_count=12, has_lake_pump=true -> 3 Stripe line items (no RPZ)."""
         tier = _make_tier(slug="essential-residential", annual_price="299.00")
         tier_repo = AsyncMock()
         tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
@@ -769,3 +769,117 @@ class TestCheckoutSessionSurcharges:
         assert sub_meta["zone_count"] == "15"
         assert sub_meta["has_lake_pump"] == "true"
         assert sub_meta["email_marketing_consent"] == "true"
+
+    @pytest.mark.asyncio
+    @patch("grins_platform.services.checkout_service.stripe.checkout.Session.create")
+    async def test_rpz_backflow_creates_line_item(self, mock_create: MagicMock) -> None:
+        """has_rpz_backflow=true -> RPZ/backflow line item at $50."""
+        tier = _make_tier(slug="essential-residential", annual_price="299.00")
+        tier_repo = AsyncMock()
+        tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
+        ts = datetime.now(timezone.utc) - timedelta(minutes=5)
+        session = _mock_session_with_consent(ts)
+
+        mock_create.return_value = MagicMock(id="cs_1", url="https://x.com")
+
+        svc = _make_checkout_service(session=session, tier_repo=tier_repo)
+        await svc.create_checkout_session(
+            package_tier=tier.slug,
+            package_type="residential",
+            consent_token=uuid4(),
+            has_rpz_backflow=True,
+        )
+
+        call_kwargs = mock_create.call_args[1]
+        items = call_kwargs["line_items"]
+        assert len(items) == 2
+        rpz_item = items[1]
+        assert rpz_item["price_data"]["unit_amount"] == 5000
+        assert (
+            rpz_item["price_data"]["product_data"]["name"] == "RPZ/backflow connection"
+        )
+
+    @pytest.mark.asyncio
+    @patch("grins_platform.services.checkout_service.stripe.checkout.Session.create")
+    async def test_rpz_backflow_winterization_uses_removal_name(
+        self,
+        mock_create: MagicMock,
+    ) -> None:
+        """Winterization-only tier uses 'RPZ/backflow removal' name."""
+        tier = _make_tier(
+            slug="winterization-only-residential",
+            annual_price="80.00",
+        )
+        tier_repo = AsyncMock()
+        tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
+        ts = datetime.now(timezone.utc) - timedelta(minutes=5)
+        session = _mock_session_with_consent(ts)
+
+        mock_create.return_value = MagicMock(id="cs_1", url="https://x.com")
+
+        svc = _make_checkout_service(session=session, tier_repo=tier_repo)
+        await svc.create_checkout_session(
+            package_tier=tier.slug,
+            package_type="residential",
+            consent_token=uuid4(),
+            has_rpz_backflow=True,
+        )
+
+        call_kwargs = mock_create.call_args[1]
+        items = call_kwargs["line_items"]
+        rpz_item = items[1]
+        assert rpz_item["price_data"]["product_data"]["name"] == "RPZ/backflow removal"
+
+    @pytest.mark.asyncio
+    @patch("grins_platform.services.checkout_service.stripe.checkout.Session.create")
+    async def test_rpz_backflow_metadata_included(self, mock_create: MagicMock) -> None:
+        """Metadata includes has_rpz_backflow."""
+        tier = _make_tier()
+        tier_repo = AsyncMock()
+        tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
+        ts = datetime.now(timezone.utc) - timedelta(minutes=5)
+        session = _mock_session_with_consent(ts)
+
+        mock_create.return_value = MagicMock(id="cs_1", url="https://x.com")
+
+        svc = _make_checkout_service(session=session, tier_repo=tier_repo)
+        await svc.create_checkout_session(
+            package_tier=tier.slug,
+            package_type="residential",
+            consent_token=uuid4(),
+            has_rpz_backflow=True,
+        )
+
+        call_kwargs = mock_create.call_args[1]
+        meta = call_kwargs["metadata"]
+        assert meta["has_rpz_backflow"] == "true"
+        sub_meta = call_kwargs["subscription_data"]["metadata"]
+        assert sub_meta["has_rpz_backflow"] == "true"
+
+    @pytest.mark.asyncio
+    @patch("grins_platform.services.checkout_service.stripe.checkout.Session.create")
+    async def test_all_surcharges_combined(self, mock_create: MagicMock) -> None:
+        """zone + lake_pump + rpz_backflow -> 4 Stripe line items."""
+        tier = _make_tier(slug="essential-residential", annual_price="299.00")
+        tier_repo = AsyncMock()
+        tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
+        ts = datetime.now(timezone.utc) - timedelta(minutes=5)
+        session = _mock_session_with_consent(ts)
+
+        mock_create.return_value = MagicMock(id="cs_1", url="https://x.com")
+
+        svc = _make_checkout_service(session=session, tier_repo=tier_repo)
+        await svc.create_checkout_session(
+            package_tier=tier.slug,
+            package_type="residential",
+            consent_token=uuid4(),
+            zone_count=12,
+            has_lake_pump=True,
+            has_rpz_backflow=True,
+        )
+
+        call_kwargs = mock_create.call_args[1]
+        items = call_kwargs["line_items"]
+        assert len(items) == 4
+        # Base, zone, lake pump, RPZ/backflow
+        assert items[3]["price_data"]["unit_amount"] == 5000

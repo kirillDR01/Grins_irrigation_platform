@@ -190,6 +190,7 @@ class TestSurchargeBreakdownFrozen:
             base_price=Decimal(100),
             zone_surcharge=Decimal(10),
             lake_pump_surcharge=Decimal(5),
+            rpz_backflow_surcharge=Decimal(50),
         )
         with pytest.raises(AttributeError):
             b.base_price = Decimal(999)  # type: ignore[misc]
@@ -219,3 +220,92 @@ class TestSurchargeCalculatorCaseInsensitive:
             Decimal("399.00"),
         )
         assert r.zone_surcharge == Decimal("10.00")
+
+
+@pytest.mark.unit
+class TestSurchargeCalculatorRpzBackflow:
+    """RPZ/backflow surcharge: flat $50 across all tiers."""
+
+    def test_rpz_backflow_standard_residential(self) -> None:
+        r = SurchargeCalculator.calculate(
+            "essential-residential",
+            "residential",
+            5,
+            False,
+            Decimal("299.00"),
+            has_rpz_backflow=True,
+        )
+        assert r.rpz_backflow_surcharge == Decimal("50.00")
+        assert r.total == Decimal("349.00")
+
+    def test_rpz_backflow_standard_commercial(self) -> None:
+        r = SurchargeCalculator.calculate(
+            "essential-commercial",
+            "commercial",
+            5,
+            False,
+            Decimal("399.00"),
+            has_rpz_backflow=True,
+        )
+        assert r.rpz_backflow_surcharge == Decimal("50.00")
+        assert r.total == Decimal("449.00")
+
+    def test_rpz_backflow_winterization_residential(self) -> None:
+        r = SurchargeCalculator.calculate(
+            "winterization-only-residential",
+            "residential",
+            5,
+            False,
+            Decimal("80.00"),
+            has_rpz_backflow=True,
+        )
+        assert r.rpz_backflow_surcharge == Decimal("50.00")
+        assert r.total == Decimal("130.00")
+
+    def test_rpz_backflow_winterization_commercial(self) -> None:
+        r = SurchargeCalculator.calculate(
+            "winterization-only-commercial",
+            "commercial",
+            5,
+            False,
+            Decimal("100.00"),
+            has_rpz_backflow=True,
+        )
+        assert r.rpz_backflow_surcharge == Decimal("50.00")
+        assert r.total == Decimal("150.00")
+
+    def test_no_rpz_backflow(self) -> None:
+        r = SurchargeCalculator.calculate(
+            "essential-residential",
+            "residential",
+            5,
+            False,
+            Decimal("299.00"),
+            has_rpz_backflow=False,
+        )
+        assert r.rpz_backflow_surcharge == Decimal(0)
+        assert r.total == Decimal("299.00")
+
+    def test_rpz_backflow_default_false(self) -> None:
+        r = SurchargeCalculator.calculate(
+            "essential-residential",
+            "residential",
+            5,
+            False,
+            Decimal("299.00"),
+        )
+        assert r.rpz_backflow_surcharge == Decimal(0)
+
+    def test_rpz_backflow_combined_with_all_surcharges(self) -> None:
+        r = SurchargeCalculator.calculate(
+            "professional-residential",
+            "residential",
+            12,
+            True,
+            Decimal("499.00"),
+            has_rpz_backflow=True,
+        )
+        assert r.zone_surcharge == Decimal("22.50")  # 3 x $7.50
+        assert r.lake_pump_surcharge == Decimal("175.00")
+        assert r.rpz_backflow_surcharge == Decimal("50.00")
+        assert r.total == Decimal("746.50")

@@ -130,6 +130,11 @@ class ServiceAgreement(Base):
         nullable=False,
         server_default="false",
     )
+    has_rpz_backflow: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
 
     # Payment
     payment_status: Mapped[str] = mapped_column(

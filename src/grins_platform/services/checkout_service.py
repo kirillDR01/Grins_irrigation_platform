@@ -135,7 +135,9 @@ class CheckoutService(LoggerMixin):
             )
             raise ConsentTokenExpiredError(consent_token)
 
-    async def _validate_tier(self, slug: str, package_type: str) -> ServiceAgreementTier:
+    async def _validate_tier(
+        self, slug: str, package_type: str
+    ) -> ServiceAgreementTier:
         """Validate tier exists, is active, and has stripe_price_id.
 
         Validates: Requirements 31.3, 31.4
@@ -176,6 +178,7 @@ class CheckoutService(LoggerMixin):
         *,
         zone_count: int = 1,
         has_lake_pump: bool = False,
+        has_rpz_backflow: bool = False,
         email_marketing_consent: bool = False,
         utm_params: dict[str, str] | None = None,
         success_url: str = "",
@@ -198,6 +201,7 @@ class CheckoutService(LoggerMixin):
             consent_token=str(consent_token),
             zone_count=zone_count,
             has_lake_pump=has_lake_pump,
+            has_rpz_backflow=has_rpz_backflow,
         )
 
         await self._validate_consent_token(consent_token)
@@ -210,6 +214,7 @@ class CheckoutService(LoggerMixin):
             zone_count=zone_count,
             has_lake_pump=has_lake_pump,
             base_price=Decimal(str(tier.annual_price)),
+            has_rpz_backflow=has_rpz_backflow,
         )
 
         # Build metadata
@@ -219,6 +224,7 @@ class CheckoutService(LoggerMixin):
             "package_type": package_type,
             "zone_count": str(zone_count),
             "has_lake_pump": str(has_lake_pump).lower(),
+            "has_rpz_backflow": str(has_rpz_backflow).lower(),
             "email_marketing_consent": str(email_marketing_consent).lower(),
         }
         if utm_params:
@@ -252,6 +258,25 @@ class CheckoutService(LoggerMixin):
                         "currency": "usd",
                         "product_data": {"name": "Lake pump surcharge"},
                         "unit_amount": int(breakdown.lake_pump_surcharge * 100),
+                        "recurring": {"interval": "year"},
+                    },
+                    "quantity": 1,
+                },
+            )
+
+        if breakdown.rpz_backflow_surcharge > 0:
+            is_winterization = tier.slug.startswith("winterization-only-")
+            rpz_name = (
+                "RPZ/backflow removal"
+                if is_winterization
+                else "RPZ/backflow connection"
+            )
+            line_items.append(
+                {
+                    "price_data": {
+                        "currency": "usd",
+                        "product_data": {"name": rpz_name},
+                        "unit_amount": int(breakdown.rpz_backflow_surcharge * 100),
                         "recurring": {"interval": "year"},
                     },
                     "quantity": 1,

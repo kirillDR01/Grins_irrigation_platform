@@ -653,6 +653,7 @@ class TestCheckoutCompletedNewFields:
             zone_count=15,
             has_lake_pump=True,
             base_price=Decimal("599.00"),
+            has_rpz_backflow=False,
         )
         # Verify agreement_repo.update called with surcharge fields
         agr_repo.update.assert_called_once()
@@ -660,6 +661,7 @@ class TestCheckoutCompletedNewFields:
         update_dict = update_args[0][1]
         assert update_dict["zone_count"] == 15
         assert update_dict["has_lake_pump"] is True
+        assert update_dict["has_rpz_backflow"] is False
         assert update_dict["base_price"] == Decimal("599.00")
         assert update_dict["annual_price"] == Decimal("749.00")
 
@@ -981,6 +983,7 @@ class TestCheckoutCompletedNewFields:
             zone_count=5,
             has_lake_pump=False,
             base_price=Decimal("80.00"),
+            has_rpz_backflow=False,
         )
 
     @pytest.mark.unit
@@ -1046,10 +1049,12 @@ class TestCheckoutCompletedNewFields:
             zone_count=1,
             has_lake_pump=False,
             base_price=Decimal("599.00"),
+            has_rpz_backflow=False,
         )
         update_dict = agr_repo.update.call_args[0][1]
         assert update_dict["zone_count"] == 1
         assert update_dict["has_lake_pump"] is False
+        assert update_dict["has_rpz_backflow"] is False
 
 
 # =============================================================================

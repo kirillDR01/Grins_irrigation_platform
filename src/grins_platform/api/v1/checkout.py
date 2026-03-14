@@ -59,11 +59,17 @@ def _check_rate_limit(ip: str) -> bool:
 class CreateCheckoutSessionRequest(BaseModel):
     """Request body for creating a Stripe checkout session."""
 
-    package_tier: str = Field(..., description="Service tier slug (e.g. essential-residential)")
+    package_tier: str = Field(
+        ..., description="Service tier slug (e.g. essential-residential)"
+    )
     package_type: str = Field(..., description="Package type (residential/commercial)")
     consent_token: UUID = Field(..., description="Pre-checkout consent token")
     zone_count: int = Field(default=1, ge=1, description="Number of irrigation zones")
     has_lake_pump: bool = Field(default=False, description="Property has a lake pump")
+    has_rpz_backflow: bool = Field(
+        default=False,
+        description="Property has RPZ/backflow device",
+    )
     email_marketing_consent: bool = Field(
         default=False,
         description="Email marketing consent",
@@ -139,6 +145,7 @@ async def create_checkout_session(
             consent_token=data.consent_token,
             zone_count=data.zone_count,
             has_lake_pump=data.has_lake_pump,
+            has_rpz_backflow=data.has_rpz_backflow,
             email_marketing_consent=data.email_marketing_consent,
             utm_params=data.utm_params,
             success_url=data.success_url,
