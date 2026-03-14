@@ -319,9 +319,7 @@ class StripeWebhookHandler(LoggerMixin):
                     # Race condition safety net
                     self.log_started(
                         "webhook_customer_duplicate_fallback",
-                        phone=normalized_phone[-4:]
-                        if normalized_phone
-                        else "unknown",
+                        phone=normalized_phone[-4:] if normalized_phone else "unknown",
                     )
                     customer = await customer_repo.find_by_phone(
                         normalized_phone or phone_raw,
@@ -352,7 +350,7 @@ class StripeWebhookHandler(LoggerMixin):
             msg = f"No tier found for slug={tier_slug}, type={package_type}"
             raise ValueError(msg)
 
-        # 3. Create agreement with PENDING status (Req 8.4, 8.6)
+        # 3. Create agreement and activate (Req 8.4, 8.6)
         stripe_data: dict[str, Any] = {
             "stripe_subscription_id": subscription_id or None,
             "stripe_customer_id": stripe_customer_id or None,
@@ -361,6 +359,13 @@ class StripeWebhookHandler(LoggerMixin):
             customer_id=customer.id,
             tier_id=tier.id,
             stripe_data=stripe_data,
+        )
+
+        # Activate immediately — payment confirmed by Stripe checkout
+        _ = await agreement_svc.transition_status(
+            agreement.id,
+            AgreementStatus.ACTIVE,
+            reason="Payment confirmed via Stripe checkout",
         )
 
         # Populate surcharge fields on agreement (Req 3.14)
@@ -521,15 +526,18 @@ class StripeWebhookHandler(LoggerMixin):
         amount_paid_cents: int = invoice_obj.get("amount_paid", 0)
         amount_paid = Decimal(str(amount_paid_cents)) / Decimal(100)
 
-        is_first_invoice = agreement.status == AgreementStatus.PENDING.value
+        is_first_invoice = agreement.last_payment_date is None
 
         if is_first_invoice:
-            # First invoice: PENDING → ACTIVE (Req 10.1)
-            _ = await agreement_svc.transition_status(
-                agreement.id,
-                AgreementStatus.ACTIVE,
-                reason="First invoice paid",
-            )
+            # First invoice (Req 10.1)
+            # Activate legacy PENDING agreements (backward compat)
+            if agreement.status == AgreementStatus.PENDING.value:
+                _ = await agreement_svc.transition_status(
+                    agreement.id,
+                    AgreementStatus.ACTIVE,
+                    reason="First invoice paid",
+                )
+            # No date updates or job generation — checkout already handled those
         else:
             # Renewal invoice (Req 10.2)
             current_status = AgreementStatus(agreement.status)
