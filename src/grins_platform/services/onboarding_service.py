@@ -8,6 +8,7 @@ Validates: Requirements 32.1, 32.2, 32.3, 32.4, 32.5, 32.6, 32.7
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -219,8 +220,28 @@ class OnboardingService(LoggerMixin):
             )
             raise AgreementNotFoundForSessionError(session_id)
 
-        # Find agreement by stripe_subscription_id
-        agreement = await self._find_agreement_by_subscription(str(subscription_id))
+        # Find agreement by stripe_subscription_id.
+        # The agreement is created by the Stripe webhook, which may still
+        # be processing when the customer submits the onboarding form.
+        # Retry a few times with short delays to handle this race condition.
+        agreement = None
+        max_attempts = 4
+        for attempt in range(max_attempts):
+            agreement = await self._find_agreement_by_subscription(
+                str(subscription_id),
+            )
+            if agreement:
+                break
+            if attempt < max_attempts - 1:
+                delay = (attempt + 1) * 2  # 2s, 4s, 6s
+                self.log_started(
+                    "complete_onboarding_retry",
+                    attempt=attempt + 1,
+                    delay_seconds=delay,
+                    session_id=session_id,
+                )
+                await asyncio.sleep(delay)
+
         if not agreement:
             self.log_rejected(
                 "complete_onboarding",

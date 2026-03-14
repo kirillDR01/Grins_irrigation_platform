@@ -246,6 +246,10 @@ class CustomerResponse(BaseModel):
         default=None,
         description="Lead source",
     )
+    preferred_service_times: dict[str, Any] | None = Field(
+        default=None,
+        description="Preferred service time window",
+    )
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Record last update timestamp")
 

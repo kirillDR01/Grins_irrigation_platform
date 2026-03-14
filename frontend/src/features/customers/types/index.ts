@@ -1,5 +1,24 @@
 import type { BaseEntity, PaginationParams } from '@/core/api';
 
+// Property entity (returned nested in customer detail)
+export interface Property extends BaseEntity {
+  customer_id: string;
+  address: string;
+  city: string;
+  state: string;
+  zip_code: string | null;
+  zone_count: number | null;
+  system_type: string;
+  property_type: string;
+  is_primary: boolean;
+  access_instructions: string | null;
+  gate_code: string | null;
+  has_dogs: boolean;
+  special_notes: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 // Customer entity
 export interface Customer extends BaseEntity {
   first_name: string;
@@ -13,6 +32,8 @@ export interface Customer extends BaseEntity {
   sms_opt_in: boolean;
   email_opt_in: boolean;
   lead_source: string | null;
+  preferred_service_times: { preference: string } | null;
+  properties?: Property[];
 }
 
 // Create customer request

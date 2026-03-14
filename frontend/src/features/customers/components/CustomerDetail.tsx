@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Phone, Mail, Edit, Trash2, Plus, MapPin } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, Edit, Trash2, Plus, MapPin, Dog, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -176,7 +176,13 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
                   <MapPin className="h-5 w-5 text-slate-600" />
                 </div>
                 <div>
-                  <p className="text-slate-400 italic">No address on file</p>
+                  {customer.properties && customer.properties.length > 0 ? (
+                    <p className="font-medium text-slate-700">
+                      {customer.properties[0].address}, {customer.properties[0].city}, {customer.properties[0].state} {customer.properties[0].zip_code}
+                    </p>
+                  ) : (
+                    <p className="text-slate-400 italic">No address on file</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -225,6 +231,29 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
                 </div>
               </>
             )}
+            <Separator className="bg-slate-100" />
+            <div>
+              <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Service Preferences</p>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-slate-500" />
+                  <span className="text-sm text-slate-600">
+                    Preferred Time:{' '}
+                    {customer.preferred_service_times?.preference === 'MORNING'
+                      ? 'Morning'
+                      : customer.preferred_service_times?.preference === 'AFTERNOON'
+                        ? 'Afternoon'
+                        : 'No Preference'}
+                  </span>
+                </div>
+                {customer.properties?.some((p) => p.has_dogs) && (
+                  <div className="flex items-center gap-2">
+                    <Dog className="h-4 w-4 text-amber-500" />
+                    <span className="text-sm text-amber-700 font-medium">Dogs on Property</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -249,13 +278,61 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
             </div>
           </CardHeader>
           <CardContent className="p-6">
-            <div className="text-center py-8">
-              <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <MapPin className="h-6 w-6 text-slate-400" />
+            {customer.properties && customer.properties.length > 0 ? (
+              <div className="space-y-4">
+                {customer.properties.map((property) => (
+                  <div
+                    key={property.id}
+                    className="rounded-lg border border-slate-100 p-4 space-y-2"
+                    data-testid={`property-${property.id}`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-medium text-slate-700">
+                          {property.address}, {property.city}, {property.state} {property.zip_code}
+                        </p>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                          <span>{property.property_type}</span>
+                          {property.zone_count != null && (
+                            <span>{property.zone_count} zones</span>
+                          )}
+                          {property.is_primary && (
+                            <span className="text-teal-600 font-medium">Primary</span>
+                          )}
+                        </div>
+                      </div>
+                      {property.has_dogs && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
+                          <Dog className="h-3 w-3" />
+                          Dogs
+                        </span>
+                      )}
+                    </div>
+                    {(property.access_instructions || property.gate_code || property.special_notes) && (
+                      <div className="text-xs text-slate-500 space-y-1 pt-1 border-t border-slate-50">
+                        {property.gate_code && (
+                          <p>Gate Code: <span className="font-medium text-slate-600">{property.gate_code}</span></p>
+                        )}
+                        {property.access_instructions && (
+                          <p>Access: {property.access_instructions}</p>
+                        )}
+                        {property.special_notes && (
+                          <p>Notes: {property.special_notes}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-              <p className="text-slate-500">No properties yet</p>
-              <p className="text-sm text-slate-400 mt-1">Add a property to track service locations</p>
-            </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <MapPin className="h-6 w-6 text-slate-400" />
+                </div>
+                <p className="text-slate-500">No properties yet</p>
+                <p className="text-sm text-slate-400 mt-1">Add a property to track service locations</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
