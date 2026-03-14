@@ -1764,3 +1764,374 @@ class TestSubscriptionDeleted:
         result = await handler.handle_event(event)
 
         assert result["status"] == "processed"
+
+
+# =============================================================================
+# checkout.session.completed — SMS & email consent transfer
+# Validates: Bugs #18, #19
+# =============================================================================
+
+
+class TestCheckoutConsentTransfer:
+    """Tests for SMS and email consent transfer in _handle_checkout_completed."""
+
+    @staticmethod
+    def _setup_mocks(
+        mock_cust_repo_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+        *,
+        customer_email_opt_in: bool = False,
+    ) -> tuple[MagicMock, AsyncMock]:
+        """Set up common mocks. Returns (customer, compliance)."""
+        customer = MagicMock()
+        customer.id = uuid4()
+        customer.stripe_customer_id = "cus_consent"
+        customer.email_opt_in_at = None
+        customer.email_opt_in = customer_email_opt_in
+        customer.email_opt_in_source = None
+        customer.sms_opt_in = False
+        customer.sms_opt_in_at = None
+        customer.sms_opt_in_source = None
+
+        cust_repo = AsyncMock()
+        cust_repo.find_by_email.return_value = [customer]
+        mock_cust_repo_cls.return_value = cust_repo
+
+        tier = MagicMock()
+        tier.id = uuid4()
+        tier.name = "Essential"
+        tier.annual_price = Decimal("299.00")
+        tier.is_active = True
+        tier_repo = AsyncMock()
+        tier_repo.get_by_slug_and_type.return_value = tier
+        mock_tier_repo_cls.return_value = tier_repo
+
+        agreement = _make_agreement(status=AgreementStatus.PENDING.value)
+        agr_svc = AsyncMock()
+        agr_svc.create_agreement.return_value = agreement
+        mock_agr_svc_cls.return_value = agr_svc
+        mock_agr_repo_cls.return_value = AsyncMock()
+
+        compliance = AsyncMock()
+        mock_compliance_cls.return_value = compliance
+
+        job_gen = AsyncMock()
+        job_gen.generate_jobs.return_value = []
+        mock_job_gen_cls.return_value = job_gen
+
+        email_svc = MagicMock()
+        email_svc.send_confirmation_email.return_value = {
+            "content": "c",
+            "sent_via": "email",
+            "sent": True,
+        }
+        email_svc.send_welcome_email.return_value = {"sent": True}
+        mock_email_cls.return_value = email_svc
+
+        return customer, compliance
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.SurchargeCalculator")
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_sms_consent_true_sets_customer_sms_opt_in(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+        mock_surcharge_cls: MagicMock,
+    ) -> None:
+        """SMS consent record with consent_given=True sets customer.sms_opt_in."""
+        handler, _session = _make_handler()
+
+        customer, _compliance = self._setup_mocks(
+            mock_cust_repo_cls,
+            mock_agr_repo_cls,
+            mock_tier_repo_cls,
+            mock_agr_svc_cls,
+            mock_compliance_cls,
+            mock_job_gen_cls,
+            mock_email_cls,
+        )
+
+        mock_breakdown = MagicMock()
+        mock_breakdown.total = Decimal("299.00")
+        mock_surcharge_cls.calculate.return_value = mock_breakdown
+
+        # Mock SMS consent query: return a record with consent_given=True
+        sms_record = MagicMock()
+        sms_record.consent_given = True
+        mock_sms_result = MagicMock()
+        mock_sms_result.scalar_one_or_none.return_value = sms_record
+        _session.execute.return_value = mock_sms_result
+
+        consent_token = uuid4()
+        event = _make_event(
+            "checkout.session.completed",
+            {
+                "customer_details": {"email": "sms@example.com"},
+                "customer": "cus_consent",
+                "subscription": "sub_sms1",
+                "metadata": {
+                    "consent_token": str(consent_token),
+                    "package_tier": "essential",
+                    "package_type": "residential",
+                },
+            },
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        assert customer.sms_opt_in is True
+        assert customer.sms_opt_in_source == "stripe_checkout"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.SurchargeCalculator")
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_sms_consent_false_does_not_set_customer_sms_opt_in(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+        mock_surcharge_cls: MagicMock,
+    ) -> None:
+        """SMS consent record with consent_given=False keeps sms_opt_in=False."""
+        handler, _session = _make_handler()
+
+        customer, _compliance = self._setup_mocks(
+            mock_cust_repo_cls,
+            mock_agr_repo_cls,
+            mock_tier_repo_cls,
+            mock_agr_svc_cls,
+            mock_compliance_cls,
+            mock_job_gen_cls,
+            mock_email_cls,
+        )
+
+        mock_breakdown = MagicMock()
+        mock_breakdown.total = Decimal("299.00")
+        mock_surcharge_cls.calculate.return_value = mock_breakdown
+
+        # Mock SMS consent query: no matching record (consent_given=False filtered out)
+        mock_sms_result = MagicMock()
+        mock_sms_result.scalar_one_or_none.return_value = None
+        _session.execute.return_value = mock_sms_result
+
+        consent_token = uuid4()
+        event = _make_event(
+            "checkout.session.completed",
+            {
+                "customer_details": {"email": "sms@example.com"},
+                "customer": "cus_consent",
+                "subscription": "sub_sms2",
+                "metadata": {
+                    "consent_token": str(consent_token),
+                    "package_tier": "essential",
+                    "package_type": "residential",
+                },
+            },
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        assert customer.sms_opt_in is False
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.SurchargeCalculator")
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_no_consent_token_does_not_set_sms(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+        mock_surcharge_cls: MagicMock,
+    ) -> None:
+        """No consent_token in metadata — SMS opt-in stays False, no crash."""
+        handler, _session = _make_handler()
+
+        customer, _compliance = self._setup_mocks(
+            mock_cust_repo_cls,
+            mock_agr_repo_cls,
+            mock_tier_repo_cls,
+            mock_agr_svc_cls,
+            mock_compliance_cls,
+            mock_job_gen_cls,
+            mock_email_cls,
+        )
+
+        mock_breakdown = MagicMock()
+        mock_breakdown.total = Decimal("299.00")
+        mock_surcharge_cls.calculate.return_value = mock_breakdown
+
+        event = _make_event(
+            "checkout.session.completed",
+            {
+                "customer_details": {"email": "sms@example.com"},
+                "customer": "cus_consent",
+                "subscription": "sub_sms3",
+                "metadata": {
+                    "package_tier": "essential",
+                    "package_type": "residential",
+                    # No consent_token
+                },
+            },
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        assert customer.sms_opt_in is False
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.SurchargeCalculator")
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_email_consent_true_sets_email_opt_in(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+        mock_surcharge_cls: MagicMock,
+    ) -> None:
+        """email_marketing_consent=true in metadata sets email_opt_in=True."""
+        handler, _session = _make_handler()
+
+        customer, _compliance = self._setup_mocks(
+            mock_cust_repo_cls,
+            mock_agr_repo_cls,
+            mock_tier_repo_cls,
+            mock_agr_svc_cls,
+            mock_compliance_cls,
+            mock_job_gen_cls,
+            mock_email_cls,
+        )
+
+        mock_breakdown = MagicMock()
+        mock_breakdown.total = Decimal("299.00")
+        mock_surcharge_cls.calculate.return_value = mock_breakdown
+
+        event = _make_event(
+            "checkout.session.completed",
+            {
+                "customer_details": {"email": "email@example.com"},
+                "customer": "cus_consent",
+                "subscription": "sub_email1",
+                "metadata": {
+                    "package_tier": "essential",
+                    "package_type": "residential",
+                    "email_marketing_consent": "true",
+                },
+            },
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        assert customer.email_opt_in is True
+        assert customer.email_opt_in_source == "checkout_marketing_consent"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.SurchargeCalculator")
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_email_consent_false_keeps_email_opt_in_false(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+        mock_surcharge_cls: MagicMock,
+    ) -> None:
+        """email_marketing_consent=false keeps email_opt_in=False."""
+        handler, _session = _make_handler()
+
+        customer, _compliance = self._setup_mocks(
+            mock_cust_repo_cls,
+            mock_agr_repo_cls,
+            mock_tier_repo_cls,
+            mock_agr_svc_cls,
+            mock_compliance_cls,
+            mock_job_gen_cls,
+            mock_email_cls,
+        )
+
+        mock_breakdown = MagicMock()
+        mock_breakdown.total = Decimal("299.00")
+        mock_surcharge_cls.calculate.return_value = mock_breakdown
+
+        event = _make_event(
+            "checkout.session.completed",
+            {
+                "customer_details": {"email": "email@example.com"},
+                "customer": "cus_consent",
+                "subscription": "sub_email2",
+                "metadata": {
+                    "package_tier": "essential",
+                    "package_type": "residential",
+                    "email_marketing_consent": "false",
+                },
+            },
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        assert customer.email_opt_in is False

@@ -136,7 +136,9 @@ class CheckoutService(LoggerMixin):
             raise ConsentTokenExpiredError(consent_token)
 
     async def _validate_tier(
-        self, slug: str, package_type: str
+        self,
+        slug: str,
+        package_type: str,
     ) -> ServiceAgreementTier:
         """Validate tier exists, is active, and has stripe_price_id.
 

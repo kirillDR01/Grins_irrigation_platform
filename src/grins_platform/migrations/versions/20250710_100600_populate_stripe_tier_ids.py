@@ -21,8 +21,16 @@ depends_on: Union[str, Sequence[str], None] = None
 TIER_STRIPE_IDS = [
     ("essential-residential", "prod_U6ibkYyfakHQE3", "price_1T8VAUQDNzCTp6j5KkRRR2j4"),
     ("essential-commercial", "prod_U6idaMQy8AHkat", "price_1T9xk7QDNzCTp6j5u3ARHZK8"),
-    ("professional-residential", "prod_U6icBhfGIvzqLx", "price_1T8VBBQDNzCTp6j5RDWwuY9S"),
-    ("professional-commercial", "prod_U6ifaZT4doEALs", "price_1T8VDzQDNzCTp6j5GQckAY7A"),
+    (
+        "professional-residential",
+        "prod_U6icBhfGIvzqLx",
+        "price_1T8VBBQDNzCTp6j5RDWwuY9S",
+    ),
+    (
+        "professional-commercial",
+        "prod_U6ifaZT4doEALs",
+        "price_1T8VDzQDNzCTp6j5GQckAY7A",
+    ),
     ("premium-residential", "prod_U6icN6YaatjlVG", "price_1T8VBZQDNzCTp6j5xmutCMnv"),
     ("premium-commercial", "prod_U6ihXIsrjf83X4", "price_1T9xk7QDNzCTp6j5Qop1Et78"),
 ]

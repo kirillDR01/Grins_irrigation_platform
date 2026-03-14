@@ -56,7 +56,8 @@ class StripeWebhookEvent(Base):
         nullable=True,
     )
     processed_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     def __repr__(self) -> str:

@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from grins_platform.log_config import LoggerMixin
+from grins_platform.models.customer import Customer
 from grins_platform.models.service_agreement import ServiceAgreement
 from grins_platform.services.stripe_config import StripeSettings
 
@@ -302,7 +303,11 @@ class OnboardingService(LoggerMixin):
         await self.session.flush()
 
         # Update customer preferred_service_times
-        customer = agreement.customer
+        # Reload customer — session.refresh() in agreement_repo.update()
+        # expires the selectin-loaded relationship
+        cust_stmt = select(Customer).where(Customer.id == agreement.customer_id)
+        cust_result = await self.session.execute(cust_stmt)
+        customer = cust_result.scalar_one_or_none()
         if customer:
             customer.preferred_service_times = {"preference": preferred_times}
             await self.session.flush()

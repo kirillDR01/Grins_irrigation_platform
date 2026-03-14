@@ -19,8 +19,16 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 TIER_STRIPE_IDS = [
-    ("winterization-only-residential", "prod_U8EJ1WraZBMrYV", "price_1T9xqeQDNzCTp6j5MNW1NtBn"),
-    ("winterization-only-commercial", "prod_U8EJGKEoPiYUWN", "price_1T9xqfQDNzCTp6j5puTQTgYz"),
+    (
+        "winterization-only-residential",
+        "prod_U8EJ1WraZBMrYV",
+        "price_1T9xqeQDNzCTp6j5MNW1NtBn",
+    ),
+    (
+        "winterization-only-commercial",
+        "prod_U8EJGKEoPiYUWN",
+        "price_1T9xqfQDNzCTp6j5puTQTgYz",
+    ),
 ]
 
 

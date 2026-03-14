@@ -17,6 +17,7 @@ from uuid import UUID
 
 import stripe
 from fastapi import APIRouter, Depends, Request, Response, status
+from sqlalchemy import select
 
 from grins_platform.database import get_db_session as get_db
 from grins_platform.log_config import LoggerMixin, get_logger
@@ -26,6 +27,7 @@ from grins_platform.models.enums import (
     AgreementStatus,
     DisclosureType,
 )
+from grins_platform.models.sms_consent_record import SmsConsentRecord
 from grins_platform.repositories.agreement_repository import AgreementRepository
 from grins_platform.repositories.agreement_tier_repository import (
     AgreementTierRepository,
@@ -292,11 +294,11 @@ class StripeWebhookHandler(LoggerMixin):
         if stripe_customer_id and customer.stripe_customer_id != stripe_customer_id:
             customer.stripe_customer_id = stripe_customer_id  # type: ignore[assignment]
 
-        # Set email_opt_in_at and email_opt_in_source (Req 68.2)
+        # Track that customer went through Stripe checkout (Req 68.2)
+        # Note: email_opt_in is set below based on actual metadata consent
         if not customer.email_opt_in_at:
             customer.email_opt_in_at = now  # type: ignore[assignment]
             customer.email_opt_in_source = "stripe_checkout"  # type: ignore[assignment]
-            customer.email_opt_in = True
 
         await self.session.flush()
 
@@ -343,10 +345,12 @@ class StripeWebhookHandler(LoggerMixin):
         )
 
         # Carry email_marketing_consent to customer (Req 2.5)
-        if meta_email_marketing_consent and not customer.email_opt_in:
+        if meta_email_marketing_consent:
             customer.email_opt_in = True
             customer.email_opt_in_at = now  # type: ignore[assignment]
             customer.email_opt_in_source = "checkout_marketing_consent"  # type: ignore[assignment]
+        else:
+            customer.email_opt_in = False
 
         # 4. Generate seasonal jobs (Req 8.5)
         _ = await job_gen.generate_jobs(agreement)
@@ -363,6 +367,18 @@ class StripeWebhookHandler(LoggerMixin):
                     customer_id=customer.id,
                     agreement_id=agreement.id,
                 )
+
+                # Transfer SMS consent to customer record (Req 29)
+                sms_stmt = select(SmsConsentRecord).where(
+                    SmsConsentRecord.consent_token == consent_uuid,
+                    SmsConsentRecord.consent_given.is_(True),
+                )
+                sms_result = await self.session.execute(sms_stmt)
+                sms_consented = sms_result.scalar_one_or_none()
+                if sms_consented:
+                    customer.sms_opt_in = True
+                    customer.sms_opt_in_at = now  # type: ignore[assignment]
+                    customer.sms_opt_in_source = "stripe_checkout"  # type: ignore[assignment]
             except (ValueError, AttributeError):
                 self.log_failed(
                     "webhook_link_orphaned",

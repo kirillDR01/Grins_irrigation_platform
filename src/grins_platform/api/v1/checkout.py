@@ -60,7 +60,8 @@ class CreateCheckoutSessionRequest(BaseModel):
     """Request body for creating a Stripe checkout session."""
 
     package_tier: str = Field(
-        ..., description="Service tier slug (e.g. essential-residential)"
+        ...,
+        description="Service tier slug (e.g. essential-residential)",
     )
     package_type: str = Field(..., description="Package type (residential/commercial)")
     consent_token: UUID = Field(..., description="Pre-checkout consent token")
