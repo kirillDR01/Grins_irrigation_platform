@@ -254,7 +254,7 @@ class LeadService(LoggerMixin):
             )
             return LeadSubmissionResponse(
                 success=True,
-                message="Thank you! We'll be in touch within 24 hours.",
+                message="Thank you! We'll reach out within 1-2 business days.",
                 lead_id=None,
             )
 
@@ -313,7 +313,7 @@ class LeadService(LoggerMixin):
 
             return LeadSubmissionResponse(
                 success=True,
-                message="Thank you! We'll be in touch within 24 hours.",
+                message="Thank you! We'll reach out within 1-2 business days.",
                 lead_id=existing_lead.id,
             )
 
@@ -351,7 +351,7 @@ class LeadService(LoggerMixin):
 
         return LeadSubmissionResponse(
             success=True,
-            message="Thank you! We'll be in touch within 24 hours.",
+            message="Thank you! We'll reach out within 1-2 business days.",
             lead_id=lead.id,
         )
 

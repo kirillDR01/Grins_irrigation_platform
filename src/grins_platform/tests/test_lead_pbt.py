@@ -450,7 +450,7 @@ class TestHoneypotTransparency:
 
         # Response looks successful (no info leakage)
         assert result.success is True
-        assert result.message == "Thank you! We'll be in touch within 24 hours."
+        assert result.message == "Thank you! We'll reach out within 1-2 business days."
         # But nothing was stored
         repo.create.assert_not_called()
         repo.update.assert_not_called()

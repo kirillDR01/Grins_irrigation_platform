@@ -179,7 +179,7 @@ class LeadSubmissionResponse(BaseModel):
     """
 
     success: bool = True
-    message: str = "Thank you! We'll be in touch within 24 hours."
+    message: str = "Thank you! We'll reach out within 1-2 business days."
     lead_id: UUID | None = None
 
 
