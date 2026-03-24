@@ -164,14 +164,17 @@ class SkillLevel(str, Enum):
 class AppointmentStatus(str, Enum):
     """Appointment status enumeration.
 
-    Validates: Admin Dashboard Requirement 1.3
+    Validates: Admin Dashboard Requirement 1.3, CRM Gap Closure Req 79
     """
 
+    PENDING = "pending"
     SCHEDULED = "scheduled"
     CONFIRMED = "confirmed"
+    EN_ROUTE = "en_route"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+    NO_SHOW = "no_show"
 
 
 # =============================================================================
@@ -395,6 +398,208 @@ class LeadSourceExtended(str, Enum):
     REFERRAL = "referral"
     YARD_SIGN = "yard_sign"
     OTHER = "other"
+
+
+# =============================================================================
+# CRM Gap Closure Enums
+# =============================================================================
+
+
+class CommunicationChannel(str, Enum):
+    """Communication channel for inbound/outbound messages.
+
+    Validates: CRM Gap Closure Req 4.4
+    """
+
+    SMS = "sms"
+    EMAIL = "email"
+    PHONE = "phone"
+    VOICEMAIL = "voicemail"
+    CHAT = "chat"
+
+
+class CommunicationDirection(str, Enum):
+    """Direction of a communication record.
+
+    Validates: CRM Gap Closure Req 4.4
+    """
+
+    INBOUND = "inbound"
+    OUTBOUND = "outbound"
+
+
+class AttachmentType(str, Enum):
+    """Type classification for lead attachments.
+
+    Validates: CRM Gap Closure Req 15.1
+    """
+
+    ESTIMATE = "estimate"
+    CONTRACT = "contract"
+    PHOTO = "photo"
+    DOCUMENT = "document"
+    OTHER = "other"
+
+
+class EstimateStatus(str, Enum):
+    """Estimate lifecycle status.
+
+    Validates: CRM Gap Closure Req 48.1
+    """
+
+    DRAFT = "draft"
+    SENT = "sent"
+    VIEWED = "viewed"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
+
+
+class ActionTag(str, Enum):
+    """Action tags for lead pipeline tracking.
+
+    Validates: CRM Gap Closure Req 13.1
+    """
+
+    NEEDS_CONTACT = "needs_contact"
+    NEEDS_ESTIMATE = "needs_estimate"
+    ESTIMATE_PENDING = "estimate_pending"
+    ESTIMATE_APPROVED = "estimate_approved"
+    ESTIMATE_REJECTED = "estimate_rejected"
+
+
+class ExpenseCategory(str, Enum):
+    """Expense category for accounting.
+
+    Validates: CRM Gap Closure Req 53.1
+    """
+
+    MATERIALS = "materials"
+    LABOR = "labor"
+    FUEL = "fuel"
+    EQUIPMENT = "equipment"
+    VEHICLE = "vehicle"
+    INSURANCE = "insurance"
+    MARKETING = "marketing"
+    OFFICE = "office"
+    SUBCONTRACTOR = "subcontractor"
+    OTHER = "other"
+
+
+class CampaignType(str, Enum):
+    """Marketing campaign type.
+
+    Validates: CRM Gap Closure Req 45.1
+    """
+
+    EMAIL = "email"
+    SMS = "sms"
+    BOTH = "both"
+
+
+class CampaignStatus(str, Enum):
+    """Marketing campaign lifecycle status.
+
+    Validates: CRM Gap Closure Req 45.1
+    """
+
+    DRAFT = "draft"
+    SCHEDULED = "scheduled"
+    SENDING = "sending"
+    SENT = "sent"
+    CANCELLED = "cancelled"
+
+
+class MediaType(str, Enum):
+    """Media library item type.
+
+    Validates: CRM Gap Closure Req 49.1
+    """
+
+    IMAGE = "image"
+    VIDEO = "video"
+    DOCUMENT = "document"
+
+
+class BreakType(str, Enum):
+    """Staff break type.
+
+    Validates: CRM Gap Closure Req 42.3
+    """
+
+    LUNCH = "lunch"
+    GAS = "gas"
+    PERSONAL = "personal"
+    OTHER = "other"
+
+
+class NotificationType(str, Enum):
+    """Notification type for customer communications.
+
+    Validates: CRM Gap Closure Req 39.1, 54.1
+    """
+
+    DAY_OF_REMINDER = "day_of_reminder"
+    ON_MY_WAY = "on_my_way"
+    ARRIVAL = "arrival"
+    DELAY = "delay"
+    COMPLETION = "completion"
+    INVOICE_PRE_DUE = "invoice_pre_due"
+    INVOICE_PAST_DUE = "invoice_past_due"
+    INVOICE_LIEN = "invoice_lien"
+    REVIEW_REQUEST = "review_request"
+    LEAD_CONFIRMATION = "lead_confirmation"
+    ESTIMATE_SENT = "estimate_sent"
+    CONTRACT_SENT = "contract_sent"
+    CAMPAIGN = "campaign"
+
+
+class FollowUpStatus(str, Enum):
+    """Estimate follow-up status.
+
+    Validates: CRM Gap Closure Req 51.1
+    """
+
+    SCHEDULED = "scheduled"
+    SENT = "sent"
+    CANCELLED = "cancelled"
+    SKIPPED = "skipped"
+
+
+# =============================================================================
+# Valid Appointment Status Transitions
+# =============================================================================
+
+VALID_APPOINTMENT_STATUS_TRANSITIONS: dict[
+    AppointmentStatus,
+    set[AppointmentStatus],
+] = {
+    AppointmentStatus.PENDING: {
+        AppointmentStatus.SCHEDULED,
+        AppointmentStatus.CANCELLED,
+    },
+    AppointmentStatus.SCHEDULED: {
+        AppointmentStatus.CONFIRMED,
+        AppointmentStatus.CANCELLED,
+    },
+    AppointmentStatus.CONFIRMED: {
+        AppointmentStatus.EN_ROUTE,
+        AppointmentStatus.CANCELLED,
+        AppointmentStatus.NO_SHOW,
+    },
+    AppointmentStatus.EN_ROUTE: {
+        AppointmentStatus.IN_PROGRESS,
+        AppointmentStatus.CANCELLED,
+    },
+    AppointmentStatus.IN_PROGRESS: {
+        AppointmentStatus.COMPLETED,
+        AppointmentStatus.CANCELLED,
+    },
+    AppointmentStatus.COMPLETED: set(),  # terminal
+    AppointmentStatus.CANCELLED: set(),  # terminal
+    AppointmentStatus.NO_SHOW: set(),  # terminal
+}
 
 
 VALID_AGREEMENT_STATUS_TRANSITIONS: dict[

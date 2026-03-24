@@ -61,6 +61,10 @@ class MessageType(str, Enum):
     INVOICE = "invoice"
     PAYMENT_REMINDER = "payment_reminder"
     LEAD_CONFIRMATION = "lead_confirmation"
+    ESTIMATE_SENT = "estimate_sent"
+    CONTRACT_SENT = "contract_sent"
+    REVIEW_REQUEST = "review_request"
+    CAMPAIGN = "campaign"
     CUSTOM = "custom"
 
 
