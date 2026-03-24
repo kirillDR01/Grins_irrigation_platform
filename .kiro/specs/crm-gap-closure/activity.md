@@ -2,6 +2,36 @@
 
 ## Recent Activity
 
+## [2026-03-23 22:27] Task 0.3: Enable Redis in Docker infrastructure
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Uncommented Redis 7-alpine service block in `docker-compose.yml` (image, port 6379, volume, healthcheck)
+- Uncommented `redis_data` volume in `docker-compose.yml`
+- Added Redis as a dependency for the app service with `condition: service_healthy`
+- Added `REDIS_URL=redis://redis:6379/0` environment variable to app service
+- Added equivalent Redis service to `docker-compose.dev.yml` with separate container name (`grins-platform-cache-dev`)
+- Added `redis_data` volume to `docker-compose.dev.yml`
+- Started Redis via `docker compose up redis -d` — container created and started successfully
+- Verified Redis responds to `redis-cli ping` → PONG
+- Verified Python redis client connectivity: `redis.from_url('redis://localhost:6379/0').ping()` → True
+
+### Files Modified
+- `docker-compose.yml` — Uncommented Redis service + volume, added Redis dependency + REDIS_URL env var to app
+- `docker-compose.dev.yml` — Added Redis service + volume
+
+### Quality Check Results
+- Redis container: ✅ Started successfully
+- Redis ping: ✅ PONG
+- Python connectivity: ✅ True
+
+### Notes
+- Redis needed for rate limiting (Req 69) and staff location caching (Req 41)
+- Dev override uses separate container name to avoid conflicts
+
+---
+
 ## [2026-03-23 22:25] Task 0.2: Add new frontend npm dependencies to frontend/package.json
 
 ### Status: ✅ COMPLETE
@@ -60,3 +90,28 @@
 
 ---
 
+
+## [2026-03-23 22:30] Task 0.4: Add new environment variables to .env.example and document in README
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Created `.env.example` with all existing and new environment variables, organized by section with comments
+- Updated README.md "Environment Variables" section to include all new variables (Redis, S3, Plaid, Vapi)
+- All 11 required new variables present: REDIS_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_BUCKET_NAME, S3_ENDPOINT_URL, S3_REGION, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV, VAPI_API_KEY, VAPI_WEBHOOK_SECRET
+- WeasyPrint confirmed as library-only (no env var needed), noted in .env.example comments
+- S3_ENDPOINT_URL documented as optional (for MinIO local dev)
+
+### Files Modified
+- `.env.example` — Created (85 lines, 23 env vars with placeholder values and comments)
+- `README.md` — Updated Environment Variables section with new variables
+
+### Quality Check Results
+- Ruff: ✅ Pass (5 pre-existing warnings in migration files, unrelated)
+- Files created correctly: ✅ Pass
+
+### Notes
+- .env.example includes all variables from existing .env plus all new ones from the spec
+- README now references `.env.example` for the full list
+
+---

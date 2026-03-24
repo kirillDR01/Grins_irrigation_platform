@@ -31,14 +31,14 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Run `npm install` to install all new dependencies and verify no version conflicts
     - _Requirements: 16.4, 50.1, 65.2, 67.1_
 
-  - [ ] 0.3 Enable Redis in Docker infrastructure
+  - [x] 0.3 Enable Redis in Docker infrastructure
     - Uncomment the Redis service block in `docker-compose.yml` (lines 56-68): image `redis:7-alpine`, port 6379, volume `redis_data`, healthcheck via `redis-cli ping`
     - Uncomment `redis_data` volume in `docker-compose.yml` (line 77)
     - Add equivalent Redis service to `docker-compose.dev.yml` if not already present
     - Verify Redis starts and responds to `redis-cli ping` via `docker compose up redis -d && docker compose exec redis redis-cli ping`
     - _Requirements: 41.1, 69.1_
 
-  - [ ] 0.4 Add new environment variables to `.env.example` and document in README
+  - [x] 0.4 Add new environment variables to `.env.example` and document in README
     - **Redis:** `REDIS_URL=redis://localhost:6379/0`
     - **S3-compatible storage:** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `S3_BUCKET_NAME=grins-platform-files`, `S3_ENDPOINT_URL` (optional, for MinIO local dev), `S3_REGION=us-east-1`
     - **Plaid:** `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV=sandbox` (sandbox for dev, production for live)

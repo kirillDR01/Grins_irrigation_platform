@@ -303,13 +303,18 @@ npm run dev
 
 ### Environment Variables
 
+See `.env.example` for the full list with comments. Key variables:
+
 ```bash
 # Database
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/grins_platform
 
+# Redis (rate limiting, staff location caching)
+REDIS_URL=redis://localhost:6379/0
+
 # Security
-SECRET_KEY=your-secret-key
-JWT_SECRET_KEY=your-jwt-secret
+SECRET_KEY=your-secret-key-min-32-chars
+JWT_SECRET_KEY=your-jwt-secret-min-32-chars
 
 # AI Features
 OPENAI_API_KEY=your-openai-api-key
@@ -321,6 +326,22 @@ TWILIO_PHONE_NUMBER=+1234567890
 
 # Google Maps
 GOOGLE_MAPS_API_KEY=your-google-maps-key
+
+# S3-Compatible Storage (photos, attachments, media, PDFs)
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+S3_BUCKET_NAME=grins-platform-files
+S3_REGION=us-east-1
+# S3_ENDPOINT_URL=http://localhost:9000  # MinIO for local dev
+
+# Plaid (banking integration)
+PLAID_CLIENT_ID=your-plaid-client-id
+PLAID_SECRET=your-plaid-secret
+PLAID_ENV=sandbox
+
+# Vapi (voice AI)
+VAPI_API_KEY=your-vapi-api-key
+VAPI_WEBHOOK_SECRET=your-vapi-webhook-secret
 
 # CORS
 CORS_ORIGINS=http://localhost:5173,https://your-domain.com
