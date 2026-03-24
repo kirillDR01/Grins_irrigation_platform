@@ -152,7 +152,7 @@ class TestHybridDottedNamespace:
 
         log_data = json.loads(output)
         assert log_data["event"] == "user.registration_started"
-        assert log_data["email"] == "test@example.com"
+        assert log_data["email"] == "t***@example.com"
         assert log_data["level"] == "info"
 
     def test_log_event_different_levels(
@@ -360,7 +360,7 @@ class TestDomainLogger:
         assert len(caplog.records) > 0
         log_data = json.loads(caplog.records[0].message)
         assert log_data["event"] == "user.auth.login_started"
-        assert log_data["email"] == "user@example.com"
+        assert log_data["email"] == "u***@example.com"
         assert log_data["source"] == "web"
 
     def test_database_event_logging(self, caplog: LogCaptureFixture) -> None:
@@ -522,17 +522,17 @@ class TestIntegration:
 
             # Check started event
             assert log_entries[0]["event"] == "user.userservice.processing_started"
-            assert log_entries[0]["email"] == "test@example.com"
+            assert log_entries[0]["email"] == "t***@example.com"
             assert log_entries[0]["request_id"] == request_id
 
             # Check validated event
             assert log_entries[1]["event"] == "user.userservice.email_validated"
-            assert log_entries[1]["email"] == "test@example.com"
+            assert log_entries[1]["email"] == "t***@example.com"
             assert log_entries[1]["request_id"] == request_id
 
             # Check completed event
             assert log_entries[2]["event"] == "user.userservice.processing_completed"
-            assert log_entries[2]["email"] == "test@example.com"
+            assert log_entries[2]["email"] == "t***@example.com"
             assert log_entries[2]["request_id"] == request_id
             assert "user_id" in log_entries[2]
 

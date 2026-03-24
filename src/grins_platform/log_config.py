@@ -16,9 +16,38 @@ import contextvars
 import logging
 import sys
 import uuid
-from typing import Any, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import structlog
+
+# Lazy import to avoid circular dependency (services/__init__.py imports log_config)
+# The actual import happens in configure_logging() which runs after all modules load
+_pii_masking_processor = None
+
+
+def _get_pii_masking_processor() -> (
+    "Callable[[Any, str, dict[str, Any]], dict[str, Any]]"
+):
+    """Lazy-load PII masking processor to avoid circular imports."""
+    global _pii_masking_processor  # noqa: PLW0603
+    if _pii_masking_processor is None:
+        from grins_platform.services.pii_masking import (  # noqa: PLC0415
+            pii_masking_processor,
+        )
+
+        _pii_masking_processor = pii_masking_processor
+    return _pii_masking_processor
+
+
+def _pii_masking_wrapper(
+    logger: Union[logging.Logger, "structlog.stdlib.BoundLogger"],
+    method_name: str,
+    event_dict: dict[str, Any],
+) -> dict[str, Any]:
+    """Wrapper that lazy-loads the PII masking processor."""
+    processor = _get_pii_masking_processor()
+    return processor(logger, method_name, event_dict)
+
 
 # Context variable for request ID correlation
 request_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
@@ -80,6 +109,8 @@ def configure_logging(
         structlog.processors.StackInfoRenderer(),
         # Exception formatting
         structlog.dev.set_exc_info,
+        # PII masking — must be after all context is added, before rendering
+        _pii_masking_wrapper,
     ]
 
     if json_output:
