@@ -2,6 +2,38 @@
 
 ## Recent Activity
 
+## [2026-03-23 22:25] Task 0.2: Add new frontend npm dependencies to frontend/package.json
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Installed 3 new production dependencies: `@excalidraw/excalidraw@^0.18.0`, `signature_pad@^5.1.3`, `qrcode.react@^4.2.0`
+- Installed 1 new dev dependency: `fast-check@^4.6.0`
+- Ran `npm install` — all packages installed successfully (193 new packages added)
+- Verified all 4 packages present in package.json
+- Ran full frontend test suite: 89 test files, 1029 tests all passing
+- Ran lint: 0 errors (6 pre-existing warnings)
+- Ran typecheck: only pre-existing errors in agreements feature (off-limits)
+
+### Files Modified
+- `frontend/package.json` — Added 4 new dependencies
+- `frontend/package-lock.json` — Updated lockfile
+
+### Quality Check Results
+- npm install: ✅ No version conflicts
+- Tests: ✅ 1029/1029 passing (89 files)
+- Lint: ✅ 0 errors
+- Typecheck: ✅ No new errors (pre-existing agreement errors only)
+
+### Notes
+- @excalidraw/excalidraw for diagram builder (Req 50)
+- signature_pad for electronic signature in contract signing portal (Req 16)
+- qrcode.react for QR code rendering in marketing dashboard (Req 65)
+- fast-check for frontend property-based testing (Req 67)
+- npm audit shows 10 pre-existing vulnerabilities (not introduced by new packages)
+
+---
+
 ## [2026-03-23 22:25] Task 0.1: Add new Python backend dependencies to pyproject.toml
 
 ### Status: ✅ COMPLETE

@@ -23,7 +23,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Run `uv sync` to install all new dependencies and verify no version conflicts
     - _Requirements: 9.2, 15.2, 41.1, 49.5, 60.1, 62.2, 65.1, 69.1, 77.1, 77.4, 80.2_
 
-  - [ ] 0.2 Add new frontend npm dependencies to `frontend/package.json`
+  - [x] 0.2 Add new frontend npm dependencies to `frontend/package.json`
     - `@excalidraw/excalidraw` — Diagram builder for estimate property diagrams (Req 50)
     - `signature_pad` — Canvas-based electronic signature for contract signing portal (Req 16)
     - `fast-check` — Property-based testing library for frontend tests (Req 67)
