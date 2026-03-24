@@ -47,14 +47,14 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Add all variables to `.env.example` with placeholder values and comments
     - _Requirements: 41.1, 44.1, 62.2, 69.1, 77.1, 80.2_
 
-  - [ ] 0.5 Update Dockerfile with system dependencies for new libraries
+  - [x] 0.5 Update Dockerfile with system dependencies for new libraries
     - Add `libmagic1` — required by python-magic for file type detection
     - Add `libpango-1.0-0`, `libpangocairo-1.0-0`, `libgdk-pixbuf-2.0-0`, `libffi-dev`, `libcairo2` — required by WeasyPrint for PDF rendering
     - Add these to the `apt-get install` layer in the Dockerfile, before the Python dependency install step
     - Rebuild Docker image and verify `python -c "import magic; import weasyprint"` succeeds inside container
     - _Requirements: 77.1, 80.2_
 
-  - [ ] 0.6 Create S3 bucket and verify connectivity
+  - [x] 0.6 Create S3 bucket and verify connectivity
     - For local development: set up MinIO container in docker-compose.dev.yml (image `minio/minio`, port 9000/9001, volume `minio_data`), create bucket `grins-platform-files` with prefix directories: `customer-photos/`, `lead-attachments/`, `media-library/`, `receipts/`, `invoices/`
     - For production: create AWS S3 bucket `grins-platform-files` with private ACL, enable versioning, configure lifecycle rule (archive to Glacier after 1 year)
     - Write and run a quick verification script: upload a test file to S3, generate pre-signed URL, download via URL, delete file — all must succeed

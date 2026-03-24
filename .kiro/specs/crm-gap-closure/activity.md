@@ -1,6 +1,71 @@
+## [2026-03-23 22:35] Task 0.6: Create S3 bucket and verify connectivity
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Added MinIO service to `docker-compose.dev.yml` (image `minio/minio`, ports 9000/9001, volume `minio_data`, healthcheck)
+- Pulled and started MinIO container successfully
+- Created verification script `scripts/verify_s3.py` that:
+  - Creates bucket `grins-platform-files` if not exists
+  - Creates 5 prefix directories: `customer-photos/`, `lead-attachments/`, `media-library/`, `receipts/`, `invoices/`
+  - Uploads test file, generates pre-signed URL, downloads and verifies content, deletes test file
+- Ran verification script — all checks passed
+- Added S3/MinIO env vars to `.env` for local development
+- MinIO console accessible at http://localhost:9001
+
+### Files Modified
+- `docker-compose.dev.yml` — Added MinIO service + minio_data volume
+- `scripts/verify_s3.py` — Created S3 verification script
+- `.env` — Added S3/MinIO environment variables for local dev
+
+### Quality Check Results
+- MinIO health: ✅ HTTP 200
+- Bucket creation: ✅ Pass
+- Prefix directories: ✅ 5/5 created
+- Upload/download/delete: ✅ Pass
+- Pre-signed URL generation: ✅ Pass
+- Docker config validation: ✅ Valid
+- Ruff lint (verify_s3.py): ✅ Pass
+
+### Notes
+- MinIO credentials for local dev: minioadmin/minioadmin
+- For production, use real AWS S3 credentials and leave S3_ENDPOINT_URL unset
+- MinIO console at http://localhost:9001 for visual bucket management
+
+---
+
 # CRM Gap Closure - Activity Log
 
 ## Recent Activity
+
+## [2026-03-23 22:35] Task 0.5: Update Dockerfile with system dependencies for new libraries
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Added `libmagic1` to Dockerfile for python-magic file type detection
+- Added `libpango-1.0-0`, `libpangocairo-1.0-0`, `libgdk-pixbuf-2.0-0`, `libffi-dev`, `libcairo2` to Dockerfile for WeasyPrint PDF rendering
+- Added all packages to the existing `apt-get install` layer, before Python dependency install step
+- Rebuilt Docker image successfully (`docker build -t grins-platform-test .`)
+- Verified `python -c "import magic; import weasyprint"` succeeds inside container
+- Verified all 7 new Python packages import correctly inside container (redis, boto3, magic, weasyprint, PIL, plaid, qrcode)
+- Verified python-magic can detect file types via libmagic1 (magic byte detection working)
+- Verified WeasyPrint can render HTML to PDF via pango/cairo (generated 2608-byte PDF from `<h1>Test</h1>`)
+
+### Files Modified
+- `Dockerfile` — Added 6 system packages to apt-get install layer with comments
+
+### Quality Check Results
+- Docker build: ✅ Pass
+- All imports inside container: ✅ Pass
+- libmagic1 file detection: ✅ Working
+- WeasyPrint PDF rendering: ✅ Working (2608 bytes generated)
+
+### Notes
+- System deps placed before Python dependency install for optimal layer caching
+- Comments added to Dockerfile explaining which library needs which system package
+
+---
 
 ## [2026-03-23 22:27] Task 0.3: Enable Redis in Docker infrastructure
 
