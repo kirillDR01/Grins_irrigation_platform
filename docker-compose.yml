@@ -25,9 +25,12 @@ services:
       - ENVIRONMENT=development
       - LOG_LEVEL=INFO
       - DATABASE_URL=postgresql+asyncpg://grins_user:grins_password@postgres:5432/grins_platform
+      - REDIS_URL=redis://redis:6379/0
     restart: unless-stopped
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   # =========================================================================
@@ -53,19 +56,19 @@ services:
       timeout: 5s
       retries: 5
 
-  # redis:
-  #   image: redis:7-alpine
-  #   container_name: grins-platform-cache
-  #   ports:
-  #     - "6379:6379"
-  #   volumes:
-  #     - redis_data:/data
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD", "redis-cli", "ping"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
+  redis:
+    image: redis:7-alpine
+    container_name: grins-platform-cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   app_output:
@@ -74,5 +77,5 @@ volumes:
     driver: local
   postgres_data:
     driver: local
-  # redis_data:
-  #   driver: local
+  redis_data:
+    driver: local
