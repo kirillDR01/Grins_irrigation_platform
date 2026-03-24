@@ -89,7 +89,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Register processor globally in `src/grins_platform/logging.py`
     - _Requirements: 76.1, 76.2, 76.3, 76.4_
 
-  - [ ] 1.4 Implement secure token storage (httpOnly cookies) and JWT validation
+  - [x] 1.4 Implement secure token storage (httpOnly cookies) and JWT validation
     - Update auth endpoints to set JWT via `Set-Cookie: HttpOnly; Secure; SameSite=Lax; Path=/`
     - Add JWT secret validation at startup: reject default secret in production, enforce ≥32 chars
     - Add `JWT_PREVIOUS_SECRET_KEY` support for key rotation with 24h grace period
