@@ -150,6 +150,7 @@ class TestGetCurrentUser:
     async def test_raises_401_when_no_credentials(self) -> None:
         """Test get_current_user raises 401 when no credentials provided."""
         mock_request = MagicMock()
+        mock_request.cookies = {}
         mock_auth_service = AsyncMock()
 
         with pytest.raises(HTTPException) as exc_info:

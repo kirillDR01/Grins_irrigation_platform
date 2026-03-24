@@ -29,6 +29,8 @@ from grins_platform.services.auth_service import AuthService
 # HTTP Bearer security scheme
 security = HTTPBearer(auto_error=False)
 
+ACCESS_TOKEN_COOKIE = "access_token"
+
 
 async def get_auth_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
@@ -52,8 +54,8 @@ async def get_current_user(
 ) -> Staff:
     """Get the current authenticated user.
 
-    This dependency extracts the JWT token from the Authorization header,
-    validates it, and returns the associated user.
+    Extracts the JWT token from the Authorization header or the access_token
+    httpOnly cookie, validates it, and returns the associated user.
 
     Args:
         request: FastAPI request object
@@ -68,7 +70,14 @@ async def get_current_user(
 
     Validates: Requirements 17.1-17.12, 20.1-20.6
     """
-    if credentials is None:
+    token: str | None = None
+    if credentials is not None:
+        token = credentials.credentials
+    else:
+        # Fall back to httpOnly cookie
+        token = request.cookies.get(ACCESS_TOKEN_COOKIE)
+
+    if token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
@@ -76,7 +85,7 @@ async def get_current_user(
         )
 
     try:
-        user = await auth_service.get_current_user(credentials.credentials)
+        user = await auth_service.get_current_user(token)
     except TokenExpiredError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

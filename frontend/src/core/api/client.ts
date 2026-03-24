@@ -1,5 +1,6 @@
 import axios from 'axios';
-import type { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
+import type { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
+import { toast } from 'sonner';
 import { config } from '@/core/config';
 import type { ApiError } from './types';
 
@@ -13,48 +14,82 @@ export const apiClient: AxiosInstance = axios.create({
   },
 });
 
-// Request interceptor - add auth token if available
-apiClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem('auth_token');
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+// Track whether a token refresh is in progress to avoid concurrent refreshes
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value?: unknown) => void;
+  reject: (reason?: unknown) => void;
+  config: AxiosRequestConfig;
+}> = [];
 
-// Response interceptor - handle errors
+function processQueue(error: unknown) {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(apiClient(prom.config));
+    }
+  });
+  failedQueue = [];
+}
+
+// Response interceptor - handle 401 (silent refresh) and 429 (rate limit toast)
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<ApiError>) => {
-    // Handle specific error codes
+  async (error: AxiosError<ApiError>) => {
+    const originalRequest = error.config;
+
     if (error.response) {
       const status = error.response.status;
-      
-      if (status === 401) {
-        // Unauthorized - clear token and redirect to login
-        localStorage.removeItem('auth_token');
-        // Could dispatch an event or redirect here
+
+      // 401 — attempt silent refresh, then retry once
+      if (status === 401 && originalRequest && !originalRequest.url?.includes('/auth/refresh') && !originalRequest.url?.includes('/auth/login')) {
+        if (isRefreshing) {
+          // Queue this request until refresh completes
+          return new Promise((resolve, reject) => {
+            failedQueue.push({ resolve, reject, config: originalRequest });
+          });
+        }
+
+        isRefreshing = true;
+
+        try {
+          await apiClient.post('/auth/refresh', null, { withCredentials: true });
+          isRefreshing = false;
+          processQueue(null);
+          // Retry the original request
+          return apiClient(originalRequest);
+        } catch (refreshError) {
+          isRefreshing = false;
+          processQueue(refreshError);
+          // Redirect to login with reason
+          window.location.href = '/login?reason=session_expired';
+          return Promise.reject(refreshError);
+        }
       }
-      
+
+      // 429 — rate limit: show toast with retry time
+      if (status === 429) {
+        const retryAfter = error.response.headers?.['retry-after'];
+        const seconds = retryAfter ? parseInt(retryAfter, 10) || 30 : 30;
+        toast.warning('Too many requests', {
+          description: `Please wait ${seconds} seconds and try again.`,
+          duration: seconds * 1000,
+        });
+        return Promise.reject(error);
+      }
+
       if (status === 403) {
-        // Forbidden - user doesn't have permission
         console.error('Access forbidden');
       }
-      
+
       if (status >= 500) {
-        // Server error
         console.error('Server error:', error.response.data);
       }
     } else if (error.request) {
-      // Network error
       console.error('Network error - no response received');
     }
-    
+
     return Promise.reject(error);
   }
 );

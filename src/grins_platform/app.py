@@ -37,7 +37,15 @@ from grins_platform.exceptions import (
     ValidationError,
 )
 from grins_platform.log_config import get_logger
+from grins_platform.middleware.rate_limit import setup_rate_limiting
+from grins_platform.middleware.request_size import (
+    RequestSizeLimitMiddleware,
+)
+from grins_platform.middleware.security_headers import (
+    SecurityHeadersMiddleware,
+)
 from grins_platform.scheduler import get_scheduler
+from grins_platform.services.auth_service import validate_jwt_config
 from grins_platform.services.background_jobs import register_scheduled_jobs
 from grins_platform.services.google_sheets_config import GoogleSheetsSettings
 from grins_platform.services.google_sheets_poller import GoogleSheetsPoller
@@ -59,6 +67,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     # Startup
     logger.info("app.startup_started", version="1.0.0")
+
+    # Validate JWT configuration
+    validate_jwt_config()
+
     db_manager = get_database_manager()
     health = await db_manager.health_check()
     logger.info("app.startup_database_check", **health)
@@ -184,6 +196,11 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Security middleware (applied in reverse order of addition)
+    app.add_middleware(RequestSizeLimitMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
+    setup_rate_limiting(app)
 
     # Register exception handlers
     _register_exception_handlers(app)

@@ -35,9 +35,12 @@ if TYPE_CHECKING:
 
 # JWT Configuration
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-production")
+JWT_PREVIOUS_SECRET_KEY = os.getenv("JWT_PREVIOUS_SECRET_KEY", "")
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 7
+# Grace period for key rotation (24 hours)
+KEY_ROTATION_GRACE_HOURS = 24
 
 # Account lockout configuration
 MAX_FAILED_ATTEMPTS = 5
@@ -45,6 +48,29 @@ LOCKOUT_DURATION_MINUTES = 15
 
 # Bcrypt cost factor
 BCRYPT_ROUNDS = 12
+
+
+def validate_jwt_config() -> None:
+    """Validate JWT configuration at startup.
+
+    Raises:
+        RuntimeError: If JWT secret is insecure in production.
+    """
+    env = os.getenv("ENVIRONMENT", "development")
+    is_production = env in ("production", "staging")
+    default_secrets = {
+        "dev-secret-key-change-in-production",
+        "change-me",
+        "secret",
+        "your-secret-key",
+    }
+    _err_default = "JWT_SECRET_KEY must not use a default value in production"
+    _err_length = "JWT_SECRET_KEY must be at least 32 characters in production"
+    if is_production:
+        if JWT_SECRET_KEY in default_secrets:
+            raise RuntimeError(_err_default)
+        if len(JWT_SECRET_KEY) < 32:
+            raise RuntimeError(_err_length)
 
 
 class BcryptContext:
@@ -144,6 +170,7 @@ class AuthService(LoggerMixin):
             "sub": str(user_id),
             "role": role.value,
             "type": "access",
+            "iat": datetime.now(UTC).timestamp(),
             "exp": expire,
         }
         return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
@@ -171,9 +198,48 @@ class AuthService(LoggerMixin):
         to_encode: dict[str, Any] = {
             "sub": str(user_id),
             "type": "refresh",
+            "iat": datetime.now(UTC).timestamp(),
             "exp": expire,
         }
         return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+    def _decode_with_rotation(self, token: str) -> dict[str, Any]:
+        """Decode a JWT token, falling back to previous secret within grace period.
+
+        Args:
+            token: JWT token to decode
+
+        Returns:
+            Decoded token payload
+
+        Raises:
+            TokenExpiredError: If token has expired
+            InvalidTokenError: If token is invalid with all keys
+        """
+        try:
+            return jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        except JWTError as primary_err:
+            if "expired" in str(primary_err).lower():
+                raise TokenExpiredError from primary_err
+            # Try previous key if configured
+            if JWT_PREVIOUS_SECRET_KEY:
+                try:
+                    payload = jwt.decode(
+                        token,
+                        JWT_PREVIOUS_SECRET_KEY,
+                        algorithms=[JWT_ALGORITHM],
+                    )
+                    # Accept if issued within grace period
+                    iat = payload.get("iat", 0)
+                    grace_cutoff = datetime.now(UTC) - timedelta(
+                        hours=KEY_ROTATION_GRACE_HOURS,
+                    )
+                    if iat >= grace_cutoff.timestamp():
+                        return payload
+                except JWTError as _rotation_err:
+                    # Previous key also failed; fall through to raise
+                    _ = _rotation_err
+            raise InvalidTokenError from primary_err
 
     def verify_access_token(self, token: str) -> dict[str, Any]:
         """Verify and decode an access token.
@@ -190,16 +256,10 @@ class AuthService(LoggerMixin):
 
         Validates: Requirement 14.5
         """
-        try:
-            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        except JWTError as e:
-            if "expired" in str(e).lower():
-                raise TokenExpiredError from e
-            raise InvalidTokenError from e
-        else:
-            if payload.get("type") != "access":
-                raise InvalidTokenError
-            return payload
+        payload = self._decode_with_rotation(token)
+        if payload.get("type") != "access":
+            raise InvalidTokenError
+        return payload
 
     def verify_refresh_token(self, token: str) -> dict[str, Any]:
         """Verify and decode a refresh token.
@@ -216,16 +276,10 @@ class AuthService(LoggerMixin):
 
         Validates: Requirement 14.6
         """
-        try:
-            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        except JWTError as e:
-            if "expired" in str(e).lower():
-                raise TokenExpiredError from e
-            raise InvalidTokenError from e
-        else:
-            if payload.get("type") != "refresh":
-                raise InvalidTokenError
-            return payload
+        payload = self._decode_with_rotation(token)
+        if payload.get("type") != "refresh":
+            raise InvalidTokenError
+        return payload
 
     def _is_account_locked(self, staff: Staff) -> bool:
         """Check if account is currently locked.

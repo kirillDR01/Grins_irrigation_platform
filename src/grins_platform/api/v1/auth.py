@@ -42,7 +42,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # Cookie settings
 REFRESH_TOKEN_COOKIE = "refresh_token"
 CSRF_TOKEN_COOKIE = "csrf_token"
+ACCESS_TOKEN_COOKIE = "access_token"
 COOKIE_MAX_AGE = 7 * 24 * 60 * 60  # 7 days in seconds
+ACCESS_COOKIE_MAX_AGE = 15 * 60  # 15 minutes in seconds
 # Only set Secure flag in local development (HTTP); deployed envs use HTTPS
 _ENV = os.getenv("ENVIRONMENT", "development")
 _IS_LOCAL = _ENV == "development" and not os.getenv("RAILWAY_ENVIRONMENT")
@@ -119,6 +121,17 @@ async def login(
         path="/",
     )
 
+    # Set access token as HttpOnly cookie
+    response.set_cookie(
+        key=ACCESS_TOKEN_COOKIE,
+        value=access_token,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
+        max_age=ACCESS_COOKIE_MAX_AGE,
+        path="/",
+    )
+
     # Set CSRF token cookie (not HttpOnly so JS can read it)
     response.set_cookie(
         key=CSRF_TOKEN_COOKIE,
@@ -160,6 +173,14 @@ async def logout(response: Response) -> None:
         samesite=COOKIE_SAMESITE,
     )
 
+    # Clear access token cookie
+    response.delete_cookie(
+        key=ACCESS_TOKEN_COOKIE,
+        path="/",
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
+    )
+
     # Clear CSRF token cookie
     response.delete_cookie(
         key=CSRF_TOKEN_COOKIE,
@@ -177,6 +198,7 @@ async def logout(response: Response) -> None:
     description="Generate new access token using refresh token from cookie.",
 )
 async def refresh(
+    response: Response,
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
     refresh_token: Annotated[str | None, Cookie(alias=REFRESH_TOKEN_COOKIE)] = None,
 ) -> TokenResponse:
@@ -203,6 +225,17 @@ async def refresh(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
         ) from e
+
+    # Set updated access token as HttpOnly cookie
+    response.set_cookie(
+        key=ACCESS_TOKEN_COOKIE,
+        value=access_token,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
+        max_age=ACCESS_COOKIE_MAX_AGE,
+        path="/",
+    )
 
     return TokenResponse(
         access_token=access_token,

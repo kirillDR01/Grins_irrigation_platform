@@ -13,8 +13,8 @@
  * UI Redesign: Task 27.1-27.7
  */
 
-import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { User, Eye, EyeOff, AlertCircle, Loader2, Droplets } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,7 @@ import { useAuth } from './AuthProvider';
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
 
   const [username, setUsername] = useState('');
@@ -33,6 +34,13 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Show session expired message if redirected from 401 interceptor
+  useEffect(() => {
+    if (searchParams.get('reason') === 'session_expired') {
+      setError('Your session has expired. Please sign in again.');
+    }
+  }, [searchParams]);
 
   // Get redirect path from location state or default to dashboard
   const from = (location.state as { from?: string })?.from || '/';

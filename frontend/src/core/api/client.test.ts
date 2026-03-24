@@ -3,12 +3,20 @@ import axios from 'axios';
 import MockAdapter from 'axios-mock-adapter';
 import { apiClient, getErrorMessage } from './client';
 
+// Mock sonner toast
+vi.mock('sonner', () => ({
+  toast: {
+    warning: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn(),
+  },
+}));
+
 describe('apiClient', () => {
   let mock: MockAdapter;
 
   beforeEach(() => {
     mock = new MockAdapter(apiClient);
-    localStorage.clear();
   });
 
   afterEach(() => {
@@ -28,24 +36,9 @@ describe('apiClient', () => {
     it('should have correct content type header', () => {
       expect(apiClient.defaults.headers['Content-Type']).toBe('application/json');
     });
-  });
 
-  describe('request interceptor', () => {
-    it('should add auth token to request headers when token exists', async () => {
-      localStorage.setItem('auth_token', 'test-token-123');
-      mock.onGet('/test').reply(200, { data: 'success' });
-
-      await apiClient.get('/test');
-
-      expect(mock.history.get[0].headers?.Authorization).toBe('Bearer test-token-123');
-    });
-
-    it('should not add auth header when no token exists', async () => {
-      mock.onGet('/test').reply(200, { data: 'success' });
-
-      await apiClient.get('/test');
-
-      expect(mock.history.get[0].headers?.Authorization).toBeUndefined();
+    it('should have withCredentials enabled', () => {
+      expect(apiClient.defaults.withCredentials).toBe(true);
     });
   });
 
@@ -56,14 +49,6 @@ describe('apiClient', () => {
       const response = await apiClient.get('/test');
 
       expect(response.data).toEqual({ data: 'success' });
-    });
-
-    it('should handle 401 unauthorized by clearing token', async () => {
-      localStorage.setItem('auth_token', 'test-token');
-      mock.onGet('/test').reply(401, { error: { message: 'Unauthorized' } });
-
-      await expect(apiClient.get('/test')).rejects.toThrow();
-      expect(localStorage.getItem('auth_token')).toBeNull();
     });
 
     it('should handle 403 forbidden', async () => {
@@ -82,12 +67,30 @@ describe('apiClient', () => {
 
     it('should handle network errors', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
-      // Use timeout to simulate network error (no response)
       mock.onGet('/test').timeout();
 
       await expect(apiClient.get('/test')).rejects.toThrow();
-      // Network errors may or may not trigger the console.error depending on the error type
-      // The important thing is that the request rejects
+    });
+
+    it('should show toast on 429 rate limit', async () => {
+      const { toast } = await import('sonner');
+      mock.onGet('/test').reply(429, { error: { message: 'Rate limited' } }, { 'retry-after': '15' });
+
+      await expect(apiClient.get('/test')).rejects.toThrow();
+
+      expect(toast.warning).toHaveBeenCalledWith('Too many requests', expect.objectContaining({
+        description: 'Please wait 15 seconds and try again.',
+      }));
+    });
+
+    it('should attempt silent refresh on 401 for non-auth endpoints', async () => {
+      // First call returns 401, refresh succeeds, retry succeeds
+      mock.onGet('/test').replyOnce(401, { error: { message: 'Unauthorized' } });
+      mock.onPost('/auth/refresh').reply(200, { access_token: 'new', token_type: 'bearer', expires_in: 900 });
+      mock.onGet('/test').reply(200, { data: 'success' });
+
+      const response = await apiClient.get('/test');
+      expect(response.data).toEqual({ data: 'success' });
     });
   });
 });
@@ -104,7 +107,6 @@ describe('getErrorMessage', () => {
         },
       },
     };
-    // Mock axios.isAxiosError
     vi.spyOn(axios, 'isAxiosError').mockReturnValue(true);
 
     const message = getErrorMessage(error);
