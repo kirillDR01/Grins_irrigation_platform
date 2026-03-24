@@ -163,18 +163,18 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Migration: Create `business_settings` table (id UUID PK, setting_key VARCHAR UNIQUE, setting_value JSONB, updated_by FK staff nullable, updated_at DateTime) with seed defaults for company info, invoice terms, notification prefs, estimate defaults — Req 87
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 4.4, 9.1, 12.1, 13.1, 15.1, 17.1, 17.2, 20.1, 35.2, 35.3, 40.1, 42.3, 45.1, 45.2, 48.1, 49.1, 51.1, 53.1, 54.4, 64.1, 74.1, 79.3, 80.1, 81.1, 81.2, 81.3, 81.4, 84.1, 87.1, 87.9_
 
-  - [ ] 1.8 Write unit tests for seed data cleanup migration
+  - [x] 1.8 Write unit tests for seed data cleanup migration
     - Verify cleanup migration removes exactly expected seed record counts
     - Verify non-seed records remain intact after migration
     - **Property 1: Seed cleanup preserves non-seed records**
     - **Validates: Requirements 1.4**
     - _Requirements: 1.5, 1.6_
 
-- [ ] 2. Checkpoint — Foundation complete
+- [x] 2. Checkpoint — Foundation complete
   - Ensure all migrations run cleanly, all security middleware tests pass, ask the user if questions arise.
 
 - [ ] 3. Data Layer: Models, Schemas, and Repositories
-  - [ ] 3.1 Create new SQLAlchemy models
+  - [x] 3.1 Create new SQLAlchemy models
     - `src/grins_platform/models/communication.py` — Communication model with customer_id FK, channel, direction, content, addressed, addressed_at, addressed_by
     - `src/grins_platform/models/customer_photo.py` — CustomerPhoto model with customer_id FK, file_key, file_name, file_size, content_type, caption, uploaded_by, appointment_id
     - `src/grins_platform/models/lead_attachment.py` — LeadAttachment model with lead_id FK, file_key, file_name, file_size, content_type, attachment_type
