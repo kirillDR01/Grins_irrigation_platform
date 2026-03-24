@@ -11,7 +11,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
 ## Tasks
 
 - [ ] 0. Dependency Setup: Install all new packages, configure infrastructure services, and add environment variables
-  - [ ] 0.1 Add new Python backend dependencies to `pyproject.toml`
+  - [x] 0.1 Add new Python backend dependencies to `pyproject.toml`
     - `redis>=5.0.0` — Redis client for rate limiting (Req 69) and staff location caching (Req 41)
     - `slowapi>=0.1.9` — Rate limiting middleware for FastAPI (Req 69)
     - `boto3>=1.34.0` — AWS S3-compatible object storage client for file uploads (Req 9, 15, 49, 60, 77, 80)
