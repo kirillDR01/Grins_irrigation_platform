@@ -103,7 +103,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Support upload for customer photos (JPEG/PNG/HEIC, 10MB), lead attachments (PDF/DOCX/JPEG/PNG, 25MB), media library (JPEG/PNG/HEIC/MP4/MOV, 50MB), receipts (JPEG/PNG/PDF, 10MB)
     - _Requirements: 9.2, 9.6, 15.2, 49.5, 75.3, 77.1, 77.2, 77.3, 77.4, 77.5, 77.6_
 
-  - [ ] 1.6 Write unit tests for security middleware and PII masking
+  - [x] 1.6 Write unit tests for security middleware and PII masking
     - Test rate limit returns 429 after threshold (P65)
     - Test all security headers present on responses (P66)
     - Test httpOnly cookie flags on login response (P67)
@@ -137,7 +137,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - **Validates: Requirements 77.3**
     - _Requirements: 69.5, 70.4, 71.6, 72.5, 72.6, 73.5, 73.6, 75.7, 75.8, 76.5, 76.6, 77.7, 77.8, 77.9_
 
-  - [ ] 1.7 Create database migrations for all new and modified tables
+  - [x] 1.7 Create database migrations for all new and modified tables
     - Migration: Remove seed data (reversible DELETE of records from seed migrations, rename seed files with `.disabled` suffix) — Req 1
     - Migration: Add `communications` table — Req 4
     - Migration: Add `customer_photos` table — Req 9

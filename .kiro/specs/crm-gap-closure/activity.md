@@ -1,3 +1,63 @@
+## [2026-03-24 04:44] Task 1.7: Create database migrations for all new and modified tables
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Created 3 Alembic migration files covering all schema changes for CRM Gap Closure:
+  1. `20260324_100000_crm_disable_seed_data.py` — Removes seed demo data (customers, staff, jobs, properties, service offerings, availability) while preserving non-seed records (Req 1)
+  2. `20260324_100100_crm_create_new_tables.py` — Creates 15 new tables: communications, customer_photos, lead_attachments, estimate_templates, contract_templates, estimates, estimate_follow_ups, expenses, campaigns, campaign_recipients, marketing_budgets, media_library, staff_breaks, audit_log, business_settings (with seed defaults)
+  3. `20260324_100200_crm_alter_existing_tables.py` — Alters 5 existing tables: leads (city/state/address/action_tags), jobs (notes/summary), appointments (en_route_at/materials_needed/estimated_duration_minutes + updated status CHECK for 8 values), invoices (reminder tracking/PDF/portal token fields), sent_messages (nullable customer_id, lead_id FK, recipient CHECK, expanded message_type CHECK). Also includes GoogleSheetSubmission → Lead data migration.
+
+### Files Modified
+- `src/grins_platform/migrations/versions/20260324_100000_crm_disable_seed_data.py` — NEW
+- `src/grins_platform/migrations/versions/20260324_100100_crm_create_new_tables.py` — NEW
+- `src/grins_platform/migrations/versions/20260324_100200_crm_alter_existing_tables.py` — NEW
+
+### Quality Check Results
+- Ruff: ✅ Pass (0 errors)
+- MyPy: ✅ Pass (0 errors)
+- Pyright: ✅ Pass (0 errors, 21 warnings — standard for Alembic migrations)
+- Tests: ✅ 1315/1317 passing (2 pre-existing failures unrelated to this task)
+
+### Technical Details
+- Migration chain: 20260313_100000 → 20260324_100000 → 20260324_100100 → 20260324_100200
+- All new tables use UUID primary keys with gen_random_uuid()
+- JSONB columns imported directly from sqlalchemy.dialects.postgresql
+- CHECK constraints on all enum-like string columns
+- Proper FK constraints with CASCADE/SET NULL as appropriate
+- Indexes on all FK columns and frequently queried fields
+- business_settings seeded with 17 default settings
+- Downgrade functions provided for all migrations
+
+---
+
+## [2026-03-24 04:35] Task 1.6: Write unit tests for security middleware and PII masking
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Created `src/grins_platform/tests/unit/test_security_middleware.py` with 55 unit tests covering:
+  - **P65**: Rate limiting returns 429 with Retry-After header (2 tests)
+  - **P66**: All 6 security headers present on responses (8 tests)
+  - **P67**: httpOnly cookie flags on auth cookies (1 test)
+  - **P68**: JWT startup validation rejects default/short secrets in production, key rotation grace period (6 tests)
+  - **P69**: Request size limit returns 413 for oversized payloads, upload paths allow 50MB (6 tests)
+  - **P72**: PII masking masks phone, email, address, redacts passwords/tokens/API keys/card numbers/Stripe IDs, handles nested dicts and inline patterns (16 tests)
+  - **P11**: File upload magic-byte validation rejects text/HTML as images, accepts valid JPEG/PDF per context (6 tests)
+  - **P73**: EXIF stripping removes metadata, returns original for non-images (3 tests)
+  - **P74**: Pre-signed URL generation passes correct expiry to S3 client (2 tests)
+  - **P71**: Input validation rejects invalid phone/email/zip, strips HTML tags from notes (5 tests)
+
+### Files Modified
+- `src/grins_platform/tests/unit/test_security_middleware.py` — created (55 tests)
+
+### Quality Check Results
+- Ruff: ✅ Pass (0 errors)
+- Tests: ✅ 55/55 passing (0.37s)
+- Pre-existing failures: 2 (unrelated to this task)
+
+---
+
 ## [2026-03-24 04:23] Task 1.5: Implement secure file upload pipeline in PhotoService
 
 ### Status: ✅ COMPLETE
