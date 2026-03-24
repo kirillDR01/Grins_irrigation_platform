@@ -98,7 +98,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Add frontend 429 interceptor: parse `Retry-After` header, show warning toast "Too many requests. Please wait {retry_after} seconds and try again.", do NOT auto-retry (Req 85)
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 71.1, 71.2, 71.3, 71.4, 71.5, 72.1, 72.2, 72.3, 72.4, 85.1, 85.2, 85.3, 85.4, 85.5_
 
-  - [ ] 1.5 Implement secure file upload pipeline in PhotoService
+  - [x] 1.5 Implement secure file upload pipeline in PhotoService
     - Create/update `src/grins_platform/services/photo_service.py` with: magic byte validation (python-magic), EXIF stripping (Pillow), UUID-based S3 keys, pre-signed URL generation (1hr expiry), per-customer quota tracking (500MB)
     - Support upload for customer photos (JPEG/PNG/HEIC, 10MB), lead attachments (PDF/DOCX/JPEG/PNG, 25MB), media library (JPEG/PNG/HEIC/MP4/MOV, 50MB), receipts (JPEG/PNG/PDF, 10MB)
     - _Requirements: 9.2, 9.6, 15.2, 49.5, 75.3, 77.1, 77.2, 77.3, 77.4, 77.5, 77.6_

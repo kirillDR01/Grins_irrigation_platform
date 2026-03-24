@@ -1,3 +1,38 @@
+## [2026-03-24 04:23] Task 1.5: Implement secure file upload pipeline in PhotoService
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Created `src/grins_platform/services/photo_service.py` — complete secure file upload pipeline with:
+  - **Magic-byte validation** via `python-magic`: detects actual file type from content, rejects mismatched extensions
+  - **EXIF stripping** via Pillow: copies pixel data to new image, removing all EXIF/GPS metadata
+  - **UUID-based S3 keys**: files stored as `{prefix}/{uuid}.{ext}`, preventing path traversal and name collisions
+  - **Pre-signed URL generation**: 1-hour expiry for secure download links
+  - **Per-customer quota tracking**: 500MB limit via S3 prefix listing
+- Four upload contexts with distinct validation rules:
+  - `CUSTOMER_PHOTO`: JPEG/PNG/HEIC, 10MB max
+  - `LEAD_ATTACHMENT`: PDF/DOCX/JPEG/PNG, 25MB max
+  - `MEDIA_LIBRARY`: JPEG/PNG/HEIC/MP4/MOV, 50MB max
+  - `RECEIPT`: JPEG/PNG/PDF, 10MB max
+- Used `Protocol` for S3 client typing to avoid `Any` in public signatures while keeping boto3 untyped
+- All methods use `LoggerMixin` structured logging (started/completed/rejected/failed events)
+
+### Files Modified
+- `src/grins_platform/services/photo_service.py` — NEW: PhotoService with UploadContext, UploadResult, S3ClientProtocol
+
+### Quality Check Results
+- Ruff: ✅ Pass
+- MyPy: ✅ Pass (0 errors)
+- Pyright: ✅ Pass (0 errors, 7 pre-existing warnings for boto3 stubs)
+- Unit Tests: ✅ 1260/1262 passing (2 pre-existing failures unchanged)
+
+### Notes
+- The service is designed to be injected with a mock S3 client for testing
+- EXIF stripping uses pixel-data copy approach (creates new image from pixel data) rather than metadata deletion, ensuring complete removal of all metadata including GPS coordinates
+- Quota tracking uses S3 list operations; for high-volume usage, consider caching in the database
+
+---
+
 ## [2026-03-24 04:22] Task 1.4: Implement secure token storage (httpOnly cookies) and JWT validation
 
 ### Status: ✅ COMPLETE
