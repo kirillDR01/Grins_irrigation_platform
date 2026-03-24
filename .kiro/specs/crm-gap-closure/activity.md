@@ -1,3 +1,67 @@
+## [2026-03-24 04:15] Task 1.3: Implement PII masking structlog processor
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Created `src/grins_platform/services/pii_masking.py` — structlog processor that masks PII:
+  - Phone numbers: show last 4 digits (`***1234`)
+  - Email addresses: first char + domain (`j***@example.com`)
+  - Street addresses: fully masked (`***MASKED***`)
+  - Card numbers, passwords, tokens, API keys, Stripe IDs: `REDACTED`
+  - Inline pattern detection for PII embedded in string values
+  - Recursive masking for nested dicts/lists
+- Registered processor globally in `log_config.py` via lazy import wrapper to avoid circular dependency (services/__init__.py → log_config.py cycle)
+- Updated 3 existing logging tests to expect masked PII values (confirms masking works)
+
+### Files Modified
+- `src/grins_platform/services/pii_masking.py` — new file
+- `src/grins_platform/log_config.py` — added lazy import + wrapper + processor registration
+- `src/grins_platform/tests/test_logging.py` — updated 3 assertions for masked emails
+
+### Quality Check Results
+- Ruff: ✅ Pass
+- MyPy: ✅ Pass
+- Pyright: ✅ Pass (0 errors, warnings only)
+- Tests: ✅ 24/24 logging tests passing, 2334/2344 total (10 pre-existing failures)
+
+### Notes
+- Used lazy import pattern to break circular dependency: log_config.py → services/pii_masking.py would trigger services/__init__.py → log_config.py
+- All 10 test failures are pre-existing (verified by running tests without changes)
+
+---
+
+## [2026-03-23 23:05] Task 1.2: Create security middleware: rate limiting, security headers, request size limits
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Created `src/grins_platform/middleware/rate_limit.py` — slowapi-based rate limiter with Redis backend (falls back to in-memory). Exports `limiter` instance, rate limit constants (AUTH_LIMIT=5/min, PUBLIC_LIMIT=10/min, UPLOAD_LIMIT=20/min, PORTAL_LIMIT=20/min, AUTHENTICATED_LIMIT=200/min), `setup_rate_limiting()` function, and 429 exception handler with Retry-After header.
+- Created `src/grins_platform/middleware/security_headers.py` — SecurityHeadersMiddleware adds X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, CSP (with Google Maps + Stripe allowances), and HSTS (production only).
+- Created `src/grins_platform/middleware/request_size.py` — RequestSizeLimitMiddleware enforces 10MB default / 50MB for upload paths. Returns 413 on exceed.
+- Updated `src/grins_platform/middleware/__init__.py` — exports all new middleware components.
+- Updated `src/grins_platform/app.py` — registered SecurityHeadersMiddleware, RequestSizeLimitMiddleware, and rate limiter in create_app().
+
+### Files Modified
+- `src/grins_platform/middleware/rate_limit.py` — NEW: Rate limiting with slowapi + Redis
+- `src/grins_platform/middleware/security_headers.py` — NEW: Security headers middleware
+- `src/grins_platform/middleware/request_size.py` — NEW: Request size limit middleware
+- `src/grins_platform/middleware/__init__.py` — Updated exports
+- `src/grins_platform/app.py` — Registered all three middleware
+
+### Quality Check Results
+- Ruff: ✅ Pass
+- MyPy: ✅ Pass (0 errors)
+- Pyright: ✅ Pass (0 errors, 18 pre-existing warnings)
+- Tests: ✅ 2334 passed (11 pre-existing failures, 0 new failures)
+
+### Notes
+- Rate limit constants exported for use in route decorators (per-endpoint limits)
+- CSP allows Google Maps, Stripe, and Google Fonts for existing integrations
+- HSTS only enabled when ENVIRONMENT=production
+- All middleware uses structured logging via LoggerMixin pattern
+
+---
+
 ## [2026-03-23 22:58] Task 1.1: Add new enum types and update existing enums
 
 ### Status: ✅ COMPLETE

@@ -77,14 +77,14 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Update VALID_MESSAGE_TYPES: add lead_confirmation, estimate_sent, contract_sent, review_request, campaign
     - _Requirements: 4.4, 13.1, 15.1, 35.2, 42.3, 45.1, 48.1, 49.1, 51.1, 53.1, 54.1, 64.1, 74.1, 79.1, 79.2, 81.4_
 
-  - [ ] 1.2 Create security middleware: rate limiting, security headers, request size limits
+  - [x] 1.2 Create security middleware: rate limiting, security headers, request size limits
     - Create `src/grins_platform/middleware/rate_limit.py` — Redis-backed sliding window via slowapi with per-endpoint limits (auth: 5/min, public: 10/min, authenticated: 200/min, uploads: 20/min, portal: 20/min/token)
     - Create `src/grins_platform/middleware/security_headers.py` — X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, CSP, HSTS (prod only)
     - Create `src/grins_platform/middleware/request_size.py` — 10MB default, 50MB for upload paths; returns 413 on exceed
     - Register all middleware in `main.py`
     - _Requirements: 69.1, 69.2, 69.3, 69.4, 70.1, 70.2, 70.3, 73.1, 73.2, 73.3, 73.4_
 
-  - [ ] 1.3 Implement PII masking structlog processor
+  - [x] 1.3 Implement PII masking structlog processor
     - Create `src/grins_platform/services/pii_masking.py` — structlog processor that masks phone (last 4), email (first char + domain), address (fully masked), card numbers (REDACTED)
     - Register processor globally in `src/grins_platform/logging.py`
     - _Requirements: 76.1, 76.2, 76.3, 76.4_
