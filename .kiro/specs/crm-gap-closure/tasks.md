@@ -67,11 +67,11 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Run `uv run python -c "import redis, boto3, magic, weasyprint, PIL, plaid, qrcode; print('All imports OK')"` inside the app container
     - _Requirements: 68.6 (agreement flow regression baseline before any changes)_
 
-- [ ] 0.8 Checkpoint — Dependencies complete
+- [x] 0.8 Checkpoint — Dependencies complete
   - Ensure all new packages install cleanly, Docker builds successfully, Redis responds, S3 connectivity verified, existing tests still pass. Ask the user if questions arise.
 
 - [ ] 1. Foundation: Enums, Security Middleware, and Database Migrations
-  - [ ] 1.1 Add new enum types and update existing enums in `src/grins_platform/models/enums.py`
+  - [x] 1.1 Add new enum types and update existing enums in `src/grins_platform/models/enums.py`
     - Add: CommunicationChannel, CommunicationDirection, AttachmentType, EstimateStatus, ActionTag, ExpenseCategory, CampaignType, CampaignStatus, MediaType, BreakType, NotificationType, FollowUpStatus
     - Update AppointmentStatus: add PENDING, EN_ROUTE, NO_SHOW
     - Update VALID_MESSAGE_TYPES: add lead_confirmation, estimate_sent, contract_sent, review_request, campaign
