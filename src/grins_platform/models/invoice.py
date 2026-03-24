@@ -175,6 +175,26 @@ class Invoice(Base):
         nullable=True,
     )
 
+    # CRM Gap Closure fields (Req 54, 80, 84)
+    pre_due_reminder_sent_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
+    last_past_due_reminder_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
+    document_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    invoice_token: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        nullable=True,
+        unique=True,
+    )
+    invoice_token_expires_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),

@@ -12,7 +12,10 @@ from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.dialects.postgresql import (
+    JSONB,
+    UUID as PGUUID,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -111,6 +114,17 @@ class Lead(Base):
     # Source page URL (Req 5.1)
     page_url: Mapped[Optional[str]] = mapped_column(
         String(2048),
+        nullable=True,
+    )
+
+    # Address fields (CRM Gap Closure Req 12.1)
+    city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    state: Mapped[Optional[str]] = mapped_column(String(2), nullable=True)
+    address: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+    # Action tags (CRM Gap Closure Req 13.1)
+    action_tags: Mapped[Optional[list[str]]] = mapped_column(
+        JSONB,
         nullable=True,
     )
 
@@ -256,6 +270,10 @@ class Lead(Base):
             "terms_accepted": self.terms_accepted,
             "email_marketing_consent": self.email_marketing_consent,
             "page_url": self.page_url,
+            "city": self.city,
+            "state": self.state,
+            "address": self.address,
+            "action_tags": self.action_tags,
             "status": self.status,
             "assigned_to": str(self.assigned_to) if self.assigned_to else None,
             "customer_id": str(self.customer_id) if self.customer_id else None,

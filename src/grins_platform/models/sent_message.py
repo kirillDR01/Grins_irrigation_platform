@@ -28,10 +28,15 @@ class SentMessage(Base):
         primary_key=True,
         server_default="gen_random_uuid()",
     )
-    customer_id: Mapped[UUID] = mapped_column(
+    customer_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("customers.id", name="fk_sent_messages_customer_id"),
-        nullable=False,
+        nullable=True,
+    )
+    lead_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("leads.id", name="fk_sent_messages_lead_id"),
+        nullable=True,
     )
     job_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
@@ -77,9 +82,13 @@ class SentMessage(Base):
     )
 
     # Relationships
-    customer: Mapped["Customer"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+    customer: Mapped["Customer | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "Customer",
         back_populates="sent_messages",
+        lazy="selectin",
+    )
+    lead: Mapped["Lead | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "Lead",
         lazy="selectin",
     )
     job: Mapped["Job | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
@@ -95,9 +104,14 @@ class SentMessage(Base):
 
     __table_args__ = (
         CheckConstraint(
+            "customer_id IS NOT NULL OR lead_id IS NOT NULL",
+            name="ck_sent_messages_recipient",
+        ),
+        CheckConstraint(
             "message_type IN ('appointment_confirmation', 'appointment_reminder', "
             "'on_the_way', 'arrival', 'completion', 'invoice', 'payment_reminder', "
-            "'custom')",
+            "'custom', 'lead_confirmation', 'estimate_sent', 'contract_sent', "
+            "'review_request', 'campaign')",
             name="ck_sent_messages_message_type",
         ),
         CheckConstraint(
@@ -106,6 +120,7 @@ class SentMessage(Base):
             name="ck_sent_messages_delivery_status",
         ),
         Index("idx_sent_messages_customer_id", "customer_id"),
+        Index("idx_sent_messages_lead_id", "lead_id"),
         Index("idx_sent_messages_job_id", "job_id"),
         Index("idx_sent_messages_message_type", "message_type"),
         Index("idx_sent_messages_delivery_status", "delivery_status"),

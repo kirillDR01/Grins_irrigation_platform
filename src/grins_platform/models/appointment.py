@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, Time
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -136,6 +137,17 @@ class Appointment(Base):
     )
     rescheduled_from_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("appointments.id"),
+        nullable=True,
+    )
+
+    # CRM Gap Closure fields (Req 35, 40)
+    en_route_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    materials_needed: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    estimated_duration_minutes: Mapped[int | None] = mapped_column(
+        Integer,
         nullable=True,
     )
 

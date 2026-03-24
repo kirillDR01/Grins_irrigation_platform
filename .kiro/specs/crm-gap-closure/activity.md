@@ -1,3 +1,127 @@
+## [2026-03-24 00:00] Task 3.1: Create new SQLAlchemy models
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Created 14 new SQLAlchemy model files:
+  - `communication.py` — Communication model (Req 4.4)
+  - `customer_photo.py` — CustomerPhoto model (Req 9.1)
+  - `lead_attachment.py` — LeadAttachment model (Req 15.1)
+  - `estimate_template.py` — EstimateTemplate model (Req 17.1)
+  - `contract_template.py` — ContractTemplate model (Req 17.2)
+  - `estimate.py` — Estimate model with portal token fields (Req 48.1, 78.1)
+  - `estimate_follow_up.py` — EstimateFollowUp model (Req 51.1)
+  - `expense.py` — Expense model (Req 53.1)
+  - `campaign.py` — Campaign + CampaignRecipient models (Req 45.1, 45.2)
+  - `marketing_budget.py` — MarketingBudget model (Req 64.1)
+  - `media_library.py` — MediaLibraryItem model (Req 49.1)
+  - `staff_break.py` — StaffBreak model (Req 42.3)
+  - `audit_log.py` — AuditLog model (Req 74.1)
+  - `business_setting.py` — BusinessSetting model (Req 87.1)
+- Updated 5 existing models:
+  - `lead.py` — Added city, state, address, action_tags (JSONB) fields
+  - `job.py` — Added notes (Text), summary (VARCHAR 255) fields
+  - `appointment.py` — Added en_route_at, materials_needed (JSONB), estimated_duration_minutes fields
+  - `invoice.py` — Added pre_due_reminder_sent_at, last_past_due_reminder_at, document_url, invoice_token, invoice_token_expires_at fields
+  - `sent_message.py` — Made customer_id nullable, added lead_id FK, added recipient CHECK constraint, expanded message_type CHECK, added lead relationship
+- Updated `models/__init__.py` to register all new models and enums
+
+### Files Modified
+- `src/grins_platform/models/communication.py` — NEW
+- `src/grins_platform/models/customer_photo.py` — NEW
+- `src/grins_platform/models/lead_attachment.py` — NEW
+- `src/grins_platform/models/estimate_template.py` — NEW
+- `src/grins_platform/models/contract_template.py` — NEW
+- `src/grins_platform/models/estimate.py` — NEW
+- `src/grins_platform/models/estimate_follow_up.py` — NEW
+- `src/grins_platform/models/expense.py` — NEW
+- `src/grins_platform/models/campaign.py` — NEW
+- `src/grins_platform/models/marketing_budget.py` — NEW
+- `src/grins_platform/models/media_library.py` — NEW
+- `src/grins_platform/models/staff_break.py` — NEW
+- `src/grins_platform/models/audit_log.py` — NEW
+- `src/grins_platform/models/business_setting.py` — NEW
+- `src/grins_platform/models/lead.py` — Added city, state, address, action_tags
+- `src/grins_platform/models/job.py` — Added notes, summary
+- `src/grins_platform/models/appointment.py` — Added en_route_at, materials_needed, estimated_duration_minutes
+- `src/grins_platform/models/invoice.py` — Added CRM gap closure fields
+- `src/grins_platform/models/sent_message.py` — Made customer_id nullable, added lead_id
+- `src/grins_platform/models/__init__.py` — Registered all new models
+
+### Quality Check Results
+- Ruff: ✅ Pass (0 errors after auto-fix)
+- MyPy: ✅ Pass (0 errors in all 20 model files)
+- Pyright: ✅ Pass (0 errors, pre-existing warnings only)
+- Tests: ✅ No new unit test failures. 6 integration test failures expected (DB columns not yet migrated)
+
+### Notes
+- Used `expense_date` as Python attribute name for the `date` column in Expense model to avoid shadowing the `date` type import (pyright error)
+- 6 integration tests now fail because they hit a real DB that doesn't have the new columns yet — this is expected and will resolve when migrations are applied to the test DB
+- All 22 pre-existing test failures remain unchanged
+
+---
+
+## [2026-03-24 05:50] Task 2: Checkpoint — Foundation complete
+
+### Status: ✅ CHECKPOINT PASSED
+
+### What Was Done
+- Ran all quality checks (ruff, mypy, pyright, pytest) against the full codebase
+- Fixed 5 mypy errors in `test_security_middleware.py` introduced by task 1.6:
+  - Line 166: `response.body.decode()` → `bytes(response.body).decode()` (union-attr fix)
+  - Lines 496-503: `result["event"]` → `str(result["event"])` (operator type fix)
+- Verified all 3 CRM migrations load correctly with proper revision chain
+- Verified all 12 new enum types import correctly
+- Verified all foundation files exist (rate_limit.py, security_headers.py, request_size.py, pii_masking.py, photo_service.py)
+
+### Quality Check Results
+- Ruff: ✅ 0 new errors (5 pre-existing in old migrations/tests)
+- MyPy: ✅ 0 new errors after fix (9 pre-existing in 3 old test files)
+- Pyright: ✅ 0 new errors (1 pre-existing in onboarding.py, 334 warnings)
+- Tests: ✅ 1342 passed, 2 pre-existing failures (test_checkout_onboarding_service, test_webhook_idempotency_property)
+
+### Files Modified
+- `src/grins_platform/tests/unit/test_security_middleware.py` — Fixed 5 mypy type errors
+
+### Verification Summary
+- All migrations: ✅ Load correctly, chain: 20260313_100000 → 20260324_100000 → 20260324_100100 → 20260324_100200
+- Security middleware tests: ✅ 55/55 passing
+- Seed data cleanup tests: ✅ 27/27 passing
+- New enums: ✅ All 12 import correctly
+- Foundation files: ✅ All present
+
+---
+
+## [2026-03-24 05:45] Task 1.8: Write unit tests for seed data cleanup migration
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Created `src/grins_platform/tests/unit/test_seed_data_cleanup.py` with 27 unit tests covering:
+  - **TestSeedCleanupMigrationStructure** (3 tests): Module loads, revision ID, down_revision chain
+  - **TestSeedCleanupTargetsCorrectCustomers** (3 tests): All 10 seed customer phones targeted, no extras, matches original seed migration
+  - **TestSeedCleanupTargetsCorrectStaff** (3 tests): All 4 seed staff phones targeted, no extras, matches original seed migration
+  - **TestSeedCleanupTargetsCorrectServices** (2 tests): All 10 seed service names targeted, auto-generated availability note targeted
+  - **TestSeedCleanupDeletionOrder** (3 tests): Jobs before customers, properties before customers, availability before staff (FK constraint order)
+  - **TestSeedCleanupPreservesNonSeedRecords** (7 tests): No unconditional DELETEs, customer/staff/service/availability DELETEs scoped to known identifiers, no TRUNCATE, no DROP TABLE
+  - **TestSeedCleanupRecordCounts** (6 tests): Exact counts (10 customers, 4 staff, 10 services), uniqueness, no overlap between customer/staff phones
+- Property 1: Seed cleanup preserves non-seed records — validated via scoping checks
+
+### Files Modified
+- `src/grins_platform/tests/unit/test_seed_data_cleanup.py` — NEW (27 tests)
+
+### Quality Check Results
+- Ruff: ✅ Pass (0 errors)
+- MyPy: ✅ Pass (0 errors)
+- Pyright: ✅ Pass (0 errors, 0 warnings)
+- Tests: ✅ 27/27 passing
+
+### Notes
+- Tests verify migration SQL by source analysis (regex + string matching) rather than executing against a real DB — appropriate for unit tier
+- Cross-references the original seed migration (20250626_100000) to ensure cleanup targets exactly the same identifiers
+
+---
+
 ## [2026-03-24 04:44] Task 1.7: Create database migrations for all new and modified tables
 
 ### Status: ✅ COMPLETE

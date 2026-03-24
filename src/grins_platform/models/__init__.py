@@ -11,24 +11,44 @@ Phase 6 (AI Assistant): AIAuditLog, AIUsage, SentMessage
 Phase 8 (Schedule Workflow): ScheduleClearAudit, Invoice
 Phase 9 (Lead Capture): Lead
 Phase 10 (Google Sheets): GoogleSheetSubmission
+CRM Gap Closure: Communication, CustomerPhoto, LeadAttachment, EstimateTemplate,
+    ContractTemplate, Estimate, EstimateFollowUp, Expense, Campaign,
+    CampaignRecipient, MarketingBudget, MediaLibraryItem, StaffBreak,
+    AuditLog, BusinessSetting
 """
 
 from grins_platform.models.agreement_status_log import AgreementStatusLog
 from grins_platform.models.ai_audit_log import AIAuditLog
 from grins_platform.models.ai_usage import AIUsage
 from grins_platform.models.appointment import Appointment
+from grins_platform.models.audit_log import AuditLog
+from grins_platform.models.business_setting import BusinessSetting
+from grins_platform.models.campaign import Campaign, CampaignRecipient
+from grins_platform.models.communication import Communication
 from grins_platform.models.consent_language_version import ConsentLanguageVersion
+from grins_platform.models.contract_template import ContractTemplate
 from grins_platform.models.customer import Customer
+from grins_platform.models.customer_photo import CustomerPhoto
 from grins_platform.models.disclosure_record import DisclosureRecord
 from grins_platform.models.email_suppression_list import EmailSuppressionList
 from grins_platform.models.enums import (
+    ActionTag,
     AgreementPaymentStatus,
     AgreementStatus,
     AppointmentStatus,
+    AttachmentType,
     BillingFrequency,
+    BreakType,
+    CampaignStatus,
+    CampaignType,
+    CommunicationChannel,
+    CommunicationDirection,
     CustomerStatus,
     DisclosureType,
     EmailType,
+    EstimateStatus,
+    ExpenseCategory,
+    FollowUpStatus,
     IntakeTag,
     InvoiceStatus,
     JobCategory,
@@ -38,6 +58,8 @@ from grins_platform.models.enums import (
     LeadSource,
     LeadSourceExtended,
     LeadStatus,
+    MediaType,
+    NotificationType,
     PackageType,
     PaymentMethod,
     PricingModel,
@@ -48,11 +70,18 @@ from grins_platform.models.enums import (
     SystemType,
     WebhookProcessingStatus,
 )
+from grins_platform.models.estimate import Estimate
+from grins_platform.models.estimate_follow_up import EstimateFollowUp
+from grins_platform.models.estimate_template import EstimateTemplate
+from grins_platform.models.expense import Expense
 from grins_platform.models.google_sheet_submission import GoogleSheetSubmission
 from grins_platform.models.invoice import Invoice
 from grins_platform.models.job import Job
 from grins_platform.models.job_status_history import JobStatusHistory
 from grins_platform.models.lead import Lead
+from grins_platform.models.lead_attachment import LeadAttachment
+from grins_platform.models.marketing_budget import MarketingBudget
+from grins_platform.models.media_library import MediaLibraryItem
 from grins_platform.models.property import Property
 from grins_platform.models.schedule_clear_audit import ScheduleClearAudit
 from grins_platform.models.sent_message import SentMessage
@@ -62,12 +91,15 @@ from grins_platform.models.service_offering import ServiceOffering
 from grins_platform.models.sms_consent_record import SmsConsentRecord
 from grins_platform.models.staff import Staff
 from grins_platform.models.staff_availability import StaffAvailability
+from grins_platform.models.staff_break import StaffBreak
 from grins_platform.models.stripe_webhook_event import StripeWebhookEvent
 
 __all__ = [
     # Phase 6: AI Assistant
     "AIAuditLog",
     "AIUsage",
+    # CRM Gap Closure
+    "ActionTag",
     # Service Package Purchases
     "AgreementPaymentStatus",
     "AgreementStatus",
@@ -75,15 +107,36 @@ __all__ = [
     # Phase 3: Admin Dashboard
     "Appointment",
     "AppointmentStatus",
+    "AttachmentType",
+    # CRM Gap Closure
+    "AuditLog",
     "BillingFrequency",
+    "BreakType",
+    "BusinessSetting",
+    "Campaign",
+    "CampaignRecipient",
+    "CampaignStatus",
+    "CampaignType",
+    "Communication",
+    "CommunicationChannel",
+    "CommunicationDirection",
     "ConsentLanguageVersion",
+    "ContractTemplate",
     # Phase 1: Customer Management
     "Customer",
+    "CustomerPhoto",
     "CustomerStatus",
     "DisclosureRecord",
     "DisclosureType",
     "EmailSuppressionList",
     "EmailType",
+    "Estimate",
+    "EstimateFollowUp",
+    "EstimateStatus",
+    "EstimateTemplate",
+    "Expense",
+    "ExpenseCategory",
+    "FollowUpStatus",
     # Phase 10: Google Sheets
     "GoogleSheetSubmission",
     "IntakeTag",
@@ -98,10 +151,15 @@ __all__ = [
     "JobStatusHistory",
     # Phase 9: Lead Capture
     "Lead",
+    "LeadAttachment",
     "LeadSituation",
     "LeadSource",
     "LeadSourceExtended",
     "LeadStatus",
+    "MarketingBudget",
+    "MediaLibraryItem",
+    "MediaType",
+    "NotificationType",
     "PackageType",
     "PaymentMethod",
     "PricingModel",
@@ -121,6 +179,7 @@ __all__ = [
     "Staff",
     # Phase 4: Route Optimization
     "StaffAvailability",
+    "StaffBreak",
     "StaffRole",
     "StripeWebhookEvent",
     "SystemType",

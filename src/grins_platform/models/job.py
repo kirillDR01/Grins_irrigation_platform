@@ -170,6 +170,10 @@ class Job(Base):
     source: Mapped[str | None] = mapped_column(String(50), nullable=True)
     source_details: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
+    # Notes and summary (CRM Gap Closure Req 20.1)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
     # Status Timestamps (Requirement 4.9)
     requested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
@@ -338,6 +342,8 @@ class Job(Base):
             "final_amount": float(self.final_amount) if self.final_amount else None,
             "source": self.source,
             "source_details": self.source_details,
+            "notes": self.notes,
+            "summary": self.summary,
             "requested_at": self.requested_at.isoformat()
             if self.requested_at
             else None,
