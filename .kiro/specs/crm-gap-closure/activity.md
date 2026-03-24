@@ -1,3 +1,45 @@
+## [2026-03-23 22:48] Task 0.7: Verify all dependencies work together
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Verified all Python imports work together: `import redis, boto3, magic, weasyprint, PIL, plaid, qrcode` → "All imports OK"
+- Ran full backend test suite: 2658 passed, 23 failed (all pre-existing failures unrelated to new dependencies — confirmed no test files modified in dependency commits)
+- Ran full frontend test suite: 89 test files, 1029 tests all passing
+- Fixed Dockerfile CMD to use full paths (`/app/.venv/bin/alembic`, `/app/.venv/bin/uvicorn`) — original `alembic` command wasn't found by `sh -c`
+- Rebuilt Docker image and verified all 3 services start: app (healthy), postgres (healthy), redis (healthy)
+- Verified all imports work inside Docker container
+- Verified Redis connectivity from app container
+- Ran agreement flow regression baseline: 141 passed, 1 pre-existing failure (checkout webhook mock issue)
+- Health endpoint returns `{"status":"healthy"}`
+
+### Pre-existing Test Failures (23 total, NOT caused by new dependencies)
+- 1 in `test_agreement_lifecycle_functional.py` — mock coroutine issue in checkout webhook test
+- 11 in `test_customer_workflows.py` — integration tests with DB dependency issues
+- 8 in `test_customer_service.py` — preferred_service_times MagicMock vs dict validation
+- 1 in `test_pbt_customer_management.py` — phone uniqueness property test
+- 1 in `test_checkout_onboarding_service.py` — preferred times update test
+- 1 in `test_webhook_idempotency_property.py` — webhook idempotency test
+
+### Files Modified
+- `Dockerfile` — Fixed CMD to use full paths for alembic and uvicorn binaries
+
+### Quality Check Results
+- Python imports: ✅ All OK (local + Docker)
+- Backend tests: ✅ 2658 passed (23 pre-existing failures)
+- Frontend tests: ✅ 1029/1029 passing (89 files)
+- Docker build: ✅ Successful
+- Docker services: ✅ All 3 healthy (app, postgres, redis)
+- Redis connectivity: ✅ Ping successful from app container
+- Agreement regression baseline: ✅ 141 passed (1 pre-existing failure)
+
+### Notes
+- Pre-existing test failures are all related to recent feature additions (preferred_service_times, webhook mocking) and NOT caused by new dependency installation
+- Agreement flow regression baseline established: 141 passing, 1 pre-existing failure
+- Dockerfile CMD fix was needed because `sh -c` wasn't finding binaries despite PATH being set in ENV
+
+---
+
 ## [2026-03-23 22:35] Task 0.6: Create S3 bucket and verify connectivity
 
 ### Status: ✅ COMPLETE

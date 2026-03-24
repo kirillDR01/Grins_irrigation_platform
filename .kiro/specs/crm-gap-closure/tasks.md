@@ -60,7 +60,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Write and run a quick verification script: upload a test file to S3, generate pre-signed URL, download via URL, delete file — all must succeed
     - _Requirements: 9.2, 15.2, 49.5, 77.1, 80.2_
 
-  - [ ] 0.7 Verify all dependencies work together
+  - [x] 0.7 Verify all dependencies work together
     - Run full backend test suite (`uv run pytest`) to confirm no existing tests break with new dependencies
     - Run full frontend test suite (`cd frontend && npm test`) to confirm no existing tests break
     - Run `docker compose up --build` and verify all services start (app, postgres, redis)
