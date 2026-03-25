@@ -65,6 +65,8 @@ def sample_customer() -> MagicMock:
     customer.updated_at = datetime.now()
     customer.properties = []
     customer.is_deleted = False
+    customer.internal_notes = None
+    customer.preferred_service_times = None
     return customer
 
 
@@ -222,6 +224,8 @@ class TestCustomerServiceUpdate:
         updated_customer.sms_opt_in = False
         updated_customer.email_opt_in = False
         updated_customer.lead_source = LeadSource.WEBSITE.value
+        updated_customer.internal_notes = None
+        updated_customer.preferred_service_times = None
         updated_customer.created_at = datetime.now()
         updated_customer.updated_at = datetime.now()
         mock_repository.update.return_value = updated_customer
@@ -498,6 +502,8 @@ class TestCustomerServiceFlags:
         updated_customer.sms_opt_in = False
         updated_customer.email_opt_in = False
         updated_customer.lead_source = LeadSource.WEBSITE.value
+        updated_customer.internal_notes = None
+        updated_customer.preferred_service_times = None
         updated_customer.created_at = datetime.now()
         updated_customer.updated_at = datetime.now()
         mock_repository.update_flags.return_value = updated_customer

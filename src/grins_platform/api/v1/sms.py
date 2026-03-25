@@ -10,8 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from grins_platform.database import get_db_session as get_db
+from grins_platform.log_config import LoggerMixin
+from grins_platform.repositories.communication_repository import (
+    CommunicationRepository,
+)
 from grins_platform.repositories.sent_message_repository import SentMessageRepository
 from grins_platform.schemas.ai import DeliveryStatus
+from grins_platform.schemas.communication import UnaddressedCountResponse
 from grins_platform.schemas.sms import (
     BulkSendRequest,
     BulkSendResponse,
@@ -113,6 +118,37 @@ async def handle_webhook(
 
 # Communications queue endpoints
 communications_router = APIRouter(prefix="/communications", tags=["Communications"])
+
+
+class _CommunicationsEndpoints(LoggerMixin):
+    """Communications API endpoint handlers with logging."""
+
+    DOMAIN = "api"
+
+
+_comms_endpoints = _CommunicationsEndpoints()
+
+
+@communications_router.get(
+    "/unaddressed-count",
+    response_model=UnaddressedCountResponse,
+    summary="Get unaddressed communication count",
+    description="Get the count of communications not yet marked as addressed.",
+)
+async def get_unaddressed_count(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> UnaddressedCountResponse:
+    """Get count of unaddressed communications.
+
+    Validates: CRM Gap Closure Req 4.2
+    """
+    _comms_endpoints.log_started("get_unaddressed_count")
+
+    repo = CommunicationRepository(db)
+    count = await repo.get_unaddressed_count()
+
+    _comms_endpoints.log_completed("get_unaddressed_count", count=count)
+    return UnaddressedCountResponse(count=count)
 
 
 @communications_router.get("/queue", response_model=CommunicationsQueueResponse)

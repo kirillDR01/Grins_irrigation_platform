@@ -34,6 +34,7 @@ const mockAppointment = {
   time_window_end: '11:00:00',
   status: 'pending' as const,
   arrived_at: null,
+  en_route_at: null,
   completed_at: null,
   notes: null,
   route_order: 1,

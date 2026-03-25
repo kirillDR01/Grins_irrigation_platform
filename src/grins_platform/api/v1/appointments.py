@@ -14,13 +14,35 @@ from datetime import date, timedelta
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,  # noqa: TC002 - Required at runtime for FastAPI DI
+)
 
-from grins_platform.api.v1.dependencies import get_appointment_service
+from grins_platform.api.v1.auth_dependencies import (
+    CurrentActiveUser,  # noqa: TC001 - Required at runtime for FastAPI DI
+)
+from grins_platform.api.v1.dependencies import (
+    get_appointment_service,
+    get_db_session,
+    get_full_appointment_service,
+)
 from grins_platform.exceptions import (
     AppointmentNotFoundError,
+    ConsentRequiredError,
     InvalidStatusTransitionError,
     JobNotFoundError,
+    ReviewAlreadyRequestedError,
+    StaffConflictError,
     StaffNotFoundError,
 )
 from grins_platform.log_config import LoggerMixin
@@ -36,9 +58,23 @@ from grins_platform.schemas.appointment import (
     StaffDailyScheduleResponse,
     WeeklyScheduleResponse,
 )
+from grins_platform.schemas.appointment_ops import (
+    PaymentCollectionRequest,
+    PaymentResult,
+    RescheduleRequest,
+    ReviewRequestResult,
+)
+from grins_platform.schemas.estimate import (
+    EstimateCreate,
+    EstimateResponse,
+)
+from grins_platform.schemas.invoice import (
+    InvoiceResponse,
+)
 from grins_platform.services.appointment_service import (
     AppointmentService,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
+from grins_platform.services.photo_service import PhotoService, UploadContext
 
 router = APIRouter()
 
@@ -477,3 +513,397 @@ async def cancel_appointment(
         ) from e
 
     _endpoints.log_completed("cancel_appointment", appointment_id=str(appointment_id))
+
+
+# =============================================================================
+# PATCH /api/v1/appointments/{id}/reschedule - Reschedule via drag-drop (Req 24)
+# =============================================================================
+
+
+@router.patch(  # type: ignore[untyped-decorator]
+    "/{appointment_id}/reschedule",
+    response_model=AppointmentResponse,
+    summary="Reschedule appointment via drag-drop",
+    description=(
+        "Reschedule an appointment to a new date/time. Validates no staff conflict."
+    ),
+)
+async def reschedule_appointment(
+    appointment_id: UUID,
+    data: RescheduleRequest,
+    _current_user: CurrentActiveUser,
+    service: Annotated[AppointmentService, Depends(get_appointment_service)],
+) -> AppointmentResponse:
+    """Reschedule an appointment via drag-drop.
+
+    Validates: Requirement 24.2
+    """
+    _endpoints.log_started(
+        "reschedule_appointment",
+        appointment_id=str(appointment_id),
+        new_date=str(data.new_date),
+    )
+
+    from datetime import time as _time  # noqa: PLC0415
+
+    new_start = _time.fromisoformat(data.new_start)
+    new_end = _time.fromisoformat(data.new_end)
+
+    try:
+        result = await service.reschedule(
+            appointment_id=appointment_id,
+            new_date=data.new_date,
+            new_start=new_start,
+            new_end=new_end,
+        )
+    except AppointmentNotFoundError as e:
+        _endpoints.log_rejected("reschedule_appointment", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Appointment not found: {e.appointment_id}",
+        ) from e
+    except StaffConflictError as e:
+        _endpoints.log_rejected("reschedule_appointment", reason="staff_conflict")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        ) from e
+
+    _endpoints.log_completed(
+        "reschedule_appointment",
+        appointment_id=str(appointment_id),
+    )
+    return AppointmentResponse.model_validate(result)  # type: ignore[no-any-return]
+
+
+# =============================================================================
+# POST /api/v1/appointments/{id}/collect-payment - On-site payment (Req 30)
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{appointment_id}/collect-payment",
+    response_model=PaymentResult,
+    summary="Collect on-site payment",
+    description="Collect payment on-site for an appointment. Creates/updates invoice.",
+)
+async def collect_payment(
+    appointment_id: UUID,
+    data: PaymentCollectionRequest,
+    _current_user: CurrentActiveUser,
+    service: Annotated[AppointmentService, Depends(get_full_appointment_service)],
+) -> PaymentResult:
+    """Collect payment on-site for an appointment.
+
+    Validates: Requirement 30.5
+    """
+    _endpoints.log_started(
+        "collect_payment",
+        appointment_id=str(appointment_id),
+        payment_method=data.payment_method.value,
+        amount=str(data.amount),
+    )
+
+    try:
+        result = await service.collect_payment(appointment_id, data)
+    except AppointmentNotFoundError as e:
+        _endpoints.log_rejected("collect_payment", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Appointment not found: {e.appointment_id}",
+        ) from e
+    except JobNotFoundError as e:
+        _endpoints.log_rejected("collect_payment", reason="job_not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job not found: {e.job_id}",
+        ) from e
+
+    _endpoints.log_completed(
+        "collect_payment",
+        appointment_id=str(appointment_id),
+        invoice_id=str(result.invoice_id),
+    )
+    return result
+
+
+# =============================================================================
+# POST /api/v1/appointments/{id}/create-invoice - On-site invoice (Req 31)
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{appointment_id}/create-invoice",
+    response_model=InvoiceResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create invoice from appointment",
+    description="Create an invoice pre-populated from appointment/job/customer data.",
+)
+async def create_invoice_from_appointment(
+    appointment_id: UUID,
+    _current_user: CurrentActiveUser,
+    service: Annotated[AppointmentService, Depends(get_full_appointment_service)],
+) -> InvoiceResponse:
+    """Create an invoice from an appointment.
+
+    Validates: Requirement 31.4
+    """
+    _endpoints.log_started(
+        "create_invoice_from_appointment",
+        appointment_id=str(appointment_id),
+    )
+
+    try:
+        invoice = await service.create_invoice_from_appointment(appointment_id)
+    except AppointmentNotFoundError as e:
+        _endpoints.log_rejected(
+            "create_invoice_from_appointment",
+            reason="not_found",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Appointment not found: {e.appointment_id}",
+        ) from e
+    except JobNotFoundError as e:
+        _endpoints.log_rejected(
+            "create_invoice_from_appointment",
+            reason="job_not_found",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job not found: {e.job_id}",
+        ) from e
+
+    _endpoints.log_completed(
+        "create_invoice_from_appointment",
+        appointment_id=str(appointment_id),
+        invoice_id=str(invoice.id),
+    )
+    return InvoiceResponse.model_validate(invoice)  # type: ignore[no-any-return]
+
+
+# =============================================================================
+# POST /api/v1/appointments/{id}/create-estimate - On-site estimate (Req 32)
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{appointment_id}/create-estimate",
+    status_code=status.HTTP_201_CREATED,
+    summary="Create estimate from appointment",
+    description=(
+        "Create an estimate from an appointment using templates and price lists."
+    ),
+)
+async def create_estimate_from_appointment(
+    appointment_id: UUID,
+    data: EstimateCreate,
+    _current_user: CurrentActiveUser,
+    service: Annotated[AppointmentService, Depends(get_full_appointment_service)],
+) -> EstimateResponse:
+    """Create an estimate from an appointment.
+
+    Validates: Requirement 32.6
+    """
+    _endpoints.log_started(
+        "create_estimate_from_appointment",
+        appointment_id=str(appointment_id),
+    )
+
+    try:
+        estimate = await service.create_estimate_from_appointment(
+            appointment_id,
+            data,
+        )
+    except AppointmentNotFoundError as e:
+        _endpoints.log_rejected(
+            "create_estimate_from_appointment",
+            reason="not_found",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Appointment not found: {e.appointment_id}",
+        ) from e
+    except JobNotFoundError as e:
+        _endpoints.log_rejected(
+            "create_estimate_from_appointment",
+            reason="job_not_found",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job not found: {e.job_id}",
+        ) from e
+
+    _endpoints.log_completed(
+        "create_estimate_from_appointment",
+        appointment_id=str(appointment_id),
+    )
+    return EstimateResponse.model_validate(estimate)  # type: ignore[no-any-return]
+
+
+# =============================================================================
+# POST /api/v1/appointments/{id}/photos - Staff photo upload (Req 33)
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{appointment_id}/photos",
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload photos from appointment",
+    description=(
+        "Upload photos during an appointment, linked to both appointment and customer."
+    ),
+)
+async def upload_appointment_photos(
+    appointment_id: UUID,
+    current_user: CurrentActiveUser,
+    service: Annotated[AppointmentService, Depends(get_appointment_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    file: Annotated[UploadFile, File(description="Photo file to upload")],
+    notes: Annotated[
+        str | None,
+        Form(description="Optional notes to save with the photo"),
+    ] = None,
+) -> dict[str, object]:
+    """Upload photos from an appointment context.
+
+    Validates: Requirement 33.4
+    """
+    _endpoints.log_started(
+        "upload_appointment_photos",
+        appointment_id=str(appointment_id),
+    )
+
+    # Verify appointment exists
+    try:
+        appointment = await service.get_appointment(appointment_id)
+    except AppointmentNotFoundError as e:
+        _endpoints.log_rejected("upload_appointment_photos", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Appointment not found: {e.appointment_id}",
+        ) from e
+
+    # Read file data
+    file_data = await file.read()
+    if not file_data:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Empty file",
+        )
+
+    # Upload via PhotoService
+    photo_service = PhotoService()
+    try:
+        upload_result = photo_service.upload_file(
+            data=file_data,
+            file_name=file.filename or "photo",
+            context=UploadContext.CUSTOMER_PHOTO,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        ) from e
+
+    # Get customer_id from the job
+    customer_id = None  # Will be resolved below
+
+    from grins_platform.models.customer_photo import CustomerPhoto  # noqa: PLC0415
+
+    # Look up the job to get customer_id
+    job_obj = await service.job_repository.get_by_id(appointment.job_id)
+    if job_obj:
+        customer_id = job_obj.customer_id
+
+        photo = CustomerPhoto(
+            customer_id=customer_id,
+            file_key=upload_result.file_key,
+            file_name=upload_result.file_name,
+            file_size=upload_result.file_size,
+            content_type=upload_result.content_type,
+            caption=notes,
+            uploaded_by=current_user.id,
+            appointment_id=appointment_id,
+        )
+        session.add(photo)
+        await session.commit()
+        await session.refresh(photo)
+
+    # Also save notes to appointment if provided
+    if notes:
+        await service.add_notes_and_photos(
+            appointment_id=appointment_id,
+            notes=notes,
+        )
+
+    download_url = photo_service.generate_presigned_url(upload_result.file_key)
+
+    _endpoints.log_completed(
+        "upload_appointment_photos",
+        appointment_id=str(appointment_id),
+        file_key=upload_result.file_key,
+    )
+
+    return {
+        "file_key": upload_result.file_key,
+        "file_name": upload_result.file_name,
+        "file_size": upload_result.file_size,
+        "content_type": upload_result.content_type,
+        "download_url": download_url,
+        "appointment_id": str(appointment_id),
+    }
+
+
+# =============================================================================
+# POST /api/v1/appointments/{id}/request-review - Google review SMS (Req 34)
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{appointment_id}/request-review",
+    response_model=ReviewRequestResult,
+    summary="Request Google review via SMS",
+    description="Send a Google review request to the customer after job completion.",
+)
+async def request_google_review(
+    appointment_id: UUID,
+    _current_user: CurrentActiveUser,
+    service: Annotated[AppointmentService, Depends(get_appointment_service)],
+) -> ReviewRequestResult:
+    """Request a Google review from the customer.
+
+    Validates: Requirement 34.3
+    """
+    _endpoints.log_started(
+        "request_google_review",
+        appointment_id=str(appointment_id),
+    )
+
+    try:
+        result = await service.request_google_review(appointment_id)
+    except AppointmentNotFoundError as e:
+        _endpoints.log_rejected("request_google_review", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Appointment not found: {e.appointment_id}",
+        ) from e
+    except ConsentRequiredError as e:
+        _endpoints.log_rejected("request_google_review", reason="no_consent")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        ) from e
+    except ReviewAlreadyRequestedError as e:
+        _endpoints.log_rejected("request_google_review", reason="dedup_30_day")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        ) from e
+
+    _endpoints.log_completed(
+        "request_google_review",
+        appointment_id=str(appointment_id),
+        sent=result.sent,
+    )
+    return result

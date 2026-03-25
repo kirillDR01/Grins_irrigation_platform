@@ -54,6 +54,16 @@ def _make_lead(
     lead.source_detail = None
     lead.zip_code = "55401"
     lead.source_site = "residential"
+    lead.city = None
+    lead.state = None
+    lead.address = None
+    lead.action_tags = None
+    lead.assigned_to = None
+    lead.customer_id = None
+    lead.contacted_at = None
+    lead.converted_at = None
+    lead.email_marketing_consent = False
+    lead.updated_at = created_at
     return lead
 
 

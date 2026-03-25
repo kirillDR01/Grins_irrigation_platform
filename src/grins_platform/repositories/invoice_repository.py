@@ -10,7 +10,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import InvoiceStatus
@@ -169,8 +169,8 @@ class InvoiceRepository(LoggerMixin):
             page_size=params.page_size,
         )
 
-        # Base query
-        stmt = select(Invoice)
+        # Base query — eager-load customer for customer_name in list response
+        stmt = select(Invoice).options(joinedload(Invoice.customer))
         count_stmt = select(func.count(Invoice.id))
 
         # Apply filters
@@ -332,3 +332,43 @@ class InvoiceRepository(LoggerMixin):
 
         self.log_completed("find_lien_filing_due", count=len(invoices))
         return invoices
+
+    async def get_pending_metrics(self) -> tuple[int, Decimal]:
+        """Get count and total amount of pending invoices.
+
+        Pending invoices are those with status SENT or VIEWED
+        (not yet paid).
+
+        Returns:
+            Tuple of (count, total_amount)
+
+        Validates: CRM Gap Closure Req 5.2
+        """
+        self.log_started("get_pending_metrics")
+
+        pending_statuses = [
+            InvoiceStatus.SENT.value,
+            InvoiceStatus.VIEWED.value,
+        ]
+
+        count_stmt = select(func.count(Invoice.id)).where(
+            Invoice.status.in_(pending_statuses),
+        )
+        total_stmt = select(
+            func.coalesce(func.sum(Invoice.total_amount), Decimal(0)),
+        ).where(
+            Invoice.status.in_(pending_statuses),
+        )
+
+        count_result = await self.session.execute(count_stmt)
+        count = count_result.scalar() or 0
+
+        total_result = await self.session.execute(total_stmt)
+        total_amount = total_result.scalar() or Decimal(0)
+
+        self.log_completed(
+            "get_pending_metrics",
+            count=count,
+            total_amount=str(total_amount),
+        )
+        return int(count), Decimal(str(total_amount))

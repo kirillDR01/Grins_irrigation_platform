@@ -345,11 +345,17 @@ class InvoiceService(LoggerMixin):
         total_pages = (total + params.page_size - 1) // params.page_size
 
         self.log_completed("list_invoices", count=len(invoices), total=total)
+
+        items: list[InvoiceResponse] = []
+        for inv in invoices:
+            resp = InvoiceResponse.model_validate(inv)
+            # Populate customer_name from eager-loaded relationship
+            if hasattr(inv, "customer") and inv.customer is not None:
+                resp.customer_name = f"{inv.customer.first_name} {inv.customer.last_name}"
+            items.append(cast("InvoiceResponse", resp))
+
         return PaginatedInvoiceResponse(
-            items=[
-                cast("InvoiceResponse", InvoiceResponse.model_validate(inv))
-                for inv in invoices
-            ],
+            items=items,
             total=total,
             page=params.page,
             page_size=params.page_size,

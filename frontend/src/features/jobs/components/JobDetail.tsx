@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -12,14 +13,17 @@ import {
   ChevronRight,
   MessageSquare,
   Sparkles,
+  Save,
+  TrendingUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingPage, ErrorMessage } from '@/shared/components';
-import { useJob, useUpdateJobStatus, useUpdateJob } from '../hooks';
+import { useJob, useUpdateJobStatus, useUpdateJob, useJobFinancials } from '../hooks';
 import { JobStatusBadge } from './JobStatusBadge';
 import type { JobStatus } from '../types';
 import {
@@ -46,10 +50,18 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
   const { data: job, isLoading, error, refetch } = useJob(id);
   const updateStatusMutation = useUpdateJobStatus();
   const updateJobMutation = useUpdateJob();
-  
+  const { data: financials, isLoading: financialsLoading } = useJobFinancials(id);
+
   // Get invoices for this job
   const { data: invoices } = useInvoicesByJob(id);
-  const linkedInvoice = invoices?.[0]; // Get the first invoice if exists
+  const linkedInvoice = invoices?.[0];
+
+  // Notes editing state (Req 20)
+  const [notesValue, setNotesValue] = useState<string | null>(null);
+  const [notesSaving, setNotesSaving] = useState(false);
+
+  // Initialize notes from job data
+  const currentNotes = notesValue !== null ? notesValue : (job?.notes ?? '');
 
   const handleStatusChange = async (newStatus: JobStatus) => {
     if (!job) return;
@@ -72,6 +84,22 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
       });
     } catch (err) {
       console.error('Failed to update payment collected status:', err);
+    }
+  };
+
+  const handleSaveNotes = async () => {
+    if (!job) return;
+    setNotesSaving(true);
+    try {
+      await updateJobMutation.mutateAsync({
+        id: job.id,
+        data: { notes: currentNotes || null },
+      });
+      setNotesValue(null); // Reset to track from server
+    } catch (err) {
+      console.error('Failed to save notes:', err);
+    } finally {
+      setNotesSaving(false);
     }
   };
 
@@ -103,11 +131,11 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={handleGoBack} 
-            aria-label="Go back" 
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleGoBack}
+            aria-label="Go back"
             className="h-8 w-8 hover:bg-slate-100 shrink-0"
           >
             <ArrowLeft className="h-4 w-4 text-slate-600" />
@@ -148,6 +176,14 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
         </div>
       )}
 
+      {/* Summary */}
+      {job.summary && (
+        <div className="bg-slate-50 rounded-lg p-3">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Summary</p>
+          <p className="text-sm text-slate-700" data-testid="job-summary">{job.summary}</p>
+        </div>
+      )}
+
       {/* Quick Info Grid */}
       <div className="grid grid-cols-2 gap-3">
         <div className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-lg">
@@ -178,13 +214,42 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
               <User className="h-4 w-4 text-blue-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-700 group-hover:text-blue-600">View Customer</p>
+              <p className="text-sm font-medium text-slate-700 group-hover:text-blue-600">
+                {job.customer_name || 'View Customer'}
+              </p>
               <p className="text-xs text-slate-400">#{job.customer_id.slice(0, 8)}</p>
             </div>
           </div>
           <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-blue-600" />
         </Link>
       )}
+
+      <Separator />
+
+      {/* Notes Section (Req 20) */}
+      <div>
+        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <FileText className="h-3.5 w-3.5" />
+          Notes
+        </p>
+        <Textarea
+          value={currentNotes}
+          onChange={(e) => setNotesValue(e.target.value)}
+          placeholder="Add notes about this job..."
+          className="min-h-[100px] bg-slate-50 border-slate-200 text-sm"
+          data-testid="job-notes-textarea"
+        />
+        <Button
+          size="sm"
+          className="mt-2 bg-teal-500 hover:bg-teal-600 text-white"
+          onClick={handleSaveNotes}
+          disabled={notesSaving || (notesValue === null)}
+          data-testid="save-notes-btn"
+        >
+          <Save className="mr-1.5 h-3.5 w-3.5" />
+          {notesSaving ? 'Saving...' : 'Save Notes'}
+        </Button>
+      </div>
 
       <Separator />
 
@@ -204,7 +269,7 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
             <p className="text-sm font-semibold text-emerald-700">{formatAmount(job.final_amount)}</p>
           </div>
         </div>
-        
+
         <div className="mt-3 p-2.5 bg-slate-50 rounded-lg">
           <p className="text-xs text-slate-400">Lead Source</p>
           <p className="text-sm font-medium text-slate-700">
@@ -248,6 +313,78 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
           <div className="mt-3" data-testid="generate-invoice-section">
             <GenerateInvoiceButton job={job} />
           </div>
+        )}
+      </div>
+
+      <Separator />
+
+      {/* Financials Section (Req 57) */}
+      <div data-testid="job-financials">
+        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+          <TrendingUp className="h-3.5 w-3.5" />
+          Financials
+        </p>
+        {financialsLoading ? (
+          <p className="text-sm text-slate-400">Loading financials...</p>
+        ) : financials ? (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-2.5 bg-slate-50 rounded-lg">
+                <p className="text-xs text-slate-400">Quoted Amount</p>
+                <p className="text-sm font-semibold text-slate-700" data-testid="fin-quoted">
+                  {formatAmount(financials.quoted_amount)}
+                </p>
+              </div>
+              <div className="p-2.5 bg-slate-50 rounded-lg">
+                <p className="text-xs text-slate-400">Final Amount</p>
+                <p className="text-sm font-semibold text-slate-700" data-testid="fin-final">
+                  {formatAmount(financials.final_amount)}
+                </p>
+              </div>
+            </div>
+            <div className="p-2.5 bg-emerald-50 rounded-lg">
+              <p className="text-xs text-emerald-600">Total Paid</p>
+              <p className="text-sm font-semibold text-emerald-700" data-testid="fin-total-paid">
+                {formatAmount(financials.total_paid)}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-2.5 bg-slate-50 rounded-lg">
+                <p className="text-xs text-slate-400">Material Costs</p>
+                <p className="text-sm font-semibold text-slate-700" data-testid="fin-material-costs">
+                  {formatAmount(financials.material_costs)}
+                </p>
+              </div>
+              <div className="p-2.5 bg-slate-50 rounded-lg">
+                <p className="text-xs text-slate-400">Labor Costs</p>
+                <p className="text-sm font-semibold text-slate-700" data-testid="fin-labor-costs">
+                  {formatAmount(financials.labor_costs)}
+                </p>
+              </div>
+            </div>
+            <div className="p-2.5 bg-slate-50 rounded-lg">
+              <p className="text-xs text-slate-400">Total Costs</p>
+              <p className="text-sm font-semibold text-slate-700" data-testid="fin-total-costs">
+                {formatAmount(financials.total_costs)}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className={`p-2.5 rounded-lg ${financials.profit >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                <p className={`text-xs ${financials.profit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>Profit</p>
+                <p className={`text-sm font-semibold ${financials.profit >= 0 ? 'text-emerald-700' : 'text-red-700'}`} data-testid="fin-profit">
+                  {formatAmount(financials.profit)}
+                </p>
+              </div>
+              <div className="p-2.5 bg-slate-50 rounded-lg">
+                <p className="text-xs text-slate-400">Profit Margin</p>
+                <p className="text-sm font-semibold text-slate-700" data-testid="fin-profit-margin">
+                  {financials.profit_margin !== null ? `${financials.profit_margin.toFixed(1)}%` : '—'}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400 italic">No financial data available.</p>
         )}
       </div>
 
@@ -348,7 +485,7 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
         </div>
       </div>
 
-      {/* AI Communication Section - Simplified */}
+      {/* AI Communication Section */}
       <Card className="bg-slate-50 border-slate-100">
         <CardHeader className="p-4 pb-2">
           <CardTitle className="flex items-center gap-2 text-sm font-medium text-slate-700">
@@ -375,9 +512,9 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
       {/* Close Button at Bottom */}
       {onClose && (
         <div className="pt-4 border-t border-slate-100">
-          <Button 
-            variant="outline" 
-            onClick={onClose} 
+          <Button
+            variant="outline"
+            onClick={onClose}
             className="w-full"
             data-testid="close-detail-btn"
           >

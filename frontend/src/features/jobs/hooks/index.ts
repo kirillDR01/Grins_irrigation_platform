@@ -7,6 +7,7 @@ export {
   useJobsReadyToSchedule,
   useJobsRequiresEstimate,
   useJobSearch,
+  useJobFinancials,
 } from './useJobs';
 
 export {

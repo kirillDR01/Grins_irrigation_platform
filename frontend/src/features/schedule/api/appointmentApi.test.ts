@@ -13,6 +13,7 @@ vi.mock('@/core/api/client', () => ({
     get: vi.fn(),
     post: vi.fn(),
     put: vi.fn(),
+    patch: vi.fn(),
     delete: vi.fn(),
   },
 }));
@@ -203,6 +204,33 @@ describe('appointmentApi', () => {
 
       expect(apiClient.put).toHaveBeenCalledWith('/appointments/appt-123', { status: 'no_show' });
       expect(result.status).toBe('no_show');
+    });
+  });
+
+  describe('getLeadTime', () => {
+    it('fetches schedule lead time', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { days: 14, label: 'Booked out 2 weeks' },
+      });
+
+      const result = await appointmentApi.getLeadTime();
+
+      expect(apiClient.get).toHaveBeenCalledWith('/schedule/lead-time');
+      expect(result.days).toBe(14);
+      expect(result.label).toBe('Booked out 2 weeks');
+    });
+  });
+
+  describe('patch', () => {
+    it('patches appointment for drag-drop rescheduling', async () => {
+      const patchedAppt = { ...mockAppointment, scheduled_date: '2025-01-30' };
+      vi.mocked(apiClient.patch).mockResolvedValue({ data: patchedAppt });
+
+      const data = { scheduled_date: '2025-01-30', time_window_start: '10:00:00' };
+      const result = await appointmentApi.patch('appt-123', data);
+
+      expect(apiClient.patch).toHaveBeenCalledWith('/appointments/appt-123', data);
+      expect(result.scheduled_date).toBe('2025-01-30');
     });
   });
 });

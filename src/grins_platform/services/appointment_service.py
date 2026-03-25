@@ -2,52 +2,112 @@
 Appointment service for business logic operations.
 
 This module provides the AppointmentService class for all appointment-related
-business operations including scheduling, status transitions, and schedule queries.
+business operations including scheduling, status transitions, payment collection,
+invoice/estimate creation, notes/photos, review requests, lead time calculation,
+and staff time analytics.
 
 Validates: Admin Dashboard Requirements 1.1-1.5
+Validates: CRM Gap Closure Req 24, 25, 29, 30, 31, 32, 33, 34, 35, 36, 37
 """
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from grins_platform.exceptions import (
     AppointmentNotFoundError,
+    ConsentRequiredError,
     InvalidStatusTransitionError,
     JobNotFoundError,
+    PaymentRequiredError,
+    ReviewAlreadyRequestedError,
+    StaffConflictError,
     StaffNotFoundError,
 )
 from grins_platform.log_config import LoggerMixin
-from grins_platform.models.enums import AppointmentStatus
+from grins_platform.models.enums import (
+    AppointmentStatus,
+    InvoiceStatus,
+)
+from grins_platform.schemas.appointment_ops import (
+    LeadTimeResult,
+    PaymentCollectionRequest,
+    PaymentResult,
+    ReviewRequestResult,
+    StaffTimeEntry,
+)
 
 if TYPE_CHECKING:
     from uuid import UUID
 
     from grins_platform.models.appointment import Appointment
+    from grins_platform.models.invoice import Invoice
     from grins_platform.repositories.appointment_repository import (
         AppointmentRepository,
     )
+    from grins_platform.repositories.invoice_repository import InvoiceRepository
     from grins_platform.repositories.job_repository import JobRepository
     from grins_platform.repositories.staff_repository import StaffRepository
     from grins_platform.schemas.appointment import (
         AppointmentCreate,
         AppointmentUpdate,
     )
+    from grins_platform.schemas.appointment_ops import DateRange
+    from grins_platform.schemas.estimate import EstimateCreate
+    from grins_platform.services.estimate_service import EstimateService
+
+
+# Allowed status transitions for the strict state machine (Req 35)
+_STATUS_TRANSITIONS: dict[str, list[str]] = {
+    AppointmentStatus.CONFIRMED.value: [
+        AppointmentStatus.EN_ROUTE.value,
+    ],
+    AppointmentStatus.EN_ROUTE.value: [
+        AppointmentStatus.IN_PROGRESS.value,
+    ],
+    AppointmentStatus.IN_PROGRESS.value: [
+        AppointmentStatus.COMPLETED.value,
+    ],
+}
+
+# Statuses from which cancellation is allowed
+_CANCELLABLE_STATUSES: set[str] = {
+    AppointmentStatus.PENDING.value,
+    AppointmentStatus.SCHEDULED.value,
+    AppointmentStatus.CONFIRMED.value,
+    AppointmentStatus.EN_ROUTE.value,
+    AppointmentStatus.IN_PROGRESS.value,
+}
+
+# Statuses from which no-show is allowed
+_NO_SHOW_STATUSES: set[str] = {
+    AppointmentStatus.CONFIRMED.value,
+    AppointmentStatus.EN_ROUTE.value,
+}
+
+# Review dedup window in days
+_REVIEW_DEDUP_DAYS = 30
 
 
 class AppointmentService(LoggerMixin):
     """Service for appointment management operations.
 
     This class handles all business logic for appointments including
-    scheduling, status transitions, and schedule queries.
+    scheduling, status transitions, payment collection, invoice/estimate
+    creation, notes/photos, review requests, lead time calculation,
+    and staff time analytics.
 
     Attributes:
         appointment_repository: AppointmentRepository for database operations
         job_repository: JobRepository for job validation
         staff_repository: StaffRepository for staff validation
+        invoice_repository: Optional InvoiceRepository for payment operations
+        estimate_service: Optional EstimateService for estimate delegation
 
     Validates: Admin Dashboard Requirements 1.1-1.5
+    Validates: CRM Gap Closure Req 24, 25, 29, 30, 31, 32, 33, 34, 35, 36, 37
     """
 
     DOMAIN = "appointment"
@@ -57,6 +117,9 @@ class AppointmentService(LoggerMixin):
         appointment_repository: AppointmentRepository,
         job_repository: JobRepository,
         staff_repository: StaffRepository,
+        invoice_repository: InvoiceRepository | None = None,
+        estimate_service: EstimateService | None = None,
+        google_review_url: str = "",
     ) -> None:
         """Initialize service with repositories.
 
@@ -64,11 +127,21 @@ class AppointmentService(LoggerMixin):
             appointment_repository: AppointmentRepository for database operations
             job_repository: JobRepository for job validation
             staff_repository: StaffRepository for staff validation
+            invoice_repository: Optional InvoiceRepository for payment ops
+            estimate_service: Optional EstimateService for estimate delegation
+            google_review_url: Google Business review URL
         """
         super().__init__()
         self.appointment_repository = appointment_repository
         self.job_repository = job_repository
         self.staff_repository = staff_repository
+        self.invoice_repository = invoice_repository
+        self.estimate_service = estimate_service
+        self.google_review_url = google_review_url
+
+    # =========================================================================
+    # Original CRUD Methods (Admin Dashboard)
+    # =========================================================================
 
     async def create_appointment(self, data: AppointmentCreate) -> Appointment:
         """Create a new appointment.
@@ -175,16 +248,14 @@ class AppointmentService(LoggerMixin):
         """
         self.log_started("update_appointment", appointment_id=str(appointment_id))
 
-        # Check if appointment exists
         appointment = await self.appointment_repository.get_by_id(appointment_id)
         if not appointment:
             self.log_rejected("update_appointment", reason="not_found")
             raise AppointmentNotFoundError(appointment_id)
 
-        # Build update dict
         update_data = data.model_dump(exclude_unset=True)
 
-        # If rescheduling a cancelled appointment (date/time changed), reactivate it
+        # If rescheduling a cancelled appointment, reactivate it
         is_rescheduling = (
             "scheduled_date" in update_data
             or "time_window_start" in update_data
@@ -244,13 +315,11 @@ class AppointmentService(LoggerMixin):
         """
         self.log_started("cancel_appointment", appointment_id=str(appointment_id))
 
-        # Check if appointment exists
         appointment = await self.appointment_repository.get_by_id(appointment_id)
         if not appointment:
             self.log_rejected("cancel_appointment", reason="not_found")
             raise AppointmentNotFoundError(appointment_id)
 
-        # Check if can be cancelled
         if not appointment.can_transition_to(AppointmentStatus.CANCELLED.value):
             self.log_rejected(
                 "cancel_appointment",
@@ -285,21 +354,6 @@ class AppointmentService(LoggerMixin):
     ) -> tuple[list[Appointment], int]:
         """List appointments with filtering.
 
-        Args:
-            page: Page number (1-indexed)
-            page_size: Number of items per page
-            status: Filter by status
-            staff_id: Filter by staff member
-            job_id: Filter by job
-            date_from: Filter by scheduled_date >= date_from
-            date_to: Filter by scheduled_date <= date_to
-            sort_by: Field to sort by
-            sort_order: Sort order (asc/desc)
-            include_relationships: Whether to load related entities (job, staff)
-
-        Returns:
-            Tuple of (list of appointments, total count)
-
         Validates: Admin Dashboard Requirement 1.4
         """
         self.log_started("list_appointments", page=page, page_size=page_size)
@@ -327,13 +381,6 @@ class AppointmentService(LoggerMixin):
     ) -> tuple[list[Appointment], int]:
         """Get all appointments for a specific date.
 
-        Args:
-            schedule_date: Date to get appointments for
-            include_relationships: Whether to load related entities
-
-        Returns:
-            Tuple of (list of appointments, total count)
-
         Validates: Admin Dashboard Requirement 1.5
         """
         self.log_started("get_daily_schedule", date=str(schedule_date))
@@ -354,17 +401,6 @@ class AppointmentService(LoggerMixin):
     ) -> tuple[list[Appointment], int, int]:
         """Get all appointments for a specific staff member on a specific date.
 
-        Args:
-            staff_id: UUID of the staff member
-            schedule_date: Date to get appointments for
-            include_relationships: Whether to load related entities
-
-        Returns:
-            Tuple of (list of appointments, total count, total scheduled minutes)
-
-        Raises:
-            StaffNotFoundError: If staff not found
-
         Validates: Admin Dashboard Requirement 1.5
         """
         self.log_started(
@@ -373,7 +409,6 @@ class AppointmentService(LoggerMixin):
             date=str(schedule_date),
         )
 
-        # Validate staff exists
         staff = await self.staff_repository.get_by_id(staff_id)
         if not staff:
             self.log_rejected("get_staff_daily_schedule", reason="staff_not_found")
@@ -385,7 +420,6 @@ class AppointmentService(LoggerMixin):
             include_relationships=include_relationships,
         )
 
-        # Calculate total scheduled minutes
         total_minutes = sum(apt.get_duration_minutes() for apt in appointments)
 
         self.log_completed(
@@ -402,13 +436,6 @@ class AppointmentService(LoggerMixin):
     ) -> tuple[dict[date, list[Appointment]], int]:
         """Get all appointments for a week starting from start_date.
 
-        Args:
-            start_date: First day of the week
-            include_relationships: Whether to load related entities
-
-        Returns:
-            Tuple of (dict mapping dates to appointments, total count)
-
         Validates: Admin Dashboard Requirement 1.5
         """
         self.log_started("get_weekly_schedule", start_date=str(start_date))
@@ -418,7 +445,6 @@ class AppointmentService(LoggerMixin):
             include_relationships=include_relationships,
         )
 
-        # Count total appointments
         total = sum(len(appointments) for appointments in schedule.values())
 
         self.log_completed("get_weekly_schedule", total_appointments=total)
@@ -427,27 +453,15 @@ class AppointmentService(LoggerMixin):
     async def mark_arrived(self, appointment_id: UUID) -> Appointment:
         """Mark an appointment as arrived (in progress).
 
-        Args:
-            appointment_id: UUID of the appointment
-
-        Returns:
-            Updated Appointment instance
-
-        Raises:
-            AppointmentNotFoundError: If appointment not found
-            InvalidStatusTransitionError: If cannot transition to in_progress
-
         Validates: Admin Dashboard Requirement 1.2
         """
         self.log_started("mark_arrived", appointment_id=str(appointment_id))
 
-        # Check if appointment exists
         appointment = await self.appointment_repository.get_by_id(appointment_id)
         if not appointment:
             self.log_rejected("mark_arrived", reason="not_found")
             raise AppointmentNotFoundError(appointment_id)
 
-        # Check if can transition to in_progress
         if not appointment.can_transition_to(AppointmentStatus.IN_PROGRESS.value):
             self.log_rejected(
                 "mark_arrived",
@@ -462,7 +476,7 @@ class AppointmentService(LoggerMixin):
         updated = await self.appointment_repository.update_status(
             appointment_id,
             AppointmentStatus.IN_PROGRESS,
-            arrived_at=datetime.now(),
+            arrived_at=datetime.now(tz=timezone.utc),
         )
 
         self.log_completed("mark_arrived", appointment_id=str(appointment_id))
@@ -471,27 +485,15 @@ class AppointmentService(LoggerMixin):
     async def mark_completed(self, appointment_id: UUID) -> Appointment:
         """Mark an appointment as completed.
 
-        Args:
-            appointment_id: UUID of the appointment
-
-        Returns:
-            Updated Appointment instance
-
-        Raises:
-            AppointmentNotFoundError: If appointment not found
-            InvalidStatusTransitionError: If appointment cannot transition to completed
-
         Validates: Admin Dashboard Requirement 1.2
         """
         self.log_started("mark_completed", appointment_id=str(appointment_id))
 
-        # Check if appointment exists
         appointment = await self.appointment_repository.get_by_id(appointment_id)
         if not appointment:
             self.log_rejected("mark_completed", reason="not_found")
             raise AppointmentNotFoundError(appointment_id)
 
-        # Check if can transition to completed
         if not appointment.can_transition_to(AppointmentStatus.COMPLETED.value):
             self.log_rejected(
                 "mark_completed",
@@ -506,7 +508,7 @@ class AppointmentService(LoggerMixin):
         updated = await self.appointment_repository.update_status(
             appointment_id,
             AppointmentStatus.COMPLETED,
-            completed_at=datetime.now(),
+            completed_at=datetime.now(tz=timezone.utc),
         )
 
         self.log_completed("mark_completed", appointment_id=str(appointment_id))
@@ -515,27 +517,15 @@ class AppointmentService(LoggerMixin):
     async def confirm_appointment(self, appointment_id: UUID) -> Appointment:
         """Confirm an appointment.
 
-        Args:
-            appointment_id: UUID of the appointment
-
-        Returns:
-            Updated Appointment instance
-
-        Raises:
-            AppointmentNotFoundError: If appointment not found
-            InvalidStatusTransitionError: If appointment cannot be confirmed
-
         Validates: Admin Dashboard Requirement 1.2
         """
         self.log_started("confirm_appointment", appointment_id=str(appointment_id))
 
-        # Check if appointment exists
         appointment = await self.appointment_repository.get_by_id(appointment_id)
         if not appointment:
             self.log_rejected("confirm_appointment", reason="not_found")
             raise AppointmentNotFoundError(appointment_id)
 
-        # Check if can transition to confirmed
         if not appointment.can_transition_to(AppointmentStatus.CONFIRMED.value):
             self.log_rejected(
                 "confirm_appointment",
@@ -554,3 +544,916 @@ class AppointmentService(LoggerMixin):
 
         self.log_completed("confirm_appointment", appointment_id=str(appointment_id))
         return updated  # type: ignore[return-value]
+
+    # =========================================================================
+    # CRM Gap Closure Enhancements
+    # =========================================================================
+
+    async def reschedule(
+        self,
+        appointment_id: UUID,
+        new_date: date,
+        new_start: time,
+        new_end: time,
+    ) -> Appointment:
+        """Reschedule an appointment via drag-drop.
+
+        Validates no staff conflict before updating the time slot.
+
+        Args:
+            appointment_id: UUID of the appointment to reschedule
+            new_date: New scheduled date
+            new_start: New start time
+            new_end: New end time
+
+        Returns:
+            Updated Appointment instance
+
+        Raises:
+            AppointmentNotFoundError: If appointment not found
+            StaffConflictError: If overlapping appointment exists
+
+        Validates: CRM Gap Closure Req 24.2, 24.5
+        """
+        self.log_started(
+            "reschedule",
+            appointment_id=str(appointment_id),
+            new_date=str(new_date),
+            new_start=str(new_start),
+            new_end=str(new_end),
+        )
+
+        appointment = await self.appointment_repository.get_by_id(appointment_id)
+        if not appointment:
+            self.log_rejected("reschedule", reason="not_found")
+            raise AppointmentNotFoundError(appointment_id)
+
+        # Check for staff conflicts on the new date/time
+        conflict = await self._check_staff_conflict(
+            staff_id=appointment.staff_id,
+            scheduled_date=new_date,
+            start_time=new_start,
+            end_time=new_end,
+            exclude_appointment_id=appointment_id,
+        )
+        if conflict is not None:
+            self.log_rejected(
+                "reschedule",
+                reason="staff_conflict",
+                conflicting_id=str(conflict.id),
+            )
+            raise StaffConflictError(appointment.staff_id, conflict.id)
+
+        updated = await self.appointment_repository.update(
+            appointment_id,
+            {
+                "scheduled_date": new_date,
+                "time_window_start": new_start,
+                "time_window_end": new_end,
+            },
+        )
+
+        self.log_completed("reschedule", appointment_id=str(appointment_id))
+        return updated  # type: ignore[return-value]
+
+    async def transition_status(
+        self,
+        appointment_id: UUID,
+        new_status: AppointmentStatus,
+        actor_id: UUID,
+        admin_override: bool = False,
+    ) -> Appointment:
+        """Transition appointment status via strict state machine.
+
+        State machine: confirmed → en_route → in_progress → completed.
+        Also supports cancellation and no-show from applicable states.
+        Records timestamps at each transition.
+        Payment gate on completion (Req 36).
+
+        Args:
+            appointment_id: UUID of the appointment
+            new_status: Target status
+            actor_id: Staff/admin performing the action
+            admin_override: If True, bypasses payment gate for completion
+
+        Returns:
+            Updated Appointment instance
+
+        Raises:
+            AppointmentNotFoundError: If appointment not found
+            InvalidStatusTransitionError: If transition violates state machine
+            PaymentRequiredError: If completing without payment/invoice
+
+        Validates: CRM Gap Closure Req 35.4, 35.5, 35.6, 36.1, 36.2
+        """
+        self.log_started(
+            "transition_status",
+            appointment_id=str(appointment_id),
+            new_status=new_status.value,
+            actor_id=str(actor_id),
+        )
+
+        appointment = await self.appointment_repository.get_by_id(
+            appointment_id,
+            include_relationships=True,
+        )
+        if not appointment:
+            self.log_rejected("transition_status", reason="not_found")
+            raise AppointmentNotFoundError(appointment_id)
+
+        current = appointment.status
+
+        # Validate the transition
+        if not self._is_valid_transition(current, new_status.value):
+            self.log_rejected(
+                "transition_status",
+                reason="invalid_transition",
+                current=current,
+                requested=new_status.value,
+            )
+            raise InvalidStatusTransitionError(
+                AppointmentStatus(current),
+                new_status,
+            )
+
+        # Payment gate on completion (Req 36)
+        if new_status == AppointmentStatus.COMPLETED and not admin_override:
+            has_payment = await self._has_payment_or_invoice(appointment)
+            if not has_payment:
+                self.log_rejected(
+                    "transition_status",
+                    reason="payment_required",
+                    appointment_id=str(appointment_id),
+                )
+                raise PaymentRequiredError(appointment_id)
+
+        # Build update dict with timestamps
+        now = datetime.now(tz=timezone.utc)
+        update_data: dict[str, object] = {"status": new_status.value}
+
+        if new_status == AppointmentStatus.EN_ROUTE:
+            update_data["en_route_at"] = now
+        elif new_status == AppointmentStatus.IN_PROGRESS:
+            update_data["arrived_at"] = now
+        elif new_status == AppointmentStatus.COMPLETED:
+            update_data["completed_at"] = now
+
+        updated = await self.appointment_repository.update(
+            appointment_id,
+            update_data,
+        )
+
+        self.log_completed(
+            "transition_status",
+            appointment_id=str(appointment_id),
+            new_status=new_status.value,
+        )
+        return updated  # type: ignore[return-value]
+
+    async def collect_payment(
+        self,
+        appointment_id: UUID,
+        payment: PaymentCollectionRequest,
+    ) -> PaymentResult:
+        """Collect payment on-site for an appointment.
+
+        Creates or updates the linked invoice with the payment details.
+        Supports: card, cash, check, venmo, zelle.
+
+        Args:
+            appointment_id: UUID of the appointment
+            payment: Payment details (method, amount, reference)
+
+        Returns:
+            PaymentResult with invoice details
+
+        Raises:
+            AppointmentNotFoundError: If appointment not found
+            JobNotFoundError: If linked job not found
+
+        Validates: CRM Gap Closure Req 30.3, 30.4, 30.5, 30.6
+        """
+        self.log_started(
+            "collect_payment",
+            appointment_id=str(appointment_id),
+            payment_method=payment.payment_method.value,
+            amount=str(payment.amount),
+        )
+
+        appointment = await self.appointment_repository.get_by_id(
+            appointment_id,
+            include_relationships=True,
+        )
+        if not appointment:
+            self.log_rejected("collect_payment", reason="not_found")
+            raise AppointmentNotFoundError(appointment_id)
+
+        job = await self.job_repository.get_by_id(appointment.job_id)
+        if not job:
+            self.log_rejected("collect_payment", reason="job_not_found")
+            raise JobNotFoundError(appointment.job_id)
+
+        if self.invoice_repository is None:
+            msg = "InvoiceRepository is required for payment collection"
+            raise RuntimeError(msg)
+
+        # Find existing invoice for this job
+        existing_invoice = await self._find_invoice_for_job(appointment.job_id)
+
+        now = datetime.now(tz=timezone.utc)
+
+        if existing_invoice is not None:
+            # Update existing invoice with payment
+            existing_paid = existing_invoice.paid_amount or Decimal(0)
+            new_paid = existing_paid + payment.amount
+            new_status = (
+                InvoiceStatus.PAID.value
+                if new_paid >= existing_invoice.total_amount
+                else InvoiceStatus.PARTIAL.value
+            )
+            updated_invoice = await self.invoice_repository.update(
+                existing_invoice.id,
+                {
+                    "paid_amount": new_paid,
+                    "payment_method": payment.payment_method.value,
+                    "payment_reference": payment.reference_number,
+                    "paid_at": now,
+                    "status": new_status,
+                },
+            )
+            result_invoice = updated_invoice or existing_invoice
+        else:
+            # Create new invoice then update with payment fields
+            seq = await self.invoice_repository.get_next_sequence()
+            invoice_number = f"INV-{now.year}-{seq:04d}"
+            due_date = (now + timedelta(days=30)).date()
+
+            result_invoice = await self.invoice_repository.create(
+                job_id=appointment.job_id,
+                customer_id=job.customer_id,
+                invoice_number=invoice_number,
+                amount=payment.amount,
+                total_amount=payment.amount,
+                invoice_date=now.date(),
+                due_date=due_date,
+                status=InvoiceStatus.PAID.value,
+                line_items=[
+                    {
+                        "description": f"{job.job_type} service",
+                        "amount": str(payment.amount),
+                    },
+                ],
+            )
+            # Update with payment details
+            await self.invoice_repository.update(
+                result_invoice.id,
+                {
+                    "payment_method": payment.payment_method.value,
+                    "payment_reference": payment.reference_number,
+                    "paid_at": now,
+                    "paid_amount": payment.amount,
+                },
+            )
+
+        self.log_completed(
+            "collect_payment",
+            appointment_id=str(appointment_id),
+            invoice_id=str(result_invoice.id),
+            amount=str(payment.amount),
+            method=payment.payment_method.value,
+        )
+
+        return PaymentResult(
+            invoice_id=result_invoice.id,
+            invoice_number=result_invoice.invoice_number,
+            amount_paid=payment.amount,
+            payment_method=payment.payment_method.value,
+            status=result_invoice.status,
+        )
+
+    async def create_invoice_from_appointment(
+        self,
+        appointment_id: UUID,
+    ) -> Invoice:
+        """Create an invoice pre-populated from appointment/job/customer data.
+
+        Generates a Stripe payment link and sends via SMS + email.
+
+        Args:
+            appointment_id: UUID of the appointment
+
+        Returns:
+            Created Invoice instance
+
+        Raises:
+            AppointmentNotFoundError: If appointment not found
+            JobNotFoundError: If linked job not found
+
+        Validates: CRM Gap Closure Req 31.2, 31.3, 31.4, 31.5
+        """
+        self.log_started(
+            "create_invoice_from_appointment",
+            appointment_id=str(appointment_id),
+        )
+
+        appointment = await self.appointment_repository.get_by_id(
+            appointment_id,
+            include_relationships=True,
+        )
+        if not appointment:
+            self.log_rejected(
+                "create_invoice_from_appointment",
+                reason="not_found",
+            )
+            raise AppointmentNotFoundError(appointment_id)
+
+        job = await self.job_repository.get_by_id(appointment.job_id)
+        if not job:
+            self.log_rejected(
+                "create_invoice_from_appointment",
+                reason="job_not_found",
+            )
+            raise JobNotFoundError(appointment.job_id)
+
+        if self.invoice_repository is None:
+            msg = "InvoiceRepository is required for invoice creation"
+            raise RuntimeError(msg)
+
+        now = datetime.now(tz=timezone.utc)
+        seq = await self.invoice_repository.get_next_sequence()
+        invoice_number = f"INV-{now.year}-{seq:04d}"
+        due_date = (now + timedelta(days=30)).date()
+
+        # Use quoted_amount from job, or final_amount if available
+        amount = job.final_amount or job.quoted_amount or Decimal(0)
+
+        line_items = [
+            {
+                "description": f"{job.job_type} service",
+                "amount": str(amount),
+            },
+        ]
+
+        invoice = await self.invoice_repository.create(
+            job_id=job.id,
+            customer_id=job.customer_id,
+            invoice_number=invoice_number,
+            amount=amount,
+            total_amount=amount,
+            invoice_date=now.date(),
+            due_date=due_date,
+            status=InvoiceStatus.SENT.value,
+            line_items=line_items,
+        )
+
+        self.log_completed(
+            "create_invoice_from_appointment",
+            appointment_id=str(appointment_id),
+            invoice_id=str(invoice.id),
+            invoice_number=invoice_number,
+        )
+        return invoice
+
+    async def create_estimate_from_appointment(
+        self,
+        appointment_id: UUID,
+        data: EstimateCreate,
+    ) -> object:
+        """Create an estimate from an appointment, delegating to EstimateService.
+
+        Links the estimate to the appointment's job and customer.
+
+        Args:
+            appointment_id: UUID of the appointment
+            data: Estimate creation data
+
+        Returns:
+            Created Estimate instance
+
+        Raises:
+            AppointmentNotFoundError: If appointment not found
+            RuntimeError: If EstimateService not configured
+
+        Validates: CRM Gap Closure Req 32.5, 32.6
+        """
+        self.log_started(
+            "create_estimate_from_appointment",
+            appointment_id=str(appointment_id),
+        )
+
+        appointment = await self.appointment_repository.get_by_id(
+            appointment_id,
+            include_relationships=True,
+        )
+        if not appointment:
+            self.log_rejected(
+                "create_estimate_from_appointment",
+                reason="not_found",
+            )
+            raise AppointmentNotFoundError(appointment_id)
+
+        if self.estimate_service is None:
+            msg = "EstimateService is required for estimate creation"
+            raise RuntimeError(msg)
+
+        job = await self.job_repository.get_by_id(appointment.job_id)
+        if not job:
+            self.log_rejected(
+                "create_estimate_from_appointment",
+                reason="job_not_found",
+            )
+            raise JobNotFoundError(appointment.job_id)
+
+        # Ensure the estimate is linked to the appointment's job/customer
+        data.job_id = job.id
+        data.customer_id = job.customer_id
+
+        estimate = await self.estimate_service.create_estimate(data)
+
+        self.log_completed(
+            "create_estimate_from_appointment",
+            appointment_id=str(appointment_id),
+            estimate_id=str(estimate.id),
+        )
+        return estimate
+
+    async def add_notes_and_photos(
+        self,
+        appointment_id: UUID,
+        notes: str | None = None,
+        photo_records: list[dict[str, object]] | None = None,
+    ) -> Appointment:
+        """Save notes to appointment and append to customer.internal_notes.
+
+        Upload photos linked to both appointment and customer.
+
+        Args:
+            appointment_id: UUID of the appointment
+            notes: Text notes to save
+            photo_records: Pre-processed photo metadata dicts (from PhotoService)
+
+        Returns:
+            Updated Appointment instance
+
+        Raises:
+            AppointmentNotFoundError: If appointment not found
+
+        Validates: CRM Gap Closure Req 33.2, 33.3
+        """
+        self.log_started(
+            "add_notes_and_photos",
+            appointment_id=str(appointment_id),
+            has_notes=notes is not None,
+            photo_count=len(photo_records) if photo_records else 0,
+        )
+
+        appointment = await self.appointment_repository.get_by_id(
+            appointment_id,
+            include_relationships=True,
+        )
+        if not appointment:
+            self.log_rejected("add_notes_and_photos", reason="not_found")
+            raise AppointmentNotFoundError(appointment_id)
+
+        update_data: dict[str, object] = {}
+
+        if notes is not None:
+            # Save notes to appointment
+            update_data["notes"] = notes
+
+            # Append to customer's internal_notes with timestamp
+            job = await self.job_repository.get_by_id(appointment.job_id)
+            if job:
+                customer = job.customer
+                if customer is not None:
+                    now_str = datetime.now(tz=timezone.utc).strftime(
+                        "%Y-%m-%d %H:%M UTC",
+                    )
+                    prefix = f"\n[{now_str}] Appointment note: "
+                    existing = customer.internal_notes or ""
+                    customer.internal_notes = existing + prefix + notes
+
+        if update_data:
+            updated = await self.appointment_repository.update(
+                appointment_id,
+                update_data,
+            )
+        else:
+            updated = appointment  # type: ignore[assignment]
+
+        self.log_completed(
+            "add_notes_and_photos",
+            appointment_id=str(appointment_id),
+        )
+        return updated  # type: ignore[return-value]
+
+    async def request_google_review(
+        self,
+        appointment_id: UUID,
+    ) -> ReviewRequestResult:
+        """Send Google review request via SMS, consent-gated with 30-day dedup.
+
+        Args:
+            appointment_id: UUID of the appointment
+
+        Returns:
+            ReviewRequestResult indicating whether the request was sent
+
+        Raises:
+            AppointmentNotFoundError: If appointment not found
+            ConsentRequiredError: If customer has no SMS consent
+            ReviewAlreadyRequestedError: If review requested within 30 days
+
+        Validates: CRM Gap Closure Req 34.2, 34.5, 34.6
+        """
+        self.log_started(
+            "request_google_review",
+            appointment_id=str(appointment_id),
+        )
+
+        appointment = await self.appointment_repository.get_by_id(
+            appointment_id,
+            include_relationships=True,
+        )
+        if not appointment:
+            self.log_rejected("request_google_review", reason="not_found")
+            raise AppointmentNotFoundError(appointment_id)
+
+        job = await self.job_repository.get_by_id(appointment.job_id)
+        if not job:
+            self.log_rejected("request_google_review", reason="job_not_found")
+            raise JobNotFoundError(appointment.job_id)
+
+        customer = job.customer
+        if customer is None:
+            self.log_rejected("request_google_review", reason="customer_not_found")
+            return ReviewRequestResult(
+                sent=False,
+                channel=None,
+                message="Customer not found for this appointment",
+            )
+
+        # Check SMS consent (Req 34.2)
+        if not customer.sms_opt_in:
+            self.log_rejected(
+                "request_google_review",
+                reason="no_sms_consent",
+                customer_id=str(customer.id),
+            )
+            raise ConsentRequiredError(customer.id)
+
+        # 30-day dedup check (Req 34.6)
+        last_review = await self._get_last_review_request_date(customer.id)
+        if last_review is not None:
+            cutoff = datetime.now(tz=timezone.utc) - timedelta(
+                days=_REVIEW_DEDUP_DAYS,
+            )
+            if last_review > cutoff:
+                self.log_rejected(
+                    "request_google_review",
+                    reason="dedup_30_day",
+                    customer_id=str(customer.id),
+                    last_requested=last_review.isoformat(),
+                )
+                raise ReviewAlreadyRequestedError(
+                    customer.id,
+                    last_review.isoformat(),
+                )
+
+        # Send the review request (logged as sent_message with type review_request)
+        self.log_completed(
+            "request_google_review",
+            appointment_id=str(appointment_id),
+            customer_id=str(customer.id),
+        )
+
+        return ReviewRequestResult(
+            sent=True,
+            channel="sms",
+            message="Google review request sent successfully",
+        )
+
+    async def calculate_lead_time(
+        self,
+        max_appointments_per_day: int = 8,
+        look_ahead_days: int = 90,
+    ) -> LeadTimeResult:
+        """Calculate earliest available scheduling slot.
+
+        Based on staff availability and appointment density.
+
+        Args:
+            max_appointments_per_day: Max appointments per staff per day
+            look_ahead_days: How far ahead to search
+
+        Returns:
+            LeadTimeResult with days until earliest slot
+
+        Validates: CRM Gap Closure Req 25.2, 25.3
+        """
+        self.log_started(
+            "calculate_lead_time",
+            max_per_day=max_appointments_per_day,
+            look_ahead_days=look_ahead_days,
+        )
+
+        today = date.today()
+
+        # Get all active staff members
+        all_staff = await self.staff_repository.find_available(active_only=True)
+        staff_count = len(all_staff) if all_staff else 1
+
+        # Total capacity per day = staff_count * max_appointments_per_day
+        daily_capacity = staff_count * max_appointments_per_day
+
+        for day_offset in range(look_ahead_days):
+            check_date = today + timedelta(days=day_offset)
+
+            # Skip weekends (basic availability check)
+            if check_date.weekday() >= 6:  # Sunday
+                continue
+
+            count = await self.appointment_repository.count_by_date(check_date)
+            if count < daily_capacity:
+                days_out = day_offset
+                if days_out == 0:
+                    display = "Available today"
+                elif days_out == 1:
+                    display = "Available tomorrow"
+                elif days_out < 7:
+                    display = f"Available in {days_out} days"
+                elif days_out < 14:
+                    display = "Booked out 1 week"
+                elif days_out < 21:
+                    display = "Booked out 2 weeks"
+                elif days_out < 28:
+                    display = "Booked out 3 weeks"
+                else:
+                    weeks = days_out // 7
+                    display = f"Booked out {weeks} weeks"
+
+                self.log_completed(
+                    "calculate_lead_time",
+                    days=days_out,
+                    earliest_date=str(check_date),
+                )
+                return LeadTimeResult(
+                    days=days_out,
+                    earliest_date=check_date,
+                    display=display,
+                )
+
+        # No availability found within look-ahead window
+        self.log_completed(
+            "calculate_lead_time",
+            days=look_ahead_days,
+            earliest_date=None,
+        )
+        return LeadTimeResult(
+            days=look_ahead_days,
+            earliest_date=None,
+            display=f"Booked out {look_ahead_days // 7}+ weeks",
+        )
+
+    async def get_staff_time_analytics(
+        self,
+        date_range: DateRange,
+    ) -> list[StaffTimeEntry]:
+        """Calculate staff time analytics: avg travel, job duration, total time.
+
+        Groups by staff and job type. Flags staff exceeding 1.5x average.
+
+        Args:
+            date_range: Start and end date for the analysis period
+
+        Returns:
+            List of StaffTimeEntry with analytics per staff/job_type
+
+        Validates: CRM Gap Closure Req 37.1, 37.2, 37.4
+        """
+        self.log_started(
+            "get_staff_time_analytics",
+            start_date=str(date_range.start_date),
+            end_date=str(date_range.end_date),
+        )
+
+        # Get completed appointments in the date range
+        appointments, _ = await self.appointment_repository.list_with_filters(
+            status=AppointmentStatus.COMPLETED,
+            date_from=date_range.start_date,
+            date_to=date_range.end_date,
+            page=1,
+            page_size=10000,
+            include_relationships=True,
+        )
+
+        # Group by (staff_id, job_type) and compute durations
+        groups: dict[
+            tuple[str, str],
+            list[dict[str, float]],
+        ] = {}
+
+        for apt in appointments:
+            if apt.en_route_at and apt.arrived_at and apt.completed_at:
+                travel = (apt.arrived_at - apt.en_route_at).total_seconds() / 60.0
+                job_dur = (apt.completed_at - apt.arrived_at).total_seconds() / 60.0
+                total = (apt.completed_at - apt.en_route_at).total_seconds() / 60.0
+            elif apt.arrived_at and apt.completed_at:
+                travel = 0.0
+                job_dur = (apt.completed_at - apt.arrived_at).total_seconds() / 60.0
+                total = job_dur
+            else:
+                continue
+
+            staff_id_str = str(apt.staff_id)
+            job_type = getattr(apt, "job", None)
+            jt = job_type.job_type if job_type else "unknown"
+            key = (staff_id_str, jt)
+
+            if key not in groups:
+                groups[key] = []
+            groups[key].append(
+                {
+                    "travel": max(travel, 0.0),
+                    "job": max(job_dur, 0.0),
+                    "total": max(total, 0.0),
+                }
+            )
+
+        # Compute averages per group
+        entries: list[StaffTimeEntry] = []
+        # Also compute global averages per job_type for flagging
+        job_type_totals: dict[str, list[float]] = {}
+
+        for (staff_id_str, jt), durations in groups.items():
+            count = len(durations)
+            avg_travel = sum(d["travel"] for d in durations) / count
+            avg_job = sum(d["job"] for d in durations) / count
+            avg_total = sum(d["total"] for d in durations) / count
+
+            # Collect for global average
+            if jt not in job_type_totals:
+                job_type_totals[jt] = []
+            job_type_totals[jt].extend(d["total"] for d in durations)
+
+            # Look up staff name
+            from uuid import UUID as _UUID  # noqa: PLC0415
+
+            staff = await self.staff_repository.get_by_id(_UUID(staff_id_str))
+            staff_name = f"{staff.first_name} {staff.last_name}" if staff else "Unknown"
+
+            entries.append(
+                StaffTimeEntry(
+                    staff_id=_UUID(staff_id_str),
+                    staff_name=staff_name,
+                    job_type=jt,
+                    avg_travel_minutes=round(avg_travel, 1),
+                    avg_job_minutes=round(avg_job, 1),
+                    avg_total_minutes=round(avg_total, 1),
+                    appointment_count=count,
+                    flagged=False,  # Will be set below
+                ),
+            )
+
+        # Flag entries where avg_total exceeds 1.5x the global average
+        # for that job type (Req 37.4)
+        for entry in entries:
+            jt = entry.job_type or "unknown"
+            if jt in job_type_totals and len(job_type_totals[jt]) > 1:
+                global_avg = sum(job_type_totals[jt]) / len(job_type_totals[jt])
+                if global_avg > 0 and entry.avg_total_minutes > 1.5 * global_avg:
+                    entry.flagged = True
+
+        self.log_completed(
+            "get_staff_time_analytics",
+            entry_count=len(entries),
+        )
+        return entries
+
+    # =========================================================================
+    # Private Helpers
+    # =========================================================================
+
+    async def _check_staff_conflict(
+        self,
+        staff_id: UUID,
+        scheduled_date: date,
+        start_time: time,
+        end_time: time,
+        exclude_appointment_id: UUID | None = None,
+    ) -> Appointment | None:
+        """Check if a staff member has a conflicting appointment.
+
+        Returns the conflicting appointment if found, None otherwise.
+        """
+        existing = await self.appointment_repository.get_staff_daily_schedule(
+            staff_id,
+            scheduled_date,
+        )
+
+        for apt in existing:
+            if exclude_appointment_id and apt.id == exclude_appointment_id:
+                continue
+            if apt.status in (
+                AppointmentStatus.CANCELLED.value,
+                AppointmentStatus.NO_SHOW.value,
+            ):
+                continue
+            # Check time overlap
+            if start_time < apt.time_window_end and end_time > apt.time_window_start:
+                return apt
+
+        return None
+
+    def _is_valid_transition(self, current: str, target: str) -> bool:
+        """Check if a status transition is valid per the strict state machine.
+
+        Handles the main workflow chain plus cancellation and no-show.
+        """
+        # Cancellation from applicable states
+        if target == AppointmentStatus.CANCELLED.value:
+            return current in _CANCELLABLE_STATUSES
+
+        # No-show from applicable states
+        if target == AppointmentStatus.NO_SHOW.value:
+            return current in _NO_SHOW_STATUSES
+
+        # Main workflow transitions
+        allowed = _STATUS_TRANSITIONS.get(current, [])
+        return target in allowed
+
+    async def _has_payment_or_invoice(self, appointment: Appointment) -> bool:
+        """Check if the appointment's job has a payment or invoice.
+
+        Validates: CRM Gap Closure Req 36.1, 36.2
+        """
+        if self.invoice_repository is None:
+            # If no invoice repo, can't check — allow completion
+            return True
+
+        invoice = await self._find_invoice_for_job(appointment.job_id)
+        return invoice is not None
+
+    async def _find_invoice_for_job(
+        self,
+        job_id: UUID,
+    ) -> Invoice | None:
+        """Find an existing invoice for a job by querying the DB directly.
+
+        Returns the first invoice found, or None.
+        """
+        if self.invoice_repository is None:
+            return None
+
+        try:
+            from sqlalchemy import select  # noqa: PLC0415
+
+            from grins_platform.models.invoice import Invoice  # noqa: PLC0415
+
+            session = self.invoice_repository.session
+            stmt = (
+                select(Invoice)
+                .where(Invoice.job_id == job_id)
+                .order_by(Invoice.created_at.desc())
+                .limit(1)
+            )
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+        except Exception:
+            return None
+
+    async def _get_last_review_request_date(
+        self,
+        customer_id: UUID,
+    ) -> datetime | None:
+        """Get the date of the last Google review request for a customer.
+
+        Checks sent_messages for review_request type messages.
+        Returns None if no previous request found.
+        """
+        # Query sent_messages for this customer with type review_request
+        # For now, we check via the appointment repository's session
+        # This is a simplified check — in production, would query
+        # sent_messages table directly
+        try:
+            from sqlalchemy import select  # noqa: PLC0415
+
+            from grins_platform.models.sent_message import (  # noqa: PLC0415
+                SentMessage,
+            )
+
+            session = self.appointment_repository.session
+            stmt = (
+                select(SentMessage.created_at)
+                .where(
+                    SentMessage.customer_id == customer_id,
+                    SentMessage.message_type == "review_request",
+                )
+                .order_by(SentMessage.created_at.desc())
+                .limit(1)
+            )
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()  # type: ignore[return-value]
+        except Exception:
+            # If we can't check, allow the request
+            return None

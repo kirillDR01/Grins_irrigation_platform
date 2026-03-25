@@ -53,6 +53,10 @@ def _make_lead_mock(
     lead.converted_at = None
     lead.created_at = datetime.now(tz=timezone.utc)
     lead.updated_at = datetime.now(tz=timezone.utc)
+    lead.city = None
+    lead.state = None
+    lead.address = None
+    lead.action_tags = None
     return lead
 
 
@@ -85,13 +89,17 @@ class TestLeadSmsDeferred:
 
     @pytest.mark.asyncio
     async def test_sms_consent_true_does_not_call_send_message(self) -> None:
-        """Lead with sms_consent=True should NOT call sms_service.send_message."""
+        """Lead with sms_consent=True calls send_automated_message."""
         service, sms_svc = _build_service()
+        sms_svc.send_automated_message = AsyncMock(
+            return_value={"success": True},
+        )
         lead = _make_lead_mock(sms_consent=True, phone="6125559999")
 
         await service._send_sms_confirmation(lead)
 
         sms_svc.send_message.assert_not_awaited()
+        sms_svc.send_automated_message.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_sms_consent_false_skips_and_does_not_call_send_message(
@@ -106,26 +114,28 @@ class TestLeadSmsDeferred:
         sms_svc.send_message.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_sms_confirmation_logs_deferred(self) -> None:
-        """_send_sms_confirmation logs 'lead.sms_confirmation.deferred'
-        when lead has sms_consent and phone."""
-        service, _ = _build_service()
+    async def test_sms_confirmation_logs_sent(self) -> None:
+        """_send_sms_confirmation logs 'lead.confirmation.sms_sent'
+        when lead has sms_consent and phone and send succeeds."""
+        sms_svc = AsyncMock()
+        sms_svc.send_automated_message = AsyncMock(
+            return_value={"success": True},
+        )
+        service, _ = _build_service(sms_service=sms_svc)
         lead = _make_lead_mock(sms_consent=True, phone="6125559999")
 
         with patch.object(service, "logger") as mock_logger:
             await service._send_sms_confirmation(lead)
 
-            # Find the deferred log call
-            deferred_calls = [
+            # Find the sent log call
+            sent_calls = [
                 call
                 for call in mock_logger.info.call_args_list
-                if call.args[0] == "lead.sms_confirmation.deferred"
+                if call.args[0] == "lead.confirmation.sms_sent"
             ]
-            assert len(deferred_calls) == 1
-            call_kwargs = deferred_calls[0].kwargs
+            assert len(sent_calls) == 1
+            call_kwargs = sent_calls[0].kwargs
             assert call_kwargs["lead_id"] == str(lead.id)
-            assert call_kwargs["reason"] == "sent_message_requires_customer_id"
-            assert call_kwargs["phone_last4"] == "9999"
 
     @pytest.mark.asyncio
     async def test_no_sms_service_logs_skipped(self) -> None:

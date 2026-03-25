@@ -3,11 +3,16 @@ export { LeadStatusBadge } from './components/LeadStatusBadge';
 export { LeadSituationBadge } from './components/LeadSituationBadge';
 export { LeadSourceBadge } from './components/LeadSourceBadge';
 export { IntakeTagBadge } from './components/IntakeTagBadge';
+export { LeadTagBadges } from './components/LeadTagBadges';
 export { FollowUpQueue } from './components/FollowUpQueue';
 export { ConvertLeadDialog } from './components/ConvertLeadDialog';
 export { LeadFilters } from './components/LeadFilters';
 export { LeadsList } from './components/LeadsList';
 export { LeadDetail } from './components/LeadDetail';
+export { BulkOutreach } from './components/BulkOutreach';
+export { AttachmentPanel } from './components/AttachmentPanel';
+export { EstimateCreator } from './components/EstimateCreator';
+export { ContractCreator } from './components/ContractCreator';
 
 // Hooks
 export {
@@ -15,11 +20,19 @@ export {
   useLead,
   useFollowUpQueue,
   useLeadMetricsBySource,
+  useLeadAttachments,
+  useEstimateTemplates,
+  useContractTemplates,
   leadKeys,
   useUpdateLead,
   useConvertLead,
   useDeleteLead,
   useCreateFromCall,
+  useBulkOutreach,
+  useUploadAttachment,
+  useDeleteAttachment,
+  useCreateEstimate,
+  useCreateContract,
 } from './hooks';
 
 // Types
@@ -29,6 +42,7 @@ export type {
   LeadSituation,
   LeadSource,
   IntakeTag,
+  ActionTag,
   LeadListParams,
   LeadUpdate,
   LeadConversionRequest,
@@ -40,6 +54,15 @@ export type {
   LeadMetricsBySourceParams,
   LeadMetricsBySourceResponse,
   LeadSourceCount,
+  LeadAttachment,
+  AttachmentType,
+  EstimateTemplate,
+  ContractTemplate,
+  EstimateLineItem,
+  BulkOutreachRequest,
+  BulkOutreachResponse,
+  CreateEstimateRequest,
+  CreateContractRequest,
 } from './types';
 export {
   LEAD_STATUS_LABELS,
@@ -47,6 +70,8 @@ export {
   LEAD_SOURCE_LABELS,
   LEAD_SOURCE_COLORS,
   INTAKE_TAG_LABELS,
+  ACTION_TAG_LABELS,
+  ACTION_TAG_COLORS,
 } from './types';
 
 // API

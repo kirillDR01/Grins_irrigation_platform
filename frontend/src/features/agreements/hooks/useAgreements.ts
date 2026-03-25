@@ -96,7 +96,7 @@ export function useOnboardingIncomplete() {
   return useQuery({
     queryKey: agreementKeys.list({ status: 'pending' as const, page: 1, page_size: 100 }),
     queryFn: () => agreementsApi.list({ status: 'pending', page: 1, page_size: 100 }),
-    select: (data) => data.items.filter((a) => !a.property_id),
+    select: (data) => data?.items?.filter((a) => !a.property_id) ?? [],
   });
 }
 

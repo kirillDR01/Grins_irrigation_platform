@@ -101,6 +101,9 @@ class TestInvoiceServiceCreateInvoice:
         invoice.lien_filed_date = None
         invoice.line_items = None
         invoice.notes = None
+        invoice.document_url = None
+        invoice.invoice_token = None
+        invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
         return invoice
@@ -348,6 +351,9 @@ class TestInvoiceServiceGetInvoice:
         invoice.lien_filed_date = None
         invoice.line_items = None
         invoice.notes = None
+        invoice.document_url = None
+        invoice.invoice_token = None
+        invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
         return invoice
@@ -434,6 +440,9 @@ class TestInvoiceServiceUpdateInvoice:
         invoice.lien_filed_date = None
         invoice.line_items = None
         invoice.notes = None
+        invoice.document_url = None
+        invoice.invoice_token = None
+        invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
         return invoice
@@ -544,6 +553,9 @@ class TestInvoiceServiceStatusOperations:
         invoice.lien_filed_date = None
         invoice.line_items = None
         invoice.notes = None
+        invoice.document_url = None
+        invoice.invoice_token = None
+        invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
         return invoice
@@ -714,6 +726,9 @@ class TestInvoiceServicePaymentOperations:
         invoice.lien_filed_date = None
         invoice.line_items = None
         invoice.notes = None
+        invoice.document_url = None
+        invoice.invoice_token = None
+        invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
         return invoice
@@ -909,6 +924,9 @@ class TestInvoiceServiceReminderOperations:
         invoice.lien_filed_date = None
         invoice.line_items = None
         invoice.notes = None
+        invoice.document_url = None
+        invoice.invoice_token = None
+        invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
         return invoice
@@ -1013,6 +1031,9 @@ class TestInvoiceServiceLienOperations:
         invoice.lien_filed_date = None
         invoice.line_items = None
         invoice.notes = None
+        invoice.document_url = None
+        invoice.invoice_token = None
+        invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
         return invoice
@@ -1184,6 +1205,9 @@ class TestInvoiceServiceGenerateFromJob:
         invoice.lien_filed_date = None
         invoice.line_items = None
         invoice.notes = None
+        invoice.document_url = None
+        invoice.invoice_token = None
+        invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
         return invoice
@@ -1370,6 +1394,9 @@ class TestInvoiceServiceListInvoices:
         invoice.lien_filed_date = None
         invoice.line_items = None
         invoice.notes = None
+        invoice.document_url = None
+        invoice.invoice_token = None
+        invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
         return invoice
@@ -1498,6 +1525,9 @@ class TestInvoiceServiceGetInvoiceDetail:
         invoice.lien_filed_date = None
         invoice.line_items = None
         invoice.notes = None
+        invoice.document_url = None
+        invoice.invoice_token = None
+        invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
 
@@ -1633,6 +1663,9 @@ class TestInvoiceServiceUpdateInvoiceFields:
         invoice.lien_filed_date = None
         invoice.line_items = None
         invoice.notes = None
+        invoice.document_url = None
+        invoice.invoice_token = None
+        invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
         return invoice
@@ -1905,6 +1938,9 @@ class TestInvoiceServiceSendInvoiceEdgeCases:
         invoice.lien_filed_date = None
         invoice.line_items = None
         invoice.notes = None
+        invoice.document_url = None
+        invoice.invoice_token = None
+        invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
         return invoice
@@ -1974,6 +2010,9 @@ class TestInvoiceServiceMarkOverdueEdgeCases:
         invoice.lien_filed_date = None
         invoice.line_items = None
         invoice.notes = None
+        invoice.document_url = None
+        invoice.invoice_token = None
+        invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
         return invoice
@@ -2072,6 +2111,9 @@ class TestInvoiceServiceListInvoicesFilters:
         invoice.lien_filed_date = None
         invoice.line_items = None
         invoice.notes = None
+        invoice.document_url = None
+        invoice.invoice_token = None
+        invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
         return invoice

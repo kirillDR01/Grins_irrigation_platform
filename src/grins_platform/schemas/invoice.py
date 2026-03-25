@@ -209,6 +209,18 @@ class InvoiceResponse(BaseModel):
         description="Invoice line items",
     )
     notes: str | None = Field(default=None, description="Optional notes")
+    document_url: str | None = Field(
+        default=None,
+        description="S3 URL for generated PDF",
+    )
+    invoice_token: UUID | None = Field(
+        default=None,
+        description="Portal access token",
+    )
+    customer_name: str | None = Field(
+        default=None,
+        description="Customer full name (populated from join)",
+    )
     created_at: datetime = Field(description="Record creation timestamp")
     updated_at: datetime = Field(description="Record update timestamp")
 

@@ -1,4 +1,4 @@
-import type { BaseEntity, PaginationParams } from '@/core/api';
+import type { BaseEntity, PaginationParams, PaginatedResponse } from '@/core/api';
 
 // Property entity (returned nested in customer detail)
 export interface Property extends BaseEntity {
@@ -32,9 +32,91 @@ export interface Customer extends BaseEntity {
   sms_opt_in: boolean;
   email_opt_in: boolean;
   lead_source: string | null;
+  internal_notes: string | null;
   preferred_service_times: { preference: string } | null;
   properties?: Property[];
 }
+
+// Customer photo entity (Req 9)
+export interface CustomerPhoto extends BaseEntity {
+  customer_id: string;
+  file_key: string;
+  file_name: string;
+  file_size: number;
+  content_type: string;
+  caption: string | null;
+  uploaded_by: string | null;
+  download_url: string;
+}
+
+// Customer invoice entity (Req 10)
+export type InvoiceStatus = 'draft' | 'sent' | 'viewed' | 'paid' | 'overdue' | 'cancelled' | 'void';
+
+export interface CustomerInvoice extends BaseEntity {
+  invoice_number: string;
+  date: string;
+  due_date: string | null;
+  total_amount: number;
+  status: InvoiceStatus;
+  days_until_due: number | null;
+  days_past_due: number | null;
+}
+
+// Invoice status color mapping
+export const invoiceStatusColors: Record<InvoiceStatus, string> = {
+  draft: 'bg-slate-100 text-slate-700',
+  sent: 'bg-blue-100 text-blue-700',
+  viewed: 'bg-violet-100 text-violet-700',
+  paid: 'bg-emerald-100 text-emerald-700',
+  overdue: 'bg-red-100 text-red-700',
+  cancelled: 'bg-gray-100 text-gray-600',
+  void: 'bg-gray-100 text-gray-600',
+};
+
+// Payment method entity (Req 56)
+export interface PaymentMethod {
+  id: string;
+  brand: string;
+  last4: string;
+  exp_month: number;
+  exp_year: number;
+  is_default: boolean;
+}
+
+// Charge request (Req 56)
+export interface ChargeRequest {
+  payment_method_id: string;
+  amount: number;
+  description: string;
+}
+
+// Duplicate customer group (Req 7)
+export interface DuplicateGroup {
+  primary: Customer;
+  duplicates: Customer[];
+  match_reasons: string[];
+}
+
+// Merge request (Req 7)
+export interface MergeRequest {
+  primary_customer_id: string;
+  duplicate_customer_ids: string[];
+}
+
+// Sent message entity (Req 82)
+export interface SentMessage {
+  id: string;
+  message_type: string;
+  recipient_phone: string | null;
+  recipient_email: string | null;
+  content: string;
+  status: string;
+  sent_at: string;
+  created_at: string;
+}
+
+// Re-export PaginatedResponse for convenience
+export type { PaginatedResponse };
 
 // Create customer request
 export interface CustomerCreate {
@@ -62,6 +144,8 @@ export interface CustomerUpdate {
   sms_opt_in?: boolean;
   email_opt_in?: boolean;
   lead_source?: string | null;
+  internal_notes?: string | null;
+  preferred_service_times?: { preference: string } | null;
 }
 
 // Customer list params

@@ -3,8 +3,8 @@
  */
 
 // Components
-export { DashboardPage, MetricsCard, RecentActivity, LeadDashboardWidgets } from './components';
-export type { MetricsCardProps } from './components';
+export { DashboardPage, MetricsCard, RecentActivity, LeadDashboardWidgets, AlertCard } from './components';
+export type { MetricsCardProps, AlertCardProps } from './components';
 
 // Hooks
 export {

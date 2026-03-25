@@ -14,6 +14,11 @@ vi.mock('@/features/dashboard/hooks', () => ({
   useJobsByStatus: vi.fn(),
 }));
 
+// Mock the auth hook
+vi.mock('@/features/auth', () => ({
+  useAuth: () => ({ user: { name: 'Admin User' } }),
+}));
+
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <BrowserRouter>{children}</BrowserRouter>
 );
@@ -47,7 +52,7 @@ describe('MorningBriefing', () => {
     render(<MorningBriefing />, { wrapper });
     const greeting = screen.getByTestId('greeting');
     expect(greeting).toBeInTheDocument();
-    expect(greeting.textContent).toContain('Viktor');
+    expect(greeting.textContent).toContain('Admin');
     expect(greeting.textContent).toContain('5 overnight requests');
   });
 

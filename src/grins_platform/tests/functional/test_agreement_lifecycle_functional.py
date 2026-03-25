@@ -249,6 +249,7 @@ class TestCheckoutWebhookPipeline:
         # Customer repo — no existing customer
         cust_repo = AsyncMock()
         cust_repo.find_by_email.return_value = []
+        cust_repo.find_by_phone.return_value = None
         customer = MagicMock()
         customer.id = uuid4()
         customer.stripe_customer_id = None

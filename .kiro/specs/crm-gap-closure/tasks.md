@@ -197,7 +197,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Register all new models in `__init__.py`
     - _Requirements: 4.4, 9.1, 12.1, 13.1, 15.1, 17.1, 17.2, 20.1, 35.3, 40.1, 42.3, 45.1, 45.2, 48.1, 49.1, 51.1, 53.1, 54.4, 64.1, 74.1, 80.1, 81.1, 81.2, 84.1, 87.1_
 
-  - [ ] 3.2 Create Pydantic schemas for all new entities
+  - [x] 3.2 Create Pydantic schemas for all new entities
     - `src/grins_platform/schemas/communication.py` — CommunicationCreate, CommunicationResponse, CommunicationUpdate (address action), UnaddressedCountResponse
     - `src/grins_platform/schemas/estimate.py` — EstimateCreate, EstimateResponse, EstimateTemplateCreate/Response, ContractTemplateCreate/Response, EstimateSendResponse, FollowUpResponse
     - `src/grins_platform/schemas/expense.py` — ExpenseCreate, ExpenseResponse, ExpenseByCategoryResponse, ReceiptExtractionResponse
@@ -217,7 +217,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - All schemas enforce max_length on strings, UUID validation on IDs, strict typing
     - _Requirements: 5.2, 6.2, 8.1, 10.3, 11.4, 12.2, 13.1, 20.2, 22.5, 37.2, 40.2, 47.3, 48.1, 52.5, 53.3, 57.2, 58.2, 59.2, 61.2, 61.4, 63.5, 64.2, 74.3, 75.1, 75.2, 75.4, 78.6, 82.2, 82.3, 83.2, 83.3, 84.2, 84.9, 87.2_
 
-  - [ ] 3.3 Create repositories for all new entities
+  - [x] 3.3 Create repositories for all new entities
     - `src/grins_platform/repositories/communication_repository.py` — CRUD + unaddressed count query + mark addressed
     - `src/grins_platform/repositories/estimate_repository.py` — CRUD + get_by_token + find unapproved older than N hours + template CRUD
     - `src/grins_platform/repositories/expense_repository.py` — CRUD + by-category aggregation + by-job filtering
@@ -227,7 +227,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - `src/grins_platform/repositories/marketing_budget_repository.py` — CRUD + budget vs actual calculation
     - _Requirements: 4.2, 4.4, 17.3, 17.4, 45.3, 45.5, 48.2, 49.2, 49.3, 53.2, 53.3, 64.2, 74.3_
 
-  - [ ] 3.4 Write unit tests for schema validation and model constraints
+  - [x] 3.4 Write unit tests for schema validation and model constraints
     - Test Communication record round-trip (create + read back identical fields, addressed defaults to false)
     - Test SentMessage with customer_id=NULL and valid lead_id inserts successfully
     - Test SentMessage with both customer_id=NULL and lead_id=NULL fails CHECK constraint
@@ -239,11 +239,11 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - **Validates: Requirements 81.1, 81.2, 81.3, 81.4**
     - _Requirements: 4.6, 4.7, 81.7, 81.8, 81.9_
 
-- [ ] 4. Checkpoint — Data layer complete
+- [x] 4. Checkpoint — Data layer complete
   - Ensure all models, schemas, and repositories are created, all data layer tests pass, ask the user if questions arise.
 
 - [ ] 5. Service Layer: Core Business Logic
-  - [ ] 5.1 Implement CustomerService enhancements (duplicates, merge, notes, photos, invoices, service times, payment methods)
+  - [x] 5.1 Implement CustomerService enhancements (duplicates, merge, notes, photos, invoices, service times, payment methods)
     - `find_duplicates()` — pg_trgm similarity() threshold 0.7 for name, exact match phone/email
     - `merge_customers()` — single transaction: UPDATE all FK refs → soft-delete duplicates → AuditLog entry
     - `update_internal_notes()` — PATCH internal_notes field
@@ -254,7 +254,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - All methods use LoggerMixin structured logging
     - _Requirements: 7.1, 7.2, 7.4, 8.4, 10.1, 10.2, 11.3, 56.1, 56.2, 56.3, 56.5, 56.6_
 
-  - [ ] 5.2 Write unit tests for CustomerService
+  - [x] 5.2 Write unit tests for CustomerService
     - Test duplicate detection finds matches by phone, email, and similar name (P7)
     - Test merge reassigns all related records and soft-deletes duplicates (P8)
     - Test internal notes round-trip (P9)
@@ -275,7 +275,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - **Validates: Requirements 11.1, 11.2, 11.3, 11.4**
     - _Requirements: 7.5, 7.6, 8.5, 9.7, 10.4, 11.5, 56.7_
 
-  - [ ] 5.3 Implement LeadService enhancements (address, tags, bulk outreach, attachments, reverse flow, work request migration)
+  - [x] 5.3 Implement LeadService enhancements (address, tags, bulk outreach, attachments, reverse flow, work request migration)
     - `create_lead()` — accept city/state/address, auto-assign NEEDS_CONTACT tag, auto-populate city/state from zip, trigger SMS confirmation if consented (Req 46)
     - `update_action_tags()` — atomic JSONB tag update
     - `mark_contacted()` — remove NEEDS_CONTACT, set contacted_at
@@ -285,7 +285,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - All methods use LoggerMixin structured logging
     - _Requirements: 12.2, 12.5, 13.2, 13.3, 13.4, 13.5, 13.6, 14.1, 14.3, 14.4, 14.5, 18.1, 18.2, 19.1, 19.4, 19.5, 19.6, 46.1, 46.2, 46.3_
 
-  - [ ] 5.4 Write unit tests for LeadService
+  - [x] 5.4 Write unit tests for LeadService
     - Test lead address fields round-trip (P14)
     - Test zip code auto-populates city and state (P15)
     - Test tag state machine: new→NEEDS_CONTACT→contacted→NEEDS_ESTIMATE→ESTIMATE_PENDING→ESTIMATE_APPROVED (P16)
@@ -315,7 +315,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - **Validates: Requirements 46.1, 46.2**
     - _Requirements: 12.6, 12.7, 13.9, 13.10, 14.6, 14.7, 15.6, 15.7, 18.4, 18.5, 19.7, 19.8, 46.5, 46.6, 46.7_
 
-  - [ ] 5.5 Implement EstimateService (create, templates, send, portal approve/reject, follow-ups, auto-routing, promotions)
+  - [x] 5.5 Implement EstimateService (create, templates, send, portal approve/reject, follow-ups, auto-routing, promotions)
     - `create_estimate()` — line items, optional Good/Better/Best tiers, calculate subtotal/tax/discount/total, generate customer_token (UUID v4), set token_expires_at (30 days)
     - `create_from_template()` — clone template line_items, apply overrides
     - `send_estimate()` — set status=SENT, send portal link via SMS+email, schedule follow-ups at Day 3/7/14/21
@@ -326,7 +326,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - `apply_promotion()` — validate code, calculate discounted total
     - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6, 17.3, 17.4, 17.5, 32.3, 32.4, 32.7, 48.4, 48.5, 48.6, 48.7, 51.2, 51.3, 51.4, 51.5, 78.1, 78.2, 78.3, 78.4, 78.5_
 
-  - [ ] 5.6 Write unit tests for EstimateService
+  - [x] 5.6 Write unit tests for EstimateService
     - Test portal estimate access by valid/expired token (P20)
     - Test estimate approval updates lead tag and sets token_readonly (P21)
     - Test estimate template round-trip and creation from template with overrides (P22)
@@ -350,7 +350,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - **Validates: Requirements 78.6**
     - _Requirements: 16.8, 16.9, 17.7, 17.8, 32.8, 48.8, 51.7, 51.8, 78.7, 78.8_
 
-  - [ ] 5.7 Implement AppointmentService enhancements (reschedule, status transitions, payment collection, invoice/estimate creation, notes/photos, review request, lead time, staff time analytics)
+  - [x] 5.7 Implement AppointmentService enhancements (reschedule, status transitions, payment collection, invoice/estimate creation, notes/photos, review request, lead time, staff time analytics)
     - `reschedule()` — drag-drop: validate no staff conflict, update time
     - `transition_status()` — strict state machine: confirmed→en_route→in_progress→completed; record timestamps; payment gate on completion (Req 36); trigger notifications on each transition (Req 39)
     - `collect_payment()` — create/update invoice with payment (card, cash, check, venmo, zelle)
@@ -362,7 +362,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - `get_staff_time_analytics()` — avg travel_time, job_duration, total_time by staff/job_type, flag 1.5x threshold
     - _Requirements: 24.2, 24.5, 25.2, 25.3, 29.1, 30.3, 30.4, 30.5, 30.6, 31.2, 31.3, 31.4, 31.5, 32.5, 32.6, 33.2, 33.3, 34.2, 34.5, 34.6, 35.4, 35.5, 35.6, 36.1, 36.2, 36.4, 37.1, 37.2, 37.4_
 
-  - [ ] 5.8 Write unit tests for AppointmentService
+  - [x] 5.8 Write unit tests for AppointmentService
     - Test appointment conflict detection on reschedule (P28)
     - Test schedule lead time calculation (P29)
     - Test job filter returns only matching jobs (P30)
@@ -401,7 +401,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - **Validates: Requirements 40.2**
     - _Requirements: 24.6, 24.7, 25.4, 26.5, 29.4, 30.7, 30.8, 31.6, 31.7, 32.8, 33.6, 33.7, 34.7, 35.8, 35.9, 36.5, 36.6, 37.5, 37.6, 40.5_
 
-  - [ ] 5.9 Implement NotificationService (day-of reminders, on-my-way, arrival, delay, completion, invoice reminders, lien notifications, lead confirmation SMS)
+  - [x] 5.9 Implement NotificationService (day-of reminders, on-my-way, arrival, delay, completion, invoice reminders, lien notifications, lead confirmation SMS)
     - `send_day_of_reminders()` — daily 7AM CT, SMS (if consented) + email for today's appointments
     - `send_on_my_way()` — staff name + Google Maps ETA to customer
     - `send_arrival_notification()` — confirm technician arrived
@@ -412,7 +412,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - All notifications consent-gated: SMS requires sms_consent=True, email always sent as fallback
     - _Requirements: 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.7, 39.8, 46.1, 46.2, 46.3, 54.1, 54.2, 54.3, 54.5, 55.1, 55.2, 55.3, 55.4, 55.5_
 
-  - [ ] 5.10 Write unit tests for NotificationService
+  - [x] 5.10 Write unit tests for NotificationService
     - Test each notification type triggered at correct event (P42)
     - Test SMS consent gating and email fallback (P42)
     - Test automated invoice reminder scheduling: pre-due, past-due, lien thresholds (P55)
@@ -422,20 +422,20 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - **Validates: Requirements 54.1, 54.2, 54.3, 55.1, 55.2**
     - _Requirements: 39.9, 39.10, 54.6, 55.6_
 
-  - [ ] 5.11 Implement CampaignService (create, send, stats, automation rules)
+  - [x] 5.11 Implement CampaignService (create, send, stats, automation rules)
     - `create_campaign()` — DRAFT status
     - `send_campaign()` — filter recipients by target_audience, skip non-consented, enqueue as background job, CAN-SPAM compliance (address + unsubscribe link)
     - `get_campaign_stats()` — delivery metrics from campaign_recipients
     - `evaluate_automation_rules()` — daily job: evaluate recurring triggers, create and send matching campaigns
     - _Requirements: 45.3, 45.4, 45.5, 45.6, 45.7, 45.8, 45.9, 45.10_
 
-  - [ ] 5.12 Write unit tests for CampaignService
+  - [x] 5.12 Write unit tests for CampaignService
     - Test campaign recipient filtering by consent (P48)
     - **Property 48: Campaign recipient filtering by consent**
     - **Validates: Requirements 45.6, 45.5**
     - _Requirements: 45.11, 45.12_
 
-  - [ ] 5.13 Implement AccountingService (summary, expenses by category, job financials, tax summary, tax estimate, tax projection, receipt OCR, Plaid sync)
+  - [x] 5.13 Implement AccountingService (summary, expenses by category, job financials, tax summary, tax estimate, tax projection, receipt OCR, Plaid sync)
     - `get_summary()` — YTD revenue (paid invoices), expenses, profit, pending/past-due totals
     - `get_expenses_by_category()` — aggregate expenses by category for date range
     - `get_job_financials()` — quoted_amount, final_amount, total_paid, material_costs, labor_costs, total_costs, profit, profit_margin
@@ -446,7 +446,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - `sync_transactions()` — Plaid daily sync: fetch transactions, auto-categorize by MCC, create expenses
     - _Requirements: 52.2, 52.5, 53.3, 53.5, 53.6, 57.1, 57.2, 59.1, 59.2, 59.3, 59.4, 60.1, 60.2, 60.4, 61.1, 61.2, 61.3, 61.4, 62.2, 62.3, 62.4, 62.5_
 
-  - [ ] 5.14 Write unit tests for AccountingService
+  - [x] 5.14 Write unit tests for AccountingService
     - Test accounting summary calculation (P53)
     - Test expense category aggregation and per-job cost linkage (P54)
     - Test per-job financial calculations with zero division handling (P56)
@@ -471,14 +471,14 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - **Validates: Requirements 62.4**
     - _Requirements: 52.7, 53.8, 53.9, 57.4, 58.5, 59.5, 60.6, 61.5, 62.7_
 
-  - [ ] 5.15 Implement MarketingService (lead analytics, CAC, QR codes) and MediaService (CRUD)
+  - [x] 5.15 Implement MarketingService (lead analytics, CAC, QR codes) and MediaService (CRUD)
     - `get_lead_analytics()` — lead counts by source, conversion funnel, conversion rates, avg time to conversion, top source, trend
     - `get_cac()` — CAC per lead source = marketing_spend / converted_customers
     - `generate_qr_code()` — QR code PNG with UTM params (utm_source=qr_code, utm_campaign={name}, utm_medium=print)
     - MediaService: CRUD for media library items with file upload/download
     - _Requirements: 49.2, 49.3, 58.1, 58.2, 63.2, 63.3, 63.4, 63.5, 65.1, 65.3_
 
-  - [ ] 5.16 Write unit tests for MarketingService and MediaService
+  - [x] 5.16 Write unit tests for MarketingService and MediaService
     - Test lead source analytics and conversion funnel (P61)
     - Test marketing budget vs actual spend (P62)
     - Test QR code URL contains correct UTM parameters (P63)
@@ -491,7 +491,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - **Validates: Requirements 65.1, 65.3**
     - _Requirements: 49.6, 58.5, 63.7, 64.5, 65.5_
 
-  - [ ] 5.17 Implement AuditService, ChatService, InvoicePDFService, and remaining services
+  - [x] 5.17 Implement AuditService, ChatService, InvoicePDFService, and remaining services
     - AuditService: `log_action()` — create audit log entry; `get_audit_log()` — paginated, filterable
     - ChatService: `handle_public_message()` — GPT-4o-mini with Grins context, Redis session (30min TTL), human escalation detection → create Communication + Lead
     - InvoicePDFService: `generate_pdf()` — WeasyPrint HTML→PDF, upload to S3, update invoice.document_url; `get_pdf_url()` — pre-signed download URL
@@ -505,7 +505,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Update NotificationService to include portal invoice link `/portal/invoices/{token}` in invoice notifications instead of internal CRM links (Req 84.7)
     - _Requirements: 41.1, 41.2, 41.5, 42.2, 42.5, 43.1, 43.2, 43.3, 43.5, 44.1, 44.2, 44.3, 44.5, 74.1, 74.2, 74.3, 80.2, 80.3, 80.4, 80.7, 84.1, 84.2, 84.7, 84.8, 84.9, 87.2, 87.7, 87.8, 87.9_
 
-  - [ ] 5.18 Write unit tests for AuditService, ChatService, InvoicePDFService, and remaining services
+  - [x] 5.18 Write unit tests for AuditService, ChatService, InvoicePDFService, and remaining services
     - Test audit log entry creation for auditable actions (P70)
     - Test chat escalation detection creates lead and communication (P46)
     - Test voice webhook creates lead with correct source (P47)
@@ -535,17 +535,17 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - **Validates: Requirements 87.2, 87.7, 87.8**
     - _Requirements: 41.6, 41.7, 42.6, 43.6, 44.7, 74.5, 79.6, 79.7, 80.8, 84.10, 84.11, 87.10_
 
-- [ ] 6. Checkpoint — Service layer complete
+- [x] 6. Checkpoint — Service layer complete
   - Ensure all service tests pass, ask the user if questions arise.
 
-- [ ] 7. API Layer: All New and Enhanced Routes
-  - [ ] 7.1 Create Dashboard-related API endpoints
+- [x] 7. API Layer: All New and Enhanced Routes
+  - [x] 7.1 Create Dashboard-related API endpoints
     - `GET /api/v1/communications/unaddressed-count` — unaddressed message count (Req 4)
     - `GET /api/v1/invoices/metrics/pending` — pending invoice count + total (Req 5)
     - `GET /api/v1/jobs/metrics/by-status` — 6-category job status counts (Req 6)
     - _Requirements: 4.2, 5.2, 6.2_
 
-  - [ ] 7.2 Write unit tests for Dashboard API endpoints
+  - [x] 7.2 Write unit tests for Dashboard API endpoints
     - Test unaddressed count returns correct counts (P3)
     - Test pending invoice metrics returns correct count and total from actual invoice records (P5)
     - Test by-status metrics returns all six categories with correct counts (P6)
@@ -557,7 +557,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - **Validates: Requirements 6.1, 6.2**
     - _Requirements: 4.6, 5.4, 6.4_
 
-  - [ ] 7.3 Create Customer-related API endpoints
+  - [x] 7.3 Create Customer-related API endpoints
     - `GET /api/v1/customers/duplicates` — potential duplicate groups (Req 7)
     - `POST /api/v1/customers/merge` — merge duplicate customers (Req 7)
     - `POST /api/v1/customers/{id}/photos` — upload customer photos (Req 9)
@@ -569,7 +569,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Update `PATCH /api/v1/customers/{id}` to accept internal_notes and preferred_service_times (Req 8, 11)
     - _Requirements: 7.1, 7.2, 8.4, 9.2, 9.3, 9.4, 10.3, 11.3, 56.2, 56.3_
 
-  - [ ] 7.4 Create Lead-related API endpoints
+  - [x] 7.4 Create Lead-related API endpoints
     - `POST /api/v1/leads/bulk-outreach` — bulk SMS/email outreach (Req 14)
     - `POST /api/v1/leads/{id}/attachments` — upload attachment (Req 15)
     - `GET /api/v1/leads/{id}/attachments` — list attachments with pre-signed URLs (Req 15)
@@ -577,14 +577,14 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Update `POST /api/v1/leads` and `PATCH /api/v1/leads/{id}` to accept city, state, address, action_tags (Req 12, 13)
     - _Requirements: 12.2, 13.1, 14.1, 15.2, 15.3, 15.4_
 
-  - [ ] 7.5 Create Estimate and Template API endpoints
+  - [x] 7.5 Create Estimate and Template API endpoints
     - CRUD `/api/v1/estimates` — estimate CRUD (Req 48)
     - `POST /api/v1/estimates/{id}/send` — send estimate to customer (Req 48)
     - CRUD `/api/v1/templates/estimates` — estimate template CRUD (Req 17)
     - CRUD `/api/v1/templates/contracts` — contract template CRUD (Req 17)
     - _Requirements: 17.3, 17.4, 48.2, 48.3_
 
-  - [ ] 7.6 Create Portal API endpoints (public, no auth)
+  - [x] 7.6 Create Portal API endpoints (public, no auth)
     - `GET /api/v1/portal/estimates/{token}` — view estimate (Req 16)
     - `POST /api/v1/portal/estimates/{token}/approve` — approve estimate (Req 16)
     - `POST /api/v1/portal/estimates/{token}/reject` — reject estimate (Req 16)
@@ -593,7 +593,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Responses exclude internal IDs (Req 78)
     - _Requirements: 16.1, 16.2, 16.3, 16.4, 78.3, 78.5, 78.6_
 
-  - [ ] 7.7 Create Schedule/Appointment API endpoints
+  - [x] 7.7 Create Schedule/Appointment API endpoints
     - Update `PATCH /api/v1/appointments/{id}` — reschedule via drag-drop (Req 24)
     - `GET /api/v1/schedule/lead-time` — booking lead time (Req 25)
     - `POST /api/v1/appointments/{id}/collect-payment` — on-site payment (Req 30)
@@ -609,7 +609,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - `POST /api/v1/notifications/appointment/{id}/day-of` — day-of reminder trigger (Req 39)
     - _Requirements: 24.2, 25.2, 30.5, 31.4, 32.6, 33.4, 34.3, 37.2, 39.6, 41.1, 41.5, 42.2_
 
-  - [ ] 7.8 Create Sales, Accounting, Marketing, Communications, Chat, Voice, Media, Audit, and Invoice PDF API endpoints
+  - [x] 7.8 Create Sales, Accounting, Marketing, Communications, Chat, Voice, Media, Audit, and Invoice PDF API endpoints
     - `GET /api/v1/sales/metrics` — sales pipeline metrics (Req 47)
     - `GET /api/v1/accounting/summary` — YTD revenue/expenses/profit (Req 52)
     - CRUD `/api/v1/expenses` + `GET /api/v1/expenses/by-category` (Req 53)
@@ -639,7 +639,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Register all new routers in `main.py` with appropriate prefixes and tags
     - _Requirements: 38.1, 43.1, 43.4, 44.5, 45.3, 45.4, 45.5, 47.3, 49.2, 49.3, 52.5, 53.2, 53.3, 53.5, 57.2, 58.2, 59.2, 60.5, 61.2, 61.4, 62.2, 63.5, 64.2, 65.1, 74.3, 80.2, 80.3, 82.1, 82.2, 82.3, 83.1, 83.2, 83.7, 84.2, 84.3, 87.2_
 
-  - [ ] 7.9 Write unit tests for Invoice bulk notify and remaining API endpoints
+  - [x] 7.9 Write unit tests for Invoice bulk notify and remaining API endpoints
     - Test consent-gated bulk invoice notifications with correct summary (P41)
     - Test sales pipeline metrics accuracy (P50)
     - **Property 41: Consent-gated bulk invoice notifications**
@@ -648,35 +648,35 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - **Validates: Requirements 47.2, 47.3**
     - _Requirements: 38.6, 47.6_
 
-- [ ] 8. Checkpoint — API layer complete
+- [x] 8. Checkpoint — API layer complete
   - Ensure all API endpoints are registered, all API tests pass, ask the user if questions arise.
 
-- [ ] 9. Frontend: Dashboard Enhancements
-  - [ ] 9.1 Implement Dashboard alert navigation with highlighting (Req 3)
+- [x] 9. Frontend: Dashboard Enhancements
+  - [x] 9.1 Implement Dashboard alert navigation with highlighting (Req 3)
     - Create `AlertCard.tsx` — clickable card that navigates to target page with `?status={status}&highlight={id}` query params
     - Update Job_List_View and Leads_Page to parse URL query params, auto-apply filters, and show 3-second highlight animation (CSS `@keyframes highlight-fade`)
     - Wire dashboard job status counts to navigate to `/jobs?status={clicked_status}`
     - Wire "New Leads" card to navigate to `/leads?status=new`
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6_
 
-  - [ ] 9.2 Implement Dashboard Messages Widget (Req 4)
+  - [x] 9.2 Implement Dashboard Messages Widget (Req 4)
     - Create `MessagesWidget.tsx` — fetch `GET /communications/unaddressed-count`, display count badge, click navigates to `/communications`
     - _Requirements: 4.1, 4.3_
 
-  - [ ] 9.3 Implement Dashboard Invoice Metrics Widget (Req 5)
+  - [x] 9.3 Implement Dashboard Invoice Metrics Widget (Req 5)
     - Create `InvoiceMetricsWidget.tsx` — fetch `GET /invoices/metrics/pending`, display count + total amount, replace old job-status-based calculation
     - _Requirements: 5.1, 5.3_
 
-  - [ ] 9.4 Implement Dashboard Job Status Grid (Req 6)
+  - [x] 9.4 Implement Dashboard Job Status Grid (Req 6)
     - Create `JobStatusGrid.tsx` — fetch `GET /jobs/metrics/by-status`, render 6 cards (New Requests, Estimates, Pending Approval, To Be Scheduled, In Progress, Complete), each clickable → navigates to `/jobs?status={status}`
     - _Requirements: 6.1_
 
-  - [ ] 9.5 Write unit tests for Dashboard URL parameter parsing and filter application
+  - [x] 9.5 Write unit tests for Dashboard URL parameter parsing and filter application
     - Test URL query parameter parsing and filter application for Job_List_View and Leads_Page
     - _Requirements: 3.7_
 
-- [ ] 10. Frontend: Customer Detail Enhancements
-  - [ ] 10.1 Implement Customer Detail tabbed layout with all new tabs
+- [x] 10. Frontend: Customer Detail Enhancements
+  - [x] 10.1 Implement Customer Detail tabbed layout with all new tabs
     - Add Radix Tabs: Overview, Photos, Invoice History, Payment Methods, Potential Duplicates
     - Overview tab: editable `internal_notes` textarea (Req 8) + `preferred_service_times` editor with Morning/Afternoon/Evening/No Preference options (Req 11)
     - Photos tab: `PhotoGallery.tsx` — grid gallery with upload dropzone (accept JPEG/PNG/HEIC), caption editing, delete with confirmation. Uses `useCustomerPhotos()` hook (Req 9)
@@ -686,8 +686,8 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Potential Duplicates section: `DuplicateReview.tsx` — shown conditionally when duplicates detected, side-by-side comparison, "Merge" button (Req 7)
     - _Requirements: 7.3, 8.2, 8.3, 9.5, 10.1, 10.2, 11.1, 11.2, 56.4, 82.4_
 
-- [ ] 11. Frontend: Leads Pipeline Enhancements
-  - [ ] 11.1 Implement Leads page enhancements (address, tags, bulk outreach, attachments, estimate/contract creation)
+- [x] 11. Frontend: Leads Pipeline Enhancements
+  - [x] 11.1 Implement Leads page enhancements (address, tags, bulk outreach, attachments, estimate/contract creation)
     - Update Leads_Page to display `city` column in list view (Req 12)
     - Lead detail: show full address fields (address, city, state, zip_code) in editable form (Req 12)
     - `LeadTagBadges.tsx` — color-coded badges: NEEDS_CONTACT (red), NEEDS_ESTIMATE (orange), ESTIMATE_PENDING (yellow), ESTIMATE_APPROVED (green), ESTIMATE_REJECTED (gray) (Req 13)
@@ -702,8 +702,8 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Remove WorkRequestsList and WorkRequestDetail components (Req 19)
     - _Requirements: 12.3, 12.4, 13.7, 13.8, 14.2, 15.5, 17.5, 17.6, 18.3, 19.2, 19.3_
 
-- [ ] 12. Frontend: Jobs List Enhancements
-  - [ ] 12.1 Implement Job List column changes and status simplification
+- [x] 12. Frontend: Jobs List Enhancements
+  - [x] 12.1 Implement Job List column changes and status simplification
     - Remove "Category" column (Req 22)
     - Add "Customer" column: customer full name linked to customer detail page (Req 22)
     - Add "Tags" column: customer tags (priority, red_flag, slow_payer, new_customer) as color-coded badges (Req 22)
@@ -716,7 +716,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Job detail: "Financials" section showing quoted_amount, final_amount, total_paid, material_costs, labor_costs, total_costs, profit, profit_margin (Req 57)
     - _Requirements: 20.3, 20.4, 20.5, 21.1, 21.2, 21.3, 21.4, 22.1, 22.2, 22.3, 22.4, 23.1, 23.2, 23.3, 23.4, 57.1, 57.3_
 
-  - [ ] 12.2 Write unit tests for job status mapping and date color logic
+  - [x] 12.2 Write unit tests for job status mapping and date color logic
     - Test status mapping correctly maps all existing statuses to simplified labels (P26)
     - Test Days Waiting calculation and Due By color logic (P27)
     - Test job notes and summary round-trip (P25)
@@ -728,8 +728,8 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - **Validates: Requirements 22.4, 23.1, 23.2, 23.3, 23.4**
     - _Requirements: 20.6, 21.5, 22.6, 23.5_
 
-- [ ] 13. Frontend: Schedule and Staff Workflow Enhancements
-  - [ ] 13.1 Implement Schedule calendar enhancements (drag-drop, lead time, job selector, inline customer info, calendar format, address auto-populate)
+- [x] 13. Frontend: Schedule and Staff Workflow Enhancements
+  - [x] 13.1 Implement Schedule calendar enhancements (drag-drop, lead time, job selector, inline customer info, calendar format, address auto-populate)
     - `DragDropCalendar.tsx` — FullCalendar with `editable: true`, `eventDrop` handler calls `PATCH /appointments/{id}`, on conflict (409) revert position + error toast. Event labels: `"{Staff Name} - {Job Type}"` (Req 28). Color by status (confirmed=blue, in_progress=orange, completed=green) (Req 24, 28)
     - `LeadTimeIndicator.tsx` — badge in schedule header: "Booked out {N} days/weeks", fetches `GET /schedule/lead-time` (Req 25)
     - `JobSelector.tsx` — modal with filterable DataTable of unscheduled jobs, filters: city/zip, job type, customer name, multi-select checkboxes, "Add to Schedule" creates appointments for each (Req 26)
@@ -738,7 +738,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - `AppointmentDetail.tsx` — enriched view: customer info, job type, location with Google Maps link, materials needed, estimated duration, customer history summary, special notes, "Get Directions" button opens `https://maps.google.com/?daddr={address}` (Req 40)
     - _Requirements: 24.1, 24.3, 24.4, 25.1, 26.1, 26.2, 26.3, 26.4, 27.1, 27.2, 27.3, 28.1, 28.2, 29.1, 29.2, 29.3, 40.2, 40.3, 40.4_
 
-  - [ ] 13.2 Implement Staff Workflow buttons and on-site actions
+  - [x] 13.2 Implement Staff Workflow buttons and on-site actions
     - `StaffWorkflowButtons.tsx` — three sequential buttons based on current status: confirmed → "On My Way" (blue), en_route → "Job Started" (orange), in_progress → "Job Complete" (green, disabled if no payment/invoice per Req 36 with tooltip). Each click calls `PATCH /appointments/{id}/status` and triggers notification (Req 35, 36)
     - `PaymentCollector.tsx` — form with method selector (Credit Card, Cash, Check, Venmo, Zelle, Send Invoice), amount input, reference number for non-card methods, calls `POST /appointments/{id}/collect-payment` (Req 30)
     - `InvoiceCreator.tsx` — pre-populated invoice form from job/customer data, calls `POST /appointments/{id}/create-invoice` (Req 31)
@@ -747,27 +747,27 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - `ReviewRequest.tsx` — "Request Google Review" button visible when status=completed, calls `POST /appointments/{id}/request-review` (Req 34)
     - _Requirements: 30.1, 30.2, 31.1, 31.2, 32.1, 32.2, 33.1, 33.5, 34.1, 34.4, 35.1, 35.7, 36.3_
 
-  - [ ] 13.3 Implement Staff tracking, breaks, and time analytics
+  - [x] 13.3 Implement Staff tracking, breaks, and time analytics
     - `StaffLocationMap.tsx` — Google Maps embed with staff pins, fetches `GET /staff/locations` every 30 seconds, pin tooltip: staff name, current appointment, time elapsed (Req 41)
     - Staff panel: show for each active staff member: current appointment, time elapsed, estimated time remaining (Req 41)
     - `BreakButton.tsx` — "Take Break" with type selector (Lunch, Gas, Personal, Other), creates blocked calendar slot, adjusts subsequent appointment ETAs (Req 42)
     - Display calculated durations (travel_time, job_duration, total_time) on completed appointment detail view (Req 37)
     - _Requirements: 37.3, 41.3, 41.4, 42.1, 42.4_
 
-  - [ ] 13.4 Write frontend unit test for calendar event label format
+  - [x] 13.4 Write frontend unit test for calendar event label format
     - Test calendar event label is formatted as "{Staff Name} - {Job Type}" (P31)
     - **Property 31: Calendar event label format**
     - **Validates: Requirements 28.1**
     - _Requirements: 28.3_
 
-- [ ] 14. Frontend: Invoice Enhancements
-  - [ ] 14.1 Implement Invoice bulk notify and PDF download
+- [x] 14. Frontend: Invoice Enhancements
+  - [x] 14.1 Implement Invoice bulk notify and PDF download
     - `BulkNotify.tsx` — "Select All" checkbox + "Bulk Notify" button with notification type selection (REMINDER, PAST_DUE, LIEN_WARNING, UPCOMING_DUE), calls `POST /invoices/bulk-notify`, display summary (Req 38)
     - Add "Download PDF" button to Invoice_Detail_View, calls `POST /invoices/{id}/generate-pdf` or `GET /invoices/{id}/pdf`, triggers browser download (Req 80)
     - _Requirements: 38.2, 80.5, 80.6_
 
-- [ ] 15. Frontend: New Dashboard Pages (Sales, Accounting, Marketing, Communications)
-  - [ ] 15.1 Implement Sales Dashboard page at `/sales`
+- [x] 15. Frontend: New Dashboard Pages (Sales, Accounting, Marketing, Communications)
+  - [x] 15.1 Implement Sales Dashboard page at `/sales`
     - `SalesDashboard.tsx` — four pipeline cards: Needs Estimate, Pending Approval, Needs Follow-Up, Revenue Pipeline. Conversion funnel chart (Recharts). Click-through to filtered lists (Req 47)
     - `EstimateBuilder.tsx` — multi-step form: select template or start blank → add/edit line items with material + labor costs → create Good/Better/Best tiers → apply promotional discount → preview + send. Totals auto-calculate (Req 48)
     - `MediaLibrary.tsx` — grid/list toggle, filter by category + media type, upload with drag-drop, attach to estimates (Req 49)
@@ -775,7 +775,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - `FollowUpQueue.tsx` — DataTable of estimates with upcoming follow-ups: customer, estimate total, days since sent, next follow-up date, promotion attached (Req 51)
     - _Requirements: 47.1, 47.2, 47.4, 47.5, 48.4, 48.5, 48.6, 49.4, 50.1, 50.2, 50.3, 50.4, 50.5, 51.6_
 
-  - [ ] 15.2 Implement Accounting Dashboard page at `/accounting`
+  - [x] 15.2 Implement Accounting Dashboard page at `/accounting`
     - `AccountingDashboard.tsx` — top-level metrics cards: YTD Revenue, YTD Expenses, YTD Profit, Profit Margin %. Date range picker (month/quarter/custom). Sections: Pending Invoices, Past Due Invoices (Req 52)
     - `ExpenseTracker.tsx` — DataTable with CRUD, create form: category dropdown, description, amount, date, vendor, job link (optional), receipt upload. Receipt upload triggers OCR extraction → pre-populates amount/vendor/category (Req 53, 60)
     - `SpendingChart.tsx` — Recharts pie/bar chart for expense category breakdown (Req 53)
@@ -786,7 +786,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - `AuditLog.tsx` — paginated audit log section showing recent administrative actions (Req 74)
     - _Requirements: 52.1, 52.2, 52.3, 52.4, 52.6, 53.4, 53.7, 59.1, 59.4, 60.1, 60.3, 61.1, 61.3, 62.1, 62.5, 62.6, 74.4_
 
-  - [ ] 15.3 Implement Marketing Dashboard page at `/marketing`
+  - [x] 15.3 Implement Marketing Dashboard page at `/marketing`
     - `MarketingDashboard.tsx` — Lead Sources chart (Recharts bar), Conversion Funnel (stepped funnel visualization), Key Metrics cards (total leads, conversion rate, avg time to conversion, top source), Advertising Channels table (Req 63)
     - `CampaignManager.tsx` — campaign list with status badges, create form: name, type (Email/SMS/Both), audience filter builder, body editor, schedule picker, send button with confirmation, stats view: sent/delivered/failed/bounced/opted_out (Req 45)
     - `BudgetTracker.tsx` — budget vs actual grouped bar chart by channel, CRUD for budget entries (Req 64)
@@ -795,36 +795,36 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - `ConversionFunnel.tsx` — lead conversion visualization (Req 63)
     - _Requirements: 45.9, 58.3, 63.1, 63.2, 63.3, 63.4, 63.6, 64.3, 64.4, 65.2, 65.4_
 
-  - [ ] 15.4 Implement Communications page at `/communications` with inbound and outbound tabs
+  - [x] 15.4 Implement Communications page at `/communications` with inbound and outbound tabs
     - `CommunicationsQueue.tsx` — "Needs Attention" tab: list of unaddressed inbound messages with customer name, channel, content preview, timestamp. "Mark as Addressed" button calls `PATCH /communications/{id}/address` (Req 4)
     - `SentMessagesLog.tsx` — "Sent Messages" tab: paginated DataTable of outbound notifications from `sent_messages`. Columns: recipient name, phone, message type, content preview (80 chars), delivery status badge (delivered=green, sent=blue, pending=yellow, failed=red with error tooltip), sent_at. Filters: message type dropdown, delivery status dropdown, date range, search. Fetches `GET /sent-messages` (Req 82)
     - _Requirements: 4.3, 82.1, 82.2, 82.3, 82.5, 82.6_
 
-  - [ ] 15.5 Implement Customer Portal pages (public, no auth)
+  - [x] 15.5 Implement Customer Portal pages (public, no auth)
     - `EstimateReview.tsx` — clean, mobile-responsive page: company logo, estimate details, line items table, tier options (if multi-tier), total with discount, "Approve" and "Reject" buttons. Reject shows optional reason textarea (Req 16)
     - `ContractSigning.tsx` — contract body with template variables resolved, signature pad (canvas-based), "Sign" button records electronic signature with timestamp/IP/user-agent (Req 16)
     - `ApprovalConfirmation.tsx` — thank you page after approval/signing, shows next steps, no internal IDs exposed (Req 16, 78)
     - `InvoicePortal.tsx` — mobile-responsive public invoice page: company branding (logo, name, address, phone from business_settings), invoice number, date, due date, line items table, total amount, amount paid, balance remaining, payment status badge. "Pay Now" button (Stripe link if balance > 0) or "Paid in Full" confirmation. Single-column layout on mobile. No internal IDs. Expired tokens (>90 days) show 410 message with contact info (Req 84)
     - _Requirements: 16.7, 84.3, 84.4, 84.5, 84.6, 84.8, 84.9_
 
-  - [ ] 15.6 Implement Public AI Chat Widget
+  <!-- - [~] 15.6 Implement Public AI Chat Widget
     - Chat widget component: message input, AI response display, session management via session_id, calls `POST /api/v1/chat/public` (Req 43)
-    - _Requirements: 43.1, 43.2, 43.3_
+    - _Requirements: 43.1, 43.2, 43.3_ -->
 
-  - [ ] 15.7 Implement Estimate Detail page at `/estimates/{id}`
+  - [x] 15.7 Implement Estimate Detail page at `/estimates/{id}`
     - `EstimateDetail.tsx` — admin-side estimate detail page showing: estimate number, customer name + contact info, creation date, status badge (color-coded), valid_until, line items table with quantities/prices/totals, tier options, subtotal, discount, total. "Activity Timeline" section showing chronological events: created, sent, viewed, approved/rejected (with timestamps + actor) and all follow-up notifications (with status). Action buttons: "Edit" (draft), "Send/Resend" (draft/sent), "Cancel" (non-terminal), "Create Job" (approved). Linked documents section: estimate PDF, contracts, media items (Req 83)
     - `EstimateList.tsx` — filtered DataTable for pipeline views (linked from SalesDashboard pipeline cards and FollowUpQueue rows). Columns: estimate number, customer, total, status badge, days since sent, next follow-up. Click row → navigates to EstimateDetail (Req 83)
     - Link to EstimateDetail from: SalesDashboard pipeline cards, FollowUpQueue rows, Lead detail AttachmentPanel, Appointment EstimateCreator confirmation
     - _Requirements: 83.1, 83.2, 83.3, 83.4, 83.5, 83.6, 83.7_
 
-  - [ ] 15.8 Implement Settings page enhancements at `/settings`
+  - [x] 15.8 Implement Settings page enhancements at `/settings`
     - `BusinessInfo.tsx` — "Business Information" section: editable fields for company_name, company_address, company_phone, company_email, company_logo_url (with image upload to S3), company_website. Reads/writes via `GET/PATCH /settings` (Req 87)
     - `InvoiceDefaults.tsx` — "Invoice Defaults" section: default_payment_terms_days (number, default 30), late_fee_percentage (number), lien_warning_days (number, default 45), lien_filing_days (number, default 120) (Req 87)
     - `NotificationPrefs.tsx` — "Notification Preferences" section: day_of_reminder_time (time picker, default 7:00 AM CT), sms_time_window_start (time picker, default 8:00 AM), sms_time_window_end (time picker, default 9:00 PM), enable_delay_notifications (toggle) (Req 87)
     - `EstimateDefaults.tsx` — "Estimate Defaults" section: default_valid_days (number, default 30), follow_up_intervals_days (comma-separated input, default "3,7,14,21"), enable_auto_follow_ups (toggle) (Req 87)
     - _Requirements: 87.3, 87.4, 87.5, 87.6_
 
-  - [ ] 15.9 Apply mobile-responsive design to all staff field components
+  - [x] 15.9 Apply mobile-responsive design to all staff field components
     - Update `StaffWorkflowButtons.tsx` — full-width stacked buttons (min-height 48px, touch target ≥44px) on screens < 768px (Req 86)
     - Update `PaymentCollector.tsx` — single-column layout on mobile, large inputs (min-height 44px), full-width submit (Req 86)
     - Update `AppointmentNotes.tsx` — full-width upload area with `accept="image/*;capture=camera"` (Req 86)
@@ -834,19 +834,19 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Add Tailwind responsive breakpoints: `md:` prefix for desktop layouts, base styles for mobile-first
     - _Requirements: 86.1, 86.2, 86.3, 86.4, 86.5, 86.6, 86.7, 86.8_
 
-- [ ] 16. Frontend: Navigation and Route Registration
-  - [ ] 16.1 Register all new routes and navigation items
+- [x] 16. Frontend: Navigation and Route Registration
+  - [x] 16.1 Register all new routes and navigation items
     - Add navigation items to main sidebar: Sales (`/sales`), Accounting (`/accounting`), Marketing (`/marketing`), Communications (`/communications`) with active state highlighting
     - Register all new frontend routes in router configuration: `/sales`, `/accounting`, `/marketing`, `/communications`, `/estimates/:id`, `/portal/estimates/:token`, `/portal/contracts/:token`, `/portal/invoices/:token`
     - Register all new backend routers in `main.py` with appropriate prefixes and tags
     - Redirect `/work-requests` to `/leads` (Req 19)
     - _Requirements: 19.2, 66.1, 66.2, 66.3, 66.4, 83.1, 84.3_
 
-- [ ] 17. Checkpoint — Frontend complete
+- [x] 17. Checkpoint — Frontend complete
   - Ensure all frontend components render, all frontend unit tests pass, navigation works, ask the user if questions arise.
 
-- [ ] 18. Background Jobs: Scheduled Tasks
-  - [ ] 18.1 Implement all background jobs in scheduler
+- [x] 18. Background Jobs: Scheduled Tasks
+  - [x] 18.1 Implement all background jobs in scheduler
     - `send_day_of_reminders` — Daily 7:00 AM CT: send appointment reminders for today's appointments (Req 39)
     - `send_invoice_reminders` — Daily 8:00 AM CT: pre-due (3 days), past-due (weekly), lien (30 days) (Req 54, 55)
     - `check_estimate_approvals` — Hourly: route unapproved estimates >4hrs to leads pipeline (Req 32)
@@ -858,7 +858,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - All jobs use existing APScheduler integration, each logs start/completion with structured logging
     - _Requirements: 32.7, 39.7, 45.7, 45.9, 45.10, 51.3, 54.1, 55.1, 62.3_
 
-  - [ ] 18.2 Write functional tests for background jobs
+  - [x] 18.2 Write functional tests for background jobs
     - Test day-of reminder job sends to all same-day appointments
     - Test invoice reminder job sends pre-due, past-due, and lien notifications to correct invoices
     - Test estimate approval check routes unapproved estimates to leads
@@ -866,16 +866,16 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Test campaign sender processes scheduled campaigns
     - _Requirements: 39.11, 54.7, 55.7_
 
-- [ ] 19. Checkpoint — Background jobs complete
+- [x] 19. Checkpoint — Background jobs complete
   - Ensure all background jobs are registered, functional tests pass, ask the user if questions arise.
 
-- [ ] 20. Testing: Functional Tests (Real DB, Mocked External Services)
-  - [ ] 20.1 Write functional tests for customer operations
+- [x] 20. Testing: Functional Tests (Real DB, Mocked External Services)
+  - [x] 20.1 Write functional tests for customer operations
     - Test customer merge with FK reassignment (all related records moved to primary, duplicates soft-deleted)
     - Test customer photo upload, list, and delete against S3-compatible storage
     - _Requirements: 7.6, 9.8_
 
-  - [ ] 20.2 Write functional tests for lead operations
+  - [x] 20.2 Write functional tests for lead operations
     - Test lead creation with full address fields
     - Test full tag lifecycle: creation → contact → estimate → approval
     - Test bulk outreach sends to multiple leads and returns correct summary counts
@@ -883,13 +883,13 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Test work request migration converts all existing work requests to leads
     - _Requirements: 12.7, 13.10, 14.7, 15.7, 19.8_
 
-  - [ ] 20.3 Write functional tests for estimate and portal operations
+  - [x] 20.3 Write functional tests for estimate and portal operations
     - Test full flow: estimate creation → link generation → customer approval → lead tag update
     - Test estimate creation from template with customized line items
     - Test estimate follow-up lifecycle: estimate sent → follow-ups scheduled → customer approves → remaining cancelled
     - _Requirements: 16.9, 17.8, 51.8_
 
-  - [ ] 20.4 Write functional tests for appointment and schedule operations
+  - [x] 20.4 Write functional tests for appointment and schedule operations
     - Test appointment time update via PATCH endpoint
     - Test full flow: collect payment → invoice updated → customer payment history updated
     - Test invoice creation, payment link generation, and customer notification
@@ -898,7 +898,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Test full status transition chain with timestamp recording
     - _Requirements: 24.7, 30.8, 31.7, 32.9, 33.7, 35.9_
 
-  - [ ] 20.5 Write functional tests for invoice, campaign, and accounting operations
+  - [x] 20.5 Write functional tests for invoice, campaign, and accounting operations
     - Test bulk notification sends to multiple invoices and returns correct summary
     - Test campaign creation, scheduling, and delivery to multiple recipients
     - Test expense CRUD with receipt upload
@@ -909,7 +909,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Test appointment creation → no_show status transition succeeds in DB
     - _Requirements: 38.7, 45.12, 53.10, 52.8, 74.6, 81.10, 80.9, 79.8_
 
-  - [ ] 20.6 Write functional tests for marketing and remaining operations
+  - [x] 20.6 Write functional tests for marketing and remaining operations
     - Test lead source aggregation from real lead data
     - Test chat context includes service information and pricing
     - Test voice webhook endpoint processes call data and creates leads correctly
@@ -917,17 +917,17 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - Test frontend can authenticate and make API calls using cookie-based auth
     - _Requirements: 63.8, 43.7, 44.8, 56.8, 71.7_
 
-- [ ] 21. Checkpoint — Functional tests complete
+- [x] 21. Checkpoint — Functional tests complete
   - Ensure all functional tests pass with real DB, ask the user if questions arise.
 
-- [ ] 22. Testing: Integration Tests (Full System)
-  - [ ] 22.1 Write integration tests for external service interactions
+- [x] 22. Testing: Integration Tests (Full System)
+  - [x] 22.1 Write integration tests for external service interactions
     - Test S3 file upload/download round-trip (customer photos, lead attachments, media library)
     - Test Redis location storage and TTL expiry for staff tracking
     - Test end-to-end estimate portal flow: create estimate → send → customer opens portal → approves → lead tag updated → job created
     - _Requirements: 9.8, 41.6_
 
-  - [ ] 22.2 Write agreement flow regression test suite (`test_agreement_flow_preservation.py`)
+  - [x] 22.2 Write agreement flow regression test suite (`test_agreement_flow_preservation.py`)
     - Verify complete agreement flow end-to-end: tier retrieval → checkout session creation → webhook processing → agreement record creation → job generation → job-customer linkage
     - Verify no existing agreement-related model, service, or route has been modified
     - Verify agreement-generated jobs appear correctly in Job_List_View with all expected fields
@@ -936,11 +936,11 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - **Validates: Requirements 68.1, 68.2, 68.3, 68.4, 68.5**
     - _Requirements: 68.6, 68.7, 68.8, 68.10_
 
-- [ ] 23. Checkpoint — Integration tests complete
+- [x] 23. Checkpoint — Integration tests complete
   - Ensure all integration tests pass with full system, ask the user if questions arise.
 
-- [ ] 24. Testing: Property-Based Tests (Hypothesis + fast-check)
-  - [ ] 24.1 Write backend property-based tests using Hypothesis
+- [x] 24. Testing: Property-Based Tests (Hypothesis + fast-check)
+  - [x] 24.1 Write backend property-based tests using Hypothesis
     - **Property 1: Seed cleanup preserves non-seed records** — `@settings(max_examples=100)` — Validates: Req 1.4
     - **Property 2: Token refresh extends session validity** — Validates: Req 2.1
     - **Property 3: Unaddressed communication count accuracy** — Validates: Req 4.2
@@ -1024,30 +1024,30 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - **Property 84: Business settings round-trip and service consumption** — Validates: Req 87.2, 87.7, 87.8
     - _Requirements: All testing requirements across Req 1-87_
 
-  - [ ] 24.2 Write frontend property-based tests using fast-check
+  - [x] 24.2 Write frontend property-based tests using fast-check
     - **Property 26: Job status simplification mapping** — all raw statuses map to exactly one simplified label, mapping is total — Validates: Req 21.1
     - **Property 27: Days Waiting calculation and Due By color logic** — correct day count, correct color for past/within-7-days/null/default — Validates: Req 22.4, 23.1-23.4
     - **Property 31: Calendar event label format** — "{Staff Name} - {Job Type}" for all appointments — Validates: Req 28.1
     - _Requirements: 21.5, 22.6, 23.5, 28.3_
 
-- [ ] 25. Checkpoint — Property-based tests complete
+- [x] 25. Checkpoint — Property-based tests complete
   - Ensure all 78 property-based tests pass, ask the user if questions arise.
 
-- [ ] 26. Testing: Comprehensive E2E Test Suite (agent-browser)
-  - [ ] 26.1 Create E2E test runner script and seed data cleanup verification
+- [x] 26. Testing: Comprehensive E2E Test Suite (agent-browser)
+  - [x] 26.1 Create E2E test runner script and seed data cleanup verification
     - Create `scripts/e2e-tests.sh` — sequential execution of all agent-browser validation scripts, reports pass/fail for each, supports `--headed` flag for debugging
     - E2E test: navigate to `/customers`, `/staff`, `/jobs` and verify no demo names appear (Req 1)
     - E2E test: login, wait, perform action, verify session remains active without redirect (Req 2)
     - _Requirements: 1.7, 2.7, 67.1, 67.3, 67.4, 67.5_
 
-  - [ ] 26.2 Create E2E tests for Dashboard
+  - [x] 26.2 Create E2E tests for Dashboard
     - E2E test: open `/dashboard`, click alert card, verify navigation to correct page with filter applied and highlight animation visible (Req 3)
     - E2E test: open `/dashboard`, verify Messages widget displays numeric count, click it, verify navigation to communications queue (Req 4)
     - E2E test: open `/dashboard`, verify Pending Invoices widget shows numeric count from invoice data (Req 5)
     - E2E test: open `/dashboard`, verify all six job status categories displayed with numeric counts (Req 6)
     - _Requirements: 3.8, 4.8, 5.5, 6.5, 67.2_
 
-  - [ ] 26.3 Create E2E tests for Customers
+  - [x] 26.3 Create E2E tests for Customers
     - E2E test: navigate to customer with duplicates, verify "Potential Duplicates" section, perform merge (Req 7)
     - E2E test: navigate to customer detail, edit internal notes, save, verify persistence on reload (Req 8)
     - E2E test: navigate to customer detail, click Photos tab, upload test image, verify in grid, delete (Req 9)
@@ -1056,7 +1056,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - E2E test: navigate to customer detail, view Payment Methods section, verify saved cards displayed (Req 56)
     - _Requirements: 7.7, 8.6, 9.9, 10.5, 11.6, 56.9, 67.2_
 
-  - [ ] 26.4 Create E2E tests for Leads
+  - [x] 26.4 Create E2E tests for Leads
     - E2E test: open `/leads`, verify city displayed in list, click lead, verify full address fields editable (Req 12)
     - E2E test: open `/leads`, verify tag badges visible, filter by specific tag, verify filtered results (Req 13)
     - E2E test: open `/leads`, select multiple leads, click "Bulk Outreach", select template, send, verify summary (Req 14)
@@ -1067,7 +1067,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - E2E test: navigate to `/work-requests`, verify redirect to `/leads`, verify former work request data appears (Req 19)
     - _Requirements: 12.8, 13.11, 14.8, 15.8, 16.10, 17.9, 18.6, 19.9, 67.2_
 
-  - [ ] 26.5 Create E2E tests for Jobs
+  - [x] 26.5 Create E2E tests for Jobs
     - E2E test: open `/jobs`, verify summary column visible, click job, edit notes, save, verify persistence (Req 20)
     - E2E test: open `/jobs`, verify status filter shows simplified labels, verify job rows display simplified badges (Req 21)
     - E2E test: open `/jobs`, verify: Category column absent, Customer column shows names, Tags column shows badges, Days Waiting shows numeric counts (Req 22)
@@ -1075,7 +1075,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - E2E test: open job detail, verify Financials section displays revenue, costs, profit (Req 57)
     - _Requirements: 20.7, 21.6, 22.7, 23.6, 57.5, 67.2_
 
-  - [ ] 26.6 Create E2E tests for Schedule and Staff Workflow
+  - [x] 26.6 Create E2E tests for Schedule and Staff Workflow
     - E2E test: open `/schedule`, drag appointment to new time slot, verify appointment at new time (Req 24)
     - E2E test: open `/schedule`, verify Lead Time indicator displays value (Req 25)
     - E2E test: open `/schedule`, click "Add Appointment", use job filter, select multiple jobs, verify appointments created (Req 26)
@@ -1095,21 +1095,21 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - E2E test: open `/schedule`, click "Take Break" for staff member, verify break appears as blocked slot (Req 42)
     - _Requirements: 24.8, 25.5, 26.6, 27.4, 28.3, 29.5, 30.9, 31.8, 32.10, 33.8, 34.8, 35.10, 36.7, 37.7, 40.6, 41.8, 42.7, 67.2_
 
-  - [ ] 26.7 Create E2E tests for Invoices
+  - [x] 26.7 Create E2E tests for Invoices
     - E2E test: open `/invoices`, select multiple invoices, click "Bulk Notify", select "Past Due", send, verify summary (Req 38)
     - E2E test: open `/invoices`, verify reminder status indicators visible on invoices with automated reminders (Req 54)
     - E2E test: open invoice detail, click "Download PDF", verify file download initiated (Req 80)
     - _Requirements: 38.8, 54.8, 80.10, 67.2_
 
-  - [ ] 26.8 Create E2E tests for Customer Notifications
+  - [x] 26.8 Create E2E tests for Customer Notifications
     - E2E test: open confirmed appointment, click "On My Way", verify notification log shows "on my way" notification queued (Req 39)
     - _Requirements: 39.12, 67.2_
 
-  - [ ] 26.9 Create E2E tests for AI Chat and Voice
+  <!-- - [~] 26.9 Create E2E tests for AI Chat and Voice
     - E2E test: open public chat widget, send message, verify AI response received, type "speak to a person", verify escalation response (Req 43)
-    - _Requirements: 43.8, 67.2_
+    - _Requirements: 43.8, 67.2_ -->
 
-  - [ ] 26.10 Create E2E tests for Sales Dashboard
+  - [x] 26.10 Create E2E tests for Sales Dashboard
     - E2E test: open `/sales`, verify all four pipeline sections display numeric counts, click "Pending Approval", verify individual estimates listed (Req 47)
     - E2E test: open estimate builder, add line items, create Good/Better/Best options, apply promotion, verify totals calculate correctly (Req 48)
     - E2E test: open media library, upload test image, verify in grid, filter by category (Req 49)
@@ -1117,7 +1117,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - E2E test: open `/sales`, view Follow-Up Queue, verify estimates with scheduled follow-ups listed (Req 51)
     - _Requirements: 47.8, 48.10, 49.7, 50.7, 51.9, 67.2_
 
-  - [ ] 26.11 Create E2E tests for Accounting Dashboard
+  - [x] 26.11 Create E2E tests for Accounting Dashboard
     - E2E test: open `/accounting`, verify YTD Revenue, Pending Invoices, Past Due sections display numeric values, change date range filter, verify metrics update (Req 52)
     - E2E test: open `/accounting`, navigate to expenses, create new expense with category and amount, verify in list and spending chart updates (Req 53)
     - E2E test: open `/accounting`, navigate to Tax Preparation, verify category totals displayed (Req 59)
@@ -1127,7 +1127,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - E2E test: perform admin action, navigate to audit log, verify action appears (Req 74)
     - _Requirements: 52.9, 53.11, 59.6, 60.7, 61.6, 62.8, 74.7, 67.2_
 
-  - [ ] 26.12 Create E2E tests for Marketing Dashboard
+  - [x] 26.12 Create E2E tests for Marketing Dashboard
     - E2E test: open `/marketing`, verify Lead Sources chart displayed, verify Conversion Funnel shows stage counts, change date range filter (Req 63)
     - E2E test: open `/marketing/campaigns`, create new campaign, select audience, schedule, verify in list with SCHEDULED status (Req 45)
     - E2E test: open `/marketing`, view Budget vs Actual chart, create new budget entry, verify in chart (Req 64)
@@ -1135,7 +1135,7 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - E2E test: open `/marketing`, verify CAC per channel displayed (Req 58)
     - _Requirements: 45.13, 58.6, 63.9, 64.6, 65.6, 67.2_
 
-  - [ ] 26.13 Create E2E tests for Navigation, Security, and Portal
+  - [x] 26.13 Create E2E tests for Navigation, Security, and Portal
     - E2E test: open application, verify all navigation items visible in sidebar (Sales, Accounting, Marketing, Communications), click each, verify correct page loads (Req 66)
     - E2E test: rapidly submit form, verify rate limit message appears (Req 69)
     - E2E test: load application, verify no console security warnings related to missing headers (Req 70)
@@ -1143,43 +1143,43 @@ This plan implements all 87 requirements from the CRM Gap Closure spec across 9 
     - E2E test: open portal link, verify estimate content displayed, verify no internal IDs visible in page source (Req 78)
     - _Requirements: 66.5, 69.6, 70.5, 71.8, 78.9, 67.2_
 
-  - [ ] 26.14 Create E2E test for Agreement Flow Preservation
+  - [x] 26.14 Create E2E test for Agreement Flow Preservation
     - E2E test: navigate to service package purchase flow, verify tier selection functional, verify checkout redirect works, verify existing agreements display correctly on customer detail page (Req 68)
     - _Requirements: 68.9, 67.2_
 
-  - [ ] 26.15 Create E2E test for SMS lead confirmation flow
+  - [x] 26.15 Create E2E test for SMS lead confirmation flow
     - E2E test: create a lead via the leads form, verify SMS confirmation is logged (Req 46)
     - _Requirements: 46.7_
 
-  - [ ] 26.16 Create E2E tests for Outbound Notification History
+  - [x] 26.16 Create E2E tests for Outbound Notification History
     - E2E test: navigate to `/communications`, click "Sent Messages" tab, verify outbound messages displayed with delivery status badges and timestamps (Req 82)
     - E2E test: navigate to a customer detail page, click "Messages" tab, verify outbound messages for that customer are displayed (Req 82)
     - _Requirements: 82.7, 82.8, 67.2_
 
-  - [ ] 26.17 Create E2E tests for Estimate Detail
+  - [x] 26.17 Create E2E tests for Estimate Detail
     - E2E test: open `/sales`, click a pipeline card, click an estimate row, verify EstimateDetail page shows line items, status badge, and activity timeline (Req 83)
     - E2E test: open an estimate detail, click "Resend", verify status updates and follow-up is scheduled (Req 83)
     - _Requirements: 83.8, 83.9, 67.2_
 
-  - [ ] 26.18 Create E2E tests for Customer Invoice Portal
+  - [x] 26.18 Create E2E tests for Customer Invoice Portal
     - E2E test: open a portal invoice link `/portal/invoices/{token}`, verify invoice content displayed (company branding, line items, total, balance), verify "Pay Now" button present, verify no internal IDs in page source (Req 84)
     - _Requirements: 84.12, 67.2_
 
-  - [ ] 26.19 Create E2E tests for Rate Limit Error Handling
+  - [x] 26.19 Create E2E tests for Rate Limit Error Handling
     - E2E test: rapidly submit a form, verify a toast notification appears with "Too many requests" message and wait time (Req 85)
     - _Requirements: 85.6, 85.7, 67.2_
 
-  - [ ] 26.20 Create E2E tests for Mobile Staff Views
+  - [x] 26.20 Create E2E tests for Mobile Staff Views
     - E2E test: set viewport to mobile (375x812), open an appointment detail, verify all workflow buttons are visible and full-width, click "On My Way", verify status updates (Req 86)
     - E2E test: set viewport to mobile, open inline customer panel, verify it renders as full-screen bottom sheet (Req 86)
     - _Requirements: 86.9, 86.10, 67.2_
 
-  - [ ] 26.21 Create E2E tests for Settings Page
+  - [x] 26.21 Create E2E tests for Settings Page
     - E2E test: navigate to `/settings`, edit company name in Business Information section, save, reload page, verify change persists (Req 87)
     - E2E test: navigate to `/settings`, modify default_payment_terms_days, save, create a new invoice, verify due date reflects the new default (Req 87)
     - _Requirements: 87.10, 87.11, 67.2_
 
-- [ ] 27. Final Checkpoint — All tests pass
+- [x] 27. Final Checkpoint — All tests pass
   - Ensure all unit, functional, integration, property-based, and E2E tests pass. Run quality checks: `uv run ruff check --fix src/ && uv run mypy src/ && uv run pyright src/ && uv run pytest -v`. Ask the user if questions arise.
 
 ## Notes

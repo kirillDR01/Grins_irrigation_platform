@@ -51,6 +51,8 @@ def _mock_customer(*, email: str | None = "test@example.com") -> MagicMock:
     c.id = uuid4()
     c.email = email
     c.full_name = "Jane Doe"
+    c.internal_notes = None
+    c.preferred_service_times = None
     return c
 
 
@@ -87,6 +89,10 @@ def _mock_lead(*, email: str | None = "lead@example.com") -> MagicMock:
     lead.id = uuid4()
     lead.email = email
     lead.first_name = "Bob"
+    lead.city = None
+    lead.state = None
+    lead.address = None
+    lead.action_tags = None
     return lead
 
 

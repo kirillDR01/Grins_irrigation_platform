@@ -68,6 +68,21 @@ class DuplicateCustomerError(CustomerError):
         super().__init__(f"Customer already exists with ID: {existing_id}")
 
 
+class MergeConflictError(CustomerError):
+    """Raised when a customer merge would create data inconsistency.
+
+    Validates: CRM Gap Closure Req 7.2
+    """
+
+    def __init__(self, message: str) -> None:
+        """Initialize with conflict description.
+
+        Args:
+            message: Description of the merge conflict
+        """
+        super().__init__(message)
+
+
 class PropertyNotFoundError(CustomerError):
     """Raised when a property is not found.
 
@@ -501,6 +516,146 @@ class ConsentValidationError(AgreementError):
         )
 
 
+# =========================================================================
+# Estimate Errors
+# =========================================================================
+
+
+class EstimateError(Exception):
+    """Base exception for estimate operations."""
+
+
+class EstimateNotFoundError(EstimateError):
+    """Raised when an estimate ID or token is not found.
+
+    Validates: CRM Gap Closure Design — EstimateService errors
+    """
+
+    def __init__(self, identifier: UUID | str) -> None:
+        """Initialize with estimate identifier."""
+        self.identifier = identifier
+        super().__init__(f"Estimate not found: {identifier}")
+
+
+class EstimateAlreadyApprovedError(EstimateError):
+    """Raised when attempting to approve/reject an already-decided estimate.
+
+    Validates: CRM Gap Closure Design — EstimateService errors
+    """
+
+    def __init__(self, estimate_id: UUID) -> None:
+        """Initialize with estimate ID."""
+        self.estimate_id = estimate_id
+        super().__init__(
+            f"Estimate {estimate_id} has already been approved or rejected",
+        )
+
+
+class EstimateTokenExpiredError(EstimateError):
+    """Raised when a portal token is past expiration.
+
+    Validates: CRM Gap Closure Design — EstimateService errors
+    """
+
+    def __init__(self, token: UUID) -> None:
+        """Initialize with token."""
+        self.token = token
+        super().__init__(f"Portal token has expired: {token}")
+
+
+class InvalidPromotionCodeError(EstimateError):
+    """Raised when a promotion code is not found or expired.
+
+    Validates: CRM Gap Closure Design — EstimateService errors
+    """
+
+    def __init__(self, code: str) -> None:
+        """Initialize with promotion code."""
+        self.code = code
+        super().__init__(f"Invalid or expired promotion code: {code}")
+
+
+class EstimateTemplateNotFoundError(EstimateError):
+    """Raised when an estimate template is not found.
+
+    Validates: CRM Gap Closure Req 17.3
+    """
+
+    def __init__(self, template_id: UUID) -> None:
+        """Initialize with template ID."""
+        self.template_id = template_id
+        super().__init__(f"Estimate template not found: {template_id}")
+
+
+# =============================================================================
+# Appointment Service Errors (CRM Gap Closure Req 24, 35, 36)
+# =============================================================================
+
+
+class StaffConflictError(Exception):
+    """Raised when rescheduling conflicts with an existing appointment.
+
+    Validates: CRM Gap Closure Req 24.5
+    """
+
+    def __init__(
+        self,
+        staff_id: UUID,
+        conflicting_appointment_id: UUID,
+    ) -> None:
+        """Initialize with staff and conflicting appointment IDs."""
+        self.staff_id = staff_id
+        self.conflicting_appointment_id = conflicting_appointment_id
+        super().__init__(
+            f"Staff {staff_id} has a conflicting appointment: "
+            f"{conflicting_appointment_id}",
+        )
+
+
+class PaymentRequiredError(Exception):
+    """Raised when completion is blocked because no payment/invoice exists.
+
+    Validates: CRM Gap Closure Req 36.1, 36.2
+    """
+
+    def __init__(self, appointment_id: UUID) -> None:
+        """Initialize with appointment ID."""
+        self.appointment_id = appointment_id
+        super().__init__(
+            "Please collect payment or send an invoice before completing this job",
+        )
+
+
+class ReviewAlreadyRequestedError(Exception):
+    """Raised when a Google review was already requested within 30 days.
+
+    Validates: CRM Gap Closure Req 34.6
+    """
+
+    def __init__(self, customer_id: UUID, last_requested_at: str) -> None:
+        """Initialize with customer ID and last request date."""
+        self.customer_id = customer_id
+        self.last_requested_at = last_requested_at
+        super().__init__(
+            f"Review already requested for customer {customer_id} "
+            f"on {last_requested_at}. 30-day dedup applies.",
+        )
+
+
+class ConsentRequiredError(Exception):
+    """Raised when SMS consent is required but not granted.
+
+    Validates: CRM Gap Closure Req 34.2
+    """
+
+    def __init__(self, customer_id: UUID) -> None:
+        """Initialize with customer ID."""
+        self.customer_id = customer_id
+        super().__init__(
+            f"SMS consent not granted for customer {customer_id}",
+        )
+
+
 __all__ = [
     "AccountLockedError",
     "AgreementError",
@@ -508,17 +663,24 @@ __all__ = [
     "AppointmentNotFoundError",
     "AuthenticationError",
     "BulkOperationError",
+    "ConsentRequiredError",
     "ConsentValidationError",
     "CustomerError",
     "CustomerNotFoundError",
     "DuplicateCustomerError",
     "DuplicateLeadError",
+    "EstimateAlreadyApprovedError",
+    "EstimateError",
+    "EstimateNotFoundError",
+    "EstimateTemplateNotFoundError",
+    "EstimateTokenExpiredError",
     "FieldOperationsError",
     "InactiveTierError",
     "InvalidAgreementStatusTransitionError",
     "InvalidCredentialsError",
     "InvalidInvoiceOperationError",
     "InvalidLeadStatusTransitionError",
+    "InvalidPromotionCodeError",
     "InvalidStatusTransitionError",
     "InvalidTokenError",
     "InvoiceNotFoundError",
@@ -527,12 +689,15 @@ __all__ = [
     "LeadError",
     "LeadNotFoundError",
     "MidSeasonTierChangeError",
+    "PaymentRequiredError",
     "PropertyCustomerMismatchError",
     "PropertyNotFoundError",
+    "ReviewAlreadyRequestedError",
     "ScheduleClearAuditNotFoundError",
     "ServiceOfferingInactiveError",
     "ServiceOfferingNotFoundError",
     "StaffAvailabilityNotFoundError",
+    "StaffConflictError",
     "StaffNotFoundError",
     "TokenExpiredError",
     "UserNotFoundError",

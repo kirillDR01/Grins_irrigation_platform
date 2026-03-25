@@ -51,6 +51,10 @@ def _make_lead_mock(
     status: str = LeadStatus.NEW.value,
     created_at: datetime | None = None,
     email_marketing_consent: bool = False,
+    city: str | None = None,
+    state: str | None = None,
+    address: str | None = None,
+    action_tags: list[str] | None = None,
 ) -> MagicMock:
     lead = MagicMock()
     lead.id = lead_id or uuid4()
@@ -74,6 +78,10 @@ def _make_lead_mock(
     lead.converted_at = None
     lead.created_at = created_at or datetime.now(tz=timezone.utc)
     lead.updated_at = datetime.now(tz=timezone.utc)
+    lead.city = city
+    lead.state = state
+    lead.address = address
+    lead.action_tags = action_tags
     return lead
 
 
@@ -498,7 +506,7 @@ class TestSmsConfirmationGating:
         repo.get_recent_by_phone_or_email.return_value = None
         repo.create.return_value = lead
         sms = AsyncMock()
-        sms.send_message.side_effect = RuntimeError("Twilio down")
+        sms.send_automated_message.side_effect = RuntimeError("Twilio down")
         svc = _build_service(lead_repo=repo, sms_service=sms)
 
         data = LeadSubmission(
@@ -512,15 +520,18 @@ class TestSmsConfirmationGating:
         assert result.success is True
 
     @pytest.mark.asyncio
-    async def test_from_call_defers_sms_when_consent(self) -> None:
-        """From-call defers SMS (not sent) when consent is given.
+    async def test_from_call_sends_sms_when_consent(self) -> None:
+        """From-call sends SMS via send_automated_message when consent is given.
 
-        After BUG #11/12/13 fix: leads bypass sms_service.send_message().
+        Validates: Requirement 46.1
         """
         lead = _make_lead_mock(sms_consent=True, phone="6125550200")
         repo = AsyncMock()
         repo.create.return_value = lead
         sms = AsyncMock()
+        sms.send_automated_message = AsyncMock(
+            return_value={"success": True},
+        )
         svc = _build_service(lead_repo=repo, sms_service=sms)
 
         data = FromCallSubmission(
@@ -532,6 +543,7 @@ class TestSmsConfirmationGating:
         await svc.create_from_call(data)
 
         sms.send_message.assert_not_awaited()
+        sms.send_automated_message.assert_awaited_once()
 
 
 # =============================================================================

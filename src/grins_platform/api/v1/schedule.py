@@ -8,18 +8,24 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from datetime import date, datetime
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session  # noqa: TC002
 
+from grins_platform.api.v1.auth_dependencies import (
+    CurrentActiveUser,  # noqa: TC001 - Required at runtime for FastAPI DI
+)
+from grins_platform.api.v1.dependencies import get_appointment_service
 from grins_platform.database import get_database_manager, get_sync_db
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.appointment import Appointment
 from grins_platform.models.customer import Customer
 from grins_platform.models.job import Job
 from grins_platform.models.property import Property
+from grins_platform.schemas.analytics import LeadTimeResponse
 from grins_platform.schemas.schedule_explanation import (
     JobReadyToSchedule,
     JobsReadyToScheduleResponse,
@@ -48,6 +54,9 @@ from grins_platform.services.ai.explanation_service import (
 )
 from grins_platform.services.ai.unassigned_analyzer import (
     UnassignedJobAnalyzer,
+)
+from grins_platform.services.appointment_service import (
+    AppointmentService,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
 from grins_platform.services.schedule_generation_service import (
     ScheduleGenerationService,
@@ -599,3 +608,42 @@ def apply_schedule(
             deleted_existing=deleted_count,
         )
         return response
+
+
+# =============================================================================
+# GET /api/v1/schedule/lead-time - Booking lead time (Req 25)
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/lead-time",
+    response_model=LeadTimeResponse,
+    summary="Get schedule booking lead time",
+    description="Calculate how far booked out the schedule is.",
+)
+async def get_lead_time(
+    _current_user: CurrentActiveUser,
+    service: Annotated[AppointmentService, Depends(get_appointment_service)],
+    max_per_day: int = Query(
+        default=8,
+        ge=1,
+        le=50,
+        description="Max appointments per staff per day",
+    ),
+) -> LeadTimeResponse:
+    """Get schedule booking lead time.
+
+    Validates: Requirement 25.2
+    """
+    endpoints.log_started("get_lead_time", max_per_day=max_per_day)
+
+    result = await service.calculate_lead_time(
+        max_appointments_per_day=max_per_day,
+    )
+
+    endpoints.log_completed("get_lead_time", days=result.days)
+
+    return LeadTimeResponse(
+        days=result.days,
+        display=result.display,
+    )

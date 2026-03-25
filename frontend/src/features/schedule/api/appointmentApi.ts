@@ -13,6 +13,16 @@ import type {
   DailyScheduleResponse,
   StaffDailyScheduleResponse,
   WeeklyScheduleResponse,
+  CollectPaymentRequest,
+  CollectPaymentResponse,
+  CreateEstimateFromAppointmentRequest,
+  CreateEstimateFromAppointmentResponse,
+  CreateInvoiceFromAppointmentResponse,
+  RequestReviewResponse,
+  StaffLocation,
+  StaffBreak,
+  CreateBreakRequest,
+  StaffTimeAnalytics,
 } from '../types';
 
 const BASE_URL = '/appointments';
@@ -129,5 +139,138 @@ export const appointmentApi = {
    */
   async markNoShow(id: string): Promise<Appointment> {
     return this.update(id, { status: 'no_show' });
+  },
+
+  /**
+   * Get schedule lead time (Req 25).
+   */
+  async getLeadTime(): Promise<{ days: number; label: string }> {
+    const response = await apiClient.get<{ days: number; label: string }>(
+      '/schedule/lead-time'
+    );
+    return response.data;
+  },
+
+  /**
+   * PATCH an appointment (for drag-drop rescheduling) (Req 24).
+   */
+  async patch(id: string, data: AppointmentUpdate): Promise<Appointment> {
+    const response = await apiClient.patch<Appointment>(`${BASE_URL}/${id}`, data);
+    return response.data;
+  },
+
+  /**
+   * Transition appointment to en_route status (Req 35).
+   */
+  async markEnRoute(id: string): Promise<Appointment> {
+    return this.update(id, { status: 'en_route' as Appointment['status'] });
+  },
+
+  /**
+   * Collect payment on-site (Req 30).
+   */
+  async collectPayment(id: string, data: CollectPaymentRequest): Promise<CollectPaymentResponse> {
+    const response = await apiClient.post<CollectPaymentResponse>(
+      `${BASE_URL}/${id}/collect-payment`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * Create invoice from appointment (Req 31).
+   */
+  async createInvoice(id: string): Promise<CreateInvoiceFromAppointmentResponse> {
+    const response = await apiClient.post<CreateInvoiceFromAppointmentResponse>(
+      `${BASE_URL}/${id}/create-invoice`
+    );
+    return response.data;
+  },
+
+  /**
+   * Create estimate from appointment (Req 32).
+   */
+  async createEstimate(
+    id: string,
+    data: CreateEstimateFromAppointmentRequest
+  ): Promise<CreateEstimateFromAppointmentResponse> {
+    const response = await apiClient.post<CreateEstimateFromAppointmentResponse>(
+      `${BASE_URL}/${id}/create-estimate`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * Upload photos for an appointment (Req 33).
+   */
+  async uploadPhotos(id: string, files: File[]): Promise<{ uploaded: number }> {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    const response = await apiClient.post<{ uploaded: number }>(
+      `${BASE_URL}/${id}/photos`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+
+  /**
+   * Request Google review from customer (Req 34).
+   */
+  async requestReview(id: string): Promise<RequestReviewResponse> {
+    const response = await apiClient.post<RequestReviewResponse>(
+      `${BASE_URL}/${id}/request-review`
+    );
+    return response.data;
+  },
+
+  /**
+   * Get all staff locations (Req 41).
+   */
+  async getStaffLocations(): Promise<StaffLocation[]> {
+    const response = await apiClient.get<StaffLocation[]>('/staff/locations');
+    return response.data;
+  },
+
+  /**
+   * Update a staff member's location (Req 41).
+   */
+  async updateStaffLocation(
+    staffId: string,
+    data: { latitude: number; longitude: number }
+  ): Promise<void> {
+    await apiClient.post(`/staff/${staffId}/location`, data);
+  },
+
+  /**
+   * Start a break for a staff member (Req 42).
+   */
+  async startBreak(staffId: string, data: CreateBreakRequest): Promise<StaffBreak> {
+    const response = await apiClient.post<StaffBreak>(
+      `/staff/${staffId}/breaks`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * End a break for a staff member (Req 42).
+   */
+  async endBreak(staffId: string, breakId: string): Promise<StaffBreak> {
+    const response = await apiClient.patch<StaffBreak>(
+      `/staff/${staffId}/breaks/${breakId}`
+    );
+    return response.data;
+  },
+
+  /**
+   * Get staff time analytics (Req 37).
+   */
+  async getStaffTimeAnalytics(): Promise<StaffTimeAnalytics[]> {
+    const response = await apiClient.get<StaffTimeAnalytics[]>(
+      '/analytics/staff-time'
+    );
+    return response.data;
   },
 };

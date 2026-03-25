@@ -10,6 +10,7 @@ import {
 } from '@tanstack/react-table';
 import { ArrowUpDown, MoreHorizontal, Search, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +35,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { LoadingPage, ErrorMessage } from '@/shared/components';
 import { InvoiceStatusBadge } from './InvoiceStatusBadge';
+import { BulkNotify } from './BulkNotify';
 import { useInvoices } from '../hooks';
 import type { Invoice, InvoiceListParams, InvoiceStatus } from '../types';
 
@@ -78,6 +80,7 @@ function isOverdue(dueDate: string, status: InvoiceStatus): boolean {
 
 export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [params, setParams] = useState<InvoiceListParams>({
     page: 1,
     page_size: 20,
@@ -94,7 +97,51 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
     date_to: dateTo || undefined,
   });
 
+  const invoiceItems = data?.items ?? [];
+  const allSelected = invoiceItems.length > 0 && invoiceItems.every((inv) => selectedIds.has(inv.id));
+  const someSelected = invoiceItems.some((inv) => selectedIds.has(inv.id));
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(invoiceItems.map((inv) => inv.id)));
+    }
+  };
+
+  const toggleOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
   const columns: ColumnDef<Invoice>[] = [
+    {
+      id: 'select',
+      header: () => (
+        <Checkbox
+          checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+          onCheckedChange={toggleAll}
+          aria-label="Select all invoices"
+          data-testid="select-all-checkbox"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={selectedIds.has(row.original.id)}
+          onCheckedChange={() => toggleOne(row.original.id)}
+          aria-label={`Select invoice ${row.original.invoice_number}`}
+          data-testid={`select-invoice-${row.original.id}`}
+        />
+      ),
+      enableSorting: false,
+    },
     {
       accessorKey: 'invoice_number',
       header: ({ column }) => (
@@ -121,16 +168,19 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
       },
     },
     {
-      accessorKey: 'customer_id',
+      accessorKey: 'customer_name',
       header: () => (
         <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
           Customer
         </span>
       ),
       cell: ({ row }) => (
-        <span className="text-sm text-slate-600">
-          {row.original.customer_id.slice(0, 8)}...
-        </span>
+        <Link
+          to={`/customers/${row.original.customer_id}`}
+          className="text-sm text-slate-600 hover:text-teal-600 transition-colors"
+        >
+          {row.original.customer_name ?? row.original.customer_id.slice(0, 8)}
+        </Link>
       ),
     },
     {
@@ -235,7 +285,7 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
   ];
 
   const table = useReactTable({
-    data: data?.items ?? [],
+    data: invoiceItems,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -327,6 +377,12 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
             <Filter className="h-4 w-4 mr-2" />
             Filter
           </Button>
+
+          {/* Bulk Notify */}
+          <BulkNotify
+            selectedInvoiceIds={Array.from(selectedIds)}
+            onComplete={() => setSelectedIds(new Set())}
+          />
         </div>
 
         {/* Table */}

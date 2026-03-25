@@ -81,6 +81,21 @@ class LeadSubmission(BaseModel):
         max_length=100,
         description="Source site identifier",
     )
+    city: str | None = Field(
+        default=None,
+        max_length=100,
+        description="City",
+    )
+    state: str | None = Field(
+        default=None,
+        max_length=2,
+        description="State abbreviation",
+    )
+    address: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Street address",
+    )
     lead_source: LeadSourceExtended | None = Field(
         default=None,
         description="Lead source channel (defaults to WEBSITE)",
@@ -206,6 +221,25 @@ class LeadUpdate(BaseModel):
         default=None,
         description="Intake routing tag",
     )
+    city: str | None = Field(
+        default=None,
+        max_length=100,
+        description="City",
+    )
+    state: str | None = Field(
+        default=None,
+        max_length=2,
+        description="State abbreviation",
+    )
+    address: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Street address",
+    )
+    action_tags: list[str] | None = Field(
+        default=None,
+        description="Action tags for pipeline tracking",
+    )
 
     @field_validator("notes")  # type: ignore[misc,untyped-decorator]
     @classmethod
@@ -229,6 +263,10 @@ class LeadResponse(BaseModel):
     phone: str
     email: str | None
     zip_code: str | None
+    city: str | None = None
+    state: str | None = None
+    address: str | None = None
+    action_tags: list[str] | None = None
     situation: LeadSituation
     notes: str | None
     source_site: str
@@ -277,6 +315,7 @@ class LeadListParams(BaseModel):
     date_to: datetime | None = None
     lead_source: list[str] | None = None
     intake_tag: str | None = None
+    action_tag: str | None = None
     sort_by: str = Field(default="created_at")
     sort_order: str = Field(default="desc", pattern="^(asc|desc)$")
 
@@ -464,3 +503,52 @@ class LeadMetricsBySourceResponse(BaseModel):
     total: int
     date_from: datetime
     date_to: datetime
+
+
+class BulkOutreachRequest(BaseModel):
+    """Request body for bulk lead outreach.
+
+    Validates: Requirement 14.1
+    """
+
+    lead_ids: list[UUID] = Field(
+        ...,
+        min_length=1,
+        description="List of lead IDs to contact",
+    )
+    template: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="Message template to send",
+    )
+    channel: str = Field(
+        default="sms",
+        pattern="^(sms|email|both)$",
+        description="Communication channel: sms, email, or both",
+    )
+
+
+class BulkOutreachSummary(BaseModel):
+    """Summary of bulk outreach results.
+
+    Validates: Requirement 14.4
+    """
+
+    sent_count: int = 0
+    skipped_count: int = 0
+    failed_count: int = 0
+    total: int = 0
+
+
+class MigrationSummary(BaseModel):
+    """Summary of work request migration results.
+
+    Validates: Requirement 19.1
+    """
+
+    total_submissions: int = 0
+    migrated_count: int = 0
+    skipped_count: int = 0
+    error_count: int = 0
+    errors: list[str] = Field(default_factory=list)

@@ -181,6 +181,16 @@ class JobUpdate(BaseModel):
         default=None,
         description="Additional source information",
     )
+    notes: str | None = Field(
+        default=None,
+        max_length=10000,
+        description="Job notes",
+    )
+    summary: str | None = Field(
+        default=None,
+        max_length=255,
+        description="Job summary",
+    )
 
     @field_validator("job_type")  # type: ignore[misc,untyped-decorator]
     @classmethod
@@ -297,8 +307,19 @@ class JobResponse(BaseModel):
         default=None,
         description="When the job was closed",
     )
+    notes: str | None = Field(default=None, description="Job notes")
+    summary: str | None = Field(default=None, description="Job summary")
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Record last update timestamp")
+    # Customer summary for list views (Req 20.2)
+    customer_name: str | None = Field(
+        default=None,
+        description="Customer full name for display",
+    )
+    customer_phone: str | None = Field(
+        default=None,
+        description="Customer phone for quick contact",
+    )
 
     @field_validator("category", mode="before")  # type: ignore[misc,untyped-decorator]
     @classmethod

@@ -58,6 +58,10 @@ def _make_lead_mock(
     contacted_at: datetime | None = None,
     converted_at: datetime | None = None,
     email_marketing_consent: bool = False,
+    city: str | None = None,
+    state: str | None = None,
+    address: str | None = None,
+    action_tags: list[str] | None = None,
 ) -> MagicMock:
     """Create a mock Lead object with given attributes."""
     lead = MagicMock()
@@ -82,6 +86,10 @@ def _make_lead_mock(
     lead.converted_at = converted_at
     lead.created_at = datetime.now(tz=timezone.utc)
     lead.updated_at = datetime.now(tz=timezone.utc)
+    lead.city = city
+    lead.state = state
+    lead.address = address
+    lead.action_tags = action_tags
     return lead
 
 

@@ -158,6 +158,15 @@ class CustomerUpdate(BaseModel):
         default=None,
         description="Email communication opt-in status",
     )
+    internal_notes: str | None = Field(
+        default=None,
+        max_length=10000,
+        description="Internal notes about the customer",
+    )
+    preferred_service_times: dict[str, Any] | None = Field(
+        default=None,
+        description="Preferred service time window",
+    )
 
     @field_validator("phone")  # type: ignore[misc,untyped-decorator]
     @classmethod
@@ -245,6 +254,10 @@ class CustomerResponse(BaseModel):
     lead_source: LeadSource | None = Field(
         default=None,
         description="Lead source",
+    )
+    internal_notes: str | None = Field(
+        default=None,
+        description="Internal notes about the customer",
     )
     preferred_service_times: dict[str, Any] | None = Field(
         default=None,
@@ -418,6 +431,125 @@ class BulkUpdateResponse(BaseModel):
         default_factory=list,
         description="List of errors for failed updates",
     )
+
+
+class DuplicateCustomerMatch(BaseModel):
+    """A single customer in a duplicate group.
+
+    Validates: CRM Gap Closure Req 7.1
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID = Field(description="Customer ID")
+    first_name: str = Field(description="First name")
+    last_name: str = Field(description="Last name")
+    phone: str = Field(description="Phone number")
+    email: str | None = Field(default=None, description="Email address")
+    match_type: str = Field(
+        description="How the duplicate was detected: phone, email, or name",
+    )
+    similarity_score: float | None = Field(
+        default=None,
+        description="Name similarity score (0-1) if matched by name",
+    )
+
+
+class DuplicateGroup(BaseModel):
+    """A group of potential duplicate customers.
+
+    Validates: CRM Gap Closure Req 7.1
+    """
+
+    customers: list[DuplicateCustomerMatch] = Field(
+        description="Customers in this duplicate group",
+    )
+
+
+class MergeCustomersRequest(BaseModel):
+    """Request to merge duplicate customers.
+
+    Validates: CRM Gap Closure Req 7.2
+    """
+
+    primary_customer_id: UUID = Field(description="ID of the customer to keep")
+    duplicate_customer_ids: list[UUID] = Field(
+        min_length=1,
+        description="IDs of duplicate customers to merge into primary",
+    )
+
+
+class PaymentMethodResponse(BaseModel):
+    """Stripe payment method details (read-only).
+
+    Validates: CRM Gap Closure Req 56.1, 56.2
+    """
+
+    id: str = Field(description="Stripe PaymentMethod ID")
+    brand: str = Field(description="Card brand (visa, mastercard, etc.)")
+    last4: str = Field(description="Last 4 digits of card number")
+    exp_month: int = Field(description="Expiration month")
+    exp_year: int = Field(description="Expiration year")
+    is_default: bool = Field(
+        default=False,
+        description="Whether this is the default payment method",
+    )
+
+
+class ChargeRequest(BaseModel):
+    """Request to charge a customer's saved payment method.
+
+    Validates: CRM Gap Closure Req 56.3
+    """
+
+    amount: int = Field(gt=0, description="Amount in cents to charge")
+    description: str = Field(
+        min_length=1,
+        max_length=500,
+        description="Charge description",
+    )
+    invoice_id: UUID | None = Field(
+        default=None,
+        description="Optional invoice ID to associate with charge",
+    )
+
+
+class ChargeResponse(BaseModel):
+    """Response from a customer charge.
+
+    Validates: CRM Gap Closure Req 56.3
+    """
+
+    payment_intent_id: str = Field(description="Stripe PaymentIntent ID")
+    status: str = Field(description="Payment status (succeeded, requires_action, etc.)")
+    amount: int = Field(description="Amount charged in cents")
+    currency: str = Field(default="usd", description="Currency code")
+
+
+class CustomerPhotoResponse(BaseModel):
+    """Response schema for a customer photo.
+
+    Validates: CRM Gap Closure Req 9.3
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID = Field(description="Photo ID")
+    customer_id: UUID = Field(description="Customer ID")
+    file_key: str = Field(description="S3 object key")
+    file_name: str = Field(description="Original file name")
+    file_size: int = Field(description="File size in bytes")
+    content_type: str = Field(description="MIME type")
+    caption: str | None = Field(default=None, description="Photo caption")
+    uploaded_by: UUID | None = Field(
+        default=None,
+        description="Staff ID who uploaded",
+    )
+    download_url: str | None = Field(
+        default=None,
+        description="Pre-signed download URL",
+    )
+    created_at: datetime = Field(description="Upload timestamp")
 
 
 def _rebuild_models() -> None:

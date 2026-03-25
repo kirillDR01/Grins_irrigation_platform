@@ -2,10 +2,10 @@
 Lead API endpoints.
 
 This module provides REST API endpoints for lead management including
-public form submission (no auth), admin CRUD, status workflow, and
-conversion to customer.
+public form submission (no auth), admin CRUD, status workflow,
+conversion to customer, bulk outreach, and attachment management.
 
-Validates: Requirement 1.10, 5.10, 7.9, 12.3
+Validates: Requirement 1.10, 5.10, 7.9, 12.2, 12.3, 13.1, 14.1, 15.2, 15.3, 15.4
 """
 
 from __future__ import annotations
@@ -14,7 +14,17 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import (
     AsyncSession,  # noqa: TC002 - Required at runtime for FastAPI DI
 )
@@ -25,6 +35,8 @@ from grins_platform.api.v1.auth_dependencies import (
 from grins_platform.api.v1.dependencies import get_db_session
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import LeadSituation, LeadStatus
+from grins_platform.models.lead import Lead
+from grins_platform.models.lead_attachment import LeadAttachment
 from grins_platform.repositories.customer_repository import CustomerRepository
 from grins_platform.repositories.job_repository import JobRepository
 from grins_platform.repositories.lead_repository import LeadRepository
@@ -34,6 +46,8 @@ from grins_platform.repositories.service_offering_repository import (
 )
 from grins_platform.repositories.staff_repository import StaffRepository
 from grins_platform.schemas.lead import (
+    BulkOutreachRequest,
+    BulkOutreachSummary,
     FromCallSubmission,
     LeadConversionRequest,
     LeadConversionResponse,
@@ -46,11 +60,16 @@ from grins_platform.schemas.lead import (
     PaginatedFollowUpQueueResponse,
     PaginatedLeadResponse,
 )
+from grins_platform.schemas.lead_attachment import (
+    LeadAttachmentListResponse,
+    LeadAttachmentResponse,
+)
 from grins_platform.services.compliance_service import ComplianceService
 from grins_platform.services.customer_service import CustomerService
 from grins_platform.services.email_service import EmailService
 from grins_platform.services.job_service import JobService
 from grins_platform.services.lead_service import LeadService
+from grins_platform.services.photo_service import PhotoService, UploadContext
 from grins_platform.services.sms_service import SMSService
 
 router = APIRouter()
@@ -303,6 +322,50 @@ async def get_lead_metrics_by_source(
 
 
 # =============================================================================
+# POST /api/v1/leads/bulk-outreach — Admin auth required
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/bulk-outreach",
+    response_model=BulkOutreachSummary,
+    summary="Bulk SMS/email outreach to leads",
+    description=(
+        "Send bulk outreach messages to multiple leads. "
+        "Respects SMS consent and contact preferences. Admin auth required."
+    ),
+)
+async def bulk_outreach(
+    data: BulkOutreachRequest,
+    _current_user: CurrentActiveUser,
+    service: Annotated[LeadService, Depends(_get_lead_service)],
+) -> BulkOutreachSummary:
+    """Send bulk outreach to multiple leads.
+
+    Validates: Requirement 14.1
+    """
+    _endpoints.log_started(
+        "bulk_outreach",
+        lead_count=len(data.lead_ids),
+        channel=data.channel,
+    )
+
+    result = await service.bulk_outreach(
+        lead_ids=data.lead_ids,
+        template=data.template,
+        channel=data.channel,
+    )
+
+    _endpoints.log_completed(
+        "bulk_outreach",
+        sent=result.sent_count,
+        skipped=result.skipped_count,
+        failed=result.failed_count,
+    )
+    return result
+
+
+# =============================================================================
 # GET /api/v1/leads/{lead_id} — Admin auth required
 # =============================================================================
 
@@ -419,3 +482,247 @@ async def delete_lead(
     await service.delete_lead(lead_id)
 
     _endpoints.log_completed("delete_lead", lead_id=str(lead_id))
+
+
+# =============================================================================
+# POST /api/v1/leads/{lead_id}/attachments — Admin auth required
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{lead_id}/attachments",
+    response_model=LeadAttachmentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload lead attachment",
+    description=(
+        "Upload a file attachment to a lead. "
+        "Supports PDF, DOCX, JPEG, PNG (max 25MB). Admin auth required."
+    ),
+)
+async def upload_lead_attachment(
+    lead_id: UUID,
+    _current_user: CurrentActiveUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    file: Annotated[UploadFile, File(description="File to upload")],
+    attachment_type: Annotated[
+        str,
+        Form(description="Attachment type: ESTIMATE, CONTRACT, or OTHER"),
+    ] = "OTHER",
+) -> LeadAttachmentResponse:
+    """Upload an attachment to a lead.
+
+    Validates: Requirement 15.2
+    """
+    _endpoints.log_started(
+        "upload_lead_attachment",
+        lead_id=str(lead_id),
+        attachment_type=attachment_type,
+    )
+
+    # Validate attachment_type
+    valid_types = {"ESTIMATE", "CONTRACT", "OTHER"}
+    if attachment_type.upper() not in valid_types:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"attachment_type must be one of: {', '.join(sorted(valid_types))}",
+        )
+
+    # Verify lead exists
+    result = await session.execute(select(Lead).where(Lead.id == lead_id))
+    lead = result.scalar_one_or_none()
+    if not lead:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Lead {lead_id} not found",
+        )
+
+    # Read file data
+    file_data = await file.read()
+    if not file_data:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Empty file",
+        )
+
+    # Upload via PhotoService
+    photo_service = PhotoService()
+    try:
+        upload_result = photo_service.upload_file(
+            data=file_data,
+            file_name=file.filename or "attachment",
+            context=UploadContext.LEAD_ATTACHMENT,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        ) from e
+
+    # Create DB record
+    attachment = LeadAttachment(
+        lead_id=lead_id,
+        file_key=upload_result.file_key,
+        file_name=upload_result.file_name,
+        file_size=upload_result.file_size,
+        content_type=upload_result.content_type,
+        attachment_type=attachment_type.upper(),
+    )
+    session.add(attachment)
+    await session.commit()
+    await session.refresh(attachment)
+
+    # Generate pre-signed URL
+    download_url = photo_service.generate_presigned_url(attachment.file_key)
+
+    _endpoints.log_completed(
+        "upload_lead_attachment",
+        lead_id=str(lead_id),
+        attachment_id=str(attachment.id),
+        file_key=upload_result.file_key,
+    )
+
+    return LeadAttachmentResponse(
+        id=attachment.id,
+        lead_id=attachment.lead_id,
+        file_key=attachment.file_key,
+        file_name=attachment.file_name,
+        file_size=attachment.file_size,
+        content_type=attachment.content_type,
+        attachment_type=attachment.attachment_type,
+        download_url=download_url,
+        created_at=attachment.created_at,
+    )
+
+
+# =============================================================================
+# GET /api/v1/leads/{lead_id}/attachments — Admin auth required
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/{lead_id}/attachments",
+    response_model=LeadAttachmentListResponse,
+    summary="List lead attachments",
+    description=(
+        "List all attachments for a lead with pre-signed download URLs. "
+        "Admin auth required."
+    ),
+)
+async def list_lead_attachments(
+    lead_id: UUID,
+    _current_user: CurrentActiveUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> LeadAttachmentListResponse:
+    """List attachments for a lead.
+
+    Validates: Requirement 15.3
+    """
+    _endpoints.log_started("list_lead_attachments", lead_id=str(lead_id))
+
+    # Verify lead exists
+    lead_result = await session.execute(select(Lead).where(Lead.id == lead_id))
+    lead = lead_result.scalar_one_or_none()
+    if not lead:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Lead {lead_id} not found",
+        )
+
+    # Query attachments
+    stmt = (
+        select(LeadAttachment)
+        .where(LeadAttachment.lead_id == lead_id)
+        .order_by(LeadAttachment.created_at.desc())
+    )
+    result = await session.execute(stmt)
+    attachments = list(result.scalars().all())
+
+    # Generate pre-signed URLs
+    photo_service = PhotoService()
+    items: list[LeadAttachmentResponse] = []
+    for att in attachments:
+        download_url = photo_service.generate_presigned_url(att.file_key)
+        items.append(
+            LeadAttachmentResponse(
+                id=att.id,
+                lead_id=att.lead_id,
+                file_key=att.file_key,
+                file_name=att.file_name,
+                file_size=att.file_size,
+                content_type=att.content_type,
+                attachment_type=att.attachment_type,
+                download_url=download_url,
+                created_at=att.created_at,
+            ),
+        )
+
+    _endpoints.log_completed(
+        "list_lead_attachments",
+        lead_id=str(lead_id),
+        count=len(items),
+    )
+
+    return LeadAttachmentListResponse(items=items, total=len(items))
+
+
+# =============================================================================
+# DELETE /api/v1/leads/{lead_id}/attachments/{attachment_id} — Admin auth
+# =============================================================================
+
+
+@router.delete(  # type: ignore[untyped-decorator]
+    "/{lead_id}/attachments/{attachment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete lead attachment",
+    description="Delete a lead attachment and its S3 object. Admin auth required.",
+)
+async def delete_lead_attachment(
+    lead_id: UUID,
+    attachment_id: UUID,
+    _current_user: CurrentActiveUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> None:
+    """Delete a lead attachment.
+
+    Validates: Requirement 15.4
+    """
+    _endpoints.log_started(
+        "delete_lead_attachment",
+        lead_id=str(lead_id),
+        attachment_id=str(attachment_id),
+    )
+
+    # Find attachment
+    stmt = select(LeadAttachment).where(
+        LeadAttachment.id == attachment_id,
+        LeadAttachment.lead_id == lead_id,
+    )
+    result = await session.execute(stmt)
+    attachment = result.scalar_one_or_none()
+    if not attachment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Attachment {attachment_id} not found for lead {lead_id}",
+        )
+
+    # Delete from S3
+    photo_service = PhotoService()
+    try:
+        photo_service.delete_file(attachment.file_key)
+    except Exception:
+        _endpoints.log_failed(
+            "delete_lead_attachment",
+            lead_id=str(lead_id),
+            attachment_id=str(attachment_id),
+            error="S3 delete failed, proceeding with DB cleanup",
+        )
+
+    # Delete DB record
+    await session.delete(attachment)
+    await session.commit()
+
+    _endpoints.log_completed(
+        "delete_lead_attachment",
+        lead_id=str(lead_id),
+        attachment_id=str(attachment_id),
+    )

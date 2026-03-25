@@ -119,9 +119,12 @@ class TestWebhookIdempotencyProperty:
 
         await handler.handle_event(event)
 
-        handler.repo.create_event_record.assert_called_once()
-        create_call = handler.repo.create_event_record.call_args
-        assert create_call[1]["stripe_event_id"] == event_id
+        # create_event_record is called at least once (pending), and possibly
+        # a second time (failed) if the event triggers processing that fails
+        # and the original record is rolled back.
+        assert handler.repo.create_event_record.call_count >= 1
+        first_call = handler.repo.create_event_record.call_args_list[0]
+        assert first_call[1]["stripe_event_id"] == event_id
 
     @given(
         event_id=stripe_event_ids,

@@ -5,7 +5,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { appointmentApi } from '../api/appointmentApi';
 import { appointmentKeys } from './useAppointments';
-import type { AppointmentCreate, AppointmentUpdate } from '../types';
+import type {
+  AppointmentCreate,
+  AppointmentUpdate,
+  CollectPaymentRequest,
+  CreateEstimateFromAppointmentRequest,
+} from '../types';
 
 /**
  * Hook to create a new appointment.
@@ -148,6 +153,102 @@ export function useMarkAppointmentNoShow() {
       queryClient.invalidateQueries({
         queryKey: [...appointmentKeys.all, 'daily'],
       });
+    },
+  });
+}
+
+/**
+ * Hook to mark appointment as en_route (Req 35).
+ */
+export function useMarkAppointmentEnRoute() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => appointmentApi.markEnRoute(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
+      queryClient.invalidateQueries({
+        queryKey: [...appointmentKeys.all, 'daily'],
+      });
+    },
+  });
+}
+
+/**
+ * Hook to collect payment on-site (Req 30).
+ */
+export function useCollectPayment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: CollectPaymentRequest }) =>
+      appointmentApi.collectPayment(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
+    },
+  });
+}
+
+/**
+ * Hook to create invoice from appointment (Req 31).
+ */
+export function useCreateInvoiceFromAppointment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => appointmentApi.createInvoice(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
+    },
+  });
+}
+
+/**
+ * Hook to create estimate from appointment (Req 32).
+ */
+export function useCreateEstimateFromAppointment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: CreateEstimateFromAppointmentRequest;
+    }) => appointmentApi.createEstimate(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
+    },
+  });
+}
+
+/**
+ * Hook to upload photos for an appointment (Req 33).
+ */
+export function useUploadAppointmentPhotos() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, files }: { id: string; files: File[] }) =>
+      appointmentApi.uploadPhotos(id, files),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
+    },
+  });
+}
+
+/**
+ * Hook to request Google review (Req 34).
+ */
+export function useRequestReview() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => appointmentApi.requestReview(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
     },
   });
 }

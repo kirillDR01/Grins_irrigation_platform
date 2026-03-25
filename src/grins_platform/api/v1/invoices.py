@@ -24,9 +24,11 @@ from grins_platform.exceptions import (
     InvalidInvoiceOperationError,
     InvoiceNotFoundError,
 )
+from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import InvoiceStatus
 from grins_platform.repositories.invoice_repository import InvoiceRepository
 from grins_platform.repositories.job_repository import JobRepository
+from grins_platform.schemas.dashboard import PendingInvoiceMetricsResponse
 from grins_platform.schemas.invoice import (
     InvoiceCreate,
     InvoiceDetailResponse,
@@ -62,9 +64,51 @@ async def get_invoice_service(
     )
 
 
+class _InvoiceEndpoints(LoggerMixin):
+    """Invoice API endpoint handlers with logging."""
+
+    DOMAIN = "api"
+
+
+_invoice_endpoints = _InvoiceEndpoints()
+
+
 # =============================================================================
 # Static Path Endpoints (MUST come before dynamic /{invoice_id} routes)
 # =============================================================================
+
+
+@router.get(
+    "/metrics/pending",
+    response_model=PendingInvoiceMetricsResponse,
+    summary="Get pending invoice metrics",
+    description="Get count and total amount of pending invoices "
+    "(status SENT or VIEWED).",
+)
+async def get_pending_invoice_metrics(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> PendingInvoiceMetricsResponse:
+    """Get pending invoice metrics for the dashboard.
+
+    Returns the count and total amount of invoices with status
+    SENT or VIEWED (not yet paid).
+
+    Validates: CRM Gap Closure Req 5.2
+    """
+    _invoice_endpoints.log_started("get_pending_invoice_metrics")
+
+    repo = InvoiceRepository(session=session)
+    count, total_amount = await repo.get_pending_metrics()
+
+    _invoice_endpoints.log_completed(
+        "get_pending_invoice_metrics",
+        count=count,
+        total_amount=float(total_amount),
+    )
+    return PendingInvoiceMetricsResponse(
+        count=count,
+        total_amount=float(total_amount),
+    )
 
 
 @router.post(
@@ -574,6 +618,150 @@ async def mark_lien_filed(
     try:
         return await service.mark_lien_filed(invoice_id, request.filing_date)
     except InvoiceNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+
+
+# =============================================================================
+# Bulk Notify — Req 38
+# =============================================================================
+
+
+@router.post(
+    "/bulk-notify",
+    summary="Bulk notify invoices",
+    description="Send notifications for multiple invoices at once.",
+)
+async def bulk_notify_invoices(
+    invoice_ids: list[UUID],
+    notification_type: str = "REMINDER",
+    _current_user: ManagerOrAdminUser = None,  # type: ignore[assignment]
+    service: Annotated[InvoiceService, Depends(get_invoice_service)] = None,  # type: ignore[assignment]
+) -> dict[str, object]:
+    """Send bulk notifications for invoices.
+
+    Validates: CRM Gap Closure Req 38.1
+    """
+    _invoice_endpoints.log_started(
+        "bulk_notify_invoices",
+        count=len(invoice_ids),
+        notification_type=notification_type,
+    )
+
+    sent = 0
+    failed = 0
+    skipped = 0
+
+    for inv_id in invoice_ids:
+        try:
+            if notification_type == "REMINDER":
+                await service.send_reminder(inv_id)
+            elif notification_type == "LIEN_WARNING":
+                await service.send_lien_warning(inv_id)
+            else:
+                await service.send_reminder(inv_id)
+            sent += 1
+        except InvoiceNotFoundError:  # noqa: PERF203
+            skipped += 1
+        except Exception:
+            _invoice_endpoints.logger.warning(
+                "bulk_notify_single_failure",
+                invoice_id=str(inv_id),
+                notification_type=notification_type,
+            )
+            failed += 1
+
+    _invoice_endpoints.log_completed(
+        "bulk_notify_invoices",
+        sent=sent,
+        failed=failed,
+        skipped=skipped,
+    )
+    return {
+        "sent": sent,
+        "failed": failed,
+        "skipped": skipped,
+        "total": len(invoice_ids),
+    }
+
+
+# =============================================================================
+# Invoice PDF — Req 80
+# =============================================================================
+
+
+@router.post(
+    "/{invoice_id}/generate-pdf",
+    summary="Generate invoice PDF",
+    description="Generate a PDF for an invoice and store in S3.",
+)
+async def generate_invoice_pdf(
+    invoice_id: UUID,
+    _current_user: ManagerOrAdminUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict[str, str]:
+    """Generate PDF for an invoice.
+
+    Validates: CRM Gap Closure Req 80.2
+    """
+    from grins_platform.services.invoice_pdf_service import (  # noqa: PLC0415
+        InvoiceNotFoundError as PDFInvoiceNotFoundError,
+        InvoicePDFService,
+    )
+
+    _invoice_endpoints.log_started(
+        "generate_invoice_pdf",
+        invoice_id=str(invoice_id),
+    )
+    try:
+        svc = InvoicePDFService()
+        document_url = await svc.generate_pdf(session, invoice_id)
+        _invoice_endpoints.log_completed(
+            "generate_invoice_pdf",
+            invoice_id=str(invoice_id),
+        )
+        return {"invoice_id": str(invoice_id), "document_url": document_url}
+    except PDFInvoiceNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+
+
+@router.get(
+    "/{invoice_id}/pdf",
+    summary="Get invoice PDF download URL",
+    description="Get a pre-signed download URL for an invoice PDF.",
+)
+async def get_invoice_pdf(
+    invoice_id: UUID,
+    _current_user: ManagerOrAdminUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict[str, str]:
+    """Get pre-signed download URL for invoice PDF.
+
+    Validates: CRM Gap Closure Req 80.3
+    """
+    from grins_platform.services.invoice_pdf_service import (  # noqa: PLC0415
+        InvoicePDFNotFoundError,
+        InvoicePDFService,
+    )
+
+    _invoice_endpoints.log_started(
+        "get_invoice_pdf",
+        invoice_id=str(invoice_id),
+    )
+    try:
+        svc = InvoicePDFService()
+        url = await svc.get_pdf_url(session, invoice_id)
+        _invoice_endpoints.log_completed(
+            "get_invoice_pdf",
+            invoice_id=str(invoice_id),
+        )
+        return {"invoice_id": str(invoice_id), "download_url": url}
+    except InvoicePDFNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e),

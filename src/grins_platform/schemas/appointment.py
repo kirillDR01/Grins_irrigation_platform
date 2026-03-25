@@ -71,6 +71,9 @@ class AppointmentResponse(BaseModel):
     status: AppointmentStatus
     arrived_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    en_route_at: Optional[datetime] = None
+    materials_needed: Optional[str] = None
+    estimated_duration_minutes: Optional[int] = None
     notes: Optional[str] = None
     route_order: Optional[int] = None
     estimated_arrival: Optional[time] = None

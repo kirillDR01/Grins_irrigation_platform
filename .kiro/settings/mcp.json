@@ -1,5 +1,19 @@
 {
   "mcpServers": {
+    "postman": {
+      "url": "https://mcp.postman.com/minimal",
+      "headers": {
+        "Authorization": "Bearer ${POSTMAN_API_KEY}"
+      },
+      "disabled": false,
+      "autoApprove": [
+        "runCollection",
+        "getCollection",
+        "getCollections",
+        "getEnvironment",
+        "getEnvironments"
+      ]
+    },
     "git": {
       "command": "uvx",
       "args": [
@@ -12,7 +26,8 @@
         "git_log",
         "git_diff",
         "git_commit",
-        "git_diff_unstaged"
+        "git_diff_unstaged",
+        "git_branch"
       ]
     },
     "filesystem": {

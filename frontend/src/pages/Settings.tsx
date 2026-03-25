@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { User, Bell, Palette, Building2, Key, Shield, LogOut, Lock, Mail, Phone, Sun, Moon } from "lucide-react";
+import { User, Bell, Palette, Key, Shield, LogOut, Lock, Mail, Phone, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/core/providers";
 import { useAuth } from "@/features/auth";
 import { authApi } from "@/features/auth/api";
 import { toast } from "sonner";
+import { BusinessInfo, InvoiceDefaults, NotificationPrefs, EstimateDefaults } from "@/features/settings";
 
 export function SettingsPage() {
   const { user, logout, updateUser } = useAuth();
@@ -241,76 +242,17 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Business Settings Section */}
-      <Card data-testid="business-settings" className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow dark:bg-slate-800 dark:border-slate-700">
-        <CardHeader className="p-6 border-b border-slate-100 dark:border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-50 rounded-lg dark:bg-blue-900/30">
-              <Building2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <CardTitle className="font-bold text-slate-800 text-lg dark:text-slate-100">Business Settings</CardTitle>
-              <CardDescription className="text-slate-500 text-sm dark:text-slate-400">Configure your business information</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="company-name" className="text-sm font-medium text-slate-700 dark:text-slate-300">Company Name</Label>
-              <Input 
-                id="company-name" 
-                data-testid="company-name-input"
-                defaultValue="Grin's Irrigation" 
-                placeholder="Company name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="business-phone" className="text-sm font-medium text-slate-700 dark:text-slate-300">Business Phone</Label>
-              <Input 
-                id="business-phone" 
-                type="tel"
-                defaultValue="(612) 555-0000" 
-                placeholder="Business phone"
-              />
-            </div>
-          </div>
+      {/* Business Information Section (Req 87.3) */}
+      <BusinessInfo />
 
-          <div className="space-y-2">
-            <Label htmlFor="business-address" className="text-sm font-medium text-slate-700 dark:text-slate-300">Business Address</Label>
-            <Input 
-              id="business-address" 
-              defaultValue="Eden Prairie, MN" 
-              placeholder="Business address"
-            />
-          </div>
+      {/* Invoice Defaults Section (Req 87.4) */}
+      <InvoiceDefaults />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="default-rate" className="text-sm font-medium text-slate-700 dark:text-slate-300">Default Hourly Rate</Label>
-              <Input 
-                id="default-rate" 
-                type="number"
-                defaultValue="85" 
-                placeholder="Hourly rate"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="zone-price" className="text-sm font-medium text-slate-700 dark:text-slate-300">Default Zone Price</Label>
-              <Input 
-                id="zone-price" 
-                type="number"
-                defaultValue="45" 
-                placeholder="Price per zone"
-              />
-            </div>
-          </div>
+      {/* Notification Preferences Section (Req 87.5) */}
+      <NotificationPrefs />
 
-          <div className="flex justify-end">
-            <Button>Save Changes</Button>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Estimate Defaults Section (Req 87.6) */}
+      <EstimateDefaults />
 
       {/* Integration Settings Section */}
       <Card data-testid="integration-settings" className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow dark:bg-slate-800 dark:border-slate-700">

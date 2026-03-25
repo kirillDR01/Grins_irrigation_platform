@@ -336,3 +336,91 @@ class SentMessageRepository(LoggerMixin):
 
         self.log_completed("get_queue_paginated", count=len(messages), total=total)
         return messages, total
+
+    async def list_with_filters(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        message_type: str | None = None,
+        delivery_status: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        search: str | None = None,
+        customer_id: UUID | None = None,
+    ) -> tuple[list[SentMessage], int]:
+        """List sent messages with pagination and filters.
+
+        Args:
+            page: Page number (1-based).
+            page_size: Items per page.
+            message_type: Filter by message type.
+            delivery_status: Filter by delivery status.
+            date_from: Filter from date.
+            date_to: Filter to date.
+            search: Search in message content.
+            customer_id: Filter by customer.
+
+        Returns:
+            Tuple of (messages, total count).
+
+        Validates: CRM Gap Closure Req 82.1, 82.2, 82.3
+        """
+        from sqlalchemy import func as sa_func  # noqa: PLC0415
+
+        self.log_started(
+            "list_with_filters",
+            page=page,
+            page_size=page_size,
+        )
+
+        query = select(SentMessage)
+        count_query = select(sa_func.count()).select_from(SentMessage)
+
+        # Apply filters
+        if message_type:
+            query = query.where(SentMessage.message_type == message_type)
+            count_query = count_query.where(
+                SentMessage.message_type == message_type,
+            )
+        if delivery_status:
+            query = query.where(SentMessage.delivery_status == delivery_status)
+            count_query = count_query.where(
+                SentMessage.delivery_status == delivery_status,
+            )
+        if date_from:
+            query = query.where(SentMessage.created_at >= date_from)
+            count_query = count_query.where(SentMessage.created_at >= date_from)
+        if date_to:
+            query = query.where(SentMessage.created_at <= date_to)
+            count_query = count_query.where(SentMessage.created_at <= date_to)
+        if search:
+            query = query.where(
+                SentMessage.message_content.ilike(f"%{search}%"),
+            )
+            count_query = count_query.where(
+                SentMessage.message_content.ilike(f"%{search}%"),
+            )
+        if customer_id:
+            query = query.where(SentMessage.customer_id == customer_id)
+            count_query = count_query.where(
+                SentMessage.customer_id == customer_id,
+            )
+
+        # Get total count
+        count_result = await self.session.execute(count_query)
+        total: int = count_result.scalar() or 0
+
+        # Get paginated results
+        offset = (page - 1) * page_size
+        query = query.order_by(SentMessage.created_at.desc())
+        query = query.limit(page_size).offset(offset)
+
+        result = await self.session.execute(query)
+        messages = list(result.scalars().all())
+
+        self.log_completed(
+            "list_with_filters",
+            count=len(messages),
+            total=total,
+        )
+        return messages, total

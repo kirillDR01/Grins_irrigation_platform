@@ -20,10 +20,13 @@ const mockJob: Job = {
   customer_id: '123e4567-e89b-12d3-a456-426614174001',
   property_id: null,
   service_offering_id: null,
+  service_agreement_id: null,
   job_type: 'spring_startup',
   category: 'ready_to_schedule',
   status: 'requested',
   description: 'Spring startup for irrigation system',
+  summary: null,
+  notes: null,
   estimated_duration_minutes: 60,
   priority_level: 0,
   weather_sensitive: false,
@@ -35,6 +38,8 @@ const mockJob: Job = {
   source: 'website',
   source_details: null,
   payment_collected_on_site: false,
+  target_start_date: null,
+  target_end_date: null,
   requested_at: '2025-01-20T10:00:00Z',
   approved_at: null,
   scheduled_at: null,
@@ -43,6 +48,8 @@ const mockJob: Job = {
   closed_at: null,
   created_at: '2025-01-20T10:00:00Z',
   updated_at: '2025-01-20T10:00:00Z',
+  customer_name: null,
+  customer_tags: null,
 };
 
 // Helper to select value in Radix UI Select via hidden native select

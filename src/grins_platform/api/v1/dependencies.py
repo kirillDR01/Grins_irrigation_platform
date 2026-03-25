@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import (
 from grins_platform.database import get_db_session as db_session_generator
 from grins_platform.repositories.appointment_repository import AppointmentRepository
 from grins_platform.repositories.customer_repository import CustomerRepository
+from grins_platform.repositories.estimate_repository import EstimateRepository
 from grins_platform.repositories.google_sheet_submission_repository import (
     GoogleSheetSubmissionRepository,
 )
@@ -35,8 +36,10 @@ from grins_platform.repositories.staff_repository import StaffRepository
 from grins_platform.services.appointment_service import AppointmentService
 from grins_platform.services.customer_service import CustomerService
 from grins_platform.services.dashboard_service import DashboardService
+from grins_platform.services.estimate_service import EstimateService
 from grins_platform.services.google_sheets_service import GoogleSheetsService
 from grins_platform.services.job_service import JobService
+from grins_platform.services.photo_service import PhotoService
 from grins_platform.services.property_service import PropertyService
 from grins_platform.services.service_offering_service import ServiceOfferingService
 from grins_platform.services.staff_availability_service import StaffAvailabilityService
@@ -175,6 +178,39 @@ async def get_appointment_service(
     )
 
 
+async def get_full_appointment_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> AppointmentService:
+    """Get AppointmentService with invoice and estimate support.
+
+    Includes InvoiceRepository and EstimateService for payment collection,
+    invoice creation, and estimate creation from appointments.
+
+    Args:
+        session: Database session from dependency injection
+
+    Returns:
+        AppointmentService instance with full capabilities
+    """
+    from grins_platform.repositories.invoice_repository import (  # noqa: PLC0415
+        InvoiceRepository,
+    )
+
+    appointment_repository = AppointmentRepository(session=session)
+    job_repository = JobRepository(session=session)
+    staff_repository = StaffRepository(session=session)
+    invoice_repository = InvoiceRepository(session=session)
+    estimate_repository = EstimateRepository(session=session)
+    estimate_service = EstimateService(estimate_repository=estimate_repository)
+    return AppointmentService(
+        appointment_repository=appointment_repository,
+        job_repository=job_repository,
+        staff_repository=staff_repository,
+        invoice_repository=invoice_repository,
+        estimate_service=estimate_service,
+    )
+
+
 async def get_dashboard_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> DashboardService:
@@ -245,13 +281,40 @@ async def get_sheets_service() -> GoogleSheetsService:
     return GoogleSheetsService(submission_repo=None, lead_repo=None)
 
 
+def get_photo_service() -> PhotoService:
+    """Get PhotoService dependency.
+
+    Returns:
+        PhotoService instance with default S3 client
+    """
+    return PhotoService()
+
+
+async def get_estimate_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> EstimateService:
+    """Get EstimateService dependency.
+
+    Args:
+        session: Database session from dependency injection
+
+    Returns:
+        EstimateService instance
+    """
+    repository = EstimateRepository(session=session)
+    return EstimateService(estimate_repository=repository)
+
+
 __all__ = [
     "get_appointment_service",
     "get_customer_service",
     "get_dashboard_service",
     "get_db_session",
+    "get_estimate_service",
+    "get_full_appointment_service",
     "get_google_sheet_submission_repository",
     "get_job_service",
+    "get_photo_service",
     "get_property_service",
     "get_service_offering_service",
     "get_sheets_service",

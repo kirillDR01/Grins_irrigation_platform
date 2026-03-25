@@ -3,9 +3,8 @@
  *
  * Displays full lead details with action buttons for managing the lead
  * through the pipeline: mark as contacted, convert to customer, mark as lost/spam.
- * When converted, shows links to the created customer and job.
- *
- * Validates: Requirement 10.1-10.10
+ * Enhanced with full address fields (Req 12), action tag badges (Req 13),
+ * attachment panel (Req 15), and estimate/contract creation (Req 17).
  */
 
 import { useState } from 'react';
@@ -29,6 +28,8 @@ import {
   Briefcase,
   MessageSquare,
   FileCheck,
+  Calculator,
+  ScrollText,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -36,6 +37,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -50,7 +52,11 @@ import { LeadStatusBadge } from './LeadStatusBadge';
 import { LeadSituationBadge } from './LeadSituationBadge';
 import { LeadSourceBadge } from './LeadSourceBadge';
 import { IntakeTagBadge } from './IntakeTagBadge';
+import { LeadTagBadges } from './LeadTagBadges';
 import { ConvertLeadDialog } from './ConvertLeadDialog';
+import { AttachmentPanel } from './AttachmentPanel';
+import { EstimateCreator } from './EstimateCreator';
+import { ContractCreator } from './ContractCreator';
 import type { LeadStatus } from '../types';
 import { LEAD_STATUS_LABELS } from '../types';
 import { useStaff } from '@/features/staff/hooks/useStaff';
@@ -74,6 +80,48 @@ export function LeadDetail() {
   const { data: staffData } = useStaff({ page_size: 100, is_active: true });
 
   const [showConvertDialog, setShowConvertDialog] = useState(false);
+  const [showEstimateCreator, setShowEstimateCreator] = useState(false);
+  const [showContractCreator, setShowContractCreator] = useState(false);
+
+  // Editable address fields
+  const [editingAddress, setEditingAddress] = useState(false);
+  const [addressForm, setAddressForm] = useState({
+    address: '',
+    city: '',
+    state: '',
+    zip_code: '',
+  });
+
+  const startEditAddress = () => {
+    if (!lead) return;
+    setAddressForm({
+      address: lead.address ?? '',
+      city: lead.city ?? '',
+      state: lead.state ?? '',
+      zip_code: lead.zip_code ?? '',
+    });
+    setEditingAddress(true);
+  };
+
+  const saveAddress = async () => {
+    if (!lead) return;
+    try {
+      await updateMutation.mutateAsync({
+        id: lead.id,
+        data: {
+          address: addressForm.address || null,
+          city: addressForm.city || null,
+          state: addressForm.state || null,
+          zip_code: addressForm.zip_code || null,
+        },
+      });
+      toast.success('Address Updated');
+      setEditingAddress(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update address';
+      toast.error('Update Failed', { description: message });
+    }
+  };
 
   // Handle status change via dropdown
   const handleStatusChange = async (newStatus: string) => {
@@ -112,68 +160,45 @@ export function LeadDetail() {
     }
   };
 
-  // Quick action: Mark as Contacted
   const handleMarkContacted = async () => {
     if (!lead) return;
     try {
-      await updateMutation.mutateAsync({
-        id: lead.id,
-        data: { status: 'contacted' },
-      });
-      toast.success('Lead Contacted', {
-        description: 'Lead marked as contacted.',
-      });
+      await updateMutation.mutateAsync({ id: lead.id, data: { status: 'contacted' } });
+      toast.success('Lead Contacted', { description: 'Lead marked as contacted.' });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to update status';
       toast.error('Update Failed', { description: message });
     }
   };
 
-  // Quick action: Mark as Lost
   const handleMarkLost = async () => {
     if (!lead) return;
     try {
-      await updateMutation.mutateAsync({
-        id: lead.id,
-        data: { status: 'lost' },
-      });
-      toast.success('Lead Marked as Lost', {
-        description: 'Lead has been marked as lost.',
-      });
+      await updateMutation.mutateAsync({ id: lead.id, data: { status: 'lost' } });
+      toast.success('Lead Marked as Lost');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to update status';
       toast.error('Update Failed', { description: message });
     }
   };
 
-  // Quick action: Mark as Spam
   const handleMarkSpam = async () => {
     if (!lead) return;
     try {
-      await updateMutation.mutateAsync({
-        id: lead.id,
-        data: { status: 'spam' },
-      });
-      toast.success('Lead Marked as Spam', {
-        description: 'Lead has been marked as spam.',
-      });
+      await updateMutation.mutateAsync({ id: lead.id, data: { status: 'spam' } });
+      toast.success('Lead Marked as Spam');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to update status';
       toast.error('Update Failed', { description: message });
     }
   };
 
-  // Delete lead
   const handleDelete = async () => {
     if (!lead) return;
-    if (!window.confirm(`Are you sure you want to delete this lead (${lead.name})?`)) {
-      return;
-    }
+    if (!window.confirm(`Are you sure you want to delete this lead (${lead.name})?`)) return;
     try {
       await deleteMutation.mutateAsync(lead.id);
-      toast.success('Lead Deleted', {
-        description: 'Lead has been permanently deleted.',
-      });
+      toast.success('Lead Deleted');
       navigate('/leads');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to delete lead';
@@ -181,17 +206,9 @@ export function LeadDetail() {
     }
   };
 
-  if (isLoading) {
-    return <LoadingPage message="Loading lead..." />;
-  }
-
-  if (error) {
-    return <ErrorMessage error={error} onRetry={() => refetch()} />;
-  }
-
-  if (!lead) {
-    return <ErrorMessage error={new Error('Lead not found')} />;
-  }
+  if (isLoading) return <LoadingPage message="Loading lead..." />;
+  if (error) return <ErrorMessage error={error} onRetry={() => refetch()} />;
+  if (!lead) return <ErrorMessage error={new Error('Lead not found')} />;
 
   const isTerminal = lead.status === 'converted' || lead.status === 'spam';
   const canMarkContacted = lead.status === 'new';
@@ -199,11 +216,7 @@ export function LeadDetail() {
   const canMarkLost = !isTerminal && lead.status !== 'lost';
   const canMarkSpam = !isTerminal;
   const availableTransitions = VALID_TRANSITIONS[lead.status] ?? [];
-
-  // Find assigned staff name
-  const assignedStaff = staffData?.items?.find(
-    (s) => s.id === lead.assigned_to
-  );
+  const assignedStaff = staffData?.items?.find((s) => s.id === lead.assigned_to);
 
   return (
     <div data-testid="lead-detail" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -250,6 +263,24 @@ export function LeadDetail() {
               </Button>
             )}
             <Button
+              variant="outline"
+              onClick={() => setShowEstimateCreator(true)}
+              data-testid="create-estimate-btn"
+              className="text-blue-700 border-blue-200 hover:bg-blue-50"
+            >
+              <Calculator className="mr-2 h-4 w-4" />
+              Create Estimate
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowContractCreator(true)}
+              data-testid="create-contract-btn"
+              className="text-purple-700 border-purple-200 hover:bg-purple-50"
+            >
+              <ScrollText className="mr-2 h-4 w-4" />
+              Create Contract
+            </Button>
+            <Button
               variant="destructive"
               onClick={handleDelete}
               disabled={deleteMutation.isPending}
@@ -270,7 +301,10 @@ export function LeadDetail() {
         {/* Main Info Card - spans 2 columns */}
         <Card className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100">
           <CardHeader className="border-b border-slate-100">
-            <CardTitle className="text-2xl font-bold text-slate-800">{lead.name}</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-2xl font-bold text-slate-800">{lead.name}</CardTitle>
+              <LeadTagBadges tags={lead.action_tags ?? []} />
+            </div>
           </CardHeader>
           <CardContent className="p-6 space-y-6">
             {/* Contact Information */}
@@ -285,10 +319,7 @@ export function LeadDetail() {
                   </div>
                   <div>
                     <p className="text-xs text-slate-400">Phone</p>
-                    <a
-                      href={`tel:${lead.phone}`}
-                      className="font-medium text-slate-700 hover:text-teal-600 transition-colors"
-                    >
+                    <a href={`tel:${lead.phone}`} className="font-medium text-slate-700 hover:text-teal-600 transition-colors">
                       {lead.phone}
                     </a>
                   </div>
@@ -300,10 +331,7 @@ export function LeadDetail() {
                   <div>
                     <p className="text-xs text-slate-400">Email</p>
                     {lead.email ? (
-                      <a
-                        href={`mailto:${lead.email}`}
-                        className="font-medium text-slate-700 hover:text-teal-600 transition-colors"
-                      >
+                      <a href={`mailto:${lead.email}`} className="font-medium text-slate-700 hover:text-teal-600 transition-colors">
                         {lead.email}
                       </a>
                     ) : (
@@ -311,16 +339,79 @@ export function LeadDetail() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+              </div>
+            </div>
+
+            <Separator className="bg-slate-100" />
+
+            {/* Full Address (Req 12) */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">
+                  Address
+                </h3>
+                {!editingAddress ? (
+                  <Button variant="ghost" size="sm" onClick={startEditAddress} data-testid="edit-address-btn">
+                    Edit
+                  </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setEditingAddress(false)}>Cancel</Button>
+                    <Button size="sm" onClick={saveAddress} disabled={updateMutation.isPending} data-testid="save-address-btn">
+                      {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {editingAddress ? (
+                <div className="space-y-3" data-testid="address-form">
+                  <Input
+                    placeholder="Street Address"
+                    value={addressForm.address}
+                    onChange={(e) => setAddressForm((p) => ({ ...p, address: e.target.value }))}
+                    data-testid="address-input"
+                  />
+                  <div className="grid grid-cols-3 gap-3">
+                    <Input
+                      placeholder="City"
+                      value={addressForm.city}
+                      onChange={(e) => setAddressForm((p) => ({ ...p, city: e.target.value }))}
+                      data-testid="city-input"
+                    />
+                    <Input
+                      placeholder="State"
+                      value={addressForm.state}
+                      onChange={(e) => setAddressForm((p) => ({ ...p, state: e.target.value }))}
+                      data-testid="state-input"
+                    />
+                    <Input
+                      placeholder="Zip Code"
+                      value={addressForm.zip_code}
+                      onChange={(e) => setAddressForm((p) => ({ ...p, zip_code: e.target.value }))}
+                      data-testid="zip-code-input"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start gap-3">
                   <div className="p-2 bg-slate-100 rounded-lg">
                     <MapPin className="h-5 w-5 text-slate-600" />
                   </div>
-                  <div>
-                    <p className="text-xs text-slate-400">Zip Code</p>
-                    <p className="font-medium text-slate-700">{lead.zip_code ?? 'N/A'}</p>
+                  <div data-testid="address-display">
+                    {lead.address || lead.city || lead.state || lead.zip_code ? (
+                      <>
+                        {lead.address && <p className="font-medium text-slate-700">{lead.address}</p>}
+                        <p className="text-slate-600">
+                          {[lead.city, lead.state].filter(Boolean).join(', ')}
+                          {lead.zip_code ? ` ${lead.zip_code}` : ''}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-slate-400 italic">No address provided</p>
+                    )}
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
             <Separator className="bg-slate-100" />
@@ -332,27 +423,21 @@ export function LeadDetail() {
               </h3>
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-slate-100 rounded-lg">
-                    <Briefcase className="h-5 w-5 text-slate-600" />
-                  </div>
+                  <div className="p-2 bg-slate-100 rounded-lg"><Briefcase className="h-5 w-5 text-slate-600" /></div>
                   <div>
                     <p className="text-xs text-slate-400">Situation</p>
                     <LeadSituationBadge situation={lead.situation} />
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-slate-100 rounded-lg">
-                    <Globe className="h-5 w-5 text-slate-600" />
-                  </div>
+                  <div className="p-2 bg-slate-100 rounded-lg"><Globe className="h-5 w-5 text-slate-600" /></div>
                   <div>
                     <p className="text-xs text-slate-400">Source Site</p>
                     <p className="font-medium text-slate-700">{lead.source_site}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-slate-100 rounded-lg">
-                    <Globe className="h-5 w-5 text-slate-600" />
-                  </div>
+                  <div className="p-2 bg-slate-100 rounded-lg"><Globe className="h-5 w-5 text-slate-600" /></div>
                   <div>
                     <p className="text-xs text-slate-400">Lead Source</p>
                     <LeadSourceBadge source={lead.lead_source} />
@@ -360,9 +445,7 @@ export function LeadDetail() {
                 </div>
                 {lead.source_detail && (
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-slate-100 rounded-lg">
-                      <Globe className="h-5 w-5 text-slate-600" />
-                    </div>
+                    <div className="p-2 bg-slate-100 rounded-lg"><Globe className="h-5 w-5 text-slate-600" /></div>
                     <div>
                       <p className="text-xs text-slate-400">Source Detail</p>
                       <p className="font-medium text-slate-700">{lead.source_detail}</p>
@@ -370,9 +453,7 @@ export function LeadDetail() {
                   </div>
                 )}
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-slate-100 rounded-lg">
-                    <Briefcase className="h-5 w-5 text-slate-600" />
-                  </div>
+                  <div className="p-2 bg-slate-100 rounded-lg"><Briefcase className="h-5 w-5 text-slate-600" /></div>
                   <div>
                     <p className="text-xs text-slate-400">Intake Tag</p>
                     <IntakeTagBadge tag={lead.intake_tag} />
@@ -386,13 +467,9 @@ export function LeadDetail() {
               <>
                 <Separator className="bg-slate-100" />
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">
-                    Notes
-                  </h3>
+                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Notes</h3>
                   <div className="flex items-start gap-3">
-                    <div className="p-2 bg-slate-100 rounded-lg">
-                      <FileText className="h-5 w-5 text-slate-600" />
-                    </div>
+                    <div className="p-2 bg-slate-100 rounded-lg"><FileText className="h-5 w-5 text-slate-600" /></div>
                     <p className="text-slate-700 whitespace-pre-wrap">{lead.notes}</p>
                   </div>
                 </div>
@@ -402,9 +479,7 @@ export function LeadDetail() {
             {/* Consent Status */}
             <Separator className="bg-slate-100" />
             <div>
-              <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">
-                Consent Status
-              </h3>
+              <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Consent Status</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex items-center gap-3">
                   <div className={`p-2 rounded-lg ${lead.sms_consent ? 'bg-green-100' : 'bg-gray-100'}`}>
@@ -438,9 +513,7 @@ export function LeadDetail() {
               <>
                 <Separator className="bg-slate-100" />
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">
-                    Conversion Details
-                  </h3>
+                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Conversion Details</h3>
                   <div className="space-y-3">
                     {lead.customer_id && (
                       <Link
@@ -458,7 +531,6 @@ export function LeadDetail() {
                         <ExternalLink className="h-4 w-4 text-green-600" />
                       </Link>
                     )}
-                    {/* Job link - shown if a job was created during conversion */}
                     <Link
                       to={`/jobs?customer_id=${lead.customer_id}`}
                       data-testid="job-link"
@@ -480,7 +552,7 @@ export function LeadDetail() {
           </CardContent>
         </Card>
 
-        {/* Right Column - Status & Actions */}
+        {/* Right Column - Status, Actions, Attachments */}
         <div className="space-y-6">
           {/* Status Card */}
           <Card className="bg-white rounded-2xl shadow-sm border border-slate-100">
@@ -488,32 +560,21 @@ export function LeadDetail() {
               <CardTitle className="font-bold text-slate-800">Status & Assignment</CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-5">
-              {/* Current Status */}
               <div>
                 <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Current Status</p>
                 <LeadStatusBadge status={lead.status} className="text-sm" />
               </div>
 
-              {/* Status Dropdown */}
               {availableTransitions.length > 0 && (
                 <div>
                   <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Change Status</p>
-                  <Select
-                    value=""
-                    onValueChange={handleStatusChange}
-                    disabled={updateMutation.isPending}
-                  >
-                    <SelectTrigger
-                      className="w-full bg-slate-50 border-slate-200 rounded-lg"
-                      data-testid="lead-status-dropdown"
-                    >
+                  <Select value="" onValueChange={handleStatusChange} disabled={updateMutation.isPending}>
+                    <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-lg" data-testid="lead-status-dropdown">
                       <SelectValue placeholder="Select new status..." />
                     </SelectTrigger>
                     <SelectContent>
                       {availableTransitions.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {LEAD_STATUS_LABELS[status]}
-                        </SelectItem>
+                        <SelectItem key={status} value={status}>{LEAD_STATUS_LABELS[status]}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -522,18 +583,10 @@ export function LeadDetail() {
 
               <Separator className="bg-slate-100" />
 
-              {/* Staff Assignment */}
               <div>
                 <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Assigned To</p>
-                <Select
-                  value={lead.assigned_to ?? 'unassigned'}
-                  onValueChange={handleStaffChange}
-                  disabled={updateMutation.isPending}
-                >
-                  <SelectTrigger
-                    className="w-full bg-slate-50 border-slate-200 rounded-lg"
-                    data-testid="lead-staff-select"
-                  >
+                <Select value={lead.assigned_to ?? 'unassigned'} onValueChange={handleStaffChange} disabled={updateMutation.isPending}>
+                  <SelectTrigger className="w-full bg-slate-50 border-slate-200 rounded-lg" data-testid="lead-staff-select">
                     <SelectValue placeholder="Unassigned">
                       {assignedStaff ? assignedStaff.name : 'Unassigned'}
                     </SelectValue>
@@ -541,9 +594,7 @@ export function LeadDetail() {
                   <SelectContent>
                     <SelectItem value="unassigned">Unassigned</SelectItem>
                     {staffData?.items?.map((staff) => (
-                      <SelectItem key={staff.id} value={staff.id}>
-                        {staff.name}
-                      </SelectItem>
+                      <SelectItem key={staff.id} value={staff.id}>{staff.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -551,7 +602,6 @@ export function LeadDetail() {
 
               <Separator className="bg-slate-100" />
 
-              {/* Timestamps */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-slate-400" />
@@ -605,63 +655,40 @@ export function LeadDetail() {
               </CardHeader>
               <CardContent className="p-6 space-y-3">
                 {canMarkContacted && (
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start text-yellow-700 border-yellow-200 hover:bg-yellow-50"
-                    onClick={handleMarkContacted}
-                    disabled={updateMutation.isPending}
-                  >
-                    <PhoneCall className="mr-2 h-4 w-4" />
-                    Mark as Contacted
+                  <Button variant="outline" className="w-full justify-start text-yellow-700 border-yellow-200 hover:bg-yellow-50" onClick={handleMarkContacted} disabled={updateMutation.isPending}>
+                    <PhoneCall className="mr-2 h-4 w-4" />Mark as Contacted
                   </Button>
                 )}
                 {canConvert && (
-                  <Button
-                    className="w-full justify-start bg-teal-500 hover:bg-teal-600 text-white"
-                    onClick={() => setShowConvertDialog(true)}
-                  >
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Convert to Customer
+                  <Button className="w-full justify-start bg-teal-500 hover:bg-teal-600 text-white" onClick={() => setShowConvertDialog(true)}>
+                    <UserPlus className="mr-2 h-4 w-4" />Convert to Customer
                   </Button>
                 )}
                 {canMarkLost && (
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start text-gray-700 border-gray-200 hover:bg-gray-50"
-                    onClick={handleMarkLost}
-                    disabled={updateMutation.isPending}
-                    data-testid="mark-lost-btn"
-                  >
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Mark as Lost
+                  <Button variant="outline" className="w-full justify-start text-gray-700 border-gray-200 hover:bg-gray-50" onClick={handleMarkLost} disabled={updateMutation.isPending} data-testid="mark-lost-btn">
+                    <XCircle className="mr-2 h-4 w-4" />Mark as Lost
                   </Button>
                 )}
                 {canMarkSpam && (
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start text-red-700 border-red-200 hover:bg-red-50"
-                    onClick={handleMarkSpam}
-                    disabled={updateMutation.isPending}
-                    data-testid="mark-spam-btn"
-                  >
-                    <ShieldAlert className="mr-2 h-4 w-4" />
-                    Mark as Spam
+                  <Button variant="outline" className="w-full justify-start text-red-700 border-red-200 hover:bg-red-50" onClick={handleMarkSpam} disabled={updateMutation.isPending} data-testid="mark-spam-btn">
+                    <ShieldAlert className="mr-2 h-4 w-4" />Mark as Spam
                   </Button>
                 )}
               </CardContent>
             </Card>
           )}
+
+          {/* Attachments Panel (Req 15) */}
+          <AttachmentPanel leadId={lead.id} />
         </div>
       </div>
 
-      {/* Convert Lead Dialog */}
+      {/* Dialogs */}
       {lead && (
-        <ConvertLeadDialog
-          lead={lead}
-          open={showConvertDialog}
-          onOpenChange={setShowConvertDialog}
-        />
+        <ConvertLeadDialog lead={lead} open={showConvertDialog} onOpenChange={setShowConvertDialog} />
       )}
+      <EstimateCreator leadId={lead.id} open={showEstimateCreator} onOpenChange={setShowEstimateCreator} />
+      <ContractCreator leadId={lead.id} leadName={lead.name} open={showContractCreator} onOpenChange={setShowContractCreator} />
     </div>
   );
 }

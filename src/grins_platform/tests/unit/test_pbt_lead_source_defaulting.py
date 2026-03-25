@@ -46,10 +46,17 @@ def _make_mock_lead(**overrides: object) -> MagicMock:
     lead.source_site = overrides.get("source_site", "residential")
     lead.sms_consent = overrides.get("sms_consent", False)
     lead.terms_accepted = overrides.get("terms_accepted", False)
+    lead.email_marketing_consent = overrides.get("email_marketing_consent", False)
     lead.assigned_to = None
     lead.customer_id = None
+    lead.contacted_at = None
+    lead.converted_at = None
     lead.created_at = overrides.get("created_at", _NOW)
     lead.updated_at = overrides.get("updated_at", _NOW)
+    lead.city = overrides.get("city")
+    lead.state = overrides.get("state")
+    lead.address = overrides.get("address")
+    lead.action_tags = overrides.get("action_tags")
     return lead
 
 

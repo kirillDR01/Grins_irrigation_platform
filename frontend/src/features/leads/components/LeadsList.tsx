@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useCallback, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   flexRender,
   getCoreRowModel,
@@ -9,6 +9,7 @@ import {
 import { Phone, Inbox, MessageSquare, FileCheck } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -22,26 +23,62 @@ import { useLeads } from '../hooks/useLeads';
 import { LeadStatusBadge } from './LeadStatusBadge';
 import { LeadSourceBadge } from './LeadSourceBadge';
 import { IntakeTagBadge } from './IntakeTagBadge';
+import { LeadTagBadges } from './LeadTagBadges';
 import { LeadFilters } from './LeadFilters';
 import { FollowUpQueue } from './FollowUpQueue';
+import { BulkOutreach } from './BulkOutreach';
 import type { Lead, LeadListParams } from '../types';
 
 export function LeadsList() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [highlightedLeadId, setHighlightedLeadId] = useState<string | null>(null);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
+
+  // Parse initial status from URL query params
+  const urlStatus = searchParams.get('status') as LeadListParams['status'] | null;
+  const urlHighlight = searchParams.get('highlight');
+
   const [params, setParams] = useState<LeadListParams>({
     page: 1,
     page_size: 20,
     sort_by: 'created_at',
     sort_order: 'desc',
+    status: urlStatus && ['new', 'contacted', 'qualified', 'converted', 'lost', 'spam'].includes(urlStatus)
+      ? (urlStatus as LeadListParams['status'])
+      : undefined,
   });
+
+  // Apply highlight from URL on mount
+  useEffect(() => {
+    if (urlHighlight) {
+      setHighlightedLeadId(urlHighlight);
+      const timer = setTimeout(() => {
+        setHighlightedLeadId(null);
+      }, 3000);
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('highlight');
+      setSearchParams(newParams, { replace: true });
+      return () => clearTimeout(timer);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data, isLoading, error, refetch } = useLeads(params);
 
   const handleFilterChange = useCallback(
     (changes: Partial<LeadListParams>) => {
       setParams((prev) => ({ ...prev, ...changes }));
+      if ('status' in changes) {
+        const newParams = new URLSearchParams(searchParams);
+        if (changes.status) {
+          newParams.set('status', changes.status);
+        } else {
+          newParams.delete('status');
+        }
+        setSearchParams(newParams, { replace: true });
+      }
     },
-    []
+    [searchParams, setSearchParams]
   );
 
   const handleRowClick = useCallback(
@@ -51,7 +88,45 @@ export function LeadsList() {
     [navigate]
   );
 
+  // Select all / individual selection
+  const allLeadIds = data?.items?.map((l) => l.id) ?? [];
+  const allSelected = allLeadIds.length > 0 && selectedLeadIds.length === allLeadIds.length;
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedLeadIds([]);
+    } else {
+      setSelectedLeadIds(allLeadIds);
+    }
+  };
+
+  const toggleSelectLead = (id: string) => {
+    setSelectedLeadIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
   const columns: ColumnDef<Lead>[] = [
+    {
+      id: 'select',
+      header: () => (
+        <Checkbox
+          checked={allSelected}
+          onCheckedChange={toggleSelectAll}
+          aria-label="Select all"
+          data-testid="select-all-checkbox"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={selectedLeadIds.includes(row.original.id)}
+          onCheckedChange={() => toggleSelectLead(row.original.id)}
+          aria-label={`Select ${row.original.name}`}
+          onClick={(e) => e.stopPropagation()}
+          data-testid={`select-lead-${row.original.id}`}
+        />
+      ),
+    },
     {
       accessorKey: 'name',
       header: () => (
@@ -60,9 +135,13 @@ export function LeadsList() {
         </span>
       ),
       cell: ({ row }) => (
-        <span className="text-sm font-medium text-slate-700">
+        <Link
+          to={`/leads/${row.original.id}`}
+          className="text-sm font-medium text-slate-700 hover:text-teal-600 transition-colors"
+          data-testid={`lead-name-${row.original.id}`}
+        >
           {row.original.name}
-        </span>
+        </Link>
       ),
     },
     {
@@ -80,6 +159,19 @@ export function LeadsList() {
       ),
     },
     {
+      accessorKey: 'city',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
+          City
+        </span>
+      ),
+      cell: ({ row }) => (
+        <span className="text-sm text-slate-600" data-testid={`lead-city-${row.original.id}`}>
+          {row.original.city ?? row.original.zip_code ?? '—'}
+        </span>
+      ),
+    },
+    {
       id: 'lead_source',
       header: () => (
         <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
@@ -88,6 +180,17 @@ export function LeadsList() {
       ),
       cell: ({ row }) => (
         <LeadSourceBadge source={row.original.lead_source} />
+      ),
+    },
+    {
+      id: 'action_tags',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
+          Tags
+        </span>
+      ),
+      cell: ({ row }) => (
+        <LeadTagBadges tags={row.original.action_tags ?? []} />
       ),
     },
     {
@@ -182,6 +285,15 @@ export function LeadsList() {
             </p>
           )}
         </div>
+        <div className="flex items-center gap-2">
+          <BulkOutreach
+            selectedLeadIds={selectedLeadIds}
+            onComplete={() => {
+              setSelectedLeadIds([]);
+              refetch();
+            }}
+          />
+        </div>
       </div>
 
       {/* Follow-Up Queue Panel */}
@@ -218,7 +330,10 @@ export function LeadsList() {
                 <TableRow
                   key={row.id}
                   data-testid="lead-row"
-                  className="hover:bg-slate-50/80 transition-colors cursor-pointer"
+                  data-lead-id={row.original.id}
+                  className={`hover:bg-slate-50/80 transition-colors cursor-pointer ${
+                    highlightedLeadId === row.original.id ? 'animate-highlight-fade' : ''
+                  }`}
                   onClick={() => handleRowClick(row.original)}
                 >
                   {row.getVisibleCells().map((cell) => (

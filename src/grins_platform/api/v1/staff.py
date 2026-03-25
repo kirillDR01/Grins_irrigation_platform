@@ -14,8 +14,14 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,  # noqa: TC002 - Required at runtime for FastAPI DI
+)
 
-from grins_platform.api.v1.dependencies import get_staff_service
+from grins_platform.api.v1.auth_dependencies import (
+    CurrentActiveUser,  # noqa: TC001 - Required at runtime for FastAPI DI
+)
+from grins_platform.api.v1.dependencies import get_db_session, get_staff_service
 from grins_platform.exceptions import StaffNotFoundError
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import (
@@ -28,6 +34,12 @@ from grins_platform.schemas.staff import (
     StaffCreate,
     StaffResponse,
     StaffUpdate,
+)
+from grins_platform.schemas.staff_ops import (
+    StaffBreakCreateRequest,
+    StaffBreakResponse,
+    StaffLocationRequest,
+    StaffLocationResponse,
 )
 from grins_platform.services.staff_service import (
     StaffService,  # noqa: TC001 - Required at runtime for FastAPI DI
@@ -185,6 +197,54 @@ async def get_staff_by_role(
 
     _endpoints.log_completed("get_staff_by_role", count=len(staff))
     return [StaffResponse.model_validate(s) for s in staff]
+
+
+# =============================================================================
+# GET /api/v1/staff/locations - All staff locations (Req 41)
+# NOTE: Static route must come BEFORE dynamic /{staff_id} routes
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/locations",
+    response_model=list[StaffLocationResponse],
+    summary="Get all staff locations",
+    description="Get the latest GPS location for all active staff members.",
+)
+async def get_all_staff_locations(
+    _current_user: CurrentActiveUser,
+    service: Annotated[StaffService, Depends(get_staff_service)],
+) -> list[StaffLocationResponse]:
+    """Get all active staff locations from Redis.
+
+    Validates: Requirement 41.5
+    """
+    _endpoints.log_started("get_all_staff_locations")
+
+    from grins_platform.services.staff_location_service import (  # noqa: PLC0415
+        StaffLocationService,
+    )
+
+    # Get all active staff IDs
+    staff_list = await service.get_available_staff()
+    staff_ids = [s.id for s in staff_list]
+
+    location_service = StaffLocationService()
+    locations = await location_service.get_all_locations(staff_ids)
+
+    result = [
+        StaffLocationResponse(
+            staff_id=loc.staff_id,
+            latitude=loc.latitude,
+            longitude=loc.longitude,
+            timestamp=loc.timestamp,
+            appointment_id=loc.appointment_id,
+        )
+        for loc in locations
+    ]
+
+    _endpoints.log_completed("get_all_staff_locations", count=len(result))
+    return result
 
 
 # =============================================================================
@@ -360,3 +420,202 @@ async def update_staff_availability(
     else:
         _endpoints.log_completed("update_availability", staff_id=str(staff_id))
         return StaffResponse.model_validate(result)  # type: ignore[no-any-return]
+
+
+# =============================================================================
+# POST /api/v1/staff/{id}/location - GPS location update (Req 41)
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{staff_id}/location",
+    response_model=dict[str, bool],
+    summary="Update staff GPS location",
+    description="Store a staff member's GPS location in Redis with 5-minute TTL.",
+)
+async def update_staff_location(
+    staff_id: UUID,
+    data: StaffLocationRequest,
+    _current_user: CurrentActiveUser,
+    service: Annotated[StaffService, Depends(get_staff_service)],
+) -> dict[str, bool]:
+    """Update a staff member's GPS location.
+
+    Validates: Requirement 41.1
+    """
+    _endpoints.log_started(
+        "update_staff_location",
+        staff_id=str(staff_id),
+    )
+
+    # Verify staff exists
+    try:
+        await service.get_staff(staff_id)
+    except StaffNotFoundError as e:
+        _endpoints.log_rejected("update_staff_location", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Staff member not found: {e.staff_id}",
+        ) from e
+
+    from grins_platform.services.staff_location_service import (  # noqa: PLC0415
+        StaffLocationService,
+    )
+
+    location_service = StaffLocationService()
+    stored = await location_service.store_location(
+        staff_id=staff_id,
+        latitude=data.latitude,
+        longitude=data.longitude,
+        appointment_id=data.appointment_id,
+    )
+
+    _endpoints.log_completed(
+        "update_staff_location",
+        staff_id=str(staff_id),
+        stored=stored,
+    )
+    return {"stored": stored}
+
+
+# =============================================================================
+# POST /api/v1/staff/{id}/breaks - Start break (Req 42)
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{staff_id}/breaks",
+    response_model=StaffBreakResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Start a staff break",
+    description="Create a break record for a staff member.",
+)
+async def start_staff_break(
+    staff_id: UUID,
+    data: StaffBreakCreateRequest,
+    _current_user: CurrentActiveUser,
+    service: Annotated[StaffService, Depends(get_staff_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> StaffBreakResponse:
+    """Start a break for a staff member.
+
+    Validates: Requirement 42.2
+    """
+    _endpoints.log_started(
+        "start_staff_break",
+        staff_id=str(staff_id),
+        break_type=data.break_type,
+    )
+
+    # Verify staff exists
+    try:
+        await service.get_staff(staff_id)
+    except StaffNotFoundError as e:
+        _endpoints.log_rejected("start_staff_break", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Staff member not found: {e.staff_id}",
+        ) from e
+
+    from grins_platform.services.staff_break_service import (  # noqa: PLC0415
+        StaffBreakService,
+    )
+
+    break_service = StaffBreakService()
+    try:
+        staff_break = await break_service.create_break(
+            session,
+            staff_id=staff_id,
+            break_type=data.break_type,
+            appointment_id=data.appointment_id,
+        )
+    except ValueError as e:
+        _endpoints.log_rejected("start_staff_break", reason=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        ) from e
+
+    await session.commit()
+
+    _endpoints.log_completed(
+        "start_staff_break",
+        staff_id=str(staff_id),
+        break_id=str(staff_break.id),
+    )
+    return StaffBreakResponse(
+        id=staff_break.id,
+        staff_id=staff_break.staff_id,
+        appointment_id=staff_break.appointment_id,
+        start_time=staff_break.start_time,
+        end_time=staff_break.end_time,
+        break_type=staff_break.break_type,
+        created_at=staff_break.created_at,
+    )
+
+
+# =============================================================================
+# PATCH /api/v1/staff/{id}/breaks/{break_id} - End break (Req 42)
+# =============================================================================
+
+
+@router.patch(  # type: ignore[untyped-decorator]
+    "/{staff_id}/breaks/{break_id}",
+    response_model=StaffBreakResponse,
+    summary="End a staff break",
+    description="End a staff break and adjust subsequent appointment ETAs.",
+)
+async def end_staff_break(
+    staff_id: UUID,
+    break_id: UUID,
+    _current_user: CurrentActiveUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> StaffBreakResponse:
+    """End a staff break.
+
+    Validates: Requirement 42.2
+    """
+    _endpoints.log_started(
+        "end_staff_break",
+        staff_id=str(staff_id),
+        break_id=str(break_id),
+    )
+
+    from grins_platform.services.staff_break_service import (  # noqa: PLC0415
+        BreakAlreadyEndedError,
+        BreakNotFoundError,
+        StaffBreakService,
+    )
+
+    break_service = StaffBreakService()
+    try:
+        staff_break = await break_service.end_break(session, break_id=break_id)
+    except BreakNotFoundError as e:
+        _endpoints.log_rejected("end_staff_break", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+    except BreakAlreadyEndedError as e:
+        _endpoints.log_rejected("end_staff_break", reason="already_ended")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        ) from e
+
+    await session.commit()
+
+    _endpoints.log_completed(
+        "end_staff_break",
+        staff_id=str(staff_id),
+        break_id=str(break_id),
+    )
+    return StaffBreakResponse(
+        id=staff_break.id,
+        staff_id=staff_break.staff_id,
+        appointment_id=staff_break.appointment_id,
+        start_time=staff_break.start_time,
+        end_time=staff_break.end_time,
+        break_type=staff_break.break_type,
+        created_at=staff_break.created_at,
+    )

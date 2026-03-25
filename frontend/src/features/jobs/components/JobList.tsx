@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   flexRender,
   getCoreRowModel,
@@ -42,9 +42,19 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { LoadingPage, ErrorMessage } from '@/shared/components';
 import { useJobs } from '../hooks';
-import { JobStatusBadge } from './JobStatusBadge';
-import type { Job, JobListParams, JobStatus, JobCategory } from '../types';
-import { formatJobType, formatAmount } from '../types';
+import type { Job, JobListParams, JobStatus, SimplifiedJobStatus } from '../types';
+import {
+  formatJobType,
+  formatAmount,
+  getSimplifiedStatus,
+  getSimplifiedStatusConfig,
+  SIMPLIFIED_STATUS_CONFIG,
+  SIMPLIFIED_STATUS_RAW_MAP,
+  CUSTOMER_TAG_CONFIG,
+  calculateDaysWaiting,
+  getDueByColorClass,
+} from '../types';
+import type { CustomerTag } from '../types';
 
 interface JobListProps {
   onEdit?: (job: Job) => void;
@@ -53,19 +63,72 @@ interface JobListProps {
   customerId?: string;
 }
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '—';
-  return format(new Date(dateStr), 'MMM d, yyyy');
+// Map simplified filter value to raw statuses for API
+function getStatusFilterValue(simplified: string): JobStatus | undefined {
+  if (simplified === 'all') return undefined;
+  const rawStatuses = SIMPLIFIED_STATUS_RAW_MAP[simplified as SimplifiedJobStatus];
+  // Use the first raw status for API filtering; backend should handle the mapping
+  return rawStatuses?.[0];
 }
 
 export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobListProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [highlightedJobId, setHighlightedJobId] = useState<string | null>(null);
+  const [simplifiedFilter, setSimplifiedFilter] = useState<string>('all');
+
+  // Parse initial status from URL query params
+  const urlStatus = searchParams.get('status') as JobStatus | null;
+  const urlHighlight = searchParams.get('highlight');
+
+  const validStatuses: JobStatus[] = ['requested', 'approved', 'scheduled', 'in_progress', 'completed', 'cancelled', 'closed'];
+
   const [params, setParams] = useState<JobListParams>({
     page: 1,
     page_size: 20,
     customer_id: customerId,
+    status: urlStatus && validStatuses.includes(urlStatus) ? urlStatus : undefined,
   });
+
+  // Initialize simplified filter from URL status
+  useEffect(() => {
+    if (urlStatus && validStatuses.includes(urlStatus)) {
+      const simplified = getSimplifiedStatus(urlStatus);
+      setSimplifiedFilter(simplified);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply highlight from URL on mount
+  useEffect(() => {
+    if (urlHighlight) {
+      setHighlightedJobId(urlHighlight);
+      const timer = setTimeout(() => {
+        setHighlightedJobId(null);
+      }, 3000);
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('highlight');
+      setSearchParams(newParams, { replace: true });
+      return () => clearTimeout(timer);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle simplified status filter change (Req 21)
+  const handleStatusChange = useCallback(
+    (value: string) => {
+      setSimplifiedFilter(value);
+      const newStatus = getStatusFilterValue(value);
+      setParams((p) => ({ ...p, status: newStatus, page: 1 }));
+      const newParams = new URLSearchParams(searchParams);
+      if (newStatus) {
+        newParams.set('status', newStatus);
+      } else {
+        newParams.delete('status');
+      }
+      setSearchParams(newParams, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
 
   const { data, isLoading, error, refetch } = useJobs(params);
 
@@ -108,57 +171,142 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
       },
     },
     {
+      accessorKey: 'summary',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
+          Summary
+        </span>
+      ),
+      cell: ({ row }) => {
+        const summary = row.original.summary;
+        return summary ? (
+          <span className="text-sm text-slate-600 truncate max-w-[200px] block" data-testid={`job-summary-${row.original.id}`}>
+            {summary}
+          </span>
+        ) : (
+          <span className="text-sm text-slate-400 italic">—</span>
+        );
+      },
+    },
+    {
       accessorKey: 'status',
       header: () => (
         <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
           Status
         </span>
       ),
-      cell: ({ row }) => (
-        <span data-testid="job-status-badge">
-          <JobStatusBadge status={row.original.status} />
-        </span>
-      ),
+      cell: ({ row }) => {
+        const config = getSimplifiedStatusConfig(row.original.status);
+        return (
+          <span
+            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${config.bgColor} ${config.color}`}
+            data-testid="job-status-badge"
+          >
+            {config.label}
+          </span>
+        );
+      },
     },
     {
-      accessorKey: 'category',
+      id: 'customer',
       header: () => (
         <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
-          Category
-        </span>
-      ),
-      cell: ({ row }) => (
-        <span
-          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
-            row.original.category === 'ready_to_schedule'
-              ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-              : 'bg-amber-50 text-amber-600 border border-amber-100'
-          }`}
-        >
-          {row.original.category === 'ready_to_schedule'
-            ? 'Ready'
-            : 'Needs Estimate'}
-        </span>
-      ),
-    },
-    {
-      accessorKey: 'target_start_date',
-      header: () => (
-        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
-          Target Dates
+          Customer
         </span>
       ),
       cell: ({ row }) => {
         const job = row.original;
-        if (!job.target_start_date) {
+        const name = job.customer_name;
+        return name ? (
+          <Link
+            to={`/customers/${job.customer_id}`}
+            className="text-sm font-medium text-slate-700 hover:text-teal-600 transition-colors"
+            data-testid={`job-customer-${job.id}`}
+          >
+            {name}
+          </Link>
+        ) : (
+          <span className="text-sm text-slate-400 italic">Unknown</span>
+        );
+      },
+    },
+    {
+      id: 'tags',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
+          Tags
+        </span>
+      ),
+      cell: ({ row }) => {
+        const tags = row.original.customer_tags;
+        if (!tags || tags.length === 0) {
           return <span className="text-sm text-slate-400 italic">—</span>;
         }
         return (
-          <span className="text-sm text-slate-600" data-testid={`target-dates-${job.id}`}>
-            {formatDate(job.target_start_date)}
-            {job.target_end_date && job.target_end_date !== job.target_start_date
-              ? ` – ${formatDate(job.target_end_date)}`
-              : ''}
+          <div className="flex flex-wrap gap-1" data-testid={`job-tags-${row.original.id}`}>
+            {tags.map((tag: CustomerTag) => {
+              const config = CUSTOMER_TAG_CONFIG[tag];
+              if (!config) return null;
+              return (
+                <span
+                  key={tag}
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${config.bgColor} ${config.color}`}
+                  data-testid={`tag-${tag}`}
+                >
+                  {config.label}
+                </span>
+              );
+            })}
+          </div>
+        );
+      },
+    },
+    {
+      id: 'days_waiting',
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          className="text-slate-500 text-xs uppercase tracking-wider font-medium hover:bg-transparent hover:text-slate-700"
+        >
+          Days Waiting
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      sortingFn: (rowA, rowB) => {
+        const daysA = calculateDaysWaiting(rowA.original.created_at);
+        const daysB = calculateDaysWaiting(rowB.original.created_at);
+        return daysA - daysB;
+      },
+      cell: ({ row }) => {
+        const days = calculateDaysWaiting(row.original.created_at);
+        return (
+          <span className="text-sm text-slate-600" data-testid={`days-waiting-${row.original.id}`}>
+            {days}
+          </span>
+        );
+      },
+    },
+    {
+      id: 'due_by',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
+          Due By
+        </span>
+      ),
+      cell: ({ row }) => {
+        const targetEnd = row.original.target_end_date;
+        if (!targetEnd) {
+          return (
+            <span className="text-sm text-slate-400 italic" data-testid={`due-by-${row.original.id}`}>
+              No deadline
+            </span>
+          );
+        }
+        const colorClass = getDueByColorClass(targetEnd);
+        return (
+          <span className={`text-sm ${colorClass}`} data-testid={`due-by-${row.original.id}`}>
+            {format(new Date(targetEnd + 'T00:00:00'), 'MMM d, yyyy')}
           </span>
         );
       },
@@ -202,27 +350,6 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
           </span>
         ) : (
           <span className="text-sm text-slate-400 italic">Not quoted</span>
-        );
-      },
-    },
-    {
-      accessorKey: 'created_at',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="text-slate-500 text-xs uppercase tracking-wider font-medium hover:bg-transparent hover:text-slate-700"
-        >
-          Created
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      cell: ({ row }) => {
-        const date = new Date(row.original.created_at);
-        return (
-          <span className="text-sm text-slate-500">
-            {date.toLocaleDateString()}
-          </span>
         );
       },
     },
@@ -314,7 +441,6 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
 
   return (
     <div data-testid="job-list">
-      {/* Table Container with Design System Styling */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         {/* Table Toolbar */}
         <div className="p-4 border-b border-slate-100 flex gap-4 items-center flex-wrap">
@@ -331,50 +457,21 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
             />
           </div>
 
-          {/* Status Filter */}
+          {/* Simplified Status Filter (Req 21) */}
           <Select
-            value={params.status || 'all'}
-            onValueChange={(value) =>
-              setParams((p) => ({
-                ...p,
-                status: value === 'all' ? undefined : (value as JobStatus),
-                page: 1,
-              }))
-            }
+            value={simplifiedFilter}
+            onValueChange={handleStatusChange}
           >
-            <SelectTrigger className="w-[160px]" data-testid="status-filter">
+            <SelectTrigger className="w-[180px]" data-testid="status-filter">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent data-testid="status-filter-options">
               <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="requested" data-testid="status-requested">Requested</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
-              <SelectItem value="scheduled" data-testid="status-scheduled">Scheduled</SelectItem>
-              <SelectItem value="in_progress">In Progress</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-              <SelectItem value="closed">Closed</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Category Filter */}
-          <Select
-            value={params.category || 'all'}
-            onValueChange={(value) =>
-              setParams((p) => ({
-                ...p,
-                category: value === 'all' ? undefined : (value as JobCategory),
-                page: 1,
-              }))
-            }
-          >
-            <SelectTrigger className="w-[180px]" data-testid="category-filter">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              <SelectItem value="ready_to_schedule">Ready to Schedule</SelectItem>
-              <SelectItem value="requires_estimate">Requires Estimate</SelectItem>
+              {(Object.keys(SIMPLIFIED_STATUS_CONFIG) as SimplifiedJobStatus[]).map((status) => (
+                <SelectItem key={status} value={status} data-testid={`status-${status.toLowerCase().replace(/\s+/g, '-')}`}>
+                  {status}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
@@ -513,7 +610,10 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
                 <TableRow
                   key={row.id}
                   data-testid="job-row"
-                  className="hover:bg-slate-50/80 transition-colors"
+                  data-job-id={row.original.id}
+                  className={`hover:bg-slate-50/80 transition-colors ${
+                    highlightedJobId === row.original.id ? 'animate-highlight-fade' : ''
+                  }`}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id} className="px-6 py-4">

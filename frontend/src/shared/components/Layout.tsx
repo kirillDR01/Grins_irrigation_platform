@@ -17,6 +17,10 @@ import {
   Funnel,
   ClipboardList,
   ScrollText,
+  TrendingUp,
+  DollarSign,
+  Megaphone,
+  MessageSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -100,6 +104,30 @@ const navItems: NavItem[] = [
     href: '/agreements',
     icon: <ScrollText className="h-5 w-5" />,
     testId: 'nav-agreements',
+  },
+  {
+    label: 'Sales',
+    href: '/sales',
+    icon: <TrendingUp className="h-5 w-5" />,
+    testId: 'nav-sales',
+  },
+  {
+    label: 'Accounting',
+    href: '/accounting',
+    icon: <DollarSign className="h-5 w-5" />,
+    testId: 'nav-accounting',
+  },
+  {
+    label: 'Marketing',
+    href: '/marketing',
+    icon: <Megaphone className="h-5 w-5" />,
+    testId: 'nav-marketing',
+  },
+  {
+    label: 'Communications',
+    href: '/communications',
+    icon: <MessageSquare className="h-5 w-5" />,
+    testId: 'nav-communications',
   },
   {
     label: 'Settings',

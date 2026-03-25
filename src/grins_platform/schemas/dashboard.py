@@ -187,3 +187,69 @@ class TodayScheduleResponse(BaseModel):
     )
 
     model_config = {"from_attributes": True}
+
+
+class PendingInvoiceMetricsResponse(BaseModel):
+    """Pending invoice metrics for the dashboard.
+
+    Returns count and total amount of invoices with status SENT or VIEWED.
+
+    Validates: CRM Gap Closure Req 5.2
+    """
+
+    count: int = Field(..., ge=0, description="Number of pending invoices")
+    total_amount: float = Field(
+        ...,
+        ge=0,
+        description="Total amount of pending invoices",
+    )
+
+    model_config = {"from_attributes": True}
+
+
+class JobStatusByCategoryResponse(BaseModel):
+    """Job status counts for the 6 dashboard categories.
+
+    Categories:
+    - new_requests: jobs with status=requested
+    - estimates: jobs with category=requires_estimate
+    - pending_approval: jobs with estimates awaiting customer approval
+    - to_be_scheduled: jobs with status=approved
+    - in_progress: jobs with status=in_progress
+    - complete: jobs with status=completed
+
+    Validates: CRM Gap Closure Req 6.2
+    """
+
+    new_requests: int = Field(
+        default=0,
+        ge=0,
+        description="Jobs with status=requested",
+    )
+    estimates: int = Field(
+        default=0,
+        ge=0,
+        description="Jobs with category=requires_estimate",
+    )
+    pending_approval: int = Field(
+        default=0,
+        ge=0,
+        description="Jobs with estimates awaiting customer approval",
+    )
+    to_be_scheduled: int = Field(
+        default=0,
+        ge=0,
+        description="Jobs with status=approved",
+    )
+    in_progress: int = Field(
+        default=0,
+        ge=0,
+        description="Jobs with status=in_progress",
+    )
+    complete: int = Field(
+        default=0,
+        ge=0,
+        description="Jobs with status=completed",
+    )
+
+    model_config = {"from_attributes": True}

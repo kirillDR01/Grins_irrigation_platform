@@ -21,6 +21,12 @@ export {
   useMarkAppointmentArrived,
   useMarkAppointmentCompleted,
   useMarkAppointmentNoShow,
+  useMarkAppointmentEnRoute,
+  useCollectPayment,
+  useCreateInvoiceFromAppointment,
+  useCreateEstimateFromAppointment,
+  useUploadAppointmentPhotos,
+  useRequestReview,
 } from './useAppointmentMutations';
 
 export {

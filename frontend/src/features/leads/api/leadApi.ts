@@ -10,6 +10,13 @@ import type {
   FromCallRequest,
   LeadMetricsBySourceResponse,
   LeadMetricsBySourceParams,
+  LeadAttachment,
+  BulkOutreachRequest,
+  BulkOutreachResponse,
+  EstimateTemplate,
+  ContractTemplate,
+  CreateEstimateRequest,
+  CreateContractRequest,
 } from '../types';
 
 const BASE_PATH = '/leads';
@@ -69,6 +76,63 @@ export const leadApi = {
       `${BASE_PATH}/metrics/by-source`,
       { params }
     );
+    return response.data;
+  },
+
+  // Bulk outreach (Req 14)
+  bulkOutreach: async (data: BulkOutreachRequest): Promise<BulkOutreachResponse> => {
+    const response = await apiClient.post<BulkOutreachResponse>(
+      `${BASE_PATH}/bulk-outreach`,
+      data
+    );
+    return response.data;
+  },
+
+  // Attachments (Req 15)
+  listAttachments: async (leadId: string): Promise<LeadAttachment[]> => {
+    const response = await apiClient.get<LeadAttachment[]>(
+      `${BASE_PATH}/${leadId}/attachments`
+    );
+    return response.data;
+  },
+
+  uploadAttachment: async (leadId: string, file: File, attachmentType: string): Promise<LeadAttachment> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('attachment_type', attachmentType);
+    const response = await apiClient.post<LeadAttachment>(
+      `${BASE_PATH}/${leadId}/attachments`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+
+  deleteAttachment: async (leadId: string, attachmentId: string): Promise<void> => {
+    await apiClient.delete(`${BASE_PATH}/${leadId}/attachments/${attachmentId}`);
+  },
+
+  // Estimate templates (Req 17)
+  listEstimateTemplates: async (): Promise<EstimateTemplate[]> => {
+    const response = await apiClient.get<EstimateTemplate[]>('/templates/estimates');
+    return response.data;
+  },
+
+  // Contract templates (Req 17)
+  listContractTemplates: async (): Promise<ContractTemplate[]> => {
+    const response = await apiClient.get<ContractTemplate[]>('/templates/contracts');
+    return response.data;
+  },
+
+  // Create estimate for lead (Req 17)
+  createEstimate: async (data: CreateEstimateRequest): Promise<unknown> => {
+    const response = await apiClient.post('/estimates', data);
+    return response.data;
+  },
+
+  // Create contract for lead (Req 17)
+  createContract: async (data: CreateContractRequest): Promise<unknown> => {
+    const response = await apiClient.post('/contracts', data);
     return response.data;
   },
 };

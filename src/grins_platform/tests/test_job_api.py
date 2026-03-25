@@ -63,6 +63,10 @@ def mock_job():
     job.started_at = None
     job.completed_at = None
     job.closed_at = None
+    job.notes = None
+    job.summary = None
+    job.customer_name = None
+    job.customer_phone = None
     job.created_at = datetime.now()
     job.updated_at = datetime.now()
     return job

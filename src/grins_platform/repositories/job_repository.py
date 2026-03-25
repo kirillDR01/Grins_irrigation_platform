@@ -13,7 +13,7 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, select, update
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import JobCategory, JobStatus  # noqa: TC001
@@ -392,8 +392,8 @@ class JobRepository(LoggerMixin):
             search=search,
         )
 
-        # Base query
-        base_query = select(Job)
+        # Base query — eager-load customer for customer_name in list response
+        base_query = select(Job).options(joinedload(Job.customer))
 
         if not include_deleted:
             base_query = base_query.where(Job.is_deleted == False)  # noqa: E712

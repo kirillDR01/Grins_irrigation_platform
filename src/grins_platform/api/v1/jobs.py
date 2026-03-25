@@ -19,8 +19,13 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import (
+    func as sa_func,
+    select as sa_select,
+)
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
-from grins_platform.api.v1.dependencies import get_job_service
+from grins_platform.api.v1.dependencies import get_db_session, get_job_service
 from grins_platform.exceptions import (
     CustomerNotFoundError,
     InvalidStatusTransitionError,
@@ -36,6 +41,9 @@ from grins_platform.models.enums import (
     JobStatus,
     PricingModel,
 )
+from grins_platform.models.estimate import Estimate
+from grins_platform.repositories.job_repository import JobRepository
+from grins_platform.schemas.dashboard import JobStatusByCategoryResponse
 from grins_platform.schemas.job import (
     JobCreate,
     JobResponse,
@@ -59,6 +67,73 @@ class JobEndpoints(LoggerMixin):
 
 
 _endpoints = JobEndpoints()
+
+
+# =============================================================================
+# GET /api/v1/jobs/metrics/by-status - Job Status Counts by Category
+# NOTE: Static routes must come BEFORE dynamic routes like /{job_id}
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/metrics/by-status",
+    response_model=JobStatusByCategoryResponse,
+    summary="Get job status counts by category",
+    description="Get job counts for the 6 dashboard categories: "
+    "New Requests, Estimates, Pending Approval, To Be Scheduled, "
+    "In Progress, and Complete.",
+)
+async def get_job_metrics_by_status(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> JobStatusByCategoryResponse:
+    """Get job counts for the 6 dashboard status categories.
+
+    Categories:
+    - new_requests: status=requested
+    - estimates: category=requires_estimate
+    - pending_approval: jobs with estimates awaiting customer approval
+    - to_be_scheduled: status=approved
+    - in_progress: status=in_progress
+    - complete: status=completed
+
+    Validates: CRM Gap Closure Req 6.2
+    """
+    _endpoints.log_started("get_job_metrics_by_status")
+
+    job_repo = JobRepository(session=session)
+
+    # Get job counts by status
+    status_counts = await job_repo.count_by_status()
+
+    # Get jobs with category=requires_estimate count
+    estimates_jobs = await job_repo.find_by_category(JobCategory.REQUIRES_ESTIMATE)
+
+    # Get pending approval count: estimates with status SENT or VIEWED
+    pending_approval_stmt = sa_select(sa_func.count(Estimate.id)).where(
+        Estimate.status.in_(["sent", "viewed"]),
+    )
+    pending_result = await session.execute(pending_approval_stmt)
+    pending_approval_count = pending_result.scalar() or 0
+
+    result = JobStatusByCategoryResponse(
+        new_requests=status_counts.get(JobStatus.REQUESTED.value, 0),
+        estimates=len(estimates_jobs),
+        pending_approval=int(pending_approval_count),
+        to_be_scheduled=status_counts.get(JobStatus.APPROVED.value, 0),
+        in_progress=status_counts.get(JobStatus.IN_PROGRESS.value, 0),
+        complete=status_counts.get(JobStatus.COMPLETED.value, 0),
+    )
+
+    _endpoints.log_completed(
+        "get_job_metrics_by_status",
+        new_requests=result.new_requests,
+        estimates=result.estimates,
+        pending_approval=result.pending_approval,
+        to_be_scheduled=result.to_be_scheduled,
+        in_progress=result.in_progress,
+        complete=result.complete,
+    )
+    return result
 
 
 # =============================================================================
@@ -182,8 +257,16 @@ async def list_jobs(
 
     _endpoints.log_completed("list_jobs", count=len(jobs), total=total)
 
+    items: list[JobResponse] = []
+    for j in jobs:
+        resp = JobResponse.model_validate(j)
+        if hasattr(j, "customer") and j.customer is not None:
+            resp.customer_name = f"{j.customer.first_name} {j.customer.last_name}"
+            resp.customer_phone = j.customer.phone
+        items.append(resp)
+
     return PaginatedJobResponse(
-        items=[JobResponse.model_validate(j) for j in jobs],
+        items=items,
         total=total,
         page=page,
         page_size=page_size,
@@ -638,3 +721,82 @@ async def calculate_job_price(
             requires_manual_quote=bool(result.get("requires_manual_quote", True)),
             calculation_details={},
         )
+
+
+# =============================================================================
+# Job Financials — Req 57, 53
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/{job_id}/financials",
+    summary="Get job financials",
+    description="Get financial breakdown for a specific job.",
+)
+async def get_job_financials(
+    job_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict[str, object]:
+    """Get per-job financial breakdown.
+
+    Validates: CRM Gap Closure Req 57.2
+    """
+    from grins_platform.services.accounting_service import (  # noqa: PLC0415
+        AccountingService,
+    )
+
+    _endpoints.log_started("get_job_financials", job_id=str(job_id))
+
+    from grins_platform.repositories.expense_repository import (  # noqa: PLC0415
+        ExpenseRepository,
+    )
+
+    repo = ExpenseRepository(session)
+    svc = AccountingService(expense_repository=repo)
+    try:
+        result = await svc.get_job_financials(session, job_id)
+        _endpoints.log_completed("get_job_financials", job_id=str(job_id))
+        return result.model_dump()
+    except Exception as e:
+        _endpoints.log_failed("get_job_financials", error=e)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job financials not found: {job_id}",
+        ) from e
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/{job_id}/costs",
+    summary="Get job costs",
+    description="Get expenses associated with a specific job.",
+)
+async def get_job_costs(
+    job_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
+) -> dict[str, object]:
+    """Get expenses for a specific job.
+
+    Validates: CRM Gap Closure Req 53.5
+    """
+    from grins_platform.repositories.expense_repository import (  # noqa: PLC0415
+        ExpenseRepository,
+    )
+    from grins_platform.schemas.expense import ExpenseResponse  # noqa: PLC0415
+
+    _endpoints.log_started("get_job_costs", job_id=str(job_id))
+    repo = ExpenseRepository(session)
+    expenses, total = await repo.list_with_filters(
+        page=page,
+        page_size=page_size,
+        job_id=job_id,
+    )
+    items = [ExpenseResponse.model_validate(e) for e in expenses]
+    _endpoints.log_completed("get_job_costs", job_id=str(job_id), count=len(items))
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }

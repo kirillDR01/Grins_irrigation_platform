@@ -106,6 +106,7 @@ export interface Invoice extends BaseEntity {
   lien_filed_date: string | null;
   line_items: InvoiceLineItem[] | null;
   notes: string | null;
+  customer_name: string | null;
 }
 
 // Invoice detail with job and customer info
@@ -152,4 +153,31 @@ export interface PaymentRecord {
   amount: number;
   payment_method: PaymentMethod;
   payment_reference?: string;
+}
+
+// Notification types for bulk notify (Req 38)
+export type NotificationType = 'REMINDER' | 'PAST_DUE' | 'LIEN_WARNING' | 'UPCOMING_DUE';
+
+export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, { label: string; description: string }> = {
+  REMINDER: { label: 'Reminder', description: 'General payment reminder' },
+  PAST_DUE: { label: 'Past Due', description: 'Past due notice' },
+  LIEN_WARNING: { label: 'Lien Warning', description: 'Mechanic\'s lien warning' },
+  UPCOMING_DUE: { label: 'Upcoming Due', description: 'Upcoming due date reminder' },
+};
+
+export interface BulkNotifyRequest {
+  invoice_ids: string[];
+  notification_type: NotificationType;
+}
+
+export interface BulkNotifyResponse {
+  sent: number;
+  skipped: number;
+  failed: number;
+  total: number;
+}
+
+// PDF generation types (Req 80)
+export interface PdfUrlResponse {
+  url: string;
 }

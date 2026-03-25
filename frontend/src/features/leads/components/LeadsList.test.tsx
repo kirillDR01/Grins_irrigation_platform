@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import { LeadsList } from './LeadsList';
 import { leadApi } from '../api/leadApi';
 import type { Lead } from '../types';
@@ -31,6 +31,9 @@ const mockLeads: Lead[] = [
     name: 'John Doe',
     phone: '6125551234',
     email: 'john@example.com',
+    address: '123 Main St',
+    city: 'Minneapolis',
+    state: 'MN',
     zip_code: '55424',
     situation: 'new_system',
     notes: 'Large backyard',
@@ -43,6 +46,7 @@ const mockLeads: Lead[] = [
     lead_source: 'website',
     source_detail: null,
     intake_tag: 'schedule',
+    action_tags: ['NEEDS_CONTACT'],
     sms_consent: true,
     terms_accepted: true,
     created_at: '2025-01-20T10:00:00Z',
@@ -53,6 +57,9 @@ const mockLeads: Lead[] = [
     name: 'Jane Smith',
     phone: '6125555678',
     email: null,
+    address: null,
+    city: 'Edina',
+    state: 'MN',
     zip_code: '55305',
     situation: 'repair',
     notes: null,
@@ -65,6 +72,7 @@ const mockLeads: Lead[] = [
     lead_source: 'phone_call',
     source_detail: 'Inbound call',
     intake_tag: null,
+    action_tags: [],
     sms_consent: false,
     terms_accepted: false,
     created_at: '2025-01-19T14:00:00Z',
@@ -85,6 +93,24 @@ function createWrapper() {
     return (
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>{children}</BrowserRouter>
+      </QueryClientProvider>
+    );
+  };
+}
+
+function createMemoryWrapper(initialEntries: string[] = ['/leads']) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+
+  return function Wrapper({ children }: { children: React.ReactNode }) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={initialEntries}>{children}</MemoryRouter>
       </QueryClientProvider>
     );
   };
@@ -275,5 +301,195 @@ describe('LeadsList', () => {
     });
 
     expect(screen.queryByTestId('leads-pagination')).not.toBeInTheDocument();
+  });
+
+  /**
+   * URL parameter parsing and filter application tests.
+   * Validates: Requirements 3.7
+   */
+  describe('URL parameter parsing and filter application', () => {
+    it('parses ?status=new from URL and auto-applies the status filter', async () => {
+      vi.mocked(leadApi.list).mockResolvedValue({
+        items: [mockLeads[0]], // 'new' status lead
+        total: 1,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<LeadsList />, {
+        wrapper: createMemoryWrapper(['/leads?status=new']),
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+      });
+
+      // Verify the API was called with the status filter from URL
+      expect(leadApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'new' })
+      );
+    });
+
+    it('parses ?status=contacted from URL and auto-applies the status filter', async () => {
+      vi.mocked(leadApi.list).mockResolvedValue({
+        items: [mockLeads[1]], // 'contacted' status lead
+        total: 1,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<LeadsList />, {
+        wrapper: createMemoryWrapper(['/leads?status=contacted']),
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+      });
+
+      expect(leadApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'contacted' })
+      );
+    });
+
+    it('applies highlight-fade animation class when ?highlight={id} is present', async () => {
+      const highlightLeadId = mockLeads[0].id;
+      vi.mocked(leadApi.list).mockResolvedValue({
+        items: mockLeads,
+        total: 2,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<LeadsList />, {
+        wrapper: createMemoryWrapper([`/leads?highlight=${highlightLeadId}`]),
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+      });
+
+      // Find the highlighted row by data-lead-id attribute
+      const rows = screen.getAllByTestId('lead-row');
+      const highlightedRow = rows.find(
+        (row) => row.getAttribute('data-lead-id') === highlightLeadId
+      );
+      expect(highlightedRow).toBeDefined();
+      expect(highlightedRow!.className).toContain('animate-highlight-fade');
+    });
+
+    it('does not apply highlight class to non-matching rows', async () => {
+      const highlightLeadId = mockLeads[0].id;
+      vi.mocked(leadApi.list).mockResolvedValue({
+        items: mockLeads,
+        total: 2,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<LeadsList />, {
+        wrapper: createMemoryWrapper([`/leads?highlight=${highlightLeadId}`]),
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+      });
+
+      const rows = screen.getAllByTestId('lead-row');
+      const nonHighlightedRow = rows.find(
+        (row) => row.getAttribute('data-lead-id') !== highlightLeadId
+      );
+      expect(nonHighlightedRow).toBeDefined();
+      expect(nonHighlightedRow!.className).not.toContain('animate-highlight-fade');
+    });
+
+    it('works correctly without any URL parameters (default state)', async () => {
+      vi.mocked(leadApi.list).mockResolvedValue({
+        items: mockLeads,
+        total: 2,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<LeadsList />, {
+        wrapper: createMemoryWrapper(['/leads']),
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+      });
+
+      // API called without status filter
+      expect(leadApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({ status: undefined })
+      );
+
+      // No rows should have highlight animation
+      const rows = screen.getAllByTestId('lead-row');
+      rows.forEach((row) => {
+        expect(row.className).not.toContain('animate-highlight-fade');
+      });
+    });
+
+    it('ignores invalid/unknown status parameters gracefully', async () => {
+      vi.mocked(leadApi.list).mockResolvedValue({
+        items: mockLeads,
+        total: 2,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<LeadsList />, {
+        wrapper: createMemoryWrapper(['/leads?status=bogus_status']),
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+      });
+
+      // Invalid status should be ignored — API called with status undefined
+      expect(leadApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({ status: undefined })
+      );
+    });
+
+    it('handles both status and highlight params together', async () => {
+      const highlightLeadId = mockLeads[0].id;
+      vi.mocked(leadApi.list).mockResolvedValue({
+        items: [mockLeads[0]],
+        total: 1,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<LeadsList />, {
+        wrapper: createMemoryWrapper([
+          `/leads?status=new&highlight=${highlightLeadId}`,
+        ]),
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+      });
+
+      // Status filter applied
+      expect(leadApi.list).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'new' })
+      );
+
+      // Highlight applied
+      const rows = screen.getAllByTestId('lead-row');
+      const highlightedRow = rows.find(
+        (row) => row.getAttribute('data-lead-id') === highlightLeadId
+      );
+      expect(highlightedRow).toBeDefined();
+      expect(highlightedRow!.className).toContain('animate-highlight-fade');
+    });
   });
 });

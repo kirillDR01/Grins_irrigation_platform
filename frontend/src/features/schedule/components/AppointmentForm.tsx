@@ -7,9 +7,12 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format } from 'date-fns';
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import {
   Form,
   FormControl,
@@ -25,9 +28,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { MapPin } from 'lucide-react';
 import { useCreateAppointment, useUpdateAppointment } from '../hooks/useAppointmentMutations';
 import { useJobsReadyToSchedule } from '@/features/jobs/hooks';
 import { useStaff } from '@/features/staff/hooks';
+import { jobApi } from '@/features/jobs/api/jobApi';
+import { customerApi } from '@/features/customers/api/customerApi';
 import type { Appointment, AppointmentCreate, AppointmentUpdate } from '../types';
 
 // Form validation schema
@@ -91,6 +97,40 @@ export function AppointmentForm({
       notes: appointment?.notes ?? '',
     },
   });
+
+  // Address auto-populate from customer's primary property (Req 29)
+  const [autoAddress, setAutoAddress] = useState<string | null>(null);
+  const [addressOverridden, setAddressOverridden] = useState(false);
+
+  const selectedJobId = form.watch('job_id');
+
+  // Fetch job to get customer_id when a job is selected
+  const { data: selectedJob } = useQuery({
+    queryKey: ['jobs', 'detail', selectedJobId],
+    queryFn: () => jobApi.get(selectedJobId),
+    enabled: !!selectedJobId && selectedJobId !== 'no-jobs',
+  });
+
+  // Fetch customer to get primary property address
+  const { data: selectedCustomer } = useQuery({
+    queryKey: ['customers', 'detail', selectedJob?.customer_id],
+    queryFn: () => customerApi.get(selectedJob!.customer_id),
+    enabled: !!selectedJob?.customer_id,
+  });
+
+  // Auto-populate address when customer data loads
+  useEffect(() => {
+    if (selectedCustomer?.properties && selectedCustomer.properties.length > 0) {
+      const primary = selectedCustomer.properties.find((p) => p.is_primary) ?? selectedCustomer.properties[0];
+      const addr = [primary.address, primary.city, primary.state, primary.zip_code]
+        .filter(Boolean)
+        .join(', ');
+      setAutoAddress(addr);
+      setAddressOverridden(false);
+    } else {
+      setAutoAddress(null);
+    }
+  }, [selectedCustomer]);
 
   const onSubmit = async (data: FormData) => {
     try {
@@ -217,6 +257,48 @@ export function AppointmentForm({
             </FormItem>
           )}
         />
+
+        {/* Auto-populated Address (Req 29) */}
+        {autoAddress && (
+          <div data-testid="auto-address-section">
+            <FormLabel>Property Address</FormLabel>
+            <div className="mt-1.5 flex items-start gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <MapPin className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                {addressOverridden ? (
+                  <Input
+                    defaultValue={autoAddress}
+                    className="text-sm"
+                    data-testid="address-override-input"
+                  />
+                ) : (
+                  <p className="text-sm text-slate-700">{autoAddress}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {!addressOverridden && (
+                  <Badge
+                    variant="outline"
+                    className="text-xs text-teal-600 border-teal-200 bg-teal-50"
+                    data-testid="auto-filled-badge"
+                  >
+                    Auto-filled
+                  </Badge>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs text-slate-500 h-6 px-2"
+                  onClick={() => setAddressOverridden(!addressOverridden)}
+                  data-testid="address-override-btn"
+                >
+                  {addressOverridden ? 'Reset' : 'Override'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Time Window */}
         <div className="grid grid-cols-2 gap-4">

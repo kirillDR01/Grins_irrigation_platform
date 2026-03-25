@@ -10,8 +10,8 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { useDebounce } from '@/shared/hooks/useDebounce';
-import type { LeadListParams, LeadStatus, LeadSituation, LeadSource } from '../types';
-import { LEAD_STATUS_LABELS, LEAD_SITUATION_LABELS, LEAD_SOURCE_LABELS } from '../types';
+import type { LeadListParams, LeadStatus, LeadSituation, LeadSource, ActionTag } from '../types';
+import { LEAD_STATUS_LABELS, LEAD_SITUATION_LABELS, LEAD_SOURCE_LABELS, ACTION_TAG_LABELS } from '../types';
 
 interface LeadFiltersProps {
   /** Current filter parameters */
@@ -62,6 +62,16 @@ export function LeadFilters({ params, onChange }: LeadFiltersProps) {
     (value: string) => {
       onChange({
         lead_source: value === 'all' ? undefined : value,
+        page: 1,
+      });
+    },
+    [onChange]
+  );
+
+  const handleActionTagChange = useCallback(
+    (value: string) => {
+      onChange({
+        action_tag: value === 'all' ? undefined : (value as ActionTag),
         page: 1,
       });
     },
@@ -190,6 +200,27 @@ export function LeadFilters({ params, onChange }: LeadFiltersProps) {
             {(Object.keys(LEAD_SOURCE_LABELS) as LeadSource[]).map((source) => (
               <SelectItem key={source} value={source}>
                 {LEAD_SOURCE_LABELS[source]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Action Tag Filter (Req 13) */}
+        <Select
+          value={params.action_tag ?? 'all'}
+          onValueChange={handleActionTagChange}
+        >
+          <SelectTrigger
+            className="w-[180px] bg-white border-slate-200 rounded-lg text-sm"
+            data-testid="lead-action-tag-filter"
+          >
+            <SelectValue placeholder="All Tags" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Tags</SelectItem>
+            {(Object.keys(ACTION_TAG_LABELS) as ActionTag[]).map((tag) => (
+              <SelectItem key={tag} value={tag}>
+                {ACTION_TAG_LABELS[tag]}
               </SelectItem>
             ))}
           </SelectContent>

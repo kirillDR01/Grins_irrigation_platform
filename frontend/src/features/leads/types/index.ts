@@ -23,11 +23,22 @@ export type LeadSource =
 // Intake tag for routing
 export type IntakeTag = 'schedule' | 'follow_up';
 
+// Action tags for lead pipeline (Req 13)
+export type ActionTag =
+  | 'NEEDS_CONTACT'
+  | 'NEEDS_ESTIMATE'
+  | 'ESTIMATE_PENDING'
+  | 'ESTIMATE_APPROVED'
+  | 'ESTIMATE_REJECTED';
+
 // Lead entity
 export interface Lead extends BaseEntity {
   name: string;
   phone: string;
   email: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
   zip_code: string | null;
   situation: LeadSituation;
   notes: string | null;
@@ -40,8 +51,84 @@ export interface Lead extends BaseEntity {
   lead_source: LeadSource;
   source_detail: string | null;
   intake_tag: IntakeTag | null;
+  action_tags: ActionTag[];
   sms_consent: boolean;
   terms_accepted: boolean;
+}
+
+// Lead attachment (Req 15)
+export type AttachmentType = 'ESTIMATE' | 'CONTRACT' | 'OTHER';
+
+export interface LeadAttachment {
+  id: string;
+  lead_id: string;
+  file_key: string;
+  file_name: string;
+  file_size: number;
+  content_type: string;
+  attachment_type: AttachmentType;
+  download_url?: string;
+  created_at: string;
+}
+
+// Estimate template (Req 17)
+export interface EstimateLineItem {
+  item: string;
+  description: string;
+  unit_price: number;
+  quantity: number;
+}
+
+export interface EstimateTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  line_items: EstimateLineItem[];
+  terms: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Contract template (Req 17)
+export interface ContractTemplate {
+  id: string;
+  name: string;
+  body: string;
+  terms_and_conditions: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Estimate creation request
+export interface CreateEstimateRequest {
+  lead_id: string;
+  template_id?: string;
+  line_items: EstimateLineItem[];
+  notes?: string;
+  valid_until?: string;
+}
+
+// Contract creation request
+export interface CreateContractRequest {
+  lead_id: string;
+  template_id?: string;
+  body: string;
+  terms_and_conditions?: string;
+}
+
+// Bulk outreach (Req 14)
+export interface BulkOutreachRequest {
+  lead_ids: string[];
+  message_template: string;
+  channel?: 'sms' | 'email';
+}
+
+export interface BulkOutreachResponse {
+  sent_count: number;
+  skipped_count: number;
+  failed_count: number;
 }
 
 // Lead list query params
@@ -55,6 +142,7 @@ export interface LeadListParams extends PaginationParams {
   sort_order?: 'asc' | 'desc';
   lead_source?: string;
   intake_tag?: string;
+  action_tag?: ActionTag;
 }
 
 // Paginated lead response
@@ -72,6 +160,11 @@ export interface LeadUpdate {
   assigned_to?: string | null;
   notes?: string;
   intake_tag?: IntakeTag | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip_code?: string | null;
+  action_tags?: ActionTag[];
 }
 
 // Lead conversion request
@@ -153,6 +246,22 @@ export const LEAD_SOURCE_COLORS: Record<LeadSource, string> = {
 export const INTAKE_TAG_LABELS: Record<string, string> = {
   schedule: 'Schedule',
   follow_up: 'Follow Up',
+};
+
+export const ACTION_TAG_LABELS: Record<ActionTag, string> = {
+  NEEDS_CONTACT: 'Needs Contact',
+  NEEDS_ESTIMATE: 'Needs Estimate',
+  ESTIMATE_PENDING: 'Estimate Pending',
+  ESTIMATE_APPROVED: 'Estimate Approved',
+  ESTIMATE_REJECTED: 'Estimate Rejected',
+};
+
+export const ACTION_TAG_COLORS: Record<ActionTag, string> = {
+  NEEDS_CONTACT: 'bg-red-100 text-red-800 border-red-200',
+  NEEDS_ESTIMATE: 'bg-orange-100 text-orange-800 border-orange-200',
+  ESTIMATE_PENDING: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  ESTIMATE_APPROVED: 'bg-green-100 text-green-800 border-green-200',
+  ESTIMATE_REJECTED: 'bg-gray-100 text-gray-600 border-gray-200',
 };
 
 // From-call lead creation request

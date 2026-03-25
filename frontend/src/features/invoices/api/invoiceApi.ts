@@ -7,6 +7,9 @@ import type {
   InvoiceUpdate,
   InvoiceListParams,
   PaymentRecord,
+  BulkNotifyRequest,
+  BulkNotifyResponse,
+  PdfUrlResponse,
 } from '../types';
 
 const BASE_PATH = '/invoices';
@@ -100,6 +103,31 @@ export const invoiceApi = {
   generateFromJob: async (jobId: string): Promise<Invoice> => {
     const response = await apiClient.post<Invoice>(
       `${BASE_PATH}/generate-from-job/${jobId}`,
+    );
+    return response.data;
+  },
+
+  // Bulk notify customers for selected invoices (Req 38)
+  bulkNotify: async (data: BulkNotifyRequest): Promise<BulkNotifyResponse> => {
+    const response = await apiClient.post<BulkNotifyResponse>(
+      `${BASE_PATH}/bulk-notify`,
+      data,
+    );
+    return response.data;
+  },
+
+  // Generate PDF for an invoice (Req 80)
+  generatePdf: async (id: string): Promise<PdfUrlResponse> => {
+    const response = await apiClient.post<PdfUrlResponse>(
+      `${BASE_PATH}/${id}/generate-pdf`,
+    );
+    return response.data;
+  },
+
+  // Get pre-signed PDF download URL (Req 80)
+  getPdfUrl: async (id: string): Promise<PdfUrlResponse> => {
+    const response = await apiClient.get<PdfUrlResponse>(
+      `${BASE_PATH}/${id}/pdf`,
     );
     return response.data;
   },

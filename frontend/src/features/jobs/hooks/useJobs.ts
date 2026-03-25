@@ -9,6 +9,7 @@ export const jobKeys = {
   list: (params?: JobListParams) => [...jobKeys.lists(), params] as const,
   details: () => [...jobKeys.all, 'detail'] as const,
   detail: (id: string) => [...jobKeys.details(), id] as const,
+  financials: (id: string) => [...jobKeys.all, 'financials', id] as const,
   byStatus: (status: JobStatus) => [...jobKeys.all, 'status', status] as const,
   byCustomer: (customerId: string) =>
     [...jobKeys.all, 'customer', customerId] as const,
@@ -79,5 +80,14 @@ export function useJobSearch(query: string) {
     queryKey: jobKeys.search(query),
     queryFn: () => jobApi.search(query),
     enabled: query.length >= 2,
+  });
+}
+
+// Get per-job financials (Req 57)
+export function useJobFinancials(id: string) {
+  return useQuery({
+    queryKey: jobKeys.financials(id),
+    queryFn: () => jobApi.getFinancials(id),
+    enabled: !!id,
   });
 }

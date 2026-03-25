@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { leadApi } from '../api/leadApi';
-import type { LeadUpdate, LeadConversionRequest, FromCallRequest } from '../types';
+import type { LeadUpdate, LeadConversionRequest, FromCallRequest, BulkOutreachRequest, CreateEstimateRequest, CreateContractRequest } from '../types';
 import { leadKeys } from './useLeads';
 
 // Update lead mutation (status, assignment, notes, intake_tag)
@@ -56,6 +56,63 @@ export function useCreateFromCall() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
       queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });
+    },
+  });
+}
+
+// Bulk outreach mutation (Req 14)
+export function useBulkOutreach() {
+  return useMutation({
+    mutationFn: (data: BulkOutreachRequest) => leadApi.bulkOutreach(data),
+  });
+}
+
+// Upload attachment mutation (Req 15)
+export function useUploadAttachment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ leadId, file, attachmentType }: { leadId: string; file: File; attachmentType: string }) =>
+      leadApi.uploadAttachment(leadId, file, attachmentType),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: leadKeys.attachments(variables.leadId) });
+    },
+  });
+}
+
+// Delete attachment mutation (Req 15)
+export function useDeleteAttachment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ leadId, attachmentId }: { leadId: string; attachmentId: string }) =>
+      leadApi.deleteAttachment(leadId, attachmentId),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: leadKeys.attachments(variables.leadId) });
+    },
+  });
+}
+
+// Create estimate mutation (Req 17)
+export function useCreateEstimate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CreateEstimateRequest) => leadApi.createEstimate(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
+    },
+  });
+}
+
+// Create contract mutation (Req 17)
+export function useCreateContract() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CreateContractRequest) => leadApi.createContract(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
     },
   });
 }

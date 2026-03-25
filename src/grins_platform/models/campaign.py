@@ -52,6 +52,10 @@ class Campaign(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    automation_rule: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
     created_by: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("staff.id", ondelete="SET NULL"),

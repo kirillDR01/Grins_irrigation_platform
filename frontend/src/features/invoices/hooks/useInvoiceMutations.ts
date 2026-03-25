@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { invoiceApi } from '../api/invoiceApi';
 import { invoiceKeys } from './useInvoices';
-import type { InvoiceCreate, InvoiceUpdate, PaymentRecord } from '../types';
+import type { InvoiceCreate, InvoiceUpdate, PaymentRecord, BulkNotifyRequest } from '../types';
 
 // Create invoice
 export function useCreateInvoice() {
@@ -111,5 +111,30 @@ export function useGenerateInvoiceFromJob() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: invoiceKeys.lists() });
     },
+  });
+}
+
+// Bulk notify customers (Req 38)
+export function useBulkNotify() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: BulkNotifyRequest) => invoiceApi.bulkNotify(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: invoiceKeys.lists() });
+    },
+  });
+}
+
+// Generate PDF for an invoice (Req 80)
+export function useGeneratePdf() {
+  return useMutation({
+    mutationFn: (id: string) => invoiceApi.generatePdf(id),
+  });
+}
+
+// Get PDF download URL (Req 80)
+export function useGetPdfUrl() {
+  return useMutation({
+    mutationFn: (id: string) => invoiceApi.getPdfUrl(id),
   });
 }

@@ -27,13 +27,24 @@ if TYPE_CHECKING:
 
 # Valid status transitions for appointments
 VALID_APPOINTMENT_TRANSITIONS: dict[str, list[str]] = {
+    AppointmentStatus.PENDING.value: [
+        AppointmentStatus.SCHEDULED.value,
+        AppointmentStatus.CANCELLED.value,
+    ],
     AppointmentStatus.SCHEDULED.value: [
         AppointmentStatus.CONFIRMED.value,
         AppointmentStatus.CANCELLED.value,
     ],
     AppointmentStatus.CONFIRMED.value: [
+        AppointmentStatus.EN_ROUTE.value,
         AppointmentStatus.IN_PROGRESS.value,
         AppointmentStatus.CANCELLED.value,
+        AppointmentStatus.NO_SHOW.value,
+    ],
+    AppointmentStatus.EN_ROUTE.value: [
+        AppointmentStatus.IN_PROGRESS.value,
+        AppointmentStatus.CANCELLED.value,
+        AppointmentStatus.NO_SHOW.value,
     ],
     AppointmentStatus.IN_PROGRESS.value: [
         AppointmentStatus.COMPLETED.value,
@@ -41,6 +52,9 @@ VALID_APPOINTMENT_TRANSITIONS: dict[str, list[str]] = {
     ],
     AppointmentStatus.COMPLETED.value: [],  # Terminal state
     AppointmentStatus.CANCELLED.value: [
+        AppointmentStatus.SCHEDULED.value,  # Can be rescheduled
+    ],
+    AppointmentStatus.NO_SHOW.value: [
         AppointmentStatus.SCHEDULED.value,  # Can be rescheduled
     ],
 }

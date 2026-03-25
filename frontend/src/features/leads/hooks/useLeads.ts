@@ -11,6 +11,9 @@ export const leadKeys = {
   detail: (id: string) => [...leadKeys.details(), id] as const,
   followUpQueue: () => [...leadKeys.all, 'follow-up-queue'] as const,
   metricsBySource: (params?: LeadMetricsBySourceParams) => [...leadKeys.all, 'metrics-by-source', params] as const,
+  attachments: (leadId: string) => [...leadKeys.all, 'attachments', leadId] as const,
+  estimateTemplates: () => [...leadKeys.all, 'estimate-templates'] as const,
+  contractTemplates: () => [...leadKeys.all, 'contract-templates'] as const,
 };
 
 // List leads with pagination and filters
@@ -43,5 +46,30 @@ export function useLeadMetricsBySource(params?: LeadMetricsBySourceParams) {
   return useQuery({
     queryKey: leadKeys.metricsBySource(params),
     queryFn: () => leadApi.metricsBySource(params),
+  });
+}
+
+// Lead attachments (Req 15)
+export function useLeadAttachments(leadId: string) {
+  return useQuery({
+    queryKey: leadKeys.attachments(leadId),
+    queryFn: () => leadApi.listAttachments(leadId),
+    enabled: !!leadId,
+  });
+}
+
+// Estimate templates (Req 17)
+export function useEstimateTemplates() {
+  return useQuery({
+    queryKey: leadKeys.estimateTemplates(),
+    queryFn: () => leadApi.listEstimateTemplates(),
+  });
+}
+
+// Contract templates (Req 17)
+export function useContractTemplates() {
+  return useQuery({
+    queryKey: leadKeys.contractTemplates(),
+    queryFn: () => leadApi.listContractTemplates(),
   });
 }

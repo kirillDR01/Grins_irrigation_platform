@@ -16,6 +16,12 @@ export type JobCategory = 'ready_to_schedule' | 'requires_estimate';
 // Job source enum matching backend
 export type JobSource = 'website' | 'google' | 'referral' | 'phone' | 'partner';
 
+// Simplified status for display (Req 21)
+export type SimplifiedJobStatus = 'To Be Scheduled' | 'In Progress' | 'Complete' | 'Cancelled';
+
+// Customer tag types (Req 22)
+export type CustomerTag = 'priority' | 'red_flag' | 'slow_payer' | 'new_customer';
+
 // Job entity
 export interface Job extends BaseEntity {
   customer_id: string;
@@ -26,6 +32,8 @@ export interface Job extends BaseEntity {
   category: JobCategory;
   status: JobStatus;
   description: string | null;
+  summary: string | null;
+  notes: string | null;
   estimated_duration_minutes: number | null;
   priority_level: number;
   weather_sensitive: boolean;
@@ -45,6 +53,22 @@ export interface Job extends BaseEntity {
   started_at: string | null;
   completed_at: string | null;
   closed_at: string | null;
+  // Nested customer summary (Req 22)
+  customer_name: string | null;
+  customer_tags: CustomerTag[] | null;
+}
+
+// Per-job financials (Req 57)
+export interface JobFinancials {
+  job_id: string;
+  quoted_amount: number | null;
+  final_amount: number | null;
+  total_paid: number;
+  material_costs: number;
+  labor_costs: number;
+  total_costs: number;
+  profit: number;
+  profit_margin: number | null;
 }
 
 // Create job request
@@ -72,6 +96,8 @@ export interface JobUpdate {
   job_type?: string;
   category?: JobCategory;
   description?: string | null;
+  summary?: string | null;
+  notes?: string | null;
   estimated_duration_minutes?: number | null;
   priority_level?: number;
   weather_sensitive?: boolean;
@@ -239,4 +265,112 @@ export function formatAmount(amount: number | null): string {
     style: 'currency',
     currency: 'USD',
   }).format(amount);
+}
+
+// Status simplification mapping (Req 21)
+export const SIMPLIFIED_STATUS_MAP: Record<JobStatus, SimplifiedJobStatus> = {
+  requested: 'To Be Scheduled',
+  approved: 'To Be Scheduled',
+  scheduled: 'In Progress',
+  in_progress: 'In Progress',
+  completed: 'Complete',
+  closed: 'Complete',
+  cancelled: 'Cancelled',
+};
+
+// Simplified status display config
+export const SIMPLIFIED_STATUS_CONFIG: Record<
+  SimplifiedJobStatus,
+  { label: string; color: string; bgColor: string }
+> = {
+  'To Be Scheduled': {
+    label: 'To Be Scheduled',
+    color: 'text-amber-700',
+    bgColor: 'bg-amber-100',
+  },
+  'In Progress': {
+    label: 'In Progress',
+    color: 'text-orange-700',
+    bgColor: 'bg-orange-100',
+  },
+  'Complete': {
+    label: 'Complete',
+    color: 'text-emerald-700',
+    bgColor: 'bg-emerald-100',
+  },
+  'Cancelled': {
+    label: 'Cancelled',
+    color: 'text-red-700',
+    bgColor: 'bg-red-100',
+  },
+};
+
+// Reverse mapping: simplified label → raw statuses it covers
+export const SIMPLIFIED_STATUS_RAW_MAP: Record<SimplifiedJobStatus, JobStatus[]> = {
+  'To Be Scheduled': ['requested', 'approved'],
+  'In Progress': ['scheduled', 'in_progress'],
+  'Complete': ['completed', 'closed'],
+  'Cancelled': ['cancelled'],
+};
+
+// Helper to get simplified status
+export function getSimplifiedStatus(status: JobStatus): SimplifiedJobStatus {
+  return SIMPLIFIED_STATUS_MAP[status];
+}
+
+// Helper to get simplified status config
+export function getSimplifiedStatusConfig(status: JobStatus) {
+  return SIMPLIFIED_STATUS_CONFIG[SIMPLIFIED_STATUS_MAP[status]];
+}
+
+// Customer tag display config (Req 22)
+export const CUSTOMER_TAG_CONFIG: Record<
+  CustomerTag,
+  { label: string; color: string; bgColor: string }
+> = {
+  priority: {
+    label: 'Priority',
+    color: 'text-blue-700',
+    bgColor: 'bg-blue-100',
+  },
+  red_flag: {
+    label: 'Red Flag',
+    color: 'text-red-700',
+    bgColor: 'bg-red-100',
+  },
+  slow_payer: {
+    label: 'Slow Payer',
+    color: 'text-amber-700',
+    bgColor: 'bg-amber-100',
+  },
+  new_customer: {
+    label: 'New Customer',
+    color: 'text-emerald-700',
+    bgColor: 'bg-emerald-100',
+  },
+};
+
+// Helper: calculate days waiting (Req 22)
+export function calculateDaysWaiting(createdAt: string): number {
+  const created = new Date(createdAt);
+  const now = new Date();
+  const diffMs = now.getTime() - created.getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+}
+
+// Helper: get due by color class (Req 23)
+export function getDueByColorClass(targetEndDate: string | null): string {
+  if (!targetEndDate) return '';
+  // Parse date parts to avoid UTC vs local timezone mismatch with date-only strings
+  const [year, month, day] = targetEndDate.split('T')[0].split('-').map(Number);
+  const target = new Date(year, month - 1, day);
+  const now = new Date();
+  // Reset time to compare dates only
+  now.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  const diffMs = target.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return 'text-red-600 font-medium';
+  if (diffDays <= 7) return 'text-amber-600 font-medium';
+  return 'text-slate-600';
 }

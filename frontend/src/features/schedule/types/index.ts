@@ -7,6 +7,7 @@ export type AppointmentStatus =
   | 'pending'
   | 'scheduled'
   | 'confirmed'
+  | 'en_route'
   | 'in_progress'
   | 'completed'
   | 'cancelled'
@@ -21,6 +22,7 @@ export interface Appointment {
   time_window_end: string; // Time string (HH:MM:SS)
   status: AppointmentStatus;
   arrived_at: string | null;
+  en_route_at: string | null;
   completed_at: string | null;
   notes: string | null;
   route_order: number | null;
@@ -130,6 +132,11 @@ export const appointmentStatusConfig: Record<
     label: 'Confirmed',
     color: 'text-blue-800',
     bgColor: 'bg-blue-100',
+  },
+  en_route: {
+    label: 'En Route',
+    color: 'text-cyan-800',
+    bgColor: 'bg-cyan-100',
   },
   in_progress: {
     label: 'In Progress',
@@ -411,4 +418,95 @@ export interface ScheduleRestoreResponse {
   appointments_restored: number;
   jobs_updated: number;
   restored_at: string;
+}
+
+// =============================================================================
+// Staff Workflow Types (Req 30-36)
+// =============================================================================
+
+export type PaymentMethod = 'credit_card' | 'cash' | 'check' | 'venmo' | 'zelle' | 'send_invoice';
+
+export interface CollectPaymentRequest {
+  payment_method: PaymentMethod;
+  amount: number;
+  reference_number?: string;
+}
+
+export interface CollectPaymentResponse {
+  id: string;
+  appointment_id: string;
+  payment_method: PaymentMethod;
+  amount: number;
+  reference_number: string | null;
+  collected_at: string;
+}
+
+export interface CreateInvoiceFromAppointmentResponse {
+  id: string;
+  invoice_number: string;
+  total_amount: number;
+  status: string;
+  payment_link: string | null;
+}
+
+export interface CreateEstimateFromAppointmentRequest {
+  template_id?: string;
+  line_items: Array<{
+    item: string;
+    description: string;
+    unit_price: number;
+    quantity: number;
+  }>;
+  notes?: string;
+  valid_until?: string;
+}
+
+export interface CreateEstimateFromAppointmentResponse {
+  id: string;
+  status: string;
+  total: number;
+}
+
+export interface RequestReviewResponse {
+  success: boolean;
+  message: string;
+  already_requested: boolean;
+}
+
+// =============================================================================
+// Staff Tracking, Breaks & Time Analytics Types (Req 37, 41, 42)
+// =============================================================================
+
+export interface StaffLocation {
+  staff_id: string;
+  staff_name: string;
+  latitude: number;
+  longitude: number;
+  current_appointment: string | null;
+  time_elapsed_minutes: number;
+  updated_at: string;
+}
+
+export type BreakType = 'lunch' | 'gas' | 'personal' | 'other';
+
+export interface StaffBreak {
+  id: string;
+  staff_id: string;
+  appointment_id: string | null;
+  start_time: string;
+  end_time: string | null;
+  break_type: BreakType;
+}
+
+export interface CreateBreakRequest {
+  break_type: BreakType;
+}
+
+export interface StaffTimeAnalytics {
+  staff_id: string;
+  staff_name: string;
+  avg_travel_time: number;
+  avg_job_duration: number;
+  avg_total_time: number;
+  flagged: boolean;
 }

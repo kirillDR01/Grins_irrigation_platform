@@ -8,6 +8,9 @@ export type {
   JobStatus,
   JobCategory,
   JobSource,
+  SimplifiedJobStatus,
+  CustomerTag,
+  JobFinancials,
 } from './types';
 
 export {
@@ -15,12 +18,20 @@ export {
   JOB_CATEGORY_CONFIG,
   JOB_PRIORITY_CONFIG,
   JOB_SOURCE_CONFIG,
+  SIMPLIFIED_STATUS_MAP,
+  SIMPLIFIED_STATUS_CONFIG,
+  SIMPLIFIED_STATUS_RAW_MAP,
+  CUSTOMER_TAG_CONFIG,
   getJobStatusConfig,
   getJobCategoryConfig,
   getJobPriorityConfig,
+  getSimplifiedStatus,
+  getSimplifiedStatusConfig,
   formatJobType,
   formatDuration,
   formatAmount,
+  calculateDaysWaiting,
+  getDueByColorClass,
 } from './types';
 
 // API
@@ -36,6 +47,7 @@ export {
   useJobsReadyToSchedule,
   useJobsRequiresEstimate,
   useJobSearch,
+  useJobFinancials,
   useCreateJob,
   useUpdateJob,
   useUpdateJobStatus,

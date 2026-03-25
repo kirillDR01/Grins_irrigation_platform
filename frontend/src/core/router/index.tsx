@@ -34,14 +34,50 @@ const InvoicesPage = lazy(() =>
 const LeadsPage = lazy(() =>
   import('@/pages/Leads').then((m) => ({ default: m.LeadsPage }))
 );
-const WorkRequestsPage = lazy(() =>
-  import('@/pages/WorkRequests').then((m) => ({
-    default: m.WorkRequestsPage,
+const WorkRequestsRedirect = lazy(() =>
+  import('@/pages/WorkRequestsRedirect').then((m) => ({
+    default: m.WorkRequestsRedirect,
   }))
 );
 const AgreementsPage = lazy(() =>
   import('@/pages/Agreements').then((m) => ({
     default: m.AgreementsPage,
+  }))
+);
+const SalesPage = lazy(() =>
+  import('@/pages/Sales').then((m) => ({ default: m.SalesPage }))
+);
+const AccountingPage = lazy(() =>
+  import('@/pages/Accounting').then((m) => ({ default: m.AccountingPage }))
+);
+const MarketingPage = lazy(() =>
+  import('@/pages/Marketing').then((m) => ({ default: m.MarketingPage }))
+);
+const CommunicationsPage = lazy(() =>
+  import('@/pages/Communications').then((m) => ({
+    default: m.CommunicationsPage,
+  }))
+);
+const EstimateDetailPage = lazy(() =>
+  import('@/pages/EstimateDetail').then((m) => ({
+    default: m.EstimateDetailPage,
+  }))
+);
+
+// Portal pages (public, no auth, no layout)
+const EstimateReviewPage = lazy(() =>
+  import('@/pages/portal/EstimateReview').then((m) => ({
+    default: m.EstimateReviewPage,
+  }))
+);
+const ContractSigningPage = lazy(() =>
+  import('@/pages/portal/ContractSigning').then((m) => ({
+    default: m.ContractSigningPage,
+  }))
+);
+const InvoicePortalPage = lazy(() =>
+  import('@/pages/portal/InvoicePortal').then((m) => ({
+    default: m.InvoicePortalPage,
   }))
 );
 
@@ -65,11 +101,39 @@ function ProtectedLayoutWrapper() {
   );
 }
 
+// Public portal wrapper - Suspense only, no auth, no layout
+function PortalWrapper() {
+  return (
+    <Suspense fallback={<LoadingPage message="Loading..." />}>
+      <Outlet />
+    </Suspense>
+  );
+}
+
 export const router = createBrowserRouter([
   // Public route: Login
   {
     path: '/login',
     element: <LoginPage />,
+  },
+  // Public portal routes (no auth, no layout)
+  {
+    path: '/portal',
+    element: <PortalWrapper />,
+    children: [
+      {
+        path: 'estimates/:token',
+        element: <EstimateReviewPage />,
+      },
+      {
+        path: 'contracts/:token',
+        element: <ContractSigningPage />,
+      },
+      {
+        path: 'invoices/:token',
+        element: <InvoicePortalPage />,
+      },
+    ],
   },
   // Protected routes
   {
@@ -102,11 +166,11 @@ export const router = createBrowserRouter([
       },
       {
         path: 'work-requests',
-        element: <WorkRequestsPage />,
+        element: <WorkRequestsRedirect />,
       },
       {
         path: 'work-requests/:id',
-        element: <WorkRequestsPage />,
+        element: <WorkRequestsRedirect />,
       },
       {
         path: 'jobs',
@@ -147,6 +211,26 @@ export const router = createBrowserRouter([
       {
         path: 'agreements/:id',
         element: <AgreementsPage />,
+      },
+      {
+        path: 'sales',
+        element: <SalesPage />,
+      },
+      {
+        path: 'accounting',
+        element: <AccountingPage />,
+      },
+      {
+        path: 'marketing',
+        element: <MarketingPage />,
+      },
+      {
+        path: 'communications',
+        element: <CommunicationsPage />,
+      },
+      {
+        path: 'estimates/:id',
+        element: <EstimateDetailPage />,
       },
       {
         path: 'settings',

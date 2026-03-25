@@ -1455,6 +1455,11 @@ class TestSheetCreatedLeadsHaveNullZipCodeProperty:
         lead.customer_id = None
         lead.contacted_at = None
         lead.converted_at = None
+        lead.city = None
+        lead.state = None
+        lead.address = None
+        lead.action_tags = None
+        lead.email_marketing_consent = False
         lead.created_at = now
         lead.updated_at = now
 

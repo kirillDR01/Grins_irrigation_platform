@@ -242,9 +242,8 @@ class PhotoService(LoggerMixin):
 
         try:
             img = Image.open(io.BytesIO(data))
-            # Re-save without EXIF by copying pixel data
-            clean = Image.new(img.mode, img.size)
-            clean.putdata(img.getdata())  # type: ignore[arg-type]
+            # Re-save without EXIF by copying pixel data (avoids deprecated getdata())
+            clean = Image.frombytes(img.mode, img.size, img.tobytes())
 
             buf = io.BytesIO()
             fmt = "JPEG" if mime == "image/jpeg" else "PNG"

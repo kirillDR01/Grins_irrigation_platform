@@ -15,6 +15,9 @@ vi.mock('../api/leadApi', () => ({
     delete: vi.fn(),
     convert: vi.fn(),
     list: vi.fn(),
+    listAttachments: vi.fn(),
+    listEstimateTemplates: vi.fn(),
+    listContractTemplates: vi.fn(),
   },
 }));
 
@@ -44,6 +47,9 @@ const baseLead: Lead = {
   name: 'John Doe',
   phone: '6125551234',
   email: 'john@example.com',
+  address: '123 Main St',
+  city: 'Minneapolis',
+  state: 'MN',
   zip_code: '55424',
   situation: 'new_system',
   notes: 'Large backyard needs full irrigation',
@@ -56,6 +62,7 @@ const baseLead: Lead = {
   lead_source: 'website',
   source_detail: null,
   intake_tag: 'schedule',
+  action_tags: ['NEEDS_CONTACT'],
   sms_consent: true,
   terms_accepted: true,
   created_at: '2025-01-20T10:00:00Z',
@@ -123,6 +130,9 @@ describe('LeadDetail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(staffApi.list).mockResolvedValue(mockStaffList);
+    vi.mocked(leadApi.listAttachments).mockResolvedValue([]);
+    vi.mocked(leadApi.listEstimateTemplates).mockResolvedValue([]);
+    vi.mocked(leadApi.listContractTemplates).mockResolvedValue([]);
   });
 
   // ---- Rendering all fields ----
@@ -142,8 +152,9 @@ describe('LeadDetail', () => {
     expect(screen.getByText('6125551234')).toBeInTheDocument();
     // Email
     expect(screen.getByText('john@example.com')).toBeInTheDocument();
-    // Zip code
-    expect(screen.getByText('55424')).toBeInTheDocument();
+    // Address
+    expect(screen.getByText('123 Main St')).toBeInTheDocument();
+    expect(screen.getByText(/Minneapolis, MN 55424/)).toBeInTheDocument();
     // Notes
     expect(screen.getByText('Large backyard needs full irrigation')).toBeInTheDocument();
     // Source site

@@ -6,6 +6,7 @@ import type {
   JobUpdate,
   JobStatusUpdate,
   JobListParams,
+  JobFinancials,
 } from '../types';
 
 const BASE_PATH = '/jobs';
@@ -112,5 +113,11 @@ export const jobApi = {
   // Close job
   close: async (id: string, notes?: string): Promise<Job> => {
     return jobApi.updateStatus(id, { status: 'closed', notes });
+  },
+
+  // Get per-job financials (Req 57)
+  getFinancials: async (id: string): Promise<JobFinancials> => {
+    const response = await apiClient.get<JobFinancials>(`${BASE_PATH}/${id}/financials`);
+    return response.data;
   },
 };

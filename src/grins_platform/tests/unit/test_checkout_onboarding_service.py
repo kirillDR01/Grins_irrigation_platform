@@ -519,9 +519,14 @@ class TestCompleteOnboarding:
         agreement_repo.update = AsyncMock(return_value=agreement)
 
         db_session = AsyncMock()
-        result_mock = MagicMock()
-        result_mock.scalar_one_or_none.return_value = agreement
-        db_session.execute = AsyncMock(return_value=result_mock)
+        # First execute returns agreement, second returns customer
+        agreement_result = MagicMock()
+        agreement_result.scalar_one_or_none.return_value = agreement
+        customer_result = MagicMock()
+        customer_result.scalar_one_or_none.return_value = customer_mock
+        db_session.execute = AsyncMock(
+            side_effect=[agreement_result, customer_result],
+        )
 
         svc = _make_onboarding_service(
             session=db_session,

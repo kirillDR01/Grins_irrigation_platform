@@ -23,6 +23,12 @@ vi.mock('../api/appointmentApi', () => ({
     markArrived: vi.fn(),
     markCompleted: vi.fn(),
     markNoShow: vi.fn(),
+    markEnRoute: vi.fn(),
+    collectPayment: vi.fn(),
+    createInvoice: vi.fn(),
+    createEstimate: vi.fn(),
+    uploadPhotos: vi.fn(),
+    requestReview: vi.fn(),
   },
 }));
 
@@ -35,6 +41,7 @@ const mockAppointment = {
   time_window_end: '11:00:00',
   status: 'pending' as const,
   arrived_at: null,
+  en_route_at: null,
   completed_at: null,
   notes: null,
   route_order: 1,

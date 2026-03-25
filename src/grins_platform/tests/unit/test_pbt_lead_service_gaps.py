@@ -62,6 +62,10 @@ def _make_lead_mock(
     lead.lead_source = "website"
     lead.source_detail = None
     lead.intake_tag = "schedule"
+    lead.city = None
+    lead.state = None
+    lead.address = None
+    lead.action_tags = None
     return lead
 
 

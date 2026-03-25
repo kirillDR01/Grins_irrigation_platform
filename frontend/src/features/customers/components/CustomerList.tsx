@@ -43,7 +43,10 @@ export function CustomerList({ onEdit, onDelete }: CustomerListProps) {
     page_size: 20,
   });
 
-  const { data, isLoading, error, refetch } = useCustomers(params);
+  const { data, isLoading, error, refetch } = useCustomers({
+    ...params,
+    search: searchQuery || undefined,
+  });
 
   const columns: ColumnDef<Customer>[] = [
     {

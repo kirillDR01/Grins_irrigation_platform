@@ -146,6 +146,8 @@ class TestPhoneUniquenessProperty:
         customer.updated_at = datetime.now()
         customer.properties = []
         customer.is_deleted = False
+        customer.internal_notes = None
+        customer.preferred_service_times = None
         return customer
 
     @given(phone=phone_strategy())

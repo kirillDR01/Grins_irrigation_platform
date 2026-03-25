@@ -113,6 +113,8 @@ def sample_customer_response(sample_customer_id: uuid.UUID) -> CustomerResponse:
         lead_source=LeadSource.WEBSITE,
         created_at=datetime.now(),
         updated_at=datetime.now(),
+        internal_notes=None,
+        preferred_service_times=None,
     )
 
 

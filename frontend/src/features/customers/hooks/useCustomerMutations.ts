@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { customerApi } from '../api/customerApi';
-import type { CustomerCreate, CustomerUpdate } from '../types';
+import type { CustomerCreate, CustomerUpdate, ChargeRequest, MergeRequest } from '../types';
 import { customerKeys } from './useCustomers';
 
 // Create customer mutation
@@ -10,7 +10,6 @@ export function useCreateCustomer() {
   return useMutation({
     mutationFn: (data: CustomerCreate) => customerApi.create(data),
     onSuccess: () => {
-      // Invalidate customer lists to refetch
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
     },
   });
@@ -24,9 +23,7 @@ export function useUpdateCustomer() {
     mutationFn: ({ id, data }: { id: string; data: CustomerUpdate }) =>
       customerApi.update(id, data),
     onSuccess: (updatedCustomer) => {
-      // Update the specific customer in cache
       queryClient.setQueryData(customerKeys.detail(updatedCustomer.id), updatedCustomer);
-      // Invalidate lists to refetch
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
     },
   });
@@ -39,9 +36,7 @@ export function useDeleteCustomer() {
   return useMutation({
     mutationFn: (id: string) => customerApi.delete(id),
     onSuccess: (_data, id) => {
-      // Remove from cache
       queryClient.removeQueries({ queryKey: customerKeys.detail(id) });
-      // Invalidate lists to refetch
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
     },
   });
@@ -64,10 +59,70 @@ export function useUpdateCustomerFlags() {
       };
     }) => customerApi.updateFlags(id, flags),
     onSuccess: (updatedCustomer) => {
-      // Update the specific customer in cache
       queryClient.setQueryData(customerKeys.detail(updatedCustomer.id), updatedCustomer);
-      // Invalidate lists to refetch
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+    },
+  });
+}
+
+// Upload customer photos mutation (Req 9)
+export function useUploadCustomerPhotos(customerId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ files, caption }: { files: File[]; caption?: string }) =>
+      customerApi.uploadPhotos(customerId, files, caption),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.photos(customerId) });
+    },
+  });
+}
+
+// Update photo caption mutation (Req 9)
+export function useUpdatePhotoCaption(customerId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ photoId, caption }: { photoId: string; caption: string }) =>
+      customerApi.updatePhotoCaption(customerId, photoId, caption),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.photos(customerId) });
+    },
+  });
+}
+
+// Delete customer photo mutation (Req 9)
+export function useDeleteCustomerPhoto(customerId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (photoId: string) => customerApi.deletePhoto(customerId, photoId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.photos(customerId) });
+    },
+  });
+}
+
+// Charge customer payment method mutation (Req 56)
+export function useChargeCustomer(customerId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: ChargeRequest) => customerApi.chargeCustomer(customerId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.invoices(customerId) });
+    },
+  });
+}
+
+// Merge duplicate customers mutation (Req 7)
+export function useMergeCustomers() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: MergeRequest) => customerApi.mergeCustomers(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.all });
     },
   });
 }

@@ -3,9 +3,10 @@ Lead service for business logic operations.
 
 This module provides the LeadService class for all lead-related
 business operations including submission, duplicate detection,
-status workflow, conversion to customer, and dashboard metrics.
+status workflow, conversion to customer, dashboard metrics,
+bulk outreach, reverse flow, and work request migration.
 
-Validates: Requirements 1-8, 13, 15
+Validates: Requirements 1-8, 12, 13, 14, 15, 18, 19, 46
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from grins_platform.exceptions import (
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import (
     VALID_LEAD_STATUS_TRANSITIONS,
+    ActionTag,
     IntakeTag,
     LeadSituation,
     LeadSource,
@@ -36,6 +38,7 @@ from grins_platform.models.sms_consent_record import SmsConsentRecord
 from grins_platform.schemas.customer import CustomerCreate
 from grins_platform.schemas.job import JobCreate
 from grins_platform.schemas.lead import (
+    BulkOutreachSummary,
     FollowUpQueueItem,
     FromCallSubmission,
     LeadConversionRequest,
@@ -47,13 +50,18 @@ from grins_platform.schemas.lead import (
     LeadSubmission,
     LeadSubmissionResponse,
     LeadUpdate,
+    MigrationSummary,
     PaginatedFollowUpQueueResponse,
     PaginatedLeadResponse,
 )
+from grins_platform.utils.zip_lookup import lookup_zip
 
 if TYPE_CHECKING:
     from uuid import UUID
 
+    from grins_platform.models.google_sheet_submission import (
+        GoogleSheetSubmission,
+    )
     from grins_platform.models.lead import Lead
     from grins_platform.repositories.lead_repository import LeadRepository
     from grins_platform.repositories.staff_repository import StaffRepository
@@ -141,14 +149,12 @@ class LeadService(LoggerMixin):
         return first_name, last_name
 
     async def _send_sms_confirmation(self, lead: Lead) -> None:
-        """Log SMS confirmation intent for leads.
+        """Send SMS confirmation for new leads with consent.
 
-        Note: SentMessage requires customer_id FK (not lead_id),
-        so we skip SentMessage creation for leads. SMS will be sent
-        when Twilio integration is production-ready and lead messaging
-        is properly modeled.
+        Sends via SMSService.send_automated_message which enforces
+        time window restrictions (8 AM - 9 PM Central).
 
-        Validates: Requirements 54.1, 54.2, 54.3, 54.4
+        Validates: Requirements 46.1, 46.2, 46.3
         """
         if not self.sms_service:
             self.logger.info(
@@ -174,14 +180,40 @@ class LeadService(LoggerMixin):
             )
             return
 
-        # Log intent — actual SMS send deferred until Twilio integration
-        # is production-ready and SentMessage supports lead_id
-        self.logger.info(
-            "lead.sms_confirmation.deferred",
-            lead_id=str(lead.id),
-            phone_last4=lead.phone[-4:] if len(lead.phone) >= 4 else "****",
-            reason="sent_message_requires_customer_id",
-        )
+        try:
+            confirmation_msg = (
+                "Thanks for reaching out to Grins Irrigation! "
+                "We received your request and will be in touch soon."
+            )
+            result = await self.sms_service.send_automated_message(
+                phone=lead.phone,
+                message=confirmation_msg,
+                message_type="lead_confirmation",
+            )
+            if result.get("success"):
+                if result.get("deferred"):
+                    self.logger.info(
+                        "lead.confirmation.sms_deferred",
+                        lead_id=str(lead.id),
+                        scheduled_for=result.get("scheduled_for"),
+                    )
+                else:
+                    self.logger.info(
+                        "lead.confirmation.sms_sent",
+                        lead_id=str(lead.id),
+                    )
+            else:
+                self.logger.info(
+                    "lead.confirmation.sms_skipped",
+                    lead_id=str(lead.id),
+                    reason=result.get("reason", "unknown"),
+                )
+        except Exception as e:
+            self.logger.warning(
+                "lead.confirmation.sms_failed",
+                lead_id=str(lead.id),
+                error=str(e),
+            )
 
     def _send_email_confirmation(self, lead: Lead) -> None:
         """Send email confirmation for a new lead.
@@ -317,7 +349,17 @@ class LeadService(LoggerMixin):
                 lead_id=existing_lead.id,
             )
 
-        # Step 5: Create new lead with new fields
+        # Step 5: Auto-populate city/state from zip if not provided (Req 12.5)
+        city = data.city
+        state = data.state
+        if data.zip_code and not city and not state:
+            looked_up_city, looked_up_state = lookup_zip(data.zip_code)
+            if looked_up_city:
+                city = looked_up_city
+            if looked_up_state:
+                state = looked_up_state
+
+        # Step 5b: Create new lead with new fields
         lead = await self.lead_repository.create(
             name=data.name,
             phone=data.phone,
@@ -333,6 +375,10 @@ class LeadService(LoggerMixin):
             sms_consent=data.sms_consent,
             email_marketing_consent=data.email_marketing_consent,
             page_url=data.page_url,
+            city=city,
+            state=state,
+            address=data.address,
+            action_tags=[ActionTag.NEEDS_CONTACT.value],
         )
 
         # Step 6: Create SmsConsentRecord for the lead
@@ -448,13 +494,19 @@ class LeadService(LoggerMixin):
         Returns:
             LeadResponse with created lead data
 
-        Validates: Requirements 45.4, 45.5
+        Validates: Requirements 12.5, 13.2, 45.4, 45.5, 46.1
         """
         self.log_started("create_from_call")
 
         lead_source = data.lead_source.value
         source_detail = data.source_detail if data.source_detail else "Inbound call"
         intake_tag = data.intake_tag.value if data.intake_tag else None
+
+        # Auto-populate city/state from zip if not provided (Req 12.5)
+        city: str | None = None
+        state: str | None = None
+        if data.zip_code:
+            city, state = lookup_zip(data.zip_code)
 
         lead = await self.lead_repository.create(
             name=data.name,
@@ -468,6 +520,9 @@ class LeadService(LoggerMixin):
             lead_source=lead_source,
             source_detail=source_detail,
             intake_tag=intake_tag,
+            city=city,
+            state=state,
+            action_tags=[ActionTag.NEEDS_CONTACT.value],
         )
 
         self.logger.info(
@@ -872,3 +927,551 @@ class LeadService(LoggerMixin):
             date_from=effective_from,
             date_to=effective_to,
         )
+
+    # ------------------------------------------------------------------ #
+    # CRM Gap Closure: New methods (Req 12, 13, 14, 18, 19, 46)
+    # ------------------------------------------------------------------ #
+
+    async def update_action_tags(
+        self,
+        lead_id: UUID,
+        add_tags: list[ActionTag] | None = None,
+        remove_tags: list[ActionTag] | None = None,
+    ) -> LeadResponse:
+        """Atomically update action tags on a lead's JSONB field.
+
+        Args:
+            lead_id: UUID of the lead to update.
+            add_tags: Tags to add (duplicates ignored).
+            remove_tags: Tags to remove (missing tags ignored).
+
+        Returns:
+            LeadResponse with updated lead data.
+
+        Raises:
+            LeadNotFoundError: If lead not found.
+
+        Validates: Requirements 13.2, 13.3, 13.4, 13.5, 13.6
+        """
+        self.log_started(
+            "update_action_tags",
+            lead_id=str(lead_id),
+            add_tags=[t.value for t in (add_tags or [])],
+            remove_tags=[t.value for t in (remove_tags or [])],
+        )
+
+        lead = await self.lead_repository.get_by_id(lead_id)
+        if not lead:
+            raise LeadNotFoundError(lead_id)
+
+        current_tags: list[str] = list(lead.action_tags or [])
+
+        # Remove tags first
+        if remove_tags:
+            remove_values = {t.value for t in remove_tags}
+            current_tags = [t for t in current_tags if t not in remove_values]
+
+        # Add tags (no duplicates)
+        if add_tags:
+            existing = set(current_tags)
+            for tag in add_tags:
+                if tag.value not in existing:
+                    current_tags.append(tag.value)
+                    existing.add(tag.value)
+
+        await self.lead_repository.update(lead_id, {"action_tags": current_tags})
+
+        self.logger.info(
+            "lead.action_tags.updated",
+            lead_id=str(lead_id),
+            tags=current_tags,
+        )
+
+        self.log_completed("update_action_tags", lead_id=str(lead_id))
+        updated_lead = await self.lead_repository.get_by_id(lead_id)
+        return LeadResponse.model_validate(updated_lead)
+
+    async def mark_contacted(self, lead_id: UUID) -> LeadResponse:
+        """Mark a lead as contacted: remove NEEDS_CONTACT, set contacted_at.
+
+        Args:
+            lead_id: UUID of the lead.
+
+        Returns:
+            LeadResponse with updated lead data.
+
+        Raises:
+            LeadNotFoundError: If lead not found.
+
+        Validates: Requirements 13.3
+        """
+        self.log_started("mark_contacted", lead_id=str(lead_id))
+
+        lead = await self.lead_repository.get_by_id(lead_id)
+        if not lead:
+            raise LeadNotFoundError(lead_id)
+
+        # Remove NEEDS_CONTACT tag
+        current_tags: list[str] = list(lead.action_tags or [])
+        current_tags = [t for t in current_tags if t != ActionTag.NEEDS_CONTACT.value]
+
+        now = datetime.now(tz=timezone.utc)
+        await self.lead_repository.update(
+            lead_id,
+            {
+                "action_tags": current_tags,
+                "contacted_at": now,
+            },
+        )
+
+        self.logger.info(
+            "lead.contacted",
+            lead_id=str(lead_id),
+            contacted_at=now.isoformat(),
+        )
+
+        self.log_completed("mark_contacted", lead_id=str(lead_id))
+        updated_lead = await self.lead_repository.get_by_id(lead_id)
+        return LeadResponse.model_validate(updated_lead)
+
+    async def bulk_outreach(
+        self,
+        lead_ids: list[UUID],
+        template: str,
+        channel: str = "sms",
+    ) -> BulkOutreachSummary:
+        """Send bulk outreach to multiple leads, respecting consent.
+
+        For SMS: skips leads without sms_consent.
+        For email: skips leads without email address.
+        For both: attempts both channels per lead.
+
+        Args:
+            lead_ids: List of lead UUIDs to contact.
+            template: Message template text.
+            channel: Communication channel (sms, email, both).
+
+        Returns:
+            BulkOutreachSummary with sent/skipped/failed counts.
+
+        Validates: Requirements 14.1, 14.3, 14.4, 14.5
+        """
+        self.log_started(
+            "bulk_outreach",
+            lead_count=len(lead_ids),
+            channel=channel,
+        )
+
+        sent = 0
+        skipped = 0
+        failed = 0
+
+        for lid in lead_ids:
+            lead = await self.lead_repository.get_by_id(lid)
+            if not lead:
+                self.logger.warning(
+                    "lead.outreach.skipped",
+                    lead_id=str(lid),
+                    reason="not_found",
+                )
+                skipped += 1
+                continue
+
+            lead_sent = False
+
+            # SMS channel
+            if channel in ("sms", "both"):
+                if not lead.sms_consent:
+                    self.logger.info(
+                        "lead.outreach.skipped",
+                        lead_id=str(lead.id),
+                        channel="sms",
+                        reason="no_sms_consent",
+                    )
+                    if channel == "sms":
+                        skipped += 1
+                        continue
+                elif not lead.phone:
+                    self.logger.info(
+                        "lead.outreach.skipped",
+                        lead_id=str(lead.id),
+                        channel="sms",
+                        reason="no_phone",
+                    )
+                    if channel == "sms":
+                        skipped += 1
+                        continue
+                else:
+                    try:
+                        if self.sms_service:
+                            await self.sms_service.send_automated_message(
+                                phone=lead.phone,
+                                message=template,
+                                message_type="campaign",
+                            )
+                        self.logger.info(
+                            "lead.outreach.sent",
+                            lead_id=str(lead.id),
+                            channel="sms",
+                        )
+                        lead_sent = True
+                    except Exception as e:
+                        self.logger.warning(
+                            "lead.outreach.failed",
+                            lead_id=str(lead.id),
+                            channel="sms",
+                            error=str(e),
+                        )
+                        if channel == "sms":
+                            failed += 1
+                            continue
+
+            # Email channel
+            if channel in ("email", "both"):
+                if not lead.email:
+                    self.logger.info(
+                        "lead.outreach.skipped",
+                        lead_id=str(lead.id),
+                        channel="email",
+                        reason="no_email",
+                    )
+                    if channel == "email" and not lead_sent:
+                        skipped += 1
+                        continue
+                else:
+                    try:
+                        if self.email_service:
+                            self.email_service.send_lead_confirmation(lead)
+                        self.logger.info(
+                            "lead.outreach.sent",
+                            lead_id=str(lead.id),
+                            channel="email",
+                        )
+                        lead_sent = True
+                    except Exception as e:
+                        self.logger.warning(
+                            "lead.outreach.failed",
+                            lead_id=str(lead.id),
+                            channel="email",
+                            error=str(e),
+                        )
+                        if not lead_sent:
+                            failed += 1
+                            continue
+
+            if lead_sent:
+                sent += 1
+            elif channel == "both":
+                # Both channels failed/skipped
+                skipped += 1
+
+        summary = BulkOutreachSummary(
+            sent_count=sent,
+            skipped_count=skipped,
+            failed_count=failed,
+            total=len(lead_ids),
+        )
+
+        self.log_completed(
+            "bulk_outreach",
+            sent=sent,
+            skipped=skipped,
+            failed=failed,
+        )
+        return summary
+
+    async def create_lead_from_estimate(
+        self,
+        customer_id: UUID,
+        estimate_id: UUID,
+    ) -> LeadResponse:
+        """Reverse flow: create or reactivate a lead with ESTIMATE_PENDING tag.
+
+        When an estimate requires customer approval, this creates a lead
+        entry so the estimate appears in the leads pipeline.
+
+        If an active lead already exists for this customer, reactivate it
+        by adding the ESTIMATE_PENDING tag.
+
+        Args:
+            customer_id: UUID of the customer.
+            estimate_id: UUID of the estimate.
+
+        Returns:
+            LeadResponse with the created/reactivated lead.
+
+        Validates: Requirements 18.1, 18.2
+        """
+        self.log_started(
+            "create_lead_from_estimate",
+            customer_id=str(customer_id),
+            estimate_id=str(estimate_id),
+        )
+
+        # Check for existing active lead for this customer
+        from grins_platform.models.lead import Lead as LeadModel  # noqa: PLC0415
+
+        stmt = (
+            select(LeadModel)
+            .where(LeadModel.customer_id == customer_id)
+            .where(
+                LeadModel.status.in_(
+                    [
+                        LeadStatus.NEW.value,
+                        LeadStatus.CONTACTED.value,
+                        LeadStatus.QUALIFIED.value,
+                    ],
+                ),
+            )
+            .order_by(LeadModel.created_at.desc())
+            .limit(1)
+        )
+        result = await self.lead_repository.session.execute(stmt)
+        existing_lead: Lead | None = result.scalar_one_or_none()
+
+        if existing_lead:
+            # Reactivate: add ESTIMATE_PENDING tag
+            current_tags: list[str] = list(existing_lead.action_tags or [])
+            if ActionTag.ESTIMATE_PENDING.value not in current_tags:
+                current_tags.append(ActionTag.ESTIMATE_PENDING.value)
+            await self.lead_repository.update(
+                existing_lead.id,
+                {"action_tags": current_tags},
+            )
+            self.logger.info(
+                "lead.from_estimate.reactivated",
+                lead_id=str(existing_lead.id),
+                customer_id=str(customer_id),
+                estimate_id=str(estimate_id),
+            )
+            self.log_completed(
+                "create_lead_from_estimate",
+                lead_id=str(existing_lead.id),
+            )
+            updated = await self.lead_repository.get_by_id(existing_lead.id)
+            return LeadResponse.model_validate(updated)
+
+        # Create new lead from customer data
+        # Fetch customer info
+        customer_detail = await self.customer_service.get_customer(
+            customer_id,
+            include_properties=False,
+            include_service_history=False,
+        )
+        name = f"{customer_detail.first_name} {customer_detail.last_name}"
+        phone = customer_detail.phone or ""
+
+        lead = await self.lead_repository.create(
+            name=name,
+            phone=phone,
+            email=customer_detail.email,
+            zip_code=None,
+            situation=LeadSituation.EXPLORING.value,
+            notes=f"Created from estimate {estimate_id}",
+            source_site="admin",
+            status=LeadStatus.NEW.value,
+            lead_source=LeadSourceExtended.REFERRAL.value,
+            source_detail="Estimate reverse flow",
+            customer_id=customer_id,
+            action_tags=[ActionTag.ESTIMATE_PENDING.value],
+        )
+
+        self.logger.info(
+            "lead.from_estimate.created",
+            lead_id=str(lead.id),
+            customer_id=str(customer_id),
+            estimate_id=str(estimate_id),
+        )
+        self.log_completed(
+            "create_lead_from_estimate",
+            lead_id=str(lead.id),
+        )
+        return LeadResponse.model_validate(lead)
+
+    async def migrate_work_requests(self) -> MigrationSummary:
+        """One-time migration of GoogleSheetSubmission records to Lead records.
+
+        Maps GoogleSheetSubmission fields to Lead fields:
+        - name → name
+        - phone → phone
+        - email → email
+        - city → city
+        - address → address
+        - client_type → source_detail
+        - referral_source → lead_source (mapped)
+        - service columns → situation + notes
+
+        Skips submissions already linked to a lead (promoted_to_lead_id).
+
+        Returns:
+            MigrationSummary with counts.
+
+        Validates: Requirements 19.1, 19.4, 19.5, 19.6
+        """
+        self.log_started("migrate_work_requests")
+
+        from grins_platform.models.google_sheet_submission import (  # noqa: PLC0415
+            GoogleSheetSubmission,
+        )
+
+        # Fetch all unprocessed submissions
+        stmt = (
+            select(GoogleSheetSubmission)
+            .where(GoogleSheetSubmission.promoted_to_lead_id.is_(None))
+            .order_by(GoogleSheetSubmission.created_at.asc())
+        )
+        result = await self.lead_repository.session.execute(stmt)
+        submissions = list(result.scalars().all())
+
+        total = len(submissions)
+        migrated = 0
+        skipped = 0
+        errors: list[str] = []
+
+        for sub in submissions:
+            try:
+                # Skip if no name or phone
+                if not sub.name or not sub.phone:
+                    skipped += 1
+                    self.logger.info(
+                        "lead.migration.skipped",
+                        submission_id=str(sub.id),
+                        reason="missing_name_or_phone",
+                    )
+                    continue
+
+                # Determine situation from service columns
+                situation = self._determine_situation_from_submission(sub)
+
+                # Build notes from service columns
+                notes = self._build_notes_from_submission(sub)
+
+                # Determine intake tag
+                intake_tag = (
+                    IntakeTag.FOLLOW_UP.value
+                    if situation
+                    in (
+                        LeadSituation.NEW_SYSTEM.value,
+                        LeadSituation.UPGRADE.value,
+                        LeadSituation.EXPLORING.value,
+                    )
+                    else IntakeTag.SCHEDULE.value
+                )
+
+                # Auto-populate city/state from zip if available
+                city = sub.city
+                state: str | None = None
+
+                lead = await self.lead_repository.create(
+                    name=sub.name,
+                    phone=sub.phone,
+                    email=sub.email,
+                    zip_code=None,
+                    situation=situation,
+                    notes=notes,
+                    source_site="google_sheets",
+                    status=LeadStatus.NEW.value,
+                    lead_source=LeadSourceExtended.GOOGLE_FORM.value,
+                    source_detail=sub.referral_source,
+                    intake_tag=intake_tag,
+                    city=city,
+                    state=state,
+                    address=sub.address,
+                    action_tags=[ActionTag.NEEDS_CONTACT.value],
+                )
+
+                # Link submission to lead
+                sub.promoted_to_lead_id = lead.id
+                sub.promoted_at = datetime.now(tz=timezone.utc)
+                sub.processing_status = "migrated"
+                await self.lead_repository.session.flush()
+
+                migrated += 1
+                self.logger.info(
+                    "lead.migration.completed",
+                    submission_id=str(sub.id),
+                    lead_id=str(lead.id),
+                )
+
+            except Exception as e:
+                error_msg = f"Submission {sub.id}: {e}"
+                errors.append(error_msg)
+                self.logger.warning(
+                    "lead.migration.failed",
+                    submission_id=str(sub.id),
+                    error=str(e),
+                )
+
+        summary = MigrationSummary(
+            total_submissions=total,
+            migrated_count=migrated,
+            skipped_count=skipped,
+            error_count=len(errors),
+            errors=errors,
+        )
+
+        self.log_completed(
+            "migrate_work_requests",
+            total=total,
+            migrated=migrated,
+            skipped=skipped,
+            errors=len(errors),
+        )
+        return summary
+
+    @staticmethod
+    def _determine_situation_from_submission(
+        sub: GoogleSheetSubmission,
+    ) -> str:
+        """Map GoogleSheetSubmission service columns to LeadSituation.
+
+        Args:
+            sub: GoogleSheetSubmission instance.
+
+        Returns:
+            Situation string value.
+        """
+        if sub.new_system_install:
+            return LeadSituation.NEW_SYSTEM.value
+        if sub.addition_to_system:
+            return LeadSituation.UPGRADE.value
+        if sub.repair_existing:
+            return LeadSituation.REPAIR.value
+        if sub.spring_startup or sub.fall_blowout or sub.summer_tuneup:
+            return LeadSituation.REPAIR.value
+        return LeadSituation.EXPLORING.value
+
+    @staticmethod
+    def _build_notes_from_submission(
+        sub: GoogleSheetSubmission,
+    ) -> str | None:
+        """Build notes string from GoogleSheetSubmission service columns.
+
+        Args:
+            sub: GoogleSheetSubmission instance.
+
+        Returns:
+            Combined notes string or None.
+        """
+        parts: list[str] = []
+        if sub.spring_startup:
+            parts.append(f"Spring Startup: {sub.spring_startup}")
+        if sub.fall_blowout:
+            parts.append(f"Fall Blowout: {sub.fall_blowout}")
+        if sub.summer_tuneup:
+            parts.append(f"Summer Tuneup: {sub.summer_tuneup}")
+        if sub.repair_existing:
+            parts.append(f"Repair: {sub.repair_existing}")
+        if sub.new_system_install:
+            parts.append(f"New System: {sub.new_system_install}")
+        if sub.addition_to_system:
+            parts.append(f"Addition: {sub.addition_to_system}")
+        if sub.additional_services_info:
+            parts.append(f"Additional: {sub.additional_services_info}")
+        if sub.date_work_needed_by:
+            parts.append(f"Needed by: {sub.date_work_needed_by}")
+        if sub.property_type:
+            parts.append(f"Property: {sub.property_type}")
+        if sub.landscape_hardscape:
+            parts.append(f"Landscape: {sub.landscape_hardscape}")
+        return "; ".join(parts) if parts else None

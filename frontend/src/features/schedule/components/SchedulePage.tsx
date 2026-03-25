@@ -17,7 +17,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Calendar, List } from 'lucide-react';
+import { Plus, Calendar, List, CalendarPlus } from 'lucide-react';
 import { CalendarView } from './CalendarView';
 import { AppointmentForm } from './AppointmentForm';
 import { AppointmentDetail } from './AppointmentDetail';
@@ -27,6 +27,9 @@ import { ClearDayDialog } from './ClearDayDialog';
 import { RecentlyClearedSection } from './RecentlyClearedSection';
 import { RestoreScheduleDialog } from './RestoreScheduleDialog';
 import { DaySelector } from './DaySelector';
+import { LeadTimeIndicator } from './LeadTimeIndicator';
+import { JobSelector } from './JobSelector';
+import { InlineCustomerPanel } from './InlineCustomerPanel';
 import { scheduleGenerationApi } from '../api/scheduleGenerationApi';
 import { useDailySchedule, useWeeklySchedule, appointmentKeys } from '../hooks/useAppointments';
 import { useStaff } from '@/features/staff/hooks/useStaff';
@@ -48,6 +51,8 @@ export function SchedulePage() {
   const [showClearDayDialog, setShowClearDayDialog] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
+  const [showJobSelector, setShowJobSelector] = useState(false);
+  const [inlinePanelAppointmentId, setInlinePanelAppointmentId] = useState<string | null>(null);
   
   // Track the current week displayed in the calendar
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => 
@@ -266,6 +271,11 @@ export function SchedulePage() {
     setShowRestoreDialog(true);
   };
 
+  // Handle inline customer panel open from calendar (Req 27)
+  const handleCustomerClick = useCallback((appointmentId: string) => {
+    setInlinePanelAppointmentId(appointmentId);
+  }, []);
+
   return (
     <div 
       data-testid="schedule-page" 
@@ -276,6 +286,7 @@ export function SchedulePage() {
         description="Manage appointments and view daily/weekly schedules"
         action={
           <div className="flex items-center gap-4">
+            <LeadTimeIndicator />
             <ClearDayButton
               onClick={handleClearDayClick}
               disabled={clearScheduleMutation.isPending}
@@ -306,6 +317,15 @@ export function SchedulePage() {
               </TabsList>
             </Tabs>
             <Button
+              onClick={() => setShowJobSelector(true)}
+              variant="outline"
+              data-testid="add-jobs-btn"
+              className="border-teal-200 text-teal-600 hover:bg-teal-50"
+            >
+              <CalendarPlus className="mr-2 h-4 w-4" />
+              Add Jobs
+            </Button>
+            <Button
               onClick={() => setShowCreateDialog(true)}
               data-testid="add-appointment-btn"
               className="bg-teal-500 hover:bg-teal-600 text-white"
@@ -335,6 +355,7 @@ export function SchedulePage() {
             onEventClick={handleEventClick}
             onWeekChange={handleWeekChange}
             selectedDate={selectedDate}
+            onCustomerClick={handleCustomerClick}
           />
         ) : (
           <AppointmentList
@@ -409,6 +430,22 @@ export function SchedulePage() {
         open={showRestoreDialog}
         onOpenChange={setShowRestoreDialog}
         auditId={selectedAuditId}
+      />
+
+      {/* Job Selector Modal (Req 26) */}
+      <JobSelector
+        open={showJobSelector}
+        onOpenChange={setShowJobSelector}
+        defaultDate={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined}
+      />
+
+      {/* Inline Customer Panel (Req 27) */}
+      <InlineCustomerPanel
+        open={!!inlinePanelAppointmentId}
+        onOpenChange={(open) => {
+          if (!open) setInlinePanelAppointmentId(null);
+        }}
+        appointmentId={inlinePanelAppointmentId}
       />
     </div>
   );

@@ -115,6 +115,8 @@ def create_mock_customer(
     customer.created_at = datetime.now()
     customer.updated_at = datetime.now()
     customer.is_deleted = is_deleted
+    customer.internal_notes = None
+    customer.preferred_service_times = None
     customer.properties = properties or []
     return customer
 

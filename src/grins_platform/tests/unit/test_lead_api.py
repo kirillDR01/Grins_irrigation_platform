@@ -79,6 +79,10 @@ def _sample_lead_response() -> dict[str, object]:
         "converted_at": None,
         "created_at": now,
         "updated_at": now,
+        "city": None,
+        "state": None,
+        "address": None,
+        "action_tags": None,
     }
 
 

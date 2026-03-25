@@ -9,6 +9,8 @@ import {
   Bell,
   AlertTriangle,
   Clock,
+  Download,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,9 +22,11 @@ import {
   useSendReminder,
   useSendLienWarning,
   useMarkLienFiled,
+  useGeneratePdf,
 } from '../hooks/useInvoiceMutations';
 import { InvoiceStatusBadge } from './InvoiceStatusBadge';
 import type { InvoiceLineItem } from '../types';
+import { toast } from 'sonner';
 
 interface InvoiceDetailProps {
   invoiceId?: string;
@@ -44,6 +48,7 @@ export function InvoiceDetail({
   const sendReminderMutation = useSendReminder();
   const sendLienWarningMutation = useSendLienWarning();
   const markLienFiledMutation = useMarkLienFiled();
+  const generatePdfMutation = useGeneratePdf();
 
   const handleSendInvoice = async () => {
     if (!invoice) return;
@@ -81,6 +86,25 @@ export function InvoiceDetail({
       });
     } catch (err) {
       console.error('Failed to mark lien filed:', err);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!invoice) return;
+    try {
+      const result = await generatePdfMutation.mutateAsync(invoice.id);
+      // Trigger browser download via the pre-signed URL
+      const link = document.createElement('a');
+      link.href = result.url;
+      link.download = `${invoice.invoice_number}.pdf`;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success('PDF download started');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to generate PDF';
+      toast.error('PDF Generation Failed', { description: msg });
     }
   };
 
@@ -455,6 +479,20 @@ export function InvoiceDetail({
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6 space-y-3">
+            <Button
+              className="w-full"
+              variant="outline"
+              onClick={handleDownloadPdf}
+              disabled={generatePdfMutation.isPending}
+              data-testid="download-pdf-btn"
+            >
+              {generatePdfMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              Download PDF
+            </Button>
             {canSend && (
               <Button
                 className="w-full bg-teal-500 hover:bg-teal-600 text-white shadow-sm shadow-teal-200"

@@ -39,6 +39,8 @@ const createMockJob = (overrides: Partial<Job> = {}): Job => ({
   category: 'ready_to_schedule',
   status: 'completed',
   description: 'Test job',
+  summary: null,
+  notes: null,
   estimated_duration_minutes: 60,
   priority_level: 0,
   weather_sensitive: false,
@@ -50,6 +52,8 @@ const createMockJob = (overrides: Partial<Job> = {}): Job => ({
   source: null,
   source_details: null,
   payment_collected_on_site: false,
+  target_start_date: null,
+  target_end_date: null,
   requested_at: null,
   approved_at: null,
   scheduled_at: null,
@@ -58,6 +62,9 @@ const createMockJob = (overrides: Partial<Job> = {}): Job => ({
   closed_at: null,
   created_at: '2026-01-28T00:00:00Z',
   updated_at: '2026-01-29T00:00:00Z',
+  customer_name: null,
+  customer_tags: null,
+  service_agreement_id: null,
   ...overrides,
 });
 

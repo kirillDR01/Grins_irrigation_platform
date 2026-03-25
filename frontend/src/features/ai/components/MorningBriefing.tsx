@@ -6,6 +6,7 @@
 
 import { Link } from 'react-router-dom';
 import { Sun, Moon, Sunrise, Sunset, ArrowRight, AlertCircle } from 'lucide-react';
+import { useAuth } from '@/features/auth';
 import { useJobsByStatus } from '@/features/dashboard/hooks';
 
 function getGreeting(): { text: string; icon: typeof Sun } {
@@ -18,9 +19,11 @@ function getGreeting(): { text: string; icon: typeof Sun } {
 }
 
 export function MorningBriefing() {
+  const { user } = useAuth();
   const { data: jobsByStatus } = useJobsByStatus();
 
   const greeting = getGreeting();
+  const firstName = user?.name?.split(' ')[0] ?? 'there';
   const overnightRequests = jobsByStatus?.requested ?? 0;
 
   // Only show if there are overnight requests
@@ -43,7 +46,7 @@ export function MorningBriefing() {
         <div className="flex-1 min-w-0">
           {/* Title */}
           <h4 className="text-slate-800 font-medium" data-testid="greeting">
-            {greeting.text}, Viktor! You have {overnightRequests} overnight request{overnightRequests !== 1 ? 's' : ''}
+            {greeting.text}, {firstName}! You have {overnightRequests} overnight request{overnightRequests !== 1 ? 's' : ''}
           </h4>
 
           {/* Description */}

@@ -2,3 +2,8 @@ export { CustomerList } from './CustomerList';
 export { CustomerDetail } from './CustomerDetail';
 export { CustomerForm } from './CustomerForm';
 export { CustomerSearch } from './CustomerSearch';
+export { PhotoGallery } from './PhotoGallery';
+export { InvoiceHistory } from './InvoiceHistory';
+export { PaymentMethods } from './PaymentMethods';
+export { CustomerMessages } from './CustomerMessages';
+export { DuplicateReview } from './DuplicateReview';

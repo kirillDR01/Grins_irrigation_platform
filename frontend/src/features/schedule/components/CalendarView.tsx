@@ -9,12 +9,13 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import type { DateClickArg } from '@fullcalendar/interaction';
+import type { DateClickArg, EventDropArg } from '@fullcalendar/interaction';
 import type { DatesSetArg, EventInput, EventClickArg } from '@fullcalendar/core';
 import { format, startOfWeek, endOfWeek, addDays } from 'date-fns';
+import { toast } from 'sonner';
 import { useWeeklySchedule } from '../hooks/useAppointments';
+import { useUpdateAppointment } from '../hooks/useAppointmentMutations';
 import { useStaff } from '@/features/staff/hooks/useStaff';
-import { getStaffColor, DEFAULT_COLOR } from '../utils/staffColors';
 import { appointmentStatusConfig } from '../types';
 import type { Appointment, AppointmentStatus } from '../types';
 import { LoadingSpinner } from '@/shared/components/LoadingSpinner';
@@ -27,9 +28,25 @@ interface CalendarViewProps {
   onWeekChange?: (weekStart: Date) => void;
   /** Currently selected date for highlighting */
   selectedDate?: Date | null;
+  /** Callback when a customer name is clicked for inline panel */
+  onCustomerClick?: (appointmentId: string) => void;
 }
 
-// Map appointment status to calendar event colors (fallback when no staff color)
+// Map appointment status to calendar event colors (Req 24, 28)
+
+/**
+ * Format a calendar event label as "{Staff Name} - {Job Type}" (Req 28).
+ * Handles null/empty staff names and job types gracefully.
+ */
+export function formatCalendarEventLabel(
+  staffName: string | null | undefined,
+  jobType: string | null | undefined,
+): string {
+  const name = staffName || '';
+  const type = jobType || 'Job';
+  return name ? `${name} - ${type}` : type;
+}
+
 const statusColors: Record<AppointmentStatus, { bg: string; border: string }> = {
   pending: { bg: '#fef3c7', border: '#f59e0b' },
   scheduled: { bg: '#f3e8ff', border: '#a855f7' },
@@ -40,21 +57,7 @@ const statusColors: Record<AppointmentStatus, { bg: string; border: string }> = 
   no_show: { bg: '#f3f4f6', border: '#6b7280' },
 };
 
-// Convert hex color to lighter background version
-function hexToLightBg(hex: string): string {
-  // Remove # if present
-  const cleanHex = hex.replace('#', '');
-  const r = parseInt(cleanHex.substring(0, 2), 16);
-  const g = parseInt(cleanHex.substring(2, 4), 16);
-  const b = parseInt(cleanHex.substring(4, 6), 16);
-  // Mix with white for lighter background (30% original, 70% white)
-  const lightR = Math.round(r * 0.3 + 255 * 0.7);
-  const lightG = Math.round(g * 0.3 + 255 * 0.7);
-  const lightB = Math.round(b * 0.3 + 255 * 0.7);
-  return `rgb(${lightR}, ${lightG}, ${lightB})`;
-}
-
-export function CalendarView({ onDateClick, onEventClick, onWeekChange, selectedDate }: CalendarViewProps) {
+export function CalendarView({ onDateClick, onEventClick, onWeekChange, selectedDate, onCustomerClick }: CalendarViewProps) {
   const [dateRange, setDateRange] = useState(() => {
     const today = new Date();
     const start = startOfWeek(today, { weekStartsOn: 0 });
@@ -72,6 +75,9 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
 
   // Fetch staff list to map staff_id to staff_name for colors
   const { data: staffData, isLoading: isLoadingStaff } = useStaff({ page_size: 100 });
+
+  // Mutation for drag-drop rescheduling (Req 24)
+  const updateAppointment = useUpdateAppointment();
 
   // Create staff_id to staff_name mapping
   const staffIdToName = useMemo(() => {
@@ -102,28 +108,22 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
     const selectedDateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : null;
 
     return activeAppointments.map((appointment) => {
-      // Get staff name from mapping, then get color
+      // Get staff name from mapping
       const staffName = staffIdToName[appointment.staff_id] || '';
-      const staffColor = getStaffColor(staffName);
       
       // Check if this event is on the selected date
       const isOnSelectedDate = selectedDateStr === appointment.scheduled_date;
       
-      // Use staff color if available, otherwise fall back to status color
-      const useStaffColor = staffColor !== DEFAULT_COLOR;
-      let colors = useStaffColor 
-        ? { bg: hexToLightBg(staffColor), border: staffColor }
-        : statusColors[appointment.status];
+      // Use status-based colors (Req 24, 28: confirmed=blue, in_progress=orange, completed=green)
+      let colors = statusColors[appointment.status];
       
       // If on selected date, use red highlight to indicate "will be cleared"
       if (isOnSelectedDate) {
         colors = { bg: '#fee2e2', border: '#ef4444' }; // Red highlight
       }
       
-      const statusLabel = appointmentStatusConfig[appointment.status].label;
-      const displayTitle = staffName 
-        ? `${staffName} - ${statusLabel}`
-        : `${statusLabel} - Job`;
+      // Event label: "{Staff Name} - {Job Type}" (Req 28)
+      const displayTitle = formatCalendarEventLabel(staffName, appointment.job_type);
 
       // Parse time strings and combine with date
       const startDateTime = new Date(
@@ -169,6 +169,45 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
     [onEventClick]
   );
 
+  // Handle drag-and-drop rescheduling (Req 24)
+  const handleEventDrop = useCallback(
+    async (arg: EventDropArg) => {
+      const appointmentId = arg.event.id;
+      const newStart = arg.event.start;
+      const newEnd = arg.event.end;
+
+      if (!newStart) {
+        arg.revert();
+        return;
+      }
+
+      const newDate = format(newStart, 'yyyy-MM-dd');
+      const newStartTime = format(newStart, 'HH:mm:ss');
+      const newEndTime = newEnd ? format(newEnd, 'HH:mm:ss') : undefined;
+
+      try {
+        await updateAppointment.mutateAsync({
+          id: appointmentId,
+          data: {
+            scheduled_date: newDate,
+            time_window_start: newStartTime,
+            ...(newEndTime ? { time_window_end: newEndTime } : {}),
+          },
+        });
+        toast.success('Appointment rescheduled');
+      } catch (error: unknown) {
+        arg.revert();
+        const message = error instanceof Error ? error.message : 'Failed to reschedule';
+        const is409 = typeof error === 'object' && error !== null && 'response' in error &&
+          (error as { response?: { status?: number } }).response?.status === 409;
+        toast.error(is409 ? 'Scheduling conflict' : 'Reschedule failed', {
+          description: message,
+        });
+      }
+    },
+    [updateAppointment]
+  );
+
   const handleDatesSet = useCallback((arg: DatesSetArg) => {
     setDateRange({
       start: format(arg.start, 'yyyy-MM-dd'),
@@ -205,8 +244,9 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
         events={events}
         dateClick={handleDateClick}
         eventClick={handleEventClick}
+        eventDrop={handleEventDrop}
         datesSet={handleDatesSet}
-        editable={false}
+        editable={true}
         selectable={true}
         selectMirror={true}
         dayMaxEvents={true}
