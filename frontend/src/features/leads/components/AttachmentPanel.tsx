@@ -36,7 +36,9 @@ interface AttachmentPanelProps {
 
 export function AttachmentPanel({ leadId }: AttachmentPanelProps) {
   const navigate = useNavigate();
-  const { data: attachments, isLoading } = useLeadAttachments(leadId);
+  const { data: rawAttachments, isLoading } = useLeadAttachments(leadId);
+  // API may return paginated {items: [...]} or plain array
+  const attachments = Array.isArray(rawAttachments) ? rawAttachments : (rawAttachments as any)?.items ?? [];
   const uploadMutation = useUploadAttachment();
   const deleteMutation = useDeleteAttachment();
   const [uploadType, setUploadType] = useState<AttachmentType>('OTHER');

@@ -74,7 +74,7 @@ export function InvoiceHistory({ customerId }: InvoiceHistoryProps) {
                 {invoice.invoice_number}
               </TableCell>
               <TableCell className="text-slate-600">
-                {new Date(invoice.date).toLocaleDateString()}
+                {new Date(invoice.invoice_date || invoice.created_at).toLocaleDateString()}
               </TableCell>
               <TableCell className="font-medium text-slate-800">
                 ${invoice.total_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}

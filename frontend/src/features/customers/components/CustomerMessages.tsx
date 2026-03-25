@@ -22,7 +22,9 @@ interface CustomerMessagesProps {
 }
 
 export function CustomerMessages({ customerId }: CustomerMessagesProps) {
-  const { data: messages, isLoading, error } = useCustomerSentMessages(customerId);
+  const { data: rawMessages, isLoading, error } = useCustomerSentMessages(customerId);
+  // API may return paginated {items: [...]} or plain array
+  const messages = Array.isArray(rawMessages) ? rawMessages : (rawMessages as any)?.items ?? [];
 
   if (isLoading) {
     return (
