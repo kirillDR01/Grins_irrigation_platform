@@ -4,9 +4,9 @@ Revision ID: 20260324_100000
 Revises: 20260313_100000
 Create Date: 2026-03-24
 
-Renames seed migration files with .disabled suffix so they are
-no longer executed by Alembic. The actual seed data DELETE is
-handled in the next migration.
+Removes seed demo data inserted by earlier seed migrations.
+Only references tables that exist at this point in the migration chain
+(before 20260324_100100 creates new CRM tables).
 
 Validates: Requirement 1.1, 1.2, 1.3
 """
@@ -26,15 +26,17 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Remove seed demo data.
 
-    Removes customers, staff, jobs, properties, service offerings,
-    and availability. Preserves non-seed records identified by phone
-    and auto-generated availability notes.
+    Only deletes from tables that exist BEFORE 20260324_100100.
+    Tables like expenses, estimates, campaigns, communications,
+    customer_photos are created in later migrations and are skipped here.
 
-    Delete order respects FK constraints:
-      agreement_status_logs → service_agreements → jobs → invoices →
-      disclosure_records → sms_consent_records → sent_messages →
-      communications → customer_photos → email_suppression_list →
-      estimates → campaigns → properties → customers
+    FK-safe delete order:
+      disclosure_records(agr) → agreement_status_logs → jobs(nullify agr) →
+      service_agreements → appointments → job_status_history →
+      schedule_waitlist → invoices(job) → sent_messages(job) → jobs →
+      invoices(cust) → disclosure_records(cust) → sms_consent_records →
+      sent_messages(cust) → email_suppression_list → properties → customers →
+      staff_availability → staff → service_offerings
     """
     _SEED_PHONES_SUBQUERY = """
         SELECT id FROM customers
@@ -50,7 +52,14 @@ def upgrade() -> None:
         WHERE customer_id IN ({_SEED_PHONES_SUBQUERY})
     """
 
-    # 1a. Delete disclosure_records linked to seed agreements
+    _SEED_JOBS_SUBQUERY = f"""
+        SELECT id FROM jobs
+        WHERE customer_id IN ({_SEED_PHONES_SUBQUERY})
+    """
+
+    # ── Phase 1: Clear service_agreement dependents ──────────────────
+
+    # disclosure_records → service_agreements.id (no CASCADE)
     op.execute(
         text(
             f"""
@@ -60,7 +69,7 @@ def upgrade() -> None:
         ),
     )
 
-    # 1b. Delete agreement_status_logs for seed agreements
+    # agreement_status_logs → service_agreements.id (CASCADE, but explicit)
     op.execute(
         text(
             f"""
@@ -70,7 +79,7 @@ def upgrade() -> None:
         ),
     )
 
-    # 1c. Nullify jobs.service_agreement_id for seed agreements
+    # jobs.service_agreement_id → service_agreements.id (no CASCADE)
     op.execute(
         text(
             f"""
@@ -80,7 +89,7 @@ def upgrade() -> None:
         ),
     )
 
-    # 2. Delete service_agreements for seed customers
+    # Delete seed service_agreements
     op.execute(
         text(
             f"""
@@ -90,12 +99,9 @@ def upgrade() -> None:
         ),
     )
 
-    # 3. Delete job-dependent tables before deleting jobs
-    _SEED_JOBS_SUBQUERY = f"""
-        SELECT id FROM jobs
-        WHERE customer_id IN ({_SEED_PHONES_SUBQUERY})
-    """
-    # 3a. Appointments → jobs.id
+    # ── Phase 2: Clear job dependents ────────────────────────────────
+
+    # appointments → jobs.id (no CASCADE)
     op.execute(
         text(
             f"""
@@ -104,7 +110,8 @@ def upgrade() -> None:
             """,
         ),
     )
-    # 3b. Job status history → jobs.id (CASCADE, but be explicit)
+
+    # job_status_history → jobs.id (CASCADE, but explicit)
     op.execute(
         text(
             f"""
@@ -113,7 +120,8 @@ def upgrade() -> None:
             """,
         ),
     )
-    # 3c. Schedule waitlist → jobs.id
+
+    # schedule_waitlist → jobs.id
     op.execute(
         text(
             f"""
@@ -122,7 +130,8 @@ def upgrade() -> None:
             """,
         ),
     )
-    # 3d. Invoices → jobs.id (RESTRICT)
+
+    # invoices → jobs.id (RESTRICT)
     op.execute(
         text(
             f"""
@@ -131,25 +140,8 @@ def upgrade() -> None:
             """,
         ),
     )
-    # 3e. Expenses → jobs.id (SET NULL — nullify instead of delete)
-    op.execute(
-        text(
-            f"""
-            UPDATE expenses SET job_id = NULL
-            WHERE job_id IN ({_SEED_JOBS_SUBQUERY});
-            """,
-        ),
-    )
-    # 3f. Estimates → jobs.id (SET NULL)
-    op.execute(
-        text(
-            f"""
-            UPDATE estimates SET job_id = NULL
-            WHERE job_id IN ({_SEED_JOBS_SUBQUERY});
-            """,
-        ),
-    )
-    # 3g. Sent messages → jobs.id
+
+    # sent_messages → jobs.id
     op.execute(
         text(
             f"""
@@ -159,7 +151,7 @@ def upgrade() -> None:
         ),
     )
 
-    # 4. Delete seed jobs
+    # Delete seed jobs
     op.execute(
         text(
             f"""
@@ -169,7 +161,9 @@ def upgrade() -> None:
         ),
     )
 
-    # 5. Delete remaining invoices referencing seed customers (not via jobs)
+    # ── Phase 3: Clear customer dependents ───────────────────────────
+
+    # invoices → customers.id (RESTRICT)
     op.execute(
         text(
             f"""
@@ -179,7 +173,7 @@ def upgrade() -> None:
         ),
     )
 
-    # 5. Delete disclosure_records for seed customers
+    # disclosure_records → customers.id
     op.execute(
         text(
             f"""
@@ -189,7 +183,7 @@ def upgrade() -> None:
         ),
     )
 
-    # 6. Delete sms_consent_records for seed customers
+    # sms_consent_records → customers.id
     op.execute(
         text(
             f"""
@@ -199,7 +193,7 @@ def upgrade() -> None:
         ),
     )
 
-    # 7. Delete sent_messages for seed customers
+    # sent_messages → customers.id
     op.execute(
         text(
             f"""
@@ -209,27 +203,7 @@ def upgrade() -> None:
         ),
     )
 
-    # 8. Delete communications for seed customers
-    op.execute(
-        text(
-            f"""
-            DELETE FROM communications
-            WHERE customer_id IN ({_SEED_PHONES_SUBQUERY});
-            """,
-        ),
-    )
-
-    # 9. Delete customer_photos for seed customers
-    op.execute(
-        text(
-            f"""
-            DELETE FROM customer_photos
-            WHERE customer_id IN ({_SEED_PHONES_SUBQUERY});
-            """,
-        ),
-    )
-
-    # 10. Delete email_suppression_list for seed customers
+    # email_suppression_list → customers.id
     op.execute(
         text(
             f"""
@@ -239,27 +213,17 @@ def upgrade() -> None:
         ),
     )
 
-    # 11. Delete estimates for seed customers
+    # leads.customer_id → customers.id (SET NULL — auto-handled, but explicit)
     op.execute(
         text(
             f"""
-            DELETE FROM estimates
+            UPDATE leads SET customer_id = NULL
             WHERE customer_id IN ({_SEED_PHONES_SUBQUERY});
             """,
         ),
     )
 
-    # 12. Delete campaigns targeting seed customers
-    op.execute(
-        text(
-            f"""
-            DELETE FROM campaigns
-            WHERE customer_id IN ({_SEED_PHONES_SUBQUERY});
-            """,
-        ),
-    )
-
-    # 13. Delete seed properties (now safe — no FK refs remain)
+    # properties → customers.id (CASCADE — auto-handled, but explicit)
     op.execute(
         text(
             f"""
@@ -269,7 +233,7 @@ def upgrade() -> None:
         ),
     )
 
-    # 14. Delete seed customers
+    # Delete seed customers
     op.execute(
         text(
             """
@@ -282,14 +246,16 @@ def upgrade() -> None:
             """,
         ),
     )
-    # Delete auto-generated staff availability
+
+    # ── Phase 4: Staff and offerings ─────────────────────────────────
+
     op.execute(
         text(
             "DELETE FROM staff_availability "
             "WHERE notes = 'Auto-generated availability';",
         ),
     )
-    # Delete seed technicians (keep admin)
+
     op.execute(
         text(
             """
@@ -298,7 +264,7 @@ def upgrade() -> None:
             """,
         ),
     )
-    # Delete seed service offerings
+
     op.execute(
         text(
             """

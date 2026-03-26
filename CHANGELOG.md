@@ -6,6 +6,135 @@
 
 ---
 
+## Phase 4 (2026-03-25): Agreement/Webhook Flow Validation & Deployment Fixes
+
+### 4.1 Checkout Webhook Full Flow Tests — `test_appointment_service.py`
+**Timestamp:** 2026-03-25 ~19:00 CDT
+**Commit:** `f0132d2`
+
+Added 7 new unit tests verifying the complete `checkout.session.completed` Stripe webhook flow and `JobGenerator` logic.
+
+#### `TestCheckoutWebhookFullFlow` (3 tests)
+
+**`test_new_customer_professional_residential_full_flow`**
+- Mocks a full Stripe `checkout.session.completed` event for a new customer purchasing Professional Residential ($349.00)
+- Patches 10 dependencies: `StripeWebhookEventRepository`, `CustomerRepository`, `CustomerService`, `AgreementRepository`, `AgreementTierRepository`, `AgreementService`, `SurchargeCalculator`, `ComplianceService`, `JobGenerator`, `EmailService`
+- Calls `StripeWebhookHandler._handle_checkout_completed()` directly
+- Verifies 16 assertions across the full chain:
+  - `find_by_email("jane.smith@example.com")` called
+  - `find_by_phone("6125559876")` called (phone normalized from `+16125559876`)
+  - `create_customer` called with `first_name="Jane"`, `last_name="Smith"`
+  - `get_by_id` called to fetch customer model after creation
+  - `stripe_customer_id` set to `"cus_stripe_abc123"` on customer record
+  - `get_by_slug_and_type("professional-residential", "residential")` called
+  - `create_agreement` called with correct `customer_id`, `tier_id`, and `stripe_data`
+  - `transition_status` called with `AgreementStatus.ACTIVE` and reason `"Payment confirmed via Stripe checkout"`
+  - `SurchargeCalculator.calculate` called with `zone_count=6`, `has_lake_pump=False`, `has_rpz_backflow=False`
+  - Agreement updated with surcharge fields: `zone_count`, `has_lake_pump`, `has_rpz_backflow`, `base_price`, `annual_price`
+  - `customer.email_opt_in` set to `True` (email_marketing_consent="true" in metadata)
+  - `generate_jobs` called with the agreement
+  - `link_orphaned_records` called with `consent_token` UUID, `customer_id`, `agreement_id`
+  - `customer.sms_opt_in` set to `True` (SMS consent record found)
+  - Two `create_disclosure` calls: `DisclosureType.PRE_SALE` (sent_via="stripe_checkout") and `DisclosureType.CONFIRMATION`
+  - `send_confirmation_email` and `send_welcome_email` called with `(customer, agreement, tier)`
+
+**`test_existing_customer_found_by_email_skips_creation`**
+- Overrides `find_by_email` to return `[mock_customer]`
+- Verifies `create_customer` NOT called, `find_by_phone` NOT called, `get_by_id` NOT called
+- Verifies full agreement/jobs/compliance/email flow still executes
+
+**`test_surcharges_applied_with_lake_pump_and_extra_zones`**
+- Checkout metadata: `zone_count="12"`, `has_lake_pump="true"`, `has_rpz_backflow="true"`
+- Verifies `SurchargeCalculator.calculate` receives `zone_count=12`, `has_lake_pump=True`, `has_rpz_backflow=True`
+- Verifies agreement updated with surcharge total `$571.50`
+
+#### `TestJobGeneratorByTier` (4 tests)
+
+**`test_professional_generates_three_jobs`**
+- Calls `JobGenerator.generate_jobs()` with mock Professional agreement
+- Verifies 3 `Job` objects created: `spring_startup` (April), `mid_season_inspection` (July), `fall_winterization` (October)
+- All jobs: `status=APPROVED`, `category=READY_TO_SCHEDULE`
+
+**`test_essential_generates_two_jobs`**
+- Essential tier → 2 jobs: `spring_startup` (April), `fall_winterization` (October)
+
+**`test_premium_generates_seven_jobs`**
+- Premium tier → 7 jobs: `spring_startup` (April), 5× `monthly_visit` (May–Sep), `fall_winterization` (October)
+
+**`test_all_jobs_linked_to_agreement_and_customer`**
+- Every generated job has correct `customer_id`, `service_agreement_id`, `property_id`, and non-null `approved_at`
+
+#### New imports added to `test_appointment_service.py`
+- `Decimal` from `decimal`
+- `patch` from `unittest.mock`
+- `UUID` from `uuid`
+- `AgreementStatus`, `DisclosureType`, `JobCategory`, `JobStatus` from `grins_platform.models.enums`
+- Lazy imports for `StripeWebhookHandler` and `JobGenerator`
+
+### 4.2 Migration Fix: Seed Data Cleanup FK Constraint Violations
+**Timestamp:** 2026-03-25 ~19:30 CDT
+**Commits:** `3aab9c3`, `f59a742`
+**File:** `migrations/versions/20260324_100000_crm_disable_seed_data.py`
+
+#### Problem
+Railway deployment crashed during Alembic migration `20260324_100000` with:
+```
+ForeignKeyViolationError: update or delete on table "properties" violates
+foreign key constraint "service_agreements_property_id_fkey"
+```
+The migration deleted `jobs → properties → customers` but ignored 12+ other tables with FK references.
+
+#### Fix (commit `3aab9c3`)
+Added FK-aware delete ordering for all dependent tables. Full delete chain:
+1. `agreement_status_logs` (by agreement_id via seed agreements subquery)
+2. `service_agreements` (by customer_id via seed phones subquery)
+3. `appointments` (by job_id via seed jobs subquery)
+4. `job_status_history` (by job_id)
+5. `schedule_waitlist` (by job_id)
+6. `invoices` (by job_id — RESTRICT FK)
+7. `expenses` — `UPDATE SET job_id = NULL` (SET NULL FK)
+8. `estimates` — `UPDATE SET job_id = NULL` (SET NULL FK)
+9. `sent_messages` (by job_id)
+10. `jobs` (by customer_id)
+11. `invoices` (by customer_id — remaining records)
+12. `disclosure_records` (by customer_id)
+13. `sms_consent_records` (by customer_id)
+14. `sent_messages` (by customer_id)
+15. `communications` (by customer_id)
+16. `customer_photos` (by customer_id)
+17. `email_suppression_list` (by customer_id)
+18. `estimates` (by customer_id)
+19. `campaigns` (by customer_id)
+20. `properties` (by customer_id)
+21. `customers` (by phone list)
+22. `staff_availability` (by notes = 'Auto-generated availability')
+23. `staff` (by phone list)
+24. `service_offerings` (by name list)
+
+#### Fix (commit `f59a742`)
+Second Railway deploy revealed another FK violation:
+```
+ForeignKeyViolationError: update or delete on table "service_agreements"
+violates foreign key constraint "disclosure_records_agreement_id_fkey"
+```
+Added 3 steps BEFORE deleting `service_agreements`:
+1. `DELETE FROM disclosure_records WHERE agreement_id IN (seed agreements)`
+2. `DELETE FROM agreement_status_logs WHERE agreement_id IN (seed agreements)`
+3. `UPDATE jobs SET service_agreement_id = NULL WHERE service_agreement_id IN (seed agreements)`
+
+### 4.3 Railway Ignore Trimmed
+**Timestamp:** 2026-03-25 ~19:45 CDT
+**Commit:** `f59a742`
+**File:** `.railwayignore`
+
+Added exclusions to reduce Railway deploy image size:
+- `src/grins_platform/tests/` — full test suite (not needed in production)
+- `tests/` — top-level test directory
+- `scripts/test_*.py` — test utility scripts (e.g., `test_twilio.py`, `test_twilio_numbers.py`)
+- `demo-screenshots/` — demo screenshot assets
+
+---
+
 ## What This Is
 
 The CRM gap closure spec (87 requirements across 13 phases) was implemented across backend (Python/FastAPI), frontend (React/TypeScript), and database (PostgreSQL) layers. This changelog documents the **post-implementation bug hunt** — a systematic analysis that found and resolved issues introduced during that implementation:
