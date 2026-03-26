@@ -6,6 +6,42 @@
 
 ---
 
+## Phase 7 (2026-03-26): E2E Battle Test Bug Fixes
+
+### Overview
+Fixed 12 bugs discovered during the E2E battle test (58 tests, 12 bugs found). Changes span both repos.
+
+### Frontend Fixes (Grins_irrigation repo — commit `6f595cf`)
+
+| Bug | Severity | Fix |
+|---|---|---|
+| BUG-001 | HIGH | Updated `PricingSection.tsx` surcharge text to match calculator: zone $8/$11, lake pump $125/$150, RPZ $110/$55 |
+| BUG-002 | HIGH | Clamped zone input `onChange` to `min 1` in `SubscriptionConfirmModal.tsx` |
+| BUG-005 | HIGH | Rendered `TermsCheckbox` in `LeadForm.tsx`, required for submission; added email validation |
+| BUG-003 | MEDIUM | Hidden `FloatingCTABar` when any `role="dialog"` modal is open (MutationObserver) |
+| BUG-006 | MEDIUM | Wrapped `.json()` calls in try/catch in `chatbotApi.ts` and `checkoutApi.ts` with fallback error handling |
+| BUG-007 | MEDIUM | Added email regex validation to `LeadForm.tsx` `validate()` with inline error display |
+| BUG-008 | MEDIUM | Added service address field validation in `OnboardingPage.tsx` when not same-as-billing |
+| BUG-011 | MEDIUM | Replaced hardcoded production Stripe portal URL in `config.ts` with `VITE_STRIPE_CUSTOMER_PORTAL_URL` env var; conditional render in `Footer.tsx` |
+| BUG-009 | LOW | Replaced hardcoded Railway domains in CSP `connect-src` with `https://*.up.railway.app` wildcard |
+| BUG-010 | LOW | Added spinner to `router.tsx` Suspense fallback (brand-colored `border-t-[#1B4D6E]`) |
+| BUG-012 | LOW | Created `AccessibilityPage.tsx` with WCAG 2.1 AA statement, added route at `/accessibility` |
+
+### Backend Fix (Grins_irrigation_platform repo)
+
+| Bug | Severity | Fix |
+|---|---|---|
+| BUG-002 | HIGH | Backend already had `ge=1` validation on `zone_count` in `CreateCheckoutSessionRequest` — no change needed |
+| BUG-001 | N/A | Fixed `test_pbt_surcharge_calculator.py` — updated zone rates ($8/$11), lake pump ($125/$150), RPZ ($110/$55 by tier) to match `surcharge_calculator.py` |
+
+### Vercel Env Vars (Phase 3 — pending)
+
+- `VITE_STRIPE_CUSTOMER_PORTAL_URL` — needs to be added for Preview (test) and Production (live)
+- `VITE_GOOGLE_MAPS_API_KEY` — needs to be added to frontend project
+- `VITE_GA4_MEASUREMENT_ID` / `VITE_GTM_CONTAINER_ID` — Production only when ready
+
+---
+
 ## Phase 6 (2026-03-26): Dev Environment Auto-Deploy Setup
 
 ### Overview
