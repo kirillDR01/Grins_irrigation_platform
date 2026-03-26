@@ -45,15 +45,37 @@ def upgrade() -> None:
         )
     """
 
-    # 1. Delete agreement_status_logs for seed agreements
+    _SEED_AGREEMENTS_SUBQUERY = f"""
+        SELECT id FROM service_agreements
+        WHERE customer_id IN ({_SEED_PHONES_SUBQUERY})
+    """
+
+    # 1a. Delete disclosure_records linked to seed agreements
+    op.execute(
+        text(
+            f"""
+            DELETE FROM disclosure_records
+            WHERE agreement_id IN ({_SEED_AGREEMENTS_SUBQUERY});
+            """,
+        ),
+    )
+
+    # 1b. Delete agreement_status_logs for seed agreements
     op.execute(
         text(
             f"""
             DELETE FROM agreement_status_logs
-            WHERE agreement_id IN (
-                SELECT id FROM service_agreements
-                WHERE customer_id IN ({_SEED_PHONES_SUBQUERY})
-            );
+            WHERE agreement_id IN ({_SEED_AGREEMENTS_SUBQUERY});
+            """,
+        ),
+    )
+
+    # 1c. Nullify jobs.service_agreement_id for seed agreements
+    op.execute(
+        text(
+            f"""
+            UPDATE jobs SET service_agreement_id = NULL
+            WHERE service_agreement_id IN ({_SEED_AGREEMENTS_SUBQUERY});
             """,
         ),
     )

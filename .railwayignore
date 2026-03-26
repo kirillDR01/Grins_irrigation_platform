@@ -16,18 +16,22 @@ node_modules/
 # Claude Code
 .claude/
 
-# Diagrams and screenshots
+# Diagrams, screenshots, and demo assets
 excalidraw-diagram-skill/
 screenshots/
+demo-screenshots/
 
 # Git
 .git/
 
-# Testing
+# Testing (not needed in production image)
 .pytest_cache/
 .hypothesis/
 htmlcov/
 coverage.json
+src/grins_platform/tests/
+tests/
+scripts/test_*.py
 
 # IDE
 .vscode/
