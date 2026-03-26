@@ -9,12 +9,12 @@
 
 ## Summary
 
-**Tests executed:** 33 (browser) + code analysis
-**Tests passed:** 29
-**Bugs found:** 10 total
-- Browser-tested: 4 (2 HIGH, 1 MEDIUM, 1 LOW)
+**Tests executed:** 46 (browser) + code analysis
+**Tests passed:** 40
+**Bugs found:** 12 total
+- Browser-tested: 6 (2 HIGH, 2 MEDIUM, 2 LOW)
 - Code analysis: 6 (1 HIGH, 3 MEDIUM, 2 LOW)
-**Full E2E checkouts completed:** 3 (Professional $260, Premium $725, Winterization $85 with decline card)
+**Full E2E checkouts completed:** 4 (Professional $260, Premium $725, Winterization $85 decline, Winterization $85 for address test)
 **Stripe error cards tested:** 2 (decline 4000...0002, insufficient funds 4000...9995)
 
 ---
@@ -195,6 +195,39 @@ If API domains change, browser will block API requests with CSP violations. Shou
 
 ---
 
+### BUG-011: Footer Customer Portal Links to Production Stripe (MEDIUM)
+
+**Location:** `Grins_irrigation/frontend/src/core/config.ts` line 24, used in `Footer.tsx` line 116
+
+**Description:** The footer "Customer Portal" link is hardcoded to the **production** Stripe Customer Portal URL:
+```
+https://billing.stripe.com/p/login/00waEXaaqack8zGa7N5Ne00  (production — no "test_" prefix)
+```
+While the onboarding success page correctly uses the dynamic `stripe_customer_portal_url` from the backend API (which is environment-aware):
+```
+https://billing.stripe.com/p/login/test_6oU8wR0zu8QUcQ4amueQM00  (test mode)
+```
+
+**Impact:** On dev, clicking "Customer Portal" in the footer takes users to production Stripe where their test subscriptions don't exist. On production, it would work correctly (by coincidence).
+
+**Fix:** Replace hardcoded URL in `config.ts` with `VITE_STRIPE_CUSTOMER_PORTAL_URL` environment variable, or fetch from backend API.
+
+**Severity:** MEDIUM — wrong environment in dev, data leak risk if test users land on production portal
+
+---
+
+### BUG-012: `/accessibility` Page Linked From Footer Is 404 (LOW)
+
+**Location:** Footer links to `/accessibility`, but no route exists in the React router
+
+**Description:** The footer contains an "Accessibility" link that navigates to `/accessibility`, which renders the "Page Not Found" 404 page. Either the route needs to be added or the footer link removed.
+
+**Screenshot:** `e2e-screenshots/navigation/15-accessibility.png`
+
+**Severity:** LOW — missing page, not critical for launch but bad for accessibility compliance perception
+
+---
+
 ## Successful Tests
 
 ### Checkout Flows
@@ -227,6 +260,9 @@ If API domains change, browser will block API requests with CSP violations. Shou
 | T13 | Valid submission | PASS | Name, phone, email, zip, service, customer type, property type, referral → "Thank You!" success message |
 | T14 | Missing required fields | PASS | Without customer type + property type: validation errors shown as red text (`role="alert"`) |
 | T15 | Button disabled without phone | PASS | Confirm button disabled until phone entered |
+| T34 | Invalid email rejected | PASS | "not-a-valid-email" → backend returns error, frontend shows "Please check your information" |
+| T35 | Duplicate lead handled | PASS | Same email twice → "We already have your information — a team member will be in touch shortly." |
+| T36 | Existing customer radio | PASS | Form renders same fields for existing customer flow |
 
 ### Navigation & Pages
 
@@ -247,6 +283,16 @@ If API domains change, browser will block API requests with CSP violations. Shou
 | T31 | Terms of Service page | PASS | Renders correctly |
 | T32 | Blog post page | PASS | "How Much Does a Sprinkler System Cost?" — title, author, date, TOC render |
 | T33 | "Get Your Free Quote" CTA | PASS | Opens modal with full lead form |
+| T37 | "Get Your Exact Quote" CTAs | PASS | Multiple CTAs on homepage all open same quote modal |
+| T38 | Privacy Policy page | PASS | Full legal content with data inventory, breadcrumbs |
+| T39 | Terms of Service page | PASS | Renders correctly with all sections |
+| T40 | Sitemap page | PASS | Renders with page listing |
+| T41 | Accessibility page | FAIL | 404 — route not defined (BUG-012) |
+| T42 | Blog post detail | PASS | "Sprinkler System Cost" post with title, author, date, TOC |
+| T43 | All 9 service sub-pages | PASS | residential-irrigation, luxury-irrigation, residential-landscaping, luxury-landscaping, commercial, commercial-grounds, smart-irrigation, irrigation-repair, seasonal-maintenance — all render with unique H1s |
+| T44 | Manage Your Subscription link | PASS | Opens Stripe Customer Portal (test mode) in new tab |
+| T45 | Footer Customer Portal link | FAIL | Points to production Stripe URL, not test (BUG-011) |
+| T46 | Onboarding — empty service address | FAIL | Submits with empty street/city/state/zip, no validation (BUG-008 confirmed) |
 
 ### Responsive
 
@@ -259,13 +305,12 @@ If API domains change, browser will block API requests with CSP violations. Shou
 
 ## Tests Not Yet Performed
 
-- [x] ~~Stripe insufficient funds card (4000000000009995) — error handling~~ (PASS - T29)
-- [ ] Onboarding — unchecking "Service address same as billing address" (manual address entry)
-- [ ] Lead form — duplicate submission handling
-- [ ] Lead form — invalid email/phone format validation
-- [ ] Blog individual post pages
-- [ ] Legal pages (Privacy Policy, Terms of Service, Accessibility)
 - [ ] Google Maps integration on Service Area page (may need API key)
-- [ ] "Manage Your Subscription" button on success page → Stripe Customer Portal
 - [ ] Mobile lead form submission
+- [ ] Mobile checkout full flow
 - [ ] Performance / Lighthouse audit
+- [ ] All commercial package full checkout flows
+- [ ] Onboarding with filled service address (non-empty, valid data)
+- [ ] Back button behavior during checkout flow
+- [ ] Session timeout / expired checkout session handling
+- [ ] Multiple rapid form submissions (double-click prevention)
