@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import extract, func, select
+from sqlalchemy import Integer, extract, func, select
 from sqlalchemy.orm import selectinload
 
 from grins_platform.log_config import LoggerMixin
@@ -286,17 +286,32 @@ class AgreementRepository(LoggerMixin):
         return agreement
 
     async def get_next_agreement_number_seq(self, year: int) -> int:
-        """Get the next sequential number for agreement_number within a year."""
+        """Get the next sequential number for agreement_number within a year.
+
+        Uses MAX of the numeric suffix instead of COUNT to avoid collisions
+        when agreements have been deleted (leaving gaps in the sequence).
+        """
         self.log_started("get_next_agreement_number_seq", year=year)
         prefix = f"AGR-{year}-"
+        prefix_len = len(prefix)
         stmt = (
-            select(func.count())
+            select(
+                func.max(
+                    func.cast(
+                        func.substr(
+                            ServiceAgreement.agreement_number,
+                            prefix_len + 1,
+                        ),
+                        Integer,
+                    ),
+                ),
+            )
             .select_from(ServiceAgreement)
             .where(ServiceAgreement.agreement_number.like(f"{prefix}%"))
         )
         result = await self.session.execute(stmt)
-        count = result.scalar() or 0
-        next_seq = count + 1
+        max_seq = result.scalar() or 0
+        next_seq = max_seq + 1
         self.log_completed("get_next_agreement_number_seq", next_seq=next_seq)
         return next_seq
 
