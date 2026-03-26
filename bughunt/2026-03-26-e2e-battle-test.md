@@ -9,13 +9,14 @@
 
 ## Summary
 
-**Tests executed:** 46 (browser) + code analysis
-**Tests passed:** 40
+**Tests executed:** 52 (browser) + code analysis
+**Tests passed:** 45
 **Bugs found:** 12 total
 - Browser-tested: 6 (2 HIGH, 2 MEDIUM, 2 LOW)
 - Code analysis: 6 (1 HIGH, 3 MEDIUM, 2 LOW)
-**Full E2E checkouts completed:** 4 (Professional $260, Premium $725, Winterization $85 decline, Winterization $85 for address test)
+**Full E2E checkouts completed:** 5 (Professional $260, Premium $725, Winterization $85 decline, Winterization $85 address test, Commercial Essential $235 with Mastercard)
 **Stripe error cards tested:** 2 (decline 4000...0002, insufficient funds 4000...9995)
+**Test card types used:** Visa (4242...), Mastercard (5555...4444), Decline (4000...0002), NSF (4000...9995)
 
 ---
 
@@ -238,6 +239,7 @@ https://billing.stripe.com/p/login/test_6oU8wR0zu8QUcQ4amueQM00  (test mode)
 | T02 | Premium Res ($725) full checkout | PASS | 3 zones + lake pump, SMS + email consent. Customer `premium-test@grins.dev` created, sms:true, email:true, pref:AFTERNOON |
 | T03 | Stripe decline card (4000...0002) | PASS | "Your card was declined. Please try a different card." shown in red. User stays on checkout page |
 | T29 | Stripe insufficient funds (4000...9995) | PASS | "Your card has insufficient funds. Try a different card." shown in red. User stays on checkout page |
+| T47 | Commercial Essential ($235) full checkout | PASS | Mastercard 5555..4444, 8 zones, SMS+email consent. Stripe shows "Commercial Essential Package". Customer `commercial-test@grins.dev` created |
 
 ### Package Modal Pricing (All 8 Tiers)
 
@@ -293,6 +295,11 @@ https://billing.stripe.com/p/login/test_6oU8wR0zu8QUcQ4amueQM00  (test mode)
 | T44 | Manage Your Subscription link | PASS | Opens Stripe Customer Portal (test mode) in new tab |
 | T45 | Footer Customer Portal link | FAIL | Points to production Stripe URL, not test (BUG-011) |
 | T46 | Onboarding — empty service address | FAIL | Submits with empty street/city/state/zip, no validation (BUG-008 confirmed) |
+| T48 | Back button from Stripe | PASS | Returns to Service Packages page cleanly, no broken state |
+| T49 | "Design Consultation" CTA | PASS | Opens same quote modal as other CTAs |
+| T50 | Homepage full scroll-through | PASS | All sections render: hero, pain points, process steps, services grid, trust signals, reviews (5-star/122), FAQ, footer |
+| T51 | Mobile sticky "Get Free Quote" | PASS | Opens lead form modal on mobile |
+| T52 | Doubled accessible names in modal | OBSERVATION | Modal labels read twice ("Full Name Full Name") — caused by duplicate form instances (modal + background page) |
 
 ### Responsive
 
@@ -309,7 +316,8 @@ https://billing.stripe.com/p/login/test_6oU8wR0zu8QUcQ4amueQM00  (test mode)
 - [ ] Mobile lead form submission
 - [ ] Mobile checkout full flow
 - [ ] Performance / Lighthouse audit
-- [ ] All commercial package full checkout flows
+- [x] ~~Commercial Essential full checkout~~ (PASS - T47, Mastercard)
+- [ ] Remaining 3 commercial packages full checkout
 - [ ] Onboarding with filled service address (non-empty, valid data)
 - [ ] Back button behavior during checkout flow
 - [ ] Session timeout / expired checkout session handling
