@@ -9,8 +9,8 @@
 
 ## Summary
 
-**Tests executed:** 52 (browser) + code analysis
-**Tests passed:** 45
+**Tests executed:** 58 (browser) + code analysis
+**Tests passed:** 51
 **Bugs found:** 12 total
 - Browser-tested: 6 (2 HIGH, 2 MEDIUM, 2 LOW)
 - Code analysis: 6 (1 HIGH, 3 MEDIUM, 2 LOW)
@@ -240,6 +240,7 @@ https://billing.stripe.com/p/login/test_6oU8wR0zu8QUcQ4amueQM00  (test mode)
 | T03 | Stripe decline card (4000...0002) | PASS | "Your card was declined. Please try a different card." shown in red. User stays on checkout page |
 | T29 | Stripe insufficient funds (4000...9995) | PASS | "Your card has insufficient funds. Try a different card." shown in red. User stays on checkout page |
 | T47 | Commercial Essential ($235) full checkout | PASS | Mastercard 5555..4444, 8 zones, SMS+email consent. Stripe shows "Commercial Essential Package". Customer `commercial-test@grins.dev` created |
+| T53 | Commercial Winterization ($105) + RPZ | PASS | Stripe shows 2 line items: "Winterization Only Commercial" $105 + "RPZ/backflow removal" $55 = $160/yr total. Correct winterization rate used |
 
 ### Package Modal Pricing (All 8 Tiers)
 
@@ -300,6 +301,11 @@ https://billing.stripe.com/p/login/test_6oU8wR0zu8QUcQ4amueQM00  (test mode)
 | T50 | Homepage full scroll-through | PASS | All sections render: hero, pain points, process steps, services grid, trust signals, reviews (5-star/122), FAQ, footer |
 | T51 | Mobile sticky "Get Free Quote" | PASS | Opens lead form modal on mobile |
 | T52 | Doubled accessible names in modal | OBSERVATION | Modal labels read twice ("Full Name Full Name") — caused by duplicate form instances (modal + background page) |
+| T54 | FAQ accordion | PASS | Opens/closes correctly, one question at a time. 6 questions with relevant answers |
+| T55 | Phone tel: links | OBSERVATION | Inconsistent format: some `tel:+19525293750`, some `tel:9525293750` (missing country code) |
+| T56 | Service Area page map | FAIL | Map div exists but Google Maps JS not loaded — VITE_GOOGLE_MAPS_API_KEY not set on frontend Vercel (part of BUG-004) |
+| T57 | Service Area community cards | PASS | Community descriptions render, "Expanding Soon" section with 11 upcoming cities |
+| T58 | Stripe RPZ line item detail | PASS | Winterization uses "RPZ/backflow removal" label, standard uses "RPZ/backflow connection" — correct labeling |
 
 ### Responsive
 
