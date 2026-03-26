@@ -34,17 +34,17 @@ _TIER_SLUGS = {
 }
 
 _ZONE_RATES: dict[tuple[str, str], Decimal] = {
-    ("standard", "residential"): Decimal("7.50"),
-    ("standard", "commercial"): Decimal("10.00"),
-    ("winterization-only", "residential"): Decimal("5.00"),
-    ("winterization-only", "commercial"): Decimal("10.00"),
+    ("standard", "residential"): Decimal("8.00"),
+    ("standard", "commercial"): Decimal("11.00"),
+    ("winterization-only", "residential"): Decimal("8.00"),
+    ("winterization-only", "commercial"): Decimal("11.00"),
 }
 
 _LAKE_RATES: dict[tuple[str, str], Decimal] = {
-    ("standard", "residential"): Decimal("175.00"),
-    ("standard", "commercial"): Decimal("200.00"),
-    ("winterization-only", "residential"): Decimal("75.00"),
-    ("winterization-only", "commercial"): Decimal("100.00"),
+    ("standard", "residential"): Decimal("125.00"),
+    ("standard", "commercial"): Decimal("150.00"),
+    ("winterization-only", "residential"): Decimal("125.00"),
+    ("winterization-only", "commercial"): Decimal("150.00"),
 }
 
 tier_category_st = st.sampled_from(["standard", "winterization-only"])
@@ -199,7 +199,7 @@ class TestSurchargeRpzBackflow:
         has_rpz_backflow: bool,
         base_price: Decimal,
     ) -> None:
-        """RPZ/backflow surcharge == $50 when has_rpz_backflow, else 0."""
+        """RPZ/backflow surcharge matches tier: $110 standard, $55 winterization."""
         slug = _pick_slug(tier_category, package_type)
         result = SurchargeCalculator.calculate(
             slug,
@@ -209,5 +209,10 @@ class TestSurchargeRpzBackflow:
             base_price,
             has_rpz_backflow=has_rpz_backflow,
         )
-        expected = Decimal("50.00") if has_rpz_backflow else Decimal(0)
+        if not has_rpz_backflow:
+            expected = Decimal(0)
+        elif tier_category == "winterization-only":
+            expected = Decimal("55.00")
+        else:
+            expected = Decimal("110.00")
         assert result.rpz_backflow_surcharge == expected
