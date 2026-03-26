@@ -133,6 +133,58 @@ Added exclusions to reduce Railway deploy image size:
 - `scripts/test_*.py` — test utility scripts (e.g., `test_twilio.py`, `test_twilio_numbers.py`)
 - `demo-screenshots/` — demo screenshot assets
 
+### 4.4 Migration Fix: Non-Existent Tables in Seed Cleanup
+**Timestamp:** 2026-03-25 ~20:15 CDT
+**Commit:** `e5f6104`
+**File:** `migrations/versions/20260324_100000_crm_disable_seed_data.py`
+
+#### Problem
+Railway deploy crashed with `UndefinedTableError: relation "expenses" does not exist`.
+Tables like `expenses`, `estimates`, `campaigns`, `communications`, `customer_photos`
+are created in migration `20260324_100100` which runs AFTER the seed cleanup.
+
+#### Fix
+Rewrote migration to ONLY reference tables that exist at this point in the migration
+chain (pre-`20260324_100100`). Organized into 4 phases:
+1. **Service agreement dependents**: `disclosure_records`, `agreement_status_logs`, nullify `jobs.service_agreement_id`
+2. **Job dependents**: `appointments`, `job_status_history`, `schedule_waitlist`, `invoices`, `sent_messages`
+3. **Customer dependents**: `invoices`, `disclosure_records`, `sms_consent_records`, `sent_messages`, `email_suppression_list`, nullify `leads.customer_id`, `properties`
+4. **Staff & offerings**: `staff_availability`, `staff`, `service_offerings`
+
+### 4.5 Railway Dev Environment Validation
+**Timestamp:** 2026-03-25 ~20:30 CDT
+**Result:** ALL PASS
+
+Railway deployment successful. Validated the full agreement creation flow via REST API:
+
+#### Database State Verified
+- **29 agreements** across all tiers (Essential, Professional, Premium, Winterization-Only)
+- **26 customers** with Stripe customer IDs and consent preferences
+- **8 agreement tiers** all active (residential + commercial variants)
+- **19 active agreements**, $641.25 MRR
+- **0 failed payments**, 0 renewal pipeline items
+
+#### Job Generation Verified Per Tier
+| Tier | Expected | Actual | Job Types | Months |
+|------|:---:|:---:|---|---|
+| Essential | 2 | 2 | spring_startup, fall_winterization | Apr, Oct |
+| Professional | 3 | 3 | spring_startup, mid_season_inspection, fall_winterization | Apr, Jul, Oct |
+| Premium | 7 | 7 | spring_startup, 5x monthly_visit, fall_winterization | Apr, May-Sep, Oct |
+
+#### Agreement Lifecycle Verified (AGR-2026-030)
+- Status history: `None → pending` ("Agreement created") then `pending → active` ("Payment confirmed via Stripe checkout")
+- Stripe subscription ID and customer ID correctly stored
+- Annual price correctly set from tier + surcharges
+
+#### Compliance Disclosures Verified (AGR-2026-030)
+- 3 disclosure records found:
+  1. `pre_sale` via `web_form` (pre-checkout consent)
+  2. `pre_sale` via `stripe_checkout` (webhook handler)
+  3. `confirmation` via `pending` (confirmation email)
+
+#### Dashboard Summary Verified
+- Active agreement count, MRR, renewal pipeline, failed payment queue all populated correctly
+
 ---
 
 ## What This Is
