@@ -181,7 +181,7 @@ export function Layout({ children }: LayoutProps) {
         <Separator />
 
         {/* Navigation */}
-        <nav className="flex flex-col gap-1 py-4 flex-1" data-testid="sidebar-nav">
+        <nav className="flex flex-col gap-1 py-4 flex-1 overflow-y-auto" data-testid="sidebar-nav">
           {navItems.map((item) => {
             // Check for exact match first, then check if it's a parent route
             // but only if no other nav item is a more specific match
