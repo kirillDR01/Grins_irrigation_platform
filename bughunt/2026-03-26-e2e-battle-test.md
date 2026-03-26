@@ -9,10 +9,11 @@
 
 ## Summary
 
-**Tests executed:** 28
-**Tests passed:** 24
+**Tests executed:** 33
+**Tests passed:** 29
 **Bugs found:** 4 (2 HIGH, 1 MEDIUM, 1 LOW)
 **Full E2E checkouts completed:** 3 (Professional $260, Premium $725, Winterization $85 with decline card)
+**Stripe error cards tested:** 2 (decline 4000...0002, insufficient funds 4000...9995)
 
 ---
 
@@ -125,6 +126,7 @@ return `...Lake pump add-on: ${lakePump}. ${rpzLabel}: $50.`;
 | T01 | Professional Res ($260) full checkout | PASS | Modal → Stripe → onboarding → "You're All Set!" Customer `e2e-test@grins.dev` created |
 | T02 | Premium Res ($725) full checkout | PASS | 3 zones + lake pump, SMS + email consent. Customer `premium-test@grins.dev` created, sms:true, email:true, pref:AFTERNOON |
 | T03 | Stripe decline card (4000...0002) | PASS | "Your card was declined. Please try a different card." shown in red. User stays on checkout page |
+| T29 | Stripe insufficient funds (4000...9995) | PASS | "Your card has insufficient funds. Try a different card." shown in red. User stays on checkout page |
 
 ### Package Modal Pricing (All 8 Tiers)
 
@@ -163,6 +165,10 @@ return `...Lake pump add-on: ${lakePump}. ${rpzLabel}: $50.`;
 | T24 | Service sub-pages | PASS | `/services/residential-irrigation` etc. all render with content |
 | T25 | "Get Your Free Quote" CTA | PASS | Opens modal with lead form |
 | T26 | Chatbot | PASS | Opens, accepts messages, responds with lead capture flow |
+| T30 | Privacy Policy page | PASS | Renders with breadcrumbs, data inventory, proper legal content |
+| T31 | Terms of Service page | PASS | Renders correctly |
+| T32 | Blog post page | PASS | "How Much Does a Sprinkler System Cost?" — title, author, date, TOC render |
+| T33 | "Get Your Free Quote" CTA | PASS | Opens modal with full lead form |
 
 ### Responsive
 
@@ -175,7 +181,7 @@ return `...Lake pump add-on: ${lakePump}. ${rpzLabel}: $50.`;
 
 ## Tests Not Yet Performed
 
-- [ ] Stripe insufficient funds card (4000000000009995) — error handling
+- [x] ~~Stripe insufficient funds card (4000000000009995) — error handling~~ (PASS - T29)
 - [ ] Onboarding — unchecking "Service address same as billing address" (manual address entry)
 - [ ] Lead form — duplicate submission handling
 - [ ] Lead form — invalid email/phone format validation
