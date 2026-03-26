@@ -34,6 +34,26 @@ Configured automatic deployments so pushing to `dev` auto-deploys frontend, admi
    - `frontend/src/features/chatbot/api/chatbotApi.ts`
    - `frontend/src/features/lead-form/api/leadApi.ts`
 
+5. **Vercel Root Directory fix** — Initial auto-deploy failed with `ENOENT: no such file or directory, open '/vercel/path0/package.json'` because the Vercel project root wasn't set. Fixed via Vercel API: `PATCH /v9/projects/{id}` with `{"rootDirectory":"frontend"}`. Subsequent deploy succeeded.
+
+6. **Vercel Deployment Protection disabled** — Preview deploys were behind Vercel SSO authentication by default, blocking public access to the dev frontend URL. Disabled `ssoProtection` via Vercel API so the dev frontend is publicly accessible.
+
+### E2E Verification (Auto-Deploy Flow)
+**Timestamp:** 2026-03-26 ~15:00 CDT
+
+Full E2E checkout test on the new stable dev frontend URL (`frontend-git-dev-kirilldr01s-projects.vercel.app`):
+
+1. **Git-triggered deploy confirmed** — Push to `dev` on `Grins_irrigation` auto-created Vercel Preview deploy `dpl_CG2CFwzk4gdHbd5WfeyZQ4ZURERX` with branch alias `frontend-git-dev-kirilldr01s-projects.vercel.app`
+2. **CORS verified** — `curl` OPTIONS preflight from `frontend-git-dev-kirilldr01s-projects.vercel.app` → `grins-dev-dev.up.railway.app` returned HTTP 200
+3. **Homepage** — Loaded correctly: "Wake Up to a Perfect Lawn Every Morning"
+4. **Service Packages** — All 3 residential (Essential $175, Professional $260, Premium $725) and 4 commercial packages displayed
+5. **Pre-checkout consent** — Filled phone (6125551234), checked SMS consent, submitted → redirected to Stripe Checkout
+6. **Stripe Checkout** — Confirmed Sandbox mode, `cs_test_*` session, $260/yr Residential Professional Package. Paid with test card 4242...4242
+7. **Onboarding** — "Welcome, E2E Test User! Professional — Residential" — filled gate code, dogs, access instructions, morning preference → "You're All Set!"
+8. **Backend verification** — Customer `e2e-test@grins.dev` created in dev DB at `2026-03-26T20:07:59Z`. Total customers: 29
+
+**Result:** Full auto-deploy E2E flow passes. No CORS errors, no misrouted API calls. All traffic correctly hitting dev Railway backend.
+
 ---
 
 ## Phase 5 (2026-03-26): End-to-End Stripe Integration Smoke Test on Dev
