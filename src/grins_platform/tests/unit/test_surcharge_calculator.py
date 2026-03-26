@@ -51,7 +51,7 @@ class TestSurchargeCalculatorEdgeCases:
             False,
             Decimal("299.00"),
         )
-        assert r.zone_surcharge == Decimal("7.50")
+        assert r.zone_surcharge == Decimal("8.00")
 
     def test_zone_count_100_many_extra_zones(self) -> None:
         r = SurchargeCalculator.calculate(
@@ -61,13 +61,13 @@ class TestSurchargeCalculatorEdgeCases:
             False,
             Decimal("299.00"),
         )
-        # 91 extra zones x $7.50
-        assert r.zone_surcharge == Decimal("682.50")
+        # 91 extra zones x $8.00
+        assert r.zone_surcharge == Decimal("728.00")
 
 
 @pytest.mark.unit
 class TestSurchargeCalculatorStandardResidential:
-    """Standard residential tier rates: zone=$7.50, lake=$175."""
+    """Standard residential tier rates: zone=$8, lake=$125."""
 
     def test_with_surcharges(self) -> None:
         r = SurchargeCalculator.calculate(
@@ -77,9 +77,9 @@ class TestSurchargeCalculatorStandardResidential:
             True,
             Decimal("499.00"),
         )
-        assert r.zone_surcharge == Decimal("22.50")  # 3 x $7.50
-        assert r.lake_pump_surcharge == Decimal("175.00")
-        assert r.total == Decimal("696.50")
+        assert r.zone_surcharge == Decimal("24.00")  # 3 x $8
+        assert r.lake_pump_surcharge == Decimal("125.00")
+        assert r.total == Decimal("648.00")
 
     def test_no_lake_pump(self) -> None:
         r = SurchargeCalculator.calculate(
@@ -89,14 +89,14 @@ class TestSurchargeCalculatorStandardResidential:
             False,
             Decimal("799.00"),
         )
-        assert r.zone_surcharge == Decimal("45.00")  # 6 x $7.50
+        assert r.zone_surcharge == Decimal("48.00")  # 6 x $8
         assert r.lake_pump_surcharge == Decimal(0)
-        assert r.total == Decimal("844.00")
+        assert r.total == Decimal("847.00")
 
 
 @pytest.mark.unit
 class TestSurchargeCalculatorStandardCommercial:
-    """Standard commercial tier rates: zone=$10, lake=$200."""
+    """Standard commercial tier rates: zone=$11, lake=$150."""
 
     def test_with_surcharges(self) -> None:
         r = SurchargeCalculator.calculate(
@@ -106,9 +106,9 @@ class TestSurchargeCalculatorStandardCommercial:
             True,
             Decimal("399.00"),
         )
-        assert r.zone_surcharge == Decimal("20.00")  # 2 x $10
-        assert r.lake_pump_surcharge == Decimal("200.00")
-        assert r.total == Decimal("619.00")
+        assert r.zone_surcharge == Decimal("22.00")  # 2 x $11
+        assert r.lake_pump_surcharge == Decimal("150.00")
+        assert r.total == Decimal("571.00")
 
     def test_no_lake_pump(self) -> None:
         r = SurchargeCalculator.calculate(
@@ -118,14 +118,14 @@ class TestSurchargeCalculatorStandardCommercial:
             False,
             Decimal("599.00"),
         )
-        assert r.zone_surcharge == Decimal("10.00")  # 1 x $10
+        assert r.zone_surcharge == Decimal("11.00")  # 1 x $11
         assert r.lake_pump_surcharge == Decimal(0)
-        assert r.total == Decimal("609.00")
+        assert r.total == Decimal("610.00")
 
 
 @pytest.mark.unit
 class TestSurchargeCalculatorWinterizationResidential:
-    """Winterization-only residential: zone=$5, lake=$75."""
+    """Winterization-only residential: zone=$8, lake=$125."""
 
     def test_with_surcharges(self) -> None:
         r = SurchargeCalculator.calculate(
@@ -135,9 +135,9 @@ class TestSurchargeCalculatorWinterizationResidential:
             True,
             Decimal("80.00"),
         )
-        assert r.zone_surcharge == Decimal("15.00")  # 3 x $5
-        assert r.lake_pump_surcharge == Decimal("75.00")
-        assert r.total == Decimal("170.00")
+        assert r.zone_surcharge == Decimal("24.00")  # 3 x $8
+        assert r.lake_pump_surcharge == Decimal("125.00")
+        assert r.total == Decimal("229.00")
 
     def test_no_lake_pump(self) -> None:
         r = SurchargeCalculator.calculate(
@@ -147,14 +147,14 @@ class TestSurchargeCalculatorWinterizationResidential:
             False,
             Decimal("80.00"),
         )
-        assert r.zone_surcharge == Decimal("5.00")  # 1 x $5
+        assert r.zone_surcharge == Decimal("8.00")  # 1 x $8
         assert r.lake_pump_surcharge == Decimal(0)
-        assert r.total == Decimal("85.00")
+        assert r.total == Decimal("88.00")
 
 
 @pytest.mark.unit
 class TestSurchargeCalculatorWinterizationCommercial:
-    """Winterization-only commercial: zone=$10, lake=$100."""
+    """Winterization-only commercial: zone=$11, lake=$150."""
 
     def test_with_surcharges(self) -> None:
         r = SurchargeCalculator.calculate(
@@ -164,9 +164,9 @@ class TestSurchargeCalculatorWinterizationCommercial:
             True,
             Decimal("100.00"),
         )
-        assert r.zone_surcharge == Decimal("60.00")  # 6 x $10
-        assert r.lake_pump_surcharge == Decimal("100.00")
-        assert r.total == Decimal("260.00")
+        assert r.zone_surcharge == Decimal("66.00")  # 6 x $11
+        assert r.lake_pump_surcharge == Decimal("150.00")
+        assert r.total == Decimal("316.00")
 
     def test_no_lake_pump(self) -> None:
         r = SurchargeCalculator.calculate(
@@ -208,8 +208,8 @@ class TestSurchargeCalculatorCaseInsensitive:
             True,
             Decimal("299.00"),
         )
-        assert r.zone_surcharge == Decimal("7.50")
-        assert r.lake_pump_surcharge == Decimal("175.00")
+        assert r.zone_surcharge == Decimal("8.00")
+        assert r.lake_pump_surcharge == Decimal("125.00")
 
     def test_mixed_case_package_type(self) -> None:
         r = SurchargeCalculator.calculate(
@@ -219,12 +219,12 @@ class TestSurchargeCalculatorCaseInsensitive:
             False,
             Decimal("399.00"),
         )
-        assert r.zone_surcharge == Decimal("10.00")
+        assert r.zone_surcharge == Decimal("11.00")
 
 
 @pytest.mark.unit
 class TestSurchargeCalculatorRpzBackflow:
-    """RPZ/backflow surcharge: flat $50 across all tiers."""
+    """RPZ/backflow surcharge: $110 standard, $55 winterization-only."""
 
     def test_rpz_backflow_standard_residential(self) -> None:
         r = SurchargeCalculator.calculate(
@@ -235,8 +235,8 @@ class TestSurchargeCalculatorRpzBackflow:
             Decimal("299.00"),
             has_rpz_backflow=True,
         )
-        assert r.rpz_backflow_surcharge == Decimal("50.00")
-        assert r.total == Decimal("349.00")
+        assert r.rpz_backflow_surcharge == Decimal("110.00")
+        assert r.total == Decimal("409.00")
 
     def test_rpz_backflow_standard_commercial(self) -> None:
         r = SurchargeCalculator.calculate(
@@ -247,8 +247,8 @@ class TestSurchargeCalculatorRpzBackflow:
             Decimal("399.00"),
             has_rpz_backflow=True,
         )
-        assert r.rpz_backflow_surcharge == Decimal("50.00")
-        assert r.total == Decimal("449.00")
+        assert r.rpz_backflow_surcharge == Decimal("110.00")
+        assert r.total == Decimal("509.00")
 
     def test_rpz_backflow_winterization_residential(self) -> None:
         r = SurchargeCalculator.calculate(
@@ -259,8 +259,8 @@ class TestSurchargeCalculatorRpzBackflow:
             Decimal("80.00"),
             has_rpz_backflow=True,
         )
-        assert r.rpz_backflow_surcharge == Decimal("50.00")
-        assert r.total == Decimal("130.00")
+        assert r.rpz_backflow_surcharge == Decimal("55.00")
+        assert r.total == Decimal("135.00")
 
     def test_rpz_backflow_winterization_commercial(self) -> None:
         r = SurchargeCalculator.calculate(
@@ -271,8 +271,8 @@ class TestSurchargeCalculatorRpzBackflow:
             Decimal("100.00"),
             has_rpz_backflow=True,
         )
-        assert r.rpz_backflow_surcharge == Decimal("50.00")
-        assert r.total == Decimal("150.00")
+        assert r.rpz_backflow_surcharge == Decimal("55.00")
+        assert r.total == Decimal("155.00")
 
     def test_no_rpz_backflow(self) -> None:
         r = SurchargeCalculator.calculate(
@@ -305,7 +305,7 @@ class TestSurchargeCalculatorRpzBackflow:
             Decimal("499.00"),
             has_rpz_backflow=True,
         )
-        assert r.zone_surcharge == Decimal("22.50")  # 3 x $7.50
-        assert r.lake_pump_surcharge == Decimal("175.00")
-        assert r.rpz_backflow_surcharge == Decimal("50.00")
-        assert r.total == Decimal("746.50")
+        assert r.zone_surcharge == Decimal("24.00")  # 3 x $8
+        assert r.lake_pump_surcharge == Decimal("125.00")
+        assert r.rpz_backflow_surcharge == Decimal("110.00")
+        assert r.total == Decimal("758.00")

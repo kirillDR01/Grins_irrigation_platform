@@ -38,15 +38,13 @@ class SurchargeBreakdown:
         )
 
 
-# (zone_rate_per_extra_zone, lake_pump_flat_rate)
-_RATES: dict[tuple[str, str], tuple[Decimal, Decimal]] = {
-    ("standard", "residential"): (Decimal("7.50"), Decimal("175.00")),
-    ("standard", "commercial"): (Decimal("10.00"), Decimal("200.00")),
-    ("winterization-only", "residential"): (Decimal("5.00"), Decimal("75.00")),
-    ("winterization-only", "commercial"): (Decimal("10.00"), Decimal("100.00")),
+# (zone_rate_per_extra_zone, lake_pump_flat_rate, rpz_backflow_flat_rate)
+_RATES: dict[tuple[str, str], tuple[Decimal, Decimal, Decimal]] = {
+    ("standard", "residential"): (Decimal("8.00"), Decimal("125.00"), Decimal("110.00")),
+    ("standard", "commercial"): (Decimal("11.00"), Decimal("150.00"), Decimal("110.00")),
+    ("winterization-only", "residential"): (Decimal("8.00"), Decimal("125.00"), Decimal("55.00")),
+    ("winterization-only", "commercial"): (Decimal("11.00"), Decimal("150.00"), Decimal("55.00")),
 }
-
-_RPZ_BACKFLOW_RATE = Decimal("50.00")
 
 _ZONE_THRESHOLD = 10
 _INCLUDED_ZONES = 9
@@ -88,9 +86,9 @@ class SurchargeCalculator:
         )
         pkg = package_type.lower()
 
-        zone_rate, lake_pump_rate = _RATES.get(
+        zone_rate, lake_pump_rate, rpz_rate = _RATES.get(
             (tier_category, pkg),
-            (Decimal(0), Decimal(0)),
+            (Decimal(0), Decimal(0), Decimal(0)),
         )
 
         zone_surcharge = (
@@ -101,7 +99,7 @@ class SurchargeCalculator:
 
         lake_pump_surcharge = lake_pump_rate if has_lake_pump else Decimal(0)
 
-        rpz_backflow_surcharge = _RPZ_BACKFLOW_RATE if has_rpz_backflow else Decimal(0)
+        rpz_backflow_surcharge = rpz_rate if has_rpz_backflow else Decimal(0)
 
         return SurchargeBreakdown(
             base_price=base_price,
