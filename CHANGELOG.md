@@ -1,8 +1,246 @@
 # CRM Gap Closure — Post-Implementation Bug Fixes
 
-**Date:** 2026-03-24 (updated 2026-03-25)
+**Date:** 2026-03-24 (updated 2026-03-26)
 **Branch:** `dev`
-**Scope:** Bug fixes, database schema corrections, and test repairs following the CRM gap closure implementation
+**Scope:** Bug fixes, database schema corrections, test repairs, and E2E validation following the CRM gap closure implementation
+
+---
+
+## Phase 6 (2026-03-26): Dev Environment Auto-Deploy Setup
+
+### Overview
+Configured automatic deployments so pushing to `dev` auto-deploys frontend, admin dashboard, and backend — all pointing at the dev Railway backend with Stripe test mode.
+
+### Dev URL Map
+
+| Component | Dev URL | Trigger |
+|---|---|---|
+| Frontend | `frontend-git-dev-kirilldr01s-projects.vercel.app` | Push to `dev` on `Grins_irrigation` repo |
+| Admin Dashboard | `grins-irrigation-platform-git-dev-kirilldr01s-projects.vercel.app` | Push to `dev` on `Grins_irrigation_platform` repo |
+| Backend API | `grins-dev-dev.up.railway.app` | Push to `dev` on `Grins_irrigation_platform` repo |
+| Stripe | Test mode (`sk_test_*`) | Already configured on Railway dev |
+
+### Changes Made
+
+1. **Vercel Git integration** — Connected `kirillDR01/Grins_irrigation` repo to Vercel frontend project (`prj_JYhxOfEtxAcDqWKVCkTQy7lYqTcF`). Pushing to `dev` now auto-creates Preview deploys with stable branch alias.
+
+2. **Vercel environment variables** — Added `VITE_API_URL` for Production environment on frontend project (points to `grinsirrigationplatform-production.up.railway.app`). Preview and Development already pointed to dev Railway. Admin dashboard env vars verified correct (all 3 environments set).
+
+3. **Railway CORS update** — Added explicit stable dev alias `https://frontend-git-dev-kirilldr01s-projects.vercel.app` to `CORS_ORIGINS` on dev environment. The wildcard `frontend-*-kirilldr01s-projects.vercel.app` already covers it, but explicit entry provides safety net. CORS preflight verified returning 200.
+
+4. **Hardcoded URL removal** (in `Grins_irrigation` repo) — Replaced silent production URL fallback in 4 API modules with fail-loud `throw new Error()` if `VITE_API_URL` is missing:
+   - `frontend/src/features/service-packages/api/checkoutApi.ts`
+   - `frontend/src/features/onboarding/api/onboardingApi.ts`
+   - `frontend/src/features/chatbot/api/chatbotApi.ts`
+   - `frontend/src/features/lead-form/api/leadApi.ts`
+
+---
+
+## Phase 5 (2026-03-26): End-to-End Stripe Integration Smoke Test on Dev
+
+### 5.1 Pre-Flight Environment Verification
+**Timestamp:** 2026-03-26 ~12:15 CDT
+
+Verified all dev environment configuration before running E2E test:
+
+- **Railway dev environment** — confirmed `RAILWAY_ENVIRONMENT_NAME=dev`, `ENVIRONMENT=development`, public domain `grins-dev-dev.up.railway.app`
+- **Stripe test mode** — confirmed `sk_test_*` secret key, 8 products with 8 matching prices (all `price_1TF2n*` IDs from migration chain)
+- **CORS_ORIGINS** — confirmed patterns: `frontend-*-kirilldr01s-projects.vercel.app`, `grins-irrigation-platform-*-kirilldr01s-projects.vercel.app`, localhost origins
+- **Vercel frontend** — `VITE_API_URL` set to `https://grins-dev-dev.up.railway.app` for Preview + Development environments
+- **Database baseline** — 27 customers, 85 jobs in dev DB before test
+
+### 5.2 Frontend Deployment to Vercel
+**Timestamp:** 2026-03-26 ~12:18 CDT
+
+1. **Initial deploy** (`vercel deploy` from `/Users/kirillrakitin/Grins_irrigation/frontend`)
+   - Deployed to Vercel Production: `https://frontend-n4eczrqbo-kirilldr01s-projects.vercel.app`
+   - Alias: `https://frontend-beige-one-56.vercel.app`
+   - Build: Vite v6.4.1, 1817 modules, 32 output chunks
+
+2. **Issue discovered:** `VITE_API_URL` was only set for Preview + Development environments on Vercel, but `vercel deploy` deployed to Production. The frontend fell back to the hardcoded production Railway URL (`grinsirrigationplatform-production.up.railway.app`) instead of the dev backend.
+
+3. **Fix:** Added `VITE_API_URL=https://grins-dev-dev.up.railway.app` to Vercel Production environment via `vercel env add VITE_API_URL production`
+
+4. **Redeployed** with `vercel deploy --prod`
+   - New Production URL: `https://frontend-ifnvrpnbg-kirilldr01s-projects.vercel.app`
+   - Alias: `https://frontend-beige-one-56.vercel.app` (same)
+   - Confirmed build picked up the env var
+
+5. **Cleanup after test:** Removed `VITE_API_URL` from Vercel Production environment via `vercel env rm VITE_API_URL production -y` to avoid affecting future production deploys
+
+### 5.3 CORS Fix for Vercel Alias URL
+**Timestamp:** 2026-03-26 ~12:30 CDT
+
+**Problem:** First checkout attempt from `frontend-beige-one-56.vercel.app` failed with "Something went wrong" error.
+
+**Root cause investigation:**
+- Direct `curl` to `POST /api/v1/onboarding/pre-checkout-consent` succeeded (returned consent token)
+- Railway logs showed: `OPTIONS /api/v1/onboarding/pre-checkout-consent HTTP/1.1" 400 Bad Request`
+- The browser preflight (OPTIONS) was rejected because the Vercel alias URL `frontend-beige-one-56.vercel.app` did **not** match the CORS wildcard pattern `frontend-*-kirilldr01s-projects.vercel.app`
+- The alias domain format (`frontend-beige-one-56.vercel.app`) differs from deployment URLs (`frontend-<hash>-kirilldr01s-projects.vercel.app`)
+
+**Fix:** Updated `CORS_ORIGINS` on Railway dev environment to add the exact alias:
+```
+CORS_ORIGINS=https://grins-dev-dev.up.railway.app,https://grins-irrigation-platform-*-kirilldr01s-projects.vercel.app,https://grins-irrigation-*-kirilldr01s-projects.vercel.app,https://frontend-*-kirilldr01s-projects.vercel.app,https://frontend-beige-one-56.vercel.app,http://localhost:5173,http://localhost:3000
+```
+
+- Set via `mcp__railway__set-variables` for dev environment
+- Railway auto-deployed (build + deploy took ~2 minutes)
+- Deployment `cd47d0ae` completed successfully
+
+### 5.4 Browser Checkout Flow Execution
+**Timestamp:** 2026-03-26 ~12:35 CDT
+
+Performed full E2E checkout using `agent-browser` automation:
+
+**Step 1: Landing page**
+- Navigated to `https://frontend-beige-one-56.vercel.app`
+- Page title: "Grins Irrigation & Landscaping | Twin Cities MN"
+- Hero: "Wake Up to a Perfect Lawn Every Morning"
+
+**Step 2: Service Packages page**
+- Navigated to `/service-packages`
+- Confirmed 3 residential packages: Essential ($175/yr), Professional ($260/yr), Premium ($725/yr)
+- Confirmed 4 commercial packages below
+- Clicked "Subscribe to Professional Plan — $260/year"
+
+**Step 3: Pre-checkout consent modal**
+- Modal opened with: $260/yr base price, phone field, zone count (default 1), lake pump checkbox, RPZ checkbox, auto-renewal disclosures (5 points), SMS consent checkbox
+- Filled phone: `6125559999`
+- Checked SMS consent checkbox
+- Clicked "Confirm Subscription"
+
+**Step 4: Backend API calls** (verified in Railway logs)
+- `OPTIONS /api/v1/onboarding/pre-checkout-consent` → **200 OK** (CORS pass)
+- `POST /api/v1/onboarding/pre-checkout-consent` → **201 Created** (consent token generated)
+- `OPTIONS /api/v1/checkout/create-session` → **200 OK**
+- `POST /api/v1/checkout/create-session` → **200 OK** (Stripe session `cs_test_a1l4rEVVyFXciswWLOXHqdul4bYjvD1xSdau3yvWLqD5E0dYAcQfQQa1l9` created)
+
+**Step 5: Stripe Checkout page**
+- Redirected to `checkout.stripe.com/c/pay/cs_test_a1l4...`
+- Page showed: "Subscribe to Residential Professional Package — $260.00 per year" with **Sandbox** badge
+- Filled email: `e2e-dev-test-20260326@grinstest.com`
+- Filled phone: `6125559999`
+- Expanded card form via JS: `document.querySelector('[data-testid="card-accordion-item"]').querySelector('button').click()`
+- Filled card: `4242 4242 4242 4242`, expiry: `12/27`, CVC: `123`, name: `E2E Dev Test`
+- Clicked "Enter address manually"
+- Filled address: `123 Test Street`, city: `Denver`, ZIP: `80111`, state: `Colorado`
+- Checked "I agree to Terms of Service and Privacy Policy"
+- Clicked **Subscribe**
+
+**Step 6: Payment processing & webhook delivery**
+- Stripe processed payment successfully
+- Railway logs: TWO `POST /api/v1/webhooks/stripe` → **200 OK** (both webhook events handled)
+- Stripe retrieved checkout session with customer expand → **200**
+- Redirected to: `https://frontend-beige-one-56.vercel.app/onboarding?session_id=cs_test_a1l4...`
+
+**Step 7: Onboarding page**
+- Page showed: "Welcome, E2E Dev Test!" / "Professional — Residential"
+- Service address same as billing: checked (123 Test Street, Denver, CO 80111)
+- Filled gate code: `1234`
+- Filled access instructions: "Gate is on the left side of the house"
+- Selected preferred time: Morning
+- Clicked "Complete Onboarding"
+
+**Step 8: Success page**
+- Page showed: **"You're All Set!"**
+- "Thank you, E2E Dev Test!"
+- "Package: Professional — Residential"
+- Services Included: Spring system activation, Mid-season inspection, Fall winterization (3 services)
+- "What Happens Next" section with next steps
+- "Manage Your Subscription" and "Back to Homepage" buttons
+
+### 5.5 Stripe Subscription Verification
+**Timestamp:** 2026-03-26 ~12:40 CDT
+
+Verified via Stripe MCP API:
+
+- **Customer ID:** `cus_UDeMBoHlRlVb5k` (found by email `e2e-dev-test-20260326@grinstest.com`)
+- **Subscription ID:** `sub_1TFD3xQDNzCTp6j5XsqPpwtA`
+- **Status:** `active`
+- **Price ID:** `price_1TF2nCQDNzCTp6j5sIB9OSH4` ($260/yr — Residential Professional)
+- **Quantity:** 1
+
+### 5.6 Admin Dashboard Verification
+**Timestamp:** 2026-03-26 ~12:42 CDT
+
+Logged into dev admin dashboard at `https://grins-irrigation-platform-git-dev-kirilldr01s-projects.vercel.app` (admin / admin123).
+
+**Dashboard overview:**
+- Active Agreements: **21** (up from 20)
+- To Be Scheduled: **88** (up from 85 — 3 new jobs)
+- MRR: **$678**
+
+**Customer record (Customers page):**
+- Name: **E2E Dev Test**
+- Customer since: **3/26/2026**
+- Phone: **6125559999**
+- Email: **e2e-dev-test-20260326@grinstest.com**
+- Address: **123 Test Street, Denver, CO 80111**
+- SMS: **Opted in**
+- Flag: **New Customer**
+- Property: residential, Primary, Gate Code: 1234, Access: "Gate is on the left side of the house"
+
+**Agreement record (Agreements page):**
+- Agreement #: **AGR-2026-032**
+- Customer: **E2E Dev Test**
+- Tier: **Professional**
+- Package Type: **Residential**
+- Annual Price: **$260.00**
+- Auto-Renew: **Yes**
+- Payment Status: **Current**
+- Status: **Active**
+- "View in Stripe" link present
+
+**Jobs/Visits (3 of 3 generated):**
+1. **spring_startup** — 3/31/2026 – 4/29/2026 — Approved
+2. **mid_season_inspection** — 6/30/2026 – 7/30/2026 — Approved
+3. **fall_winterization** — 9/30/2026 – 10/30/2026 — Approved
+
+**Status History:**
+1. **Pending** — "Agreement created" — 3/26/2026
+2. **Pending → Active** — "Payment confirmed via Stripe checkout" — 3/26/2026
+
+**Compliance (3 disclosure records):**
+1. **Confirmation** — 3/26/2026 via pending
+2. **Pre-Sale** — 3/26/2026 via stripe_checkout
+3. **Pre-Sale** — 3/26/2026 via web_form
+- Pre-Sale: green check
+- Confirmation: green check
+- Renewal Notice: N/A (not applicable yet)
+- Annual Notice: warning (not sent yet — expected for new agreement)
+- Cancellation Confirmation: N/A
+
+### 5.7 E2E Test Summary — ALL CHECKS PASSED
+
+| Check | Expected | Actual | Status |
+|-------|----------|--------|--------|
+| Frontend loads on dev Vercel | Landing page renders | "Wake Up to a Perfect Lawn" | PASS |
+| Service packages display | 8 tiers with correct prices | All 8 displayed correctly | PASS |
+| Pre-checkout consent modal | Phone + SMS consent + disclosures | All fields present, form submitted | PASS |
+| Consent API call | 201 Created | 201 Created | PASS |
+| Checkout session created | Stripe session URL returned | `cs_test_a1l4...` session created | PASS |
+| Stripe Checkout page | $260/yr Professional Residential | Correct product + price shown | PASS |
+| Test card payment | Accepted | Payment processed successfully | PASS |
+| Webhook delivery | 200 OK | Two webhooks both returned 200 OK | PASS |
+| Redirect to onboarding | `/onboarding?session_id=...` | Correct redirect with session ID | PASS |
+| Onboarding form | Welcome + package name | "Welcome, E2E Dev Test!" + "Professional — Residential" | PASS |
+| Success page | "You're All Set!" | Full success page with services listed | PASS |
+| Stripe customer created | Customer with test email | `cus_UDeMBoHlRlVb5k` found | PASS |
+| Stripe subscription active | Active subscription for $260/yr | `sub_1TFD3x...` active on `price_1TF2nC...` | PASS |
+| Customer in admin | Name, email, phone, address | All fields correct | PASS |
+| Agreement in admin | AGR-2026-032, Professional, Active, $260 | All fields correct | PASS |
+| Jobs generated | 3 jobs (spring, mid-season, fall) | 3 jobs created, all Approved | PASS |
+| Status history | pending → active | Two entries: created + Stripe confirmed | PASS |
+| Compliance records | Pre-sale + Confirmation | 3 records: 2 pre-sale + 1 confirmation | PASS |
+| Database totals | +1 customer, +1 agreement, +3 jobs | 28 customers, 21 active agreements, 88 jobs | PASS |
+
+### 5.8 Issues Found and Fixed During Test
+
+| Issue | Root Cause | Fix Applied |
+|-------|-----------|-------------|
+| Frontend hitting production backend | `VITE_API_URL` not set for Vercel Production env; fallback URL points to prod Railway | Added env var for Production, then removed after test |
+| CORS 400 on OPTIONS preflight | Vercel alias URL `frontend-beige-one-56.vercel.app` doesn't match wildcard `frontend-*-kirilldr01s-projects.vercel.app` | Added exact alias to `CORS_ORIGINS` on Railway dev |
 
 ---
 
