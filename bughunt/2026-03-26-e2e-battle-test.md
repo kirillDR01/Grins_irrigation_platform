@@ -9,9 +9,11 @@
 
 ## Summary
 
-**Tests executed:** 33
+**Tests executed:** 33 (browser) + code analysis
 **Tests passed:** 29
-**Bugs found:** 4 (2 HIGH, 1 MEDIUM, 1 LOW)
+**Bugs found:** 10 total
+- Browser-tested: 4 (2 HIGH, 1 MEDIUM, 1 LOW)
+- Code analysis: 6 (1 HIGH, 3 MEDIUM, 2 LOW)
 **Full E2E checkouts completed:** 3 (Professional $260, Premium $725, Winterization $85 with decline card)
 **Stripe error cards tested:** 2 (decline 4000...0002, insufficient funds 4000...9995)
 
@@ -114,6 +116,82 @@ return `...Lake pump add-on: ${lakePump}. ${rpzLabel}: $50.`;
 - `GA4` + `GTM` — No analytics tracking on dev (acceptable), but must be set for production
 
 **Severity:** LOW for dev, must be addressed before production deploy
+
+---
+
+### BUG-005: Missing Terms Acceptance Checkbox in Lead Form (HIGH — code analysis)
+
+**Location:** `Grins_irrigation/frontend/src/features/lead-form/components/LeadForm.tsx` lines 71, 270-280
+
+**Description:** The `termsAccepted` field exists in form state (initialized `false` at line 71) and is sent in the payload, but the `TermsCheckbox` component is imported but **never rendered** in the form JSX. Only `SmsConsentCheckbox` and `EmailMarketingCheckbox` are rendered. Terms acceptance is always submitted as `false`.
+
+**Impact:** Terms acceptance requirement cannot be enforced. Compliance gap — users never explicitly accept terms before lead submission.
+
+**Severity:** HIGH — compliance/legal risk
+
+---
+
+### BUG-006: Unhandled JSON Parse Errors in API Calls (MEDIUM — code analysis)
+
+**Location:**
+- `checkoutApi.ts` lines 41, 57
+- `onboardingApi.ts` lines 24, 44
+- `chatbotApi.ts` line 11
+
+**Description:** `.json()` calls on API responses are not wrapped in try/catch. If the server returns malformed JSON, an HTML error page, or a network interruption occurs during parsing, the unhandled rejection will crash the component.
+
+**Example (chatbotApi.ts):**
+```typescript
+const data = await response.json();  // Can throw if not valid JSON
+return data.response;                // Also undefined if field missing
+```
+
+**Severity:** MEDIUM — causes unhandled promise rejections on API errors
+
+---
+
+### BUG-007: Missing Email Validation in Lead Form (MEDIUM — code analysis)
+
+**Location:** `Grins_irrigation/frontend/src/features/lead-form/components/LeadForm.tsx` lines 42-52
+
+**Description:** The `validate()` function checks for name, phone format, and zip code, but has no email format validation. The input uses `type="email"` for browser-level hints, but the form's custom validation logic doesn't verify email format. Invalid emails (e.g., "not-an-email") can be submitted.
+
+**Severity:** MEDIUM — junk emails in lead database
+
+---
+
+### BUG-008: Onboarding Service Address Has No Validation (MEDIUM — code analysis)
+
+**Location:** `Grins_irrigation/frontend/src/features/onboarding/components/OnboardingPage.tsx` lines 185-209
+
+**Description:** When user unchecks "Service address same as billing address", the address fields appear with `aria-required="true"` but **no form validation** enforces them. The onSubmit handler will send empty/undefined service_address fields to the backend.
+
+**Severity:** MEDIUM — incomplete property data for service scheduling
+
+---
+
+### BUG-009: Hardcoded API Domains in CSP Header (LOW — code analysis)
+
+**Location:** `Grins_irrigation/frontend/index.html` line 6
+
+**Description:** The `Content-Security-Policy` `connect-src` directive hardcodes both Railway domains:
+```
+https://grinsirrigationplatform-production.up.railway.app
+https://grins-dev-dev.up.railway.app
+```
+If API domains change, browser will block API requests with CSP violations. Should be environment-based.
+
+**Severity:** LOW — works currently, fragile for domain changes
+
+---
+
+### BUG-010: Invisible Router Loading Fallback (LOW — code analysis)
+
+**Location:** `Grins_irrigation/frontend/src/core/router.tsx` line 42
+
+**Description:** The React Suspense fallback is `<div className="flex-1" />` — an invisible empty div. Users see a blank page while lazy-loaded route chunks download. No loading spinner or skeleton.
+
+**Severity:** LOW — poor UX during page transitions, especially on slow connections
 
 ---
 
