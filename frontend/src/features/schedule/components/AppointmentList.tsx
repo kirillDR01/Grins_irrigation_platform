@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { format } from 'date-fns';
+import { parseLocalDate } from '@/shared/utils/dateUtils';
 import {
   useReactTable,
   getCoreRowModel,
@@ -101,7 +102,7 @@ export function AppointmentList({ onAppointmentClick }: AppointmentListProps) {
       accessorKey: 'scheduled_date',
       header: 'Date/Time',
       cell: ({ row }) => {
-        const date = new Date(row.original.scheduled_date);
+        const date = parseLocalDate(row.original.scheduled_date);
         const start = row.original.time_window_start.slice(0, 5);
         const end = row.original.time_window_end.slice(0, 5);
         return (

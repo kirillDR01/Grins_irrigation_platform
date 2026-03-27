@@ -6,6 +6,7 @@
  */
 
 import { format } from 'date-fns';
+import { parseLocalDate } from '@/shared/utils/dateUtils';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -161,7 +162,7 @@ export function AppointmentDetail({
             </div>
             <div>
               <p className="text-sm font-semibold text-slate-800">
-                {format(new Date(appointment.scheduled_date), 'EEEE, MMMM d, yyyy')}
+                {format(parseLocalDate(appointment.scheduled_date), 'EEEE, MMMM d, yyyy')}
               </p>
               <div className="flex items-center gap-1.5 text-xs text-slate-500">
                 <Clock className="h-3 w-3" />

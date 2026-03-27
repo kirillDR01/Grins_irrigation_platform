@@ -217,11 +217,28 @@ async def list_jobs(
         pattern="^(asc|desc)$",
         description="Sort order (asc or desc)",
     ),
+    limit: int | None = Query(
+        default=None,
+        ge=1,
+        le=100,
+        description="Max items to return (alias for page_size). Takes precedence over page_size when provided.",
+    ),
+    offset: int | None = Query(
+        default=None,
+        ge=0,
+        description="Number of items to skip. Converted to equivalent page number.",
+    ),
 ) -> PaginatedJobResponse:
     """List jobs with filtering and pagination.
 
     Validates: Requirement 6.1-6.6, 6.9, 12.1
     """
+    # Support limit/offset as alternative to page/page_size
+    if limit is not None:
+        page_size = limit
+    if offset is not None:
+        page = (offset // page_size) + 1
+
     _endpoints.log_started(
         "list_jobs",
         page=page,

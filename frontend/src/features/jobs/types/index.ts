@@ -1,4 +1,5 @@
 import type { BaseEntity, PaginationParams } from '@/core/api';
+import { parseLocalDate } from '@/shared/utils/dateUtils';
 
 // Job status enum matching backend
 export type JobStatus =
@@ -361,9 +362,7 @@ export function calculateDaysWaiting(createdAt: string): number {
 // Helper: get due by color class (Req 23)
 export function getDueByColorClass(targetEndDate: string | null): string {
   if (!targetEndDate) return '';
-  // Parse date parts to avoid UTC vs local timezone mismatch with date-only strings
-  const [year, month, day] = targetEndDate.split('T')[0].split('-').map(Number);
-  const target = new Date(year, month - 1, day);
+  const target = parseLocalDate(targetEndDate);
   const now = new Date();
   // Reset time to compare dates only
   now.setHours(0, 0, 0, 0);

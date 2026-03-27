@@ -290,6 +290,7 @@ class CheckoutService(LoggerMixin):
 
         session_params: dict[str, Any] = {
             "mode": "subscription",
+            "payment_method_types": ["card"],
             "line_items": line_items,
             "phone_number_collection": {"enabled": True},
             "billing_address_collection": "required",

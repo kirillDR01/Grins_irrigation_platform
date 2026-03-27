@@ -16,6 +16,7 @@ import {
   Save,
   TrendingUp,
 } from 'lucide-react';
+import { parseLocalDate } from '@/shared/utils/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -537,7 +538,7 @@ function TimelineRow({ label, date, isActive }: TimelineRowProps) {
     <>
       <p className={`${isActive ? 'text-slate-700' : 'text-slate-400'}`}>{label}</p>
       <p className={`text-right ${isActive ? 'text-slate-600' : 'text-slate-300'}`}>
-        {date ? new Date(date).toLocaleDateString() : '-'}
+        {date ? parseLocalDate(date).toLocaleDateString() : '-'}
       </p>
     </>
   );

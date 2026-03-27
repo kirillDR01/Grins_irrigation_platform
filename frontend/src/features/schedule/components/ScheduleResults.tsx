@@ -4,6 +4,7 @@
  */
 
 import { useState } from 'react';
+import { parseLocalDate } from '@/shared/utils/dateUtils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -46,7 +47,7 @@ export function ScheduleResults({ results, scheduleDate }: ScheduleResultsProps)
   const applyMutation = useApplySchedule();
 
   // Format the date for display
-  const formattedDate = new Date(scheduleDate + 'T00:00:00').toLocaleDateString('en-US', {
+  const formattedDate = parseLocalDate(scheduleDate).toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',

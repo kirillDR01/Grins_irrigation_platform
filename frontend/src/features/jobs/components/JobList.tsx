@@ -10,6 +10,7 @@ import {
 } from '@tanstack/react-table';
 import { ArrowUpDown, MoreHorizontal, Search, FileText, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
+import { parseLocalDate } from '@/shared/utils/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -306,7 +307,7 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
         const colorClass = getDueByColorClass(targetEnd);
         return (
           <span className={`text-sm ${colorClass}`} data-testid={`due-by-${row.original.id}`}>
-            {format(new Date(targetEnd + 'T00:00:00'), 'MMM d, yyyy')}
+            {format(parseLocalDate(targetEnd), 'MMM d, yyyy')}
           </span>
         );
       },
@@ -515,11 +516,11 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
                 {params.target_date_from || params.target_date_to ? (
                   <span className="text-sm">
                     {params.target_date_from
-                      ? format(new Date(params.target_date_from + 'T00:00:00'), 'MMM d')
+                      ? format(parseLocalDate(params.target_date_from), 'MMM d')
                       : '...'}
                     {' – '}
                     {params.target_date_to
-                      ? format(new Date(params.target_date_to + 'T00:00:00'), 'MMM d')
+                      ? format(parseLocalDate(params.target_date_to), 'MMM d')
                       : '...'}
                   </span>
                 ) : (
@@ -535,7 +536,7 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
                     mode="single"
                     selected={
                       params.target_date_from
-                        ? new Date(params.target_date_from + 'T00:00:00')
+                        ? parseLocalDate(params.target_date_from)
                         : undefined
                     }
                     onSelect={(date) =>
@@ -554,7 +555,7 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
                     mode="single"
                     selected={
                       params.target_date_to
-                        ? new Date(params.target_date_to + 'T00:00:00')
+                        ? parseLocalDate(params.target_date_to)
                         : undefined
                     }
                     onSelect={(date) =>
