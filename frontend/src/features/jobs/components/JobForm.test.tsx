@@ -23,7 +23,7 @@ const mockJob: Job = {
   service_agreement_id: null,
   job_type: 'spring_startup',
   category: 'ready_to_schedule',
-  status: 'requested',
+  status: 'to_be_scheduled',
   description: 'Spring startup for irrigation system',
   summary: null,
   notes: null,

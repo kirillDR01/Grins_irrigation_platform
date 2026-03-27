@@ -54,6 +54,7 @@ export interface Lead extends BaseEntity {
   action_tags: ActionTag[];
   sms_consent: boolean;
   terms_accepted: boolean;
+  email_marketing_consent: boolean;
 }
 
 // Lead attachment (Req 15)

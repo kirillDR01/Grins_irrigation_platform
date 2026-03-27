@@ -34,7 +34,7 @@ const mockJob = {
   service_offering_id: null,
   job_type: 'spring_startup',
   category: 'ready_to_schedule' as const,
-  status: 'requested' as const,
+  status: 'to_be_scheduled' as const,
   description: 'Spring startup service',
   estimated_duration_minutes: 60,
   priority_level: 0,
@@ -89,7 +89,7 @@ describe('jobKeys', () => {
   });
 
   it('should generate correct list key with params', () => {
-    const params = { page: 1, status: 'requested' as const };
+    const params = { page: 1, status: 'to_be_scheduled' as const };
     expect(jobKeys.list(params)).toEqual(['jobs', 'list', params]);
   });
 
@@ -102,7 +102,7 @@ describe('jobKeys', () => {
   });
 
   it('should generate correct byStatus key', () => {
-    expect(jobKeys.byStatus('requested')).toEqual(['jobs', 'status', 'requested']);
+    expect(jobKeys.byStatus('to_be_scheduled')).toEqual(['jobs', 'status', 'to_be_scheduled']);
   });
 
   it('should generate correct byCustomer key', () => {
@@ -143,7 +143,7 @@ describe('useJobs', () => {
   });
 
   it('should fetch jobs with params', async () => {
-    const params = { page: 2, status: 'approved' as const };
+    const params = { page: 2, status: 'to_be_scheduled' as const };
     vi.mocked(jobApi.list).mockResolvedValue(mockPaginatedResponse);
 
     const { result } = renderHook(() => useJobs(params), {
@@ -211,7 +211,7 @@ describe('useJobsByStatus', () => {
   it('should fetch jobs by status', async () => {
     vi.mocked(jobApi.getByStatus).mockResolvedValue(mockPaginatedResponse);
 
-    const { result } = renderHook(() => useJobsByStatus('requested'), {
+    const { result } = renderHook(() => useJobsByStatus('to_be_scheduled'), {
       wrapper: createWrapper(),
     });
 
@@ -219,14 +219,14 @@ describe('useJobsByStatus', () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(jobApi.getByStatus).toHaveBeenCalledWith('requested', undefined);
+    expect(jobApi.getByStatus).toHaveBeenCalledWith('to_be_scheduled', undefined);
   });
 
   it('should fetch jobs by status with additional params', async () => {
     const params = { page: 2 };
     vi.mocked(jobApi.getByStatus).mockResolvedValue(mockPaginatedResponse);
 
-    const { result } = renderHook(() => useJobsByStatus('approved', params), {
+    const { result } = renderHook(() => useJobsByStatus('in_progress', params), {
       wrapper: createWrapper(),
     });
 
@@ -234,7 +234,7 @@ describe('useJobsByStatus', () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(jobApi.getByStatus).toHaveBeenCalledWith('approved', params);
+    expect(jobApi.getByStatus).toHaveBeenCalledWith('in_progress', params);
   });
 });
 

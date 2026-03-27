@@ -240,11 +240,9 @@ class TestJobMetricsByStatusEndpoint:
             mock_job_repo = AsyncMock()
             mock_job_repo.count_by_status = AsyncMock(
                 return_value={
-                    "requested": 10,
-                    "approved": 5,
+                    "to_be_scheduled": 15,
                     "in_progress": 8,
                     "completed": 20,
-                    "scheduled": 2,
                     "cancelled": 1,
                 },
             )
@@ -264,10 +262,10 @@ class TestJobMetricsByStatusEndpoint:
 
                 assert resp.status_code == 200
                 data = resp.json()
-                assert data["new_requests"] == 10
+                assert data["new_requests"] == 0
                 assert data["estimates"] == 4
                 assert data["pending_approval"] == 3
-                assert data["to_be_scheduled"] == 5
+                assert data["to_be_scheduled"] == 15
                 assert data["in_progress"] == 8
                 assert data["complete"] == 20
             finally:
@@ -454,8 +452,7 @@ class TestProperty6JobStatusPartitioning:
     """
 
     @given(
-        requested=st.integers(min_value=0, max_value=500),
-        approved=st.integers(min_value=0, max_value=500),
+        to_be_scheduled=st.integers(min_value=0, max_value=500),
         in_progress=st.integers(min_value=0, max_value=500),
         completed=st.integers(min_value=0, max_value=500),
         estimates_count=st.integers(min_value=0, max_value=500),
@@ -465,8 +462,7 @@ class TestProperty6JobStatusPartitioning:
     @pytest.mark.asyncio
     async def test_response_has_exactly_six_categories(
         self,
-        requested: int,
-        approved: int,
+        to_be_scheduled: int,
         in_progress: int,
         completed: int,
         estimates_count: int,
@@ -487,8 +483,7 @@ class TestProperty6JobStatusPartitioning:
             mock_job_repo = AsyncMock()
             mock_job_repo.count_by_status = AsyncMock(
                 return_value={
-                    "requested": requested,
-                    "approved": approved,
+                    "to_be_scheduled": to_be_scheduled,
                     "in_progress": in_progress,
                     "completed": completed,
                 },
@@ -522,10 +517,10 @@ class TestProperty6JobStatusPartitioning:
                 assert set(data.keys()) == expected_keys
 
                 # Values match what was provided
-                assert data["new_requests"] == requested
+                assert data["new_requests"] == 0  # No longer a distinct status
                 assert data["estimates"] == estimates_count
                 assert data["pending_approval"] == pending_approval
-                assert data["to_be_scheduled"] == approved
+                assert data["to_be_scheduled"] == to_be_scheduled
                 assert data["in_progress"] == in_progress
                 assert data["complete"] == completed
 

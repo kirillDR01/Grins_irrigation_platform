@@ -41,7 +41,7 @@ def mock_job():
     job.service_offering_id = uuid4()
     job.job_type = "spring_startup"
     job.category = JobCategory.READY_TO_SCHEDULE.value
-    job.status = JobStatus.REQUESTED.value
+    job.status = JobStatus.TO_BE_SCHEDULED.value
     job.description = "Test job"
     job.estimated_duration_minutes = 60
     job.priority_level = 0
@@ -302,7 +302,7 @@ class TestListJobs:
         response = client.get(
             "/api/v1/jobs",
             params={
-                "status": "requested",
+                "status": "to_be_scheduled",
                 "category": "ready_to_schedule",
                 "page": 1,
                 "page_size": 10,
@@ -328,23 +328,23 @@ class TestUpdateJobStatus:
 
     def test_update_status_success(self, client, mock_job, mock_job_service):
         """Test successful status update."""
-        mock_job.status = JobStatus.APPROVED.value
+        mock_job.status = JobStatus.IN_PROGRESS.value
         mock_job_service.update_status.return_value = mock_job
 
         response = client.put(
             f"/api/v1/jobs/{mock_job.id}/status",
-            json={"status": "approved"},
+            json={"status": "in_progress"},
         )
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert data["status"] == "approved"
+        assert data["status"] == "in_progress"
 
     def test_update_status_invalid_transition(self, client, mock_job_service):
         """Test status update with invalid transition."""
         job_id = uuid4()
         mock_job_service.update_status.side_effect = InvalidStatusTransitionError(
-            JobStatus.REQUESTED,
+            JobStatus.TO_BE_SCHEDULED,
             JobStatus.COMPLETED,
         )
 
@@ -363,7 +363,7 @@ class TestUpdateJobStatus:
 
         response = client.put(
             f"/api/v1/jobs/{job_id}/status",
-            json={"status": "approved"},
+            json={"status": "in_progress"},
         )
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
@@ -378,7 +378,7 @@ class TestGetJobHistory:
         history_entry.id = uuid4()
         history_entry.job_id = mock_job.id
         history_entry.previous_status = None
-        history_entry.new_status = JobStatus.REQUESTED.value
+        history_entry.new_status = JobStatus.TO_BE_SCHEDULED.value
         history_entry.changed_at = datetime.now()
         history_entry.changed_by = None
         history_entry.notes = None
@@ -390,7 +390,7 @@ class TestGetJobHistory:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert len(data) == 1
-        assert data[0]["new_status"] == "requested"
+        assert data[0]["new_status"] == "to_be_scheduled"
 
     def test_get_history_not_found(self, client, mock_job_service):
         """Test history retrieval with non-existent job."""
@@ -438,7 +438,7 @@ class TestGetJobsByStatus:
         """Test successful by-status retrieval."""
         mock_job_service.get_by_status.return_value = ([mock_job], 1)
 
-        response = client.get("/api/v1/jobs/by-status/requested")
+        response = client.get("/api/v1/jobs/by-status/to_be_scheduled")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()

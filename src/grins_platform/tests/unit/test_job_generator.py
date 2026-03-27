@@ -192,7 +192,7 @@ class TestStatusAndCategory:
     @pytest.mark.unit
     @pytest.mark.asyncio
     @pytest.mark.parametrize("tier", ["Essential", "Professional", "Premium"])
-    async def test_all_jobs_status_approved(self, tier: str) -> None:
+    async def test_all_jobs_status_to_be_scheduled(self, tier: str) -> None:
         session = _make_session()
         gen = JobGenerator(session)
         agreement = _make_agreement(tier_name=tier)
@@ -200,7 +200,7 @@ class TestStatusAndCategory:
         jobs = await gen.generate_jobs(agreement)
 
         for job in jobs:
-            assert job.status == JobStatus.APPROVED.value
+            assert job.status == JobStatus.TO_BE_SCHEDULED.value
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -297,7 +297,7 @@ class TestLinking:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_all_jobs_have_approved_at_set(self) -> None:
+    async def test_all_jobs_have_requested_at_set(self) -> None:
         session = _make_session()
         gen = JobGenerator(session)
         agreement = _make_agreement(tier_name="Essential")
@@ -305,4 +305,4 @@ class TestLinking:
         jobs = await gen.generate_jobs(agreement)
 
         for job in jobs:
-            assert job.approved_at is not None
+            assert job.requested_at is not None

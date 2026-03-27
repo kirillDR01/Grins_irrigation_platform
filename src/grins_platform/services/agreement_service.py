@@ -309,20 +309,18 @@ class AgreementService(LoggerMixin):
         if not agreement:
             raise AgreementNotFoundError(agreement_id)
 
-        # Cancel APPROVED jobs, preserve others
+        # Cancel TO_BE_SCHEDULED jobs, preserve others
         total_visits = len(agreement.jobs)
         remaining_visits = 0
         for job in agreement.jobs:
-            if job.status == JobStatus.APPROVED.value:
+            if job.status == JobStatus.TO_BE_SCHEDULED.value:
                 job.status = JobStatus.CANCELLED.value
-                job.closed_at = datetime.now(timezone.utc)
                 remaining_visits += 1
             elif job.status not in (
                 JobStatus.COMPLETED.value,
-                JobStatus.CLOSED.value,
                 JobStatus.CANCELLED.value,
             ):
-                # SCHEDULED, IN_PROGRESS — not completed, count as remaining
+                # IN_PROGRESS — not completed, count as remaining
                 remaining_visits += 1
 
         # Compute prorated refund

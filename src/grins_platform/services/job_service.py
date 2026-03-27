@@ -64,12 +64,9 @@ class JobService(LoggerMixin):
 
     # Valid status transitions
     VALID_TRANSITIONS: ClassVar[dict[JobStatus, set[JobStatus]]] = {
-        JobStatus.REQUESTED: {JobStatus.APPROVED, JobStatus.CANCELLED},
-        JobStatus.APPROVED: {JobStatus.SCHEDULED, JobStatus.CANCELLED},
-        JobStatus.SCHEDULED: {JobStatus.IN_PROGRESS, JobStatus.CANCELLED},
-        JobStatus.IN_PROGRESS: {JobStatus.COMPLETED, JobStatus.CANCELLED},
-        JobStatus.COMPLETED: {JobStatus.CLOSED},
-        JobStatus.CLOSED: set(),  # Terminal state
+        JobStatus.TO_BE_SCHEDULED: {JobStatus.IN_PROGRESS, JobStatus.CANCELLED},
+        JobStatus.IN_PROGRESS: {JobStatus.COMPLETED, JobStatus.CANCELLED, JobStatus.TO_BE_SCHEDULED},
+        JobStatus.COMPLETED: set(),  # Terminal state
         JobStatus.CANCELLED: set(),  # Terminal state
     }
 
@@ -139,12 +136,9 @@ class JobService(LoggerMixin):
             Field name or None if no timestamp field
         """
         timestamp_map = {
-            JobStatus.REQUESTED: "requested_at",
-            JobStatus.APPROVED: "approved_at",
-            JobStatus.SCHEDULED: "scheduled_at",
+            JobStatus.TO_BE_SCHEDULED: "requested_at",
             JobStatus.IN_PROGRESS: "started_at",
             JobStatus.COMPLETED: "completed_at",
-            JobStatus.CLOSED: "closed_at",
         }
         return timestamp_map.get(status)
 
@@ -211,7 +205,7 @@ class JobService(LoggerMixin):
             service_offering_id=data.service_offering_id,
             job_type=data.job_type,
             category=category.value,
-            status=JobStatus.REQUESTED.value,
+            status=JobStatus.TO_BE_SCHEDULED.value,
             description=data.description,
             estimated_duration_minutes=data.estimated_duration_minutes,
             priority_level=data.priority_level,
@@ -227,7 +221,7 @@ class JobService(LoggerMixin):
         # Record initial status in history
         await self.job_repository.add_status_history(
             job_id=job.id,
-            new_status=JobStatus.REQUESTED,
+            new_status=JobStatus.TO_BE_SCHEDULED,
             previous_status=None,
         )
 

@@ -1,7 +1,7 @@
 """Property test for generated job invariants.
 
 Property 2: Generated Job Invariants
-For any generated job: status=APPROVED, category=READY_TO_SCHEDULE,
+For any generated job: status=TO_BE_SCHEDULED, category=READY_TO_SCHEDULE,
 non-null service_agreement_id matching source agreement, non-null customer_id,
 matching property_id when agreement has one.
 
@@ -62,12 +62,12 @@ class TestGeneratedJobInvariants:
 
     @given(tier_name=tiers)
     @settings(max_examples=30)
-    async def test_all_jobs_have_approved_status(self, tier_name: str) -> None:
-        """Every generated job has status=APPROVED."""
+    async def test_all_jobs_have_to_be_scheduled_status(self, tier_name: str) -> None:
+        """Every generated job has status=TO_BE_SCHEDULED."""
         gen = JobGenerator(_make_session())
         jobs = await gen.generate_jobs(_make_agreement(tier_name))
         for job in jobs:
-            assert job.status == JobStatus.APPROVED.value
+            assert job.status == JobStatus.TO_BE_SCHEDULED.value
 
     @given(tier_name=tiers)
     @settings(max_examples=30)

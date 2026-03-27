@@ -83,7 +83,7 @@ class TestFailedPaymentEscalationTimeline:
         """PAUSED ≥ 14 days → CANCELLED."""
         escalator = FailedPaymentEscalator()
         approved_job = MagicMock()
-        approved_job.status = JobStatus.APPROVED.value
+        approved_job.status = JobStatus.TO_BE_SCHEDULED.value
         completed_job = MagicMock()
         completed_job.status = JobStatus.COMPLETED.value
 
@@ -121,6 +121,6 @@ class TestFailedPaymentEscalationTimeline:
 
         assert agreement.status == AgreementStatus.CANCELLED.value
         assert agreement.cancelled_at is not None
-        # APPROVED jobs cancelled, COMPLETED preserved
+        # TO_BE_SCHEDULED jobs cancelled, COMPLETED preserved
         assert approved_job.status == JobStatus.CANCELLED.value
         assert completed_job.status == JobStatus.COMPLETED.value

@@ -1,8 +1,8 @@
 """Property test for cancellation job preservation.
 
-Property 13: Cancellation Preserves Non-APPROVED Jobs
-For any cancelled agreement, APPROVED jobs cancelled;
-SCHEDULED/IN_PROGRESS/COMPLETED jobs unchanged.
+Property 13: Cancellation Preserves Non-TO_BE_SCHEDULED Jobs
+For any cancelled agreement, TO_BE_SCHEDULED jobs cancelled;
+IN_PROGRESS/COMPLETED jobs unchanged.
 
 Validates: Requirements 14.2, 14.3
 """
@@ -24,14 +24,12 @@ from grins_platform.models.enums import AgreementStatus, JobStatus
 from grins_platform.services.agreement_service import AgreementService
 
 # Statuses that should be CANCELLED by cancel_agreement
-CANCELLABLE = [JobStatus.APPROVED.value]
+CANCELLABLE = [JobStatus.TO_BE_SCHEDULED.value]
 
 # Statuses that must be PRESERVED (not modified) by cancel_agreement
 PRESERVED = [
-    JobStatus.SCHEDULED.value,
     JobStatus.IN_PROGRESS.value,
     JobStatus.COMPLETED.value,
-    JobStatus.CLOSED.value,
     JobStatus.CANCELLED.value,
 ]
 
@@ -43,7 +41,6 @@ def _make_job(status: str) -> MagicMock:
     job = MagicMock()
     job.id = uuid4()
     job.status = status
-    job.closed_at = None
     return job
 
 
@@ -71,15 +68,15 @@ def _make_service(agr: MagicMock) -> AgreementService:
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestCancellationJobPreservationProperty:
-    """Property 13: Cancellation preserves non-APPROVED jobs."""
+    """Property 13: Cancellation preserves non-TO_BE_SCHEDULED jobs."""
 
     @given(job_statuses=st.lists(all_statuses, min_size=1, max_size=15))
     @settings(max_examples=50)
-    async def test_approved_jobs_cancelled(
+    async def test_to_be_scheduled_jobs_cancelled(
         self,
         job_statuses: list[str],
     ) -> None:
-        """All APPROVED jobs transition to CANCELLED after cancellation."""
+        """All TO_BE_SCHEDULED jobs transition to CANCELLED after cancellation."""
         jobs = [_make_job(s) for s in job_statuses]
         agr = _make_agreement(jobs)
         svc = _make_service(agr)
@@ -87,16 +84,16 @@ class TestCancellationJobPreservationProperty:
         await svc.cancel_agreement(agr.id, "test")
 
         for job, original in zip(jobs, job_statuses):
-            if original == JobStatus.APPROVED.value:
+            if original == JobStatus.TO_BE_SCHEDULED.value:
                 assert job.status == JobStatus.CANCELLED.value
 
     @given(job_statuses=st.lists(all_statuses, min_size=1, max_size=15))
     @settings(max_examples=50)
-    async def test_non_approved_jobs_unchanged(
+    async def test_non_to_be_scheduled_jobs_unchanged(
         self,
         job_statuses: list[str],
     ) -> None:
-        """SCHEDULED/IN_PROGRESS/COMPLETED/CLOSED/CANCELLED jobs are untouched."""
+        """IN_PROGRESS/COMPLETED/CANCELLED jobs are untouched."""
         jobs = [_make_job(s) for s in job_statuses]
         agr = _make_agreement(jobs)
         svc = _make_service(agr)
@@ -104,14 +101,14 @@ class TestCancellationJobPreservationProperty:
         await svc.cancel_agreement(agr.id, "test")
 
         for job, original in zip(jobs, job_statuses):
-            if original != JobStatus.APPROVED.value:
+            if original != JobStatus.TO_BE_SCHEDULED.value:
                 assert job.status == original
 
     @given(count=st.integers(min_value=1, max_value=10))
     @settings(max_examples=20)
-    async def test_all_approved_all_cancelled(self, count: int) -> None:
-        """When every job is APPROVED, every job becomes CANCELLED."""
-        jobs = [_make_job(JobStatus.APPROVED.value) for _ in range(count)]
+    async def test_all_to_be_scheduled_all_cancelled(self, count: int) -> None:
+        """When every job is TO_BE_SCHEDULED, every job becomes CANCELLED."""
+        jobs = [_make_job(JobStatus.TO_BE_SCHEDULED.value) for _ in range(count)]
         agr = _make_agreement(jobs)
         svc = _make_service(agr)
 
@@ -132,24 +129,26 @@ class TestCancellationJobPreservationProperty:
         assert all(j.status == JobStatus.COMPLETED.value for j in jobs)
 
     @given(
-        approved=st.integers(min_value=1, max_value=5),
-        scheduled=st.integers(min_value=1, max_value=5),
+        to_be_scheduled=st.integers(min_value=1, max_value=5),
+        in_progress=st.integers(min_value=1, max_value=5),
     )
     @settings(max_examples=30)
-    async def test_mixed_only_approved_cancelled(
+    async def test_mixed_only_to_be_scheduled_cancelled(
         self,
-        approved: int,
-        scheduled: int,
+        to_be_scheduled: int,
+        in_progress: int,
     ) -> None:
-        """In a mix of APPROVED + SCHEDULED, only APPROVED become CANCELLED."""
-        jobs_approved = [_make_job(JobStatus.APPROVED.value) for _ in range(approved)]
-        jobs_scheduled = [
-            _make_job(JobStatus.SCHEDULED.value) for _ in range(scheduled)
+        """In a mix of TO_BE_SCHEDULED + IN_PROGRESS, only TO_BE_SCHEDULED become CANCELLED."""
+        jobs_to_be_scheduled = [
+            _make_job(JobStatus.TO_BE_SCHEDULED.value) for _ in range(to_be_scheduled)
         ]
-        agr = _make_agreement(jobs_approved + jobs_scheduled)
+        jobs_in_progress = [
+            _make_job(JobStatus.IN_PROGRESS.value) for _ in range(in_progress)
+        ]
+        agr = _make_agreement(jobs_to_be_scheduled + jobs_in_progress)
         svc = _make_service(agr)
 
         await svc.cancel_agreement(agr.id, "test")
 
-        assert all(j.status == JobStatus.CANCELLED.value for j in jobs_approved)
-        assert all(j.status == JobStatus.SCHEDULED.value for j in jobs_scheduled)
+        assert all(j.status == JobStatus.CANCELLED.value for j in jobs_to_be_scheduled)
+        assert all(j.status == JobStatus.IN_PROGRESS.value for j in jobs_in_progress)

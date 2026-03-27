@@ -112,7 +112,7 @@ class ScheduleClearService(LoggerMixin):
         jobs_to_reset: list[UUID] = []
         for appointment in appointments:
             job = await self.job_repository.get_by_id(appointment.job_id)
-            if job and job.status == JobStatus.SCHEDULED.value:
+            if job and job.status == JobStatus.IN_PROGRESS.value:
                 jobs_to_reset.append(job.id)
 
         # Create audit log before deletion
@@ -133,7 +133,7 @@ class ScheduleClearService(LoggerMixin):
         for job_id in jobs_to_reset:
             _ = await self.job_repository.update(
                 job_id=job_id,
-                data={"status": JobStatus.APPROVED.value},
+                data={"status": JobStatus.TO_BE_SCHEDULED.value},
             )
 
         self.log_completed(
@@ -332,7 +332,7 @@ class ScheduleClearService(LoggerMixin):
                 job_id = UUID(job_id_str) if isinstance(job_id_str, str) else job_id_str
                 _ = await self.job_repository.update(
                     job_id=job_id,
-                    data={"status": JobStatus.SCHEDULED.value},
+                    data={"status": JobStatus.IN_PROGRESS.value},
                 )
                 jobs_updated += 1
             except (ValueError, KeyError) as e:  # noqa: PERF203

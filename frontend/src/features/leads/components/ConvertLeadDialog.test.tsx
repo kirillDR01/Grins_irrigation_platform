@@ -61,6 +61,7 @@ const twoWordNameLead: Lead = {
   action_tags: [],
   sms_consent: true,
   terms_accepted: true,
+  email_marketing_consent: true,
   created_at: '2025-01-20T10:00:00Z',
   updated_at: '2025-01-20T10:00:00Z',
 };

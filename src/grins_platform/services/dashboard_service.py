@@ -295,12 +295,9 @@ class DashboardService(LoggerMixin):
         jobs_dict = await self._get_jobs_by_status_dict()
 
         response = JobsByStatusResponse(
-            requested=jobs_dict.get(JobStatus.REQUESTED.value, 0),
-            approved=jobs_dict.get(JobStatus.APPROVED.value, 0),
-            scheduled=jobs_dict.get(JobStatus.SCHEDULED.value, 0),
+            to_be_scheduled=jobs_dict.get(JobStatus.TO_BE_SCHEDULED.value, 0),
             in_progress=jobs_dict.get(JobStatus.IN_PROGRESS.value, 0),
             completed=jobs_dict.get(JobStatus.COMPLETED.value, 0),
-            closed=jobs_dict.get(JobStatus.CLOSED.value, 0),
             cancelled=jobs_dict.get(JobStatus.CANCELLED.value, 0),
         )
 

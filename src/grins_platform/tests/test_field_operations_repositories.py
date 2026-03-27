@@ -334,7 +334,7 @@ class TestJobRepository:
         mock_session.execute.return_value = mock_result
 
         # Act
-        result = await repository.find_by_status(JobStatus.REQUESTED)
+        result = await repository.find_by_status(JobStatus.TO_BE_SCHEDULED)
 
         # Assert
         assert len(result) == 2
@@ -391,9 +391,9 @@ class TestJobRepository:
         # Act
         await repository.add_status_history(
             job_id=job_id,
-            new_status=JobStatus.APPROVED,
-            previous_status=JobStatus.REQUESTED,
-            notes="Approved by admin",
+            new_status=JobStatus.IN_PROGRESS,
+            previous_status=JobStatus.TO_BE_SCHEDULED,
+            notes="Job started",
         )
 
         # Assert
@@ -440,7 +440,7 @@ class TestJobRepository:
         jobs, total = await repository.list_with_filters(
             page=1,
             page_size=20,
-            status=JobStatus.REQUESTED,
+            status=JobStatus.TO_BE_SCHEDULED,
             category=JobCategory.READY_TO_SCHEDULE,
         )
 

@@ -34,7 +34,7 @@ const STATUS_CATEGORIES: StatusCategory[] = [
   {
     key: 'new_requests',
     label: 'New Requests',
-    queryParam: 'requested',
+    queryParam: 'to_be_scheduled',
     icon: Inbox,
     iconBg: 'bg-amber-100',
     iconColor: 'text-amber-600',
@@ -61,7 +61,7 @@ const STATUS_CATEGORIES: StatusCategory[] = [
   {
     key: 'to_be_scheduled',
     label: 'To Be Scheduled',
-    queryParam: 'approved',
+    queryParam: 'to_be_scheduled',
     icon: CalendarCheck,
     iconBg: 'bg-teal-100',
     iconColor: 'text-teal-600',

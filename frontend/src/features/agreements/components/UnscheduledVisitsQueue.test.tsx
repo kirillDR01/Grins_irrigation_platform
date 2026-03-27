@@ -24,7 +24,7 @@ const mockJobs = [
   {
     id: 'j1',
     job_type: 'spring_startup',
-    status: 'approved',
+    status: 'to_be_scheduled',
     target_start_date: '2026-03-15',
     target_end_date: '2026-04-30',
     estimated_duration_minutes: 90,
@@ -33,7 +33,7 @@ const mockJobs = [
   {
     id: 'j2',
     job_type: 'spring_startup',
-    status: 'approved',
+    status: 'to_be_scheduled',
     target_start_date: '2026-03-15',
     target_end_date: '2026-04-30',
     estimated_duration_minutes: 60,
@@ -42,7 +42,7 @@ const mockJobs = [
   {
     id: 'j3',
     job_type: 'fall_winterization',
-    status: 'approved',
+    status: 'to_be_scheduled',
     target_start_date: null,
     target_end_date: null,
     estimated_duration_minutes: null,

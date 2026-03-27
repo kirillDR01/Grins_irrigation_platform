@@ -23,7 +23,7 @@ const mockJobs: Job[] = [
     service_agreement_id: null,
     job_type: 'spring_startup',
     category: 'ready_to_schedule',
-    status: 'requested',
+    status: 'to_be_scheduled',
     description: 'Spring startup for irrigation system',
     summary: 'Spring startup - residential',
     notes: 'Customer prefers morning appointments',
@@ -97,7 +97,7 @@ const mockSubscriptionJob: Job = {
   service_agreement_id: 'agr-001',
   job_type: 'spring_startup',
   category: 'ready_to_schedule',
-  status: 'approved',
+  status: 'to_be_scheduled',
   description: 'Subscription spring startup',
   summary: 'Subscription spring startup',
   notes: null,
@@ -561,7 +561,7 @@ describe('JobList', () => {
       );
     });
 
-    it('parses ?status=requested from URL and auto-applies the status filter', async () => {
+    it('parses ?status=to_be_scheduled from URL and auto-applies the status filter', async () => {
       vi.mocked(jobApi.list).mockResolvedValue({
         items: [mockJobs[0]],
         total: 1,
@@ -571,7 +571,7 @@ describe('JobList', () => {
       });
 
       render(<JobList />, {
-        wrapper: createMemoryWrapper(['/jobs?status=requested']),
+        wrapper: createMemoryWrapper(['/jobs?status=to_be_scheduled']),
       });
 
       await waitFor(() => {
@@ -579,7 +579,7 @@ describe('JobList', () => {
       });
 
       expect(jobApi.list).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'requested' })
+        expect.objectContaining({ status: 'to_be_scheduled' })
       );
     });
 

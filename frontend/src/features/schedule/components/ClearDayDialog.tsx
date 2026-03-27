@@ -130,8 +130,8 @@ export function ClearDayDialog({
               data-testid="status-reset-notice"
             >
               <p className="text-sm text-amber-800">
-                <span className="font-semibold">Note:</span> Jobs with &quot;scheduled&quot;
-                status will be reset to &quot;approved&quot; so they can be rescheduled.
+                <span className="font-semibold">Note:</span> Jobs with &quot;in_progress&quot;
+                status will be reset to &quot;to_be_scheduled&quot; so they can be rescheduled.
               </p>
             </div>
 

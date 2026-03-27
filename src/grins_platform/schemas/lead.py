@@ -287,6 +287,7 @@ class LeadResponse(BaseModel):
     property_type: str | None = None
     sms_consent: bool = False
     terms_accepted: bool = False
+    email_marketing_consent: bool = False
     status: LeadStatus
     assigned_to: UUID | None
     customer_id: UUID | None

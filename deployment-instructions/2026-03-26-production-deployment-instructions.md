@@ -1,5 +1,74 @@
 # Deployment Instructions: Service Package Purchases
 
+---
+
+## 0. Job Status Simplification (Migration Required)
+
+**Added 2026-03-26** — This migration MUST run before deploying the latest code.
+
+### What Changed
+
+The job status enum was simplified from 7 values to 4:
+
+| Old Status | New Status |
+|---|---|
+| `requested` | `to_be_scheduled` |
+| `approved` | `to_be_scheduled` |
+| `scheduled` | `in_progress` |
+| `in_progress` | `in_progress` |
+| `completed` | `completed` |
+| `closed` | `completed` |
+| `cancelled` | `cancelled` |
+
+### Migration
+
+```bash
+uv run alembic upgrade head
+```
+
+This runs migration `20260326_120000_simplify_job_statuses` which:
+1. Updates all existing `jobs.status` rows to new values
+2. Updates all `job_status_history.previous_status` and `new_status` rows
+3. Replaces CHECK constraints on both tables
+4. Changes `jobs.status` server default from `'requested'` to `'to_be_scheduled'`
+
+**Runs in a single transaction — safe for zero-downtime deployment.**
+
+### Verification
+
+After migration, verify no old status values remain:
+
+```bash
+uv run python -c "
+from sqlalchemy import create_engine, text
+import os
+engine = create_engine(os.environ['DATABASE_URL'].replace('+asyncpg', ''))
+with engine.connect() as conn:
+    result = conn.execute(text(\"SELECT status, count(*) FROM jobs GROUP BY status ORDER BY status\"))
+    for r in result:
+        print(f'{r[0]}: {r[1]}')
+"
+```
+
+Expected output should only contain: `to_be_scheduled`, `in_progress`, `completed`, `cancelled`.
+
+### API Breaking Changes
+
+- `GET /api/v1/jobs?status=` — only accepts `to_be_scheduled`, `in_progress`, `completed`, `cancelled`
+- `GET /api/v1/jobs/by-status/{status}` — same 4 values
+- `GET /api/v1/dashboard/jobs-by-status` — response fields changed from `{requested, approved, scheduled, in_progress, completed, closed, cancelled}` to `{to_be_scheduled, in_progress, completed, cancelled}`
+- `PUT /api/v1/jobs/{id}/status` — request body `status` field only accepts 4 values
+
+### Rollback
+
+If needed, the migration has a `downgrade()` that reverses the mapping (`to_be_scheduled` → `approved`, leaves others as-is):
+
+```bash
+uv run alembic downgrade 20260326_100000
+```
+
+---
+
 ## 1. Database Changes
 
 ### New Tables (11 migrations)

@@ -506,7 +506,7 @@ class TestJobServiceFunctional:
         mock_job = MagicMock()
         mock_job.id = job_id
         mock_job.category = JobCategory.READY_TO_SCHEDULE.value
-        mock_job.status = JobStatus.REQUESTED.value
+        mock_job.status = JobStatus.TO_BE_SCHEDULED.value
         mock_job_repo.create.return_value = mock_job
 
         data = JobCreate(
@@ -573,19 +573,19 @@ class TestJobServiceFunctional:
         # Start with REQUESTED status
         mock_job = MagicMock()
         mock_job.id = job_id
-        mock_job.status = JobStatus.REQUESTED.value
+        mock_job.status = JobStatus.TO_BE_SCHEDULED.value
         mock_job_repo.get_by_id.return_value = mock_job
 
         # Transition to APPROVED
         updated_job = MagicMock()
         updated_job.id = job_id
-        updated_job.status = JobStatus.APPROVED.value
+        updated_job.status = JobStatus.IN_PROGRESS.value
         mock_job_repo.update.return_value = updated_job
 
-        data = JobStatusUpdate(status=JobStatus.APPROVED)
+        data = JobStatusUpdate(status=JobStatus.IN_PROGRESS)
         result = await service.update_status(job_id, data)
 
-        assert result.status == JobStatus.APPROVED.value
+        assert result.status == JobStatus.IN_PROGRESS.value
         mock_job_repo.add_status_history.assert_called_once()
 
     async def test_invalid_status_transition_rejected(
@@ -602,7 +602,7 @@ class TestJobServiceFunctional:
 
         mock_job = MagicMock()
         mock_job.id = job_id
-        mock_job.status = JobStatus.REQUESTED.value
+        mock_job.status = JobStatus.TO_BE_SCHEDULED.value
         mock_job_repo.get_by_id.return_value = mock_job
 
         # Try to skip to COMPLETED (invalid)
@@ -822,7 +822,7 @@ class TestJobServiceFunctional:
         # Create job
         mock_job = MagicMock()
         mock_job.id = job_id
-        mock_job.status = JobStatus.REQUESTED.value
+        mock_job.status = JobStatus.TO_BE_SCHEDULED.value
         mock_job_repo.create.return_value = mock_job
         mock_job_repo.get_by_id.return_value = mock_job
 
@@ -834,11 +834,8 @@ class TestJobServiceFunctional:
 
         # Transition through all states
         transitions = [
-            (JobStatus.REQUESTED, JobStatus.APPROVED),
-            (JobStatus.APPROVED, JobStatus.SCHEDULED),
-            (JobStatus.SCHEDULED, JobStatus.IN_PROGRESS),
+            (JobStatus.TO_BE_SCHEDULED, JobStatus.IN_PROGRESS),
             (JobStatus.IN_PROGRESS, JobStatus.COMPLETED),
-            (JobStatus.COMPLETED, JobStatus.CLOSED),
         ]
 
         for current, next_status in transitions:

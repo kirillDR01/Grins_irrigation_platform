@@ -494,14 +494,14 @@ export function LeadDetail() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${lead.terms_accepted ? 'bg-green-100' : 'bg-gray-100'}`}>
-                    <FileCheck className={`h-5 w-5 ${lead.terms_accepted ? 'text-green-600' : 'text-gray-400'}`} />
+                  <div className={`p-2 rounded-lg ${lead.email_marketing_consent ? 'bg-green-100' : 'bg-gray-100'}`}>
+                    <FileCheck className={`h-5 w-5 ${lead.email_marketing_consent ? 'text-green-600' : 'text-gray-400'}`} />
                   </div>
                   <div>
-                    <p className="text-xs text-slate-400">Terms Accepted</p>
-                    <p className={`text-sm font-medium ${lead.terms_accepted ? 'text-green-700' : 'text-gray-500'}`}
-                       data-testid={`terms-accepted-${lead.id}`}>
-                      {lead.terms_accepted ? 'Accepted' : 'Not accepted'}
+                    <p className="text-xs text-slate-400">Email Marketing Consent</p>
+                    <p className={`text-sm font-medium ${lead.email_marketing_consent ? 'text-green-700' : 'text-gray-500'}`}
+                       data-testid={`email-marketing-consent-${lead.id}`}>
+                      {lead.email_marketing_consent ? 'Opted in' : 'Not opted in'}
                     </p>
                   </div>
                 </div>

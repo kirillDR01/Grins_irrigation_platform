@@ -5,8 +5,8 @@ Property 3: Clear Schedule Audit Completeness
 - Audit contains all reset job IDs
 
 Property 4: Job Status Reset Correctness
-- Only 'scheduled' jobs are reset
-- 'in_progress' and 'completed' jobs unchanged
+- Only 'in_progress' jobs are reset
+- 'completed' jobs unchanged
 
 Validates: Requirements 3.1-3.7, 5.1-5.6
 """
@@ -50,7 +50,7 @@ def create_mock_appointment(
 
 def create_mock_job(
     job_id: Any | None = None,
-    status: str = JobStatus.SCHEDULED.value,
+    status: str = JobStatus.IN_PROGRESS.value,
 ) -> MagicMock:
     """Create a mock job object."""
     job = MagicMock()
@@ -162,7 +162,7 @@ class TestScheduleClearAuditCompletenessProperty:
         # Track expected job IDs
         expected_job_ids: set[Any] = set()
         for appt in appointments:
-            job = create_mock_job(job_id=appt.job_id, status=JobStatus.SCHEDULED.value)
+            job = create_mock_job(job_id=appt.job_id, status=JobStatus.IN_PROGRESS.value)
             expected_job_ids.add(job.id)
             mock_job_repo.get_by_id.return_value = job
 
@@ -220,30 +220,30 @@ class TestJobStatusResetCorrectnessProperty:
     """Property-based tests for job status reset correctness.
 
     Property 4: Job Status Reset Correctness
-    - Only jobs with status 'scheduled' are reset to 'approved'
-    - Jobs with status 'in_progress' or 'completed' are unchanged
+    - Only jobs with status 'in_progress' are reset to 'to_be_scheduled'
+    - Jobs with status 'completed' are unchanged
 
     Validates: Requirements 3.3-3.4
     """
 
     @given(
-        num_scheduled=st.integers(min_value=0, max_value=10),
-        num_in_progress=st.integers(min_value=0, max_value=5),
+        num_in_progress=st.integers(min_value=0, max_value=10),
+        num_to_be_scheduled=st.integers(min_value=0, max_value=5),
         num_completed=st.integers(min_value=0, max_value=5),
     )
     @settings(max_examples=30, deadline=10000)
     @pytest.mark.asyncio
-    async def test_only_scheduled_jobs_are_reset(
+    async def test_only_in_progress_jobs_are_reset(
         self,
-        num_scheduled: int,
         num_in_progress: int,
+        num_to_be_scheduled: int,
         num_completed: int,
     ) -> None:
-        """Property: Only 'scheduled' jobs are reset, others unchanged.
+        """Property: Only 'in_progress' jobs are reset, others unchanged.
 
         Given appointments with jobs in various statuses:
-        - Jobs with status 'scheduled' are reset to 'approved'
-        - Jobs with status 'in_progress' are NOT reset
+        - Jobs with status 'in_progress' are reset to 'to_be_scheduled'
+        - Jobs with status 'to_be_scheduled' are NOT reset
         - Jobs with status 'completed' are NOT reset
         """
         service, mock_appointment_repo, mock_job_repo, mock_audit_repo = (
@@ -254,17 +254,17 @@ class TestJobStatusResetCorrectnessProperty:
         appointments: list[MagicMock] = []
         job_statuses: dict[Any, str] = {}
 
-        # Scheduled jobs (should be reset)
-        for _ in range(num_scheduled):
-            appt = create_mock_appointment()
-            appointments.append(appt)
-            job_statuses[appt.job_id] = JobStatus.SCHEDULED.value
-
-        # In-progress jobs (should NOT be reset)
+        # In-progress jobs (should be reset)
         for _ in range(num_in_progress):
             appt = create_mock_appointment()
             appointments.append(appt)
             job_statuses[appt.job_id] = JobStatus.IN_PROGRESS.value
+
+        # To-be-scheduled jobs (should NOT be reset)
+        for _ in range(num_to_be_scheduled):
+            appt = create_mock_appointment()
+            appointments.append(appt)
+            job_statuses[appt.job_id] = JobStatus.TO_BE_SCHEDULED.value
 
         # Completed jobs (should NOT be reset)
         for _ in range(num_completed):
@@ -276,7 +276,7 @@ class TestJobStatusResetCorrectnessProperty:
 
         # Configure job repo to return correct status for each job
         def get_job_by_id(job_id: Any) -> MagicMock:
-            status = job_statuses.get(job_id, JobStatus.SCHEDULED.value)
+            status = job_statuses.get(job_id, JobStatus.IN_PROGRESS.value)
             return create_mock_job(job_id=job_id, status=status)
 
         mock_job_repo.get_by_id.side_effect = get_job_by_id
@@ -288,36 +288,36 @@ class TestJobStatusResetCorrectnessProperty:
 
         await service.clear_schedule(schedule_date=date(2025, 1, 28))
 
-        # Count how many times update was called (only for scheduled jobs)
+        # Count how many times update was called (only for in_progress jobs)
         update_calls = mock_job_repo.update.call_args_list
 
-        # Property: Number of updates equals number of scheduled jobs
-        assert len(update_calls) == num_scheduled
+        # Property: Number of updates equals number of in_progress jobs
+        assert len(update_calls) == num_in_progress
 
-        # Property: All updates set status to 'approved'
+        # Property: All updates set status to 'to_be_scheduled'
         for call in update_calls:
-            assert call.kwargs["data"]["status"] == JobStatus.APPROVED.value
+            assert call.kwargs["data"]["status"] == JobStatus.TO_BE_SCHEDULED.value
 
     @given(num_appointments=st.integers(min_value=1, max_value=10))
     @settings(max_examples=20, deadline=10000)
     @pytest.mark.asyncio
-    async def test_in_progress_jobs_never_reset(
+    async def test_to_be_scheduled_jobs_never_reset(
         self,
         num_appointments: int,
     ) -> None:
-        """Property: Jobs with status 'in_progress' are never reset."""
+        """Property: Jobs with status 'to_be_scheduled' are never reset."""
         service, mock_appointment_repo, mock_job_repo, mock_audit_repo = (
             create_service_with_mocks()
         )
 
-        # All appointments have in_progress jobs
+        # All appointments have to_be_scheduled jobs
         appointments = [create_mock_appointment() for _ in range(num_appointments)]
         mock_appointment_repo.get_daily_schedule.return_value = appointments
 
         for appt in appointments:
             job = create_mock_job(
                 job_id=appt.job_id,
-                status=JobStatus.IN_PROGRESS.value,
+                status=JobStatus.TO_BE_SCHEDULED.value,
             )
             mock_job_repo.get_by_id.return_value = job
 
@@ -372,22 +372,19 @@ class TestJobStatusResetCorrectnessProperty:
     @given(
         status=st.sampled_from(
             [
-                JobStatus.REQUESTED.value,
-                JobStatus.APPROVED.value,
-                JobStatus.IN_PROGRESS.value,
+                JobStatus.TO_BE_SCHEDULED.value,
                 JobStatus.COMPLETED.value,
-                JobStatus.CLOSED.value,
                 JobStatus.CANCELLED.value,
             ],
         ),
     )
     @settings(max_examples=20, deadline=10000)
     @pytest.mark.asyncio
-    async def test_non_scheduled_statuses_never_reset(
+    async def test_non_in_progress_statuses_never_reset(
         self,
         status: str,
     ) -> None:
-        """Property: Jobs with any non-scheduled status are never reset."""
+        """Property: Jobs with any non-in_progress status are never reset."""
         service, mock_appointment_repo, mock_job_repo, mock_audit_repo = (
             create_service_with_mocks()
         )
@@ -406,7 +403,7 @@ class TestJobStatusResetCorrectnessProperty:
 
         await service.clear_schedule(schedule_date=date(2025, 1, 28))
 
-        # Property: No job updates should occur for non-scheduled status
+        # Property: No job updates should occur for non-in_progress status
         mock_job_repo.update.assert_not_called()
 
         # Property: jobs_reset should be empty

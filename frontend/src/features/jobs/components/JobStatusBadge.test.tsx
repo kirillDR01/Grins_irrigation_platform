@@ -11,13 +11,10 @@ import type { JobStatus } from '../types';
 
 describe('JobStatusBadge', () => {
   const allStatuses: JobStatus[] = [
-    'requested',
-    'approved',
-    'scheduled',
+    'to_be_scheduled',
     'in_progress',
     'completed',
     'cancelled',
-    'closed',
   ];
 
   describe('rendering', () => {
@@ -27,22 +24,10 @@ describe('JobStatusBadge', () => {
       expect(screen.getByTestId(`status-${status}`)).toBeInTheDocument();
     });
 
-    it('renders with correct label for requested status', () => {
-      render(<JobStatusBadge status="requested" />);
+    it('renders with correct label for to_be_scheduled status', () => {
+      render(<JobStatusBadge status="to_be_scheduled" />);
 
-      expect(screen.getByText('Requested')).toBeInTheDocument();
-    });
-
-    it('renders with correct label for approved status', () => {
-      render(<JobStatusBadge status="approved" />);
-
-      expect(screen.getByText('Approved')).toBeInTheDocument();
-    });
-
-    it('renders with correct label for scheduled status', () => {
-      render(<JobStatusBadge status="scheduled" />);
-
-      expect(screen.getByText('Scheduled')).toBeInTheDocument();
+      expect(screen.getByText('To Be Scheduled')).toBeInTheDocument();
     });
 
     it('renders with correct label for in_progress status', () => {
@@ -54,7 +39,7 @@ describe('JobStatusBadge', () => {
     it('renders with correct label for completed status', () => {
       render(<JobStatusBadge status="completed" />);
 
-      expect(screen.getByText('Completed')).toBeInTheDocument();
+      expect(screen.getByText('Complete')).toBeInTheDocument();
     });
 
     it('renders with correct label for cancelled status', () => {
@@ -63,54 +48,21 @@ describe('JobStatusBadge', () => {
       expect(screen.getByText('Cancelled')).toBeInTheDocument();
     });
 
-    it('renders with correct label for closed status', () => {
-      render(<JobStatusBadge status="closed" />);
-
-      expect(screen.getByText('Closed')).toBeInTheDocument();
-    });
-
     it('applies custom className', () => {
-      render(<JobStatusBadge status="requested" className="custom-class" />);
+      render(<JobStatusBadge status="to_be_scheduled" className="custom-class" />);
 
-      const badge = screen.getByTestId('status-requested');
+      const badge = screen.getByTestId('status-to_be_scheduled');
       expect(badge).toHaveClass('custom-class');
     });
   });
 
   describe('tooltip', () => {
     it('does not show tooltip by default', () => {
-      render(<JobStatusBadge status="requested" />);
+      render(<JobStatusBadge status="to_be_scheduled" />);
 
       expect(
-        screen.queryByText(/Job has been requested/)
+        screen.queryByText(/Job is waiting to be scheduled/)
       ).not.toBeInTheDocument();
-    });
-
-    it('shows tooltip on hover when showTooltip is true', async () => {
-      const user = userEvent.setup();
-      render(<JobStatusBadge status="requested" showTooltip />);
-
-      const badge = screen.getByTestId('status-requested');
-      await user.hover(badge.parentElement!);
-
-      // The tooltip should be in the DOM (hidden by CSS until hover)
-      expect(
-        screen.getByText('Job has been requested and is awaiting approval')
-      ).toBeInTheDocument();
-    });
-
-    it('shows correct tooltip for approved status', async () => {
-      const user = userEvent.setup();
-      render(<JobStatusBadge status="approved" showTooltip />);
-
-      const badge = screen.getByTestId('status-approved');
-      await user.hover(badge.parentElement!);
-
-      expect(
-        screen.getByText(
-          'Job has been approved and is ready to be scheduled'
-        )
-      ).toBeInTheDocument();
     });
 
     it('shows correct tooltip for in_progress status', async () => {
@@ -128,94 +80,72 @@ describe('JobStatusBadge', () => {
 });
 
 describe('getNextStatuses', () => {
-  it('returns correct next statuses for requested', () => {
-    const nextStatuses = getNextStatuses('requested');
-    expect(nextStatuses).toEqual(['approved', 'cancelled']);
-  });
-
-  it('returns correct next statuses for approved', () => {
-    const nextStatuses = getNextStatuses('approved');
-    expect(nextStatuses).toEqual(['scheduled', 'cancelled']);
-  });
-
-  it('returns correct next statuses for scheduled', () => {
-    const nextStatuses = getNextStatuses('scheduled');
+  it('returns correct next statuses for to_be_scheduled', () => {
+    const nextStatuses = getNextStatuses('to_be_scheduled');
     expect(nextStatuses).toEqual(['in_progress', 'cancelled']);
   });
 
   it('returns correct next statuses for in_progress', () => {
     const nextStatuses = getNextStatuses('in_progress');
-    expect(nextStatuses).toEqual(['completed', 'cancelled']);
+    expect(nextStatuses).toEqual(['completed', 'cancelled', 'to_be_scheduled']);
   });
 
-  it('returns correct next statuses for completed', () => {
+  it('returns empty array for completed', () => {
     const nextStatuses = getNextStatuses('completed');
-    expect(nextStatuses).toEqual(['closed']);
+    expect(nextStatuses).toEqual([]);
   });
 
   it('returns empty array for cancelled', () => {
     const nextStatuses = getNextStatuses('cancelled');
     expect(nextStatuses).toEqual([]);
   });
-
-  it('returns empty array for closed', () => {
-    const nextStatuses = getNextStatuses('closed');
-    expect(nextStatuses).toEqual([]);
-  });
 });
 
 describe('canTransitionTo', () => {
-  it('allows transition from requested to approved', () => {
-    expect(canTransitionTo('requested', 'approved')).toBe(true);
+  it('allows transition from to_be_scheduled to in_progress', () => {
+    expect(canTransitionTo('to_be_scheduled', 'in_progress')).toBe(true);
   });
 
-  it('allows transition from requested to cancelled', () => {
-    expect(canTransitionTo('requested', 'cancelled')).toBe(true);
+  it('allows transition from to_be_scheduled to cancelled', () => {
+    expect(canTransitionTo('to_be_scheduled', 'cancelled')).toBe(true);
   });
 
-  it('does not allow transition from requested to completed', () => {
-    expect(canTransitionTo('requested', 'completed')).toBe(false);
-  });
-
-  it('allows transition from approved to scheduled', () => {
-    expect(canTransitionTo('approved', 'scheduled')).toBe(true);
-  });
-
-  it('does not allow transition from approved to in_progress', () => {
-    expect(canTransitionTo('approved', 'in_progress')).toBe(false);
+  it('does not allow transition from to_be_scheduled to completed', () => {
+    expect(canTransitionTo('to_be_scheduled', 'completed')).toBe(false);
   });
 
   it('allows transition from in_progress to completed', () => {
     expect(canTransitionTo('in_progress', 'completed')).toBe(true);
   });
 
-  it('allows transition from completed to closed', () => {
-    expect(canTransitionTo('completed', 'closed')).toBe(true);
+  it('allows transition from in_progress to cancelled', () => {
+    expect(canTransitionTo('in_progress', 'cancelled')).toBe(true);
   });
 
-  it('does not allow any transition from closed', () => {
-    expect(canTransitionTo('closed', 'requested')).toBe(false);
-    expect(canTransitionTo('closed', 'approved')).toBe(false);
-    expect(canTransitionTo('closed', 'cancelled')).toBe(false);
+  it('allows transition from in_progress to to_be_scheduled', () => {
+    expect(canTransitionTo('in_progress', 'to_be_scheduled')).toBe(true);
+  });
+
+  it('does not allow any transition from completed', () => {
+    expect(canTransitionTo('completed', 'to_be_scheduled')).toBe(false);
+    expect(canTransitionTo('completed', 'in_progress')).toBe(false);
+    expect(canTransitionTo('completed', 'cancelled')).toBe(false);
   });
 
   it('does not allow any transition from cancelled', () => {
-    expect(canTransitionTo('cancelled', 'requested')).toBe(false);
-    expect(canTransitionTo('cancelled', 'approved')).toBe(false);
-    expect(canTransitionTo('cancelled', 'closed')).toBe(false);
+    expect(canTransitionTo('cancelled', 'to_be_scheduled')).toBe(false);
+    expect(canTransitionTo('cancelled', 'in_progress')).toBe(false);
+    expect(canTransitionTo('cancelled', 'completed')).toBe(false);
   });
 });
 
 describe('JOB_STATUS_WORKFLOW', () => {
   it('defines workflow for all statuses', () => {
     const allStatuses: JobStatus[] = [
-      'requested',
-      'approved',
-      'scheduled',
+      'to_be_scheduled',
       'in_progress',
       'completed',
       'cancelled',
-      'closed',
     ];
 
     allStatuses.forEach((status) => {
@@ -226,13 +156,10 @@ describe('JOB_STATUS_WORKFLOW', () => {
 
   it('has correct workflow structure', () => {
     expect(JOB_STATUS_WORKFLOW).toEqual({
-      requested: ['approved', 'cancelled'],
-      approved: ['scheduled', 'cancelled'],
-      scheduled: ['in_progress', 'cancelled'],
-      in_progress: ['completed', 'cancelled'],
-      completed: ['closed'],
+      to_be_scheduled: ['in_progress', 'cancelled'],
+      in_progress: ['completed', 'cancelled', 'to_be_scheduled'],
+      completed: [],
       cancelled: [],
-      closed: [],
     });
   });
 });

@@ -76,11 +76,11 @@ def _make_agreement(**overrides: Any) -> MagicMock:
     return agr
 
 
-def _make_job(*, status: str = JobStatus.APPROVED.value) -> MagicMock:
+def _make_job(*, status: str = JobStatus.TO_BE_SCHEDULED.value) -> MagicMock:
     job = MagicMock()
     job.id = uuid4()
     job.status = status
-    job.closed_at = None
+    job.requested_at = None
     return job
 
 
@@ -387,7 +387,7 @@ class TestFailedPaymentEscalation:
             id=agr_id,
             status=AgreementStatus.PAUSED.value,
             jobs=[
-                _make_job(status=JobStatus.APPROVED.value),
+                _make_job(status=JobStatus.TO_BE_SCHEDULED.value),
                 _make_job(status=JobStatus.COMPLETED.value),
             ],
         )
@@ -484,7 +484,7 @@ class TestSeasonalJobGeneration:
             assert job.customer_id == agr.customer_id
             assert job.service_agreement_id == agr.id
             assert job.property_id == agr.property_id
-            assert job.status == JobStatus.APPROVED.value
+            assert job.status == JobStatus.TO_BE_SCHEDULED.value
             assert job.category == JobCategory.READY_TO_SCHEDULE.value
 
     async def test_professional_tier_generates_three_jobs(self) -> None:

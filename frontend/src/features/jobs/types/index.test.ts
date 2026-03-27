@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
 import {
-  SIMPLIFIED_STATUS_MAP,
+  STATUS_LABEL_MAP,
   getSimplifiedStatus,
   getSimplifiedStatusConfig,
-  SIMPLIFIED_STATUS_CONFIG,
-  SIMPLIFIED_STATUS_RAW_MAP,
+  JOB_STATUS_CONFIG,
+  LABEL_STATUS_MAP,
   calculateDaysWaiting,
   getDueByColorClass,
   type JobStatus,
-  type SimplifiedJobStatus,
+  type JobStatusLabel,
   type Job,
 } from './index';
 
@@ -19,16 +19,13 @@ function toLocalDateStr(d: Date): string {
 }
 
 const ALL_RAW_STATUSES: JobStatus[] = [
-  'requested',
-  'approved',
-  'scheduled',
+  'to_be_scheduled',
   'in_progress',
   'completed',
   'cancelled',
-  'closed',
 ];
 
-const ALL_SIMPLIFIED_STATUSES: SimplifiedJobStatus[] = [
+const ALL_STATUS_LABELS: JobStatusLabel[] = [
   'To Be Scheduled',
   'In Progress',
   'Complete',
@@ -40,71 +37,59 @@ const ALL_SIMPLIFIED_STATUSES: SimplifiedJobStatus[] = [
  * Validates: Requirements 21.1
  */
 describe('Job status simplification mapping (P26)', () => {
-  it('maps requested → "To Be Scheduled"', () => {
-    expect(getSimplifiedStatus('requested')).toBe('To Be Scheduled');
+  it('maps to_be_scheduled -> "To Be Scheduled"', () => {
+    expect(getSimplifiedStatus('to_be_scheduled')).toBe('To Be Scheduled');
   });
 
-  it('maps approved → "To Be Scheduled"', () => {
-    expect(getSimplifiedStatus('approved')).toBe('To Be Scheduled');
-  });
-
-  it('maps scheduled → "In Progress"', () => {
-    expect(getSimplifiedStatus('scheduled')).toBe('In Progress');
-  });
-
-  it('maps in_progress → "In Progress"', () => {
+  it('maps in_progress -> "In Progress"', () => {
     expect(getSimplifiedStatus('in_progress')).toBe('In Progress');
   });
 
-  it('maps completed → "Complete"', () => {
+  it('maps completed -> "Complete"', () => {
     expect(getSimplifiedStatus('completed')).toBe('Complete');
   });
 
-  it('maps closed → "Complete"', () => {
-    expect(getSimplifiedStatus('closed')).toBe('Complete');
-  });
-
-  it('maps cancelled → "Cancelled"', () => {
+  it('maps cancelled -> "Cancelled"', () => {
     expect(getSimplifiedStatus('cancelled')).toBe('Cancelled');
   });
 
-  it('SIMPLIFIED_STATUS_MAP is total — covers all 7 raw statuses', () => {
+  it('STATUS_LABEL_MAP is total -- covers all 4 statuses', () => {
     for (const status of ALL_RAW_STATUSES) {
-      expect(SIMPLIFIED_STATUS_MAP[status]).toBeDefined();
-      expect(ALL_SIMPLIFIED_STATUSES).toContain(SIMPLIFIED_STATUS_MAP[status]);
+      expect(STATUS_LABEL_MAP[status]).toBeDefined();
+      expect(ALL_STATUS_LABELS).toContain(STATUS_LABEL_MAP[status]);
     }
   });
 
-  it('getSimplifiedStatusConfig returns valid config for every raw status', () => {
+  it('getSimplifiedStatusConfig returns valid config for every status', () => {
     for (const status of ALL_RAW_STATUSES) {
       const config = getSimplifiedStatusConfig(status);
       expect(config).toBeDefined();
       expect(config).toHaveProperty('label');
       expect(config).toHaveProperty('color');
       expect(config).toHaveProperty('bgColor');
-      expect(config.label).toBe(SIMPLIFIED_STATUS_MAP[status]);
+      expect(config.label).toBe(STATUS_LABEL_MAP[status]);
     }
   });
 
-  it('SIMPLIFIED_STATUS_RAW_MAP reverse mapping covers all raw statuses', () => {
-    const allMappedRaw = Object.values(SIMPLIFIED_STATUS_RAW_MAP).flat();
+  it('LABEL_STATUS_MAP reverse mapping covers all statuses', () => {
+    const allMappedRaw = Object.values(LABEL_STATUS_MAP);
     for (const status of ALL_RAW_STATUSES) {
       expect(allMappedRaw).toContain(status);
     }
   });
 
   /**
-   * Property-based test: for any raw status, the mapping produces exactly one
-   * simplified label and the mapping is total.
+   * Property-based test: for any status, the mapping produces exactly one
+   * label and the mapping is total.
    * **Validates: Requirements 21.1**
    */
-  it('property: every raw status maps to exactly one simplified label', () => {
+  it('property: every status maps to exactly one label', () => {
     fc.assert(
       fc.property(
         fc.constantFrom(...ALL_RAW_STATUSES),
         (status: JobStatus) => {
-          const simplified = getSimplifiedStatus(status);
-          expect(ALL_SIMPLIFIED_STATUSES).toContain(simplified);
+          const label = getSimplifiedStatus(status);
+          expect(ALL_STATUS_LABELS).toContain(label);
           expect(getSimplifiedStatusConfig(status)).toBeDefined();
         }
       ),
@@ -150,7 +135,7 @@ describe('Days Waiting calculation and Due By color logic (P27)', () => {
             created.setDate(created.getDate() - daysAgo);
             const result = calculateDaysWaiting(created.toISOString());
             expect(result).toBeGreaterThanOrEqual(0);
-            // Allow ±1 day tolerance for edge cases around midnight
+            // Allow +-1 day tolerance for edge cases around midnight
             expect(Math.abs(result - daysAgo)).toBeLessThanOrEqual(1);
           }
         ),
@@ -195,7 +180,7 @@ describe('Days Waiting calculation and Due By color logic (P27)', () => {
 
     /**
      * Property-based test: Due By color logic is correct for all dates.
-     * Past → red, within 7 days → amber, beyond 7 days → default, null → empty.
+     * Past -> red, within 7 days -> amber, beyond 7 days -> default, null -> empty.
      * **Validates: Requirements 23.1, 23.2, 23.3, 23.4**
      */
     it('property: due by color logic is correct for all generated dates', () => {

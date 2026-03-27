@@ -3,13 +3,10 @@ import { parseLocalDate } from '@/shared/utils/dateUtils';
 
 // Job status enum matching backend
 export type JobStatus =
-  | 'requested'
-  | 'approved'
-  | 'scheduled'
+  | 'to_be_scheduled'
   | 'in_progress'
   | 'completed'
-  | 'cancelled'
-  | 'closed';
+  | 'cancelled';
 
 // Job category enum matching backend
 export type JobCategory = 'ready_to_schedule' | 'requires_estimate';
@@ -17,8 +14,8 @@ export type JobCategory = 'ready_to_schedule' | 'requires_estimate';
 // Job source enum matching backend
 export type JobSource = 'website' | 'google' | 'referral' | 'phone' | 'partner';
 
-// Simplified status for display (Req 21)
-export type SimplifiedJobStatus = 'To Be Scheduled' | 'In Progress' | 'Complete' | 'Cancelled';
+// Display labels for job statuses
+export type JobStatusLabel = 'To Be Scheduled' | 'In Progress' | 'Complete' | 'Cancelled';
 
 // Customer tag types (Req 22)
 export type CustomerTag = 'priority' | 'red_flag' | 'slow_payer' | 'new_customer';
@@ -49,11 +46,11 @@ export interface Job extends BaseEntity {
   target_start_date: string | null;
   target_end_date: string | null;
   requested_at: string | null;
-  approved_at: string | null;
-  scheduled_at: string | null;
+  approved_at: string | null;  // Historical, no longer written
+  scheduled_at: string | null;  // Historical, no longer written
   started_at: string | null;
   completed_at: string | null;
-  closed_at: string | null;
+  closed_at: string | null;  // Historical, no longer written
   // Nested customer summary (Req 22)
   customer_name: string | null;
   customer_tags: CustomerTag[] | null;
@@ -141,20 +138,10 @@ export const JOB_STATUS_CONFIG: Record<
   JobStatus,
   { label: string; color: string; bgColor: string }
 > = {
-  requested: {
-    label: 'Requested',
+  to_be_scheduled: {
+    label: 'To Be Scheduled',
     color: 'text-amber-700',
     bgColor: 'bg-amber-100',
-  },
-  approved: {
-    label: 'Approved',
-    color: 'text-blue-700',
-    bgColor: 'bg-blue-100',
-  },
-  scheduled: {
-    label: 'Scheduled',
-    color: 'text-violet-700',
-    bgColor: 'bg-violet-100',
   },
   in_progress: {
     label: 'In Progress',
@@ -162,7 +149,7 @@ export const JOB_STATUS_CONFIG: Record<
     bgColor: 'bg-orange-100',
   },
   completed: {
-    label: 'Completed',
+    label: 'Complete',
     color: 'text-emerald-700',
     bgColor: 'bg-emerald-100',
   },
@@ -170,11 +157,6 @@ export const JOB_STATUS_CONFIG: Record<
     label: 'Cancelled',
     color: 'text-red-700',
     bgColor: 'bg-red-100',
-  },
-  closed: {
-    label: 'Closed',
-    color: 'text-slate-500',
-    bgColor: 'bg-slate-100',
   },
 };
 
@@ -268,60 +250,30 @@ export function formatAmount(amount: number | null): string {
   }).format(amount);
 }
 
-// Status simplification mapping (Req 21)
-export const SIMPLIFIED_STATUS_MAP: Record<JobStatus, SimplifiedJobStatus> = {
-  requested: 'To Be Scheduled',
-  approved: 'To Be Scheduled',
-  scheduled: 'In Progress',
+// Status label mapping (backend status → display label)
+export const STATUS_LABEL_MAP: Record<JobStatus, JobStatusLabel> = {
+  to_be_scheduled: 'To Be Scheduled',
   in_progress: 'In Progress',
   completed: 'Complete',
-  closed: 'Complete',
   cancelled: 'Cancelled',
 };
 
-// Simplified status display config
-export const SIMPLIFIED_STATUS_CONFIG: Record<
-  SimplifiedJobStatus,
-  { label: string; color: string; bgColor: string }
-> = {
-  'To Be Scheduled': {
-    label: 'To Be Scheduled',
-    color: 'text-amber-700',
-    bgColor: 'bg-amber-100',
-  },
-  'In Progress': {
-    label: 'In Progress',
-    color: 'text-orange-700',
-    bgColor: 'bg-orange-100',
-  },
-  'Complete': {
-    label: 'Complete',
-    color: 'text-emerald-700',
-    bgColor: 'bg-emerald-100',
-  },
-  'Cancelled': {
-    label: 'Cancelled',
-    color: 'text-red-700',
-    bgColor: 'bg-red-100',
-  },
+// Reverse mapping: display label → backend status
+export const LABEL_STATUS_MAP: Record<JobStatusLabel, JobStatus> = {
+  'To Be Scheduled': 'to_be_scheduled',
+  'In Progress': 'in_progress',
+  'Complete': 'completed',
+  'Cancelled': 'cancelled',
 };
 
-// Reverse mapping: simplified label → raw statuses it covers
-export const SIMPLIFIED_STATUS_RAW_MAP: Record<SimplifiedJobStatus, JobStatus[]> = {
-  'To Be Scheduled': ['requested', 'approved'],
-  'In Progress': ['scheduled', 'in_progress'],
-  'Complete': ['completed', 'closed'],
-  'Cancelled': ['cancelled'],
-};
-
-// Helper to get simplified status
-export function getSimplifiedStatus(status: JobStatus): SimplifiedJobStatus {
-  return SIMPLIFIED_STATUS_MAP[status];
+// Helper to get status label
+export function getSimplifiedStatus(status: JobStatus): JobStatusLabel {
+  return STATUS_LABEL_MAP[status];
 }
 
-// Helper to get simplified status config
+// Helper to get status config (replaces getSimplifiedStatusConfig)
 export function getSimplifiedStatusConfig(status: JobStatus) {
-  return SIMPLIFIED_STATUS_CONFIG[SIMPLIFIED_STATUS_MAP[status]];
+  return JOB_STATUS_CONFIG[status];
 }
 
 // Customer tag display config (Req 22)

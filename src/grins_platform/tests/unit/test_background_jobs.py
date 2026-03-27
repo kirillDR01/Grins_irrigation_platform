@@ -58,7 +58,7 @@ def _make_agreement(
     return agr
 
 
-def _make_job(status: str = JobStatus.APPROVED.value) -> MagicMock:
+def _make_job(status: str = JobStatus.TO_BE_SCHEDULED.value) -> MagicMock:
     job = MagicMock()
     job.status = status
     return job
@@ -115,12 +115,12 @@ class TestFailedPaymentEscalator:
     async def test_paused_14_days_transitions_to_cancelled(self):
         """PAUSED ≥ 14 days → CANCELLED with Stripe cancel."""
         escalator = FailedPaymentEscalator()
-        job_approved = _make_job(JobStatus.APPROVED.value)
+        job_to_be_scheduled = _make_job(JobStatus.TO_BE_SCHEDULED.value)
         job_completed = _make_job(JobStatus.COMPLETED.value)
         agreement = _make_agreement(
             status=AgreementStatus.PAUSED.value,
             updated_at=datetime.now(timezone.utc) - timedelta(days=15),
-            jobs=[job_approved, job_completed],
+            jobs=[job_to_be_scheduled, job_completed],
         )
 
         mock_session = AsyncMock()
@@ -154,7 +154,7 @@ class TestFailedPaymentEscalator:
 
         assert agreement.status == AgreementStatus.CANCELLED.value
         assert agreement.cancelled_at is not None
-        assert job_approved.status == JobStatus.CANCELLED.value
+        assert job_to_be_scheduled.status == JobStatus.CANCELLED.value
         # Completed job should not be changed
         assert job_completed.status == JobStatus.COMPLETED.value
         mock_stripe.Subscription.cancel.assert_called_once()

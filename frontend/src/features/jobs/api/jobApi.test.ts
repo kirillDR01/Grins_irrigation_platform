@@ -22,7 +22,7 @@ const mockJob = {
   customer_id: 'cust-123',
   property_id: 'prop-123',
   job_type: 'spring_startup',
-  status: 'requested',
+  status: 'to_be_scheduled',
   description: 'Spring startup service',
   quoted_amount: '150.00',
   created_at: '2025-01-29T00:00:00Z',
@@ -50,7 +50,7 @@ describe('jobApi', () => {
         data: { items: [mockJob], total: 1, page: 1, page_size: 20 },
       });
 
-      const params = { status: 'approved', page: 1 };
+      const params = { status: 'to_be_scheduled', page: 1 };
       await jobApi.list(params);
 
       expect(apiClient.get).toHaveBeenCalledWith('/jobs', { params });
@@ -99,13 +99,13 @@ describe('jobApi', () => {
 
   describe('updateStatus', () => {
     it('updates job status', async () => {
-      const approvedJob = { ...mockJob, status: 'approved' };
-      vi.mocked(apiClient.put).mockResolvedValue({ data: approvedJob });
+      const inProgressJob = { ...mockJob, status: 'in_progress' };
+      vi.mocked(apiClient.put).mockResolvedValue({ data: inProgressJob });
 
-      const result = await jobApi.updateStatus('job-123', { status: 'approved' });
+      const result = await jobApi.updateStatus('job-123', { status: 'in_progress' });
 
-      expect(apiClient.put).toHaveBeenCalledWith('/jobs/job-123/status', { status: 'approved' });
-      expect(result.status).toBe('approved');
+      expect(apiClient.put).toHaveBeenCalledWith('/jobs/job-123/status', { status: 'in_progress' });
+      expect(result.status).toBe('in_progress');
     });
   });
 
@@ -121,17 +121,17 @@ describe('jobApi', () => {
 
   describe('getReadyToSchedule', () => {
     it('fetches jobs ready to schedule', async () => {
-      const approvedJob = { ...mockJob, status: 'approved' };
+      const toBeScheduledJob = { ...mockJob, status: 'to_be_scheduled' };
       vi.mocked(apiClient.get).mockResolvedValue({
-        data: { items: [approvedJob], total: 1, page: 1, page_size: 20 },
+        data: { items: [toBeScheduledJob], total: 1, page: 1, page_size: 20 },
       });
 
       const result = await jobApi.getReadyToSchedule();
 
       expect(apiClient.get).toHaveBeenCalledWith('/jobs', {
-        params: { category: 'ready_to_schedule', status: 'approved' },
+        params: { category: 'ready_to_schedule', status: 'to_be_scheduled' },
       });
-      expect(result.items[0].status).toBe('approved');
+      expect(result.items[0].status).toBe('to_be_scheduled');
     });
   });
 
@@ -193,13 +193,13 @@ describe('jobApi', () => {
 
   describe('approve', () => {
     it('approves job', async () => {
-      const approvedJob = { ...mockJob, status: 'approved' };
-      vi.mocked(apiClient.put).mockResolvedValue({ data: approvedJob });
+      const toBeScheduledJob = { ...mockJob, status: 'to_be_scheduled' };
+      vi.mocked(apiClient.put).mockResolvedValue({ data: toBeScheduledJob });
 
       const result = await jobApi.approve('job-123');
 
-      expect(apiClient.put).toHaveBeenCalledWith('/jobs/job-123/status', { status: 'approved' });
-      expect(result.status).toBe('approved');
+      expect(apiClient.put).toHaveBeenCalledWith('/jobs/job-123/status', { status: 'to_be_scheduled' });
+      expect(result.status).toBe('to_be_scheduled');
     });
   });
 
@@ -235,16 +235,16 @@ describe('jobApi', () => {
 
   describe('close', () => {
     it('closes job', async () => {
-      const closedJob = { ...mockJob, status: 'closed' };
-      vi.mocked(apiClient.put).mockResolvedValue({ data: closedJob });
+      const completedJob = { ...mockJob, status: 'completed' };
+      vi.mocked(apiClient.put).mockResolvedValue({ data: completedJob });
 
       const result = await jobApi.close('job-123', 'Payment received');
 
       expect(apiClient.put).toHaveBeenCalledWith('/jobs/job-123/status', {
-        status: 'closed',
+        status: 'completed',
         notes: 'Payment received',
       });
-      expect(result.status).toBe('closed');
+      expect(result.status).toBe('completed');
     });
   });
 });

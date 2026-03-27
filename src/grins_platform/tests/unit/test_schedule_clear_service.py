@@ -76,7 +76,7 @@ class TestScheduleClearServiceClearSchedule:
     def _create_mock_job(
         self,
         job_id: str,
-        status: str = JobStatus.SCHEDULED.value,
+        status: str = JobStatus.IN_PROGRESS.value,
     ) -> MagicMock:
         """Create a mock job object."""
         job = MagicMock()
@@ -105,7 +105,7 @@ class TestScheduleClearServiceClearSchedule:
 
         # Create mock jobs (scheduled status)
         for appt in appointments:
-            mock_job = self._create_mock_job(appt.job_id, JobStatus.SCHEDULED.value)
+            mock_job = self._create_mock_job(appt.job_id, JobStatus.IN_PROGRESS.value)
             mock_job_repo.get_by_id.return_value = mock_job
 
         # Create mock audit record
@@ -197,14 +197,14 @@ class TestScheduleClearServiceClearSchedule:
         assert len(call_kwargs["appointments_data"]) == 1
 
     @pytest.mark.asyncio
-    async def test_clear_schedule_resets_scheduled_jobs(
+    async def test_clear_schedule_resets_in_progress_jobs(
         self,
         service: ScheduleClearService,
         mock_appointment_repo: AsyncMock,
         mock_job_repo: AsyncMock,
         mock_audit_repo: AsyncMock,
     ) -> None:
-        """Test that only scheduled jobs are reset to approved."""
+        """Test that only in_progress jobs are reset to to_be_scheduled."""
         schedule_date = date(2025, 1, 28)
 
         # Create appointments with different job statuses
@@ -213,9 +213,9 @@ class TestScheduleClearServiceClearSchedule:
         appointments = [appt1, appt2]
         mock_appointment_repo.get_daily_schedule.return_value = appointments
 
-        # First job is scheduled, second is in_progress
-        job1 = self._create_mock_job(appt1.job_id, JobStatus.SCHEDULED.value)
-        job2 = self._create_mock_job(appt2.job_id, JobStatus.IN_PROGRESS.value)
+        # First job is in_progress, second is completed
+        job1 = self._create_mock_job(appt1.job_id, JobStatus.IN_PROGRESS.value)
+        job2 = self._create_mock_job(appt2.job_id, JobStatus.COMPLETED.value)
 
         mock_job_repo.get_by_id.side_effect = [job1, job2]
 
@@ -226,12 +226,12 @@ class TestScheduleClearServiceClearSchedule:
 
         result = await service.clear_schedule(schedule_date=schedule_date)
 
-        # Only scheduled job should be reset
+        # Only in_progress job should be reset
         assert result.jobs_reset == 1
         mock_job_repo.update.assert_called_once()
         update_call = mock_job_repo.update.call_args
         assert update_call.kwargs["job_id"] == appt1.job_id
-        assert update_call.kwargs["data"]["status"] == JobStatus.APPROVED.value
+        assert update_call.kwargs["data"]["status"] == JobStatus.TO_BE_SCHEDULED.value
 
     @pytest.mark.asyncio
     async def test_clear_schedule_does_not_reset_completed_jobs(
@@ -492,7 +492,7 @@ class TestScheduleClearServiceAuditCompleteness:
         for appt in appointments:
             job = MagicMock()
             job.id = appt.job_id
-            job.status = JobStatus.SCHEDULED.value
+            job.status = JobStatus.IN_PROGRESS.value
             mock_job_repo.get_by_id.return_value = job
 
         mock_audit = MagicMock()
@@ -529,7 +529,7 @@ class TestScheduleClearServiceAuditCompleteness:
         for appt in appointments:
             job = MagicMock()
             job.id = appt.job_id
-            job.status = JobStatus.SCHEDULED.value
+            job.status = JobStatus.IN_PROGRESS.value
             scheduled_job_ids.append(job.id)
             mock_job_repo.get_by_id.return_value = job
 
@@ -594,29 +594,29 @@ class TestScheduleClearServiceJobStatusReset:
         return appointment
 
     @pytest.mark.asyncio
-    async def test_only_scheduled_jobs_are_reset(
+    async def test_only_in_progress_jobs_are_reset(
         self,
         service: ScheduleClearService,
         mock_appointment_repo: AsyncMock,
         mock_job_repo: AsyncMock,
         mock_audit_repo: AsyncMock,
     ) -> None:
-        """Property 4: Only 'scheduled' jobs are reset."""
+        """Property 4: Only 'in_progress' jobs are reset."""
         # Create appointments with various job statuses
-        appt_scheduled = self._create_mock_appointment()
         appt_in_progress = self._create_mock_appointment()
         appt_completed = self._create_mock_appointment()
-        appt_approved = self._create_mock_appointment()
+        appt_to_be_scheduled = self._create_mock_appointment()
+        appt_cancelled = self._create_mock_appointment()
 
-        appointments = [appt_scheduled, appt_in_progress, appt_completed, appt_approved]
+        appointments = [appt_in_progress, appt_completed, appt_to_be_scheduled, appt_cancelled]
         mock_appointment_repo.get_daily_schedule.return_value = appointments
 
         # Set up job statuses
         jobs = {
-            appt_scheduled.job_id: JobStatus.SCHEDULED.value,
             appt_in_progress.job_id: JobStatus.IN_PROGRESS.value,
             appt_completed.job_id: JobStatus.COMPLETED.value,
-            appt_approved.job_id: JobStatus.APPROVED.value,
+            appt_to_be_scheduled.job_id: JobStatus.TO_BE_SCHEDULED.value,
+            appt_cancelled.job_id: JobStatus.CANCELLED.value,
         }
 
         def get_job(job_id: str) -> MagicMock:
@@ -634,27 +634,27 @@ class TestScheduleClearServiceJobStatusReset:
 
         result = await service.clear_schedule(schedule_date=date(2025, 1, 28))
 
-        # Only the scheduled job should be reset
+        # Only the in_progress job should be reset
         assert result.jobs_reset == 1
         mock_job_repo.update.assert_called_once()
         update_call = mock_job_repo.update.call_args
-        assert update_call.kwargs["job_id"] == appt_scheduled.job_id
+        assert update_call.kwargs["job_id"] == appt_in_progress.job_id
 
     @pytest.mark.asyncio
-    async def test_in_progress_jobs_unchanged(
+    async def test_to_be_scheduled_jobs_unchanged(
         self,
         service: ScheduleClearService,
         mock_appointment_repo: AsyncMock,
         mock_job_repo: AsyncMock,
         mock_audit_repo: AsyncMock,
     ) -> None:
-        """Property 4: 'in_progress' jobs are unchanged."""
+        """Property 4: 'to_be_scheduled' jobs are unchanged."""
         appt = self._create_mock_appointment()
         mock_appointment_repo.get_daily_schedule.return_value = [appt]
 
         job = MagicMock()
         job.id = appt.job_id
-        job.status = JobStatus.IN_PROGRESS.value
+        job.status = JobStatus.TO_BE_SCHEDULED.value
         mock_job_repo.get_by_id.return_value = job
 
         mock_audit = MagicMock()

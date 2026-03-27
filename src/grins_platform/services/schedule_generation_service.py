@@ -179,7 +179,7 @@ class ScheduleGenerationService(LoggerMixin):
         jobs: list[Job] = (
             self.db.query(Job)
             .filter(
-                Job.status.in_([JobStatus.APPROVED.value, JobStatus.REQUESTED.value]),
+                Job.status == JobStatus.TO_BE_SCHEDULED.value,
                 Job.is_deleted == False,  # noqa: E712
             )
             .all()

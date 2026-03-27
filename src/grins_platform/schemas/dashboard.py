@@ -150,12 +150,9 @@ class RecentActivityResponse(BaseModel):
 class JobsByStatusResponse(BaseModel):
     """Jobs count grouped by status."""
 
-    requested: int = Field(default=0, description="Jobs in requested status")
-    approved: int = Field(default=0, description="Jobs in approved status")
-    scheduled: int = Field(default=0, description="Jobs in scheduled status")
+    to_be_scheduled: int = Field(default=0, description="Jobs awaiting scheduling")
     in_progress: int = Field(default=0, description="Jobs in progress")
     completed: int = Field(default=0, description="Completed jobs")
-    closed: int = Field(default=0, description="Closed jobs")
     cancelled: int = Field(default=0, description="Cancelled jobs")
 
     model_config = {"from_attributes": True}

@@ -1470,7 +1470,7 @@ class TestJobGeneratorByTier:
         types = [j.job_type for j in jobs]
         assert types == ["spring_startup", "mid_season_inspection", "fall_winterization"]
         for job in jobs:
-            assert job.status == JobStatus.APPROVED.value
+            assert job.status == JobStatus.TO_BE_SCHEDULED.value
             assert job.category == JobCategory.READY_TO_SCHEDULE.value
             assert job.customer_id == agreement.customer_id
             assert job.service_agreement_id == agreement.id
@@ -1530,4 +1530,4 @@ class TestJobGeneratorByTier:
             assert job.customer_id == agreement.customer_id
             assert job.service_agreement_id == agreement.id
             assert job.property_id == agreement.property_id
-            assert job.approved_at is not None
+            assert job.requested_at is not None

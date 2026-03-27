@@ -65,6 +65,7 @@ const baseLead: Lead = {
   action_tags: ['NEEDS_CONTACT'],
   sms_consent: true,
   terms_accepted: true,
+  email_marketing_consent: true,
   created_at: '2025-01-20T10:00:00Z',
   updated_at: '2025-01-20T10:00:00Z',
 };
@@ -433,8 +434,8 @@ describe('LeadDetail', () => {
 
   // ---- Consent indicators on detail ----
 
-  it('renders consent indicators as "Given"/"Accepted" when true', async () => {
-    vi.mocked(leadApi.getById).mockResolvedValue(baseLead); // sms_consent=true, terms_accepted=true
+  it('renders consent indicators as "Given"/"Opted in" when true', async () => {
+    vi.mocked(leadApi.getById).mockResolvedValue(baseLead); // sms_consent=true, email_marketing_consent=true
 
     render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
 
@@ -445,8 +446,8 @@ describe('LeadDetail', () => {
     const smsConsent = screen.getByTestId('sms-consent-lead-001');
     expect(smsConsent).toHaveTextContent('Given');
 
-    const termsAccepted = screen.getByTestId('terms-accepted-lead-001');
-    expect(termsAccepted).toHaveTextContent('Accepted');
+    const emailMarketing = screen.getByTestId('email-marketing-consent-lead-001');
+    expect(emailMarketing).toHaveTextContent('Opted in');
   });
 
   it('renders consent indicators as "Not given"/"Not accepted" when false', async () => {
@@ -455,6 +456,7 @@ describe('LeadDetail', () => {
       id: 'lead-no-consent',
       sms_consent: false,
       terms_accepted: false,
+      email_marketing_consent: false,
     };
     vi.mocked(leadApi.getById).mockResolvedValue(leadNoConsent);
 
@@ -467,7 +469,7 @@ describe('LeadDetail', () => {
     const smsConsent = screen.getByTestId('sms-consent-lead-no-consent');
     expect(smsConsent).toHaveTextContent('Not given');
 
-    const termsAccepted = screen.getByTestId('terms-accepted-lead-no-consent');
-    expect(termsAccepted).toHaveTextContent('Not accepted');
+    const emailMarketing = screen.getByTestId('email-marketing-consent-lead-no-consent');
+    expect(emailMarketing).toHaveTextContent('Not opted in');
   });
 });

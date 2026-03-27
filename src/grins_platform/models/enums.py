@@ -112,13 +112,10 @@ class JobStatus(str, Enum):
     Validates: Requirement 4.1
     """
 
-    REQUESTED = "requested"
-    APPROVED = "approved"
-    SCHEDULED = "scheduled"
+    TO_BE_SCHEDULED = "to_be_scheduled"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
-    CLOSED = "closed"
 
 
 class JobSource(str, Enum):

@@ -38,6 +38,7 @@ const mockFollowUpLeads: FollowUpLead[] = [
     action_tags: [],
     sms_consent: false,
     terms_accepted: false,
+    email_marketing_consent: false,
     created_at: '2025-01-20T06:00:00Z',
     updated_at: '2025-01-20T06:00:00Z',
     time_since_created: 14, // red urgency (>=12h)
@@ -65,6 +66,7 @@ const mockFollowUpLeads: FollowUpLead[] = [
     action_tags: [],
     sms_consent: true,
     terms_accepted: true,
+    email_marketing_consent: true,
     created_at: '2025-01-20T14:00:00Z',
     updated_at: '2025-01-20T14:00:00Z',
     time_since_created: 5, // yellow urgency (2-12h)

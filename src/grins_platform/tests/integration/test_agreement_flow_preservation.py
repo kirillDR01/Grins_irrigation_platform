@@ -88,7 +88,7 @@ def _make_job(
     customer_id: Any = None,
     property_id: Any = None,
     service_agreement_id: Any = None,
-    status: str = JobStatus.APPROVED.value,
+    status: str = JobStatus.TO_BE_SCHEDULED.value,
     category: str = JobCategory.READY_TO_SCHEDULE.value,
 ) -> MagicMock:
     """Build a mock job with agreement-expected fields."""
@@ -99,10 +99,9 @@ def _make_job(
     job.service_agreement_id = service_agreement_id or uuid4()
     job.status = status
     job.category = category
-    job.closed_at = None
     job.target_start_date = date(2026, 4, 1)
     job.target_end_date = date(2026, 4, 30)
-    job.approved_at = datetime.now(timezone.utc)
+    job.requested_at = datetime.now(timezone.utc)
     job.description = "Spring system activation and inspection"
     job.job_type = "spring_startup"
     return job
@@ -251,7 +250,7 @@ class TestAgreementFlowPreservation:
             assert job.customer_id == customer_id
             assert job.service_agreement_id == agr_id
             assert job.property_id == property_id
-            assert job.status == JobStatus.APPROVED.value
+            assert job.status == JobStatus.TO_BE_SCHEDULED.value
             assert job.category == JobCategory.READY_TO_SCHEDULE.value
 
 
@@ -524,7 +523,7 @@ class TestJobGenerationPreservation:
             assert job.customer_id == customer_id
             assert job.service_agreement_id == agr_id
             assert job.property_id == property_id
-            assert job.status == JobStatus.APPROVED.value
+            assert job.status == JobStatus.TO_BE_SCHEDULED.value
             assert job.category == JobCategory.READY_TO_SCHEDULE.value
 
         # Verify job types
@@ -561,7 +560,7 @@ class TestJobGenerationPreservation:
         for job in jobs:
             assert job.customer_id == customer_id
             assert job.service_agreement_id == agr_id
-            assert job.status == JobStatus.APPROVED.value
+            assert job.status == JobStatus.TO_BE_SCHEDULED.value
             assert job.category == JobCategory.READY_TO_SCHEDULE.value
 
     async def test_premium_tier_works_with_existing_job_generator(
@@ -594,7 +593,7 @@ class TestJobGenerationPreservation:
             assert job.customer_id == customer_id
             assert job.service_agreement_id == agr_id
             assert job.property_id == property_id
-            assert job.status == JobStatus.APPROVED.value
+            assert job.status == JobStatus.TO_BE_SCHEDULED.value
             assert job.category == JobCategory.READY_TO_SCHEDULE.value
 
     async def test_job_target_dates_works_with_existing_job_generator(
@@ -700,7 +699,7 @@ class TestAgreementStatusTransitionsPreservation:
             id=agr_id,
             status=AgreementStatus.PAUSED.value,
             jobs=[
-                _make_job(status=JobStatus.APPROVED.value),
+                _make_job(status=JobStatus.TO_BE_SCHEDULED.value),
                 _make_job(status=JobStatus.COMPLETED.value),
             ],
         )
@@ -883,7 +882,7 @@ class TestAgreementJobListViewPreservation:
 
         for job in jobs:
             # Status and category for Job_List_View
-            assert job.status == JobStatus.APPROVED.value
+            assert job.status == JobStatus.TO_BE_SCHEDULED.value
             assert job.category == JobCategory.READY_TO_SCHEDULE.value
 
             # Customer and agreement linkage
@@ -895,8 +894,8 @@ class TestAgreementJobListViewPreservation:
             assert isinstance(job.target_start_date, date)
             assert isinstance(job.target_end_date, date)
 
-            # Approval timestamp
-            assert job.approved_at is not None
+            # Request timestamp
+            assert job.requested_at is not None
 
             # Description present
             assert job.description is not None
@@ -945,7 +944,7 @@ class TestAgreementJobListViewPreservation:
             )
 
             for job in jobs:
-                assert job.status == JobStatus.APPROVED.value, (
+                assert job.status == JobStatus.TO_BE_SCHEDULED.value, (
                     f"{tier_name} job should be APPROVED"
                 )
                 assert job.category == JobCategory.READY_TO_SCHEDULE.value, (

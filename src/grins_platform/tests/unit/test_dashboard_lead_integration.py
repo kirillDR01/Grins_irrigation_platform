@@ -37,7 +37,7 @@ def mock_job_repository() -> Mock:
     repo = MagicMock()
     repo.count_by_status = AsyncMock(
         return_value={
-            JobStatus.REQUESTED.value: 5,
+            JobStatus.TO_BE_SCHEDULED.value: 5,
             JobStatus.COMPLETED.value: 20,
         },
     )

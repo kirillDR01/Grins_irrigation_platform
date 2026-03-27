@@ -116,10 +116,10 @@ async def get_job_metrics_by_status(
     pending_approval_count = pending_result.scalar() or 0
 
     result = JobStatusByCategoryResponse(
-        new_requests=status_counts.get(JobStatus.REQUESTED.value, 0),
+        new_requests=0,  # No longer a distinct status; driven by action tags
         estimates=len(estimates_jobs),
         pending_approval=int(pending_approval_count),
-        to_be_scheduled=status_counts.get(JobStatus.APPROVED.value, 0),
+        to_be_scheduled=status_counts.get(JobStatus.TO_BE_SCHEDULED.value, 0),
         in_progress=status_counts.get(JobStatus.IN_PROGRESS.value, 0),
         complete=status_counts.get(JobStatus.COMPLETED.value, 0),
     )

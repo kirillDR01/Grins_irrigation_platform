@@ -28,14 +28,12 @@ job_counts = st.integers(min_value=0, max_value=20)
 
 # Statuses that count as "remaining" in the refund calculation
 REMAINING_STATUSES = [
-    JobStatus.APPROVED.value,
-    JobStatus.SCHEDULED.value,
+    JobStatus.TO_BE_SCHEDULED.value,
     JobStatus.IN_PROGRESS.value,
 ]
 # Statuses that do NOT count as remaining
 DONE_STATUSES = [
     JobStatus.COMPLETED.value,
-    JobStatus.CLOSED.value,
     JobStatus.CANCELLED.value,
 ]
 
@@ -48,7 +46,6 @@ def _make_job(status: str) -> MagicMock:
     job = MagicMock()
     job.id = uuid4()
     job.status = status
-    job.closed_at = None
     return job
 
 
@@ -128,7 +125,7 @@ class TestProratedRefundProperty:
         annual_price: Decimal,
         count: int,
     ) -> None:
-        """All COMPLETED/CLOSED/CANCELLED → refund is zero."""
+        """All COMPLETED/CANCELLED → refund is zero."""
         jobs = [_make_job(JobStatus.COMPLETED.value) for _ in range(count)]
         agr = _make_agreement(annual_price, jobs)
         svc, repo = _make_service(agr)
@@ -140,13 +137,13 @@ class TestProratedRefundProperty:
 
     @given(annual_price=prices, count=st.integers(min_value=1, max_value=10))
     @settings(max_examples=20)
-    async def test_all_approved_full_refund(
+    async def test_all_to_be_scheduled_full_refund(
         self,
         annual_price: Decimal,
         count: int,
     ) -> None:
-        """All APPROVED → refund equals full annual_price."""
-        jobs = [_make_job(JobStatus.APPROVED.value) for _ in range(count)]
+        """All TO_BE_SCHEDULED → refund equals full annual_price."""
+        jobs = [_make_job(JobStatus.TO_BE_SCHEDULED.value) for _ in range(count)]
         agr = _make_agreement(annual_price, jobs)
         svc, repo = _make_service(agr)
 

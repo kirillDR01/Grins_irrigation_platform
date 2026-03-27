@@ -1,3 +1,76 @@
+# Simplify Job Status Enum (7 → 4)
+
+**Date:** 2026-03-26
+**Scope:** Collapse job statuses from 7 (`requested`, `approved`, `scheduled`, `in_progress`, `completed`, `cancelled`, `closed`) to 4 (`to_be_scheduled`, `in_progress`, `completed`, `cancelled`) at the database level.
+
+---
+
+## Status Mapping
+
+| Old Status | New Status | Rationale |
+|---|---|---|
+| `requested` | `to_be_scheduled` | Jobs enter the system ready to schedule |
+| `approved` | `to_be_scheduled` | Same bucket — both await scheduling |
+| `scheduled` | `in_progress` | Once on a calendar date, it's in-progress |
+| `in_progress` | `in_progress` | No change |
+| `completed` | `completed` | No change |
+| `closed` | `completed` | Merged — no distinct business meaning |
+| `cancelled` | `cancelled` | No change |
+
+## New Valid Transitions
+
+```
+to_be_scheduled → in_progress, cancelled
+in_progress     → completed, cancelled, to_be_scheduled (schedule clear/restore)
+completed       → (terminal)
+cancelled       → (terminal)
+```
+
+## Changes
+
+### Database Migration
+- New migration `20260326_120000_simplify_job_statuses.py`: updates CHECK constraints on `jobs.status` and `job_status_history` columns, migrates existing rows, changes `server_default` to `to_be_scheduled`
+
+### Backend (12 files)
+
+| File | Change |
+|---|---|
+| `models/enums.py` | `JobStatus` enum: 7 → 4 values |
+| `models/job.py` | `VALID_STATUS_TRANSITIONS` simplified; `server_default` → `to_be_scheduled`; `is_terminal_status()` checks `completed` instead of `closed` |
+| `services/job_service.py` | `VALID_TRANSITIONS`, `_get_timestamp_field()`, `create_job()` default status updated |
+| `services/job_generator.py` | Generated jobs start as `to_be_scheduled` (was `approved`) |
+| `services/schedule_clear_service.py` | Clears `in_progress` → `to_be_scheduled` (was `scheduled` → `approved`) |
+| `services/schedule_generation_service.py` | Queries `to_be_scheduled` jobs (was `approved`/`requested`) |
+| `services/background_jobs.py` | Cancels `to_be_scheduled` jobs (was `approved`) |
+| `services/agreement_service.py` | Cancellation targets `to_be_scheduled` (was `approved`); terminal check uses `completed` (was `completed`/`closed`) |
+| `services/dashboard_service.py` | `get_jobs_by_status()` returns 4 statuses |
+| `api/v1/jobs.py` | Metrics endpoint uses new status values |
+| `schemas/job.py` | No structural change (enum auto-adjusts) |
+| `schemas/dashboard.py` | `JobsByStatusResponse`: 7 → 4 fields |
+
+### Frontend (7 files)
+
+| File | Change |
+|---|---|
+| `features/jobs/types/index.ts` | `JobStatus` type: 4 values; removed `SIMPLIFIED_STATUS_MAP`/`SIMPLIFIED_STATUS_RAW_MAP`/`SIMPLIFIED_STATUS_CONFIG`; added `STATUS_LABEL_MAP`/`LABEL_STATUS_MAP` |
+| `features/jobs/components/JobList.tsx` | Status filter uses 4 statuses directly; action menu simplified |
+| `features/jobs/components/JobStatusBadge.tsx` | `JOB_STATUS_WORKFLOW` simplified to 4 entries |
+| `features/jobs/api/jobApi.ts` | `approve()` → `to_be_scheduled`; `close()` → `completed` |
+| `features/dashboard/components/JobStatusGrid.tsx` | Query params updated to new status values |
+| `features/dashboard/types/index.ts` | `JobsByStatusResponse`: 4 fields |
+| `features/schedule/components/ClearDayDialog.tsx` | Status reset notice text updated |
+
+### Tests (~41 files)
+- All backend and frontend test files updated to use new status values
+
+## Deployment Notes
+
+- **Migration required:** `alembic upgrade head` — migrates existing data atomically
+- **No downtime:** Migration runs in a single transaction; old values are mapped before new CHECK constraint is applied
+- **API breaking change:** `GET /api/v1/jobs/by-status/{status}` now only accepts 4 values; `GET /api/v1/dashboard/jobs-by-status` response fields changed from 7 to 4
+
+---
+
 # Tier-Based Priority Scheduling
 
 **Date:** 2026-03-26

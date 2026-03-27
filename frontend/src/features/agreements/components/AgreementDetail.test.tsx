@@ -54,7 +54,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 const makeJob = (overrides: Partial<AgreementJobSummary> = {}): AgreementJobSummary => ({
   id: 'j1',
   job_type: 'Spring Startup',
-  status: 'approved',
+  status: 'to_be_scheduled',
   target_start_date: '2026-04-01',
   target_end_date: '2026-04-30',
   ...overrides,

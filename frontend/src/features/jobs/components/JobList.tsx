@@ -43,14 +43,14 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { LoadingPage, ErrorMessage } from '@/shared/components';
 import { useJobs } from '../hooks';
-import type { Job, JobListParams, JobStatus, SimplifiedJobStatus } from '../types';
+import type { Job, JobListParams, JobStatus, JobStatusLabel } from '../types';
 import {
   formatJobType,
   formatAmount,
-  getSimplifiedStatus,
   getSimplifiedStatusConfig,
-  SIMPLIFIED_STATUS_CONFIG,
-  SIMPLIFIED_STATUS_RAW_MAP,
+  JOB_STATUS_CONFIG,
+  LABEL_STATUS_MAP,
+  STATUS_LABEL_MAP,
   CUSTOMER_TAG_CONFIG,
   calculateDaysWaiting,
   getDueByColorClass,
@@ -64,12 +64,10 @@ interface JobListProps {
   customerId?: string;
 }
 
-// Map simplified filter value to raw statuses for API
-function getStatusFilterValue(simplified: string): JobStatus | undefined {
-  if (simplified === 'all') return undefined;
-  const rawStatuses = SIMPLIFIED_STATUS_RAW_MAP[simplified as SimplifiedJobStatus];
-  // Use the first raw status for API filtering; backend should handle the mapping
-  return rawStatuses?.[0];
+// Map filter label to backend status for API
+function getStatusFilterValue(label: string): JobStatus | undefined {
+  if (label === 'all') return undefined;
+  return LABEL_STATUS_MAP[label as JobStatusLabel];
 }
 
 export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobListProps) {
@@ -83,7 +81,7 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
   const urlStatus = searchParams.get('status') as JobStatus | null;
   const urlHighlight = searchParams.get('highlight');
 
-  const validStatuses: JobStatus[] = ['requested', 'approved', 'scheduled', 'in_progress', 'completed', 'cancelled', 'closed'];
+  const validStatuses: JobStatus[] = ['to_be_scheduled', 'in_progress', 'completed', 'cancelled'];
 
   const [params, setParams] = useState<JobListParams>({
     page: 1,
@@ -95,8 +93,8 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
   // Initialize simplified filter from URL status
   useEffect(() => {
     if (urlStatus && validStatuses.includes(urlStatus)) {
-      const simplified = getSimplifiedStatus(urlStatus);
-      setSimplifiedFilter(simplified);
+      const label = STATUS_LABEL_MAP[urlStatus];
+      setSimplifiedFilter(label);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -382,9 +380,9 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
                 <DropdownMenuItem onClick={() => onEdit(job)}>Edit</DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
-              {onStatusChange && job.status === 'requested' && (
-                <DropdownMenuItem onClick={() => onStatusChange(job, 'approved')}>
-                  Approve
+              {onStatusChange && job.status === 'to_be_scheduled' && (
+                <DropdownMenuItem onClick={() => onStatusChange(job, 'in_progress')}>
+                  Start Job
                 </DropdownMenuItem>
               )}
               {onStatusChange && job.status === 'in_progress' && (
@@ -392,13 +390,8 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
                   Mark Complete
                 </DropdownMenuItem>
               )}
-              {onStatusChange && job.status === 'completed' && (
-                <DropdownMenuItem onClick={() => onStatusChange(job, 'closed')}>
-                  Close Job
-                </DropdownMenuItem>
-              )}
               <DropdownMenuSeparator />
-              {onStatusChange && !['cancelled', 'closed'].includes(job.status) && (
+              {onStatusChange && !['cancelled', 'completed'].includes(job.status) && (
                 <DropdownMenuItem
                   onClick={() => onStatusChange(job, 'cancelled')}
                   className="text-destructive"
@@ -468,9 +461,9 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
             </SelectTrigger>
             <SelectContent data-testid="status-filter-options">
               <SelectItem value="all">All Statuses</SelectItem>
-              {(Object.keys(SIMPLIFIED_STATUS_CONFIG) as SimplifiedJobStatus[]).map((status) => (
-                <SelectItem key={status} value={status} data-testid={`status-${status.toLowerCase().replace(/\s+/g, '-')}`}>
-                  {status}
+              {(Object.entries(JOB_STATUS_CONFIG) as [JobStatus, { label: string }][]).map(([, cfg]) => (
+                <SelectItem key={cfg.label} value={cfg.label} data-testid={`status-${cfg.label.toLowerCase().replace(/\s+/g, '-')}`}>
+                  {cfg.label}
                 </SelectItem>
               ))}
             </SelectContent>

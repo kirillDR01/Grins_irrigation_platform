@@ -11,13 +11,10 @@ interface JobStatusBadgeProps {
 }
 
 const STATUS_DESCRIPTIONS: Record<JobStatus, string> = {
-  requested: 'Job has been requested and is awaiting approval',
-  approved: 'Job has been approved and is ready to be scheduled',
-  scheduled: 'Job has been scheduled for a specific date and time',
+  to_be_scheduled: 'Job is awaiting scheduling',
   in_progress: 'Work is currently being performed',
-  completed: 'Work has been completed, awaiting final review',
+  completed: 'Work has been completed',
   cancelled: 'Job has been cancelled',
-  closed: 'Job is fully complete and closed',
 };
 
 export const JobStatusBadge = memo(function JobStatusBadge({
@@ -61,13 +58,10 @@ export const JobStatusBadge = memo(function JobStatusBadge({
 
 // Export status workflow helpers
 export const JOB_STATUS_WORKFLOW: Record<JobStatus, JobStatus[]> = {
-  requested: ['approved', 'cancelled'],
-  approved: ['scheduled', 'cancelled'],
-  scheduled: ['in_progress', 'cancelled'],
-  in_progress: ['completed', 'cancelled'],
-  completed: ['closed'],
+  to_be_scheduled: ['in_progress', 'cancelled'],
+  in_progress: ['completed', 'cancelled', 'to_be_scheduled'],
+  completed: [],
   cancelled: [],
-  closed: [],
 };
 
 export function getNextStatuses(currentStatus: JobStatus): JobStatus[] {

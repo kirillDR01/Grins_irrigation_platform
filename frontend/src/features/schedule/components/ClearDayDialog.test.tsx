@@ -72,7 +72,7 @@ describe('ClearDayDialog', () => {
   it('displays status reset notice', () => {
     render(<ClearDayDialog {...defaultProps} />);
     expect(screen.getByTestId('status-reset-notice')).toBeInTheDocument();
-    expect(screen.getByText(/Jobs with "scheduled" status will be reset/)).toBeInTheDocument();
+    expect(screen.getByText(/Jobs with "in_progress" status will be reset/)).toBeInTheDocument();
   });
 
   it('displays audit notice', () => {

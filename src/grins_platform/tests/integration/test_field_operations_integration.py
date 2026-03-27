@@ -104,7 +104,7 @@ def create_mock_job(
     service_offering_id: uuid.UUID | None = None,
     job_type: str = "spring_startup",
     category: str = JobCategory.READY_TO_SCHEDULE.value,
-    status: str = JobStatus.REQUESTED.value,
+    status: str = JobStatus.TO_BE_SCHEDULED.value,
 ) -> MagicMock:
     """Create a mock job object."""
     job = MagicMock()
@@ -678,7 +678,7 @@ class TestStatusWorkflowIntegration:
         mock_job = create_mock_job(
             job_id=job_id,
             customer_id=customer_id,
-            status=JobStatus.REQUESTED.value,
+            status=JobStatus.TO_BE_SCHEDULED.value,
         )
         mock_job_repo.create.return_value = mock_job
         mock_job_repo.get_by_id.return_value = mock_job
@@ -694,11 +694,8 @@ class TestStatusWorkflowIntegration:
 
         # Test all valid transitions
         transitions = [
-            (JobStatus.REQUESTED, JobStatus.APPROVED),
-            (JobStatus.APPROVED, JobStatus.SCHEDULED),
-            (JobStatus.SCHEDULED, JobStatus.IN_PROGRESS),
+            (JobStatus.TO_BE_SCHEDULED, JobStatus.IN_PROGRESS),
             (JobStatus.IN_PROGRESS, JobStatus.COMPLETED),
-            (JobStatus.COMPLETED, JobStatus.CLOSED),
         ]
 
         for current, next_status in transitions:
@@ -725,24 +722,24 @@ class TestStatusWorkflowIntegration:
 
         mock_job = create_mock_job(
             job_id=job_id,
-            status=JobStatus.REQUESTED.value,
+            status=JobStatus.TO_BE_SCHEDULED.value,
         )
         mock_job_repo.get_by_id.return_value = mock_job
 
         updated = MagicMock()
-        updated.status = JobStatus.APPROVED.value
+        updated.status = JobStatus.IN_PROGRESS.value
         mock_job_repo.update.return_value = updated
 
         status_data = JobStatusUpdate(
-            status=JobStatus.APPROVED,
+            status=JobStatus.IN_PROGRESS,
             notes="Approved by manager",
         )
         await job_service.update_status(job_id, status_data)
 
         mock_job_repo.add_status_history.assert_called_once_with(
             job_id=job_id,
-            new_status=JobStatus.APPROVED,
-            previous_status=JobStatus.REQUESTED,
+            new_status=JobStatus.IN_PROGRESS,
+            previous_status=JobStatus.TO_BE_SCHEDULED,
             notes="Approved by manager",
         )
 
@@ -759,7 +756,7 @@ class TestStatusWorkflowIntegration:
 
         mock_job = create_mock_job(
             job_id=job_id,
-            status=JobStatus.REQUESTED.value,
+            status=JobStatus.TO_BE_SCHEDULED.value,
         )
         mock_job_repo.get_by_id.return_value = mock_job
 
@@ -773,21 +770,21 @@ class TestStatusWorkflowIntegration:
         job_service: JobService,
         mock_job_repo: AsyncMock,
     ) -> None:
-        """Test terminal states (CLOSED, CANCELLED) have no valid transitions.
+        """Test terminal states (COMPLETED, CANCELLED) have no valid transitions.
 
         Validates: Requirement 4.8, 4.9
         """
         job_id = uuid.uuid4()
 
-        # Test CLOSED state
+        # Test COMPLETED state
         mock_job = create_mock_job(
             job_id=job_id,
-            status=JobStatus.CLOSED.value,
+            status=JobStatus.COMPLETED.value,
         )
         mock_job_repo.get_by_id.return_value = mock_job
 
         for next_status in JobStatus:
-            if next_status != JobStatus.CLOSED:
+            if next_status != JobStatus.COMPLETED:
                 status_data = JobStatusUpdate(status=next_status)
                 with pytest.raises(InvalidStatusTransitionError):
                     await job_service.update_status(job_id, status_data)
@@ -804,9 +801,7 @@ class TestStatusWorkflowIntegration:
         job_id = uuid.uuid4()
 
         cancellable_states = [
-            JobStatus.REQUESTED,
-            JobStatus.APPROVED,
-            JobStatus.SCHEDULED,
+            JobStatus.TO_BE_SCHEDULED,
             JobStatus.IN_PROGRESS,
         ]
 

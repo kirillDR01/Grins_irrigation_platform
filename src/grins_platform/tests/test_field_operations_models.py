@@ -71,13 +71,10 @@ class TestJobStatus:
 
     def test_all_values(self) -> None:
         """Test all job status values exist."""
-        assert JobStatus.REQUESTED.value == "requested"
-        assert JobStatus.APPROVED.value == "approved"
-        assert JobStatus.SCHEDULED.value == "scheduled"
+        assert JobStatus.TO_BE_SCHEDULED.value == "to_be_scheduled"
         assert JobStatus.IN_PROGRESS.value == "in_progress"
         assert JobStatus.COMPLETED.value == "completed"
         assert JobStatus.CANCELLED.value == "cancelled"
-        assert JobStatus.CLOSED.value == "closed"
 
 
 class TestJobSource:
@@ -183,8 +180,8 @@ class TestJobModel:
     def test_status_enum_property(self) -> None:
         """Test status_enum property returns correct enum."""
         job = Job()
-        job.status = "requested"
-        assert job.status_enum == JobStatus.REQUESTED
+        job.status = "to_be_scheduled"
+        assert job.status_enum == JobStatus.TO_BE_SCHEDULED
 
     def test_category_enum_property(self) -> None:
         """Test category_enum property returns correct enum."""
@@ -207,25 +204,25 @@ class TestJobModel:
     def test_can_transition_to_valid(self) -> None:
         """Test can_transition_to returns True for valid transitions."""
         job = Job()
-        job.status = "requested"
-        assert job.can_transition_to("approved") is True
+        job.status = "to_be_scheduled"
+        assert job.can_transition_to("in_progress") is True
         assert job.can_transition_to("cancelled") is True
 
     def test_can_transition_to_invalid(self) -> None:
         """Test can_transition_to returns False for invalid transitions."""
         job = Job()
-        job.status = "requested"
+        job.status = "to_be_scheduled"
         assert job.can_transition_to("completed") is False
-        assert job.can_transition_to("closed") is False
 
     def test_get_valid_transitions(self) -> None:
         """Test get_valid_transitions returns correct list."""
         job = Job()
-        job.status = "approved"
+        job.status = "in_progress"
         transitions = job.get_valid_transitions()
-        assert "scheduled" in transitions
+        assert "completed" in transitions
         assert "cancelled" in transitions
-        assert len(transitions) == 2
+        assert "to_be_scheduled" in transitions
+        assert len(transitions) == 3
 
     def test_is_terminal_status_cancelled(self) -> None:
         """Test is_terminal_status returns True for cancelled."""
@@ -233,10 +230,10 @@ class TestJobModel:
         job.status = "cancelled"
         assert job.is_terminal_status() is True
 
-    def test_is_terminal_status_closed(self) -> None:
-        """Test is_terminal_status returns True for closed."""
+    def test_is_terminal_status_completed(self) -> None:
+        """Test is_terminal_status returns True for completed."""
         job = Job()
-        job.status = "closed"
+        job.status = "completed"
         assert job.is_terminal_status() is True
 
     def test_is_terminal_status_in_progress(self) -> None:
@@ -249,35 +246,21 @@ class TestJobModel:
         """Test __repr__ method."""
         job = Job()
         job.job_type = "spring_startup"
-        job.status = "requested"
+        job.status = "to_be_scheduled"
 
         repr_str = repr(job)
 
         assert "Job" in repr_str
         assert "spring_startup" in repr_str
-        assert "requested" in repr_str
+        assert "to_be_scheduled" in repr_str
 
 
 class TestValidStatusTransitions:
     """Tests for VALID_STATUS_TRANSITIONS constant."""
 
-    def test_requested_transitions(self) -> None:
-        """Test valid transitions from requested status."""
-        transitions = VALID_STATUS_TRANSITIONS["requested"]
-        assert "approved" in transitions
-        assert "cancelled" in transitions
-        assert len(transitions) == 2
-
-    def test_approved_transitions(self) -> None:
-        """Test valid transitions from approved status."""
-        transitions = VALID_STATUS_TRANSITIONS["approved"]
-        assert "scheduled" in transitions
-        assert "cancelled" in transitions
-        assert len(transitions) == 2
-
-    def test_scheduled_transitions(self) -> None:
-        """Test valid transitions from scheduled status."""
-        transitions = VALID_STATUS_TRANSITIONS["scheduled"]
+    def test_to_be_scheduled_transitions(self) -> None:
+        """Test valid transitions from to_be_scheduled status."""
+        transitions = VALID_STATUS_TRANSITIONS["to_be_scheduled"]
         assert "in_progress" in transitions
         assert "cancelled" in transitions
         assert len(transitions) == 2
@@ -287,22 +270,17 @@ class TestValidStatusTransitions:
         transitions = VALID_STATUS_TRANSITIONS["in_progress"]
         assert "completed" in transitions
         assert "cancelled" in transitions
-        assert len(transitions) == 2
+        assert "to_be_scheduled" in transitions
+        assert len(transitions) == 3
 
-    def test_completed_transitions(self) -> None:
-        """Test valid transitions from completed status."""
+    def test_completed_is_terminal(self) -> None:
+        """Test completed has no valid transitions."""
         transitions = VALID_STATUS_TRANSITIONS["completed"]
-        assert "closed" in transitions
-        assert len(transitions) == 1
+        assert len(transitions) == 0
 
     def test_cancelled_is_terminal(self) -> None:
         """Test cancelled has no valid transitions."""
         transitions = VALID_STATUS_TRANSITIONS["cancelled"]
-        assert len(transitions) == 0
-
-    def test_closed_is_terminal(self) -> None:
-        """Test closed has no valid transitions."""
-        transitions = VALID_STATUS_TRANSITIONS["closed"]
         assert len(transitions) == 0
 
 
@@ -321,8 +299,8 @@ class TestJobStatusHistoryModel:
     def test_previous_status_enum_property_with_value(self) -> None:
         """Test previous_status_enum property returns correct enum."""
         history = JobStatusHistory()
-        history.previous_status = "requested"
-        assert history.previous_status_enum == JobStatus.REQUESTED
+        history.previous_status = "to_be_scheduled"
+        assert history.previous_status_enum == JobStatus.TO_BE_SCHEDULED
 
     def test_previous_status_enum_property_none(self) -> None:
         """Test previous_status_enum property returns None for initial."""
@@ -333,33 +311,33 @@ class TestJobStatusHistoryModel:
     def test_new_status_enum_property(self) -> None:
         """Test new_status_enum property returns correct enum."""
         history = JobStatusHistory()
-        history.new_status = "approved"
-        assert history.new_status_enum == JobStatus.APPROVED
+        history.new_status = "in_progress"
+        assert history.new_status_enum == JobStatus.IN_PROGRESS
 
     def test_to_dict(self) -> None:
         """Test to_dict method returns correct dictionary."""
         history = JobStatusHistory()
-        history.previous_status = "requested"
-        history.new_status = "approved"
-        history.notes = "Customer approved the work"
+        history.previous_status = "to_be_scheduled"
+        history.new_status = "in_progress"
+        history.notes = "Job started"
 
         result = history.to_dict()
 
-        assert result["previous_status"] == "requested"
-        assert result["new_status"] == "approved"
-        assert result["notes"] == "Customer approved the work"
+        assert result["previous_status"] == "to_be_scheduled"
+        assert result["new_status"] == "in_progress"
+        assert result["notes"] == "Job started"
 
     def test_repr(self) -> None:
         """Test __repr__ method."""
         history = JobStatusHistory()
-        history.previous_status = "requested"
-        history.new_status = "approved"
+        history.previous_status = "to_be_scheduled"
+        history.new_status = "in_progress"
 
         repr_str = repr(history)
 
         assert "JobStatusHistory" in repr_str
-        assert "requested" in repr_str
-        assert "approved" in repr_str
+        assert "to_be_scheduled" in repr_str
+        assert "in_progress" in repr_str
 
 
 # =============================================================================

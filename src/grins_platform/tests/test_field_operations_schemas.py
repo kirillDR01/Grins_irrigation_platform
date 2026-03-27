@@ -378,11 +378,11 @@ class TestJobStatusUpdate:
     def test_valid_status_update(self) -> None:
         """Test valid status update."""
         data = JobStatusUpdate(
-            status=JobStatus.APPROVED,
-            notes="Approved by manager",
+            status=JobStatus.IN_PROGRESS,
+            notes="Job started",
         )
-        assert data.status == JobStatus.APPROVED
-        assert data.notes == "Approved by manager"
+        assert data.status == JobStatus.IN_PROGRESS
+        assert data.notes == "Job started"
 
     def test_status_required(self) -> None:
         """Test status is required."""
@@ -407,7 +407,7 @@ class TestJobResponse:
             customer_id=uuid4(),
             job_type="repair",
             category=JobCategory.READY_TO_SCHEDULE,
-            status=JobStatus.REQUESTED,
+            status=JobStatus.TO_BE_SCHEDULED,
             priority_level=0,
             weather_sensitive=False,
             staffing_required=1,
@@ -425,7 +425,7 @@ class TestJobResponse:
             customer_id=uuid4(),
             job_type="repair",
             category="ready_to_schedule",  # type: ignore
-            status="requested",  # type: ignore
+            status="to_be_scheduled",  # type: ignore
             source="website",  # type: ignore
             priority_level=0,
             weather_sensitive=False,
@@ -434,7 +434,7 @@ class TestJobResponse:
             updated_at=now,
         )
         assert data.category == JobCategory.READY_TO_SCHEDULE
-        assert data.status == JobStatus.REQUESTED
+        assert data.status == JobStatus.TO_BE_SCHEDULED
         assert data.source == JobSource.WEBSITE
 
 
@@ -448,12 +448,12 @@ class TestJobStatusHistoryResponse:
         data = JobStatusHistoryResponse(
             id=uuid4(),
             job_id=uuid4(),
-            previous_status=JobStatus.REQUESTED,
-            new_status=JobStatus.APPROVED,
+            previous_status=JobStatus.TO_BE_SCHEDULED,
+            new_status=JobStatus.IN_PROGRESS,
             changed_at=now,
         )
-        assert data.previous_status == JobStatus.REQUESTED
-        assert data.new_status == JobStatus.APPROVED
+        assert data.previous_status == JobStatus.TO_BE_SCHEDULED
+        assert data.new_status == JobStatus.IN_PROGRESS
 
     def test_previous_status_nullable(self) -> None:
         """Test previous status can be null (initial status)."""
@@ -462,7 +462,7 @@ class TestJobStatusHistoryResponse:
             id=uuid4(),
             job_id=uuid4(),
             previous_status=None,
-            new_status=JobStatus.REQUESTED,
+            new_status=JobStatus.TO_BE_SCHEDULED,
             changed_at=now,
         )
         assert data.previous_status is None
@@ -515,12 +515,12 @@ class TestJobListParams:
         """Test all filter parameters."""
         customer_id = uuid4()
         params = JobListParams(
-            status=JobStatus.REQUESTED,
+            status=JobStatus.TO_BE_SCHEDULED,
             category=JobCategory.READY_TO_SCHEDULE,
             customer_id=customer_id,
             priority_level=1,
         )
-        assert params.status == JobStatus.REQUESTED
+        assert params.status == JobStatus.TO_BE_SCHEDULED
         assert params.category == JobCategory.READY_TO_SCHEDULE
         assert params.customer_id == customer_id
         assert params.priority_level == 1

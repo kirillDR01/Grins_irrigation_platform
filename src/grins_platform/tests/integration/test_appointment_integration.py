@@ -40,7 +40,7 @@ from grins_platform.services.appointment_service import AppointmentService
 def create_mock_job(
     job_id: uuid.UUID | None = None,
     customer_id: uuid.UUID | None = None,
-    status: str = JobStatus.APPROVED.value,
+    status: str = JobStatus.TO_BE_SCHEDULED.value,
 ) -> MagicMock:
     """Create a mock job object."""
     job = MagicMock()

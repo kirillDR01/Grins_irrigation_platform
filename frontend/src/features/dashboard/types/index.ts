@@ -57,12 +57,9 @@ export interface RecentActivityResponse {
 }
 
 export interface JobsByStatusResponse {
-  requested: number;
-  approved: number;
-  scheduled: number;
+  to_be_scheduled: number;
   in_progress: number;
   completed: number;
-  closed: number;
   cancelled: number;
 }
 

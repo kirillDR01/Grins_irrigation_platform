@@ -114,7 +114,7 @@ def _make_mock_job(priority_level: int) -> Job:
         customer_id=uuid4(),
         job_type="spring_startup",
         category=JobCategory.READY_TO_SCHEDULE.value,
-        status=JobStatus.APPROVED.value,
+        status=JobStatus.TO_BE_SCHEDULED.value,
         priority_level=priority_level,
     )
     # Force an id since we're not using a real DB
@@ -419,7 +419,7 @@ class TestEndToEndPriorityBadgeConsistency:
                 customer_id=uuid4(),
                 job_type="spring_startup",
                 category=JobCategory.READY_TO_SCHEDULE.value,
-                status=JobStatus.APPROVED.value,
+                status=JobStatus.TO_BE_SCHEDULED.value,
                 priority_level=priority,
             )
             # Force an id for serialization
@@ -435,7 +435,7 @@ class TestEndToEndPriorityBadgeConsistency:
                 customer_id=uuid4(),
                 job_type="spring_startup",
                 category=JobCategory.READY_TO_SCHEDULE.value,
-                status=JobStatus.APPROVED.value,
+                status=JobStatus.TO_BE_SCHEDULED.value,
                 priority_level=priority,
             )
             object.__setattr__(job, "id", uuid4())

@@ -881,11 +881,11 @@ class TestJobService:
         job_id = uuid4()
         mock_job = MagicMock()
         mock_job.id = job_id
-        mock_job.status = JobStatus.REQUESTED.value
+        mock_job.status = JobStatus.TO_BE_SCHEDULED.value
         mock_job_repository.get_by_id.return_value = mock_job
         mock_job_repository.update.return_value = mock_job
 
-        data = JobStatusUpdate(status=JobStatus.APPROVED)
+        data = JobStatusUpdate(status=JobStatus.IN_PROGRESS)
 
         # Act
         result = await service.update_status(job_id, data)
@@ -906,7 +906,7 @@ class TestJobService:
         job_id = uuid4()
         mock_job = MagicMock()
         mock_job.id = job_id
-        mock_job.status = JobStatus.REQUESTED.value  # Can't go directly to completed
+        mock_job.status = JobStatus.TO_BE_SCHEDULED.value  # Can't go directly to completed
         mock_job_repository.get_by_id.return_value = mock_job
 
         data = JobStatusUpdate(status=JobStatus.COMPLETED)
@@ -926,10 +926,10 @@ class TestJobService:
         job_id = uuid4()
         mock_job = MagicMock()
         mock_job.id = job_id
-        mock_job.status = JobStatus.CLOSED.value  # Terminal state
+        mock_job.status = JobStatus.COMPLETED.value  # Terminal state
         mock_job_repository.get_by_id.return_value = mock_job
 
-        data = JobStatusUpdate(status=JobStatus.REQUESTED)
+        data = JobStatusUpdate(status=JobStatus.TO_BE_SCHEDULED)
 
         # Act & Assert
         with pytest.raises(InvalidStatusTransitionError):
@@ -1078,7 +1078,7 @@ class TestJobService:
         jobs, total = await service.list_jobs(
             page=1,
             page_size=20,
-            status=JobStatus.REQUESTED,
+            status=JobStatus.TO_BE_SCHEDULED,
         )
 
         # Assert

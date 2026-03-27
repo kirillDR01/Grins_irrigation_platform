@@ -130,7 +130,7 @@ class TestWinterizationOnlyResidential:
         gen = JobGenerator(_make_session())
         agr = _make_agreement(tier_slug="winterization-only-residential")
         jobs = await gen.generate_jobs(agr)
-        assert jobs[0].status == JobStatus.APPROVED.value
+        assert jobs[0].status == JobStatus.TO_BE_SCHEDULED.value
         assert jobs[0].category == JobCategory.READY_TO_SCHEDULE.value
 
     @pytest.mark.unit

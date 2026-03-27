@@ -43,13 +43,10 @@ if TYPE_CHECKING:
 
 # Valid status transitions (Requirement 4.2-4.7)
 VALID_STATUS_TRANSITIONS: dict[str, list[str]] = {
-    JobStatus.REQUESTED.value: [JobStatus.APPROVED.value, JobStatus.CANCELLED.value],
-    JobStatus.APPROVED.value: [JobStatus.SCHEDULED.value, JobStatus.CANCELLED.value],
-    JobStatus.SCHEDULED.value: [JobStatus.IN_PROGRESS.value, JobStatus.CANCELLED.value],
-    JobStatus.IN_PROGRESS.value: [JobStatus.COMPLETED.value, JobStatus.CANCELLED.value],
-    JobStatus.COMPLETED.value: [JobStatus.CLOSED.value],
+    JobStatus.TO_BE_SCHEDULED.value: [JobStatus.IN_PROGRESS.value, JobStatus.CANCELLED.value],
+    JobStatus.IN_PROGRESS.value: [JobStatus.COMPLETED.value, JobStatus.CANCELLED.value, JobStatus.TO_BE_SCHEDULED.value],
+    JobStatus.COMPLETED.value: [],  # Terminal state
     JobStatus.CANCELLED.value: [],  # Terminal state
-    JobStatus.CLOSED.value: [],  # Terminal state
 }
 
 
@@ -122,7 +119,7 @@ class Job(Base):
     status: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
-        server_default="requested",
+        server_default="to_be_scheduled",
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -310,7 +307,7 @@ class Job(Base):
 
         Validates: Requirement 4.7
         """
-        return self.status in [JobStatus.CANCELLED.value, JobStatus.CLOSED.value]
+        return self.status in [JobStatus.CANCELLED.value, JobStatus.COMPLETED.value]
 
     def to_dict(self) -> dict[str, Any]:
         """Convert the job to a dictionary.

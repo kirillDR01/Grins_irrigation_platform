@@ -131,12 +131,12 @@ class JobGenerator(LoggerMixin):
                 service_agreement_id=agreement.id,
                 job_type=job_type,
                 category=JobCategory.READY_TO_SCHEDULE.value,
-                status=JobStatus.APPROVED.value,
+                status=JobStatus.TO_BE_SCHEDULED.value,
                 description=description,
                 priority_level=priority,
                 target_start_date=date(year, month_start, 1),
                 target_end_date=date(year, month_end, last_day),
-                approved_at=now,
+                requested_at=now,
             )
             self.session.add(job)
             jobs.append(job)

@@ -211,11 +211,9 @@ class TestPriorityPersistsThroughTransitions:
 
         # Simulate full lifecycle transitions
         lifecycle = [
-            JobStatus.APPROVED.value,
-            JobStatus.SCHEDULED.value,
+            JobStatus.TO_BE_SCHEDULED.value,
             JobStatus.IN_PROGRESS.value,
             JobStatus.COMPLETED.value,
-            JobStatus.CLOSED.value,
         ]
 
         for status in lifecycle:
@@ -238,10 +236,8 @@ class TestPriorityPersistsThroughTransitions:
         assert job.priority_level == 1
 
         for status in [
-            JobStatus.SCHEDULED.value,
             JobStatus.IN_PROGRESS.value,
             JobStatus.COMPLETED.value,
-            JobStatus.CLOSED.value,
         ]:
             job.status = status
             assert job.priority_level == 1
@@ -260,10 +256,8 @@ class TestPriorityPersistsThroughTransitions:
         assert job.priority_level == 0
 
         for status in [
-            JobStatus.SCHEDULED.value,
             JobStatus.IN_PROGRESS.value,
             JobStatus.COMPLETED.value,
-            JobStatus.CLOSED.value,
         ]:
             job.status = status
             assert job.priority_level == 0

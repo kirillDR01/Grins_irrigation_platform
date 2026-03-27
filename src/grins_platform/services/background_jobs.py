@@ -105,9 +105,8 @@ class FailedPaymentEscalator(LoggerMixin):
             agreement.cancelled_at = now  # type: ignore[assignment]
 
             for job in agreement.jobs:
-                if job.status == JobStatus.APPROVED.value:
+                if job.status == JobStatus.TO_BE_SCHEDULED.value:
                     job.status = JobStatus.CANCELLED.value
-                    job.closed_at = now
 
             logger.info(
                 "scheduler.escalate_failed_payments.cancelled",

@@ -85,10 +85,10 @@ describe('GenerateInvoiceButton', () => {
     expect(screen.getByText('Generate Invoice')).toBeInTheDocument();
   });
 
-  it('renders button for closed job without payment collected', () => {
-    const job = createMockJob({ status: 'closed', payment_collected_on_site: false });
+  it('renders button for completed job (second instance) without payment collected', () => {
+    const job = createMockJob({ status: 'completed', payment_collected_on_site: false });
     renderWithRouter(<GenerateInvoiceButton job={job} />);
-    
+
     expect(screen.getByTestId('generate-invoice-btn')).toBeInTheDocument();
   });
 
@@ -99,31 +99,17 @@ describe('GenerateInvoiceButton', () => {
     expect(screen.queryByTestId('generate-invoice-btn')).not.toBeInTheDocument();
   });
 
-  it('does not render for requested job', () => {
-    const job = createMockJob({ status: 'requested', payment_collected_on_site: false });
+  it('does not render for to_be_scheduled job', () => {
+    const job = createMockJob({ status: 'to_be_scheduled', payment_collected_on_site: false });
     renderWithRouter(<GenerateInvoiceButton job={job} />);
-    
-    expect(screen.queryByTestId('generate-invoice-btn')).not.toBeInTheDocument();
-  });
 
-  it('does not render for approved job', () => {
-    const job = createMockJob({ status: 'approved', payment_collected_on_site: false });
-    renderWithRouter(<GenerateInvoiceButton job={job} />);
-    
-    expect(screen.queryByTestId('generate-invoice-btn')).not.toBeInTheDocument();
-  });
-
-  it('does not render for scheduled job', () => {
-    const job = createMockJob({ status: 'scheduled', payment_collected_on_site: false });
-    renderWithRouter(<GenerateInvoiceButton job={job} />);
-    
     expect(screen.queryByTestId('generate-invoice-btn')).not.toBeInTheDocument();
   });
 
   it('does not render for in_progress job', () => {
     const job = createMockJob({ status: 'in_progress', payment_collected_on_site: false });
     renderWithRouter(<GenerateInvoiceButton job={job} />);
-    
+
     expect(screen.queryByTestId('generate-invoice-btn')).not.toBeInTheDocument();
   });
 

@@ -34,7 +34,7 @@ const mockJob = {
   service_offering_id: null,
   job_type: 'spring_startup',
   category: 'ready_to_schedule' as const,
-  status: 'requested' as const,
+  status: 'to_be_scheduled' as const,
   description: 'Spring startup service',
   estimated_duration_minutes: 60,
   priority_level: 0,
@@ -104,10 +104,10 @@ describe('useUpdateJobStatus', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
   it('should update job status successfully', async () => {
-    vi.mocked(jobApi.updateStatus).mockResolvedValue({ ...mockJob, status: 'approved' as const });
+    vi.mocked(jobApi.updateStatus).mockResolvedValue({ ...mockJob, status: 'in_progress' as const });
     const { result } = renderHook(() => useUpdateJobStatus(), { wrapper: createWrapper() });
-    await result.current.mutateAsync({ id: '1', data: { status: 'approved' } });
-    expect(jobApi.updateStatus).toHaveBeenCalledWith('1', { status: 'approved' });
+    await result.current.mutateAsync({ id: '1', data: { status: 'in_progress' } });
+    expect(jobApi.updateStatus).toHaveBeenCalledWith('1', { status: 'in_progress' });
   });
 });
 
@@ -126,7 +126,7 @@ describe('useApproveJob', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
   it('should approve job successfully', async () => {
-    vi.mocked(jobApi.approve).mockResolvedValue({ ...mockJob, status: 'approved' as const });
+    vi.mocked(jobApi.approve).mockResolvedValue({ ...mockJob, status: 'to_be_scheduled' as const });
     const { result } = renderHook(() => useApproveJob(), { wrapper: createWrapper() });
     await result.current.mutateAsync('1');
     expect(jobApi.approve).toHaveBeenCalledWith('1');
@@ -174,14 +174,14 @@ describe('useCloseJob', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
   it('should close job successfully', async () => {
-    vi.mocked(jobApi.close).mockResolvedValue({ ...mockJob, status: 'closed' as const });
+    vi.mocked(jobApi.close).mockResolvedValue({ ...mockJob, status: 'completed' as const });
     const { result } = renderHook(() => useCloseJob(), { wrapper: createWrapper() });
     await result.current.mutateAsync({ id: '1' });
     expect(jobApi.close).toHaveBeenCalledWith('1', undefined);
   });
 
   it('should close job with notes', async () => {
-    vi.mocked(jobApi.close).mockResolvedValue({ ...mockJob, status: 'closed' as const });
+    vi.mocked(jobApi.close).mockResolvedValue({ ...mockJob, status: 'completed' as const });
     const { result } = renderHook(() => useCloseJob(), { wrapper: createWrapper() });
     await result.current.mutateAsync({ id: '1', notes: 'Invoice paid' });
     expect(jobApi.close).toHaveBeenCalledWith('1', 'Invoice paid');

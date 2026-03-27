@@ -248,11 +248,10 @@ class TestProperty4PriorityPersistenceThroughLifecycle:
     """
 
     LIFECYCLE_STATUSES: ClassVar[list[str]] = [
-        JobStatus.APPROVED.value,
-        JobStatus.SCHEDULED.value,
+        JobStatus.TO_BE_SCHEDULED.value,
         JobStatus.IN_PROGRESS.value,
         JobStatus.COMPLETED.value,
-        JobStatus.CLOSED.value,
+        JobStatus.CANCELLED.value,
     ]
 
     @pytest.mark.parametrize("priority", [0, 1, 2])
@@ -265,7 +264,7 @@ class TestProperty4PriorityPersistenceThroughLifecycle:
             customer_id=uuid4(),
             job_type="spring_startup",
             category="ready_to_schedule",
-            status=JobStatus.APPROVED.value,
+            status=JobStatus.TO_BE_SCHEDULED.value,
             priority_level=priority,
         )
 

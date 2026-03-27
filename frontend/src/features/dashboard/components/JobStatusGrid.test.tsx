@@ -132,7 +132,7 @@ describe('JobStatusGrid', () => {
     expect(zeros).toHaveLength(6);
   });
 
-  it('navigates to /jobs?status=requested on New Requests click', () => {
+  it('navigates to /jobs?status=to_be_scheduled on New Requests click', () => {
     mockUseJobStatusMetrics.mockReturnValue({
       data: mockData,
       isLoading: false,
@@ -141,7 +141,7 @@ describe('JobStatusGrid', () => {
     render(<JobStatusGrid />, { wrapper: createWrapper() });
 
     fireEvent.click(screen.getByTestId('job-status-new-requests'));
-    expect(mockNavigate).toHaveBeenCalledWith('/jobs?status=requested');
+    expect(mockNavigate).toHaveBeenCalledWith('/jobs?status=to_be_scheduled');
   });
 
   it('navigates to /jobs?status=requires_estimate on Estimates click', () => {
@@ -168,7 +168,7 @@ describe('JobStatusGrid', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/jobs?status=pending_approval');
   });
 
-  it('navigates to /jobs?status=approved on To Be Scheduled click', () => {
+  it('navigates to /jobs?status=to_be_scheduled on To Be Scheduled click', () => {
     mockUseJobStatusMetrics.mockReturnValue({
       data: mockData,
       isLoading: false,
@@ -177,7 +177,7 @@ describe('JobStatusGrid', () => {
     render(<JobStatusGrid />, { wrapper: createWrapper() });
 
     fireEvent.click(screen.getByTestId('job-status-to-be-scheduled'));
-    expect(mockNavigate).toHaveBeenCalledWith('/jobs?status=approved');
+    expect(mockNavigate).toHaveBeenCalledWith('/jobs?status=to_be_scheduled');
   });
 
   it('navigates to /jobs?status=in_progress on In Progress click', () => {
@@ -213,7 +213,7 @@ describe('JobStatusGrid', () => {
     render(<JobStatusGrid />, { wrapper: createWrapper() });
 
     fireEvent.keyDown(screen.getByTestId('job-status-new-requests'), { key: 'Enter' });
-    expect(mockNavigate).toHaveBeenCalledWith('/jobs?status=requested');
+    expect(mockNavigate).toHaveBeenCalledWith('/jobs?status=to_be_scheduled');
   });
 
   it('navigates on Space key press', () => {

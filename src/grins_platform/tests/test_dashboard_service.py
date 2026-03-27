@@ -47,12 +47,9 @@ def mock_job_repository() -> Mock:
     repo = MagicMock()
     repo.count_by_status = AsyncMock(
         return_value={
-            JobStatus.REQUESTED.value: 10,
-            JobStatus.APPROVED.value: 5,
-            JobStatus.SCHEDULED.value: 8,
-            JobStatus.IN_PROGRESS.value: 3,
-            JobStatus.COMPLETED.value: 50,
-            JobStatus.CLOSED.value: 20,
+            JobStatus.TO_BE_SCHEDULED.value: 15,
+            JobStatus.IN_PROGRESS.value: 11,
+            JobStatus.COMPLETED.value: 70,
             JobStatus.CANCELLED.value: 2,
         },
     )
@@ -165,9 +162,9 @@ class TestDashboardServiceGetOverviewMetrics:
         """Test that metrics include jobs by status."""
         result = await dashboard_service.get_overview_metrics()
 
-        assert JobStatus.REQUESTED.value in result.jobs_by_status
-        assert result.jobs_by_status[JobStatus.REQUESTED.value] == 10
-        assert result.jobs_by_status[JobStatus.COMPLETED.value] == 50
+        assert JobStatus.TO_BE_SCHEDULED.value in result.jobs_by_status
+        assert result.jobs_by_status[JobStatus.TO_BE_SCHEDULED.value] == 15
+        assert result.jobs_by_status[JobStatus.COMPLETED.value] == 70
 
     @pytest.mark.asyncio
     async def test_get_overview_metrics_includes_today_appointments(
@@ -394,12 +391,9 @@ class TestDashboardServiceGetJobsByStatus:
         """Test that response includes counts for all statuses."""
         result = await dashboard_service.get_jobs_by_status()
 
-        assert result.requested == 10
-        assert result.approved == 5
-        assert result.scheduled == 8
-        assert result.in_progress == 3
-        assert result.completed == 50
-        assert result.closed == 20
+        assert result.to_be_scheduled == 15
+        assert result.in_progress == 11
+        assert result.completed == 70
         assert result.cancelled == 2
 
 

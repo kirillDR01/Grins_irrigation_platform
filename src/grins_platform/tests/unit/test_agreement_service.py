@@ -73,11 +73,10 @@ def _make_agreement(
     return agr
 
 
-def _make_job(*, status=JobStatus.APPROVED.value) -> MagicMock:
+def _make_job(*, status=JobStatus.TO_BE_SCHEDULED.value) -> MagicMock:
     job = MagicMock()
     job.id = uuid4()
     job.status = status
-    job.closed_at = None
     return job
 
 
@@ -424,10 +423,10 @@ class TestCancelAgreement:
     """Tests for cancellation: job handling and prorated refund."""
 
     @pytest.mark.asyncio
-    async def test_approved_jobs_cancelled(self) -> None:
+    async def test_to_be_scheduled_jobs_cancelled(self) -> None:
         jobs = [
-            _make_job(status=JobStatus.APPROVED.value),
-            _make_job(status=JobStatus.APPROVED.value),
+            _make_job(status=JobStatus.TO_BE_SCHEDULED.value),
+            _make_job(status=JobStatus.TO_BE_SCHEDULED.value),
             _make_job(status=JobStatus.COMPLETED.value),
         ]
         agr = _make_agreement(
@@ -446,9 +445,9 @@ class TestCancelAgreement:
         assert jobs[1].status == JobStatus.CANCELLED.value
 
     @pytest.mark.asyncio
-    async def test_scheduled_and_in_progress_preserved(self) -> None:
+    async def test_in_progress_and_completed_preserved(self) -> None:
         jobs = [
-            _make_job(status=JobStatus.SCHEDULED.value),
+            _make_job(status=JobStatus.IN_PROGRESS.value),
             _make_job(status=JobStatus.IN_PROGRESS.value),
             _make_job(status=JobStatus.COMPLETED.value),
         ]
@@ -463,18 +462,18 @@ class TestCancelAgreement:
         svc = _make_service(agreement_repo=agr_repo)
         await svc.cancel_agreement(agr.id, "Test")
 
-        assert jobs[0].status == JobStatus.SCHEDULED.value
+        assert jobs[0].status == JobStatus.IN_PROGRESS.value
         assert jobs[1].status == JobStatus.IN_PROGRESS.value
         assert jobs[2].status == JobStatus.COMPLETED.value
 
     @pytest.mark.asyncio
     async def test_prorated_refund_calculation(self) -> None:
-        # 3 total jobs: 2 APPROVED (remaining), 1 COMPLETED
+        # 3 total jobs: 2 TO_BE_SCHEDULED (remaining), 1 COMPLETED
         # remaining_visits = 2, total = 3
         # refund = 600 * 2/3 = 400.00
         jobs = [
-            _make_job(status=JobStatus.APPROVED.value),
-            _make_job(status=JobStatus.APPROVED.value),
+            _make_job(status=JobStatus.TO_BE_SCHEDULED.value),
+            _make_job(status=JobStatus.TO_BE_SCHEDULED.value),
             _make_job(status=JobStatus.COMPLETED.value),
         ]
         agr = _make_agreement(

@@ -39,7 +39,7 @@ class TestJobCreationDefaults:
 
     **Property 1: Job Creation Defaults**
     *For any* valid job creation request, the created job SHALL have
-    status="requested" and priority_level=0 (unless explicitly specified).
+    status="to_be_scheduled" and priority_level=0 (unless explicitly specified).
 
     **Validates: Requirements 2.9, 2.10, 4.1**
     """
@@ -60,17 +60,17 @@ class TestJobCreationDefaults:
         ),
     )
     @settings(max_examples=50)
-    def test_default_status_is_requested(self, job_type: str) -> None:  # noqa: ARG002
+    def test_default_status_is_to_be_scheduled(self, job_type: str) -> None:  # noqa: ARG002
         """
         Feature: field-operations, Property 1: Job Creation Defaults
-        For any job type, the default status should be 'requested'.
+        For any job type, the default status should be 'to_be_scheduled'.
         """
-        # The JobService always sets status to REQUESTED on creation
+        # The JobService always sets status to TO_BE_SCHEDULED on creation
         # This is verified by checking the constant in the service
 
-        # Verify the service creates jobs with REQUESTED status
+        # Verify the service creates jobs with TO_BE_SCHEDULED status
         # (The actual creation is tested in unit tests, here we verify the constant)
-        assert JobStatus.REQUESTED.value == "requested"
+        assert JobStatus.TO_BE_SCHEDULED.value == "to_be_scheduled"
 
     @pytest.mark.unit
     @given(
@@ -137,12 +137,9 @@ class TestEnumValidation:
         All JobStatus enum values should be valid.
         """
         assert status.value in [
-            "requested",
-            "approved",
-            "scheduled",
+            "to_be_scheduled",
             "in_progress",
             "completed",
-            "closed",
             "cancelled",
         ]
 
@@ -315,23 +312,17 @@ class TestStatusTransitions:
 
     **Property 4: Status Transition Validity**
     *For any* job status transition attempt:
-    - From "requested": only "approved" or "cancelled" are valid
-    - From "approved": only "scheduled" or "cancelled" are valid
-    - From "scheduled": only "in_progress" or "cancelled" are valid
-    - From "in_progress": only "completed" or "cancelled" are valid
-    - From "completed": only "closed" is valid
-    - From "cancelled" or "closed": no transitions are valid (terminal states)
+    - From "to_be_scheduled": only "in_progress" or "cancelled" are valid
+    - From "in_progress": only "completed", "cancelled", or "to_be_scheduled" are valid
+    - From "completed" or "cancelled": no transitions are valid (terminal states)
 
     **Validates: Requirements 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.10**
     """
 
     VALID_TRANSITIONS: ClassVar[dict[JobStatus, set[JobStatus]]] = {
-        JobStatus.REQUESTED: {JobStatus.APPROVED, JobStatus.CANCELLED},
-        JobStatus.APPROVED: {JobStatus.SCHEDULED, JobStatus.CANCELLED},
-        JobStatus.SCHEDULED: {JobStatus.IN_PROGRESS, JobStatus.CANCELLED},
-        JobStatus.IN_PROGRESS: {JobStatus.COMPLETED, JobStatus.CANCELLED},
-        JobStatus.COMPLETED: {JobStatus.CLOSED},
-        JobStatus.CLOSED: set(),  # Terminal state
+        JobStatus.TO_BE_SCHEDULED: {JobStatus.IN_PROGRESS, JobStatus.CANCELLED},
+        JobStatus.IN_PROGRESS: {JobStatus.COMPLETED, JobStatus.CANCELLED, JobStatus.TO_BE_SCHEDULED},
+        JobStatus.COMPLETED: set(),  # Terminal state
         JobStatus.CANCELLED: set(),  # Terminal state
     }
 
@@ -374,7 +365,7 @@ class TestStatusTransitions:
         Feature: field-operations, Property 4: Status Transition Validity
         Terminal states (CLOSED, CANCELLED) have no valid transitions.
         """
-        for terminal in [JobStatus.CLOSED, JobStatus.CANCELLED]:
+        for terminal in [JobStatus.COMPLETED, JobStatus.CANCELLED]:
             valid_targets = self.VALID_TRANSITIONS.get(terminal, set())
             assert len(valid_targets) == 0
             assert target_status not in valid_targets
@@ -383,9 +374,7 @@ class TestStatusTransitions:
     @given(
         current_status=st.sampled_from(
             [
-                JobStatus.REQUESTED,
-                JobStatus.APPROVED,
-                JobStatus.SCHEDULED,
+                JobStatus.TO_BE_SCHEDULED,
                 JobStatus.IN_PROGRESS,
             ],
         ),

@@ -62,7 +62,7 @@ const mockJobs: JobReadyToSchedule[] = [
     city: 'Eden Prairie',
     priority: 'high',
     duration_minutes: 60,
-    status: 'approved',
+    status: 'to_be_scheduled',
   },
   {
     job_id: 'job-2',
@@ -71,7 +71,7 @@ const mockJobs: JobReadyToSchedule[] = [
     city: 'Plymouth',
     priority: 'normal',
     duration_minutes: 45,
-    status: 'requested',
+    status: 'to_be_scheduled',
   },
   {
     job_id: 'job-3',
@@ -80,7 +80,7 @@ const mockJobs: JobReadyToSchedule[] = [
     city: 'Eden Prairie',
     priority: 'high',
     duration_minutes: 30,
-    status: 'approved',
+    status: 'to_be_scheduled',
   },
 ];
 

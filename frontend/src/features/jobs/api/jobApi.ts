@@ -52,7 +52,7 @@ export const jobApi = {
   // Get jobs ready to schedule
   getReadyToSchedule: async (): Promise<PaginatedResponse<Job>> => {
     const response = await apiClient.get<PaginatedResponse<Job>>(BASE_PATH, {
-      params: { category: 'ready_to_schedule', status: 'approved' },
+      params: { category: 'ready_to_schedule', status: 'to_be_scheduled' },
     });
     return response.data;
   },
@@ -95,9 +95,9 @@ export const jobApi = {
     return response.data;
   },
 
-  // Approve job (transition from requested to approved)
+  // Approve job (mark as to_be_scheduled)
   approve: async (id: string): Promise<Job> => {
-    return jobApi.updateStatus(id, { status: 'approved' });
+    return jobApi.updateStatus(id, { status: 'to_be_scheduled' });
   },
 
   // Cancel job
@@ -110,9 +110,9 @@ export const jobApi = {
     return jobApi.updateStatus(id, { status: 'completed', notes });
   },
 
-  // Close job
+  // Close job (mark as completed)
   close: async (id: string, notes?: string): Promise<Job> => {
-    return jobApi.updateStatus(id, { status: 'closed', notes });
+    return jobApi.updateStatus(id, { status: 'completed', notes });
   },
 
   // Get per-job financials (Req 57)
