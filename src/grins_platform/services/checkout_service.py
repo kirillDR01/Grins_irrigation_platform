@@ -267,11 +267,17 @@ class CheckoutService(LoggerMixin):
             )
 
         if breakdown.rpz_backflow_surcharge > 0:
+            is_winterization = tier.slug.startswith("winterization-only-")
+            rpz_name = (
+                "RPZ/backflow removal"
+                if is_winterization
+                else "RPZ/backflow connection & removal"
+            )
             line_items.append(
                 {
                     "price_data": {
                         "currency": "usd",
-                        "product_data": {"name": "RPZ/backflow connection & removal"},
+                        "product_data": {"name": rpz_name},
                         "unit_amount": int(breakdown.rpz_backflow_surcharge * 100),
                         "recurring": {"interval": "year"},
                     },
