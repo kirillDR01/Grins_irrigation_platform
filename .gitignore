@@ -87,6 +87,7 @@ logs/
 *.db
 *.sqlite
 *.sqlite3
+backups/
 
 # Output directories
 output/
