@@ -82,6 +82,8 @@ def _make_lead_mock(
     lead.state = state
     lead.address = address
     lead.action_tags = action_tags
+    lead.customer_type = None
+    lead.property_type = None
     return lead
 
 

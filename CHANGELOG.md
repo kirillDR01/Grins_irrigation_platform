@@ -1,3 +1,33 @@
+# Tier-Based Priority Scheduling
+
+**Date:** 2026-03-26
+**Scope:** Wire tier-to-priority mapping into job generation so the existing scheduler and UI correctly reflect tier-based priority
+
+---
+
+## Changes
+
+| File | Change | Impact |
+|---|---|---|
+| `src/grins_platform/services/job_generator.py` | Added `_TIER_PRIORITY_MAP` constant; set `priority_level` in `generate_jobs()` | Jobs now get correct priority based on tier |
+
+## Tier → Priority Mapping
+
+| Tier | priority_level | Badge Label |
+|---|---|---|
+| Essential | 0 | Normal |
+| Professional | 1 | High |
+| Premium | 2 | Urgent |
+| Winterization-only | 0 | Normal |
+
+## Notes
+- No DB migration needed — `priority_level` field already exists with `server_default="0"`
+- No frontend changes — `JobList.tsx` and `JobDetail.tsx` already display priority badges
+- No scheduler changes — `schedule_solver_service.py` already sorts by `-priority`
+- Winterization-only tiers default to priority 0 (normal)
+
+---
+
 # CRM Gap Closure — Post-Implementation Bug Fixes
 
 **Date:** 2026-03-24 (updated 2026-03-26)

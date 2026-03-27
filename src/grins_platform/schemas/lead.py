@@ -130,6 +130,16 @@ class LeadSubmission(BaseModel):
         max_length=2048,
         description="Source page URL",
     )
+    customer_type: str | None = Field(
+        default=None,
+        max_length=20,
+        description="Customer type: new or existing",
+    )
+    property_type: str | None = Field(
+        default=None,
+        max_length=20,
+        description="Property type: RESIDENTIAL or COMMERCIAL",
+    )
     consent_ip: str | None = Field(
         default=None,
         description="IP address at time of consent",
@@ -273,6 +283,8 @@ class LeadResponse(BaseModel):
     lead_source: str | None = None
     source_detail: str | None = None
     intake_tag: str | None = None
+    customer_type: str | None = None
+    property_type: str | None = None
     sms_consent: bool = False
     terms_accepted: bool = False
     status: LeadStatus

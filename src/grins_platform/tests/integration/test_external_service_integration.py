@@ -218,8 +218,8 @@ def _make_customer_mock(**overrides: Any) -> MagicMock:
     c.email = overrides.get("email", "customer@example.com")
     c.first_name = overrides.get("first_name", "Jane")
     c.last_name = overrides.get("last_name", "Doe")
-    c.internal_notes = overrides.get("internal_notes", None)
-    c.preferred_service_times = overrides.get("preferred_service_times", None)
+    c.internal_notes = overrides.get("internal_notes")
+    c.preferred_service_times = overrides.get("preferred_service_times")
     return c
 
 
@@ -233,9 +233,9 @@ def _make_lead_mock(**overrides: Any) -> MagicMock:
         "action_tags",
         [ActionTag.ESTIMATE_PENDING.value],
     )
-    lead.city = overrides.get("city", None)
-    lead.state = overrides.get("state", None)
-    lead.address = overrides.get("address", None)
+    lead.city = overrides.get("city")
+    lead.state = overrides.get("state")
+    lead.address = overrides.get("address")
     return lead
 
 

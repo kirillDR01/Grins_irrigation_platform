@@ -62,6 +62,8 @@ def _make_lead_mock(
     state: str | None = None,
     address: str | None = None,
     action_tags: list[str] | None = None,
+    customer_type: str | None = None,
+    property_type: str | None = None,
 ) -> MagicMock:
     """Create a mock Lead object with given attributes."""
     lead = MagicMock()
@@ -90,6 +92,8 @@ def _make_lead_mock(
     lead.state = state
     lead.address = address
     lead.action_tags = action_tags
+    lead.customer_type = customer_type
+    lead.property_type = property_type
     return lead
 
 

@@ -1460,6 +1460,8 @@ class TestSheetCreatedLeadsHaveNullZipCodeProperty:
         lead.address = None
         lead.action_tags = None
         lead.email_marketing_consent = False
+        lead.customer_type = None
+        lead.property_type = None
         lead.created_at = now
         lead.updated_at = now
 

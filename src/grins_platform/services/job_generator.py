@@ -51,6 +51,12 @@ _TIER_JOB_MAP: dict[str, list[tuple[str, str, int, int]]] = {
     "Premium": _PREMIUM_JOBS,
 }
 
+_TIER_PRIORITY_MAP: dict[str, int] = {
+    "Essential": 0,
+    "Professional": 1,
+    "Premium": 2,
+}
+
 
 class JobGenerator(LoggerMixin):
     """Generates seasonal jobs for a service agreement based on its tier.
@@ -85,12 +91,6 @@ class JobGenerator(LoggerMixin):
         """
         tier_name = agreement.tier.name
         tier_slug: str = agreement.tier.slug
-        self.log_started(
-            "generate_jobs",
-            agreement_id=str(agreement.id),
-            tier_name=tier_name,
-            tier_slug=tier_slug,
-        )
 
         # Winterization-only tiers detected by slug prefix
         if tier_slug.startswith("winterization-only-"):
@@ -106,6 +106,19 @@ class JobGenerator(LoggerMixin):
             msg = f"Unknown tier name: {tier_name}"
             raise ValueError(msg)
 
+        if tier_slug.startswith("winterization-only-"):
+            priority = 0
+        else:
+            priority = _TIER_PRIORITY_MAP.get(tier_name, 0)
+
+        self.log_started(
+            "generate_jobs",
+            agreement_id=str(agreement.id),
+            tier_name=tier_name,
+            tier_slug=tier_slug,
+            priority=priority,
+        )
+
         now = datetime.now(timezone.utc)
         year = now.year
 
@@ -120,6 +133,7 @@ class JobGenerator(LoggerMixin):
                 category=JobCategory.READY_TO_SCHEDULE.value,
                 status=JobStatus.APPROVED.value,
                 description=description,
+                priority_level=priority,
                 target_start_date=date(year, month_start, 1),
                 target_end_date=date(year, month_end, last_day),
                 approved_at=now,

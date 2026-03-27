@@ -111,6 +111,14 @@ class Lead(Base):
         server_default="false",
     )
 
+    # Customer classification fields
+    customer_type: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True,
+    )
+    property_type: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True,
+    )
+
     # Source page URL (Req 5.1)
     page_url: Mapped[Optional[str]] = mapped_column(
         String(2048),
@@ -273,6 +281,8 @@ class Lead(Base):
             "city": self.city,
             "state": self.state,
             "address": self.address,
+            "customer_type": self.customer_type,
+            "property_type": self.property_type,
             "action_tags": self.action_tags,
             "status": self.status,
             "assigned_to": str(self.assigned_to) if self.assigned_to else None,

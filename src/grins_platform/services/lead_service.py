@@ -378,6 +378,8 @@ class LeadService(LoggerMixin):
             city=city,
             state=state,
             address=data.address,
+            customer_type=data.customer_type,
+            property_type=data.property_type,
             action_tags=[ActionTag.NEEDS_CONTACT.value],
         )
 

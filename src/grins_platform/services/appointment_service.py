@@ -1277,7 +1277,7 @@ class AppointmentService(LoggerMixin):
                     "travel": max(travel, 0.0),
                     "job": max(job_dur, 0.0),
                     "total": max(total, 0.0),
-                }
+                },
             )
 
         # Compute averages per group

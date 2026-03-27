@@ -34,18 +34,22 @@ uv run alembic upgrade 20250702_101000
 
 ### Seed Data
 
-Migration `20250702_100000` automatically seeds 6 service agreement tiers:
+Migration `20250702_100000` seeds the initial 6 tiers, `20250710_100500` adds 2 winterization tiers, and `20260325_100000` updates all 8 tiers to current pricing with Stripe IDs.
 
-| Tier | Package Type | Annual Price |
-|------|-------------|-------------|
-| Essential | Residential | $170.00 |
-| Essential | Commercial | $225.00 |
-| Professional | Residential | $250.00 |
-| Professional | Commercial | $375.00 |
-| Premium | Residential | $700.00 |
-| Premium | Commercial | $850.00 |
+After all migrations, the 8 tiers are:
 
-**Note:** `stripe_product_id` and `stripe_price_id` on tiers are NULL after migration. These must be populated after creating corresponding Stripe Products/Prices (see Section 4).
+| Tier | Package Type | Annual Price | Stripe Product (Test) | Stripe Price (Test) |
+|------|-------------|-------------|----------------------|---------------------|
+| Essential | Residential | $175.00 | `prod_U6ibkYyfakHQE3` | `price_1TF2nBQDNzCTp6j5u43DTExH` |
+| Professional | Residential | $260.00 | `prod_U6icBhfGIvzqLx` | `price_1TF2nCQDNzCTp6j5sIB9OSH4` |
+| Premium | Residential | $725.00 | `prod_U6icN6YaatjlVG` | `price_1TF2nCQDNzCTp6j5SC24GCKa` |
+| Essential | Commercial | $235.00 | `prod_U6idaMQy8AHkat` | `price_1TF2nEQDNzCTp6j53W5uUqfi` |
+| Professional | Commercial | $390.00 | `prod_U6ifaZT4doEALs` | `price_1TF2nFQDNzCTp6j5rhmqYTlJ` |
+| Premium | Commercial | $880.00 | `prod_U6ihXIsrjf83X4` | `price_1TF2nGQDNzCTp6j5zWieKL0w` |
+| Winterization Only | Residential | $85.00 | `prod_U8EJ1WraZBMrYV` | `price_1TF2nDQDNzCTp6j5KmY0goPa` |
+| Winterization Only | Commercial | $105.00 | `prod_U8EJGKEoPiYUWN` | `price_1TF2nGQDNzCTp6j5Cieln9IO` |
+
+**Note:** The test Stripe IDs above are populated by migration `20260325_100000`. For production, you must create new products/prices in the live Stripe account and update the database (see Section 4).
 
 ### Verify Seed Data
 
@@ -67,17 +71,33 @@ with engine.connect() as conn:
 
 ### Backend (Railway)
 
+#### Core (required for app to start)
+
+| Variable | Description | Required | Example |
+|----------|------------|----------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | Yes | `postgresql+asyncpg://user:pass@host:5432/dbname` |
+| `JWT_SECRET_KEY` | JWT signing secret (min 32 chars in production) | Yes | `<random-64-char-string>` |
+| `CORS_ORIGINS` | Comma-separated allowed origins | Yes | `https://frontend.vercel.app,https://admin.vercel.app` |
+
+#### Stripe
+
 | Variable | Description | Required | Example |
 |----------|------------|----------|---------|
 | `STRIPE_SECRET_KEY` | Stripe API secret key | Yes | `sk_live_...` |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook endpoint signing secret | Yes | `whsec_...` |
-| `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key (for frontend) | Yes | `pk_live_...` |
 | `STRIPE_CUSTOMER_PORTAL_URL` | Stripe Customer Portal URL | Yes | `https://billing.stripe.com/p/login/...` |
 | `STRIPE_TAX_ENABLED` | Enable Stripe Tax automatic calculation | No (default: `true`) | `true` |
+
+#### Email & Compliance
+
+| Variable | Description | Required | Example |
+|----------|------------|----------|---------|
 | `EMAIL_API_KEY` | Email provider API key | Yes | `SG.xxx...` |
 | `COMPANY_PHYSICAL_ADDRESS` | Physical address for CAN-SPAM compliance | Yes (for commercial emails) | `123 Main St, Minneapolis, MN 55401` |
 
 **Behavior when missing:**
+- `DATABASE_URL` / `JWT_SECRET_KEY` missing: app will not start
+- `CORS_ORIGINS` missing: defaults to localhost only — frontend requests will be blocked
 - `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` missing: logs warning, payment features disabled (app still starts)
 - `EMAIL_API_KEY` missing: emails recorded as `sent_via="pending"` with `delivery_confirmed=false`
 - `COMPANY_PHYSICAL_ADDRESS` missing: commercial emails refused (transactional emails still sent)
@@ -86,8 +106,13 @@ with engine.connect() as conn:
 
 | Variable | Description | Required | Example |
 |----------|------------|----------|---------|
-| `VITE_API_URL` | Backend API base URL | Yes | `https://api.grinsirrigations.com` |
+| `VITE_API_BASE_URL` | Backend API base URL | Yes | `https://api.grinsirrigations.com` |
 | `VITE_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key | Yes | `pk_live_...` |
+| `VITE_STRIPE_CUSTOMER_PORTAL_URL` | Stripe Customer Portal link (per-environment) | Yes | `https://billing.stripe.com/p/login/...` |
+
+**Per-environment portal URLs (set in Vercel):**
+- **Preview (dev branch):** `https://billing.stripe.com/p/login/test_6oU8wR0zu8QUcQ4amueQM00`
+- **Production:** `https://billing.stripe.com/p/login/00gaEXaaqack8zGa7N5Ne00`
 
 ---
 
@@ -123,14 +148,77 @@ cd frontend && npm install
 
 ## 4. Stripe Configuration
 
-### Webhook Endpoint
+### 4a. Test Environment (Already Configured)
+
+The test/dev Stripe account already has all 8 products, prices, and webhook configured.
+Migration `20260325_100000` populates the test Stripe IDs into the database automatically.
+
+**Test webhook endpoint:** `https://grins-dev-dev.up.railway.app/api/v1/webhooks/stripe`
+
+### 4b. Production Environment — Using the Stripe MCP Server
+
+For production, use the Stripe MCP server in Claude Code to create products, prices, and verify configuration. Switch to the **live Stripe API key** before running these steps.
+
+#### Step 1: Create Products (via MCP `create_product`)
+
+Create 8 products in the live Stripe account:
+
+| # | Product Name | Description |
+|---|-------------|-------------|
+| 1 | Residential Essential Package | Annual residential plan: Spring Start-Up, Fall Winterization, and Controller Programming. |
+| 2 | Residential Professional Package | Annual residential plan: Everything in Essential plus 1 Mid-Season Inspection & Tune-Up, Priority Scheduling, and 10% Off Repairs. |
+| 3 | Residential Premium Package | Annual residential plan: Everything in Professional plus 4 Monthly Monitoring Visits, 15% Off Repairs, Emergency Service, Free Consultations, and No Service Call Fees. |
+| 4 | Commercial Essential Package | Annual commercial plan: Spring Start-Up, Fall Winterization, and Controller Programming. |
+| 5 | Commercial Professional Package | Annual commercial plan: Everything in Essential plus 1 Mid-Season Inspection & Tune-Up, Priority Scheduling, and 10% Off Repairs. |
+| 6 | Commercial Premium Package | Annual commercial plan: Everything in Professional plus 4 Monthly Monitoring Visits, 15% Off Repairs, Emergency Service, Free Consultations, and No Service Call Fees. |
+| 7 | Winterization Only Residential | Single fall winterization for residential properties |
+| 8 | Winterization Only Commercial | Single fall winterization for commercial properties |
+
+#### Step 2: Create Prices (via MCP `create_price`)
+
+Create a recurring annual price for each product:
+
+| Product | Amount (cents) | Currency | Recurring Interval |
+|---------|---------------|----------|-------------------|
+| Residential Essential | 17500 | usd | year |
+| Residential Professional | 26000 | usd | year |
+| Residential Premium | 72500 | usd | year |
+| Commercial Essential | 23500 | usd | year |
+| Commercial Professional | 39000 | usd | year |
+| Commercial Premium | 88000 | usd | year |
+| Winterization Only Residential | 8500 | usd | year |
+| Winterization Only Commercial | 10500 | usd | year |
+
+#### Step 3: Verify Products & Prices (via MCP `list_products` / `list_prices`)
+
+Run `list_products` and `list_prices` to confirm all 8 products and prices were created correctly.
+
+#### Step 4: Update Database with Production Stripe IDs
+
+After creating the live products and prices, update the `service_agreement_tiers` table with the production Stripe IDs:
+
+```sql
+-- Replace prod_xxx / price_xxx with actual live Stripe IDs from Step 3
+UPDATE service_agreement_tiers SET stripe_product_id = 'prod_xxx', stripe_price_id = 'price_xxx' WHERE slug = 'essential-residential';
+UPDATE service_agreement_tiers SET stripe_product_id = 'prod_xxx', stripe_price_id = 'price_xxx' WHERE slug = 'professional-residential';
+UPDATE service_agreement_tiers SET stripe_product_id = 'prod_xxx', stripe_price_id = 'price_xxx' WHERE slug = 'premium-residential';
+UPDATE service_agreement_tiers SET stripe_product_id = 'prod_xxx', stripe_price_id = 'price_xxx' WHERE slug = 'essential-commercial';
+UPDATE service_agreement_tiers SET stripe_product_id = 'prod_xxx', stripe_price_id = 'price_xxx' WHERE slug = 'professional-commercial';
+UPDATE service_agreement_tiers SET stripe_product_id = 'prod_xxx', stripe_price_id = 'price_xxx' WHERE slug = 'premium-commercial';
+UPDATE service_agreement_tiers SET stripe_product_id = 'prod_xxx', stripe_price_id = 'price_xxx' WHERE slug = 'winterization-only-residential';
+UPDATE service_agreement_tiers SET stripe_product_id = 'prod_xxx', stripe_price_id = 'price_xxx' WHERE slug = 'winterization-only-commercial';
+```
+
+**Important:** Tiers with `stripe_price_id = NULL` will return HTTP 503 on checkout session creation.
+
+### 4c. Webhook Endpoint
 
 | Setting | Value |
 |---------|-------|
-| URL | `https://<backend-domain>/api/v1/webhooks/stripe` |
+| URL | `https://<production-backend-domain>/api/v1/webhooks/stripe` |
 | API Version | Match your `stripe` library version |
 
-### Required Webhook Events
+#### Required Webhook Events
 
 Subscribe to these 6 events:
 
@@ -141,49 +229,39 @@ Subscribe to these 6 events:
 5. `customer.subscription.updated`
 6. `customer.subscription.deleted`
 
-### Stripe Products & Prices
+**Note:** The webhook endpoint must be configured manually in the Stripe Dashboard (Developers → Webhooks → Add endpoint). The MCP server does not currently support webhook management. Copy the signing secret to `STRIPE_WEBHOOK_SECRET` in Railway.
 
-Create 6 Stripe Products with recurring Prices matching the seeded tiers:
-
-| Product Name | Price | Billing |
-|-------------|-------|---------|
-| Essential Residential | $170.00/year | Annual |
-| Essential Commercial | $225.00/year | Annual |
-| Professional Residential | $250.00/year | Annual |
-| Professional Commercial | $375.00/year | Annual |
-| Premium Residential | $700.00/year | Annual |
-| Premium Commercial | $850.00/year | Annual |
-
-After creating, update the `service_agreement_tiers` table:
-
-```sql
-UPDATE service_agreement_tiers SET stripe_product_id = 'prod_xxx', stripe_price_id = 'price_xxx' WHERE slug = 'essential-residential';
-UPDATE service_agreement_tiers SET stripe_product_id = 'prod_xxx', stripe_price_id = 'price_xxx' WHERE slug = 'essential-commercial';
-UPDATE service_agreement_tiers SET stripe_product_id = 'prod_xxx', stripe_price_id = 'price_xxx' WHERE slug = 'professional-residential';
-UPDATE service_agreement_tiers SET stripe_product_id = 'prod_xxx', stripe_price_id = 'price_xxx' WHERE slug = 'professional-commercial';
-UPDATE service_agreement_tiers SET stripe_product_id = 'prod_xxx', stripe_price_id = 'price_xxx' WHERE slug = 'premium-residential';
-UPDATE service_agreement_tiers SET stripe_product_id = 'prod_xxx', stripe_price_id = 'price_xxx' WHERE slug = 'premium-commercial';
-```
-
-**Important:** Tiers with `stripe_price_id = NULL` will return HTTP 503 on checkout session creation.
-
-### Customer Portal
+### 4d. Customer Portal
 
 1. Enable the Stripe Customer Portal in Stripe Dashboard → Settings → Billing → Customer Portal
 2. Configure allowed actions: update payment method, cancel subscription
-3. Copy the portal link to `STRIPE_CUSTOMER_PORTAL_URL`
+3. Copy the portal link to `STRIPE_CUSTOMER_PORTAL_URL` (Railway) and `VITE_STRIPE_CUSTOMER_PORTAL_URL` (Vercel)
+4. Set **different portal URLs per environment** in Vercel (see Section 2, Frontend table)
 
-### Stripe Tax
+### 4e. Stripe Tax
 
 If `STRIPE_TAX_ENABLED=true` (default), ensure Stripe Tax is configured:
 1. Stripe Dashboard → Settings → Tax
 2. Set tax registration for Minnesota
 3. Enable automatic tax calculation
 
-### Invoice Upcoming Timing
+### 4f. Invoice Upcoming Timing
 
 Stripe sends `invoice.upcoming` ~3 days before renewal by default. To adjust:
 - Stripe Dashboard → Settings → Billing → Subscriptions → Days before renewal to send upcoming invoice event
+
+### 4g. Price Reference — Test vs Production
+
+| Tier | Test Price ID | Production Price ID |
+|------|--------------|-------------------|
+| Essential Residential ($175/yr) | `price_1TF2nBQDNzCTp6j5u43DTExH` | _TBD — set after Step 2_ |
+| Professional Residential ($260/yr) | `price_1TF2nCQDNzCTp6j5sIB9OSH4` | _TBD_ |
+| Premium Residential ($725/yr) | `price_1TF2nCQDNzCTp6j5SC24GCKa` | _TBD_ |
+| Essential Commercial ($235/yr) | `price_1TF2nEQDNzCTp6j53W5uUqfi` | _TBD_ |
+| Professional Commercial ($390/yr) | `price_1TF2nFQDNzCTp6j5rhmqYTlJ` | _TBD_ |
+| Premium Commercial ($880/yr) | `price_1TF2nGQDNzCTp6j5zWieKL0w` | _TBD_ |
+| Winterization Only Residential ($85/yr) | `price_1TF2nDQDNzCTp6j5KmY0goPa` | _TBD_ |
+| Winterization Only Commercial ($105/yr) | `price_1TF2nGQDNzCTp6j5Cieln9IO` | _TBD_ |
 
 ---
 
@@ -226,7 +304,7 @@ Configure SPF, DKIM, and DMARC records for the email sending domain to ensure de
 | POST | `/api/v1/checkout/create-session` | Create Stripe Checkout session (rate-limited 5/IP/min) |
 | GET | `/api/v1/onboarding/verify-session` | Verify Stripe session |
 | POST | `/api/v1/onboarding/complete` | Complete onboarding with property data |
-| POST | `/api/v1/webhooks/stripe` | Stripe webhook receiver (excluded from CSRF) |
+| POST | `/api/v1/webhooks/stripe` | Stripe webhook receiver (signature-verified via `STRIPE_WEBHOOK_SECRET`) |
 | GET | `/api/v1/email/unsubscribe` | Email unsubscribe |
 
 ### Authenticated (Admin)
@@ -239,12 +317,12 @@ Configure SPF, DKIM, and DMARC records for the email sending domain to ensure de
 | PATCH | `/api/v1/agreements/{id}/notes` | Update agreement notes |
 | POST | `/api/v1/agreements/{id}/approve-renewal` | Approve renewal |
 | POST | `/api/v1/agreements/{id}/reject-renewal` | Reject renewal |
-| GET | `/api/v1/agreements/metrics` | Agreement metrics (MRR, ARPA, etc.) |
+| GET | `/api/v1/agreements/metrics/summary` | Agreement metrics (MRR, ARPA, etc.) |
 | GET | `/api/v1/agreements/metrics/mrr-history` | MRR history (trailing 12 months) |
 | GET | `/api/v1/agreements/metrics/tier-distribution` | Agreements by tier |
-| GET | `/api/v1/agreements/renewal-pipeline` | Renewal pipeline queue |
-| GET | `/api/v1/agreements/failed-payments` | Failed payments queue |
-| GET | `/api/v1/agreements/annual-notice-due` | Annual notice due queue |
+| GET | `/api/v1/agreements/queues/renewal-pipeline` | Renewal pipeline queue |
+| GET | `/api/v1/agreements/queues/failed-payments` | Failed payments queue |
+| GET | `/api/v1/agreements/queues/annual-notice-due` | Annual notice due queue |
 | GET | `/api/v1/agreement-tiers` | List active tiers |
 | GET | `/api/v1/agreement-tiers/{id}` | Tier detail |
 | GET | `/api/v1/agreements/{id}/compliance` | Agreement compliance records |
@@ -258,16 +336,18 @@ Configure SPF, DKIM, and DMARC records for the email sending domain to ensure de
 
 ## 7. Deployment Order
 
-1. **Set environment variables** on Railway and Vercel (Section 2)
+1. **Set environment variables** on Railway and Vercel (Section 2), including `VITE_STRIPE_CUSTOMER_PORTAL_URL` per environment
 2. **Install dependencies**: `uv sync` (backend), `npm install` (frontend)
-3. **Run database migrations**: `uv run alembic upgrade head`
-4. **Verify seed data** (Section 1 verify command)
-5. **Create Stripe Products/Prices** and update `service_agreement_tiers` with Stripe IDs (Section 4)
-6. **Configure Stripe webhook** endpoint with the 6 required events (Section 4)
-7. **Configure Stripe Customer Portal** and set `STRIPE_CUSTOMER_PORTAL_URL`
-8. **Deploy backend** (Railway)
-9. **Deploy frontend** (Vercel)
-10. **Run post-deployment verification** (Section 8)
+3. **Run database migrations**: `uv run alembic upgrade head` (populates test Stripe IDs automatically)
+4. **Verify seed data** — confirm all 8 tiers with prices (Section 1 verify command)
+5. **Create production Stripe Products/Prices** using the Stripe MCP server (Section 4b, Steps 1–3)
+6. **Update database** with production Stripe IDs (Section 4b, Step 4)
+7. **Configure Stripe webhook** endpoint in Stripe Dashboard with the 6 required events (Section 4c)
+8. **Configure Stripe Customer Portal** and set `STRIPE_CUSTOMER_PORTAL_URL` / `VITE_STRIPE_CUSTOMER_PORTAL_URL` (Section 4d)
+9. **Configure Stripe Tax** for Minnesota (Section 4e)
+10. **Deploy backend** (Railway)
+11. **Deploy frontend** (Vercel)
+12. **Run post-deployment verification** (Section 8)
 
 ---
 
@@ -282,14 +362,14 @@ curl -s https://<backend-domain>/health | python -m json.tool
 ### API Endpoint Smoke Tests
 
 ```bash
-# List tiers (should return 6)
+# List tiers (should return 8)
 curl -s https://<backend-domain>/api/v1/agreement-tiers | python -m json.tool
 
 # Dashboard summary (should include agreement + lead metrics)
 curl -s -H "Authorization: Bearer <token>" https://<backend-domain>/api/v1/dashboard/summary | python -m json.tool
 
 # Agreement metrics
-curl -s -H "Authorization: Bearer <token>" https://<backend-domain>/api/v1/agreements/metrics | python -m json.tool
+curl -s -H "Authorization: Bearer <token>" https://<backend-domain>/api/v1/agreements/metrics/summary | python -m json.tool
 
 # Follow-up queue
 curl -s -H "Authorization: Bearer <token>" https://<backend-domain>/api/v1/leads/follow-up-queue | python -m json.tool

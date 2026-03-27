@@ -676,10 +676,10 @@ class TestCheckoutSessionSurcharges:
         assert len(items) == 3
         # Base price
         assert items[0]["price"] == "price_test_123"
-        # Zone surcharge: 3 extra zones x $7.50 = $22.50 = 2250 cents
-        assert items[1]["price_data"]["unit_amount"] == 2250
-        # Lake pump surcharge: $175.00 = 17500 cents
-        assert items[2]["price_data"]["unit_amount"] == 17500
+        # Zone surcharge: 3 extra zones x $8.00 = $24.00 = 2400 cents
+        assert items[1]["price_data"]["unit_amount"] == 2400
+        # Lake pump surcharge: $125.00 = 12500 cents
+        assert items[2]["price_data"]["unit_amount"] == 12500
 
     @pytest.mark.asyncio
     @patch("grins_platform.services.checkout_service.stripe.checkout.Session.create")
@@ -737,10 +737,10 @@ class TestCheckoutSessionSurcharges:
         call_kwargs = mock_create.call_args[1]
         items = call_kwargs["line_items"]
         assert len(items) == 3
-        # Zone surcharge: 2 extra zones x $5.00 = $10.00 = 1000 cents
-        assert items[1]["price_data"]["unit_amount"] == 1000
-        # Lake pump surcharge: $75.00 = 7500 cents
-        assert items[2]["price_data"]["unit_amount"] == 7500
+        # Zone surcharge: 2 extra zones x $8.00 = $16.00 = 1600 cents
+        assert items[1]["price_data"]["unit_amount"] == 1600
+        # Lake pump surcharge: $125.00 = 12500 cents
+        assert items[2]["price_data"]["unit_amount"] == 12500
 
     @pytest.mark.asyncio
     @patch("grins_platform.services.checkout_service.stripe.checkout.Session.create")
@@ -778,7 +778,7 @@ class TestCheckoutSessionSurcharges:
     @pytest.mark.asyncio
     @patch("grins_platform.services.checkout_service.stripe.checkout.Session.create")
     async def test_rpz_backflow_creates_line_item(self, mock_create: MagicMock) -> None:
-        """has_rpz_backflow=true -> RPZ/backflow line item at $50."""
+        """has_rpz_backflow=true -> RPZ/backflow line item at $110."""
         tier = _make_tier(slug="essential-residential", annual_price="299.00")
         tier_repo = AsyncMock()
         tier_repo.get_by_slug_and_type = AsyncMock(return_value=tier)
@@ -799,7 +799,7 @@ class TestCheckoutSessionSurcharges:
         items = call_kwargs["line_items"]
         assert len(items) == 2
         rpz_item = items[1]
-        assert rpz_item["price_data"]["unit_amount"] == 5000
+        assert rpz_item["price_data"]["unit_amount"] == 11000
         assert (
             rpz_item["price_data"]["product_data"]["name"] == "RPZ/backflow connection"
         )
@@ -887,4 +887,4 @@ class TestCheckoutSessionSurcharges:
         items = call_kwargs["line_items"]
         assert len(items) == 4
         # Base, zone, lake pump, RPZ/backflow
-        assert items[3]["price_data"]["unit_amount"] == 5000
+        assert items[3]["price_data"]["unit_amount"] == 11000

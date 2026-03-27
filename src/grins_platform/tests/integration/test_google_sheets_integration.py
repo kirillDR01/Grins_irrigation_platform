@@ -59,6 +59,8 @@ def _make_lead_model(**overrides: Any) -> MagicMock:
     lead.state = overrides.get("state")
     lead.address = overrides.get("address")
     lead.action_tags = overrides.get("action_tags")
+    lead.customer_type = overrides.get("customer_type")
+    lead.property_type = overrides.get("property_type")
     lead.created_at = overrides.get("created_at", now)
     lead.updated_at = overrides.get("updated_at", now)
     return lead

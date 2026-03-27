@@ -9,7 +9,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from grins_platform.api.v1.dependencies import get_db_session
@@ -131,6 +131,24 @@ class CompleteOnboardingRequest(BaseModel):
         default="NO_PREFERENCE",
         description="Preferred service times",
     )
+
+    @model_validator(mode="after")
+    def validate_service_address(self) -> "CompleteOnboardingRequest":
+        """Require service address fields when not using billing address."""
+        if not self.service_address_same_as_billing:
+            addr = self.service_address or {}
+            missing = [
+                f
+                for f in ("street", "city", "state", "zip")
+                if not addr.get(f, "").strip()
+            ]
+            if missing:
+                msg = (
+                    "Service address fields required when not using "
+                    f"billing address: {', '.join(missing)}"
+                )
+                raise ValueError(msg)
+        return self
 
 
 class CompleteOnboardingResponse(BaseModel):
