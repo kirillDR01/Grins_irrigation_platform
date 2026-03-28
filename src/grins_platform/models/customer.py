@@ -145,6 +145,14 @@ class Customer(Base):
         JSON,
         nullable=True,
     )
+    preferred_schedule: Mapped[Optional[str]] = mapped_column(
+        String(30),
+        nullable=True,
+    )
+    preferred_schedule_details: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
 
     # Staff-only Notes (Requirement 28.1)
     internal_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

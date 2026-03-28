@@ -131,6 +131,32 @@ class CompleteOnboardingRequest(BaseModel):
         default="NO_PREFERENCE",
         description="Preferred service times",
     )
+    preferred_schedule: str = Field(
+        default="ASAP",
+        description="When customer wants service done",
+    )
+    preferred_schedule_details: str | None = Field(
+        default=None,
+        description="Free-text details for 'Other' schedule preference",
+    )
+
+    @model_validator(mode="after")
+    def validate_preferred_schedule(self) -> "CompleteOnboardingRequest":
+        """Validate preferred_schedule enum and require details for OTHER."""
+        valid = {"ASAP", "ONE_TWO_WEEKS", "THREE_FOUR_WEEKS", "OTHER"}
+        if self.preferred_schedule not in valid:
+            msg = f"preferred_schedule must be one of {sorted(valid)}"
+            raise ValueError(msg)
+        if self.preferred_schedule == "OTHER" and (
+            not self.preferred_schedule_details
+            or not self.preferred_schedule_details.strip()
+        ):
+            msg = (
+                "preferred_schedule_details is required"
+                " when preferred_schedule is 'OTHER'"
+            )
+            raise ValueError(msg)
+        return self
 
     @model_validator(mode="after")
     def validate_service_address(self) -> "CompleteOnboardingRequest":
@@ -347,6 +373,8 @@ async def complete_onboarding(
             has_dogs=data.has_dogs,
             access_instructions=data.access_instructions,
             preferred_times=data.preferred_times,
+            preferred_schedule=data.preferred_schedule,
+            preferred_schedule_details=data.preferred_schedule_details,
         )
     except SessionNotFoundError:
         _endpoints.log_rejected(

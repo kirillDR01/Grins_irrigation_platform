@@ -192,6 +192,8 @@ class OnboardingService(LoggerMixin):
         has_dogs: bool = False,
         access_instructions: str | None = None,
         preferred_times: str = "NO_PREFERENCE",
+        preferred_schedule: str = "ASAP",
+        preferred_schedule_details: str | None = None,
     ) -> ServiceAgreement:
         """Complete onboarding by creating property and linking to agreement/jobs.
 
@@ -310,6 +312,8 @@ class OnboardingService(LoggerMixin):
         customer = cust_result.scalar_one_or_none()
         if customer:
             customer.preferred_service_times = {"preference": preferred_times}
+            customer.preferred_schedule = preferred_schedule
+            customer.preferred_schedule_details = preferred_schedule_details
             await self.session.flush()
 
         self.log_completed(
