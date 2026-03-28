@@ -34,8 +34,6 @@ export interface Customer extends BaseEntity {
   lead_source: string | null;
   internal_notes: string | null;
   preferred_service_times: { preference: string } | null;
-  preferred_schedule?: string;
-  preferred_schedule_details?: string;
   properties?: Property[];
 }
 
@@ -148,8 +146,6 @@ export interface CustomerUpdate {
   lead_source?: string | null;
   internal_notes?: string | null;
   preferred_service_times?: { preference: string } | null;
-  preferred_schedule?: string;
-  preferred_schedule_details?: string;
 }
 
 // Customer list params

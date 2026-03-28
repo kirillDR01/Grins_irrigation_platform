@@ -196,6 +196,10 @@ class ServiceAgreement(Base):
     # Notes
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Preferred service timeline (per-purchase urgency)
+    preferred_schedule: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    preferred_schedule_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Onboarding reminder tracking (Req 10.6)
     onboarding_reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),

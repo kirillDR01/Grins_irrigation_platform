@@ -93,6 +93,8 @@ class AgreementResponse(BaseModel):
     renewal_date: date | None = None
     auto_renew: bool
     payment_status: str
+    preferred_schedule: str | None = None
+    preferred_schedule_details: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

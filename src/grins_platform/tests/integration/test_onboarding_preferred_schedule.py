@@ -55,7 +55,7 @@ class TestOnboardingPreferredScheduleAPI:
         async_client: AsyncClient,
         db_session: AsyncSession,
     ) -> None:
-        """POST /complete with ONE_TWO_WEEKS saves to DB."""
+        """POST /complete with ONE_TWO_WEEKS saves to agreement in DB."""
         customer = Customer(
             first_name="Integration",
             last_name="Test",
@@ -93,13 +93,13 @@ class TestOnboardingPreferredScheduleAPI:
         data = response.json()
         assert "agreement_id" in data
 
-        stmt = select(Customer).where(
-            Customer.id == customer.id,
+        stmt = select(ServiceAgreement).where(
+            ServiceAgreement.stripe_subscription_id == "sub_int_123",
         )
         result = await db_session.execute(stmt)
-        updated = result.scalar_one()
-        assert updated.preferred_schedule == "ONE_TWO_WEEKS"
-        assert updated.preferred_schedule_details is None
+        updated_agr = result.scalar_one()
+        assert updated_agr.preferred_schedule == "ONE_TWO_WEEKS"
+        assert updated_agr.preferred_schedule_details is None
 
     @pytest.mark.asyncio
     async def test_complete_onboarding_rejects_other_without_details(

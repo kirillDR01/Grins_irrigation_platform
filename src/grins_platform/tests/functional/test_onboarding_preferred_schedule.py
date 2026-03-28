@@ -1,9 +1,9 @@
 """Functional tests for preferred_schedule onboarding persistence.
 
 Tests real DB writes via OnboardingService to verify preferred_schedule
-and preferred_schedule_details are saved to the customer record.
+and preferred_schedule_details are saved to the service agreement record.
 
-Validates: preferred_schedule column persistence in customers table.
+Validates: preferred_schedule column persistence in service_agreements table.
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ class TestOnboardingPreferredSchedulePersistence:
         self,
         db_session: AsyncSession,
     ) -> None:
-        """complete_onboarding persists ONE_TWO_WEEKS to customer."""
+        """complete_onboarding persists ONE_TWO_WEEKS to agreement."""
         customer = Customer(
             first_name="Test",
             last_name="User",
@@ -101,20 +101,20 @@ class TestOnboardingPreferredSchedulePersistence:
             )
             await db_session.flush()
 
-        stmt = select(Customer).where(
-            Customer.id == customer.id,
+        stmt = select(ServiceAgreement).where(
+            ServiceAgreement.stripe_subscription_id == "sub_test_123",
         )
         result = await db_session.execute(stmt)
-        updated = result.scalar_one()
-        assert updated.preferred_schedule == "ONE_TWO_WEEKS"
-        assert updated.preferred_schedule_details is None
+        updated_agr = result.scalar_one()
+        assert updated_agr.preferred_schedule == "ONE_TWO_WEEKS"
+        assert updated_agr.preferred_schedule_details is None
 
     @pytest.mark.asyncio
     async def test_saves_other_with_details(
         self,
         db_session: AsyncSession,
     ) -> None:
-        """complete_onboarding persists OTHER + details to customer."""
+        """complete_onboarding persists OTHER + details to agreement."""
         customer = Customer(
             first_name="Other",
             last_name="User",
@@ -153,13 +153,13 @@ class TestOnboardingPreferredSchedulePersistence:
             )
             await db_session.flush()
 
-        stmt = select(Customer).where(
-            Customer.id == customer.id,
+        stmt = select(ServiceAgreement).where(
+            ServiceAgreement.stripe_subscription_id == "sub_test_456",
         )
         result = await db_session.execute(stmt)
-        updated = result.scalar_one()
-        assert updated.preferred_schedule == "OTHER"
-        assert updated.preferred_schedule_details == ("Week of April 14th")
+        updated_agr = result.scalar_one()
+        assert updated_agr.preferred_schedule == "OTHER"
+        assert updated_agr.preferred_schedule_details == "Week of April 14th"
 
     @pytest.mark.asyncio
     async def test_asap_has_no_details(
@@ -204,10 +204,10 @@ class TestOnboardingPreferredSchedulePersistence:
             )
             await db_session.flush()
 
-        stmt = select(Customer).where(
-            Customer.id == customer.id,
+        stmt = select(ServiceAgreement).where(
+            ServiceAgreement.stripe_subscription_id == "sub_test_789",
         )
         result = await db_session.execute(stmt)
-        updated = result.scalar_one()
-        assert updated.preferred_schedule == "ASAP"
-        assert updated.preferred_schedule_details is None
+        updated_agr = result.scalar_one()
+        assert updated_agr.preferred_schedule == "ASAP"
+        assert updated_agr.preferred_schedule_details is None

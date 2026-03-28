@@ -181,8 +181,6 @@ class CustomerService(LoggerMixin):
             "lead_source": customer.lead_source,
             "internal_notes": customer.internal_notes,
             "preferred_service_times": customer.preferred_service_times,
-            "preferred_schedule": customer.preferred_schedule,
-            "preferred_schedule_details": customer.preferred_schedule_details,
             "created_at": customer.created_at,
             "updated_at": customer.updated_at,
             "properties": customer.properties if include_properties else [],

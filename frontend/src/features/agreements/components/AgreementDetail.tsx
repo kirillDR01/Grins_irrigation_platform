@@ -63,6 +63,13 @@ function jobStatusIcon(status: string) {
   }
 }
 
+const SCHEDULE_LABELS: Record<string, string> = {
+  ASAP: 'As Soon As Possible',
+  ONE_TWO_WEEKS: 'Within 1-2 Weeks',
+  THREE_FOUR_WEEKS: 'Within 3-4 Weeks',
+  OTHER: 'Other',
+};
+
 const DISCLOSURE_LABELS: Record<DisclosureType, string> = {
   PRE_SALE: 'Pre-Sale',
   CONFIRMATION: 'Confirmation',
@@ -132,6 +139,17 @@ function InfoSection({ agreement }: { agreement: AgreementDetailType }) {
             <p className="text-xs text-slate-400">Payment Status</p>
             <p className="font-medium text-slate-700 capitalize">{agreement.payment_status.replace('_', ' ')}</p>
           </div>
+          {agreement.preferred_schedule && (
+            <div data-testid="agreement-preferred-schedule">
+              <p className="text-xs text-slate-400">Preferred Timeline</p>
+              <p className="font-medium text-slate-700">
+                {SCHEDULE_LABELS[agreement.preferred_schedule] || agreement.preferred_schedule}
+              </p>
+              {agreement.preferred_schedule === 'OTHER' && agreement.preferred_schedule_details && (
+                <p className="text-xs text-slate-500 mt-1">{agreement.preferred_schedule_details}</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Customer link */}

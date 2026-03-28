@@ -293,10 +293,14 @@ class OnboardingService(LoggerMixin):
             is_primary=True,
         )
 
-        # Link property to agreement
+        # Link property to agreement and save schedule preference
         agreement = await self.agreement_repo.update(
             agreement,
-            {"property_id": prop.id},
+            {
+                "property_id": prop.id,
+                "preferred_schedule": preferred_schedule,
+                "preferred_schedule_details": preferred_schedule_details,
+            },
         )
 
         # Update all linked jobs with property_id
@@ -312,8 +316,6 @@ class OnboardingService(LoggerMixin):
         customer = cust_result.scalar_one_or_none()
         if customer:
             customer.preferred_service_times = {"preference": preferred_times}
-            customer.preferred_schedule = preferred_schedule
-            customer.preferred_schedule_details = preferred_schedule_details
             await self.session.flush()
 
         self.log_completed(

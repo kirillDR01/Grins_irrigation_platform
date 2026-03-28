@@ -37,13 +37,6 @@ const SERVICE_TIME_OPTIONS = [
   { value: 'NO_PREFERENCE', label: 'No Preference' },
 ] as const;
 
-const SCHEDULE_LABELS: Record<string, string> = {
-  ASAP: 'As Soon As Possible',
-  ONE_TWO_WEEKS: 'Within 1-2 Weeks',
-  THREE_FOUR_WEEKS: 'Within 3-4 Weeks',
-  OTHER: 'Other',
-};
-
 interface CustomerDetailProps {
   onEdit?: () => void;
 }
@@ -293,19 +286,6 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
                   <div className="flex items-center gap-2">
                     <Dog className="h-4 w-4 text-amber-500" />
                     <span className="text-sm text-amber-700 font-medium">Dogs on Property</span>
-                  </div>
-                )}
-                {customer.preferred_schedule && (
-                  <div className="flex items-start gap-2" data-testid="customer-preferred-schedule">
-                    <Clock className="h-4 w-4 text-slate-500 mt-0.5" />
-                    <div>
-                      <span className="text-sm text-slate-600">
-                        Timeline: {SCHEDULE_LABELS[customer.preferred_schedule] || customer.preferred_schedule}
-                      </span>
-                      {customer.preferred_schedule === 'OTHER' && customer.preferred_schedule_details && (
-                        <p className="text-xs text-slate-500 mt-0.5">{customer.preferred_schedule_details}</p>
-                      )}
-                    </div>
                   </div>
                 )}
               </div>

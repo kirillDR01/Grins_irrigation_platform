@@ -167,15 +167,6 @@ class CustomerUpdate(BaseModel):
         default=None,
         description="Preferred service time window",
     )
-    preferred_schedule: str | None = Field(
-        default=None,
-        description="When customer wants service done",
-    )
-    preferred_schedule_details: str | None = Field(
-        default=None,
-        description="Free-text details for 'Other' schedule preference",
-    )
-
     @field_validator("phone")  # type: ignore[misc,untyped-decorator]
     @classmethod
     def validate_phone(cls, v: str | None) -> str | None:
@@ -270,14 +261,6 @@ class CustomerResponse(BaseModel):
     preferred_service_times: dict[str, Any] | None = Field(
         default=None,
         description="Preferred service time window",
-    )
-    preferred_schedule: str | None = Field(
-        default=None,
-        description="When customer wants service done",
-    )
-    preferred_schedule_details: str | None = Field(
-        default=None,
-        description="Free-text details for 'Other' schedule preference",
     )
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Record last update timestamp")
