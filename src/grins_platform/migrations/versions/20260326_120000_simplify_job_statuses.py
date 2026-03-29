@@ -71,11 +71,11 @@ def upgrade() -> None:
     for old, new in _STATUS_MAP.items():
         op.execute(
             f"UPDATE job_status_history SET previous_status = '{new}' "
-            f"WHERE previous_status = '{old}'"
+            f"WHERE previous_status = '{old}'",
         )
         op.execute(
             f"UPDATE job_status_history SET new_status = '{new}' "
-            f"WHERE new_status = '{old}'"
+            f"WHERE new_status = '{old}'",
         )
 
     # Add new CHECK constraints for history
@@ -127,11 +127,11 @@ def downgrade() -> None:
     for new, old in _REVERSE_MAP.items():
         op.execute(
             f"UPDATE job_status_history SET previous_status = '{old}' "
-            f"WHERE previous_status = '{new}'"
+            f"WHERE previous_status = '{new}'",
         )
         op.execute(
             f"UPDATE job_status_history SET new_status = '{old}' "
-            f"WHERE new_status = '{new}'"
+            f"WHERE new_status = '{new}'",
         )
 
     op.create_check_constraint(

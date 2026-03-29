@@ -145,7 +145,6 @@ class Customer(Base):
         JSON,
         nullable=True,
     )
-
     # Staff-only Notes (Requirement 28.1)
     internal_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 

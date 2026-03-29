@@ -179,6 +179,8 @@ class CustomerService(LoggerMixin):
             "sms_opt_in": customer.sms_opt_in,
             "email_opt_in": customer.email_opt_in,
             "lead_source": customer.lead_source,
+            "internal_notes": customer.internal_notes,
+            "preferred_service_times": customer.preferred_service_times,
             "created_at": customer.created_at,
             "updated_at": customer.updated_at,
             "properties": customer.properties if include_properties else [],

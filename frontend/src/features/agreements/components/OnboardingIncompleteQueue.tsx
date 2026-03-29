@@ -5,6 +5,13 @@ import { LoadingSpinner } from '@/shared/components/LoadingSpinner';
 import { useOnboardingIncomplete } from '../hooks';
 import { ChevronDown, ChevronUp, UserX } from 'lucide-react';
 
+const SCHEDULE_LABELS: Record<string, string> = {
+  ASAP: 'ASAP',
+  ONE_TWO_WEEKS: '1-2 Weeks',
+  THREE_FOUR_WEEKS: '3-4 Weeks',
+  OTHER: 'Other',
+};
+
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
@@ -46,6 +53,11 @@ export function OnboardingIncompleteQueue() {
                     </Link>
                     <span className="text-sm text-slate-500 truncate">{agr.customer_name}</span>
                     <span className="text-xs text-slate-400">Created {formatDate(agr.created_at)}</span>
+                    {agr.preferred_schedule && (
+                      <span className="text-xs text-teal-600 font-medium shrink-0">
+                        {SCHEDULE_LABELS[agr.preferred_schedule] || agr.preferred_schedule}
+                      </span>
+                    )}
                   </div>
                   <span className="text-xs text-violet-600 font-medium shrink-0">No property</span>
                 </div>

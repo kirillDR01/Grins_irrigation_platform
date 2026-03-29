@@ -271,7 +271,7 @@ class CheckoutService(LoggerMixin):
             rpz_name = (
                 "RPZ/backflow removal"
                 if is_winterization
-                else "RPZ/backflow connection"
+                else "RPZ/backflow connection & removal"
             )
             line_items.append(
                 {

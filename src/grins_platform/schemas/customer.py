@@ -167,7 +167,6 @@ class CustomerUpdate(BaseModel):
         default=None,
         description="Preferred service time window",
     )
-
     @field_validator("phone")  # type: ignore[misc,untyped-decorator]
     @classmethod
     def validate_phone(cls, v: str | None) -> str | None:

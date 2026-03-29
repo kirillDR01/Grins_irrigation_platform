@@ -121,6 +121,8 @@ export interface Agreement {
   renewal_date: string | null;
   auto_renew: boolean;
   payment_status: PaymentStatus;
+  preferred_schedule: string | null;
+  preferred_schedule_details: string | null;
   created_at: string;
 }
 

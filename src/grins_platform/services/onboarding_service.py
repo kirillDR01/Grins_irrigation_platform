@@ -192,6 +192,8 @@ class OnboardingService(LoggerMixin):
         has_dogs: bool = False,
         access_instructions: str | None = None,
         preferred_times: str = "NO_PREFERENCE",
+        preferred_schedule: str = "ASAP",
+        preferred_schedule_details: str | None = None,
     ) -> ServiceAgreement:
         """Complete onboarding by creating property and linking to agreement/jobs.
 
@@ -291,10 +293,14 @@ class OnboardingService(LoggerMixin):
             is_primary=True,
         )
 
-        # Link property to agreement
+        # Link property to agreement and save schedule preference
         agreement = await self.agreement_repo.update(
             agreement,
-            {"property_id": prop.id},
+            {
+                "property_id": prop.id,
+                "preferred_schedule": preferred_schedule,
+                "preferred_schedule_details": preferred_schedule_details,
+            },
         )
 
         # Update all linked jobs with property_id

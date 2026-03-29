@@ -106,6 +106,8 @@ def _agreement_to_response(agr: ServiceAgreement) -> AgreementResponse:
         renewal_date=agr.renewal_date,
         auto_renew=agr.auto_renew,
         payment_status=agr.payment_status,
+        preferred_schedule=agr.preferred_schedule,
+        preferred_schedule_details=agr.preferred_schedule_details,
         created_at=agr.created_at,
     )
 
