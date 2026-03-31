@@ -1,8 +1,8 @@
 """Integration tests for Google Sheets cross-feature compatibility.
 
 Tests verify that sheet-created leads integrate correctly with the
-existing Leads system, dashboard metrics, and that the nullable
-zip_code migration doesn't break existing functionality.
+existing Leads system, dashboard metrics, and that the required address /
+optional zip_code schema doesn't break existing functionality.
 
 Validates: Requirements 12.3, 12.6, 15.1, 15.2, 15.3, 15.4, 15.5
 """
@@ -287,27 +287,38 @@ class TestExistingLeadsUnaffected:
 
 
 # =============================================================================
-# Test: Public form still requires zip_code
+# Test: Public form requires address, zip_code is optional
 # =============================================================================
 
 
 @pytest.mark.integration
-class TestPublicFormStillRequiresZipCode:
+class TestPublicFormRequiresAddress:
     """Validates: Requirement 15.5"""
 
-    def test_lead_submission_rejects_missing_zip_code(self) -> None:
-        """LeadSubmission requires zip_code — missing raises ValidationError."""
+    def test_lead_submission_rejects_missing_address(self) -> None:
+        """LeadSubmission requires address — missing raises ValidationError."""
         with pytest.raises(ValidationError):
             LeadSubmission(
                 name="Test User",
                 phone="(612) 555-1234",
                 situation=LeadSituation.NEW_SYSTEM,
                 source_site="residential",
-                # zip_code intentionally omitted
+                # address intentionally omitted
             )  # type: ignore[call-arg]
 
+    def test_lead_submission_accepts_missing_zip_code(self) -> None:
+        """LeadSubmission accepts missing zip_code (now optional)."""
+        sub = LeadSubmission(
+            name="Test User",
+            phone="(612) 555-1234",
+            situation=LeadSituation.NEW_SYSTEM,
+            source_site="residential",
+            address="123 Main St",
+        )
+        assert sub.zip_code is None
+
     def test_lead_submission_rejects_invalid_zip_code(self) -> None:
-        """LeadSubmission rejects non-5-digit zip_code."""
+        """LeadSubmission rejects non-5-digit zip_code when provided."""
         with pytest.raises(ValidationError):
             LeadSubmission(
                 name="Test User",
@@ -315,6 +326,7 @@ class TestPublicFormStillRequiresZipCode:
                 zip_code="123",
                 situation=LeadSituation.NEW_SYSTEM,
                 source_site="residential",
+                address="123 Main St",
             )
 
     def test_lead_submission_accepts_valid_zip_code(self) -> None:
@@ -325,8 +337,20 @@ class TestPublicFormStillRequiresZipCode:
             zip_code="55424",
             situation=LeadSituation.NEW_SYSTEM,
             source_site="residential",
+            address="123 Main St",
         )
         assert sub.zip_code == "55424"
+
+    def test_lead_submission_accepts_valid_address(self) -> None:
+        """LeadSubmission accepts valid address."""
+        sub = LeadSubmission(
+            name="Test User",
+            phone="(612) 555-1234",
+            situation=LeadSituation.NEW_SYSTEM,
+            source_site="residential",
+            address="456 Oak Ave",
+        )
+        assert sub.address == "456 Oak Ave"
 
 
 # =============================================================================

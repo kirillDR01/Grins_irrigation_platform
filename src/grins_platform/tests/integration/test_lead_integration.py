@@ -142,6 +142,7 @@ class TestLeadSubmissionDashboardMetrics:
             zip_code="55424",
             situation=LeadSituation.NEW_SYSTEM,
             source_site="residential",
+            address="123 Main St, Denver, CO 80209",
         )
         result = await lead_service.submit_lead(submission)
         assert result.success is True
@@ -169,6 +170,7 @@ class TestLeadSubmissionDashboardMetrics:
             situation=LeadSituation.EXPLORING,
             source_site="residential",
             website="http://spam.com",  # honeypot filled
+            address="123 Main St, Denver, CO 80209",
         )
         result = await lead_service.submit_lead(submission)
         assert result.success is True
@@ -215,6 +217,7 @@ class TestLeadLifecycle:
             zip_code="55346",
             situation=LeadSituation.NEW_SYSTEM,
             source_site="residential",
+            address="123 Main St, Denver, CO 80209",
         )
         submit_result = await lead_service.submit_lead(submission)
         assert submit_result.success is True
@@ -340,6 +343,7 @@ class TestDuplicateDetection:
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             source_site="residential",
+            address="123 Main St, Denver, CO 80209",
         )
         result1 = await lead_service.submit_lead(sub1)
         assert result1.success is True
@@ -360,6 +364,7 @@ class TestDuplicateDetection:
             email="new@email.com",
             notes="Additional info",
             source_site="residential",
+            address="123 Main St, Denver, CO 80209",
         )
         result2 = await lead_service.submit_lead(sub2)
         assert result2.success is True
@@ -394,6 +399,7 @@ class TestDuplicateDetection:
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             source_site="residential",
+            address="123 Main St, Denver, CO 80209",
         )
         result = await lead_service.submit_lead(submission)
 
@@ -423,6 +429,7 @@ class TestDuplicateDetection:
             situation=LeadSituation.REPAIR,
             email="new@email.com",
             source_site="residential",
+            address="123 Main St, Denver, CO 80209",
         )
         await lead_service.submit_lead(submission)
 

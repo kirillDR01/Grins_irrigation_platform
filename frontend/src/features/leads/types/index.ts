@@ -270,7 +270,8 @@ export interface FromCallRequest {
   name: string;
   phone: string;
   email?: string | null;
-  zip_code: string;
+  address: string;
+  zip_code?: string | null;
   situation: LeadSituation;
   notes?: string | null;
   lead_source?: LeadSource;

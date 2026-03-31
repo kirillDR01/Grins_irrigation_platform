@@ -147,6 +147,7 @@ class TestSubmitLead:
             json={
                 "name": "John Doe",
                 "phone": "(612) 555-1234",
+                "address": "123 Main St, Denver, CO 80209",
                 "zip_code": "55424",
                 "situation": "new_system",
             },
@@ -169,6 +170,7 @@ class TestSubmitLead:
             json={
                 "name": "",
                 "phone": "123",
+                "address": "123 Main St, Denver, CO 80209",
                 "zip_code": "abc",
                 "situation": "invalid",
             },
@@ -193,6 +195,7 @@ class TestSubmitLead:
             json={
                 "name": "Bot",
                 "phone": "(612) 555-9999",
+                "address": "123 Main St, Denver, CO 80209",
                 "zip_code": "55424",
                 "situation": "repair",
                 "website": "http://spam.com",

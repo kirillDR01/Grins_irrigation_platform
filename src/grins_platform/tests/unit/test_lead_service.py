@@ -193,6 +193,7 @@ class TestSubmitLead:
         data = LeadSubmission(
             name="John Doe",
             phone="(612) 555-0123",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.NEW_SYSTEM,
         )
@@ -213,6 +214,7 @@ class TestSubmitLead:
         data = LeadSubmission(
             name="Bot User",
             phone="6125550123",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             website="http://spam.com",
@@ -242,6 +244,7 @@ class TestSubmitLead:
         data = LeadSubmission(
             name="John Doe",
             phone="6125550123",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.UPGRADE,
             email="john@example.com",
@@ -279,6 +282,7 @@ class TestSubmitLead:
         data = LeadSubmission(
             name="John Doe",
             phone="6125550123",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.NEW_SYSTEM,
             email="new@example.com",
@@ -307,6 +311,7 @@ class TestSubmitLead:
         data = LeadSubmission(
             name="Real User",
             phone="6125550123",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.EXPLORING,
             website="",

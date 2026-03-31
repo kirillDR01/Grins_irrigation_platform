@@ -300,6 +300,7 @@ class TestLeadNewFieldsAndDuplicateDetection:
                         "name": "Test User",
                         "phone": "6125559876",
                         "zip_code": "55424",
+                        "address": "123 Main St, Denver, CO 80209",
                         "situation": "new_system",
                         "email": "test@example.com",
                         "sms_consent": True,
@@ -346,6 +347,7 @@ class TestLeadNewFieldsAndDuplicateDetection:
                         "name": "Dup User",
                         "phone": "6125551111",
                         "zip_code": "55424",
+                        "address": "123 Main St, Denver, CO 80209",
                         "situation": "repair",
                     },
                 )
@@ -376,6 +378,7 @@ class TestLeadNewFieldsAndDuplicateDetection:
                         "name": "Email Dup",
                         "phone": "6125552222",
                         "zip_code": "55424",
+                        "address": "123 Main St, Denver, CO 80209",
                         "situation": "new_system",
                         "email": "dup@example.com",
                     },

@@ -9,6 +9,8 @@ Validates: Requirement 12.5
 
 from __future__ import annotations
 
+import re
+
 # Colorado service area zip codes — primary market for Grins Irrigation
 # Format: zip_code -> (city, state)
 _ZIP_MAP: dict[str, tuple[str, str]] = {
@@ -183,6 +185,22 @@ _ZIP_MAP.update(
         "80634": ("Greeley", "CO"),
     },
 )
+
+
+def extract_zip_from_address(address: str) -> str | None:
+    """Extract a 5-digit zip code from a full address string.
+
+    Finds the last 5-digit number in the string, which is typically
+    the zip code in a US address format.
+
+    Args:
+        address: Full address string (e.g. "1234 Elm St, Denver, CO 80209").
+
+    Returns:
+        The extracted 5-digit zip code, or None if not found.
+    """
+    matches = re.findall(r"\b(\d{5})\b", address)
+    return matches[-1] if matches else None
 
 
 def lookup_zip(zip_code: str) -> tuple[str | None, str | None]:

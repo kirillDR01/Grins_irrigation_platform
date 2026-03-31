@@ -99,6 +99,7 @@ class TestDuplicateLeadDetection:
         data = LeadSubmission(
             name="Test User",
             phone="6125550123",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -119,6 +120,7 @@ class TestDuplicateLeadDetection:
         data = LeadSubmission(
             name="Test User",
             phone="6125559999",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             email="test@example.com",
@@ -139,6 +141,7 @@ class TestDuplicateLeadDetection:
         data = LeadSubmission(
             name="Test User",
             phone="6125550123",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -159,6 +162,7 @@ class TestDuplicateLeadDetection:
         data = LeadSubmission(
             name="Test User",
             phone="6125559999",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             email="different@example.com",
@@ -178,6 +182,7 @@ class TestDuplicateLeadDetection:
         data = LeadSubmission(
             name="Test User",
             phone="6125550123",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -215,6 +220,7 @@ class TestSmsConsentRecordCreation:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             sms_consent=True,
@@ -248,6 +254,7 @@ class TestSmsConsentRecordCreation:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             sms_consent=False,
@@ -272,6 +279,7 @@ class TestSmsConsentRecordCreation:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             consent_language_version="v1.0",
@@ -296,6 +304,7 @@ class TestSmsConsentRecordCreation:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -475,6 +484,7 @@ class TestNewFieldsInSubmitLead:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             email_marketing_consent=True,
@@ -498,6 +508,7 @@ class TestNewFieldsInSubmitLead:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             page_url="https://example.com/landing",
@@ -519,6 +530,7 @@ class TestNewFieldsInSubmitLead:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             sms_consent=True,

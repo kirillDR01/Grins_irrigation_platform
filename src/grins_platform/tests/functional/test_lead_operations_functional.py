@@ -210,6 +210,7 @@ class TestLeadCreationWithAddressFields:
             phone="(512) 555-5678",
             zip_code="78701",
             situation=LeadSituation.REPAIR,
+            address="123 Main St, Denver, CO 80209",
         )
         result = await svc.create_from_call(data)
 
@@ -235,6 +236,7 @@ class TestLeadCreationWithAddressFields:
             zip_code="78701",
             situation=LeadSituation.EXPLORING,
             source_site="residential",
+            address="123 Main St, Denver, CO 80209",
         )
         result = await svc.submit_lead(data)
 
@@ -275,6 +277,7 @@ class TestActionTagLifecycle:
             zip_code="78701",
             situation=LeadSituation.NEW_SYSTEM,
             source_site="residential",
+            address="123 Main St, Denver, CO 80209",
         )
         submit_result = await svc.submit_lead(data)
         assert submit_result.success is True

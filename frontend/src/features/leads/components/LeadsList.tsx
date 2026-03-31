@@ -167,7 +167,7 @@ export function LeadsList() {
       ),
       cell: ({ row }) => (
         <span className="text-sm text-slate-600" data-testid={`lead-city-${row.original.id}`}>
-          {row.original.city ?? row.original.zip_code ?? '—'}
+          {row.original.city ?? row.original.address ?? '—'}
         </span>
       ),
     },

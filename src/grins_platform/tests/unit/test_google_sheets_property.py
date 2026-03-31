@@ -6,7 +6,7 @@ Property 3: Client type determines lead creation.
 Property 4: Situation mapping priority.
 Property 5: Notes aggregation contains all non-empty fields.
 Property 7: Sheet-created leads have null zip_code.
-Property 8: Public form submission still requires zip_code.
+Property 8: Public form submission requires address.
 Property 9: Duplicate phone deduplication.
 Property 10: Row processing error isolation.
 Property 11: Only new rows are processed.
@@ -1474,7 +1474,7 @@ class TestSheetCreatedLeadsHaveNullZipCodeProperty:
         assert data["zip_code"] is None
 
 
-# --- Property 8: Public form submission still requires zip_code ---
+# --- Property 8: Public form submission requires address ---
 
 from pydantic import ValidationError  # noqa: E402
 
@@ -1482,12 +1482,12 @@ from grins_platform.schemas.lead import LeadSubmission  # noqa: E402
 
 
 @pytest.mark.unit
-class TestPublicFormStillRequiresZipCodeProperty:
-    """Property 8: Public form submission still requires zip_code.
+class TestPublicFormRequiresAddressProperty:
+    """Property 8: Public form submission requires address.
 
-    For any LeadSubmission payload where zip_code is missing, empty, or
-    not exactly 5 digits, Pydantic validation should reject the payload.
-    The nullable migration does not weaken the public form contract.
+    For any LeadSubmission payload where address is missing or empty,
+    Pydantic validation should reject the payload. zip_code is now
+    optional and may be omitted without error.
 
     Validates: Requirements 4.2
     """
@@ -1497,6 +1497,7 @@ class TestPublicFormStillRequiresZipCodeProperty:
         "phone": "6125551234",
         "situation": LeadSituation.NEW_SYSTEM,
         "source_site": "residential",
+        "address": "123 Main St",
     }
 
     @given(
@@ -1508,6 +1509,59 @@ class TestPublicFormStillRequiresZipCodeProperty:
         sub = LeadSubmission(**self._base, zip_code=zip_code)
         assert sub.zip_code == zip_code
 
+    def test_missing_zip_code_accepted(self) -> None:
+        """Omitting zip_code entirely → accepted (now optional)."""
+        sub = LeadSubmission(**self._base)
+        assert sub.zip_code is None
+
+    @given(
+        address=st.text(
+            min_size=1,
+            max_size=100,
+            alphabet=st.characters(
+                blacklist_categories=("Cs",),
+                blacklist_characters="<>",
+            ),
+        ).filter(lambda s: s.strip() != ""),
+    )
+    @settings(max_examples=200)
+    def test_valid_address_accepted(self, address: str) -> None:
+        """Non-empty address → accepted."""
+        sub = LeadSubmission(
+            name="Test User",
+            phone="6125551234",
+            situation=LeadSituation.NEW_SYSTEM,
+            source_site="residential",
+            address=address,
+        )
+        assert sub.address == address.strip()
+
+    def test_missing_address_rejected(self) -> None:
+        """Omitting address entirely → ValidationError."""
+        with pytest.raises(ValidationError):
+            LeadSubmission(
+                name="Test User",
+                phone="6125551234",
+                situation=LeadSituation.NEW_SYSTEM,
+                source_site="residential",
+                # address intentionally omitted
+            )  # type: ignore[call-arg]
+
+    @given(
+        address=st.sampled_from(["", " ", "  ", "\t"]),
+    )
+    @settings(max_examples=50)
+    def test_empty_or_whitespace_address_rejected(self, address: str) -> None:
+        """Empty or whitespace-only address → ValidationError."""
+        with pytest.raises(ValidationError):
+            LeadSubmission(
+                name="Test User",
+                phone="6125551234",
+                situation=LeadSituation.NEW_SYSTEM,
+                source_site="residential",
+                address=address,
+            )
+
     @given(
         zip_code=st.text(
             alphabet=st.characters(categories=["Nd"]),
@@ -1516,8 +1570,8 @@ class TestPublicFormStillRequiresZipCodeProperty:
         ),
     )
     @settings(max_examples=200)
-    def test_fewer_than_5_digits_rejected(self, zip_code: str) -> None:
-        """Fewer than 5 digits → ValidationError."""
+    def test_fewer_than_5_digits_zip_rejected(self, zip_code: str) -> None:
+        """Fewer than 5 digits → ValidationError (zip format still validated when provided)."""
         with pytest.raises(ValidationError):
             LeadSubmission(**self._base, zip_code=zip_code)
 
@@ -1529,24 +1583,10 @@ class TestPublicFormStillRequiresZipCodeProperty:
         ),
     )
     @settings(max_examples=200)
-    def test_more_than_5_digits_rejected(self, zip_code: str) -> None:
-        """More than 5 digits → ValidationError."""
+    def test_more_than_5_digits_zip_rejected(self, zip_code: str) -> None:
+        """More than 5 digits → ValidationError (zip format still validated when provided)."""
         with pytest.raises(ValidationError):
             LeadSubmission(**self._base, zip_code=zip_code)
-
-    @given(
-        zip_code=st.sampled_from(["", " ", "  ", "\t"]),
-    )
-    @settings(max_examples=50)
-    def test_empty_or_whitespace_rejected(self, zip_code: str) -> None:
-        """Empty or whitespace-only → ValidationError."""
-        with pytest.raises(ValidationError):
-            LeadSubmission(**self._base, zip_code=zip_code)
-
-    def test_missing_zip_code_rejected(self) -> None:
-        """Omitting zip_code entirely → ValidationError."""
-        with pytest.raises(ValidationError):
-            LeadSubmission(**self._base)  # type: ignore[call-arg]
 
     @given(
         zip_code=st.text(
@@ -1556,7 +1596,7 @@ class TestPublicFormStillRequiresZipCodeProperty:
         ),
     )
     @settings(max_examples=200)
-    def test_non_digit_characters_rejected(self, zip_code: str) -> None:
+    def test_non_digit_zip_characters_rejected(self, zip_code: str) -> None:
         """5 non-digit characters → ValidationError."""
         with pytest.raises(ValidationError):
             LeadSubmission(**self._base, zip_code=zip_code)

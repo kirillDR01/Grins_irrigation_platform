@@ -705,6 +705,7 @@ class TestInputValidation:
             LeadSubmission(
                 name="Test User",
                 phone="abc",
+                address="123 Main St, Denver, CO 80209",
                 zip_code="55344",
                 situation=LeadSituation.NEW_SYSTEM,
             )
@@ -715,6 +716,7 @@ class TestInputValidation:
             LeadSubmission(
                 name="Test User",
                 phone="6125551234",
+                address="123 Main St, Denver, CO 80209",
                 zip_code="ABCDE",
                 situation=LeadSituation.NEW_SYSTEM,
             )
@@ -724,6 +726,7 @@ class TestInputValidation:
         lead = LeadSubmission(
             name="Test User",
             phone="6125551234",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55344",
             situation=LeadSituation.NEW_SYSTEM,
             notes="<script>alert('xss')</script>Hello",

@@ -54,7 +54,7 @@ from grins_platform.schemas.lead import (
     PaginatedFollowUpQueueResponse,
     PaginatedLeadResponse,
 )
-from grins_platform.utils.zip_lookup import lookup_zip
+from grins_platform.utils.zip_lookup import extract_zip_from_address, lookup_zip
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -326,6 +326,9 @@ class LeadService(LoggerMixin):
             if data.email is not None and existing_lead.email is None:
                 update_data["email"] = data.email
 
+            if data.address and not existing_lead.address:
+                update_data["address"] = data.address
+
             if data.notes is not None:
                 if existing_lead.notes:
                     update_data["notes"] = f"{existing_lead.notes}\n{data.notes}"
@@ -349,11 +352,16 @@ class LeadService(LoggerMixin):
                 lead_id=existing_lead.id,
             )
 
-        # Step 5: Auto-populate city/state from zip if not provided (Req 12.5)
+        # Step 5: Extract zip from address if not provided
+        zip_code = data.zip_code
+        if not zip_code and data.address:
+            zip_code = extract_zip_from_address(data.address)
+
+        # Auto-populate city/state from zip if not provided (Req 12.5)
         city = data.city
         state = data.state
-        if data.zip_code and not city and not state:
-            looked_up_city, looked_up_state = lookup_zip(data.zip_code)
+        if zip_code and not city and not state:
+            looked_up_city, looked_up_state = lookup_zip(zip_code)
             if looked_up_city:
                 city = looked_up_city
             if looked_up_state:
@@ -364,7 +372,7 @@ class LeadService(LoggerMixin):
             name=data.name,
             phone=data.phone,
             email=data.email,
-            zip_code=data.zip_code,
+            zip_code=zip_code,
             situation=data.situation.value,
             notes=data.notes,
             source_site=data.source_site,
@@ -504,17 +512,22 @@ class LeadService(LoggerMixin):
         source_detail = data.source_detail if data.source_detail else "Inbound call"
         intake_tag = data.intake_tag.value if data.intake_tag else None
 
+        # Extract zip from address if not provided
+        zip_code = data.zip_code
+        if not zip_code and data.address:
+            zip_code = extract_zip_from_address(data.address)
+
         # Auto-populate city/state from zip if not provided (Req 12.5)
         city: str | None = None
         state: str | None = None
-        if data.zip_code:
-            city, state = lookup_zip(data.zip_code)
+        if zip_code:
+            city, state = lookup_zip(zip_code)
 
         lead = await self.lead_repository.create(
             name=data.name,
             phone=data.phone,
             email=data.email,
-            zip_code=data.zip_code,
+            zip_code=zip_code,
             situation=data.situation.value,
             notes=data.notes,
             source_site="admin",
@@ -524,6 +537,7 @@ class LeadService(LoggerMixin):
             intake_tag=intake_tag,
             city=city,
             state=state,
+            address=data.address,
             action_tags=[ActionTag.NEEDS_CONTACT.value],
         )
 

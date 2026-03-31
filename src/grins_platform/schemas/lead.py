@@ -57,11 +57,10 @@ class LeadSubmission(BaseModel):
         max_length=20,
         description="Phone number",
     )
-    zip_code: str = Field(
-        ...,
-        min_length=5,
+    zip_code: str | None = Field(
+        default=None,
         max_length=10,
-        description="5-digit zip code",
+        description="5-digit zip code (optional — extracted from address if omitted)",
     )
     situation: LeadSituation = Field(
         ...,
@@ -91,8 +90,9 @@ class LeadSubmission(BaseModel):
         max_length=2,
         description="State abbreviation",
     )
-    address: str | None = Field(
-        default=None,
+    address: str = Field(
+        ...,
+        min_length=1,
         max_length=500,
         description="Street address",
     )
@@ -164,11 +164,13 @@ class LeadSubmission(BaseModel):
 
     @field_validator("zip_code")  # type: ignore[misc,untyped-decorator]
     @classmethod
-    def validate_zip_code(cls, v: str) -> str:
+    def validate_zip_code(cls, v: str | None) -> str | None:
         """Validate 5-digit zip code.
 
         Validates: Requirement 1.4
         """
+        if v is None:
+            return None
         digits = "".join(filter(str.isdigit, v))
         if len(digits) != 5:
             msg = "Zip code must be exactly 5 digits"
@@ -183,6 +185,19 @@ class LeadSubmission(BaseModel):
         Validates: Requirement 1.11
         """
         return strip_html_tags(v)
+
+    @field_validator("address")  # type: ignore[misc,untyped-decorator]
+    @classmethod
+    def sanitize_address(cls, v: str) -> str:
+        """Strip HTML tags and whitespace from address.
+
+        Validates: Requirement 1.11
+        """
+        sanitized = strip_html_tags(v)
+        if not sanitized:
+            msg = "Address must not be empty"
+            raise ValueError(msg)
+        return sanitized
 
     @field_validator("notes")  # type: ignore[misc,untyped-decorator]
     @classmethod
@@ -355,7 +370,17 @@ class FromCallSubmission(BaseModel):
     name: str = Field(..., min_length=1, max_length=200, description="Full name")
     phone: str = Field(..., min_length=7, max_length=20, description="Phone number")
     email: EmailStr | None = Field(default=None, description="Optional email")
-    zip_code: str = Field(..., min_length=5, max_length=10, description="Zip code")
+    address: str = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Street address",
+    )
+    zip_code: str | None = Field(
+        default=None,
+        max_length=10,
+        description="Zip code (optional — extracted from address if omitted)",
+    )
     situation: LeadSituation = Field(..., description="Service situation")
     notes: str | None = Field(default=None, max_length=1000, description="Notes")
     lead_source: LeadSourceExtended = Field(
@@ -380,8 +405,10 @@ class FromCallSubmission(BaseModel):
 
     @field_validator("zip_code")  # type: ignore[misc,untyped-decorator]
     @classmethod
-    def validate_zip_code(cls, v: str) -> str:
+    def validate_zip_code(cls, v: str | None) -> str | None:
         """Validate 5-digit zip code."""
+        if v is None:
+            return None
         digits = "".join(filter(str.isdigit, v))
         if len(digits) != 5:
             msg = "Zip code must be exactly 5 digits"
@@ -393,6 +420,16 @@ class FromCallSubmission(BaseModel):
     def sanitize_name(cls, v: str) -> str:
         """Strip HTML tags."""
         return strip_html_tags(v)
+
+    @field_validator("address")  # type: ignore[misc,untyped-decorator]
+    @classmethod
+    def sanitize_address(cls, v: str) -> str:
+        """Strip HTML tags and whitespace from address."""
+        sanitized = strip_html_tags(v)
+        if not sanitized:
+            msg = "Address must not be empty"
+            raise ValueError(msg)
+        return sanitized
 
     @field_validator("notes")  # type: ignore[misc,untyped-decorator]
     @classmethod
