@@ -101,3 +101,12 @@ tmp/
 
 # Google service account keys
 grins-irrigation-*.json
+
+# Database backups (contain production data)
+backups/
+
+# E2E test screenshots (binary artifacts)
+e2e-screenshots/
+
+# Deployment docs with sensitive credentials
+deployment-instructions/productiongolive.md
