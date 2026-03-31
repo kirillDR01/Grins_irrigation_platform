@@ -132,6 +132,7 @@ class TestLeadCreationSourceAndTag:
             zip_code="55424",
             situation=LeadSituation.NEW_SYSTEM,
             source_site="residential",
+            address="123 Main St, Denver, CO 80209",
         )
         result = await svc.submit_lead(data)
 
@@ -156,6 +157,7 @@ class TestLeadCreationSourceAndTag:
             phone="(612) 555-5678",
             zip_code="55346",
             situation=LeadSituation.REPAIR,
+            address="123 Main St, Denver, CO 80209",
         )
         result = await svc.create_from_call(data)
 
@@ -183,6 +185,7 @@ class TestLeadCreationSourceAndTag:
             source_site="residential",
             lead_source=LeadSourceExtended.REFERRAL,
             intake_tag=IntakeTag.FOLLOW_UP,
+            address="123 Main St, Denver, CO 80209",
         )
         result = await svc.submit_lead(data)
 
@@ -746,6 +749,7 @@ class TestLeadWithSmsConsentFullFlow:
             situation=LeadSituation.NEW_SYSTEM,
             sms_consent=True,
             source_site="residential",
+            address="123 Main St, Denver, CO 80209",
         )
 
         result = await svc.submit_lead(data)
@@ -789,6 +793,7 @@ class TestLeadWithSmsConsentFullFlow:
             situation=LeadSituation.EXPLORING,
             sms_consent=False,
             source_site="residential",
+            address="123 Main St, Denver, CO 80209",
         )
 
         result = await svc.submit_lead(data)

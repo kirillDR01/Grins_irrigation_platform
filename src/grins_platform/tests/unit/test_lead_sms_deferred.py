@@ -208,6 +208,7 @@ class TestSubmitLeadSmsIntegration:
         data = LeadSubmission(
             name="SMS Test User",
             phone="6125559999",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55401",
             situation=LeadSituation.NEW_SYSTEM,
             sms_consent=True,
@@ -244,6 +245,7 @@ class TestSubmitLeadSmsIntegration:
         data = LeadSubmission(
             name="No SMS User",
             phone="6125550001",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55401",
             situation=LeadSituation.EXPLORING,
             sms_consent=False,

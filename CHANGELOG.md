@@ -1,3 +1,82 @@
+# Replace Zip Code with Address Field in Lead Submission
+
+**Date:** 2026-03-30
+**Scope:** Replace the required `zip_code` field with a required `address` field on `LeadSubmission` and `FromCallSubmission` schemas. The backend auto-extracts the zip code from the address string when needed.
+
+---
+
+## Summary
+
+The "Get Your Free Quote" landing page form is being updated to collect a full address instead of just a zip code. This change makes `address` required and `zip_code` optional across both public lead submission and admin from-call lead creation flows.
+
+**Deployment note:** Deploy backend first (zip_code is now optional, so the existing landing page still works). Then deploy the landing page update.
+
+---
+
+## Changes
+
+### New Utility: `extract_zip_from_address()`
+
+| File | Change |
+|---|---|
+| `src/grins_platform/utils/zip_lookup.py` | Added `import re` and new function `extract_zip_from_address(address: str) -> str | None` — extracts the last 5-digit number from an address string using regex `r'\b(\d{5})\b'`. Returns `None` if no match. |
+
+### Schema Changes
+
+| File | Change |
+|---|---|
+| `src/grins_platform/schemas/lead.py` — `LeadSubmission` | `address`: changed from `default=None` to required (`...`, `min_length=1`, `max_length=500`). `zip_code`: changed from required (`...`, `min_length=5`) to `default=None`, `max_length=10`. Added `sanitize_address` validator (strips HTML tags, raises ValueError if result is empty). Updated `validate_zip_code` to return `None` when value is `None`. |
+| `src/grins_platform/schemas/lead.py` — `FromCallSubmission` | Added new required `address` field (`...`, `min_length=1`, `max_length=500`). `zip_code`: changed from required (`...`, `min_length=5`) to `default=None`, `max_length=10`. Added `sanitize_address` validator (same pattern). Updated `validate_zip_code` with `None` guard. |
+
+### Service Changes
+
+| File | Change |
+|---|---|
+| `src/grins_platform/services/lead_service.py` — imports | Added `extract_zip_from_address` to import from `zip_lookup`. |
+| `src/grins_platform/services/lead_service.py` — `submit_lead()` (line ~322-380) | Added address merge logic for duplicate leads: if new submission has address and existing lead doesn't, update it. Before city/state lookup, extract zip from address if `zip_code` not provided. Use local `zip_code` variable in lookup and create call. |
+| `src/grins_platform/services/lead_service.py` — `create_from_call()` (line ~507-528) | Same zip extraction pattern. Added `address=data.address` to the `lead_repository.create()` call (was missing). |
+
+### Frontend Changes
+
+| File | Change |
+|---|---|
+| `frontend/src/features/leads/types/index.ts` — `FromCallRequest` | Added `address: string` (required). Changed `zip_code` from `string` to `string \| null` (optional). |
+| `frontend/src/features/leads/components/LeadsList.tsx` (line 170) | Changed city column fallback from `city ?? zip_code ?? '—'` to `city ?? address ?? '—'`. |
+
+### Test Updates (~20 files)
+
+| File | Changes |
+|---|---|
+| `tests/unit/test_lead_schemas.py` | Added `address=` to ~43 `LeadSubmission` calls; added new `TestAddressRequired` class (8 tests) and `TestAddressSanitization` class (8 tests); added `TestFromCallSubmission` class with zip-optional and address-required tests. Updated `validate_zip_code` tests for optional behavior. |
+| `tests/unit/test_lead_api.py` | Added `"address"` to 3 JSON payloads. |
+| `tests/unit/test_lead_service.py` | Added `address=` to 5 `LeadSubmission` calls. |
+| `tests/unit/test_lead_service_crm.py` | Added `address=` to 6 `LeadSubmission` calls. |
+| `tests/unit/test_lead_service_extensions.py` | Added `address=` to 15 `LeadSubmission` + 6 `FromCallSubmission` calls. |
+| `tests/unit/test_lead_service_gaps.py` | Added `address=` to 12 `LeadSubmission` calls. |
+| `tests/unit/test_lead_sms_deferred.py` | Added `address=` to 2 `LeadSubmission` calls. |
+| `tests/unit/test_security_middleware.py` | Added `address=` to 3 `LeadSubmission` calls. |
+| `tests/unit/test_pbt_lead_source_defaulting.py` | Added `address=` to 2 `LeadSubmission` + 2 `FromCallSubmission` calls. |
+| `tests/unit/test_pbt_intake_tag_defaulting.py` | Added `address=` to 2 `LeadSubmission` + 2 `FromCallSubmission` calls. |
+| `tests/unit/test_pbt_lead_service_gaps.py` | Added `address=` to 5 `LeadSubmission` calls. |
+| `tests/unit/test_google_sheets_property.py` | Added `address` to `_base` dict. Renamed `TestPublicFormStillRequiresZipCodeProperty` → `TestPublicFormRequiresAddressProperty`. Replaced zip-required tests with address-required tests. Kept zip-format-validation tests. |
+| `tests/test_lead_pbt.py` | Added `address=` to 6 `LeadSubmission` call sites. |
+| `tests/functional/test_lead_operations_functional.py` | Added `address=` to 2 `LeadSubmission` + 1 `FromCallSubmission` calls. |
+| `tests/functional/test_lead_service_functional.py` | Added `address=` to 4 `LeadSubmission` + 1 `FromCallSubmission` calls. |
+| `tests/integration/test_lead_api_integration.py` | Added `"address"` to 4 JSON payloads. |
+| `tests/integration/test_lead_integration.py` | Added `address=` to 7 `LeadSubmission` calls. |
+| `tests/integration/test_google_sheets_integration.py` | Renamed `TestPublicFormStillRequiresZipCode` → `TestPublicFormRequiresAddress`. Flipped zip-required → address-required tests. Added `address=` to all `LeadSubmission` calls. |
+| `tests/integration/test_integration_gaps_api.py` | Added `"address"` to 3 JSON payloads. |
+
+---
+
+## Verification
+
+- **Linting:** `ruff check` and `ruff format --check` — all pass
+- **Backend tests:** 3456 passed (0 lead-related failures)
+- **Frontend tests:** 1173 passed across 101 test files
+
+---
+
 # Simplify Job Status Enum (7 → 4)
 
 **Date:** 2026-03-26

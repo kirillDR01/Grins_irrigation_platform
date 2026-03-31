@@ -256,6 +256,7 @@ class TestDuplicateDetectionCorrectness:
         submission = LeadSubmission(
             name="Test",
             phone="(612) 555-1234",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.NEW_SYSTEM,
             source_site="residential",
@@ -305,6 +306,7 @@ class TestDuplicateDetectionCorrectness:
         submission = LeadSubmission(
             name="Test",
             phone="(612) 555-1234",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             source_site="residential",
@@ -441,6 +443,7 @@ class TestHoneypotTransparency:
         submission = LeadSubmission(
             name="Bot Test",
             phone="(612) 555-1234",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.NEW_SYSTEM,
             source_site="residential",
@@ -480,6 +483,7 @@ class TestHoneypotTransparency:
         submission = LeadSubmission(
             name="Real User",
             phone="(612) 555-1234",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             source_site="residential",
@@ -533,6 +537,7 @@ class TestHoneypotTransparency:
         base_data: dict[str, Any] = {
             "name": "Test User",
             "phone": "(612) 555-1234",
+            "address": "123 Main St, Denver, CO 80209",
             "zip_code": "55424",
             "situation": LeadSituation.NEW_SYSTEM,
             "source_site": "residential",

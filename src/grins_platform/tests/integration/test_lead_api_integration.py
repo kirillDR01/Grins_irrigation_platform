@@ -315,6 +315,7 @@ class TestFromCallEndpoint:
                 "phone": "6125559876",
                 "zip_code": "55346",
                 "situation": "new_system",
+                "address": "123 Main St, Denver, CO 80209",
             },
         )
 
@@ -337,6 +338,7 @@ class TestFromCallEndpoint:
                 "phone": "6125559876",
                 "zip_code": "55346",
                 "situation": "new_system",
+                "address": "123 Main St, Denver, CO 80209",
             },
         )
 
@@ -368,6 +370,7 @@ class TestFromCallEndpoint:
                 "notes": "Needs estimate",
                 "source_detail": "Referral from neighbor",
                 "intake_tag": "follow_up",
+                "address": "123 Main St, Denver, CO 80209",
             },
         )
 
@@ -752,6 +755,7 @@ class TestLeadFilterConsistency:
                 "zip_code": "55424",
                 "situation": "new_system",
                 "source_site": "residential",
+                "address": "123 Main St, Denver, CO 80209",
             },
         )
         assert submit_resp.status_code == 201

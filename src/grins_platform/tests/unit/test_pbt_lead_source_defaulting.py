@@ -88,6 +88,7 @@ class TestLeadSourceDefaultingProperty:
         data = LeadSubmission(
             name="Test User",
             phone="6125551234",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55401",
             situation="repair",
             source_site=source_site,
@@ -124,6 +125,7 @@ class TestLeadSourceDefaultingProperty:
         data = LeadSubmission(
             name="Test User",
             phone="6125551234",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55401",
             situation="repair",
             lead_source=explicit_source,
@@ -160,6 +162,7 @@ class TestLeadSourceDefaultingProperty:
         data = FromCallSubmission(
             name="Test User",
             phone="6125551234",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55401",
             situation="repair",
             notes=notes,
@@ -197,6 +200,7 @@ class TestLeadSourceDefaultingProperty:
         data = FromCallSubmission(
             name="Test User",
             phone="6125551234",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55401",
             situation="repair",
             lead_source=explicit_source,

@@ -246,6 +246,7 @@ class TestProperty14LeadAddressRoundTrip:
             phone="6125550456",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
+            address="123 Main St, Denver, CO 80209",
         )
         result = await svc.submit_lead(data)
 
@@ -306,6 +307,7 @@ class TestProperty15ZipCodeAutoPopulate:
             phone="6125550999",
             zip_code=zip_code,
             situation=LeadSituation.EXPLORING,
+            address="123 Main St, Denver, CO 80209",
         )
         await svc.submit_lead(data)
 
@@ -336,6 +338,7 @@ class TestProperty15ZipCodeAutoPopulate:
             phone="6125550888",
             zip_code="99999",
             situation=LeadSituation.REPAIR,
+            address="123 Main St, Denver, CO 80209",
         )
         await svc.submit_lead(data)
 
@@ -370,6 +373,7 @@ class TestProperty15ZipCodeAutoPopulate:
             situation=LeadSituation.NEW_SYSTEM,
             city="Custom City",
             state="MN",
+            address="123 Main St, Denver, CO 80209",
         )
         await svc.submit_lead(data)
 
@@ -1557,6 +1561,7 @@ class TestProperty49SMSLeadConfirmation:
             zip_code="80202",
             situation=LeadSituation.NEW_SYSTEM,
             sms_consent=True,
+            address="123 Main St, Denver, CO 80209",
         )
         result = await svc.submit_lead(data)
 
@@ -1591,6 +1596,7 @@ class TestProperty49SMSLeadConfirmation:
             zip_code="80202",
             situation=LeadSituation.REPAIR,
             sms_consent=False,
+            address="123 Main St, Denver, CO 80209",
         )
         await svc.submit_lead(data)
 

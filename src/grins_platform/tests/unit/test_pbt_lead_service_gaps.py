@@ -123,6 +123,7 @@ class TestProperty3LeadFieldPersistence:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             email_marketing_consent=email_marketing,
@@ -161,6 +162,7 @@ class TestProperty9DuplicateDetection:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             sms_consent=sms_consent,
@@ -188,6 +190,7 @@ class TestProperty9DuplicateDetection:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             sms_consent=sms_consent,
@@ -227,6 +230,7 @@ class TestProperty10ConsentRecordAtSubmission:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             sms_consent=sms_consent,
@@ -264,6 +268,7 @@ class TestProperty10ConsentRecordAtSubmission:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             consent_ip=ip,

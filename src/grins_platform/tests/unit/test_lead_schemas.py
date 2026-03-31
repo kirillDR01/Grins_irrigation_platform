@@ -17,6 +17,7 @@ from pydantic import ValidationError
 
 from grins_platform.models.enums import LeadSituation, LeadStatus
 from grins_platform.schemas.lead import (
+    FromCallSubmission,
     LeadResponse,
     LeadSubmission,
     LeadUpdate,
@@ -106,6 +107,7 @@ class TestPhoneNormalization:
             name="Test User",
             phone=phone,
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
         )
 
@@ -164,6 +166,7 @@ class TestPhoneRejection:
                 name="Test User",
                 phone="123",
                 zip_code="55424",
+                address="123 Main St, Denver, CO 80209",
                 situation=LeadSituation.NEW_SYSTEM,
             )
         errors = exc_info.value.errors()
@@ -176,6 +179,7 @@ class TestPhoneRejection:
                 name="Test User",
                 phone="abcdefghij",
                 zip_code="55424",
+                address="123 Main St, Denver, CO 80209",
                 situation=LeadSituation.NEW_SYSTEM,
             )
         errors = exc_info.value.errors()
@@ -188,6 +192,7 @@ class TestPhoneRejection:
                 name="Test User",
                 phone="26125550123",
                 zip_code="55424",
+                address="123 Main St, Denver, CO 80209",
                 situation=LeadSituation.NEW_SYSTEM,
             )
         errors = exc_info.value.errors()
@@ -200,6 +205,7 @@ class TestPhoneRejection:
                 name="Test User",
                 phone="612555012",
                 zip_code="55424",
+                address="123 Main St, Denver, CO 80209",
                 situation=LeadSituation.NEW_SYSTEM,
             )
         errors = exc_info.value.errors()
@@ -224,41 +230,66 @@ class TestZipCodeValidation:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
         )
         assert sub.zip_code == "55424"
 
+    def test_omitted_zip_code_defaults_to_none(self) -> None:
+        """Test that omitting zip_code defaults to None (zip_code is optional)."""
+        sub = LeadSubmission(
+            name="Test User",
+            phone="6125550123",
+            address="123 Main St, Denver, CO 80209",
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.zip_code is None
+
+    def test_none_zip_code_accepted(self) -> None:
+        """Test that zip_code=None is accepted (zip_code is optional)."""
+        sub = LeadSubmission(
+            name="Test User",
+            phone="6125550123",
+            zip_code=None,
+            address="123 Main St, Denver, CO 80209",
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.zip_code is None
+
     def test_3_digit_zip_rejected(self) -> None:
-        """Test '554' (too short) is rejected by min_length constraint."""
+        """Test '554' (too short) is rejected by validator when provided."""
         with pytest.raises(ValidationError) as exc_info:
             LeadSubmission(
                 name="Test User",
                 phone="6125550123",
                 zip_code="554",
+                address="123 Main St, Denver, CO 80209",
                 situation=LeadSituation.NEW_SYSTEM,
             )
         errors = exc_info.value.errors()
         assert any("zip_code" in str(e["loc"]) for e in errors)
 
     def test_too_few_digits_rejected(self) -> None:
-        """Test zip code with fewer than 5 digits is rejected."""
+        """Test zip code with fewer than 5 digits is rejected when provided."""
         with pytest.raises(ValidationError) as exc_info:
             LeadSubmission(
                 name="Test User",
                 phone="6125550123",
                 zip_code="5542",
+                address="123 Main St, Denver, CO 80209",
                 situation=LeadSituation.NEW_SYSTEM,
             )
         errors = exc_info.value.errors()
         assert any("zip_code" in str(e["loc"]) for e in errors)
 
     def test_too_many_digits_rejected(self) -> None:
-        """Test zip code with more than 5 digits is rejected."""
+        """Test zip code with more than 5 digits is rejected when provided."""
         with pytest.raises(ValidationError) as exc_info:
             LeadSubmission(
                 name="Test User",
                 phone="6125550123",
                 zip_code="5542412345",
+                address="123 Main St, Denver, CO 80209",
                 situation=LeadSituation.NEW_SYSTEM,
             )
         errors = exc_info.value.errors()
@@ -271,18 +302,20 @@ class TestZipCodeValidation:
                 name="Test User",
                 phone="6125550123",
                 zip_code="55424-1234",
+                address="123 Main St, Denver, CO 80209",
                 situation=LeadSituation.NEW_SYSTEM,
             )
         errors = exc_info.value.errors()
         assert any("zip_code" in str(e["loc"]) for e in errors)
 
     def test_non_numeric_zip_rejected(self) -> None:
-        """Test non-numeric zip code is rejected."""
+        """Test non-numeric zip code is rejected when provided."""
         with pytest.raises(ValidationError) as exc_info:
             LeadSubmission(
                 name="Test User",
                 phone="6125550123",
                 zip_code="abcde",
+                address="123 Main St, Denver, CO 80209",
                 situation=LeadSituation.NEW_SYSTEM,
             )
         errors = exc_info.value.errors()
@@ -307,6 +340,7 @@ class TestSituationEnumValidation:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
         )
         assert sub.situation == LeadSituation.NEW_SYSTEM
@@ -317,6 +351,7 @@ class TestSituationEnumValidation:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.UPGRADE,
         )
         assert sub.situation == LeadSituation.UPGRADE
@@ -327,6 +362,7 @@ class TestSituationEnumValidation:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.REPAIR,
         )
         assert sub.situation == LeadSituation.REPAIR
@@ -337,6 +373,7 @@ class TestSituationEnumValidation:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.EXPLORING,
         )
         assert sub.situation == LeadSituation.EXPLORING
@@ -348,6 +385,7 @@ class TestSituationEnumValidation:
                 name="Test User",
                 phone="6125550123",
                 zip_code="55424",
+                address="123 Main St, Denver, CO 80209",
                 situation=situation,
             )
             assert sub.situation == situation
@@ -359,6 +397,7 @@ class TestSituationEnumValidation:
                 name="Test User",
                 phone="6125550123",
                 zip_code="55424",
+                address="123 Main St, Denver, CO 80209",
                 situation="invalid_situation",  # type: ignore[arg-type]
             )
         errors = exc_info.value.errors()
@@ -383,6 +422,7 @@ class TestEmailValidation:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
             email=None,
         )
@@ -394,6 +434,7 @@ class TestEmailValidation:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
         )
         assert sub.email is None
@@ -404,6 +445,7 @@ class TestEmailValidation:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
             email="john@example.com",
         )
@@ -416,6 +458,7 @@ class TestEmailValidation:
                 name="Test User",
                 phone="6125550123",
                 zip_code="55424",
+                address="123 Main St, Denver, CO 80209",
                 situation=LeadSituation.NEW_SYSTEM,
                 email="not-an-email",
             )
@@ -429,6 +472,7 @@ class TestEmailValidation:
                 name="Test User",
                 phone="6125550123",
                 zip_code="55424",
+                address="123 Main St, Denver, CO 80209",
                 situation=LeadSituation.NEW_SYSTEM,
                 email="john@",
             )
@@ -454,6 +498,7 @@ class TestHtmlSanitization:
             name="<script>alert(1)</script>John",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
         )
         assert sub.name == "alert(1)John"
@@ -464,6 +509,7 @@ class TestHtmlSanitization:
             name="<b>bold</b>",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
         )
         assert sub.name == "bold"
@@ -474,6 +520,7 @@ class TestHtmlSanitization:
             name="John Doe",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
         )
         assert sub.name == "John Doe"
@@ -484,6 +531,7 @@ class TestHtmlSanitization:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
             notes="<p>My backyard is <b>large</b></p>",
         )
@@ -495,6 +543,7 @@ class TestHtmlSanitization:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
             notes=None,
         )
@@ -506,6 +555,7 @@ class TestHtmlSanitization:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
             notes="<div></div>",
         )
@@ -542,6 +592,7 @@ class TestHoneypotField:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
             website="",
         )
@@ -553,6 +604,7 @@ class TestHoneypotField:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
             website=None,
         )
@@ -564,6 +616,7 @@ class TestHoneypotField:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
         )
         assert sub.website is None
@@ -578,6 +631,7 @@ class TestHoneypotField:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
             website="http://spam.com",
         )
@@ -604,6 +658,7 @@ class TestMaxLengthConstraints:
                 name=long_name,
                 phone="6125550123",
                 zip_code="55424",
+                address="123 Main St, Denver, CO 80209",
                 situation=LeadSituation.NEW_SYSTEM,
             )
         errors = exc_info.value.errors()
@@ -616,6 +671,7 @@ class TestMaxLengthConstraints:
             name=name_200,
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
         )
         assert len(sub.name) == 200
@@ -628,6 +684,7 @@ class TestMaxLengthConstraints:
                 name="Test User",
                 phone="6125550123",
                 zip_code="55424",
+                address="123 Main St, Denver, CO 80209",
                 situation=LeadSituation.NEW_SYSTEM,
                 notes=long_notes,
             )
@@ -641,6 +698,7 @@ class TestMaxLengthConstraints:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
             notes=notes_1000,
         )
@@ -654,6 +712,7 @@ class TestMaxLengthConstraints:
                 name="Test User",
                 phone="6125550123",
                 zip_code="55424",
+                address="123 Main St, Denver, CO 80209",
                 situation=LeadSituation.NEW_SYSTEM,
                 source_site=long_source,
             )
@@ -667,6 +726,7 @@ class TestMaxLengthConstraints:
                 name="",
                 phone="6125550123",
                 zip_code="55424",
+                address="123 Main St, Denver, CO 80209",
                 situation=LeadSituation.NEW_SYSTEM,
             )
         errors = exc_info.value.errors()
@@ -778,6 +838,7 @@ class TestDefaultValues:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
         )
         assert sub.source_site == "residential"
@@ -788,6 +849,7 @@ class TestDefaultValues:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
             source_site="commercial",
         )
@@ -799,6 +861,7 @@ class TestDefaultValues:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
         )
         assert sub.email is None
@@ -809,6 +872,7 @@ class TestDefaultValues:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
         )
         assert sub.notes is None
@@ -819,6 +883,316 @@ class TestDefaultValues:
             name="Test User",
             phone="6125550123",
             zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
             situation=LeadSituation.NEW_SYSTEM,
         )
         assert sub.website is None
+
+
+# =============================================================================
+# Address required field tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestAddressRequired:
+    """Test suite for address being a required field on LeadSubmission
+    and FromCallSubmission.
+
+    Validates: address is required with min_length=1, max_length=500
+    """
+
+    def test_lead_submission_without_address_rejected(self) -> None:
+        """Test that LeadSubmission without address raises ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            LeadSubmission(
+                name="Test User",
+                phone="6125550123",
+                zip_code="55424",
+                situation=LeadSituation.NEW_SYSTEM,
+            )
+        errors = exc_info.value.errors()
+        assert any("address" in str(e["loc"]) for e in errors)
+
+    def test_lead_submission_with_empty_address_rejected(self) -> None:
+        """Test that LeadSubmission with empty address raises ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            LeadSubmission(
+                name="Test User",
+                phone="6125550123",
+                zip_code="55424",
+                address="",
+                situation=LeadSituation.NEW_SYSTEM,
+            )
+        errors = exc_info.value.errors()
+        assert any("address" in str(e["loc"]) for e in errors)
+
+    def test_lead_submission_address_over_500_chars_rejected(self) -> None:
+        """Test that LeadSubmission with address > 500 chars is rejected."""
+        long_address = "A" * 501
+        with pytest.raises(ValidationError) as exc_info:
+            LeadSubmission(
+                name="Test User",
+                phone="6125550123",
+                zip_code="55424",
+                address=long_address,
+                situation=LeadSituation.NEW_SYSTEM,
+            )
+        errors = exc_info.value.errors()
+        assert any("address" in str(e["loc"]) for e in errors)
+
+    def test_lead_submission_valid_address_accepted(self) -> None:
+        """Test that LeadSubmission with a valid address is accepted."""
+        sub = LeadSubmission(
+            name="Test User",
+            phone="6125550123",
+            zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.address == "123 Main St, Denver, CO 80209"
+
+    def test_from_call_submission_without_address_rejected(self) -> None:
+        """Test that FromCallSubmission without address raises ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            FromCallSubmission(
+                name="Test User",
+                phone="6125550123",
+                zip_code="55424",
+                situation=LeadSituation.NEW_SYSTEM,
+            )
+        errors = exc_info.value.errors()
+        assert any("address" in str(e["loc"]) for e in errors)
+
+    def test_from_call_submission_with_empty_address_rejected(self) -> None:
+        """Test that FromCallSubmission with empty address raises ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            FromCallSubmission(
+                name="Test User",
+                phone="6125550123",
+                zip_code="55424",
+                address="",
+                situation=LeadSituation.NEW_SYSTEM,
+            )
+        errors = exc_info.value.errors()
+        assert any("address" in str(e["loc"]) for e in errors)
+
+    def test_from_call_submission_address_over_500_chars_rejected(self) -> None:
+        """Test that FromCallSubmission with address > 500 chars is rejected."""
+        long_address = "A" * 501
+        with pytest.raises(ValidationError) as exc_info:
+            FromCallSubmission(
+                name="Test User",
+                phone="6125550123",
+                zip_code="55424",
+                address=long_address,
+                situation=LeadSituation.NEW_SYSTEM,
+            )
+        errors = exc_info.value.errors()
+        assert any("address" in str(e["loc"]) for e in errors)
+
+    def test_from_call_submission_valid_address_accepted(self) -> None:
+        """Test that FromCallSubmission with a valid address is accepted."""
+        sub = FromCallSubmission(
+            name="Test User",
+            phone="6125550123",
+            zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.address == "123 Main St, Denver, CO 80209"
+
+
+# =============================================================================
+# Address sanitization tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestAddressSanitization:
+    """Test suite for sanitize_address stripping HTML tags from address field.
+
+    Validates: Requirement 1.11 — address field sanitization
+    """
+
+    def test_lead_submission_address_script_tags_stripped(self) -> None:
+        """Test that <script> tags are stripped from LeadSubmission address."""
+        sub = LeadSubmission(
+            name="Test User",
+            phone="6125550123",
+            address="<script>alert(1)</script>123 Main St",
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.address == "alert(1)123 Main St"
+
+    def test_lead_submission_address_bold_tags_stripped(self) -> None:
+        """Test that <b> tags are stripped from LeadSubmission address."""
+        sub = LeadSubmission(
+            name="Test User",
+            phone="6125550123",
+            address="<b>123</b> Main St",
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.address == "123 Main St"
+
+    def test_lead_submission_address_plain_text_preserved(self) -> None:
+        """Test that plain text address is preserved in LeadSubmission."""
+        sub = LeadSubmission(
+            name="Test User",
+            phone="6125550123",
+            address="456 Oak Ave, Minneapolis, MN 55401",
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.address == "456 Oak Ave, Minneapolis, MN 55401"
+
+    def test_lead_submission_address_nested_tags_stripped(self) -> None:
+        """Test that nested HTML tags are stripped from LeadSubmission address."""
+        sub = LeadSubmission(
+            name="Test User",
+            phone="6125550123",
+            address="<div><p>123 Main St</p></div>",
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.address == "123 Main St"
+
+    def test_from_call_submission_address_script_tags_stripped(self) -> None:
+        """Test that <script> tags are stripped from FromCallSubmission address."""
+        sub = FromCallSubmission(
+            name="Test User",
+            phone="6125550123",
+            address="<script>alert(1)</script>123 Main St",
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.address == "alert(1)123 Main St"
+
+    def test_from_call_submission_address_bold_tags_stripped(self) -> None:
+        """Test that <b> tags are stripped from FromCallSubmission address."""
+        sub = FromCallSubmission(
+            name="Test User",
+            phone="6125550123",
+            address="<b>123</b> Main St",
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.address == "123 Main St"
+
+    def test_from_call_submission_address_plain_text_preserved(self) -> None:
+        """Test that plain text address is preserved in FromCallSubmission."""
+        sub = FromCallSubmission(
+            name="Test User",
+            phone="6125550123",
+            address="456 Oak Ave, Minneapolis, MN 55401",
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.address == "456 Oak Ave, Minneapolis, MN 55401"
+
+    def test_from_call_submission_address_with_attributes_stripped(self) -> None:
+        """Test that tags with attributes are stripped from FromCallSubmission address."""
+        sub = FromCallSubmission(
+            name="Test User",
+            phone="6125550123",
+            address='<a href="http://evil.com">123 Main St</a>',
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.address == "123 Main St"
+
+
+# =============================================================================
+# FromCallSubmission tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestFromCallSubmission:
+    """Test suite for FromCallSubmission schema.
+
+    Validates: Requirement 45.4, 45.5 — admin from-call lead creation
+    """
+
+    def test_valid_from_call_submission(self) -> None:
+        """Test that a valid FromCallSubmission is accepted."""
+        sub = FromCallSubmission(
+            name="Test User",
+            phone="6125550123",
+            address="123 Main St, Denver, CO 80209",
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.name == "Test User"
+        assert sub.phone == "6125550123"
+        assert sub.address == "123 Main St, Denver, CO 80209"
+        assert sub.zip_code is None
+
+    def test_zip_code_optional_defaults_to_none(self) -> None:
+        """Test that zip_code defaults to None when omitted."""
+        sub = FromCallSubmission(
+            name="Test User",
+            phone="6125550123",
+            address="123 Main St, Denver, CO 80209",
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.zip_code is None
+
+    def test_zip_code_none_accepted(self) -> None:
+        """Test that zip_code=None is accepted."""
+        sub = FromCallSubmission(
+            name="Test User",
+            phone="6125550123",
+            zip_code=None,
+            address="123 Main St, Denver, CO 80209",
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.zip_code is None
+
+    def test_valid_zip_code_accepted(self) -> None:
+        """Test that a valid 5-digit zip code is accepted when provided."""
+        sub = FromCallSubmission(
+            name="Test User",
+            phone="6125550123",
+            zip_code="55424",
+            address="123 Main St, Denver, CO 80209",
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.zip_code == "55424"
+
+    def test_invalid_zip_code_rejected_when_provided(self) -> None:
+        """Test that an invalid zip code is rejected when provided."""
+        with pytest.raises(ValidationError) as exc_info:
+            FromCallSubmission(
+                name="Test User",
+                phone="6125550123",
+                zip_code="abc",
+                address="123 Main St, Denver, CO 80209",
+                situation=LeadSituation.NEW_SYSTEM,
+            )
+        errors = exc_info.value.errors()
+        assert any("zip_code" in str(e["loc"]) for e in errors)
+
+    def test_phone_normalization(self) -> None:
+        """Test that phone is normalized in FromCallSubmission."""
+        sub = FromCallSubmission(
+            name="Test User",
+            phone="(612) 555-0123",
+            address="123 Main St, Denver, CO 80209",
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.phone == "6125550123"
+
+    def test_name_html_stripped(self) -> None:
+        """Test that HTML tags are stripped from name in FromCallSubmission."""
+        sub = FromCallSubmission(
+            name="<b>Test</b> User",
+            phone="6125550123",
+            address="123 Main St, Denver, CO 80209",
+            situation=LeadSituation.NEW_SYSTEM,
+        )
+        assert sub.name == "Test User"
+
+    def test_notes_html_stripped(self) -> None:
+        """Test that HTML tags are stripped from notes in FromCallSubmission."""
+        sub = FromCallSubmission(
+            name="Test User",
+            phone="6125550123",
+            address="123 Main St, Denver, CO 80209",
+            situation=LeadSituation.NEW_SYSTEM,
+            notes="<p>Called about <b>repair</b></p>",
+        )
+        assert sub.notes == "Called about repair"

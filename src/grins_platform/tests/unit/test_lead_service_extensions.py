@@ -129,6 +129,7 @@ class TestLeadSourceTracking:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -149,6 +150,7 @@ class TestLeadSourceTracking:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             lead_source=LeadSourceExtended.GOOGLE_AD,
@@ -180,6 +182,7 @@ class TestLeadSourceTracking:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             lead_source=source,
@@ -199,6 +202,7 @@ class TestLeadSourceTracking:
         data = FromCallSubmission(
             name="Caller Name",
             phone="6125550200",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -217,6 +221,7 @@ class TestLeadSourceTracking:
         data = FromCallSubmission(
             name="Caller Name",
             phone="6125550200",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -235,6 +240,7 @@ class TestLeadSourceTracking:
         data = FromCallSubmission(
             name="Caller Name",
             phone="6125550200",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             source_detail="Referred by neighbor",
@@ -266,6 +272,7 @@ class TestIntakeTagDefaulting:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -286,6 +293,7 @@ class TestIntakeTagDefaulting:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             intake_tag=IntakeTag.FOLLOW_UP,
@@ -305,6 +313,7 @@ class TestIntakeTagDefaulting:
         data = FromCallSubmission(
             name="Caller Name",
             phone="6125550200",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -323,6 +332,7 @@ class TestIntakeTagDefaulting:
         data = FromCallSubmission(
             name="Caller Name",
             phone="6125550200",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             intake_tag=IntakeTag.FOLLOW_UP,
@@ -431,6 +441,7 @@ class TestSmsConfirmationGating:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -452,6 +463,7 @@ class TestSmsConfirmationGating:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -473,6 +485,7 @@ class TestSmsConfirmationGating:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -493,6 +506,7 @@ class TestSmsConfirmationGating:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -514,6 +528,7 @@ class TestSmsConfirmationGating:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -539,6 +554,7 @@ class TestSmsConfirmationGating:
         data = FromCallSubmission(
             name="Caller",
             phone="6125550200",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -571,6 +587,7 @@ class TestEmailConfirmation:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -592,6 +609,7 @@ class TestEmailConfirmation:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -612,6 +630,7 @@ class TestEmailConfirmation:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -633,6 +652,7 @@ class TestEmailConfirmation:
         data = LeadSubmission(
             name="Test User",
             phone="6125550100",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
@@ -902,6 +922,7 @@ class TestWorkRequestAutoPromotion:
         data = LeadSubmission(
             name="Work Request User",
             phone="6125550300",
+            address="123 Main St, Denver, CO 80209",
             zip_code="55424",
             situation=LeadSituation.REPAIR,
             lead_source=LeadSourceExtended.GOOGLE_FORM,
