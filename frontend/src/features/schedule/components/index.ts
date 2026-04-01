@@ -30,3 +30,6 @@ export { AppointmentNotes } from './AppointmentNotes';
 export { ReviewRequest } from './ReviewRequest';
 export { StaffLocationMap } from './StaffLocationMap';
 export { BreakButton } from './BreakButton';
+export { CapacityHeatMap } from './CapacityHeatMap';
+export { ScheduleOverviewEnhanced } from './ScheduleOverviewEnhanced';
+export { BatchScheduleResults } from './BatchScheduleResults';

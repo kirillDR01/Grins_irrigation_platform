@@ -8,15 +8,17 @@ Validates: Requirement 1.1, 1.6, 1.8, 28.1, 28.3, 68.1, 68.4
 """
 
 from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, String, Text, func
+from sqlalchemy import Boolean, DateTime, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import (
     JSON,
     UUID as PGUUID,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.schema import ForeignKey
 
 from grins_platform.database import Base
 from grins_platform.models.enums import CustomerStatus, LeadSource
@@ -148,6 +150,22 @@ class Customer(Base):
     # Staff-only Notes (Requirement 28.1)
     internal_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # AI Scheduling fields
+    clv_score: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    preferred_resource_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("staff.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    time_window_preference: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+    time_window_is_hard: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
+
     # Email Opt-in Tracking (Requirement 68.1, 68.4)
     email_opt_in_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
@@ -257,6 +275,36 @@ class Customer(Base):
             changed = True
         if changed:
             self.communication_preferences_updated_at = datetime.now()
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert the customer to a dictionary.
+
+        Returns:
+            Dictionary representation of the customer.
+            Note: preferred_resource_id is excluded as it's a FK.
+        """
+        return {
+            "id": str(self.id),
+            "first_name": self.first_name,
+            "last_name": self.last_name,
+            "full_name": self.full_name,
+            "phone": self.phone,
+            "email": self.email,
+            "status": self.status,
+            "is_priority": self.is_priority,
+            "is_red_flag": self.is_red_flag,
+            "is_slow_payer": self.is_slow_payer,
+            "is_new_customer": self.is_new_customer,
+            "sms_opt_in": self.sms_opt_in,
+            "email_opt_in": self.email_opt_in,
+            "lead_source": self.lead_source,
+            "clv_score": float(self.clv_score) if self.clv_score else None,
+            "time_window_preference": self.time_window_preference,
+            "time_window_is_hard": self.time_window_is_hard,
+            "is_deleted": self.is_deleted,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 
     def __repr__(self) -> str:
         """Return string representation of customer."""

@@ -165,6 +165,12 @@ class Appointment(Base):
         nullable=True,
     )
 
+    # AI Scheduling fields
+    ai_explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    criteria_scores: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True,
+    )
+
     # Relationships
     job: Mapped["Job"] = relationship("Job", back_populates="appointments")
     staff: Mapped["Staff"] = relationship("Staff", back_populates="appointments")
@@ -259,4 +265,6 @@ class Appointment(Base):
             else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "ai_explanation": self.ai_explanation,
+            "criteria_scores": self.criteria_scores,
         }

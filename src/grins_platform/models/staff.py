@@ -12,7 +12,17 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
-from sqlalchemy import JSON, Boolean, DateTime, Integer, Numeric, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -21,6 +31,7 @@ from grins_platform.models.enums import SkillLevel, StaffRole
 
 if TYPE_CHECKING:
     from grins_platform.models.appointment import Appointment
+    from grins_platform.models.service_zone import ServiceZone
     from grins_platform.models.staff_availability import StaffAvailability
 
 
@@ -132,6 +143,19 @@ class Staff(Base):
         nullable=True,
     )
 
+    # AI Scheduling fields
+    performance_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    callback_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    avg_satisfaction: Mapped[float | None] = mapped_column(Float, nullable=True)
+    service_zone_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("service_zones.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    overtime_threshold_minutes: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
     # Status
     is_active: Mapped[bool] = mapped_column(
         Boolean,
@@ -159,6 +183,12 @@ class Staff(Base):
         "StaffAvailability",
         back_populates="staff",
         cascade="all, delete-orphan",
+    )
+
+    # AI Scheduling relationship
+    service_zone: Mapped["ServiceZone | None"] = relationship(
+        "ServiceZone",
+        foreign_keys=[service_zone_id],
     )
 
     def __repr__(self) -> str:
@@ -199,6 +229,13 @@ class Staff(Base):
             "default_start_lng": (
                 float(self.default_start_lng) if self.default_start_lng else None
             ),
+            "performance_score": self.performance_score,
+            "callback_rate": self.callback_rate,
+            "avg_satisfaction": self.avg_satisfaction,
+            "service_zone_id": (
+                str(self.service_zone_id) if self.service_zone_id else None
+            ),
+            "overtime_threshold_minutes": self.overtime_threshold_minutes,
             "is_available": self.is_available,
             "availability_notes": self.availability_notes,
             "hourly_rate": float(self.hourly_rate) if self.hourly_rate else None,

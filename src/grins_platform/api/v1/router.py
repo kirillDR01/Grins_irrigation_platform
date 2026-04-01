@@ -16,6 +16,8 @@ from grins_platform.api.v1.agreements import (
     tier_router as agreement_tiers_router,
 )
 from grins_platform.api.v1.ai import router as ai_router
+from grins_platform.api.v1.ai_scheduling import router as ai_scheduling_router
+from grins_platform.api.v1.alerts import router as alerts_router
 from grins_platform.api.v1.analytics import router as analytics_router
 from grins_platform.api.v1.appointments import router as appointments_router
 from grins_platform.api.v1.audit import router as audit_router
@@ -343,6 +345,18 @@ api_router.include_router(
     notifications_router,
     prefix="/notifications",
     tags=["notifications"],
+)
+
+# Include AI Scheduling endpoints (AI scheduling chat, evaluation, criteria)
+api_router.include_router(
+    ai_scheduling_router,
+    tags=["ai-scheduling"],
+)
+
+# Include Scheduling Alerts endpoints (alerts, suggestions, change requests)
+api_router.include_router(
+    alerts_router,
+    tags=["scheduling-alerts"],
 )
 
 __all__ = ["api_router"]

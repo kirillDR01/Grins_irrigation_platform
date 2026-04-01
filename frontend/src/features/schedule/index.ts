@@ -58,6 +58,12 @@ export {
   useScheduleStatus,
   useGenerateSchedule,
   usePreviewSchedule,
+  aiSchedulingKeys,
+  useCapacityForecast,
+  useBatchGenerate,
+  useUtilizationReport,
+  useEvaluateSchedule,
+  useCriteriaConfig,
 } from './hooks';
 
 // Components
@@ -80,4 +86,7 @@ export {
   EstimateCreator,
   AppointmentNotes,
   ReviewRequest,
+  CapacityHeatMap,
+  ScheduleOverviewEnhanced,
+  BatchScheduleResults,
 } from './components';

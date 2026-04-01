@@ -265,6 +265,7 @@ def upgrade() -> None:
         ),
     )
 
+    # Only delete seed service_offerings that are NOT referenced by any jobs
     op.execute(
         text(
             """
@@ -274,6 +275,10 @@ def upgrade() -> None:
                 'Sprinkler Head Replacement','Valve Repair','Pipe Repair',
                 'System Diagnostic','New Zone Installation',
                 'Drip Irrigation Setup','Full System Installation'
+            )
+            AND id NOT IN (
+                SELECT DISTINCT service_offering_id FROM jobs
+                WHERE service_offering_id IS NOT NULL
             );
             """,
         ),

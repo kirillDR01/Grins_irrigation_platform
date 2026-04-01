@@ -41,3 +41,12 @@ export { useScheduleExplanation } from './useScheduleExplanation';
 export { useUnassignedJobExplanation } from './useUnassignedJobExplanation';
 export { useConstraintParser } from './useConstraintParser';
 export { useJobsReadyToSchedule } from './useJobsReadyToSchedule';
+
+export {
+  aiSchedulingKeys,
+  useCapacityForecast,
+  useBatchGenerate,
+  useUtilizationReport,
+  useEvaluateSchedule,
+  useCriteriaConfig,
+} from './useAIScheduling';

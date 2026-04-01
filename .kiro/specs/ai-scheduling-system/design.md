@@ -255,8 +255,8 @@ class ChangeRequestService(LoggerMixin):
 ### Frontend Components
 
 #### Schedule Overview Extensions (`features/schedule/`)
-- `CapacityHeatMap.tsx` — Visual capacity utilization by day/resource with >90% and <60% indicators
-- `ScheduleOverviewEnhanced.tsx` — Extended schedule view with status indicators, route sequences, and AI-generated annotations
+- `CapacityHeatMap.tsx` — Capacity row at the bottom of the schedule grid showing daily aggregate utilization percentages with color coding: >90% red (overbooking risk), 60–90% green (healthy), <60% yellow (underutilization opportunity)
+- `ScheduleOverviewEnhanced.tsx` — Custom resource-row × day-column grid layout (replaces FullCalendar for the AI scheduling view). Each row = one resource (name, role, inline utilization %, e.g., "Mike D. — Senior Tech — 87% utilized"). Each column = one day (date + total job count in header, e.g., "Mon 2/16 — 18 jobs"). Cells contain job cards color-coded by job type (Spring Opening = green, Fall Closing = orange, Maintenance = blue, New Build = purple, Backflow Test = teal) with ⭐ VIP and ⚠️ conflict icons. Includes a job type color legend above the grid, a week title header with Day/Week/Month toggle and "+ New Job" button, and integrates CapacityHeatMap at the bottom.
 - `BatchScheduleResults.tsx` — Multi-week campaign schedule display
 
 #### Alerts/Suggestions Panel (`features/scheduling-alerts/`)
@@ -267,7 +267,7 @@ class ChangeRequestService(LoggerMixin):
 - `ChangeRequestCard.tsx` — Resource change request with approve/deny
 
 #### AI Chat Extensions (`features/ai/`)
-- `SchedulingChat.tsx` — Enhanced chat component with scheduling-specific UI (schedule previews inline, clarifying question buttons)
+- `SchedulingChat.tsx` — Persistent right sidebar chat panel (not modal or collapsible) with scheduling-specific UI: inline schedule previews, clarifying question buttons, criteria tag badges (e.g., "Criteria #1 Proximity", "Criteria #26 Weather") in AI responses, and actionable "Publish Schedule" buttons when the AI generates/modifies schedules
 - `ResourceMobileChat.tsx` — Mobile-optimized chat for Resource role
 - `PreJobChecklist.tsx` — Pre-job requirements display for Resource mobile view
 

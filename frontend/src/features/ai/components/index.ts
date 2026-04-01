@@ -8,3 +8,6 @@ export { AICommunicationDrafts } from './AICommunicationDrafts';
 export { AIEstimateGenerator } from './AIEstimateGenerator';
 export { MorningBriefing } from './MorningBriefing';
 export { CommunicationsQueue } from './CommunicationsQueue';
+export { SchedulingChat } from './SchedulingChat';
+export { ResourceMobileChat } from './ResourceMobileChat';
+export { PreJobChecklist } from './PreJobChecklist';

@@ -17,6 +17,7 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     Numeric,
@@ -43,8 +44,15 @@ if TYPE_CHECKING:
 
 # Valid status transitions (Requirement 4.2-4.7)
 VALID_STATUS_TRANSITIONS: dict[str, list[str]] = {
-    JobStatus.TO_BE_SCHEDULED.value: [JobStatus.IN_PROGRESS.value, JobStatus.CANCELLED.value],
-    JobStatus.IN_PROGRESS.value: [JobStatus.COMPLETED.value, JobStatus.CANCELLED.value, JobStatus.TO_BE_SCHEDULED.value],
+    JobStatus.TO_BE_SCHEDULED.value: [
+        JobStatus.IN_PROGRESS.value,
+        JobStatus.CANCELLED.value,
+    ],
+    JobStatus.IN_PROGRESS.value: [
+        JobStatus.COMPLETED.value,
+        JobStatus.CANCELLED.value,
+        JobStatus.TO_BE_SCHEDULED.value,
+    ],
     JobStatus.COMPLETED.value: [],  # Terminal state
     JobStatus.CANCELLED.value: [],  # Terminal state
 }
@@ -137,6 +145,31 @@ class Job(Base):
         Boolean,
         nullable=False,
         server_default="false",
+    )
+
+    # AI Scheduling fields
+    sla_deadline: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    compliance_deadline: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    job_phase: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    depends_on_job_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("jobs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    is_outdoor: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
+    predicted_complexity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    revenue_per_hour: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2),
+        nullable=True,
     )
 
     # Target date range for agreement-generated jobs (Requirements 4.1, 4.2)
@@ -256,6 +289,13 @@ class Job(Base):
         lazy="selectin",
     )
 
+    # Self-referential relationship for job dependencies
+    depends_on_job: Mapped["Job | None"] = relationship(
+        "Job",
+        remote_side="Job.id",
+        foreign_keys=[depends_on_job_id],
+    )
+
     def __repr__(self) -> str:
         """Return string representation of the job."""
         return (
@@ -332,6 +372,23 @@ class Job(Base):
             "estimated_duration_minutes": self.estimated_duration_minutes,
             "priority_level": self.priority_level,
             "weather_sensitive": self.weather_sensitive,
+            "sla_deadline": (
+                self.sla_deadline.isoformat() if self.sla_deadline else None
+            ),
+            "compliance_deadline": (
+                self.compliance_deadline.isoformat()
+                if self.compliance_deadline
+                else None
+            ),
+            "job_phase": self.job_phase,
+            "depends_on_job_id": (
+                str(self.depends_on_job_id) if self.depends_on_job_id else None
+            ),
+            "is_outdoor": self.is_outdoor,
+            "predicted_complexity": self.predicted_complexity,
+            "revenue_per_hour": (
+                float(self.revenue_per_hour) if self.revenue_per_hour else None
+            ),
             "staffing_required": self.staffing_required,
             "equipment_required": self.equipment_required,
             "materials_required": self.materials_required,

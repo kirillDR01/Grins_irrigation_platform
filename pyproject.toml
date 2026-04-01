@@ -271,6 +271,11 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "ANN",     # Don't require type annotations in tests
     "SLF001",  # Allow private member access in tests
 ]
+# Scorer modules share a common interface; not all params used in every method
+"**/scorers/*.py" = [
+    "ARG002",  # Allow unused method arguments (interface conformance)
+    "ANN401",  # Allow Any in scorer dispatch helpers
+]
 # Example/demo files can be more relaxed
 "examples/*.py" = [
     "T201",    # Allow print statements in examples
