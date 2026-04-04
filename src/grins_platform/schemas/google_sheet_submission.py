@@ -18,6 +18,7 @@ class GoogleSheetSubmissionResponse(BaseModel):
 
     id: UUID
     sheet_row_number: int
+    content_hash: str | None = None
     timestamp: str | None
     spring_startup: str | None
     fall_blowout: str | None

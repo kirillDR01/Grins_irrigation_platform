@@ -72,6 +72,20 @@ class GoogleSheetSubmissionRepository(LoggerMixin):
         self.log_completed("get_max_row_number", max_row=max_row)
         return max_row
 
+    async def get_existing_hashes(self, hashes: list[str]) -> set[str]:
+        """Return the subset of hashes that already exist in the DB."""
+        self.log_started("get_existing_hashes", hash_count=len(hashes))
+        if not hashes:
+            self.log_completed("get_existing_hashes", found=0)
+            return set()
+        stmt = select(GoogleSheetSubmission.content_hash).where(
+            GoogleSheetSubmission.content_hash.in_(hashes),
+        )
+        result = await self.session.execute(stmt)
+        existing: set[str] = {row[0] for row in result.all()}
+        self.log_completed("get_existing_hashes", found=len(existing))
+        return existing
+
     async def list_with_filters(
         self,
         params: SubmissionListParams,

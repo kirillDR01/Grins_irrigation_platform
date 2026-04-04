@@ -25,7 +25,10 @@ from grins_platform.repositories.google_sheet_submission_repository import (
     GoogleSheetSubmissionRepository,
 )
 from grins_platform.schemas.google_sheet_submission import SyncStatusResponse
-from grins_platform.services.google_sheets_service import build_column_map
+from grins_platform.services.google_sheets_service import (
+    build_column_map,
+    compute_row_hash,
+)
 
 if TYPE_CHECKING:
     from grins_platform.database import DatabaseManager
@@ -285,24 +288,37 @@ class GoogleSheetsPoller:
                     headers=[h[:60] for h in header_row],
                 )
 
-        # Get max stored row to find new rows
-        max_row = 0
+        # Compute content hashes for all data rows
+        data_rows = rows[start_idx:]
+        row_hashes: list[tuple[int, list[str], str]] = []
+        for i, row_data in enumerate(data_rows, start=start_idx + 1):
+            row_number = i + 1
+            content_hash = compute_row_hash(row_data)
+            row_hashes.append((row_number, row_data, content_hash))
+
+        # Batch lookup: which hashes already exist in DB?
+        all_hashes = [h for _, _, h in row_hashes]
+        existing_hashes: set[str] = set()
         async for session in self._db_manager.get_session():
             sub_repo = GoogleSheetSubmissionRepository(session)
-            max_row = await sub_repo.get_max_row_number()
+            existing_hashes = await sub_repo.get_existing_hashes(all_hashes)
             break
 
-        new_count = 0
-        for i, row_data in enumerate(
-            rows[start_idx:],
-            start=start_idx + 1,
-        ):
-            # 1-based row number (historically offset by +1; kept for
-            # backward-compatibility with existing database row numbers).
-            row_number = i + 1
-            if row_number <= max_row:
-                continue
+        # Filter to only new rows
+        new_rows = [
+            (rn, rd, ch) for rn, rd, ch in row_hashes
+            if ch not in existing_hashes
+        ]
 
+        logger.info(
+            "poller.dedup_summary",
+            total_data_rows=len(data_rows),
+            already_imported=len(data_rows) - len(new_rows),
+            new_rows_to_process=len(new_rows),
+        )
+
+        new_count = 0
+        for row_number, row_data, content_hash in new_rows:
             try:
                 async for session in self._db_manager.get_session():
                     _ = await self._service.process_row(
@@ -310,6 +326,7 @@ class GoogleSheetsPoller:
                         row_number,
                         session,
                         col_map=col_map,
+                        content_hash=content_hash,
                     )
                     await session.commit()
                     new_count += 1
@@ -318,6 +335,7 @@ class GoogleSheetsPoller:
                 logger.debug(
                     "poller.row_duplicate_skipped",
                     row_number=row_number,
+                    content_hash=content_hash,
                 )
             except Exception as e:
                 logger.exception(

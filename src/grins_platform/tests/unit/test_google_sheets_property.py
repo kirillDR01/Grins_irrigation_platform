@@ -798,7 +798,7 @@ class TestRowProcessingErrorIsolationProperty:
             "grins_platform.services.google_sheets_poller.GoogleSheetSubmissionRepository",
         ) as mock_repo_cls:
             mock_repo_inst = MagicMock()
-            mock_repo_inst.get_max_row_number = AsyncMock(return_value=0)
+            mock_repo_inst.get_existing_hashes = AsyncMock(return_value=set())
             mock_repo_cls.return_value = mock_repo_inst
 
             loop = asyncio.new_event_loop()
@@ -818,28 +818,35 @@ class TestRowProcessingErrorIsolationProperty:
 
 @pytest.mark.unit
 class TestOnlyNewRowsProcessedProperty:
-    """Property 11: Only new rows are processed.
+    """Property 11: Only new rows are processed (hash-based dedup).
 
-    For any max stored row number and any set of fetched rows, the poller
-    should process only rows whose computed row_number exceeds max_row.
-    The count of processed rows equals the number of rows with
-    row_number > max_row.
+    For any set of fetched rows and any subset of "already imported" rows,
+    the poller should process only rows whose content hash is not already
+    in the DB. The count of processed rows equals the number of rows
+    with new (unseen) hashes.
 
     Validates: Requirements 1.4
     """
 
     @given(
-        max_row=st.integers(min_value=0, max_value=20),
         total_rows=st.integers(min_value=1, max_value=15),
+        num_existing=st.integers(min_value=0, max_value=15),
     )
     @settings(max_examples=200)
-    def test_only_rows_beyond_max_row_are_processed(
+    def test_only_rows_with_new_hashes_are_processed(
         self,
-        max_row: int,
         total_rows: int,
+        num_existing: int,
     ) -> None:
-        """Rows with row_number <= max_row are skipped; others processed."""
-        rows = [[""] * EXPECTED_COLUMNS for _ in range(total_rows)]
+        """Rows whose hash already exists in DB are skipped; others processed."""
+        from grins_platform.services.google_sheets_service import compute_row_hash
+
+        # Make each row unique by including its index
+        rows = [[f"row_{i}_col"] + [""] * (EXPECTED_COLUMNS - 1) for i in range(total_rows)]
+
+        # Mark the first num_existing rows as "already imported"
+        num_existing = min(num_existing, total_rows)
+        existing_hashes = {compute_row_hash(rows[i]) for i in range(num_existing)}
 
         processed_row_numbers: list[int] = []
 
@@ -886,7 +893,7 @@ class TestOnlyNewRowsProcessedProperty:
             "grins_platform.services.google_sheets_poller.GoogleSheetSubmissionRepository",
         ) as mock_repo_cls:
             mock_repo_inst = MagicMock()
-            mock_repo_inst.get_max_row_number = AsyncMock(return_value=max_row)
+            mock_repo_inst.get_existing_hashes = AsyncMock(return_value=existing_hashes)
             mock_repo_cls.return_value = mock_repo_inst
 
             loop = asyncio.new_event_loop()
@@ -895,19 +902,16 @@ class TestOnlyNewRowsProcessedProperty:
             finally:
                 loop.close()
 
-        # Row numbers are 2, 3, ..., total_rows+1 (1-based, no header skip)
-        expected = [r for r in range(2, total_rows + 2) if r > max_row]
-        assert sorted(processed_row_numbers) == expected
-        assert count == len(expected)
+        expected_count = total_rows - num_existing
+        assert count == expected_count
+        assert len(processed_row_numbers) == expected_count
 
-    @given(max_row=st.integers(min_value=50, max_value=200))
-    @settings(max_examples=100)
-    def test_all_rows_skipped_when_max_row_exceeds_total(
-        self,
-        max_row: int,
-    ) -> None:
-        """When max_row >= all row numbers, nothing is processed."""
-        rows = [[""] * EXPECTED_COLUMNS for _ in range(5)]
+    def test_all_rows_skipped_when_all_hashes_exist(self) -> None:
+        """When all hashes exist in DB, nothing is processed."""
+        from grins_platform.services.google_sheets_service import compute_row_hash
+
+        rows = [[f"row_{i}"] + [""] * (EXPECTED_COLUMNS - 1) for i in range(5)]
+        all_hashes = {compute_row_hash(r) for r in rows}
 
         poller = object.__new__(GoogleSheetsPoller)
         poller._spreadsheet_id = "test"
@@ -942,7 +946,7 @@ class TestOnlyNewRowsProcessedProperty:
             "grins_platform.services.google_sheets_poller.GoogleSheetSubmissionRepository",
         ) as mock_repo_cls:
             mock_repo_inst = MagicMock()
-            mock_repo_inst.get_max_row_number = AsyncMock(return_value=max_row)
+            mock_repo_inst.get_existing_hashes = AsyncMock(return_value=all_hashes)
             mock_repo_cls.return_value = mock_repo_inst
 
             loop = asyncio.new_event_loop()
@@ -954,8 +958,8 @@ class TestOnlyNewRowsProcessedProperty:
         assert count == 0
         mock_service.process_row.assert_not_called()
 
-    def test_zero_max_row_processes_all_data_rows(self) -> None:
-        """When max_row is 0, all data rows are processed."""
+    def test_no_existing_hashes_processes_all_data_rows(self) -> None:
+        """When no hashes exist in DB, all data rows are processed."""
         total_rows = 3
         rows = [[""] * EXPECTED_COLUMNS for _ in range(total_rows)]
 
@@ -1003,7 +1007,7 @@ class TestOnlyNewRowsProcessedProperty:
             "grins_platform.services.google_sheets_poller.GoogleSheetSubmissionRepository",
         ) as mock_repo_cls:
             mock_repo_inst = MagicMock()
-            mock_repo_inst.get_max_row_number = AsyncMock(return_value=0)
+            mock_repo_inst.get_existing_hashes = AsyncMock(return_value=set())
             mock_repo_cls.return_value = mock_repo_inst
 
             loop = asyncio.new_event_loop()
