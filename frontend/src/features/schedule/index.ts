@@ -89,4 +89,5 @@ export {
   CapacityHeatMap,
   ScheduleOverviewEnhanced,
   BatchScheduleResults,
+  AIScheduleView,
 } from './components';

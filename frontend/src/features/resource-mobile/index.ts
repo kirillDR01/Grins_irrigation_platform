@@ -33,3 +33,4 @@ export {
 export { ResourceScheduleView } from './components/ResourceScheduleView';
 export { ResourceAlertsList } from './components/ResourceAlertsList';
 export { ResourceSuggestionsList } from './components/ResourceSuggestionsList';
+export { ResourceMobileView } from './components/ResourceMobileView';

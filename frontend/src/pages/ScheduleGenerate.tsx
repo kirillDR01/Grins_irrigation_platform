@@ -1,9 +1,9 @@
 /**
- * Schedule Generation page wrapper.
+ * Schedule Generation page wrapper — renders the AI scheduling workspace.
  */
 
-import { ScheduleGenerationPage } from '@/features/schedule';
+import { AIScheduleView } from '@/features/schedule';
 
 export function ScheduleGeneratePage() {
-  return <ScheduleGenerationPage />;
+  return <AIScheduleView />;
 }

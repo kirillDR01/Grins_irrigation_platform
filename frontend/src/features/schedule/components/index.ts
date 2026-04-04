@@ -33,3 +33,4 @@ export { BreakButton } from './BreakButton';
 export { CapacityHeatMap } from './CapacityHeatMap';
 export { ScheduleOverviewEnhanced } from './ScheduleOverviewEnhanced';
 export { BatchScheduleResults } from './BatchScheduleResults';
+export { AIScheduleView } from './AIScheduleView';
