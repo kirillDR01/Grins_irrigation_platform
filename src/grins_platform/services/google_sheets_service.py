@@ -3,6 +3,9 @@
 Processes Google Sheet submission rows, creates leads for all submissions
 (auto-promotion), and provides listing/detail access to submissions.
 
+Uses header-based dynamic column mapping so the integration adapts
+automatically when the Google Form questions are reordered or modified.
+
 Validates: Requirements 3.1-3.11, 11.1, 17.2-17.4, 52.1, 52.2, 52.5
 """
 
@@ -13,7 +16,7 @@ from math import ceil
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from grins_platform.log_config import LoggerMixin
+from grins_platform.log_config import LoggerMixin, get_logger
 from grins_platform.models.enums import IntakeTag, LeadSituation, LeadSourceExtended
 from grins_platform.repositories.google_sheet_submission_repository import (
     GoogleSheetSubmissionRepository,
@@ -31,12 +34,143 @@ if TYPE_CHECKING:
 
     from grins_platform.models.google_sheet_submission import GoogleSheetSubmission
 
+logger = get_logger(__name__)
+
 EXPECTED_COLUMNS = 18
 
 # The Google Sheet has 20 columns (A-T), but the internal data model uses 18.
 # Column R ("Score") and S ("Email Address" duplicate) are not needed.
 # Column T ("Landscape/Hardscape") maps to internal index 17.
 _SHEET_COLUMNS = 20
+
+# --- Header-based dynamic column mapping ---
+#
+# The 18 internal fields in the order expected by process_row and the DB model.
+INTERNAL_FIELDS = [
+    "timestamp",
+    "spring_startup",
+    "fall_blowout",
+    "summer_tuneup",
+    "repair_existing",
+    "new_system_install",
+    "addition_to_system",
+    "additional_services_info",
+    "date_work_needed_by",
+    "name",
+    "phone",
+    "email",
+    "city",
+    "address",
+    "client_type",
+    "property_type",
+    "referral_source",
+    "landscape_hardscape",
+]
+
+# Keyword patterns for matching header strings to internal field names.
+# Each entry: (field_name, required_keywords, exclude_keywords).
+# All required keywords must appear in the lowercased header; if any
+# exclude keyword appears the pattern is skipped.
+#
+# IMPORTANT: build_column_map uses LAST-match-wins so that when the sheet
+# has both old columns (B-Q) and new columns (T-AC) with duplicate field
+# names, the newer columns (later in the header) take priority. This
+# handles the transition from the old multi-checkbox form to the new
+# simplified form.
+_HEADER_PATTERNS: list[tuple[str, list[str], list[str]]] = [
+    ("timestamp", ["timestamp"], []),
+    ("spring_startup", ["spring"], []),
+    ("fall_blowout", ["fall", "blow"], []),
+    ("summer_tuneup", ["summer", "tune"], []),
+    ("repair_existing", ["repair"], []),
+    ("new_system_install", ["new", "install"], ["existing"]),
+    ("new_system_install", ["new", "system"], ["existing"]),
+    # "additional services" must come BEFORE "addition" — "addition" is a
+    # substring of "additional" and would match first otherwise.
+    ("additional_services_info", ["additional", "service"], []),
+    ("additional_services_info", ["additional", "info"], ["addition to"]),
+    ("addition_to_system", ["addition"], ["service", "additional service"]),
+    ("date_work_needed_by", ["date", "need"], []),
+    ("date_work_needed_by", ["when", "need"], []),
+    ("date_work_needed_by", ["date", "completion"], []),
+    ("date_work_needed_by", ["requested date"], []),
+    ("landscape_hardscape", ["landscape"], []),
+    ("landscape_hardscape", ["hardscape"], []),
+    ("client_type", ["client", "type"], []),
+    ("client_type", ["new", "existing"], ["install", "system"]),
+    ("property_type", ["property", "type"], []),
+    ("referral_source", ["referral"], []),
+    ("referral_source", ["hear about"], []),
+    ("referral_source", ["how did you"], []),
+    # New-form fields (columns W, Z, AC)
+    ("zip_code", ["zip"], []),
+    ("work_requested", ["select", "work", "requested"], []),
+    ("work_requested", ["work requested"], []),
+    ("agreed_to_terms", ["agree", "terms"], []),
+    ("agreed_to_terms", ["terms of service"], []),
+    # Generic single-keyword patterns last
+    ("name", ["name"], ["additional", "service", "sheet"]),
+    ("phone", ["phone"], []),
+    ("phone", ["number"], ["row", "sheet", "zone", "invoice"]),
+    ("email", ["email"], []),
+    ("city", ["city"], []),
+    ("address", ["address"], ["email"]),
+]
+
+# Extra fields extracted from the raw row via col_map but not stored in
+# the 18-column submission model. Used for lead creation and notes.
+EXTRA_FIELDS = ["zip_code", "work_requested", "agreed_to_terms"]
+
+
+def _match_header(header: str) -> str | None:
+    """Match a single header string to an internal field name.
+
+    Returns the field name or None if no pattern matches.
+    """
+    h = header.strip().lower()
+    if not h:
+        return None
+
+    for field, required, exclude in _HEADER_PATTERNS:
+        if any(kw in h for kw in exclude):
+            continue
+        if all(kw in h for kw in required):
+            return field
+
+    return None
+
+
+def build_column_map(headers: list[str]) -> dict[str, int]:
+    """Build a mapping from internal field names to sheet column indices.
+
+    Uses LAST-match-wins so that when the sheet has both old (B-Q) and
+    new (T-AC) columns with the same field names, the newer columns
+    (which appear later) take priority. This handles the form transition.
+    """
+    col_map: dict[str, int] = {}
+    for idx, header in enumerate(headers):
+        field = _match_header(header)
+        if field:
+            col_map[field] = idx  # last occurrence wins
+    return col_map
+
+
+def extract_row_by_headers(
+    raw_row: list[str],
+    col_map: dict[str, int],
+) -> list[str]:
+    """Extract an 18-element internal row from a raw sheet row using a column map.
+
+    Fields not found in col_map get empty strings.
+    """
+    result: list[str] = []
+    for field in INTERNAL_FIELDS:
+        idx = col_map.get(field)
+        if idx is not None and idx < len(raw_row):
+            result.append(raw_row[idx])
+        else:
+            result.append("")
+    return result
 
 
 class GoogleSheetsService(LoggerMixin):
@@ -58,12 +192,18 @@ class GoogleSheetsService(LoggerMixin):
         row: list[str],
         row_number: int,
         session: AsyncSession,
+        col_map: dict[str, int] | None = None,
     ) -> GoogleSheetSubmission:
         """Process a sheet row: store submission and create lead.
 
         All work request submissions are auto-promoted to Leads regardless of
         client type. The submission is updated with promoted_to_lead_id and
         promoted_at for tracking.
+
+        Args:
+            col_map: Optional header-based column mapping. When provided, fields
+                are extracted by column name rather than hardcoded position. This
+                makes the integration resilient to Google Form column changes.
 
         Validates: Requirements 52.1, 52.2, 52.5
         """
@@ -72,7 +212,14 @@ class GoogleSheetsService(LoggerMixin):
         sub_repo = GoogleSheetSubmissionRepository(session)
         lead_repo = LeadRepository(session)
 
-        padded = pad_row(remap_sheet_row(row))
+        if col_map:
+            padded = pad_row(extract_row_by_headers(row, col_map))
+        else:
+            padded = pad_row(remap_sheet_row(row))
+
+        # Extract extra fields from the raw row that aren't in the 18-column
+        # submission model (zip_code, work_requested, agreed_to_terms).
+        extras = _extract_extras(row, col_map)
 
         submission = await sub_repo.create(
             sheet_row_number=row_number,
@@ -94,6 +241,10 @@ class GoogleSheetsService(LoggerMixin):
             property_type=padded[15] or None,
             referral_source=padded[16] or None,
             landscape_hardscape=padded[17] or None,
+            # New form fields (stored in DB for visibility in admin)
+            zip_code=extras.get("zip_code") or None,
+            work_requested=extras.get("work_requested") or None,
+            agreed_to_terms=extras.get("agreed_to_terms") or None,
         )
 
         client_type = (padded[14].strip().lower()) if padded[14] else ""
@@ -104,6 +255,20 @@ class GoogleSheetsService(LoggerMixin):
 
         phone = self.safe_normalize_phone(padded[10])
         existing_lead = await lead_repo.get_by_phone_and_active_status(phone)
+
+        # Determine situation from old checkbox columns OR new single-select
+        work_requested = extras.get("work_requested", "")
+        situation = self.map_situation(padded, work_requested=work_requested)
+
+        # Build notes including extra fields
+        notes = self.aggregate_notes(padded, extras=extras) or None
+
+        # Use zip_code from form if available
+        zip_code = extras.get("zip_code") or None
+
+        # Determine if they agreed to terms of service
+        agreed = (extras.get("agreed_to_terms", "").strip().lower()
+                  in ("yes", "true", "1"))
 
         if existing_lead:
             lead_id = existing_lead.id
@@ -118,13 +283,18 @@ class GoogleSheetsService(LoggerMixin):
                 name=self.normalize_name(padded[9]),
                 phone=phone,
                 email=padded[11].strip() or None,
-                zip_code=None,
-                situation=self.map_situation(padded).value,
-                notes=self.aggregate_notes(padded) or None,
+                zip_code=zip_code,
+                address=padded[13].strip() or None,
+                city=padded[12].strip() or None,
+                situation=situation.value,
+                notes=notes,
                 source_site="google_sheets",
                 lead_source=LeadSourceExtended.GOOGLE_FORM.value,
                 source_detail=source_detail,
                 intake_tag=IntakeTag.SCHEDULE.value,
+                terms_accepted=agreed,
+                property_type=padded[15].strip() or None,
+                customer_type=padded[14].strip() or None,
             )
             lead_id = lead.id
             self.logger.info(
@@ -196,17 +366,35 @@ class GoogleSheetsService(LoggerMixin):
             lead_id = existing_lead.id
         else:
             row = _submission_to_row(submission)
+            # Build extras from stored submission fields
+            sub_extras: dict[str, str] = {}
+            if submission.work_requested:
+                sub_extras["work_requested"] = submission.work_requested
+            if submission.zip_code:
+                sub_extras["zip_code"] = submission.zip_code
+            if submission.agreed_to_terms:
+                sub_extras["agreed_to_terms"] = submission.agreed_to_terms
+
+            work_req = sub_extras.get("work_requested", "")
+            agreed = (sub_extras.get("agreed_to_terms", "").strip().lower()
+                      in ("yes", "true", "1"))
+
             lead = await lead_repo.create(
                 name=self.normalize_name(submission.name or ""),
                 phone=phone,
                 email=(submission.email or "").strip() or None,
-                zip_code=None,
-                situation=self.map_situation(row).value,
-                notes=self.aggregate_notes(row) or None,
+                zip_code=sub_extras.get("zip_code") or None,
+                address=(submission.address or "").strip() or None,
+                city=(submission.city or "").strip() or None,
+                situation=self.map_situation(row, work_requested=work_req).value,
+                notes=self.aggregate_notes(row, extras=sub_extras) or None,
                 source_site="google_sheets",
                 lead_source=LeadSourceExtended.GOOGLE_FORM.value,
                 source_detail=source_detail,
                 intake_tag=IntakeTag.SCHEDULE.value,
+                terms_accepted=agreed,
+                property_type=(submission.property_type or "").strip() or None,
+                customer_type=(submission.client_type or "").strip() or None,
             )
             lead_id = lead.id
 
@@ -270,8 +458,17 @@ class GoogleSheetsService(LoggerMixin):
         return submission
 
     @staticmethod
-    def map_situation(row: list[str]) -> LeadSituation:
-        """Map sheet service columns to LeadSituation enum."""
+    def map_situation(
+        row: list[str],
+        work_requested: str = "",
+    ) -> LeadSituation:
+        """Map service columns to LeadSituation enum.
+
+        Checks both the old checkbox columns (B-G, indices 1-6) and the new
+        single-select ``work_requested`` text. Old checkboxes take priority
+        when present; otherwise the work_requested text is checked for keywords.
+        """
+        # Old form: individual checkbox columns
         if row[5].strip():  # new_system_install
             return LeadSituation.NEW_SYSTEM
         if row[6].strip():  # addition_to_system
@@ -280,11 +477,33 @@ class GoogleSheetsService(LoggerMixin):
             return LeadSituation.REPAIR
         if any(row[i].strip() for i in (1, 2, 3)):  # seasonal
             return LeadSituation.EXPLORING
+
+        # New form: single "Please Select Work Requested" text
+        if work_requested:
+            wr = work_requested.lower()
+            if "new" in wr and ("install" in wr or "system" in wr):
+                return LeadSituation.NEW_SYSTEM
+            if "addition" in wr:
+                return LeadSituation.UPGRADE
+            if "repair" in wr:
+                return LeadSituation.REPAIR
+            if any(kw in wr for kw in ("spring", "blow", "winteriz", "tune")):
+                return LeadSituation.EXPLORING
+            # Any work_requested value implies at least exploring
+            return LeadSituation.EXPLORING
+
         return LeadSituation.EXPLORING
 
     @staticmethod
-    def aggregate_notes(row: list[str]) -> str:
-        """Combine sheet columns into structured notes string."""
+    def aggregate_notes(
+        row: list[str],
+        extras: dict[str, str] | None = None,
+    ) -> str:
+        """Combine sheet columns into structured notes string.
+
+        Includes both old-form service checkboxes and new-form extra fields
+        (work_requested, zip_code, agreed_to_terms).
+        """
         parts: list[str] = []
         services: list[str] = []
         for idx, label in [
@@ -311,6 +530,18 @@ class GoogleSheetsService(LoggerMixin):
         for idx, label in field_map:
             if row[idx].strip():
                 parts.append(f"{label}: {row[idx].strip()}")
+
+        # Extra fields from new form columns (not in 18-column model)
+        if extras:
+            extra_map = [
+                ("work_requested", "Work requested"),
+                ("zip_code", "Zip code"),
+                ("agreed_to_terms", "Agreed to terms"),
+            ]
+            for key, label in extra_map:
+                val = extras.get(key, "")
+                if val:
+                    parts.append(f"{label}: {val}")
 
         return "\n".join(parts) if parts else ""
 
@@ -356,6 +587,28 @@ def pad_row(row: list[str]) -> list[str]:
     if len(row) >= EXPECTED_COLUMNS:
         return row[:EXPECTED_COLUMNS]
     return row + [""] * (EXPECTED_COLUMNS - len(row))
+
+
+def _extract_extras(
+    raw_row: list[str],
+    col_map: dict[str, int] | None,
+) -> dict[str, str]:
+    """Extract extra fields (not in 18-column model) from the raw row.
+
+    These fields exist in the new form columns but don't have dedicated
+    columns in the google_sheet_submissions DB table. They're used for
+    lead creation and notes aggregation.
+    """
+    extras: dict[str, str] = {}
+    if not col_map:
+        return extras
+    for field in EXTRA_FIELDS:
+        idx = col_map.get(field)
+        if idx is not None and idx < len(raw_row):
+            val = raw_row[idx].strip()
+            if val:
+                extras[field] = val
+    return extras
 
 
 def _submission_to_row(submission: GoogleSheetSubmission) -> list[str]:

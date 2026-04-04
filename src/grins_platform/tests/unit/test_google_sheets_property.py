@@ -754,6 +754,7 @@ class TestRowProcessingErrorIsolationProperty:
             _row: list[str],
             _row_number: int,
             _session: object,
+            **kwargs: object,
         ) -> MagicMock:
             nonlocal call_index
             idx = call_index
@@ -846,6 +847,7 @@ class TestOnlyNewRowsProcessedProperty:
             _row: list[str],
             row_number: int,
             _session: object,
+            **kwargs: object,
         ) -> MagicMock:
             processed_row_numbers.append(row_number)
             return MagicMock()
@@ -963,6 +965,7 @@ class TestOnlyNewRowsProcessedProperty:
             _row: list[str],
             row_number: int,
             _session: object,
+            **kwargs: object,
         ) -> MagicMock:
             processed_row_numbers.append(row_number)
             return MagicMock()
@@ -1386,6 +1389,9 @@ class TestSheetCreatedLeadsHaveNullZipCodeProperty:
             "landscape_hardscape",
         ):
             setattr(mock_submission, attr, "")
+        mock_submission.zip_code = None
+        mock_submission.work_requested = None
+        mock_submission.agreed_to_terms = None
 
         mock_lead = MagicMock()
         mock_lead.id = uuid4()

@@ -393,6 +393,9 @@ def sample_submission_model(sample_sheet_row: list[str]) -> MagicMock:
     sub.property_type = sample_sheet_row[15]
     sub.referral_source = sample_sheet_row[16]
     sub.landscape_hardscape = sample_sheet_row[17]
+    sub.zip_code = None
+    sub.work_requested = None
+    sub.agreed_to_terms = None
     sub.processing_status = "imported"
     sub.processing_error = None
     sub.lead_id = None

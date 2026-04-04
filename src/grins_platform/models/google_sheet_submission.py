@@ -74,6 +74,11 @@ class GoogleSheetSubmission(Base):
     referral_source: Mapped[str | None] = mapped_column(Text, nullable=True)
     landscape_hardscape: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # New form fields (columns W, Z, AC — added when form was restructured)
+    zip_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    work_requested: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    agreed_to_terms: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
     # Processing metadata
     processing_status: Mapped[str] = mapped_column(
         String(20),

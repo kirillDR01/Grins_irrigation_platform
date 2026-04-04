@@ -25,6 +25,7 @@ from grins_platform.repositories.google_sheet_submission_repository import (
     GoogleSheetSubmissionRepository,
 )
 from grins_platform.schemas.google_sheet_submission import SyncStatusResponse
+from grins_platform.services.google_sheets_service import build_column_map
 
 if TYPE_CHECKING:
     from grins_platform.database import DatabaseManager
@@ -96,6 +97,10 @@ class GoogleSheetsPoller:
         self._sa_email: str = ""
         self._sa_private_key: str = ""
 
+        # Detected sheet headers and column mapping (populated on first poll)
+        self._detected_headers: list[str] = []
+        self._column_map: dict[str, int] = {}
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -128,11 +133,13 @@ class GoogleSheetsPoller:
 
     @property
     def sync_status(self) -> SyncStatusResponse:
-        """Return current poller status."""
+        """Return current poller status including detected headers."""
         return SyncStatusResponse(
             last_sync=self._last_sync,
             is_running=self._running,
             last_error=self._last_error,
+            detected_headers=self._detected_headers,
+            column_map=self._column_map,
         )
 
     # ------------------------------------------------------------------
@@ -253,6 +260,31 @@ class GoogleSheetsPoller:
         # Detect header row dynamically
         start_idx = detect_header_row(rows)
 
+        # Build header-based column map for resilient field extraction.
+        # This makes the integration adapt automatically when the Google
+        # Form questions are reordered, added, or removed.
+        col_map: dict[str, int] | None = None
+        if start_idx > 0:
+            header_row = rows[start_idx - 1]
+            col_map = build_column_map(header_row)
+            self._detected_headers = header_row
+            self._column_map = col_map
+            logger.info(
+                "poller.headers_detected",
+                header_count=len(header_row),
+                mapped_fields=sorted(col_map.keys()),
+                unmapped_count=len(header_row) - len(col_map),
+            )
+            # Warn if critical fields are missing from the mapping
+            critical = {"name", "phone", "email"}
+            missing = critical - set(col_map.keys())
+            if missing:
+                logger.warning(
+                    "poller.critical_fields_unmapped",
+                    missing_fields=sorted(missing),
+                    headers=[h[:60] for h in header_row],
+                )
+
         # Get max stored row to find new rows
         max_row = 0
         async for session in self._db_manager.get_session():
@@ -277,6 +309,7 @@ class GoogleSheetsPoller:
                         row_data,
                         row_number,
                         session,
+                        col_map=col_map,
                     )
                     await session.commit()
                     new_count += 1
@@ -305,14 +338,18 @@ class GoogleSheetsPoller:
         self,
         token: str,
     ) -> list[list[str]]:
-        """Fetch all rows from the configured sheet range."""
+        """Fetch all rows from the configured sheet range.
+
+        Fetches all columns (no column limit) so the header-based mapping
+        can discover fields regardless of how many columns the form has.
+        """
         # Quote sheet name with single quotes for A1 notation — required when
         # the name contains spaces, parentheses, or other special characters.
         quoted_name = f"'{self._sheet_name}'"
         url = (
             f"https://sheets.googleapis.com/v4/spreadsheets/"
             f"{self._spreadsheet_id}/values/"
-            f"{quoted_name}!A:T"
+            f"{quoted_name}"
         )
         try:
             async with httpx.AsyncClient(timeout=30.0) as c:
