@@ -27,6 +27,7 @@ import { LeadTagBadges } from './LeadTagBadges';
 import { LeadFilters } from './LeadFilters';
 import { FollowUpQueue } from './FollowUpQueue';
 import { BulkOutreach } from './BulkOutreach';
+import { SheetsSync } from './SheetsSync';
 import type { Lead, LeadListParams } from '../types';
 
 export function LeadsList() {
@@ -286,6 +287,7 @@ export function LeadsList() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <SheetsSync />
           <BulkOutreach
             selectedLeadIds={selectedLeadIds}
             onComplete={() => {
