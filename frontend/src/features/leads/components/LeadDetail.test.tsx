@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { LeadDetail } from './LeadDetail';
@@ -471,5 +472,116 @@ describe('LeadDetail', () => {
 
     const emailMarketing = screen.getByTestId('email-marketing-consent-lead-no-consent');
     expect(emailMarketing).toHaveTextContent('Not opted in');
+  });
+
+  // ---- Lead Deletion Flow (Req 5) ----
+
+  describe('Lead Deletion', () => {
+    it('opens confirmation dialog when delete button is clicked', async () => {
+      const user = userEvent.setup();
+      vi.mocked(leadApi.getById).mockResolvedValue(baseLead);
+
+      render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+      });
+
+      // Click the delete button
+      await user.click(screen.getByTestId('delete-lead-btn'));
+
+      // Confirmation dialog should appear
+      await waitFor(() => {
+        expect(screen.getByTestId('delete-confirmation-dialog')).toBeInTheDocument();
+      });
+      expect(screen.getByText(/Are you sure you want to delete/)).toBeInTheDocument();
+      expect(screen.getAllByText('John Doe').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByTestId('confirm-delete-btn')).toBeInTheDocument();
+      expect(screen.getByTestId('cancel-delete-btn')).toBeInTheDocument();
+    });
+
+    it('closes confirmation dialog when cancel is clicked', async () => {
+      const user = userEvent.setup();
+      vi.mocked(leadApi.getById).mockResolvedValue(baseLead);
+
+      render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+      });
+
+      // Open dialog
+      await user.click(screen.getByTestId('delete-lead-btn'));
+      await waitFor(() => {
+        expect(screen.getByTestId('delete-confirmation-dialog')).toBeInTheDocument();
+      });
+
+      // Click cancel
+      await user.click(screen.getByTestId('cancel-delete-btn'));
+
+      // Dialog should close
+      await waitFor(() => {
+        expect(screen.queryByTestId('delete-confirmation-dialog')).not.toBeInTheDocument();
+      });
+
+      // Should NOT have called the delete API
+      expect(leadApi.delete).not.toHaveBeenCalled();
+    });
+
+    it('deletes lead and navigates to /leads on success', async () => {
+      const user = userEvent.setup();
+      vi.mocked(leadApi.getById).mockResolvedValue(baseLead);
+      vi.mocked(leadApi.delete).mockResolvedValue(undefined);
+
+      render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+      });
+
+      // Open dialog and confirm
+      await user.click(screen.getByTestId('delete-lead-btn'));
+      await waitFor(() => {
+        expect(screen.getByTestId('delete-confirmation-dialog')).toBeInTheDocument();
+      });
+      await user.click(screen.getByTestId('confirm-delete-btn'));
+
+      // Should call delete API
+      await waitFor(() => {
+        expect(leadApi.delete).toHaveBeenCalledWith('lead-001');
+      });
+
+      // Should navigate to leads list
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/leads');
+      });
+    });
+
+    it('shows error toast when deletion fails', async () => {
+      const user = userEvent.setup();
+      vi.mocked(leadApi.getById).mockResolvedValue(baseLead);
+      vi.mocked(leadApi.delete).mockRejectedValue(new Error('Network Error'));
+
+      render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+      });
+
+      // Open dialog and confirm
+      await user.click(screen.getByTestId('delete-lead-btn'));
+      await waitFor(() => {
+        expect(screen.getByTestId('delete-confirmation-dialog')).toBeInTheDocument();
+      });
+      await user.click(screen.getByTestId('confirm-delete-btn'));
+
+      // Should call delete API
+      await waitFor(() => {
+        expect(leadApi.delete).toHaveBeenCalledWith('lead-001');
+      });
+
+      // Should NOT navigate (deletion failed)
+      expect(mockNavigate).not.toHaveBeenCalledWith('/leads');
+    });
   });
 });

@@ -525,6 +525,46 @@ class EmailService(LoggerMixin):
             "disclosure_type": None,
         }
 
+    def send_subscription_management_email(
+        self,
+        to_email: str,
+        portal_url: str,
+    ) -> dict[str, Any]:
+        """Send subscription management login email with portal session link.
+
+        Validates: Requirements 2.1, 2.3
+        """
+        self.log_started(
+            "send_subscription_management_email",
+            recipient=_mask_email(to_email),
+        )
+
+        subject = "Manage Your Grin's Irrigation Subscription"
+        context = {
+            "portal_session_url": portal_url,
+        }
+
+        html_body = self._render_template(
+            "subscription_manage.html",
+            context,
+        )
+        classification = self._classify_email("subscription_management")
+        sent = self._send_email(
+            to_email=to_email,
+            subject=subject,
+            html_body=html_body,
+            email_type="subscription_management",
+            classification=classification,
+        )
+
+        self.log_completed("send_subscription_management_email", sent=sent)
+        return {
+            "sent": sent,
+            "sent_via": "email" if sent else "pending",
+            "recipient_email": to_email,
+            "content": html_body,
+        }
+
     def check_suppression_and_opt_in(
         self,
         email: str,

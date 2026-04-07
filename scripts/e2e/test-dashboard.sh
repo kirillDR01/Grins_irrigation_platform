@@ -23,7 +23,7 @@ BASE_URL="http://localhost:5173"
 HEADED_FLAG=""
 
 # Admin credentials (from env or defaults for dev)
-ADMIN_EMAIL="${E2E_ADMIN_EMAIL:-admin@grins.com}"
+ADMIN_EMAIL="${E2E_ADMIN_EMAIL:-admin}"
 ADMIN_PASSWORD="${E2E_ADMIN_PASSWORD:-admin123}"
 
 # Parse arguments
@@ -52,8 +52,8 @@ agent-browser wait 1000
 agent-browser screenshot "$SCREENSHOT_DIR/01-login-page.png"
 
 # Fill email field
-if agent-browser is visible "[data-testid='email-input']" 2>/dev/null; then
-  agent-browser fill "[data-testid='email-input']" "$ADMIN_EMAIL"
+if agent-browser is visible "[data-testid='username-input']" 2>/dev/null; then
+  agent-browser fill "[data-testid='username-input']" "$ADMIN_EMAIL"
 elif agent-browser is visible "[name='email']" 2>/dev/null; then
   agent-browser fill "[name='email']" "$ADMIN_EMAIL"
 elif agent-browser is visible "input[type='email']" 2>/dev/null; then

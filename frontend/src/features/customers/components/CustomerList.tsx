@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   flexRender,
@@ -8,9 +8,9 @@ import {
   type ColumnDef,
   type SortingState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, MoreHorizontal, Phone, Search, Filter, Download } from 'lucide-react';
+import { ArrowUpDown, MoreHorizontal, Phone, Filter, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { CustomerSearch } from './CustomerSearch';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +42,15 @@ export function CustomerList({ onEdit, onDelete }: CustomerListProps) {
     page: 1,
     page_size: 20,
   });
+
+  // Reset pagination to page 1 when debounced search query changes
+  useEffect(() => {
+    setParams((prev) => ({ ...prev, page: 1 }));
+  }, [searchQuery]);
+
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
 
   const { data, isLoading, error, refetch } = useCustomers({
     ...params,
@@ -202,17 +211,9 @@ export function CustomerList({ onEdit, onDelete }: CustomerListProps) {
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         {/* Table Toolbar */}
         <div className="p-4 border-b border-slate-100 flex gap-4 items-center">
-          {/* Search Input */}
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              type="text"
-              placeholder="Search customers..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-slate-50 border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-              data-testid="customer-search"
-            />
+          {/* Debounced Search Input */}
+          <div className="flex-1 max-w-sm">
+            <CustomerSearch onSearch={handleSearch} />
           </div>
           {/* Filter Button */}
           <Button variant="outline" size="sm" className="gap-2">

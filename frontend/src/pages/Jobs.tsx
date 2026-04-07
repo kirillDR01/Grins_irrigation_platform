@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Plus, Sparkles, AlertTriangle } from 'lucide-react';
+import type { Job } from '@/features/jobs/types';
 
 export function JobsPage() {
   const { id } = useParams<{ id: string }>();
@@ -22,6 +23,7 @@ export function JobsPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showCategorizeDialog, setShowCategorizeDialog] = useState(false);
   const [jobDescription, setJobDescription] = useState('');
+  const [editingJob, setEditingJob] = useState<Job | null>(null);
   
   // AI Categorization hook
   const {
@@ -75,7 +77,7 @@ export function JobsPage() {
         }
       />
 
-      <JobList />
+      <JobList onEdit={(job) => setEditingJob(job)} />
 
       {/* AI Categorize Dialog */}
       <Dialog open={showCategorizeDialog} onOpenChange={setShowCategorizeDialog}>
@@ -239,6 +241,32 @@ export function JobsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Edit Job Dialog (Req 8) */}
+      <Dialog
+        open={!!editingJob}
+        onOpenChange={(open) => !open && setEditingJob(null)}
+      >
+        <DialogContent
+          className="max-w-2xl max-h-[90vh] overflow-y-auto"
+          aria-describedby="edit-job-description"
+          data-testid="edit-job-dialog"
+        >
+          <DialogHeader>
+            <DialogTitle>Edit Job</DialogTitle>
+            <p id="edit-job-description" className="text-sm text-muted-foreground">
+              Update the job details below.
+            </p>
+          </DialogHeader>
+          {editingJob && (
+            <JobForm
+              job={editingJob}
+              onSuccess={() => setEditingJob(null)}
+              onCancel={() => setEditingJob(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Job Detail Dialog */}
       <Dialog open={!!selectedJobId} onOpenChange={handleCloseDetail}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto p-0" aria-describedby="job-detail-description">
@@ -253,6 +281,10 @@ export function JobsPage() {
               <JobDetail
                 jobId={selectedJobId}
                 onClose={handleCloseDetail}
+                onEdit={(job) => {
+                  handleCloseDetail();
+                  setEditingJob(job);
+                }}
               />
             )}
           </div>

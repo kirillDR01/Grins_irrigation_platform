@@ -6,7 +6,7 @@ import {
   useReactTable,
   type ColumnDef,
 } from '@tanstack/react-table';
-import { Phone, Inbox, MessageSquare, FileCheck } from 'lucide-react';
+import { Phone, Inbox, MessageSquare, FileCheck, Plus } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -28,6 +28,7 @@ import { LeadFilters } from './LeadFilters';
 import { FollowUpQueue } from './FollowUpQueue';
 import { BulkOutreach } from './BulkOutreach';
 import { SheetsSync } from './SheetsSync';
+import { CreateLeadDialog } from './CreateLeadDialog';
 import type { Lead, LeadListParams } from '../types';
 
 export function LeadsList() {
@@ -35,6 +36,7 @@ export function LeadsList() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [highlightedLeadId, setHighlightedLeadId] = useState<string | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   // Parse initial status from URL query params
   const urlStatus = searchParams.get('status') as LeadListParams['status'] | null;
@@ -295,8 +297,19 @@ export function LeadsList() {
               refetch();
             }}
           />
+          <Button
+            onClick={() => setCreateDialogOpen(true)}
+            data-testid="add-lead-btn"
+            className="bg-teal-500 hover:bg-teal-600 text-white shadow-sm shadow-teal-200"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Lead
+          </Button>
         </div>
       </div>
+
+      {/* Create Lead Dialog */}
+      <CreateLeadDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
 
       {/* Follow-Up Queue Panel */}
       <FollowUpQueue />

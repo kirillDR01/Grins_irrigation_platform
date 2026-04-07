@@ -34,6 +34,14 @@ if TYPE_CHECKING:
 CONSENT_TOKEN_MAX_AGE = timedelta(hours=2)
 
 
+class SubscriptionNotFoundError(Exception):
+    """Raised when no Stripe customer is found for the given email."""
+
+    def __init__(self, email: str) -> None:
+        self.email = email
+        super().__init__(f"No subscription found for email: {email}")
+
+
 class CheckoutError(Exception):
     """Base error for checkout operations."""
 
@@ -81,6 +89,18 @@ class TierNotConfiguredError(CheckoutError):
         """Initialize with unconfigured tier slug."""
         super().__init__(f"Tier not configured for Stripe: {slug}")
         self.slug = slug
+
+
+class StripeUnavailableError(CheckoutError):
+    """Raised when Stripe SDK calls fail (auth, network, API errors).
+
+    Should map to HTTP 503 Service Unavailable.
+    """
+
+    def __init__(self, message: str) -> None:
+        """Initialize with underlying Stripe error message."""
+        super().__init__(f"Stripe is unavailable: {message}")
+        self.message = message
 
 
 class CheckoutService(LoggerMixin):
@@ -320,3 +340,48 @@ class CheckoutService(LoggerMixin):
             total=str(breakdown.total),
         )
         return checkout_url
+
+    async def create_portal_session(self, email: str) -> str:
+        """Look up Stripe customer by email and create a billing portal session URL.
+
+        Returns the portal session URL.
+        Raises SubscriptionNotFoundError if no customer is found.
+        Raises StripeUnavailableError if Stripe SDK calls fail (auth, network, etc.).
+
+        Validates: Requirements 2.1, 2.2
+        """
+        self.log_started("create_portal_session", email=email[:3] + "***")
+
+        stripe.api_key = self.stripe_settings.stripe_secret_key
+
+        try:
+            customers = stripe.Customer.list(email=email, limit=1)
+        except stripe.error.StripeError as exc:
+            self.log_failed("create_portal_session", error=exc)
+            raise StripeUnavailableError(str(exc)) from exc
+
+        if not customers.data:
+            self.log_rejected(
+                "create_portal_session",
+                reason="customer_not_found",
+            )
+            raise SubscriptionNotFoundError(email)
+
+        customer = customers.data[0]
+
+        try:
+            portal_session = stripe.billing_portal.Session.create(
+                customer=customer.id,
+                return_url=self.stripe_settings.stripe_customer_portal_url or None,
+            )
+        except stripe.error.StripeError as exc:
+            self.log_failed("create_portal_session", error=exc)
+            raise StripeUnavailableError(str(exc)) from exc
+
+        portal_url: str = portal_session.url
+
+        self.log_completed(
+            "create_portal_session",
+            customer_id=customer.id,
+        )
+        return portal_url

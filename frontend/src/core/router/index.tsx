@@ -80,6 +80,11 @@ const InvoicePortalPage = lazy(() =>
     default: m.InvoicePortalPage,
   }))
 );
+const SubscriptionManagementPage = lazy(() =>
+  import('@/pages/portal/SubscriptionManagement').then((m) => ({
+    default: m.SubscriptionManagementPage,
+  }))
+);
 
 // Layout wrapper component with Suspense for lazy loaded pages
 function LayoutWrapper() {
@@ -132,6 +137,10 @@ export const router = createBrowserRouter([
       {
         path: 'invoices/:token',
         element: <InvoicePortalPage />,
+      },
+      {
+        path: 'manage-subscription',
+        element: <SubscriptionManagementPage />,
       },
     ],
   },

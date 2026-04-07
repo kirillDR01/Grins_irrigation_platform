@@ -279,6 +279,19 @@ export interface FromCallRequest {
   intake_tag?: IntakeTag | null;
 }
 
+// Manual lead creation request
+export interface ManualLeadCreateRequest {
+  name: string;
+  phone: string;
+  email?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip_code?: string | null;
+  situation?: LeadSituation;
+  notes?: string | null;
+}
+
 // Lead metrics by source
 export interface LeadSourceCount {
   lead_source: string;

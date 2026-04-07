@@ -50,6 +50,7 @@ from grins_platform.schemas.lead import (
     LeadSubmission,
     LeadSubmissionResponse,
     LeadUpdate,
+    ManualLeadCreate,
     MigrationSummary,
     PaginatedFollowUpQueueResponse,
     PaginatedLeadResponse,
@@ -554,6 +555,57 @@ class LeadService(LoggerMixin):
         response: LeadResponse = LeadResponse.model_validate(lead)
         return response
 
+    async def create_manual_lead(self, data: ManualLeadCreate) -> LeadResponse:
+        """Create a lead manually from the CRM interface.
+
+        Args:
+            data: ManualLeadCreate schema with lead data
+
+        Returns:
+            LeadResponse with created lead data
+
+        Validates: Requirements 7.1-7.5
+        """
+        self.log_started("create_manual_lead")
+
+        # Extract zip from address if not provided
+        zip_code = data.zip_code
+        if not zip_code and data.address:
+            zip_code = extract_zip_from_address(data.address)
+
+        # Auto-populate city/state from zip if not provided
+        city = data.city
+        state = data.state
+        if zip_code and not city and not state:
+            city, state = lookup_zip(zip_code)
+
+        lead = await self.lead_repository.create(
+            name=data.name,
+            phone=data.phone,
+            email=data.email,
+            zip_code=zip_code,
+            situation=data.situation.value,
+            notes=data.notes,
+            source_site="admin",
+            status=LeadStatus.NEW.value,
+            lead_source="manual",
+            source_detail="Manual CRM entry",
+            intake_tag=None,
+            city=city,
+            state=state,
+            address=data.address,
+            action_tags=[ActionTag.NEEDS_CONTACT.value],
+        )
+
+        self.logger.info(
+            "lead.manual_created",
+            lead_id=str(lead.id),
+        )
+
+        self.log_completed("create_manual_lead", lead_id=str(lead.id))
+        response: LeadResponse = LeadResponse.model_validate(lead)
+        return response
+
     async def get_lead(self, lead_id: UUID) -> LeadResponse:
         """Get a single lead by ID.
 
@@ -787,7 +839,11 @@ class LeadService(LoggerMixin):
                 ("requires_estimate", "Consultation"),
             )
 
-            description = data.job_description or default_description
+            description = (
+                data.job_description
+                if data.job_description is not None
+                else default_description
+            )
 
             job_data = JobCreate(
                 customer_id=customer.id,

@@ -17,14 +17,18 @@ from grins_platform.log_config import LoggerMixin, get_logger
 from grins_platform.repositories.agreement_tier_repository import (
     AgreementTierRepository,
 )
+from grins_platform.schemas.checkout import SubscriptionManageRequest
 from grins_platform.services.checkout_service import (
     CheckoutService,
     ConsentTokenExpiredError,
     ConsentTokenNotFoundError,
+    StripeUnavailableError,
+    SubscriptionNotFoundError,
     TierInactiveError,
     TierNotConfiguredError,
     TierNotFoundError,
 )
+from grins_platform.services.email_service import EmailService
 
 logger = get_logger(__name__)
 
@@ -194,3 +198,85 @@ async def create_checkout_session(
 
     _endpoints.log_completed("create_checkout_session", checkout_url=checkout_url)
     return CreateCheckoutSessionResponse(checkout_url=checkout_url)
+
+
+# ---------------------------------------------------------------------------
+# Manage Subscription endpoint
+# ---------------------------------------------------------------------------
+
+
+class ManageSubscriptionResponse(BaseModel):
+    """Response for manage-subscription request."""
+
+    message: str
+
+
+@router.post(
+    "/manage-subscription",
+    response_model=ManageSubscriptionResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Send subscription management email",
+    description=(
+        "Public endpoint. Looks up a Stripe customer by email and sends "
+        "a login email with a billing portal session link."
+    ),
+)
+async def manage_subscription(
+    data: SubscriptionManageRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> ManageSubscriptionResponse | JSONResponse:
+    """Send subscription management login email.
+
+    Validates: Requirements 2.1, 2.2, 2.3
+    """
+    client_ip = request.client.host if request.client else "unknown"
+
+    if not _check_rate_limit(client_ip):
+        logger.warning("checkout.manage_subscription.rate_limited", ip=client_ip)
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"detail": "Rate limit exceeded. Try again later."},
+        )
+
+    _endpoints.log_started("manage_subscription", email=data.email[:3] + "***")
+
+    tier_repo = AgreementTierRepository(session=db)
+    service = CheckoutService(session=db, tier_repo=tier_repo)
+
+    try:
+        portal_url = await service.create_portal_session(data.email)
+    except SubscriptionNotFoundError:
+        _endpoints.log_rejected(
+            "manage_subscription",
+            reason="subscription_not_found",
+        )
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "detail": "No subscription found for that email address.",
+            },
+        )
+    except StripeUnavailableError as exc:
+        _endpoints.log_failed("manage_subscription", error=exc)
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": (
+                    "Subscription management is temporarily unavailable. "
+                    "Please try again in a few minutes or contact support."
+                ),
+            },
+        )
+
+    # Send the portal link via email
+    email_service = EmailService()
+    email_service.send_subscription_management_email(
+        to_email=data.email,
+        portal_url=portal_url,
+    )
+
+    _endpoints.log_completed("manage_subscription")
+    return ManageSubscriptionResponse(
+        message="A login email has been sent. Please check your inbox and spam folder.",
+    )

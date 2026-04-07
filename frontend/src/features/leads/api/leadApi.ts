@@ -17,6 +17,7 @@ import type {
   ContractTemplate,
   CreateEstimateRequest,
   CreateContractRequest,
+  ManualLeadCreateRequest,
 } from '../types';
 
 const BASE_PATH = '/leads';
@@ -67,6 +68,12 @@ export const leadApi = {
   // Create lead from phone call (admin-only)
   createFromCall: async (data: FromCallRequest): Promise<Lead> => {
     const response = await apiClient.post<Lead>(`${BASE_PATH}/from-call`, data);
+    return response.data;
+  },
+
+  // Create lead manually (admin-only)
+  createManual: async (data: ManualLeadCreateRequest): Promise<Lead> => {
+    const response = await apiClient.post<Lead>(`${BASE_PATH}/manual`, data);
     return response.data;
   },
 

@@ -57,6 +57,7 @@ from grins_platform.schemas.lead import (
     LeadSubmission,
     LeadSubmissionResponse,
     LeadUpdate,
+    ManualLeadCreate,
     PaginatedFollowUpQueueResponse,
     PaginatedLeadResponse,
 )
@@ -180,6 +181,35 @@ async def create_from_call(
     result = await service.create_from_call(data)
 
     _endpoints.log_completed("create_from_call", lead_id=str(result.id))
+    return result
+
+
+# =============================================================================
+# POST /api/v1/leads/manual — Admin auth required
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/manual",
+    response_model=LeadResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create lead manually",
+    description="Admin-only endpoint for creating leads manually via CRM interface.",
+)
+async def create_manual_lead(
+    data: ManualLeadCreate,
+    _current_user: CurrentActiveUser,
+    service: Annotated[LeadService, Depends(_get_lead_service)],
+) -> LeadResponse:
+    """Create a lead manually from the CRM interface.
+
+    Validates: Requirement 7.1-7.5
+    """
+    _endpoints.log_started("create_manual_lead")
+
+    result = await service.create_manual_lead(data)
+
+    _endpoints.log_completed("create_manual_lead", lead_id=str(result.id))
     return result
 
 

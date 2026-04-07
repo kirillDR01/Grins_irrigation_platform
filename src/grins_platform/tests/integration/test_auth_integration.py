@@ -185,7 +185,7 @@ class TestLoginFlowIntegration:
             assert "access_token" in data
             assert data["access_token"] == "access_token_123"
             assert data["token_type"] == "bearer"
-            assert data["expires_in"] == 15 * 60
+            assert data["expires_in"] == 60 * 60
             assert "csrf_token" in data
             assert data["csrf_token"] == "csrf_token_789"
 
@@ -291,7 +291,7 @@ class TestTokenRefreshFlowIntegration:
         # Return tuple of (access_token, expires_in)
         mock_auth_service.refresh_access_token.return_value = (
             "new_access_token_123",
-            15 * 60,  # 15 minutes in seconds
+            60 * 60,  # 60 minutes in seconds
         )
 
         app.dependency_overrides[get_auth_service] = lambda: mock_auth_service
@@ -307,7 +307,7 @@ class TestTokenRefreshFlowIntegration:
             assert "access_token" in data
             assert data["access_token"] == "new_access_token_123"
             assert data["token_type"] == "bearer"
-            assert data["expires_in"] == 15 * 60
+            assert data["expires_in"] == 60 * 60
 
         finally:
             app.dependency_overrides.clear()
@@ -738,7 +738,7 @@ class TestCompleteAuthWorkflowIntegration:
         }
         mock_auth_service.refresh_access_token.return_value = (
             "new_access_token_789",
-            15 * 60,  # 15 minutes in seconds
+            60 * 60,  # 60 minutes in seconds
         )
         mock_auth_service.verify_access_token.return_value = {
             "sub": str(sample_admin_user.id),

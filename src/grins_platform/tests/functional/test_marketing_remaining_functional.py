@@ -581,7 +581,7 @@ class TestCookieBasedAuthWorkflow:
         mock_auth_service = AsyncMock()
         mock_auth_service.refresh_access_token.return_value = (
             "new_access_token",
-            900,
+            3600,
         )
 
         response = MagicMock()
@@ -594,7 +594,7 @@ class TestCookieBasedAuthWorkflow:
         )
 
         assert result.access_token == "new_access_token"
-        assert result.expires_in == 900
+        assert result.expires_in == 3600
 
         # Verify new access token cookie was set
         response.set_cookie.assert_called_once()

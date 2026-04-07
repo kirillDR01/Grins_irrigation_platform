@@ -15,6 +15,7 @@ import {
   Sparkles,
   Save,
   TrendingUp,
+  Pencil,
 } from 'lucide-react';
 import { parseLocalDate } from '@/shared/utils/dateUtils';
 import { Button } from '@/components/ui/button';
@@ -26,7 +27,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingPage, ErrorMessage } from '@/shared/components';
 import { useJob, useUpdateJobStatus, useUpdateJob, useJobFinancials } from '../hooks';
 import { JobStatusBadge } from './JobStatusBadge';
-import type { JobStatus } from '../types';
+import type { Job, JobStatus } from '../types';
 import {
   formatJobType,
   formatDuration,
@@ -39,11 +40,11 @@ import { GenerateInvoiceButton, InvoiceStatusBadge, useInvoicesByJob } from '@/f
 
 interface JobDetailProps {
   jobId?: string;
-  onEdit?: () => void;
+  onEdit?: (job: Job) => void;
   onClose?: () => void;
 }
 
-export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
+export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps) {
   const { id: paramId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const id = propJobId || paramId || '';
@@ -149,6 +150,18 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {onEdit && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onEdit(job)}
+              data-testid="edit-job-btn"
+              className="h-8"
+            >
+              <Pencil className="mr-1.5 h-3.5 w-3.5" />
+              Edit
+            </Button>
+          )}
           <JobStatusBadge status={job.status} data-testid="job-status-badge" />
         </div>
       </div>

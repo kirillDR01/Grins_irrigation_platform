@@ -20,7 +20,7 @@ SCREENSHOT_DIR="e2e-screenshots/navigation-security"
 BASE_URL="http://localhost:5173"
 HEADED_FLAG=""
 
-ADMIN_EMAIL="${E2E_ADMIN_EMAIL:-admin@grins.com}"
+ADMIN_EMAIL="${E2E_ADMIN_EMAIL:-admin}"
 ADMIN_PASSWORD="${E2E_ADMIN_PASSWORD:-admin123}"
 
 for arg in "$@"; do
@@ -46,8 +46,8 @@ agent-browser $HEADED_FLAG open "${BASE_URL}/login"
 agent-browser wait --load networkidle
 agent-browser wait 1000
 
-if agent-browser is visible "[data-testid='email-input']" 2>/dev/null; then
-  agent-browser fill "[data-testid='email-input']" "$ADMIN_EMAIL"
+if agent-browser is visible "[data-testid='username-input']" 2>/dev/null; then
+  agent-browser fill "[data-testid='username-input']" "$ADMIN_EMAIL"
 elif agent-browser is visible "[name='email']" 2>/dev/null; then
   agent-browser fill "[name='email']" "$ADMIN_EMAIL"
 elif agent-browser is visible "input[type='email']" 2>/dev/null; then

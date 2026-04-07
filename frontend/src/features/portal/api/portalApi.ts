@@ -8,7 +8,19 @@ import type {
   PortalSignRequest,
 } from '../types';
 
+export interface ManageSubscriptionResponse {
+  message: string;
+}
+
 export const portalApi = {
+  // Subscription management (public, no auth)
+  manageSubscription: async (email: string): Promise<ManageSubscriptionResponse> => {
+    const response = await apiClient.post<ManageSubscriptionResponse>(
+      '/checkout/manage-subscription',
+      { email },
+    );
+    return response.data;
+  },
   // Estimate portal (public, no auth)
   getEstimate: async (token: string): Promise<PortalEstimate> => {
     const response = await apiClient.get<PortalEstimate>(`/portal/estimates/${token}`);

@@ -176,7 +176,7 @@ class TestLoginEndpoint:
             data = response.json()
             assert data["access_token"] == valid_access_token
             assert data["token_type"] == "bearer"
-            assert data["expires_in"] == 900  # 15 minutes
+            assert data["expires_in"] == 3600  # 60 minutes
             assert data["csrf_token"] == valid_csrf_token
             assert data["user"]["username"] == "testuser"
             assert data["user"]["role"] == "manager"
@@ -334,7 +334,7 @@ class TestRefreshEndpoint:
         """Test successful token refresh returns new access token."""
         mock_auth_service.refresh_access_token.return_value = (
             "new_access_token",
-            900,
+            3600,
         )
 
         app.dependency_overrides[get_auth_service] = override_auth_service
@@ -352,7 +352,7 @@ class TestRefreshEndpoint:
             data = response.json()
             assert data["access_token"] == "new_access_token"
             assert data["token_type"] == "bearer"
-            assert data["expires_in"] == 900
+            assert data["expires_in"] == 3600
         finally:
             app.dependency_overrides.clear()
 
@@ -625,7 +625,7 @@ class TestResponseFormats:
         """Test token refresh response has correct format."""
         mock_auth_service.refresh_access_token.return_value = (
             "new_access_token",
-            900,
+            3600,
         )
 
         app.dependency_overrides[get_auth_service] = override_auth_service

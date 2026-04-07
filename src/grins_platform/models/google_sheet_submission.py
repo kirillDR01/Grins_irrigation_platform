@@ -39,7 +39,12 @@ class GoogleSheetSubmission(Base):
     sheet_row_number: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
+    )
+    content_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
         unique=True,
+        index=True,
     )
 
     # 18 sheet columns — all nullable strings

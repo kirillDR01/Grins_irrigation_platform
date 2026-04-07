@@ -177,6 +177,64 @@ class TestGoogleSheetSubmissionRepositoryGetMaxRowNumber:
 
 
 # =============================================================================
+# Get existing hashes tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestGoogleSheetSubmissionRepositoryGetExistingHashes:
+    """Tests for GoogleSheetSubmissionRepository.get_existing_hashes method."""
+
+    @pytest.fixture
+    def mock_session(self) -> AsyncMock:
+        return AsyncMock()
+
+    @pytest.fixture
+    def repository(self, mock_session: AsyncMock) -> GoogleSheetSubmissionRepository:
+        return GoogleSheetSubmissionRepository(mock_session)
+
+    @pytest.mark.asyncio
+    async def test_returns_matching_hashes(
+        self,
+        repository: GoogleSheetSubmissionRepository,
+        mock_session: AsyncMock,
+    ) -> None:
+        mock_result = MagicMock()
+        mock_result.all.return_value = [("hash1",), ("hash3",)]
+        mock_session.execute.return_value = mock_result
+
+        result = await repository.get_existing_hashes(["hash1", "hash2", "hash3"])
+
+        assert result == {"hash1", "hash3"}
+        mock_session.execute.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_set_when_no_matches(
+        self,
+        repository: GoogleSheetSubmissionRepository,
+        mock_session: AsyncMock,
+    ) -> None:
+        mock_result = MagicMock()
+        mock_result.all.return_value = []
+        mock_session.execute.return_value = mock_result
+
+        result = await repository.get_existing_hashes(["hash1", "hash2"])
+
+        assert result == set()
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_set_for_empty_input(
+        self,
+        repository: GoogleSheetSubmissionRepository,
+        mock_session: AsyncMock,
+    ) -> None:
+        result = await repository.get_existing_hashes([])
+
+        assert result == set()
+        mock_session.execute.assert_not_awaited()
+
+
+# =============================================================================
 # List with filters tests
 # =============================================================================
 

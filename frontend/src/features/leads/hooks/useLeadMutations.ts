@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { leadApi } from '../api/leadApi';
-import type { LeadUpdate, LeadConversionRequest, FromCallRequest, BulkOutreachRequest, CreateEstimateRequest, CreateContractRequest } from '../types';
+import type { LeadUpdate, LeadConversionRequest, FromCallRequest, BulkOutreachRequest, CreateEstimateRequest, CreateContractRequest, ManualLeadCreateRequest } from '../types';
 import { leadKeys } from './useLeads';
 
 // Update lead mutation (status, assignment, notes, intake_tag)
@@ -53,6 +53,19 @@ export function useCreateFromCall() {
 
   return useMutation({
     mutationFn: (data: FromCallRequest) => leadApi.createFromCall(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });
+    },
+  });
+}
+
+// Create lead manually (admin-only)
+export function useCreateManualLead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: ManualLeadCreateRequest) => leadApi.createManual(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
       queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });

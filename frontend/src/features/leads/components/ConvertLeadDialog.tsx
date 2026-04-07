@@ -10,6 +10,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { UserPlus, Briefcase, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -134,11 +135,18 @@ function ConvertLeadForm({ lead, onOpenChange }: ConvertLeadFormProps) {
         navigate(`/customers/${result.customer_id}`);
       }
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to convert lead';
-      toast.error('Conversion Failed', {
-        description: message,
-      });
+      // Check for already-converted error from backend
+      if (axios.isAxiosError(error) && error.response?.data?.error?.code === 'LEAD_ALREADY_CONVERTED') {
+        toast.error('Lead Already Converted', {
+          description: 'This lead has already been converted to a customer.',
+        });
+      } else {
+        const message =
+          error instanceof Error ? error.message : 'Failed to convert lead';
+        toast.error('Conversion Failed', {
+          description: message,
+        });
+      }
     }
   };
 

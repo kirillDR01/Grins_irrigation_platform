@@ -311,4 +311,58 @@ describe('JobForm', () => {
     expect(screen.getByTestId('source-select')).toBeInTheDocument();
     expect(screen.getByText('Select source')).toBeInTheDocument();
   });
+
+  it('shows current job type value when editing an existing job', () => {
+    render(<JobForm job={mockJob} />, { wrapper: createWrapper() });
+
+    // The job type select trigger should display the current job type label
+    const jobTypeSelect = screen.getByTestId('job-type-select');
+    expect(jobTypeSelect).toBeInTheDocument();
+    expect(jobTypeSelect).toHaveTextContent('Spring Startup');
+  });
+
+  it('shows correct job type for different job types when editing', () => {
+    const repairJob: Job = { ...mockJob, job_type: 'repair' };
+    render(<JobForm job={repairJob} />, { wrapper: createWrapper() });
+
+    const jobTypeSelect = screen.getByTestId('job-type-select');
+    expect(jobTypeSelect).toHaveTextContent('Repair');
+  });
+
+  it('allows changing job type when editing an existing job', async () => {
+    const onSuccess = vi.fn();
+    vi.mocked(jobApi.update).mockResolvedValue({
+      ...mockJob,
+      job_type: 'winterization',
+    });
+
+    const { container } = render(
+      <JobForm job={mockJob} onSuccess={onSuccess} />,
+      { wrapper: createWrapper() }
+    );
+
+    // Verify current value is shown
+    const jobTypeSelect = screen.getByTestId('job-type-select');
+    expect(jobTypeSelect).toHaveTextContent('Spring Startup');
+
+    // Change job type via hidden native select
+    selectOption(container, 'job-type-select', 'winterization');
+
+    // Submit form
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('submit-btn'));
+
+    await waitFor(() => {
+      expect(jobApi.update).toHaveBeenCalledWith(
+        mockJob.id,
+        expect.objectContaining({
+          job_type: 'winterization',
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(onSuccess).toHaveBeenCalled();
+    });
+  });
 });

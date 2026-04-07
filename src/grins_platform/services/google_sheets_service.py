@@ -11,6 +11,7 @@ Validates: Requirements 3.1-3.11, 11.1, 17.2-17.4, 52.1, 52.2, 52.5
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timezone
 from math import ceil
 from typing import TYPE_CHECKING
@@ -122,6 +123,17 @@ _HEADER_PATTERNS: list[tuple[str, list[str], list[str]]] = [
 EXTRA_FIELDS = ["zip_code", "work_requested", "agreed_to_terms"]
 
 
+def compute_row_hash(raw_row: list[str]) -> str:
+    """Compute a deterministic SHA-256 hash of a raw sheet row.
+
+    Takes the raw sheet row (before any mapping), joins all cell values
+    with a pipe delimiter, and returns the hex digest. Same row content
+    produces the same hash regardless of sheet position.
+    """
+    joined = "|".join(raw_row)
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+
+
 def _match_header(header: str) -> str | None:
     """Match a single header string to an internal field name.
 
@@ -193,6 +205,7 @@ class GoogleSheetsService(LoggerMixin):
         row_number: int,
         session: AsyncSession,
         col_map: dict[str, int] | None = None,
+        content_hash: str | None = None,
     ) -> GoogleSheetSubmission:
         """Process a sheet row: store submission and create lead.
 
@@ -223,6 +236,7 @@ class GoogleSheetsService(LoggerMixin):
 
         submission = await sub_repo.create(
             sheet_row_number=row_number,
+            content_hash=content_hash,
             timestamp=padded[0] or None,
             spring_startup=padded[1] or None,
             fall_blowout=padded[2] or None,
