@@ -570,6 +570,12 @@ class CampaignWorker(LoggerMixin):
         finally:
             if redis_client:
                 await redis_client.aclose()
+            # Persist the recipient's terminal state before the tick's
+            # aggregate COUNT in _update_campaign_status runs. The session
+            # is created with autoflush=False, so without this explicit
+            # flush the COUNT would read the stale "sending" row and the
+            # campaign would be left stuck in SENDING forever.
+            await session.flush()
 
     async def _resolve_recipient(
         self,
@@ -637,8 +643,13 @@ class CampaignWorker(LoggerMixin):
             campaign.status = CampaignStatus.SENT.value  # type: ignore[assignment]
             campaign.sent_at = datetime.now(timezone.utc)  # type: ignore[assignment]
         elif failed > 0 and sent == 0:
-            # All failed — keep as sending so retry is possible
-            pass
+            # All failed — still a terminal dispatch; the user can inspect
+            # per-recipient error messages and invoke the retry-failed endpoint
+            # which re-sets the campaign back to SENDING and enqueues new
+            # pending rows. Leaving the campaign in SENDING here would make
+            # it appear stuck in the UI forever.
+            campaign.status = CampaignStatus.SENT.value  # type: ignore[assignment]
+            campaign.sent_at = datetime.now(timezone.utc)  # type: ignore[assignment]
 
     async def _record_tick(
         self,
