@@ -75,7 +75,7 @@ class AuditService(LoggerMixin):
         entry = await repo.create(
             action=action,
             resource_type=resource_type,
-            resource_id=str(resource_id) if resource_id else None,
+            resource_id=resource_id,
             actor_id=actor_id,
             actor_role=actor_role,
             details=details,

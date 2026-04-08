@@ -31,9 +31,8 @@ class AuditLogResponse(BaseModel):
         max_length=50,
         description="Resource type affected",
     )
-    resource_id: str | None = Field(
+    resource_id: UUID | None = Field(
         default=None,
-        max_length=50,
         description="Resource UUID",
     )
     details: dict[str, Any] | None = Field(

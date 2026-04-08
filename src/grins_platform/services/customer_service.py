@@ -994,7 +994,7 @@ class CustomerService(LoggerMixin):
             actor_role="admin",
             action="customer.merge",
             resource_type="customer",
-            resource_id=str(primary_id),
+            resource_id=primary_id,
             details={
                 "primary_customer_id": str(primary_id),
                 "merged_customer_ids": [str(d) for d in duplicate_ids],

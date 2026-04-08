@@ -8,6 +8,7 @@ Validates: CRM Gap Closure Req 74.3
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from sqlalchemy import func, select
 
@@ -15,8 +16,6 @@ from grins_platform.log_config import LoggerMixin
 from grins_platform.models.audit_log import AuditLog
 
 if TYPE_CHECKING:
-    from uuid import UUID
-
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from grins_platform.schemas.audit import AuditLogFilters
@@ -39,7 +38,7 @@ class AuditLogRepository(LoggerMixin):
         self,
         action: str,
         resource_type: str,
-        resource_id: str | None = None,
+        resource_id: UUID | str | None = None,
         actor_id: UUID | None = None,
         actor_role: str | None = None,
         details: dict[str, Any] | None = None,
@@ -51,7 +50,7 @@ class AuditLogRepository(LoggerMixin):
         Args:
             action: Action performed (e.g. "customer.merge")
             resource_type: Resource type affected (e.g. "customer")
-            resource_id: Resource UUID as string
+            resource_id: Resource UUID (str accepted for legacy callers)
             actor_id: Staff UUID who performed the action
             actor_role: Role of the actor
             details: Additional event details (JSONB)
@@ -65,10 +64,22 @@ class AuditLogRepository(LoggerMixin):
         """
         self.log_started("create", audit_action=action, resource_type=resource_type)
 
+        # Coerce legacy string callers to UUID to match the DB column type.
+        resource_uuid: UUID | None
+        if resource_id is None:
+            resource_uuid = None
+        elif isinstance(resource_id, UUID):
+            resource_uuid = resource_id
+        else:
+            try:
+                resource_uuid = UUID(str(resource_id))
+            except (ValueError, TypeError):
+                resource_uuid = None
+
         entry = AuditLog(
             action=action,
             resource_type=resource_type,
-            resource_id=resource_id,
+            resource_id=resource_uuid,
             actor_id=actor_id,
             actor_role=actor_role,
             details=details,
