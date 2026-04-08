@@ -81,7 +81,7 @@ class SentMessageRepository(LoggerMixin):
         self,
         message_id: UUID,
         delivery_status: DeliveryStatus | None = None,
-        twilio_sid: str | None = None,
+        provider_message_id: str | None = None,
         error_message: str | None = None,
         sent_at: datetime | None = None,
     ) -> SentMessage | None:
@@ -90,7 +90,7 @@ class SentMessageRepository(LoggerMixin):
         Args:
             message_id: The message ID
             delivery_status: New delivery status
-            twilio_sid: Twilio message SID
+            provider_message_id: Provider message ID
             error_message: Error message if failed
             sent_at: When the message was sent
 
@@ -110,8 +110,8 @@ class SentMessageRepository(LoggerMixin):
 
         if delivery_status:
             message.delivery_status = delivery_status.value
-        if twilio_sid:
-            message.twilio_sid = twilio_sid
+        if provider_message_id:
+            message.provider_message_id = provider_message_id
         if error_message is not None:
             message.error_message = error_message
         if sent_at:

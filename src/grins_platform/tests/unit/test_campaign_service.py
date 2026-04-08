@@ -27,6 +27,18 @@ from grins_platform.services.campaign_service import (
     CampaignService,
     NoRecipientsError,
 )
+from grins_platform.services.sms.recipient import Recipient
+from grins_platform.services.sms_service import SMSConsentDeniedError
+
+
+def _recipient_from_customer(customer: MagicMock) -> Recipient:
+    """Build a Recipient from a mock Customer."""
+    return Recipient(
+        phone=customer.phone,
+        source_type="customer",
+        customer_id=customer.id,
+    )
+
 
 # =============================================================================
 # Helpers
@@ -89,6 +101,24 @@ def _make_customer_mock(
     c.internal_notes = None
     c.preferred_service_times = None
     return c
+
+
+def _recipient_from(c: MagicMock) -> Recipient:
+    """Convert a customer mock to a Recipient."""
+    return Recipient(
+        phone=c.phone,
+        source_type="customer",
+        customer_id=c.id,
+        first_name=c.first_name,
+        last_name=c.last_name,
+    )
+
+
+def _scalar_result(value: Any) -> AsyncMock:
+    """Create a mock DB execute result returning *value*."""
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = value
+    return result
 
 
 def _build_service(
@@ -180,7 +210,7 @@ class TestProperty48CampaignRecipientFilteringByConsent:
     async def test_send_campaign_with_sms_type_skips_non_sms_consented(
         self,
     ) -> None:
-        """SMS campaigns skip customers without sms_opt_in."""
+        """SMS campaigns skip customers denied by centralized consent check (B2)."""
         campaign = _make_campaign_mock(
             campaign_type=CampaignType.SMS.value,
             status=CampaignStatus.DRAFT.value,
@@ -193,11 +223,22 @@ class TestProperty48CampaignRecipientFilteringByConsent:
         repo.update.return_value = campaign
 
         sms_service = AsyncMock()
-        sms_service.send_message.return_value = {"success": True}
+        # First call succeeds (consented), second raises consent denied
+        sms_service.send_message.side_effect = [
+            {"success": True},
+            SMSConsentDeniedError("Consent denied"),
+        ]
 
         svc = _build_service(repo=repo, sms_service=sms_service)
 
         db = AsyncMock()
+        # DB returns Customer mocks for email channel resolution
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalar_result(consented),
+                _scalar_result(non_consented),
+            ],
+        )
 
         with (
             patch.object(
@@ -208,14 +249,26 @@ class TestProperty48CampaignRecipientFilteringByConsent:
             patch.object(
                 svc,
                 "_filter_recipients",
-                return_value=[consented, non_consented],
+                return_value=[
+                    _recipient_from(consented),
+                    _recipient_from(non_consented),
+                ],
             ),
         ):
             result = await svc.send_campaign(db, campaign.id)
 
         assert result.sent == 1
-        assert result.skipped == 1
+        assert result.skipped == 0
+        assert result.failed == 1
         assert result.total_recipients == 2
+        # Verify opted_out recipient was recorded
+        repo.add_recipient.assert_any_call(
+            campaign_id=campaign.id,
+            customer_id=non_consented.id,
+            lead_id=None,
+            channel="sms",
+            delivery_status="opted_out",
+        )
 
     # ----------------------------------------------------------------
     # 3. send_campaign filters recipients by consent (EMAIL)
@@ -254,6 +307,13 @@ class TestProperty48CampaignRecipientFilteringByConsent:
         svc = _build_service(repo=repo, email_service=email_service)
 
         db = AsyncMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalar_result(consented),
+                _scalar_result(no_consent),
+                _scalar_result(no_email),
+            ],
+        )
 
         with (
             patch.object(
@@ -264,7 +324,11 @@ class TestProperty48CampaignRecipientFilteringByConsent:
             patch.object(
                 svc,
                 "_filter_recipients",
-                return_value=[consented, no_consent, no_email],
+                return_value=[
+                    _recipient_from(consented),
+                    _recipient_from(no_consent),
+                    _recipient_from(no_email),
+                ],
             ),
         ):
             result = await svc.send_campaign(db, campaign.id)
@@ -282,7 +346,7 @@ class TestProperty48CampaignRecipientFilteringByConsent:
     async def test_send_campaign_with_both_type_respects_per_channel_consent(
         self,
     ) -> None:
-        """BOTH campaigns send on each channel only if consented."""
+        """BOTH campaigns send on each channel; SMS consent via SMSService (B2)."""
         campaign = _make_campaign_mock(
             campaign_type=CampaignType.BOTH.value,
             status=CampaignStatus.DRAFT.value,
@@ -294,13 +358,13 @@ class TestProperty48CampaignRecipientFilteringByConsent:
             email_opt_in=True,
             email="both@example.com",
         )
-        # Customer with only SMS
+        # Customer with only SMS consent
         sms_only = _make_customer_mock(
             sms_opt_in=True,
             email_opt_in=False,
             email="sms@example.com",
         )
-        # Customer with neither
+        # Customer with neither — SMS consent denied by SMSService
         neither = _make_customer_mock(
             sms_opt_in=False,
             email_opt_in=False,
@@ -311,7 +375,12 @@ class TestProperty48CampaignRecipientFilteringByConsent:
         repo.update.return_value = campaign
 
         sms_service = AsyncMock()
-        sms_service.send_message.return_value = {"success": True}
+        # both: success, sms_only: success, neither: consent denied
+        sms_service.send_message.side_effect = [
+            {"success": True},
+            {"success": True},
+            SMSConsentDeniedError("Consent denied"),
+        ]
         email_service = MagicMock()
         email_service._send_email.return_value = True
 
@@ -322,6 +391,13 @@ class TestProperty48CampaignRecipientFilteringByConsent:
         )
 
         db = AsyncMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalar_result(both),
+                _scalar_result(sms_only),
+                _scalar_result(neither),
+            ],
+        )
 
         with (
             patch.object(
@@ -332,14 +408,22 @@ class TestProperty48CampaignRecipientFilteringByConsent:
             patch.object(
                 svc,
                 "_filter_recipients",
-                return_value=[both, sms_only, neither],
+                return_value=[
+                    _recipient_from(both),
+                    _recipient_from(sms_only),
+                    _recipient_from(neither),
+                ],
             ),
         ):
             result = await svc.send_campaign(db, campaign.id)
 
-        # both: 2 channels sent, sms_only: 1 channel sent, neither: skipped
+        # both: sms(sent) + email(sent) = 2 sent
+        # sms_only: sms(sent) = 1 sent, no email channel (no email_opt_in)
+        # neither: sms(consent denied → opted_out, counted as failed)
+        #          no email channel (no email_opt_in)
         assert result.sent == 3
-        assert result.skipped == 1
+        assert result.skipped == 0
+        assert result.failed == 1
         assert result.total_recipients == 3
 
     # ----------------------------------------------------------------
@@ -371,6 +455,11 @@ class TestProperty48CampaignRecipientFilteringByConsent:
 
         svc = _build_service(repo=repo, email_service=email_service)
         db = AsyncMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalar_result(customer),
+            ],
+        )
 
         biz_addr = "123 Main St, Austin TX 78701"
         with (
@@ -382,7 +471,7 @@ class TestProperty48CampaignRecipientFilteringByConsent:
             patch.object(
                 svc,
                 "_filter_recipients",
-                return_value=[customer],
+                return_value=[_recipient_from(customer)],
             ),
         ):
             await svc.send_campaign(db, campaign.id)
@@ -588,6 +677,11 @@ class TestProperty48CampaignRecipientFilteringByConsent:
         svc = _build_service(repo=repo, sms_service=sms_service)
 
         db = AsyncMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalar_result(customer),
+            ],
+        )
 
         with (
             patch.object(
@@ -603,7 +697,7 @@ class TestProperty48CampaignRecipientFilteringByConsent:
             patch.object(
                 svc,
                 "_filter_recipients",
-                return_value=[customer],
+                return_value=[_recipient_from(customer)],
             ),
         ):
             triggered = await svc.evaluate_automation_rules(db)
@@ -739,24 +833,34 @@ class TestProperty48CampaignRecipientFilteringByConsent:
     def test_resolve_channels_with_sms_campaign_and_sms_consent(
         self,
     ) -> None:
-        """SMS campaign + sms_opt_in returns ['sms']."""
+        """SMS campaign returns ['sms'] regardless of sms_opt_in (B2 fix)."""
         campaign = _make_campaign_mock(
             campaign_type=CampaignType.SMS.value,
         )
         customer = _make_customer_mock(sms_opt_in=True)
-        channels = CampaignService._resolve_channels(campaign, customer)
+        recipient = _recipient_from_customer(customer)
+        channels = CampaignService._resolve_channels(
+            campaign,
+            recipient,
+            customer,
+        )
         assert channels == ["sms"]
 
     def test_resolve_channels_with_sms_campaign_and_no_sms_consent(
         self,
     ) -> None:
-        """SMS campaign + no sms_opt_in returns []."""
+        """SMS campaign still returns ['sms'] — consent checked downstream (B2 fix)."""
         campaign = _make_campaign_mock(
             campaign_type=CampaignType.SMS.value,
         )
         customer = _make_customer_mock(sms_opt_in=False)
-        channels = CampaignService._resolve_channels(campaign, customer)
-        assert channels == []
+        recipient = _recipient_from_customer(customer)
+        channels = CampaignService._resolve_channels(
+            campaign,
+            recipient,
+            customer,
+        )
+        assert channels == ["sms"]
 
     def test_resolve_channels_with_email_campaign_and_email_consent(
         self,
@@ -769,7 +873,12 @@ class TestProperty48CampaignRecipientFilteringByConsent:
             email_opt_in=True,
             email="test@example.com",
         )
-        channels = CampaignService._resolve_channels(campaign, customer)
+        recipient = _recipient_from_customer(customer)
+        channels = CampaignService._resolve_channels(
+            campaign,
+            recipient,
+            customer,
+        )
         assert channels == ["email"]
 
     def test_resolve_channels_with_email_campaign_and_no_email(
@@ -780,7 +889,12 @@ class TestProperty48CampaignRecipientFilteringByConsent:
             campaign_type=CampaignType.EMAIL.value,
         )
         customer = _make_customer_mock(email_opt_in=True, email=None)
-        channels = CampaignService._resolve_channels(campaign, customer)
+        recipient = _recipient_from_customer(customer)
+        channels = CampaignService._resolve_channels(
+            campaign,
+            recipient,
+            customer,
+        )
         assert channels == []
 
     def test_resolve_channels_with_both_campaign_and_full_consent(
@@ -795,13 +909,18 @@ class TestProperty48CampaignRecipientFilteringByConsent:
             email_opt_in=True,
             email="test@example.com",
         )
-        channels = CampaignService._resolve_channels(campaign, customer)
+        recipient = _recipient_from_customer(customer)
+        channels = CampaignService._resolve_channels(
+            campaign,
+            recipient,
+            customer,
+        )
         assert channels == ["sms", "email"]
 
     def test_resolve_channels_with_both_campaign_and_no_consent(
         self,
     ) -> None:
-        """BOTH campaign + no consent returns []."""
+        """BOTH campaign + no consent returns ['sms'] — consent downstream (B2)."""
         campaign = _make_campaign_mock(
             campaign_type=CampaignType.BOTH.value,
         )
@@ -809,8 +928,13 @@ class TestProperty48CampaignRecipientFilteringByConsent:
             sms_opt_in=False,
             email_opt_in=False,
         )
-        channels = CampaignService._resolve_channels(campaign, customer)
-        assert channels == []
+        recipient = _recipient_from_customer(customer)
+        channels = CampaignService._resolve_channels(
+            campaign,
+            recipient,
+            customer,
+        )
+        assert channels == ["sms"]
 
     # ----------------------------------------------------------------
     # 15. _apply_can_spam appends correct footer

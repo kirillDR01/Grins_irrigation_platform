@@ -29,6 +29,7 @@ from grins_platform.services.estimate_service import EstimateService
 from grins_platform.services.notification_service import (
     NotificationService,
 )
+from grins_platform.services.sms.recipient import Recipient
 
 # =============================================================================
 # Helpers
@@ -55,6 +56,24 @@ def _make_customer(
     c.sms_opt_in = sms_opt_in
     c.properties = properties or []
     return c
+
+
+def _recipient_from(c: MagicMock) -> Recipient:
+    """Convert a customer mock to a Recipient."""
+    return Recipient(
+        phone=c.phone,
+        source_type="customer",
+        customer_id=c.id,
+        first_name=c.first_name,
+        last_name=c.last_name,
+    )
+
+
+def _scalar_result(value: Any) -> MagicMock:
+    """Create a mock DB execute result returning *value*."""
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = value
+    return result
 
 
 def _make_appointment(
@@ -106,7 +125,7 @@ def _make_invoice(
     inv = MagicMock()
     inv.id = invoice_id or uuid4()
     inv.job_id = job_id or uuid4()
-    inv.customer_id = (customer.id if customer else uuid4())
+    inv.customer_id = customer.id if customer else uuid4()
     inv.invoice_number = invoice_number
     inv.total_amount = total_amount
     inv.due_date = due_date or (date.today() + timedelta(days=2))
@@ -634,8 +653,10 @@ class TestCampaignSender:
         repo.update = AsyncMock()
         repo.add_recipient = AsyncMock()
 
-        # Mock _filter_recipients to return customers
-        svc._filter_recipients = AsyncMock(return_value=[cust1, cust2])  # type: ignore[method-assign]
+        # Mock _filter_recipients to return Recipient objects
+        svc._filter_recipients = AsyncMock(  # type: ignore[method-assign]
+            return_value=[_recipient_from(cust1), _recipient_from(cust2)],
+        )
         # Mock _get_business_address
         svc._get_business_address = AsyncMock(  # type: ignore[method-assign]
             return_value="123 Main St, Austin TX",
@@ -644,6 +665,12 @@ class TestCampaignSender:
         svc._send_to_recipient = AsyncMock(return_value=True)  # type: ignore[method-assign]
 
         db = AsyncMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalar_result(cust1),
+                _scalar_result(cust2),
+            ],
+        )
         result = await svc.send_campaign(db, campaign.id)
 
         assert result.sent == 2
@@ -664,7 +691,7 @@ class TestCampaignSender:
         repo.add_recipient = AsyncMock()
 
         svc._filter_recipients = AsyncMock(  # type: ignore[method-assign]
-            return_value=[opted_out_cust],
+            return_value=[_recipient_from(opted_out_cust)],
         )
         svc._get_business_address = AsyncMock(  # type: ignore[method-assign]
             return_value="123 Main St",
@@ -673,6 +700,11 @@ class TestCampaignSender:
         svc._resolve_channels = MagicMock(return_value=[])  # type: ignore[method-assign]
 
         db = AsyncMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalar_result(opted_out_cust),
+            ],
+        )
         result = await svc.send_campaign(db, campaign.id)
 
         assert result.skipped == 1

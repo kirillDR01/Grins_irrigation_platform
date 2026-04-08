@@ -6,7 +6,7 @@ Validates: Requirements 8.1-8.6, 9.1-9.5
 from __future__ import annotations
 
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -56,8 +56,9 @@ class TestExactOptOutKeywords:
         result = await service.handle_inbound("+16125551234", keyword, "SM123")
 
         assert result["action"] == "opt_out"
-        service.session.add.assert_called_once()
-        added = service.session.add.call_args[0][0]
+        # session.add called for SmsConsentRecord + AuditLog
+        assert service.session.add.call_count >= 1
+        added = service.session.add.call_args_list[0][0][0]
         assert added.consent_given is False
         assert added.opt_out_method == "text_stop"
         assert added.opt_out_confirmation_sent is True
@@ -125,37 +126,37 @@ class TestInformalOptOut:
 
 @pytest.mark.unit
 class TestConsentCheck:
-    """Test check_sms_consent method."""
+    """Test check_sms_consent_legacy method."""
 
     @pytest.mark.asyncio
     async def test_opted_out_phone_returns_false(self) -> None:
         """Opted-out phone → False."""
         service = _make_service()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = False
-        service.session.execute = AsyncMock(return_value=mock_result)
-
-        assert await service.check_sms_consent("6125551234") is False
+        with patch(
+            "grins_platform.services.sms_service.check_sms_consent",
+            return_value=False,
+        ):
+            assert await service.check_sms_consent_legacy("6125551234") is False
 
     @pytest.mark.asyncio
     async def test_opted_in_phone_returns_true(self) -> None:
         """Opted-in phone → True."""
         service = _make_service()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = True
-        service.session.execute = AsyncMock(return_value=mock_result)
-
-        assert await service.check_sms_consent("6125551234") is True
+        with patch(
+            "grins_platform.services.sms_service.check_sms_consent",
+            return_value=True,
+        ):
+            assert await service.check_sms_consent_legacy("6125551234") is True
 
     @pytest.mark.asyncio
     async def test_no_records_returns_true(self) -> None:
         """No consent records → default True."""
         service = _make_service()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        service.session.execute = AsyncMock(return_value=mock_result)
-
-        assert await service.check_sms_consent("6125551234") is True
+        with patch(
+            "grins_platform.services.sms_service.check_sms_consent",
+            return_value=True,
+        ):
+            assert await service.check_sms_consent_legacy("6125551234") is True
 
 
 # --- 10.4: Time window enforcement ---
@@ -250,15 +251,15 @@ class TestAutomatedMessageWiring:
     async def test_opted_out_skips_send(self) -> None:
         """Opted-out phone → message not sent."""
         service = _make_service()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = False
-        service.session.execute = AsyncMock(return_value=mock_result)
-
-        result = await service.send_automated_message(
-            "6125551234",
-            "Hello",
-            "automated",
-        )
+        with patch(
+            "grins_platform.services.sms_service.check_sms_consent",
+            return_value=False,
+        ):
+            result = await service.send_automated_message(
+                "6125551234",
+                "Hello",
+                "automated",
+            )
         assert result["success"] is False
         assert result["reason"] == "opted_out"
 
@@ -266,12 +267,17 @@ class TestAutomatedMessageWiring:
     async def test_in_window_sends_immediately(self) -> None:
         """Opted-in phone within time window → sends immediately."""
         service = _make_service()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = True
-        service.session.execute = AsyncMock(return_value=mock_result)
 
         fake_now = datetime(2026, 3, 10, 10, 0, 0, tzinfo=CT_TZ)
-        with patch("grins_platform.services.sms_service.datetime") as mock_dt:
+        with (
+            patch(
+                "grins_platform.services.sms_service.check_sms_consent",
+                return_value=True,
+            ),
+            patch(
+                "grins_platform.services.sms_service.datetime",
+            ) as mock_dt,
+        ):
             mock_dt.now.return_value = fake_now
             mock_dt.combine = datetime.combine
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
@@ -284,18 +290,23 @@ class TestAutomatedMessageWiring:
             )
 
         assert result["success"] is True
-        assert "twilio_sid" in result
+        assert "provider_message_id" in result
 
     @pytest.mark.asyncio
     async def test_outside_window_defers(self) -> None:
         """Opted-in phone outside time window → deferred."""
         service = _make_service()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = True
-        service.session.execute = AsyncMock(return_value=mock_result)
 
         fake_now = datetime(2026, 3, 10, 22, 0, 0, tzinfo=CT_TZ)
-        with patch("grins_platform.services.sms_service.datetime") as mock_dt:
+        with (
+            patch(
+                "grins_platform.services.sms_service.check_sms_consent",
+                return_value=True,
+            ),
+            patch(
+                "grins_platform.services.sms_service.datetime",
+            ) as mock_dt,
+        ):
             mock_dt.now.return_value = fake_now
             mock_dt.combine = datetime.combine
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)

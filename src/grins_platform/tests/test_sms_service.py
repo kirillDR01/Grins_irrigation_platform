@@ -5,7 +5,7 @@ Property 13: SMS Opt-in Enforcement
 Validates: Requirements 12.8, 12.9
 """
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
@@ -16,7 +16,8 @@ from hypothesis import (
 )
 
 from grins_platform.schemas.ai import MessageType
-from grins_platform.services.sms_service import SMSOptInError, SMSService
+from grins_platform.services.sms.recipient import Recipient
+from grins_platform.services.sms_service import SMSConsentDeniedError, SMSService
 
 
 @pytest.mark.asyncio
@@ -33,17 +34,27 @@ class TestSMSOptInProperty:
         message_type: MessageType,
         message: str,
     ) -> None:
-        """Property: Customers without opt-in cannot receive SMS."""
+        """Property: Customers without consent cannot receive SMS."""
         mock_session = AsyncMock()
         service = SMSService(mock_session)
+        recipient = Recipient(
+            phone="+16125551234",
+            source_type="customer",
+            customer_id=uuid4(),
+        )
 
-        with pytest.raises(SMSOptInError):
+        with (
+            patch(
+                "grins_platform.services.sms_service.check_sms_consent",
+                return_value=False,
+            ),
+            pytest.raises(SMSConsentDeniedError),
+        ):
             await service.send_message(
-                customer_id=uuid4(),
-                phone="6125551234",
+                recipient=recipient,
                 message=message,
                 message_type=message_type,
-                sms_opt_in=False,  # Not opted in
+                consent_type="marketing",
             )
 
     @given(
@@ -54,27 +65,29 @@ class TestSMSOptInProperty:
         self,
         message_type: MessageType,
     ) -> None:
-        """Property: Customers with opt-in can receive SMS."""
+        """Property: Customers with consent can receive SMS."""
         mock_session = AsyncMock()
         service = SMSService(mock_session)
+        recipient = Recipient(
+            phone="+16125551234",
+            source_type="customer",
+            customer_id=uuid4(),
+        )
 
-        # Mock repository methods
-        mock_message = AsyncMock()
-        mock_message.id = uuid4()
-        service.message_repo.create = AsyncMock(return_value=mock_message)
-        service.message_repo.update = AsyncMock(return_value=mock_message)
         # No recent messages
         service.message_repo.get_by_customer_and_type = AsyncMock(
             return_value=[],
         )
 
-        result = await service.send_message(
-            customer_id=uuid4(),
-            phone="6125551234",
-            message="Test message",
-            message_type=message_type,
-            sms_opt_in=True,  # Opted in
-        )
+        with patch(
+            "grins_platform.services.sms_service.check_sms_consent",
+            return_value=True,
+        ):
+            result = await service.send_message(
+                recipient=recipient,
+                message="Test message",
+                message_type=message_type,
+            )
 
         assert result["success"] is True
         assert "message_id" in result
@@ -105,7 +118,7 @@ class TestSMSOptInProperty:
             result = await service.handle_webhook(
                 from_phone="+16125551234",
                 body=keyword,
-                twilio_sid="SM123",
+                provider_sid="SM123",
             )
             assert result["action"] == "opt_out"
 
@@ -118,6 +131,6 @@ class TestSMSOptInProperty:
             result = await service.handle_webhook(
                 from_phone="+16125551234",
                 body=keyword,
-                twilio_sid="SM123",
+                provider_sid="SM123",
             )
             assert result["action"] == "confirm"

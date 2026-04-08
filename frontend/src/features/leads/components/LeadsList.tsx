@@ -6,7 +6,7 @@ import {
   useReactTable,
   type ColumnDef,
 } from '@tanstack/react-table';
-import { Phone, Inbox, MessageSquare, FileCheck, Plus } from 'lucide-react';
+import { Phone, Inbox, MessageSquare, FileCheck, Plus, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -29,6 +29,7 @@ import { FollowUpQueue } from './FollowUpQueue';
 import { BulkOutreach } from './BulkOutreach';
 import { SheetsSync } from './SheetsSync';
 import { CreateLeadDialog } from './CreateLeadDialog';
+import { NewTextCampaignModal } from '@/features/communications';
 import type { Lead, LeadListParams } from '../types';
 
 export function LeadsList() {
@@ -37,6 +38,7 @@ export function LeadsList() {
   const [highlightedLeadId, setHighlightedLeadId] = useState<string | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [campaignModalOpen, setCampaignModalOpen] = useState(false);
 
   // Parse initial status from URL query params
   const urlStatus = searchParams.get('status') as LeadListParams['status'] | null;
@@ -422,6 +424,47 @@ export function LeadsList() {
           </div>
         )}
       </div>
+
+      {/* Sticky Bulk Action Bar */}
+      {selectedLeadIds.length > 0 && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-lg"
+          data-testid="bulk-action-bar"
+        >
+          <span className="text-sm font-medium" data-testid="selected-count">
+            {selectedLeadIds.length} selected
+          </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="gap-2"
+            onClick={() => setCampaignModalOpen(true)}
+            data-testid="text-selected-leads-btn"
+          >
+            <MessageSquare className="h-4 w-4" />
+            Text Selected
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-white hover:text-white hover:bg-slate-700"
+            onClick={() => setSelectedLeadIds([])}
+            data-testid="clear-selection-btn"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
+      {/* Campaign Modal */}
+      <NewTextCampaignModal
+        open={campaignModalOpen}
+        onOpenChange={(open) => {
+          setCampaignModalOpen(open);
+          if (!open) setSelectedLeadIds([]);
+        }}
+        preSelectedLeadIds={selectedLeadIds}
+      />
     </div>
   );
 }

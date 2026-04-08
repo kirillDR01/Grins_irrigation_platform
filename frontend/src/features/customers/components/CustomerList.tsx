@@ -7,9 +7,11 @@ import {
   getSortedRowModel,
   type ColumnDef,
   type SortingState,
+  type RowSelectionState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, MoreHorizontal, Phone, Filter, Download } from 'lucide-react';
+import { ArrowUpDown, MoreHorizontal, Phone, Filter, Download, MessageSquare, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { CustomerSearch } from './CustomerSearch';
 import {
   DropdownMenu,
@@ -26,6 +28,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { StatusBadge, LoadingPage, ErrorMessage } from '@/shared/components';
+import { NewTextCampaignModal } from '@/features/communications';
 import { useCustomers } from '../hooks';
 import type { Customer, CustomerListParams } from '../types';
 import { getCustomerFlags, getCustomerFullName } from '../types';
@@ -38,6 +41,8 @@ interface CustomerListProps {
 export function CustomerList({ onEdit, onDelete }: CustomerListProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [campaignModalOpen, setCampaignModalOpen] = useState(false);
   const [params, setParams] = useState<CustomerListParams>({
     page: 1,
     page_size: 20,
@@ -57,7 +62,36 @@ export function CustomerList({ onEdit, onDelete }: CustomerListProps) {
     search: searchQuery || undefined,
   });
 
+  const selectedCustomerIds = Object.keys(rowSelection)
+    .map((idx) => (data?.items ?? [])[Number(idx)]?.id)
+    .filter(Boolean) as string[];
+
+  const selectedCount = selectedCustomerIds.length;
+
   const columns: ColumnDef<Customer>[] = [
+    {
+      id: 'select',
+      header: ({ table }) => (
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && 'indeterminate')
+          }
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
+          data-testid="select-all-customers"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label={`Select ${getCustomerFullName(row.original)}`}
+          data-testid={`select-customer-${row.original.id}`}
+        />
+      ),
+      enableSorting: false,
+    },
     {
       accessorKey: 'name',
       header: ({ column }) => (
@@ -192,8 +226,10 @@ export function CustomerList({ onEdit, onDelete }: CustomerListProps) {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     onSortingChange: setSorting,
+    onRowSelectionChange: setRowSelection,
     state: {
       sorting,
+      rowSelection,
     },
   });
 
@@ -301,6 +337,47 @@ export function CustomerList({ onEdit, onDelete }: CustomerListProps) {
           </div>
         )}
       </div>
+
+      {/* Sticky Bulk Action Bar */}
+      {selectedCount > 0 && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-lg"
+          data-testid="bulk-action-bar"
+        >
+          <span className="text-sm font-medium" data-testid="selected-count">
+            {selectedCount} selected
+          </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="gap-2"
+            onClick={() => setCampaignModalOpen(true)}
+            data-testid="text-selected-customers-btn"
+          >
+            <MessageSquare className="h-4 w-4" />
+            Text Selected
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-white hover:text-white hover:bg-slate-700"
+            onClick={() => setRowSelection({})}
+            data-testid="clear-selection-btn"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
+      {/* Campaign Modal */}
+      <NewTextCampaignModal
+        open={campaignModalOpen}
+        onOpenChange={(open) => {
+          setCampaignModalOpen(open);
+          if (!open) setRowSelection({});
+        }}
+        preSelectedCustomerIds={selectedCustomerIds}
+      />
     </div>
   );
 }

@@ -323,7 +323,7 @@ export interface SMSSendRequest {
 export interface SMSSendResponse {
   success: boolean;
   message_id: string;
-  twilio_sid?: string;
+  provider_message_id?: string;
   status: string;
 }
 

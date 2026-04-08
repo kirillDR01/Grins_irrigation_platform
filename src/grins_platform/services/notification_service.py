@@ -213,12 +213,16 @@ class NotificationService(LoggerMixin):
         # --- SMS (consent-gated) ---
         if customer.sms_opt_in and self.sms_service is not None:
             try:
+                from grins_platform.services.sms.recipient import (  # noqa: PLC0415
+                    Recipient,
+                )
+
+                recipient = Recipient.from_customer(customer)
                 sms_result = await self.sms_service.send_message(
-                    customer_id=customer.id,
-                    phone=customer.phone,
+                    recipient=recipient,
                     message=sms_body,
                     message_type=message_type,
-                    sms_opt_in=True,
+                    consent_type="transactional",
                     job_id=job_id,
                     appointment_id=appointment_id,
                 )

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.campaign import Campaign, CampaignRecipient
@@ -391,3 +391,108 @@ class CampaignRepository(LoggerMixin):
 
         self.log_completed("get_campaign_stats", total=total)
         return stats
+
+    async def get_failed_recipients(
+        self,
+        campaign_id: UUID,
+    ) -> list[CampaignRecipient]:
+        """Get all failed recipients for a campaign.
+
+        Args:
+            campaign_id: Campaign UUID
+
+        Returns:
+            List of failed CampaignRecipient rows.
+        """
+        self.log_started("get_failed_recipients", campaign_id=str(campaign_id))
+        stmt = (
+            select(CampaignRecipient)
+            .where(CampaignRecipient.campaign_id == campaign_id)
+            .where(CampaignRecipient.delivery_status == "failed")
+            .order_by(CampaignRecipient.created_at.asc())
+        )
+        result = await self.session.execute(stmt)
+        rows = list(result.scalars().all())
+        self.log_completed("get_failed_recipients", count=len(rows))
+        return rows
+
+    async def clone_recipients_as_pending(
+        self,
+        campaign_id: UUID,
+        source_recipient_ids: list[UUID],
+    ) -> int:
+        """Create new pending CampaignRecipient rows cloned from failed ones.
+
+        Original failed rows are kept for audit. New rows get fresh ``pending``
+        status.
+
+        Args:
+            campaign_id: Campaign UUID
+            source_recipient_ids: IDs of failed recipients to retry.
+
+        Returns:
+            Number of new rows created.
+        """
+        self.log_started(
+            "clone_recipients_as_pending",
+            campaign_id=str(campaign_id),
+            count=len(source_recipient_ids),
+        )
+        if not source_recipient_ids:
+            return 0
+
+        stmt = select(CampaignRecipient).where(
+            CampaignRecipient.id.in_(source_recipient_ids),
+            CampaignRecipient.campaign_id == campaign_id,
+            CampaignRecipient.delivery_status == "failed",
+        )
+        result = await self.session.execute(stmt)
+        sources = list(result.scalars().all())
+
+        created = 0
+        for src in sources:
+            new_row = CampaignRecipient(
+                campaign_id=campaign_id,
+                customer_id=src.customer_id,
+                lead_id=src.lead_id,
+                channel=src.channel,
+                delivery_status="pending",
+            )
+            self.session.add(new_row)
+            created += 1
+
+        if created:
+            await self.session.flush()
+
+        self.log_completed("clone_recipients_as_pending", created=created)
+        return created
+
+    async def cancel_pending_recipients(self, campaign_id: UUID) -> int:
+        """Transition all ``pending`` recipients to ``cancelled``.
+
+        ``sending`` rows are left untouched so they finish naturally.
+
+        Args:
+            campaign_id: Campaign UUID
+
+        Returns:
+            Number of rows transitioned to cancelled.
+        """
+        self.log_started("cancel_pending_recipients", campaign_id=str(campaign_id))
+
+        stmt = (
+            update(CampaignRecipient)
+            .where(CampaignRecipient.campaign_id == campaign_id)
+            .where(CampaignRecipient.delivery_status == "pending")
+            .values(delivery_status="cancelled")
+        )
+        result = await self.session.execute(stmt)
+        cancelled: int = result.rowcount  # type: ignore[assignment]
+        await self.session.flush()
+
+        self.log_completed(
+            "cancel_pending_recipients",
+            campaign_id=str(campaign_id),
+            cancelled=cancelled,
+        )
+        return cancelled

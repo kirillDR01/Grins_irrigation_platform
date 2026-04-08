@@ -128,6 +128,10 @@ class CampaignRecipient(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    sending_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -144,6 +148,7 @@ class CampaignRecipient(Base):
     __table_args__ = (
         Index("idx_campaign_recipients_campaign_id", "campaign_id"),
         Index("idx_campaign_recipients_delivery_status", "delivery_status"),
+        Index("ix_campaign_recipients_sending_started_at", "sending_started_at"),
     )
 
     def __repr__(self) -> str:

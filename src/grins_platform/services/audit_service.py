@@ -66,7 +66,7 @@ class AuditService(LoggerMixin):
         """
         self.log_started(
             "log_action",
-            action=action,
+            audit_action=action,
             resource_type=resource_type,
             resource_id=str(resource_id) if resource_id else None,
         )
@@ -86,7 +86,7 @@ class AuditService(LoggerMixin):
         self.log_completed(
             "log_action",
             audit_log_id=str(entry.id),
-            action=action,
+            audit_action=action,
         )
         return entry
 

@@ -63,7 +63,7 @@ class AuditLogRepository(LoggerMixin):
 
         Validates: CRM Gap Closure Req 74.3
         """
-        self.log_started("create", action=action, resource_type=resource_type)
+        self.log_started("create", audit_action=action, resource_type=resource_type)
 
         entry = AuditLog(
             action=action,

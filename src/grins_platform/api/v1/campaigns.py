@@ -42,7 +42,9 @@ from grins_platform.schemas.campaign import (
     AudiencePreviewResponse,
     CampaignCancelResult,
     CampaignCreate,
+    CampaignRecipientResponse,
     CampaignResponse,
+    CampaignRetryResult,
     CampaignSendAcceptedResponse,
     CampaignStats,
     CsvRejectedRow,
@@ -106,7 +108,8 @@ async def create_campaign(
         details={"name": data.name, "type": data.campaign_type.value},
     )
     _endpoints.log_completed("create_campaign", campaign_id=str(result.id))
-    return result
+    validated: CampaignResponse = CampaignResponse.model_validate(result)
+    return validated
 
 
 @router.get(
@@ -460,7 +463,8 @@ async def get_campaign(
             detail=f"Campaign not found: {campaign_id}",
         )
     _endpoints.log_completed("get_campaign", campaign_id=str(campaign_id))
-    return CampaignResponse.model_validate(campaign)
+    result: CampaignResponse = CampaignResponse.model_validate(campaign)
+    return result
 
 
 @router.delete(
@@ -590,6 +594,72 @@ async def cancel_campaign_endpoint(
             campaign_id=campaign_id,
             cancelled_recipients=cancelled,
         )
+
+
+@router.post(
+    "/{campaign_id}/retry-failed",
+    response_model=CampaignRetryResult,
+    summary="Retry failed recipients",
+    description=(
+        "Create new pending CampaignRecipient rows for failed recipients. "
+        "Original failed rows are kept for audit."
+    ),
+)
+async def retry_failed_recipients(
+    campaign_id: UUID,
+    _current_user: ManagerOrAdminUser,
+    service: Annotated[CampaignService, Depends(get_campaign_service)],
+) -> CampaignRetryResult:
+    """Retry failed recipients for a campaign.
+
+    Validates: Requirement 37
+    """
+    _endpoints.log_started("retry_failed", campaign_id=str(campaign_id))
+    try:
+        retried = await service.retry_failed_recipients(campaign_id)
+    except CampaignNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+    else:
+        _endpoints.log_completed(
+            "retry_failed",
+            campaign_id=str(campaign_id),
+            retried=retried,
+        )
+        return CampaignRetryResult(
+            campaign_id=campaign_id,
+            retried_recipients=retried,
+        )
+
+
+@router.get(
+    "/{campaign_id}/recipients",
+    response_model=dict[str, Any],
+    summary="List campaign recipients",
+    description="List recipients for a campaign with optional status filter.",
+)
+async def list_campaign_recipients(
+    campaign_id: UUID,
+    _current_user: CurrentActiveUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    delivery_status: str | None = Query(default=None, alias="status"),
+) -> dict[str, Any]:
+    """List recipients for a campaign.
+
+    Validates: Requirement 37
+    """
+    _endpoints.log_started("list_recipients", campaign_id=str(campaign_id))
+    repo = CampaignRepository(session)
+    recipients, total = await repo.get_recipients(
+        campaign_id, page=page, page_size=page_size, delivery_status=delivery_status,
+    )
+    items = [CampaignRecipientResponse.model_validate(r) for r in recipients]
+    _endpoints.log_completed("list_recipients", count=len(items), total=total)
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @router.get(

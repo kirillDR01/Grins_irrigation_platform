@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.business_setting import BusinessSetting
@@ -24,12 +25,17 @@ from grins_platform.models.enums import (
     EmailType,
     NotificationType,
 )
+from grins_platform.models.lead import Lead
+from grins_platform.models.property import Property
 from grins_platform.schemas.ai import MessageType
 from grins_platform.schemas.campaign import (
     CampaignCreate,
     CampaignSendResult,
     CampaignStats,
 )
+from grins_platform.services.sms.phone_normalizer import normalize_to_e164
+from grins_platform.services.sms.recipient import Recipient
+from grins_platform.services.sms_service import SMSConsentDeniedError
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -230,20 +236,35 @@ class CampaignService(LoggerMixin):
         skipped = 0
         failed = 0
 
-        for customer in recipients:
-            channels = self._resolve_channels(campaign, customer)
+        for recipient in recipients:
+            # Fetch Customer model for email channel resolution
+            customer: Customer | None = None
+            if recipient.source_type == "customer" and recipient.customer_id:
+                cust_result = await db.execute(
+                    select(Customer).where(
+                        Customer.id == recipient.customer_id,
+                    ),
+                )
+                customer = cust_result.scalar_one_or_none()
+
+            channels = self._resolve_channels(
+                campaign,
+                recipient,
+                customer,
+            )
 
             if not channels:
                 skipped += 1
                 self.logger.info(
                     "campaign.campaignservice.send_skipped",
                     campaign_id=str(campaign_id),
-                    customer_id=str(customer.id),
+                    source_type=recipient.source_type,
                     reason="no_consented_channel",
                 )
                 await self.repo.add_recipient(
                     campaign_id=campaign_id,
-                    customer_id=customer.id,
+                    customer_id=recipient.customer_id,
+                    lead_id=recipient.lead_id,
                     channel=campaign.campaign_type,
                     delivery_status="opted_out",
                 )
@@ -252,9 +273,10 @@ class CampaignService(LoggerMixin):
             for channel in channels:
                 ok = await self._send_to_recipient(
                     campaign=campaign,
-                    customer=customer,
+                    recipient=recipient,
                     channel=channel,
                     business_address=business_address,
+                    customer=customer,
                 )
                 if ok:
                     sent += 1
@@ -285,6 +307,128 @@ class CampaignService(LoggerMixin):
             skipped=skipped,
             failed=failed,
         )
+
+    # ================================================================
+    # enqueue_campaign_send — Req 8.4, 31, 41
+    # ================================================================
+
+    async def enqueue_campaign_send(
+        self,
+        db: AsyncSession,
+        campaign_id: UUID,
+    ) -> tuple[UUID, int]:
+        """Enqueue campaign recipients for background delivery.
+
+        Validates campaign, filters recipients, creates CampaignRecipient
+        rows with ``delivery_status='pending'``, and sets campaign status
+        to SENDING so the background worker picks them up.
+
+        Args:
+            db: Async database session (for audience queries).
+            campaign_id: UUID of the campaign to enqueue.
+
+        Returns:
+            Tuple of (campaign_id, total_recipients_enqueued).
+
+        Raises:
+            CampaignNotFoundError: Campaign does not exist.
+            CampaignAlreadySentError: Campaign already sent/sending.
+            NoRecipientsError: No recipients match audience filter.
+
+        Validates: Requirements 8.4, 31, 41
+        """
+        self.log_started("enqueue_campaign_send", campaign_id=str(campaign_id))
+
+        campaign = await self.repo.get_by_id(campaign_id)
+        if campaign is None:
+            self.log_failed(
+                "enqueue_campaign_send",
+                error=CampaignNotFoundError(campaign_id),
+            )
+            raise CampaignNotFoundError(campaign_id)
+
+        if campaign.status in (
+            CampaignStatus.SENT.value,
+            CampaignStatus.SENDING.value,
+        ):
+            self.log_rejected(
+                "enqueue_campaign_send",
+                reason="already_sent",
+                campaign_id=str(campaign_id),
+                status=campaign.status,
+            )
+            raise CampaignAlreadySentError(campaign_id)
+
+        recipients = await self._filter_recipients(db, campaign)
+        if not recipients:
+            self.log_rejected(
+                "enqueue_campaign_send",
+                reason="no_recipients",
+                campaign_id=str(campaign_id),
+            )
+            raise NoRecipientsError(campaign_id)
+
+        # Create CampaignRecipient rows with pending status
+        for recipient in recipients:
+            _ = await self.repo.add_recipient(
+                campaign_id=campaign_id,
+                customer_id=recipient.customer_id,
+                lead_id=recipient.lead_id,
+                channel=campaign.campaign_type,
+                delivery_status="pending",
+            )
+
+        # Transition to SENDING so background worker picks up
+        _ = await self.repo.update(
+            campaign_id,
+            status=CampaignStatus.SENDING.value,
+        )
+
+        self.log_completed(
+            "enqueue_campaign_send",
+            campaign_id=str(campaign_id),
+            total_recipients=len(recipients),
+        )
+        return campaign_id, len(recipients)
+
+    # ================================================================
+    # cancel_campaign — Req 28, 37
+    # ================================================================
+
+    async def cancel_campaign(self, campaign_id: UUID) -> int:
+        """Cancel a campaign by transitioning pending recipients to cancelled.
+
+        ``sending`` rows are left untouched so they finish naturally.
+        Campaign status is set to ``cancelled``.
+
+        Args:
+            campaign_id: UUID of the campaign.
+
+        Returns:
+            Number of recipients cancelled.
+
+        Raises:
+            CampaignNotFoundError: If campaign does not exist.
+        """
+        self.log_started("cancel_campaign", campaign_id=str(campaign_id))
+
+        campaign = await self.repo.get_by_id(campaign_id)
+        if campaign is None:
+            self.log_failed(
+                "cancel_campaign",
+                error=CampaignNotFoundError(campaign_id),
+            )
+            raise CampaignNotFoundError(campaign_id)
+
+        cancelled = await self.repo.cancel_pending_recipients(campaign_id)
+        await self.repo.update(campaign_id, status=CampaignStatus.CANCELLED.value)
+
+        self.log_completed(
+            "cancel_campaign",
+            campaign_id=str(campaign_id),
+            cancelled=cancelled,
+        )
+        return cancelled
 
     # ================================================================
     # get_campaign_stats — Req 45.5
@@ -340,6 +484,59 @@ class CampaignService(LoggerMixin):
             total=result.total,
         )
         return result
+
+    # ================================================================
+    # retry_failed_recipients — Req 37
+    # ================================================================
+
+    async def retry_failed_recipients(
+        self,
+        campaign_id: UUID,
+        recipient_ids: list[UUID] | None = None,
+    ) -> int:
+        """Retry failed recipients by cloning them as new pending rows.
+
+        Original failed rows are kept for audit. If ``recipient_ids`` is
+        ``None``, all failed recipients are retried.
+
+        Args:
+            campaign_id: Campaign UUID.
+            recipient_ids: Specific failed recipient IDs to retry, or None for all.
+
+        Returns:
+            Number of new pending rows created.
+
+        Raises:
+            CampaignNotFoundError: If campaign does not exist.
+        """
+        self.log_started("retry_failed_recipients", campaign_id=str(campaign_id))
+
+        campaign = await self.repo.get_by_id(campaign_id)
+        if campaign is None:
+            self.log_failed(
+                "retry_failed_recipients",
+                error=CampaignNotFoundError(campaign_id),
+            )
+            raise CampaignNotFoundError(campaign_id)
+
+        if recipient_ids is None:
+            failed = await self.repo.get_failed_recipients(campaign_id)
+            recipient_ids = [r.id for r in failed]
+
+        created = await self.repo.clone_recipients_as_pending(
+            campaign_id, recipient_ids,
+        )
+
+        # Re-activate campaign so the worker picks up the new rows
+        if created > 0:
+            await self.repo.update(campaign_id, status=CampaignStatus.SENDING.value)
+
+        self.log_completed(
+            "retry_failed_recipients",
+            campaign_id=str(campaign_id),
+            retried=created,
+        )
+        return created
 
     # ================================================================
     # evaluate_automation_rules — Req 45.10
@@ -469,87 +666,317 @@ class CampaignService(LoggerMixin):
         self,
         db: AsyncSession,
         campaign: Campaign,
-    ) -> list[Customer]:
-        """Filter customers by target_audience criteria.
+    ) -> list[Recipient]:
+        """Filter recipients from Customer + Lead + ad-hoc sources.
 
-        Supports filter keys:
-        - lead_source: match customer.lead_source
-        - is_active: match customer.is_active
-        - no_appointment_in_days: no appointment in N days
-        - (empty/None): all active customers
+        Returns a deduplicated list of Recipient objects. When the same
+        E.164 phone appears in multiple sources, the customer record wins.
 
-        Validates: CRM Gap Closure Req 45.6
+        Supports both the new structured ``TargetAudience`` format (keys:
+        ``customers``, ``leads``, ``ad_hoc``) and the legacy flat format
+        (keys: ``lead_source``, ``is_active``, ``no_appointment_in_days``).
+
+        Validates: Requirements 13.1, 13.6, 5.5
         """
         from grins_platform.models.appointment import (  # noqa: PLC0415
             Appointment,
         )
+        from grins_platform.models.job import Job  # noqa: PLC0415
 
-        base_query = select(Customer).where(
-            Customer.is_active.is_(True),
-        )
         audience = campaign.target_audience or {}
+        seen_phones: dict[str, Recipient] = {}
 
-        if audience.get("lead_source"):
-            base_query = base_query.where(
-                Customer.lead_source == audience["lead_source"],
+        # ----------------------------------------------------------
+        # Detect structured vs legacy format
+        # ----------------------------------------------------------
+        is_structured = any(k in audience for k in ("customers", "leads", "ad_hoc"))
+        cust_filters = audience.get("customers") or {} if is_structured else audience
+        lead_filters = audience.get("leads") or {} if is_structured else {}
+        adhoc_filters = audience.get("ad_hoc") or {} if is_structured else {}
+
+        # ----------------------------------------------------------
+        # 1. Customer source
+        # ----------------------------------------------------------
+        if cust_filters or not is_structured:
+            base_q = select(Customer).where(
+                Customer.status == "active",
+                Customer.is_deleted.is_(False),
             )
 
-        if audience.get("is_active") is not None:
-            base_query = base_query.where(
-                Customer.is_active.is_(audience["is_active"]),
-            )
-
-        result = await db.execute(base_query)
-        customers: list[Customer] = list(result.scalars().all())
-
-        # Post-filter: no_appointment_in_days
-        days_threshold = audience.get("no_appointment_in_days")
-        if days_threshold is not None and isinstance(
-            days_threshold,
-            int,
-        ):
-            cutoff = datetime.now(tz=timezone.utc) - timedelta(
-                days=days_threshold,
-            )
-            filtered: list[Customer] = []
-            for customer in customers:
-                appt_stmt = (
-                    select(Appointment.id)
-                    .where(
-                        Appointment.customer_id == customer.id,
-                    )
-                    .where(Appointment.scheduled_start >= cutoff)
-                    .limit(1)
+            if cust_filters.get("sms_opt_in") is not None:
+                base_q = base_q.where(
+                    Customer.sms_opt_in.is_(cust_filters["sms_opt_in"]),
                 )
-                appt_result = await db.execute(appt_stmt)
-                if appt_result.scalar_one_or_none() is None:
-                    filtered.append(customer)
-            customers = filtered
 
-        return customers
+            ids_inc = cust_filters.get("ids_include")
+            if ids_inc:
+                base_q = base_q.where(Customer.id.in_(ids_inc))
+
+            if cust_filters.get("lead_source"):
+                base_q = base_q.where(
+                    Customer.lead_source == cust_filters["lead_source"],
+                )
+
+            if cust_filters.get("is_active") is not None:
+                status_val = "active" if cust_filters["is_active"] else "inactive"
+                base_q = base_q.where(Customer.status == status_val)
+
+            # City filter via properties join
+            cities = cust_filters.get("cities")
+            if cities:
+                base_q = base_q.where(
+                    Customer.id.in_(
+                        select(Property.customer_id).where(
+                            Property.city.in_(cities),
+                        ),
+                    ),
+                )
+
+            # Tags filter (Customer has no tags column — skip if present)
+            # last_service_between handled via appointments post-filter below
+
+            base_q = base_q.options(selectinload(Customer.properties))
+            result = await db.execute(base_q)
+            customers: list[Customer] = list(result.scalars().unique().all())
+
+            # Post-filter: no_appointment_in_days (legacy + structured)
+            days_threshold = cust_filters.get("no_appointment_in_days")
+            if days_threshold is not None and isinstance(days_threshold, int):
+                cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days_threshold)
+                filtered: list[Customer] = []
+                for cust in customers:
+                    appt_stmt = (
+                        select(Appointment.id)
+                        .join(Job, Appointment.job_id == Job.id)
+                        .where(Job.customer_id == cust.id)
+                        .where(Appointment.scheduled_date >= cutoff.date())
+                        .limit(1)
+                    )
+                    appt_result = await db.execute(appt_stmt)
+                    if appt_result.scalar_one_or_none() is None:
+                        filtered.append(cust)
+                customers = filtered
+
+            # Post-filter: last_service_between
+            svc_range = cust_filters.get("last_service_between")
+            if svc_range and len(svc_range) == 2:
+                start_d, end_d = svc_range
+                start_dt = datetime(
+                    start_d.year,
+                    start_d.month,
+                    start_d.day,
+                    tzinfo=timezone.utc,
+                )
+                end_dt = datetime(
+                    end_d.year,
+                    end_d.month,
+                    end_d.day,
+                    23,
+                    59,
+                    59,
+                    tzinfo=timezone.utc,
+                )
+                svc_filtered: list[Customer] = []
+                for cust in customers:
+                    appt_stmt = (
+                        select(Appointment.id)
+                        .join(Job, Appointment.job_id == Job.id)
+                        .where(Job.customer_id == cust.id)
+                        .where(Appointment.scheduled_date >= start_dt.date())
+                        .where(Appointment.scheduled_date <= end_dt.date())
+                        .limit(1)
+                    )
+                    appt_result = await db.execute(appt_stmt)
+                    if appt_result.scalar_one_or_none() is not None:
+                        svc_filtered.append(cust)
+                customers = svc_filtered
+
+            for cust in customers:
+                try:
+                    phone = normalize_to_e164(cust.phone)
+                except Exception:
+                    self.logger.debug(
+                        "campaign.filter_recipients.bad_phone",
+                        customer_id=str(cust.id),
+                    )
+                    continue
+                seen_phones[phone] = Recipient.from_customer(cust)
+
+        # ----------------------------------------------------------
+        # 2. Lead source
+        # ----------------------------------------------------------
+        if lead_filters:
+            lead_q = select(Lead).where(Lead.status != "converted")
+
+            if lead_filters.get("sms_consent") is not None:
+                lead_q = lead_q.where(
+                    Lead.sms_consent.is_(lead_filters["sms_consent"]),
+                )
+
+            ids_inc = lead_filters.get("ids_include")
+            if ids_inc:
+                lead_q = lead_q.where(Lead.id.in_(ids_inc))
+
+            statuses = lead_filters.get("statuses")
+            if statuses:
+                lead_q = lead_q.where(Lead.status.in_(statuses))
+
+            if lead_filters.get("lead_source"):
+                lead_q = lead_q.where(
+                    Lead.lead_source == lead_filters["lead_source"],
+                )
+
+            if lead_filters.get("intake_tag"):
+                lead_q = lead_q.where(
+                    Lead.intake_tag == lead_filters["intake_tag"],
+                )
+
+            cities = lead_filters.get("cities")
+            if cities:
+                lead_q = lead_q.where(Lead.city.in_(cities))
+
+            created_range = lead_filters.get("created_between")
+            if created_range and len(created_range) == 2:
+                start_d, end_d = created_range
+                start_dt = datetime(
+                    start_d.year,
+                    start_d.month,
+                    start_d.day,
+                    tzinfo=timezone.utc,
+                )
+                end_dt = datetime(
+                    end_d.year,
+                    end_d.month,
+                    end_d.day,
+                    23,
+                    59,
+                    59,
+                    tzinfo=timezone.utc,
+                )
+                lead_q = lead_q.where(Lead.created_at >= start_dt)
+                lead_q = lead_q.where(Lead.created_at <= end_dt)
+
+            # action_tags_include (JSONB contains)
+            action_tags = lead_filters.get("action_tags_include")
+            if action_tags:
+                for tag in action_tags:
+                    lead_q = lead_q.where(Lead.action_tags.contains([tag]))
+
+            result = await db.execute(lead_q)
+            leads: list[Lead] = list(result.scalars().all())
+
+            for lead in leads:
+                try:
+                    phone = normalize_to_e164(lead.phone)
+                except Exception:
+                    self.logger.debug(
+                        "campaign.filter_recipients.bad_phone",
+                        lead_id=str(lead.id),
+                    )
+                    continue
+                # Customer wins on phone collision
+                if phone not in seen_phones:
+                    seen_phones[phone] = Recipient.from_lead(lead)
+
+        # ----------------------------------------------------------
+        # 3. Ad-hoc CSV source (ghost leads resolved at send time)
+        # ----------------------------------------------------------
+        # CSV upload endpoint (task 8.6) stages rows; ghost leads are
+        # created only on final send to avoid orphans.  Until that
+        # endpoint exists, ad-hoc returns empty.
+        if adhoc_filters and adhoc_filters.get("csv_upload_id"):
+            # Placeholder: will be wired when POST /campaigns/audience/csv
+            # creates staged rows.  For now, log and skip.
+            self.logger.debug(
+                "campaign.filter_recipients.adhoc_skipped",
+                csv_upload_id=str(adhoc_filters["csv_upload_id"]),
+                reason="csv_upload_endpoint_not_yet_implemented",
+            )
+
+        return list(seen_phones.values())
+
+    async def preview_audience(
+        self,
+        db: AsyncSession,
+        target_audience: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Preview audience without creating a campaign.
+
+        Returns total count, per-source breakdown, and first 20 matches.
+
+        Validates: Requirement 13.8
+        """
+        self.log_started("preview_audience")
+
+        # Build a lightweight object with .target_audience for _filter_recipients
+        class _FakeAudience:
+            def __init__(self, ta: dict[str, Any]) -> None:
+                self.target_audience = ta
+
+        fake = _FakeAudience(target_audience)
+        recipients = await self._filter_recipients(db, fake)  # type: ignore[arg-type]
+
+        customers_count = sum(1 for r in recipients if r.source_type == "customer")
+        leads_count = sum(1 for r in recipients if r.source_type == "lead")
+        ad_hoc_count = sum(1 for r in recipients if r.source_type == "ad_hoc")
+
+        from grins_platform.services.sms_service import (  # noqa: PLC0415
+            _mask_phone,
+        )
+
+        matches = [
+            {
+                "phone_masked": _mask_phone(r.phone),
+                "source_type": r.source_type,
+                "first_name": r.first_name,
+                "last_name": r.last_name,
+            }
+            for r in recipients[:20]
+        ]
+
+        self.log_completed(
+            "preview_audience",
+            total=len(recipients),
+            customers=customers_count,
+            leads=leads_count,
+            ad_hoc=ad_hoc_count,
+        )
+        return {
+            "total": len(recipients),
+            "customers_count": customers_count,
+            "leads_count": leads_count,
+            "ad_hoc_count": ad_hoc_count,
+            "matches": matches,
+        }
 
     @staticmethod
     def _resolve_channels(
         campaign: Campaign,
-        customer: Customer,
+        recipient: Recipient,  # noqa: ARG004
+        customer: Customer | None = None,
     ) -> list[str]:
-        """Determine channels for a customer based on consent.
+        """Determine channels for a recipient based on campaign type.
 
-        SMS requires sms_opt_in. Email requires email_opt_in.
+        Consent is checked downstream by SMSService.send_message() via
+        check_sms_consent(). Email still checks email_opt_in here since
+        EmailService does not have a centralized consent module yet.
 
-        Validates: CRM Gap Closure Req 45.6
+        Args:
+            campaign: The campaign being sent.
+            recipient: Unified Recipient object.
+            customer: Optional Customer model for email opt-in check.
+
+        Validates: CRM Gap Closure Req 45.6, CallRail B2 fix, CallRail 4.8
         """
         channels: list[str] = []
         ctype = campaign.campaign_type
 
-        if (
-            ctype
-            in (
-                CampaignType.SMS.value,
-                CampaignType.BOTH.value,
-            )
-            and customer.sms_opt_in
+        if ctype in (
+            CampaignType.SMS.value,
+            CampaignType.BOTH.value,
         ):
+            # B2 fix: do NOT check customer.sms_opt_in here.
+            # Consent is enforced by SMSService via check_sms_consent().
             channels.append("sms")
 
         if (
@@ -558,6 +985,7 @@ class CampaignService(LoggerMixin):
                 CampaignType.EMAIL.value,
                 CampaignType.BOTH.value,
             )
+            and customer is not None
             and customer.email_opt_in
             and customer.email
         ):
@@ -569,18 +997,30 @@ class CampaignService(LoggerMixin):
         self,
         *,
         campaign: Campaign,
-        customer: Customer,
+        recipient: Recipient,
         channel: str,
         business_address: str,
+        customer: Customer | None = None,
     ) -> bool:
         """Send a campaign message to one recipient on one channel.
 
         Appends CAN-SPAM footer (physical address + unsubscribe).
         Records a CampaignRecipient row for tracking.
+        Consent is checked by SMSService.send_message() via check_sms_consent().
+
+        Populates CampaignRecipient.customer_id or lead_id based on
+        recipient.source_type.
+
+        Args:
+            campaign: The campaign being sent.
+            recipient: Unified Recipient object.
+            channel: "sms" or "email".
+            business_address: Physical address for CAN-SPAM.
+            customer: Optional Customer model for email sends.
 
         Returns True if sent successfully, False otherwise.
 
-        Validates: CRM Gap Closure Req 45.4, 45.8
+        Validates: CRM Gap Closure Req 45.4, 45.8, CallRail B2 fix, CallRail 4.8, 19.1
         """
         compliant_body = self._apply_can_spam(
             campaign.body,
@@ -588,26 +1028,46 @@ class CampaignService(LoggerMixin):
         )
 
         success = False
+        customer_id = recipient.customer_id
+        lead_id = recipient.lead_id
 
         if channel == "sms" and self.sms_service is not None:
             try:
                 sms_result = await self.sms_service.send_message(
-                    customer_id=customer.id,
-                    phone=customer.phone,
+                    recipient=recipient,
                     message=compliant_body,
                     message_type=MessageType.CAMPAIGN,
-                    sms_opt_in=True,
+                    consent_type="marketing",
+                    campaign_id=campaign.id,
                 )
                 success = sms_result.get("success", False)
+            except SMSConsentDeniedError:
+                self.logger.info(
+                    "campaign.campaignservice.consent_denied",
+                    campaign_id=str(campaign.id),
+                    source_type=recipient.source_type,
+                )
+                await self.repo.add_recipient(
+                    campaign_id=campaign.id,
+                    customer_id=customer_id,
+                    lead_id=lead_id,
+                    channel=channel,
+                    delivery_status="opted_out",
+                )
+                return False
             except Exception as exc:
                 self.log_failed(
                     "send_to_recipient_sms",
                     error=exc,
                     campaign_id=str(campaign.id),
-                    customer_id=str(customer.id),
+                    source_type=recipient.source_type,
                 )
 
-        elif channel == "email" and self.email_service is not None:
+        elif (
+            channel == "email"
+            and self.email_service is not None
+            and customer is not None
+        ):
             try:
                 success = self.email_service._send_email(  # noqa: SLF001
                     to_email=customer.email or "",
@@ -621,7 +1081,7 @@ class CampaignService(LoggerMixin):
                     "send_to_recipient_email",
                     error=exc,
                     campaign_id=str(campaign.id),
-                    customer_id=str(customer.id),
+                    source_type=recipient.source_type,
                 )
 
         # Record recipient
@@ -630,7 +1090,8 @@ class CampaignService(LoggerMixin):
 
         await self.repo.add_recipient(
             campaign_id=campaign.id,
-            customer_id=customer.id,
+            customer_id=customer_id,
+            lead_id=lead_id,
             channel=channel,
             delivery_status=delivery_status,
             sent_at=sent_at,

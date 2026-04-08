@@ -20,6 +20,7 @@ from grins_platform.api.v1.analytics import router as analytics_router
 from grins_platform.api.v1.appointments import router as appointments_router
 from grins_platform.api.v1.audit import router as audit_router
 from grins_platform.api.v1.auth import router as auth_router
+from grins_platform.api.v1.callrail_webhooks import router as callrail_webhooks_router
 from grins_platform.api.v1.campaigns import router as campaigns_router
 from grins_platform.api.v1.chat import router as chat_router
 from grins_platform.api.v1.checkout import router as checkout_router
@@ -197,6 +198,12 @@ api_router.include_router(
 api_router.include_router(
     webhooks_router,
     tags=["webhooks"],
+)
+
+# Include CallRail Webhook endpoints (excluded from CSRF)
+api_router.include_router(
+    callrail_webhooks_router,
+    tags=["callrail-webhooks"],
 )
 
 # Include Onboarding endpoints (public pre-checkout consent)

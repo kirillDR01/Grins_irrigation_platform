@@ -6,7 +6,28 @@ from uuid import uuid4
 import pytest
 from httpx import AsyncClient
 
-from grins_platform.services.sms_service import SMSOptInError
+from grins_platform.database import get_db_session
+from grins_platform.main import app
+from grins_platform.services.sms_service import SMSConsentDeniedError
+
+
+def _mock_customer(customer_id=None):
+    """Create a mock Customer for endpoint tests."""
+    c = Mock()
+    c.id = customer_id or uuid4()
+    c.phone = "+16125551234"
+    c.first_name = "Test"
+    c.last_name = "User"
+    return c
+
+
+def _mock_db_with_customer(customer):
+    """Create a mock async DB session that returns the given customer."""
+    mock_result = Mock()
+    mock_result.scalar_one_or_none.return_value = customer
+    mock_db = AsyncMock()
+    mock_db.execute = AsyncMock(return_value=mock_result)
+    return mock_db
 
 
 @pytest.mark.asyncio
@@ -22,52 +43,68 @@ class TestSMSSendEndpoint:
         """Test that send returns success response."""
         mock_sms = mock_sms_cls.return_value
         message_id = uuid4()
+        customer_id = uuid4()
         mock_sms.send_message = AsyncMock(
             return_value={
                 "success": True,
                 "message_id": str(message_id),
-                "twilio_sid": "SM123",
+                "provider_message_id": "SM123",
                 "status": "sent",
             },
         )
 
-        response = await client.post(
-            "/api/v1/sms/send",
-            json={
-                "customer_id": str(uuid4()),
-                "phone": "6125551234",
-                "message": "Test message",
-                "message_type": "appointment_confirmation",
-                "sms_opt_in": True,
-            },
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
+        mock_customer = _mock_customer(customer_id)
+        mock_db = _mock_db_with_customer(mock_customer)
+
+        app.dependency_overrides[get_db_session] = lambda: mock_db
+        try:
+            response = await client.post(
+                "/api/v1/sms/send",
+                json={
+                    "customer_id": str(customer_id),
+                    "phone": "6125551234",
+                    "message": "Test message",
+                    "message_type": "appointment_confirmation",
+                    "sms_opt_in": True,
+                },
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+        finally:
+            app.dependency_overrides.pop(get_db_session, None)
 
     @patch("grins_platform.api.v1.sms.SMSService")
-    async def test_send_enforces_opt_in(
+    async def test_send_enforces_consent(
         self,
         mock_sms_cls: Mock,
         client: AsyncClient,
     ) -> None:
-        """Test that send enforces SMS opt-in."""
+        """Test that send enforces SMS consent."""
         mock_sms = mock_sms_cls.return_value
+        customer_id = uuid4()
         mock_sms.send_message = AsyncMock(
-            side_effect=SMSOptInError("Customer has not opted in to SMS"),
+            side_effect=SMSConsentDeniedError("Consent denied"),
         )
 
-        response = await client.post(
-            "/api/v1/sms/send",
-            json={
-                "customer_id": str(uuid4()),
-                "phone": "6125551234",
-                "message": "Test message",
-                "message_type": "appointment_confirmation",
-                "sms_opt_in": False,
-            },
-        )
-        assert response.status_code == 403
+        mock_customer = _mock_customer(customer_id)
+        mock_db = _mock_db_with_customer(mock_customer)
+
+        app.dependency_overrides[get_db_session] = lambda: mock_db
+        try:
+            response = await client.post(
+                "/api/v1/sms/send",
+                json={
+                    "customer_id": str(customer_id),
+                    "phone": "6125551234",
+                    "message": "Test message",
+                    "message_type": "appointment_confirmation",
+                    "sms_opt_in": False,
+                },
+            )
+            assert response.status_code == 403
+        finally:
+            app.dependency_overrides.pop(get_db_session, None)
 
     async def test_send_requires_phone(self, client: AsyncClient) -> None:
         """Test that send requires phone number."""
@@ -159,21 +196,19 @@ class TestCommunicationsQueueEndpoint:
 class TestBulkSendEndpoint:
     """Tests for /api/v1/communications/send-bulk endpoint."""
 
-    @patch("grins_platform.api.v1.sms.SMSService")
+    @patch("grins_platform.api.v1.sms.CampaignRepository")
     async def test_bulk_send_processes_messages(
         self,
-        mock_sms_cls: Mock,
+        mock_repo_cls: Mock,
         client: AsyncClient,
     ) -> None:
-        """Test that bulk send processes multiple messages."""
-        mock_sms = mock_sms_cls.return_value
-        mock_sms.send_message = AsyncMock(
-            return_value={
-                "success": True,
-                "message_id": str(uuid4()),
-                "status": "sent",
-            },
+        """Test that bulk send enqueues recipients and returns 202."""
+        campaign_id = uuid4()
+        mock_repo = mock_repo_cls.return_value
+        mock_repo.create = AsyncMock(
+            return_value=Mock(id=campaign_id),
         )
+        mock_repo.add_recipients_bulk = AsyncMock(return_value=[])
 
         response = await client.post(
             "/api/v1/communications/send-bulk",
@@ -194,10 +229,25 @@ class TestBulkSendEndpoint:
                 ],
             },
         )
-        assert response.status_code == 200
+        assert response.status_code == 202
         data = response.json()
-        assert data["total"] == 2
-        assert data["success_count"] == 2
+        assert data["campaign_id"] == str(campaign_id)
+        assert data["total_recipients"] == 2
+        assert data["status"] == "pending"
+
+        # Verify campaign was created with correct params
+        mock_repo.create.assert_called_once()
+        call_kwargs = mock_repo.create.call_args[1]
+        assert call_kwargs["campaign_type"] == "SMS"
+        assert call_kwargs["status"] == "pending"
+        assert call_kwargs["body"] == "Test bulk message"
+
+        # Verify recipients were enqueued
+        mock_repo.add_recipients_bulk.assert_called_once()
+        recipients_arg = mock_repo.add_recipients_bulk.call_args[0][0]
+        assert len(recipients_arg) == 2
+        assert all(r["delivery_status"] == "pending" for r in recipients_arg)
+        assert all(r["channel"] == "sms" for r in recipients_arg)
 
 
 @pytest.mark.asyncio
@@ -235,20 +285,24 @@ class TestDeleteMessageEndpoint:
 
 @pytest.mark.property
 @pytest.mark.asyncio
-class TestSMSOptInProperty:
-    """Property test: SMS opt-in enforcement."""
+class TestSMSConsentProperty:
+    """Property test: SMS consent enforcement."""
 
     @patch("grins_platform.api.v1.sms.SMSService")
-    async def test_opt_in_required_for_all_message_types(
+    async def test_consent_required_for_all_message_types(
         self,
         mock_sms_cls: Mock,
         client: AsyncClient,
     ) -> None:
-        """Property 13: SMS opt-in required for all message types."""
+        """Property 13: SMS consent required for all message types."""
         mock_sms = mock_sms_cls.return_value
         mock_sms.send_message = AsyncMock(
-            side_effect=SMSOptInError("Customer has not opted in to SMS"),
+            side_effect=SMSConsentDeniedError("Consent denied"),
         )
+
+        customer_id = uuid4()
+        mock_customer = _mock_customer(customer_id)
+        mock_db = _mock_db_with_customer(mock_customer)
 
         message_types = [
             "appointment_confirmation",
@@ -260,16 +314,21 @@ class TestSMSOptInProperty:
             "payment_reminder",
         ]
 
-        for message_type in message_types:
-            response = await client.post(
-                "/api/v1/sms/send",
-                json={
-                    "customer_id": str(uuid4()),
-                    "phone": "6125551234",
-                    "message": "Test message",
-                    "message_type": message_type,
-                    "sms_opt_in": False,
-                },
-            )
-            # All should be rejected due to opt-in
-            assert response.status_code == 403
+        app.dependency_overrides[get_db_session] = lambda: mock_db
+        try:
+            for message_type in message_types:
+                response = await client.post(
+                    "/api/v1/sms/send",
+                    json={
+                        "customer_id": str(customer_id),
+                        "phone": "6125551234",
+                        "message": "Test message",
+                        "message_type": message_type,
+                        "sms_opt_in": False,
+                    },
+                )
+                assert response.status_code == 403, (
+                    f"Expected 403 for {message_type}, got {response.status_code}"
+                )
+        finally:
+            app.dependency_overrides.pop(get_db_session, None)

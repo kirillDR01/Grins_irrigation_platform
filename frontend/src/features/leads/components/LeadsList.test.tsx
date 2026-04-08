@@ -25,6 +25,12 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
+// Mock NewTextCampaignModal to avoid AuthProvider dependency
+vi.mock('@/features/communications', () => ({
+  NewTextCampaignModal: ({ open, preSelectedLeadIds }: { open: boolean; preSelectedLeadIds?: string[] }) =>
+    open ? <div data-testid="campaign-modal">Campaign Modal ({preSelectedLeadIds?.length ?? 0} leads)</div> : null,
+}));
+
 const mockLeads: Lead[] = [
   {
     id: 'lead-001',
@@ -492,6 +498,126 @@ describe('LeadsList', () => {
       );
       expect(highlightedRow).toBeDefined();
       expect(highlightedRow!.className).toContain('animate-highlight-fade');
+    });
+  });
+
+  describe('bulk select and Text Selected', () => {
+    beforeEach(() => {
+      vi.mocked(leadApi.list).mockResolvedValue({
+        items: mockLeads,
+        total: 2,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+    });
+
+    it('renders checkbox column in the table', async () => {
+      render(<LeadsList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('select-all-checkbox')).toBeInTheDocument();
+      expect(screen.getByTestId(`select-lead-${mockLeads[0].id}`)).toBeInTheDocument();
+      expect(screen.getByTestId(`select-lead-${mockLeads[1].id}`)).toBeInTheDocument();
+    });
+
+    it('does not show bulk-action bar when no rows selected', async () => {
+      render(<LeadsList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId('bulk-action-bar')).not.toBeInTheDocument();
+    });
+
+    it('shows bulk-action bar with selected count when a row is checked', async () => {
+      const user = userEvent.setup();
+      render(<LeadsList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+      });
+
+      // Click the first lead checkbox
+      await user.click(screen.getByTestId(`select-lead-${mockLeads[0].id}`));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('bulk-action-bar')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('selected-count')).toHaveTextContent('1 selected');
+      expect(screen.getByTestId('text-selected-leads-btn')).toBeInTheDocument();
+    });
+
+    it('opens campaign modal with pre-selected lead IDs when Text Selected is clicked', async () => {
+      const user = userEvent.setup();
+      render(<LeadsList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+      });
+
+      // Select first lead
+      await user.click(screen.getByTestId(`select-lead-${mockLeads[0].id}`));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('text-selected-leads-btn')).toBeInTheDocument();
+      });
+
+      // Click "Text Selected"
+      await user.click(screen.getByTestId('text-selected-leads-btn'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('campaign-modal')).toBeInTheDocument();
+      });
+
+      // Mock renders the count of pre-selected IDs
+      expect(screen.getByTestId('campaign-modal')).toHaveTextContent('1 leads');
+    });
+
+    it('clears selection when clear button is clicked', async () => {
+      const user = userEvent.setup();
+      render(<LeadsList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+      });
+
+      // Select a lead
+      await user.click(screen.getByTestId(`select-lead-${mockLeads[0].id}`));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('bulk-action-bar')).toBeInTheDocument();
+      });
+
+      // Click clear
+      await user.click(screen.getByTestId('clear-selection-btn'));
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('bulk-action-bar')).not.toBeInTheDocument();
+      });
+    });
+
+    it('selects all rows via select-all checkbox', async () => {
+      const user = userEvent.setup();
+      render(<LeadsList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+      });
+
+      // Click select all
+      await user.click(screen.getByTestId('select-all-checkbox'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('bulk-action-bar')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('selected-count')).toHaveTextContent('2 selected');
     });
   });
 });

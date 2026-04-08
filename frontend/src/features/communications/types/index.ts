@@ -46,3 +46,26 @@ export interface SentMessageListParams extends PaginationParams {
 export interface UnaddressedCountResponse {
   count: number;
 }
+
+// Campaign types (CallRail SMS Integration)
+export type {
+  CampaignType,
+  CampaignStatus,
+  RecipientDeliveryStatus,
+  CustomerAudienceFilter,
+  LeadAudienceFilter,
+  AdHocAudienceFilter,
+  TargetAudience,
+  Campaign,
+  CampaignCreate,
+  CampaignRecipient,
+  CampaignSendAccepted,
+  CampaignCancelResult,
+  CampaignStats,
+  AudiencePreviewRecipient,
+  AudiencePreview,
+  CsvRejectedRow,
+  CsvUploadResult,
+  RateLimitInfo,
+  WorkerHealth,
+} from './campaign';

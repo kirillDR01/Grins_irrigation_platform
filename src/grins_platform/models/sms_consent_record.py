@@ -44,6 +44,7 @@ class SmsConsentRecord(Base):
         Index("ix_sms_consent_records_customer_id", "customer_id"),
         Index("ix_sms_consent_records_consent_token", "consent_token"),
         Index("ix_sms_consent_records_lead_id", "lead_id"),
+        Index("ix_sms_consent_records_created_by_staff_id", "created_by_staff_id"),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -102,6 +103,11 @@ class SmsConsentRecord(Base):
         Boolean,
         nullable=False,
         server_default="false",
+    )
+    created_by_staff_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("staff.id", name="fk_sms_consent_records_created_by_staff"),
+        nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

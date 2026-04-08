@@ -290,6 +290,20 @@ class CampaignCancelResult(BaseModel):
     )
 
 
+class CampaignRetryResult(BaseModel):
+    """Result of retrying failed campaign recipients.
+
+    Validates: Requirement 37
+    """
+
+    campaign_id: UUID = Field(..., description="Campaign UUID")
+    retried_recipients: int = Field(
+        ...,
+        ge=0,
+        description="Number of new pending rows created from failed recipients",
+    )
+
+
 class RateLimitInfo(BaseModel):
     """Rate limit state snapshot from CallRail headers."""
 

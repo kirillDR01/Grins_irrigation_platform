@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import (
 
 from grins_platform.database import get_db_session as db_session_generator
 from grins_platform.repositories.appointment_repository import AppointmentRepository
+from grins_platform.repositories.campaign_repository import CampaignRepository
 from grins_platform.repositories.customer_repository import CustomerRepository
 from grins_platform.repositories.estimate_repository import EstimateRepository
 from grins_platform.repositories.google_sheet_submission_repository import (
@@ -34,14 +35,18 @@ from grins_platform.repositories.service_offering_repository import (
 )
 from grins_platform.repositories.staff_repository import StaffRepository
 from grins_platform.services.appointment_service import AppointmentService
+from grins_platform.services.campaign_service import CampaignService
 from grins_platform.services.customer_service import CustomerService
 from grins_platform.services.dashboard_service import DashboardService
+from grins_platform.services.email_service import EmailService
 from grins_platform.services.estimate_service import EstimateService
 from grins_platform.services.google_sheets_service import GoogleSheetsService
 from grins_platform.services.job_service import JobService
 from grins_platform.services.photo_service import PhotoService
 from grins_platform.services.property_service import PropertyService
 from grins_platform.services.service_offering_service import ServiceOfferingService
+from grins_platform.services.sms.factory import get_sms_provider
+from grins_platform.services.sms_service import SMSService
 from grins_platform.services.staff_availability_service import StaffAvailabilityService
 from grins_platform.services.staff_service import StaffService
 
@@ -305,8 +310,34 @@ async def get_estimate_service(
     return EstimateService(estimate_repository=repository)
 
 
+async def get_campaign_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> CampaignService:
+    """Get CampaignService with SMS and Email dependencies wired.
+
+    Fixes B1: CampaignService now receives SMSService and EmailService
+    so campaign sends actually dispatch messages.
+
+    Args:
+        session: Database session from dependency injection.
+
+    Returns:
+        CampaignService with all dependencies.
+    """
+    repo = CampaignRepository(session)
+    provider = get_sms_provider()
+    sms_service = SMSService(session=session, provider=provider)
+    email_service = EmailService()
+    return CampaignService(
+        campaign_repository=repo,
+        sms_service=sms_service,
+        email_service=email_service,
+    )
+
+
 __all__ = [
     "get_appointment_service",
+    "get_campaign_service",
     "get_customer_service",
     "get_dashboard_service",
     "get_db_session",

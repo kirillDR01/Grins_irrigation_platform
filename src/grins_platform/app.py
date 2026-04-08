@@ -50,6 +50,8 @@ from grins_platform.services.background_jobs import register_scheduled_jobs
 from grins_platform.services.google_sheets_config import GoogleSheetsSettings
 from grins_platform.services.google_sheets_poller import GoogleSheetsPoller
 from grins_platform.services.google_sheets_service import GoogleSheetsService
+from grins_platform.services.sms.audit import log_provider_switched
+from grins_platform.services.sms.factory import get_sms_provider
 from grins_platform.services.stripe_config import StripeSettings
 
 logger = get_logger(__name__)
@@ -112,6 +114,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("app.scheduler_started")
     except Exception as e:
         logger.warning("app.scheduler_startup_failed", error=str(e))
+
+    # Log SMS provider selection at boot (Requirement 41)
+    try:
+        provider = get_sms_provider()
+        provider_name = provider.provider_name
+        logger.info("app.sms_provider_resolved", provider=provider_name)
+        async for session in db_manager.get_session():
+            await log_provider_switched(session, provider_name=provider_name)
+    except Exception as e:
+        logger.warning("app.sms_provider_audit_failed", error=str(e))
 
     logger.info("app.startup_completed")
 

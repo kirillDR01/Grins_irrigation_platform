@@ -1,23 +1,43 @@
 """SMS Service for customer communications.
 
-Validates: AI Assistant Requirements 12.1-12.10
-Validates: Requirements 8.1-8.6, 9.1-9.5
+Refactored to accept a pluggable BaseSMSProvider, Recipient-based sends,
+type-scoped consent, campaign-scoped dedupe, rate-limit integration,
+and merge-field templating.
+
+Validates: Requirements 1.5, 1.6, 4.5, 4.6, 8.1-8.6, 9.1-9.5, 11.2, 11.3,
+           24, 26, 38, 39
 """
+
+from __future__ import annotations
 
 import os
 import re
+import time as _time_mod
 from datetime import datetime, time, timedelta, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from grins_platform.log_config import LoggerMixin, get_logger
+from grins_platform.models.sent_message import SentMessage
 from grins_platform.models.sms_consent_record import SmsConsentRecord
 from grins_platform.repositories.sent_message_repository import SentMessageRepository
 from grins_platform.schemas.ai import DeliveryStatus, MessageType
+from grins_platform.services.sms.audit import log_consent_hard_stop
+from grins_platform.services.sms.consent import ConsentType, check_sms_consent
+from grins_platform.services.sms.templating import render_template
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from grins_platform.services.sms.base import (
+        BaseSMSProvider,
+        ProviderSendResult,
+    )
+    from grins_platform.services.sms.rate_limit_tracker import SMSRateLimitTracker
+    from grins_platform.services.sms.recipient import Recipient
 
 logger = get_logger(__name__)
 
@@ -43,6 +63,17 @@ OPT_OUT_CONFIRMATION_MSG = (
     "You've been unsubscribed from Grins Irrigation texts. Reply START to re-subscribe."
 )
 
+# Sender prefix and STOP footer
+_DEFAULT_PREFIX = "Grins Irrigation: "
+_DEFAULT_FOOTER = " Reply STOP to opt out."
+
+
+def _mask_phone(phone: str) -> str:
+    """Mask phone for logging: +1XXX***XXXX."""
+    if len(phone) >= 10:
+        return phone[:4] + "***" + phone[-4:]
+    return "***"
+
 
 class SMSError(Exception):
     """Base exception for SMS errors."""
@@ -52,131 +83,304 @@ class SMSOptInError(SMSError):
     """Raised when customer has not opted in to SMS."""
 
 
+class SMSConsentDeniedError(SMSError):
+    """Raised when consent check fails."""
+
+
+class SMSRateLimitDeniedError(SMSError):
+    """Raised when rate limit check denies the send."""
+
+
 class SMSService(LoggerMixin):
-    """Service for sending SMS messages via Twilio."""
+    """Service for sending SMS messages via a pluggable provider."""
 
     DOMAIN = "business"
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        provider: BaseSMSProvider | None = None,
+        rate_limit_tracker: SMSRateLimitTracker | None = None,
+    ) -> None:
         """Initialize SMS service.
 
         Args:
-            session: Database session
+            session: Database session.
+            provider: SMS provider (defaults to NullProvider if None).
+            rate_limit_tracker: Optional rate limit tracker.
         """
         super().__init__()
         self.session = session
         self.message_repo = SentMessageRepository(session)
-        self.twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID", "")
-        self.twilio_auth_token = os.getenv("TWILIO_AUTH_TOKEN", "")
-        self.twilio_phone_number = os.getenv("TWILIO_PHONE_NUMBER", "")
+        if provider is not None:
+            self.provider = provider
+        else:
+            from grins_platform.services.sms.null_provider import (  # noqa: PLC0415
+                NullProvider,
+            )
+
+            self.provider = NullProvider()
+        self.rate_limit_tracker = rate_limit_tracker
+        self._prefix = os.environ.get("SMS_SENDER_PREFIX", _DEFAULT_PREFIX)
+        self._footer = _DEFAULT_FOOTER
 
     async def send_message(
         self,
-        customer_id: UUID,
-        phone: str,
+        recipient: Recipient,
         message: str,
         message_type: MessageType,
-        sms_opt_in: bool = False,
+        consent_type: ConsentType = "transactional",
+        campaign_id: UUID | None = None,
         job_id: UUID | None = None,
         appointment_id: UUID | None = None,
+        *,
+        skip_formatting: bool = False,
     ) -> dict[str, Any]:
-        """Send an SMS message to a customer.
+        """Send an SMS message via the configured provider.
 
         Args:
-            customer_id: Customer ID
-            phone: Phone number
-            message: Message content
-            message_type: Type of message
-            sms_opt_in: Whether customer has opted in
-            job_id: Optional job ID
-            appointment_id: Optional appointment ID
+            recipient: Unified Recipient (customer, lead, or ad-hoc).
+            message: Message body (may contain merge fields).
+            message_type: Type of message.
+            consent_type: Consent scope (marketing/transactional/operational).
+            campaign_id: Optional campaign ID for B4 dedupe scoping.
+            job_id: Optional job ID.
+            appointment_id: Optional appointment ID.
+            skip_formatting: If True, skip prefix/footer/template rendering.
 
         Returns:
-            Result with message ID and status
+            Result dict with success, message_id, status.
 
         Raises:
-            SMSOptInError: If customer has not opted in
-            SMSError: If sending fails
+            SMSConsentDeniedError: If consent check fails.
+            SMSRateLimitDeniedError: If rate limit denies the send.
+            SMSError: If sending fails.
         """
+        masked = _mask_phone(recipient.phone)
+        _send_t0 = _time_mod.monotonic()
+
+        logger.info(
+            "sms.send.requested",
+            phone=masked,
+            message_type=message_type.value,
+            consent_type=consent_type,
+            source_type=recipient.source_type,
+            provider=self.provider.provider_name,
+        )
         self.log_started(
             "send_message",
-            customer_id=str(customer_id),
+            phone=masked,
             message_type=message_type.value,
+            consent_type=consent_type,
+            source_type=recipient.source_type,
         )
 
-        # Check opt-in
-        if not sms_opt_in:
-            self.log_rejected("send_message", reason="not_opted_in")
-            msg = "Customer has not opted in to SMS messages"
-            raise SMSOptInError(msg)
-
-        # Check for duplicate messages within 24 hours (Requirement 7.7)
-        recent_messages = await self.message_repo.get_by_customer_and_type(
-            customer_id=customer_id,
-            message_type=message_type,
-            hours_back=24,
+        # S11: Type-scoped consent check
+        has_consent = await check_sms_consent(
+            self.session,
+            recipient.phone,
+            consent_type,
         )
-
-        if recent_messages:
-            self.log_rejected(
-                "send_message",
-                reason="duplicate_message_within_24_hours",
-                recent_message_id=str(recent_messages[0].id),
+        if not has_consent:
+            logger.info(
+                "sms.consent.denied",
+                phone=masked,
+                consent_type=consent_type,
             )
-            return {
-                "success": False,
-                "reason": (
-                    "Duplicate message prevented - "
-                    "same message type sent within 24 hours"
-                ),
-                "recent_message_id": str(recent_messages[0].id),
-                "recent_message_sent_at": recent_messages[0].created_at.isoformat(),
-            }
+            self.log_rejected("send_message", reason="consent_denied")
+            msg = f"Consent denied for {masked} (type={consent_type})"
+            raise SMSConsentDeniedError(msg)
 
-        # Format phone number to E.164
-        formatted_phone = self._format_phone(phone)
+        # B4: Campaign-scoped dedupe (24h window)
+        if campaign_id is not None:
+            dupes = await self._check_campaign_dedupe(
+                recipient,
+                campaign_id,
+                message_type,
+            )
+            if dupes:
+                self.log_rejected(
+                    "send_message",
+                    reason="campaign_dedupe",
+                    campaign_id=str(campaign_id),
+                )
+                return {
+                    "success": False,
+                    "reason": "Duplicate: same recipient+campaign within 24h",
+                    "recent_message_id": str(dupes[0].id),
+                    "recent_message_sent_at": dupes[0].created_at.isoformat(),
+                }
+        elif recipient.customer_id is not None:
+            legacy_dupes = await self.message_repo.get_by_customer_and_type(
+                customer_id=recipient.customer_id,
+                message_type=message_type,
+                hours_back=24,
+            )
+            if legacy_dupes:
+                self.log_rejected(
+                    "send_message",
+                    reason="duplicate_message_within_24_hours",
+                )
+                sent_at = legacy_dupes[0].created_at.isoformat()
+                return {
+                    "success": False,
+                    "reason": "Duplicate message prevented",
+                    "recent_message_id": str(legacy_dupes[0].id),
+                    "recent_message_sent_at": sent_at,
+                }
+
+        # Rate limit check
+        if self.rate_limit_tracker is not None:
+            rl_result = await self.rate_limit_tracker.check()
+            if not rl_result.allowed:
+                logger.info(
+                    "sms.rate_limit.denied",
+                    phone=masked,
+                    retry_after=rl_result.retry_after_seconds,
+                )
+                # Create a scheduled message instead of failing
+                scheduled_for = datetime.now(tz=timezone.utc) + timedelta(
+                    seconds=rl_result.retry_after_seconds,
+                )
+                sent_message = SentMessage(
+                    customer_id=recipient.customer_id,
+                    lead_id=recipient.lead_id,
+                    job_id=job_id,
+                    appointment_id=appointment_id,
+                    campaign_id=campaign_id,
+                    message_type=message_type.value,
+                    message_content=message,
+                    recipient_phone=recipient.phone,
+                    delivery_status=DeliveryStatus.SCHEDULED.value,
+                    scheduled_for=scheduled_for,
+                )
+                self.session.add(sent_message)
+                await self.session.flush()
+                return {
+                    "success": True,
+                    "deferred": True,
+                    "message_id": str(sent_message.id),
+                    "status": "scheduled",
+                    "scheduled_for": scheduled_for.isoformat(),
+                }
+
+        # Render merge fields + format message
+        if not skip_formatting:
+            context = {
+                "first_name": recipient.first_name or "",
+                "last_name": recipient.last_name or "",
+            }
+            rendered = render_template(message, context)
+            formatted = f"{self._prefix}{rendered}{self._footer}"
+        else:
+            formatted = message
+
+        # Normalize phone
+        formatted_phone = self._format_phone(recipient.phone)
 
         # Create message record
-        sent_message = await self.message_repo.create(
-            customer_id=customer_id,
-            message_type=message_type,
-            message_content=message,
-            recipient_phone=formatted_phone,
+        sent_message = SentMessage(
+            customer_id=recipient.customer_id,
+            lead_id=recipient.lead_id,
             job_id=job_id,
             appointment_id=appointment_id,
+            campaign_id=campaign_id,
+            message_type=message_type.value,
+            message_content=formatted,
+            recipient_phone=formatted_phone,
+            delivery_status=DeliveryStatus.PENDING.value,
         )
+        self.session.add(sent_message)
+        await self.session.flush()
+        await self.session.refresh(sent_message)
 
-        # Send via Twilio (placeholder - would use actual Twilio client)
+        # Send via provider
         try:
-            twilio_sid = await self._send_via_twilio(formatted_phone, message)
+            result = await self.provider.send_text(formatted_phone, formatted)
 
-            # Update message record
-            await self.message_repo.update(
-                sent_message.id,
-                delivery_status=DeliveryStatus.SENT,
-                twilio_sid=twilio_sid,
-                sent_at=datetime.now(),
+            # Update rate limit tracker from provider response headers
+            rl_hourly_remaining: int | None = None
+            rl_daily_remaining: int | None = None
+            if (
+                self.rate_limit_tracker is not None
+                and result.raw_response is not None
+            ):
+                raw_resp = result.raw_response
+                if "_response_headers" in raw_resp:
+                    await self.rate_limit_tracker.update_from_headers(
+                        raw_resp["_response_headers"],
+                    )
+                rl_state = await self.rate_limit_tracker.check()
+                rl_hourly_remaining = rl_state.state.hourly_remaining
+                rl_daily_remaining = rl_state.state.daily_remaining
+
+            sent_message.delivery_status = DeliveryStatus.SENT.value
+            sent_message.provider_message_id = result.provider_message_id
+            sent_message.provider_conversation_id = result.provider_conversation_id
+            sent_message.provider_thread_id = result.provider_thread_id
+            sent_message.sent_at = datetime.now(tz=timezone.utc)
+            await self.session.flush()
+
+            latency_ms = int((_time_mod.monotonic() - _send_t0) * 1000)
+            logger.info(
+                "sms.send.succeeded",
+                phone=masked,
+                provider=self.provider.provider_name,
+                provider_conversation_id=result.provider_conversation_id,
+                provider_thread_id=result.provider_thread_id,
+                latency_ms=latency_ms,
+                hourly_remaining=rl_hourly_remaining,
+                daily_remaining=rl_daily_remaining,
+                x_request_id=result.request_id,
             )
-
             self.log_completed("send_message", message_id=str(sent_message.id))
             return {
                 "success": True,
                 "message_id": str(sent_message.id),
-                "twilio_sid": twilio_sid,
+                "provider_message_id": result.provider_message_id,
                 "status": "sent",
             }
 
         except Exception as e:
-            # Update message record with failure
-            await self.message_repo.update(
-                sent_message.id,
-                delivery_status=DeliveryStatus.FAILED,
-                error_message=str(e),
-            )
+            sent_message.delivery_status = DeliveryStatus.FAILED.value
+            sent_message.error_message = str(e)
+            await self.session.flush()
 
+            latency_ms = int((_time_mod.monotonic() - _send_t0) * 1000)
+            logger.exception(
+                "sms.send.failed",
+                phone=masked,
+                provider=self.provider.provider_name,
+                latency_ms=latency_ms,
+                error=str(e),
+            )
             self.log_failed("send_message", error=e)
             msg = f"Failed to send SMS: {e}"
             raise SMSError(msg) from e
+
+    async def _check_campaign_dedupe(
+        self,
+        recipient: Recipient,
+        campaign_id: UUID,
+        message_type: MessageType,  # noqa: ARG002
+    ) -> list[SentMessage]:
+        """Check for duplicate sends within a campaign (B4 fix)."""
+        from sqlalchemy import and_  # noqa: PLC0415
+
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=24)
+        conditions = [
+            SentMessage.campaign_id == campaign_id,
+            SentMessage.recipient_phone == self._format_phone(recipient.phone),
+            SentMessage.created_at >= cutoff,
+        ]
+        stmt = (
+            select(SentMessage)
+            .where(and_(*conditions))
+            .order_by(SentMessage.created_at.desc())
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
 
     async def send_automated_message(
         self,
@@ -196,15 +400,15 @@ class SMSService(LoggerMixin):
 
         Validates: Requirements 8.6, 9.4, 9.5
         """
-        self.log_started("send_automated_message", phone=phone)
+        self.log_started("send_automated_message", phone=_mask_phone(phone))
 
         # Check consent before sending (Req 8.6)
-        has_consent = await self.check_sms_consent(phone)
+        has_consent = await check_sms_consent(self.session, phone)
         if not has_consent:
             self.log_rejected(
                 "send_automated_message",
                 reason="opted_out",
-                phone=phone,
+                phone=_mask_phone(phone),
             )
             return {"success": False, "reason": "opted_out"}
 
@@ -217,30 +421,30 @@ class SMSService(LoggerMixin):
                 "scheduled_for": scheduled_time.isoformat(),
             }
 
-        # Send immediately
-        twilio_sid = await self._send_via_twilio(
-            self._format_phone(phone),
-            message,
+        # Send immediately via provider
+        formatted_phone = self._format_phone(phone)
+        result = await self.provider.send_text(formatted_phone, message)
+        self.log_completed(
+            "send_automated_message",
+            phone=_mask_phone(phone),
         )
-        self.log_completed("send_automated_message", phone=phone)
-        return {"success": True, "twilio_sid": twilio_sid}
+        return {"success": True, "provider_message_id": result.provider_message_id}
 
-    async def _send_via_twilio(
+    async def _send_via_provider(
         self,
-        phone: str,  # noqa: ARG002
-        message: str,  # noqa: ARG002
-    ) -> str:
-        """Send message via Twilio API.
+        phone: str,
+        message: str,
+    ) -> ProviderSendResult:
+        """Send message via the configured provider.
 
         Args:
-            phone: Formatted phone number
-            message: Message content
+            phone: Formatted phone number.
+            message: Message content.
 
         Returns:
-            Twilio message SID
+            ProviderSendResult from the provider.
         """
-        # Placeholder - in production would use Twilio client
-        return f"SM{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        return await self.provider.send_text(phone, message)
 
     def _format_phone(self, phone: str) -> str:
         """Format phone number to E.164 format.
@@ -260,21 +464,21 @@ class SMSService(LoggerMixin):
         self,
         from_phone: str,
         body: str,
-        twilio_sid: str,
+        provider_sid: str,
     ) -> dict[str, Any]:
         """Handle incoming SMS with STOP keyword and informal opt-out processing.
 
         Args:
             from_phone: Sender phone number
             body: Message body
-            twilio_sid: Twilio message SID
+            provider_sid: Provider message SID
 
         Returns:
             Processing result
 
         Validates: Requirements 8.1-8.5
         """
-        self.log_started("handle_inbound", from_phone=from_phone)
+        self.log_started("handle_inbound", from_phone=_mask_phone(from_phone))
 
         body_stripped = body.strip()
         body_lower = body_stripped.lower()
@@ -288,7 +492,7 @@ class SMSService(LoggerMixin):
             return await self._flag_informal_opt_out(from_phone, body_stripped)
 
         # Delegate to existing webhook handler for other messages
-        return await self.handle_webhook(from_phone, body, twilio_sid)
+        return await self.handle_webhook(from_phone, body, provider_sid)
 
     async def _process_exact_opt_out(
         self,
@@ -324,14 +528,20 @@ class SMSService(LoggerMixin):
         self.session.add(record)
         await self.session.flush()
 
+        # Audit: hard STOP received (Requirement 41)
+        await log_consent_hard_stop(
+            self.session,
+            phone_masked=_mask_phone(formatted_phone),
+        )
+
         # Send confirmation SMS (Req 8.3)
-        await self._send_via_twilio(formatted_phone, OPT_OUT_CONFIRMATION_MSG)
+        _ = await self.provider.send_text(formatted_phone, OPT_OUT_CONFIRMATION_MSG)
 
         self.log_completed(
             "handle_inbound",
             webhook_action="exact_opt_out",
             keyword=keyword,
-            phone=phone,
+            phone=_mask_phone(phone),
         )
         return {
             "action": "opt_out",
@@ -370,19 +580,17 @@ class SMSService(LoggerMixin):
         """
         self.log_started(
             "flag_informal_opt_out",
-            phone=phone,
-            body=body,
+            phone=_mask_phone(phone),
         )
         logger.warning(
             "sms.informal_opt_out.flagged",
-            phone=phone,
-            body=body,
+            phone=_mask_phone(phone),
             action="admin_review_required",
         )
         self.log_completed(
             "handle_inbound",
             webhook_action="informal_opt_out_flagged",
-            phone=phone,
+            phone=_mask_phone(phone),
         )
         return {
             "action": "informal_opt_out_flagged",
@@ -391,30 +599,23 @@ class SMSService(LoggerMixin):
             "message": "Informal opt-out detected. Flagged for admin review.",
         }
 
-    async def check_sms_consent(self, phone: str) -> bool:
+    async def check_sms_consent_legacy(self, phone: str) -> bool:
         """Check most recent consent record for a phone number.
+
+        Thin wrapper around the consent module for backward compatibility.
 
         Args:
             phone: Phone number (any format)
 
         Returns:
-            True if most recent consent record has consent_given=True,
-            or True if no records exist (default allow).
-
-        Validates: Requirements 8.6
+            True if consent allows transactional sends.
         """
-        formatted_phone = self._format_phone(phone)
-        stmt = (
-            select(SmsConsentRecord.consent_given)
-            .where(SmsConsentRecord.phone_number == formatted_phone)
-            .order_by(SmsConsentRecord.created_at.desc())
-            .limit(1)
-        )
-        result = await self.session.execute(stmt)
-        row = result.scalar_one_or_none()
-        if row is None:
-            return True  # No records = default allow
-        return bool(row)
+        return await check_sms_consent(self.session, phone)
+
+    # Alias for backward compatibility with callers using the old name
+    async def check_sms_consent(self, phone: str) -> bool:
+        """Alias for check_sms_consent_legacy."""
+        return await self.check_sms_consent_legacy(phone)
 
     def enforce_time_window(
         self,
@@ -457,13 +658,13 @@ class SMSService(LoggerMixin):
             "enforce_time_window",
             original_time=now_ct.isoformat(),
             scheduled_time=scheduled.isoformat(),
-            phone=phone,
+            phone=_mask_phone(phone),
         )
         logger.info(
             "sms.time_window.deferred",
             original_time=now_ct.isoformat(),
             scheduled_time=scheduled.isoformat(),
-            phone=phone,
+            phone=_mask_phone(phone),
         )
         return scheduled
 
@@ -471,19 +672,19 @@ class SMSService(LoggerMixin):
         self,
         from_phone: str,
         body: str,
-        twilio_sid: str,  # noqa: ARG002
+        provider_sid: str,  # noqa: ARG002
     ) -> dict[str, Any]:
-        """Handle incoming SMS webhook from Twilio.
+        """Handle incoming SMS webhook.
 
         Args:
             from_phone: Sender phone number
             body: Message body
-            twilio_sid: Twilio message SID
+            provider_sid: Provider message SID
 
         Returns:
             Processing result
         """
-        self.log_started("handle_webhook", from_phone=from_phone)
+        self.log_started("handle_webhook", from_phone=_mask_phone(from_phone))
 
         body_lower = body.strip().lower()
 

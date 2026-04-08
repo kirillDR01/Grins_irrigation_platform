@@ -13,7 +13,7 @@ Validates: Requirements 8.1-8.6, 9.2, 9.5
 from __future__ import annotations
 
 from datetime import datetime, time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from hypothesis import (
@@ -70,8 +70,9 @@ class TestProperty12ExactOptOutKeyword:
         result = await service.handle_inbound("+16125551234", body, "SM123")
 
         assert result["action"] == "opt_out"
-        service.session.add.assert_called_once()
-        added = service.session.add.call_args[0][0]
+        # session.add called for SmsConsentRecord + AuditLog
+        assert service.session.add.call_count >= 1
+        added = service.session.add.call_args_list[0][0][0]
         assert added.consent_given is False
         assert added.opt_out_method == "text_stop"
         assert added.opt_out_confirmation_sent is True
@@ -117,24 +118,24 @@ class TestProperty14ConsentCheckBlocks:
         self,
         consent_given: bool,
     ) -> None:
-        """check_sms_consent returns consent_given from most recent record."""
+        """check_sms_consent_legacy returns consent_given from module."""
         service = _make_service()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = consent_given
-        service.session.execute = AsyncMock(return_value=mock_result)
-
-        result = await service.check_sms_consent("6125551234")
+        with patch(
+            "grins_platform.services.sms_service.check_sms_consent",
+            return_value=consent_given,
+        ):
+            result = await service.check_sms_consent_legacy("6125551234")
         assert result is consent_given
 
     @pytest.mark.asyncio
     async def test_no_records_defaults_to_allow(self) -> None:
         """No consent records = default allow (True)."""
         service = _make_service()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        service.session.execute = AsyncMock(return_value=mock_result)
-
-        result = await service.check_sms_consent("6125551234")
+        with patch(
+            "grins_platform.services.sms_service.check_sms_consent",
+            return_value=True,
+        ):
+            result = await service.check_sms_consent_legacy("6125551234")
         assert result is True
 
 

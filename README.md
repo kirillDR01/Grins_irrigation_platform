@@ -120,12 +120,16 @@ Grin's Irrigation Platform is a field service automation system that eliminates 
 - **Morning Briefing**: Daily summary of scheduled work
 
 ### 10. SMS Communications
-- Twilio integration for SMS messaging
-- Opt-in compliance
-- Message templates for common communications
-- Delivery status tracking
+- Provider-agnostic SMS architecture (CallRail default, Twilio swap via env var)
+- Type-scoped consent enforcement (marketing/transactional/operational)
+- Hard-STOP precedence across all consent types
+- Merge-field message templates with GSM-7/UCS-2 segment counting
+- 3-step campaign wizard (Audience → Compose → Review)
+- Background campaign worker with state machine and orphan recovery
+- Rate limit tracking via CallRail response headers
+- CSV audience upload with staff attestation for ad-hoc recipients
+- Bulk-select entry points on Customers and Leads tabs
 - Communications queue management
-- Bulk send capability
 
 ### 11. Dashboard & Analytics
 - Overview metrics (customers, jobs, appointments)
@@ -158,7 +162,7 @@ Grin's Irrigation Platform is a field service automation system that eliminates 
 | **Pydantic 2.0** | Data validation |
 | **structlog** | Structured logging |
 | **OpenAI** | AI features |
-| **Twilio** | SMS communications |
+| **Twilio** | SMS communications (swap provider) |
 | **Timefold** | Schedule optimization |
 | **uv** | Package management |
 
@@ -319,7 +323,18 @@ JWT_SECRET_KEY=your-jwt-secret-min-32-chars
 # AI Features
 OPENAI_API_KEY=your-openai-api-key
 
-# SMS (Twilio)
+# SMS Provider (callrail, twilio, or null for testing)
+SMS_PROVIDER=callrail
+
+# CallRail SMS (default provider)
+CALLRAIL_API_KEY=your-callrail-api-key
+CALLRAIL_ACCOUNT_ID=your-callrail-account-id
+CALLRAIL_COMPANY_ID=your-callrail-company-id
+CALLRAIL_TRACKING_NUMBER=+1234567890
+CALLRAIL_TRACKER_ID=your-callrail-tracker-id
+CALLRAIL_WEBHOOK_SECRET=your-callrail-webhook-secret
+
+# SMS (Twilio) — only needed when SMS_PROVIDER=twilio
 TWILIO_ACCOUNT_SID=your-account-sid
 TWILIO_AUTH_TOKEN=your-auth-token
 TWILIO_PHONE_NUMBER=+1234567890
@@ -744,6 +759,32 @@ uv run alembic downgrade -1
 # Validate features
 ./scripts/validate-all.sh
 ```
+
+### SMS Provider Swap (CallRail ↔ Twilio)
+
+The platform uses a provider-agnostic SMS architecture. CallRail is the default provider; switching to Twilio is a zero-code operation:
+
+1. **Verify Twilio 10DLC** — Ensure your Twilio 10DLC brand and campaign registration is active
+2. **Set environment variables** in `.env`:
+   ```bash
+   SMS_PROVIDER=twilio
+   TWILIO_ACCOUNT_SID=your-account-sid
+   TWILIO_AUTH_TOKEN=your-auth-token
+   TWILIO_PHONE_NUMBER=+1234567890
+   ```
+   Leave `CALLRAIL_*` variables in place as fallback.
+3. **Update Twilio inbound webhook URL** in the Twilio console to point to:
+   ```
+   https://<your-domain>/api/v1/webhooks/twilio-inbound
+   ```
+4. **Restart the backend** — `get_sms_provider()` will return `TwilioProvider` on boot
+5. **Smoke test** — Send one text message, reply STOP, verify consent record is created
+
+No changes are needed to `SMSService`, `CampaignService`, the Communications UI, or any business logic. Rate limiter keys are automatically namespaced by provider name, so CallRail counters don't interfere with Twilio.
+
+To switch back to CallRail, set `SMS_PROVIDER=callrail` (or remove the variable) and restart.
+
+For testing without a real provider, set `SMS_PROVIDER=null` to use the in-memory `NullProvider`.
 
 ---
 
