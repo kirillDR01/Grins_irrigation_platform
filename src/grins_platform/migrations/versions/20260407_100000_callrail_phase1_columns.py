@@ -34,10 +34,29 @@ def upgrade() -> None:
     )
 
     # 0b. Rename campaign_recipients.status → delivery_status (model mismatch)
-    op.alter_column(
-        "campaign_recipients",
-        "status",
-        new_column_name="delivery_status",
+    #
+    # IDEMPOTENT: some environments (notably the Railway dev DB) were
+    # bootstrapped with ``delivery_status`` directly via a different
+    # migration ancestry, so the column to rename does not exist there.
+    # The original ``op.alter_column(..., new_column_name=...)`` form
+    # crashed with ``UndefinedColumnError: column "status" does not
+    # exist`` on the first dev deploy of this migration. Wrap the rename
+    # in a conditional DO block that no-ops when ``status`` is missing.
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'campaign_recipients'
+                  AND column_name = 'status'
+            ) THEN
+                ALTER TABLE campaign_recipients
+                    RENAME COLUMN status TO delivery_status;
+            END IF;
+        END
+        $$;
+        """,
     )
 
     # 1. campaign_recipients.sending_started_at
@@ -112,9 +131,26 @@ def downgrade() -> None:
         table_name="campaign_recipients",
     )
     op.drop_column("campaign_recipients", "sending_started_at")
-    op.alter_column(
-        "campaign_recipients",
-        "delivery_status",
-        new_column_name="status",
+    # Mirror the upgrade's idempotent rename: only rename back to
+    # ``status`` if ``delivery_status`` exists and ``status`` does not.
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'campaign_recipients'
+                  AND column_name = 'delivery_status'
+            ) AND NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'campaign_recipients'
+                  AND column_name = 'status'
+            ) THEN
+                ALTER TABLE campaign_recipients
+                    RENAME COLUMN delivery_status TO status;
+            END IF;
+        END
+        $$;
+        """,
     )
     op.drop_column("campaign_recipients", "channel")
