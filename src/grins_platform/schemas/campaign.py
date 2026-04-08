@@ -163,8 +163,43 @@ class CampaignCreate(BaseModel):
         description="Email subject line",
     )
     body: str = Field(
-        ...,
+        default="",
+        max_length=10000,
+        description=(
+            "Message body. Empty string allowed on draft create; "
+            "must be non-empty at send time."
+        ),
+    )
+    scheduled_at: datetime | None = Field(
+        default=None,
+        description="Scheduled send time",
+    )
+
+
+class CampaignUpdate(BaseModel):
+    """Schema for updating a draft campaign.
+
+    All fields optional; only provided fields are applied.
+    Only campaigns in DRAFT status may be updated.
+    """
+
+    name: str | None = Field(
+        default=None,
         min_length=1,
+        max_length=200,
+        description="Campaign name",
+    )
+    target_audience: TargetAudience | dict[str, Any] | None = Field(
+        default=None,
+        description="Audience filter criteria (structured or legacy dict)",
+    )
+    subject: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Email subject line",
+    )
+    body: str | None = Field(
+        default=None,
         max_length=10000,
         description="Message body",
     )

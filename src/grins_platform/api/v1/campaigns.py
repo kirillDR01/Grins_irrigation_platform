@@ -47,6 +47,7 @@ from grins_platform.schemas.campaign import (
     CampaignRetryResult,
     CampaignSendAcceptedResponse,
     CampaignStats,
+    CampaignUpdate,
     CsvRejectedRow,
     CsvUploadResult,
     TargetAudience,
@@ -54,8 +55,10 @@ from grins_platform.schemas.campaign import (
 )
 from grins_platform.services.campaign_service import (
     CampaignAlreadySentError,
+    CampaignNotDraftError,
     CampaignNotFoundError,
     CampaignService,
+    EmptyCampaignBodyError,
     NoRecipientsError,
 )
 from grins_platform.services.sms.audit import (
@@ -345,6 +348,9 @@ async def upload_csv_audience(
     from grins_platform.services.sms.audit import (  # noqa: PLC0415
         log_csv_attestation_submitted,
     )
+    from grins_platform.services.sms.consent import (  # noqa: PLC0415
+        bulk_insert_attestation_consent,
+    )
     from grins_platform.services.sms.csv_upload import (  # noqa: PLC0415
         match_recipients,
         parse_csv,
@@ -372,6 +378,19 @@ async def upload_csv_audience(
         session,
         parse_result.recipients,
     )
+
+    # Persist marketing consent records for every attested phone so the
+    # send-time consent gate (check_sms_consent) allows delivery. The
+    # attestation IS the consent record under staff-attestation consent
+    # method (Requirement 25).
+    if parse_result.recipients:
+        await bulk_insert_attestation_consent(
+            session,
+            staff_id=current_user.id,
+            phones=[r.phone_e164 for r in parse_result.recipients],
+            attestation_version=attestation_version,
+            attestation_text=attestation_text_shown,
+        )
 
     # Stage parsed data + attestation in Redis (1h TTL) for send time
     redis_url = os.environ.get("REDIS_URL")
@@ -467,6 +486,42 @@ async def get_campaign(
     return result
 
 
+@router.patch(
+    "/{campaign_id}",
+    response_model=CampaignResponse,
+    summary="Update draft campaign",
+    description=(
+        "Update a campaign in DRAFT status. Only provided fields are applied. "
+        "Campaigns in sending/sent/cancelled state cannot be edited."
+    ),
+)
+async def update_campaign(
+    campaign_id: UUID,
+    data: CampaignUpdate,
+    _current_user: ManagerOrAdminUser,
+    service: Annotated[CampaignService, Depends(get_campaign_service)],
+) -> CampaignResponse:
+    """Update a draft campaign's name, body, audience, subject, or schedule.
+
+    Validates: Requirement 33.6
+    """
+    _endpoints.log_started("update_campaign", campaign_id=str(campaign_id))
+    try:
+        updated = await service.update_campaign(campaign_id, data)
+    except CampaignNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+    except CampaignNotDraftError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        ) from e
+    _endpoints.log_completed("update_campaign", campaign_id=str(campaign_id))
+    return CampaignResponse.model_validate(updated)
+
+
 @router.delete(
     "/{campaign_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -523,6 +578,11 @@ async def send_campaign(
             detail=str(e),
         ) from e
     except CampaignAlreadySentError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except EmptyCampaignBodyError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),

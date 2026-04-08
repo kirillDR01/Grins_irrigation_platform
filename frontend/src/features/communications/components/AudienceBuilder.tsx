@@ -9,6 +9,7 @@
  */
 
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import axios from 'axios';
 import { Users, UserPlus, FileSpreadsheet, Upload, AlertTriangle, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,6 +53,9 @@ const ATTESTATION_TEXT =
 const ATTESTATION_VERSION = '1.0';
 const CSV_MAX_SIZE_MB = 2;
 const CSV_MAX_ROWS = 5000;
+
+// Radix Select does not allow empty-string values, so use a sentinel.
+const ALL_SOURCES_VALUE = '__all__';
 
 // --- Props ---
 
@@ -239,8 +243,17 @@ export function AudienceBuilder({
   const handleCsvUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
+      // Reset the input so selecting the same file again still fires onChange
+      e.target.value = '';
       if (!file) return;
       setCsvError(null);
+
+      if (!attestationChecked) {
+        setCsvError(
+          'Please check the staff consent attestation above before uploading.',
+        );
+        return;
+      }
 
       if (file.size > CSV_MAX_SIZE_MB * 1024 * 1024) {
         setCsvError(`File exceeds ${CSV_MAX_SIZE_MB} MB limit.`);
@@ -258,8 +271,24 @@ export function AudienceBuilder({
         },
         {
           onSuccess: (result) => setCsvResult(result),
-          onError: (err) =>
-            setCsvError(err instanceof Error ? err.message : 'CSV upload failed'),
+          onError: (err) => {
+            // Prefer the backend's FastAPI `detail` field over the generic
+            // axios "Request failed with status code 400" message.
+            if (axios.isAxiosError(err)) {
+              const detail = err.response?.data?.detail;
+              if (typeof detail === 'string') {
+                setCsvError(detail);
+                return;
+              }
+              if (Array.isArray(detail) && detail[0]?.msg) {
+                setCsvError(String(detail[0].msg));
+                return;
+              }
+            }
+            setCsvError(
+              err instanceof Error ? err.message : 'CSV upload failed',
+            );
+          },
         },
       );
     },
@@ -505,14 +534,16 @@ export function AudienceBuilder({
               </Label>
             </div>
             <Select
-              value={leadSourceFilter}
-              onValueChange={setLeadSourceFilter}
+              value={leadSourceFilter || ALL_SOURCES_VALUE}
+              onValueChange={(v) =>
+                setLeadSourceFilter(v === ALL_SOURCES_VALUE ? '' : v)
+              }
             >
               <SelectTrigger className="w-[160px]" data-testid="lead-source-filter">
                 <SelectValue placeholder="All sources" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All sources</SelectItem>
+                <SelectItem value={ALL_SOURCES_VALUE}>All sources</SelectItem>
                 <SelectItem value="website">Website</SelectItem>
                 <SelectItem value="google_form">Google Form</SelectItem>
                 <SelectItem value="phone_call">Phone Call</SelectItem>
@@ -619,6 +650,28 @@ export function AudienceBuilder({
       {/* --- Ad-hoc CSV Panel --- */}
       {activePanel === 'adhoc' && (
         <div data-testid="adhoc-panel" className="space-y-4">
+          {/* Staff attestation — must be checked BEFORE upload */}
+          <div
+            className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3"
+            data-testid="attestation-block"
+          >
+            <p className="text-sm font-medium text-amber-800">
+              Staff Consent Attestation (Required before upload)
+            </p>
+            <p className="text-xs text-amber-700">{ATTESTATION_TEXT}</p>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="attestation"
+                checked={attestationChecked}
+                onCheckedChange={(v) => setAttestationChecked(!!v)}
+                data-testid="attestation-checkbox"
+              />
+              <Label htmlFor="attestation" className="text-sm text-amber-800">
+                I confirm the above
+              </Label>
+            </div>
+          </div>
+
           {/* Upload area */}
           <div className="rounded-lg border-2 border-dashed border-slate-300 p-6 text-center">
             <Upload className="mx-auto h-8 w-8 text-slate-400 mb-2" />
@@ -642,11 +695,16 @@ export function AudienceBuilder({
               variant="outline"
               size="sm"
               onClick={() => fileInputRef.current?.click()}
-              disabled={csvUploadMutation.isPending}
+              disabled={csvUploadMutation.isPending || !attestationChecked}
               data-testid="csv-upload-btn"
             >
               {csvUploadMutation.isPending ? 'Uploading...' : 'Choose CSV'}
             </Button>
+            {!attestationChecked && (
+              <p className="text-xs text-amber-700 mt-2">
+                Check the staff attestation above to enable upload.
+              </p>
+            )}
           </div>
 
           {csvError && (
@@ -692,28 +750,6 @@ export function AudienceBuilder({
               )}
             </div>
           )}
-
-          {/* Staff attestation */}
-          <div
-            className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3"
-            data-testid="attestation-block"
-          >
-            <p className="text-sm font-medium text-amber-800">
-              Staff Consent Attestation (Required)
-            </p>
-            <p className="text-xs text-amber-700">{ATTESTATION_TEXT}</p>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="attestation"
-                checked={attestationChecked}
-                onCheckedChange={(v) => setAttestationChecked(!!v)}
-                data-testid="attestation-checkbox"
-              />
-              <Label htmlFor="attestation" className="text-sm text-amber-800">
-                I confirm the above
-              </Label>
-            </div>
-          </div>
         </div>
       )}
     </div>

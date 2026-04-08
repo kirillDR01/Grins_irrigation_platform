@@ -22,7 +22,12 @@ import { useAuth } from '@/features/auth';
 import { AudienceBuilder } from './AudienceBuilder';
 import { MessageComposer } from './MessageComposer';
 import { CampaignReview } from './CampaignReview';
-import { useCreateCampaign, useSendCampaign, useAudiencePreview } from '../hooks';
+import {
+  useCreateCampaign,
+  useUpdateCampaign,
+  useSendCampaign,
+  useAudiencePreview,
+} from '../hooks';
 import type { TargetAudience, AudiencePreview } from '../types/campaign';
 
 // --- Constants ---
@@ -74,6 +79,7 @@ export function NewTextCampaignModal({
 
   // --- Mutations ---
   const createCampaign = useCreateCampaign();
+  const updateCampaign = useUpdateCampaign();
   const sendCampaign = useSendCampaign();
   const audiencePreviewMutation = useAudiencePreview();
 
@@ -206,7 +212,19 @@ export function NewTextCampaignModal({
   // --- Send / Schedule ---
   const handleSendNow = useCallback(async () => {
     if (!campaignId) return;
+    if (!messageBody.trim()) {
+      toast.error('Message body cannot be empty.');
+      return;
+    }
     try {
+      // Persist the composed body + latest audience to the draft before sending.
+      await updateCampaign.mutateAsync({
+        id: campaignId,
+        data: {
+          target_audience: audience,
+          body: messageBody,
+        },
+      });
       await sendCampaign.mutateAsync(campaignId);
       toast.success('Campaign queued for sending.');
       localStorage.removeItem(getDraftKey(userId));
@@ -215,19 +233,24 @@ export function NewTextCampaignModal({
     } catch {
       toast.error('Failed to send campaign.');
     }
-  }, [campaignId, sendCampaign, userId, onOpenChange, resetWizard]);
+  }, [campaignId, messageBody, audience, updateCampaign, sendCampaign, userId, onOpenChange, resetWizard]);
 
   const handleSchedule = useCallback(
     async (scheduledAt: string) => {
       if (!campaignId) return;
+      if (!messageBody.trim()) {
+        toast.error('Message body cannot be empty.');
+        return;
+      }
       try {
-        // Update campaign with scheduled_at, then send
-        await createCampaign.mutateAsync({
-          name: `SMS Campaign ${new Date().toLocaleDateString()}`,
-          campaign_type: 'sms',
-          target_audience: audience,
-          body: messageBody,
-          scheduled_at: scheduledAt,
+        // Persist composed body + latest audience + schedule to the existing draft.
+        await updateCampaign.mutateAsync({
+          id: campaignId,
+          data: {
+            target_audience: audience,
+            body: messageBody,
+            scheduled_at: scheduledAt,
+          },
         });
         await sendCampaign.mutateAsync(campaignId);
         toast.success(`Campaign scheduled for ${new Date(scheduledAt).toLocaleString()}.`);
@@ -238,7 +261,7 @@ export function NewTextCampaignModal({
         toast.error('Failed to schedule campaign.');
       }
     },
-    [campaignId, audience, messageBody, createCampaign, sendCampaign, userId, onOpenChange, resetWizard],
+    [campaignId, audience, messageBody, updateCampaign, sendCampaign, userId, onOpenChange, resetWizard],
   );
 
   // Reset on close
@@ -250,7 +273,8 @@ export function NewTextCampaignModal({
     [onOpenChange, resetWizard],
   );
 
-  const isSending = sendCampaign.isPending || createCampaign.isPending;
+  const isSending =
+    sendCampaign.isPending || createCampaign.isPending || updateCampaign.isPending;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>

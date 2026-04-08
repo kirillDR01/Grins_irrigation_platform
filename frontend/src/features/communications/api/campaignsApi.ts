@@ -15,6 +15,7 @@ import type {
   CampaignRetryResult,
   CampaignSendAccepted,
   CampaignStats,
+  CampaignUpdate,
   CsvUploadResult,
   TargetAudience,
   WorkerHealth,
@@ -29,6 +30,11 @@ export interface ListCampaignsParams {
 export const campaignsApi = {
   create: async (data: CampaignCreate): Promise<Campaign> => {
     const response = await apiClient.post<Campaign>('/campaigns', data);
+    return response.data;
+  },
+
+  update: async (id: string, data: CampaignUpdate): Promise<Campaign> => {
+    const response = await apiClient.patch<Campaign>(`/campaigns/${id}`, data);
     return response.data;
   },
 

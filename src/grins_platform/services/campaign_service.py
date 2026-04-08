@@ -32,6 +32,7 @@ from grins_platform.schemas.campaign import (
     CampaignCreate,
     CampaignSendResult,
     CampaignStats,
+    CampaignUpdate,
 )
 from grins_platform.services.sms.phone_normalizer import normalize_to_e164
 from grins_platform.services.sms.recipient import Recipient
@@ -79,6 +80,27 @@ class NoRecipientsError(Exception):
         self.campaign_id = campaign_id
         super().__init__(
             f"Campaign {campaign_id}: target audience matched zero recipients.",
+        )
+
+
+class CampaignNotDraftError(Exception):
+    """Raised when attempting to update a campaign that is not in DRAFT status."""
+
+    def __init__(self, campaign_id: UUID, status: str) -> None:
+        self.campaign_id = campaign_id
+        self.status = status
+        super().__init__(
+            f"Campaign {campaign_id} is in '{status}' status; only DRAFT campaigns can be edited.",
+        )
+
+
+class EmptyCampaignBodyError(Exception):
+    """Raised when attempting to send a campaign with an empty message body."""
+
+    def __init__(self, campaign_id: UUID) -> None:
+        self.campaign_id = campaign_id
+        super().__init__(
+            f"Campaign {campaign_id}: message body is empty. Compose a message before sending.",
         )
 
 
@@ -153,6 +175,75 @@ class CampaignService(LoggerMixin):
             campaign_id=str(campaign.id),
         )
         return campaign
+
+    # ================================================================
+    # update_campaign — draft edits
+    # ================================================================
+
+    async def update_campaign(
+        self,
+        campaign_id: UUID,
+        data: CampaignUpdate,
+    ) -> Campaign:
+        """Update a draft campaign.
+
+        Only campaigns in DRAFT status may be edited. Only fields
+        explicitly provided (non-None) are applied.
+
+        Args:
+            campaign_id: UUID of the campaign to update.
+            data: Partial campaign update payload.
+
+        Returns:
+            The updated Campaign record.
+
+        Raises:
+            CampaignNotFoundError: Campaign does not exist.
+            CampaignNotDraftError: Campaign is not in DRAFT status.
+        """
+        self.log_started("update_campaign", campaign_id=str(campaign_id))
+
+        campaign = await self.repo.get_by_id(campaign_id)
+        if campaign is None:
+            self.log_failed(
+                "update_campaign",
+                error=CampaignNotFoundError(campaign_id),
+            )
+            raise CampaignNotFoundError(campaign_id)
+
+        if campaign.status != CampaignStatus.DRAFT.value:
+            self.log_rejected(
+                "update_campaign",
+                reason="not_draft",
+                campaign_id=str(campaign_id),
+                status=campaign.status,
+            )
+            raise CampaignNotDraftError(campaign_id, campaign.status)
+
+        update_fields = data.model_dump(exclude_unset=True, exclude_none=False)
+        # Drop keys that were never set (exclude_unset above) but also drop
+        # keys whose value is None so we don't overwrite existing data.
+        update_fields = {k: v for k, v in update_fields.items() if v is not None}
+
+        if not update_fields:
+            self.log_completed(
+                "update_campaign",
+                campaign_id=str(campaign_id),
+                changed=0,
+            )
+            return campaign
+
+        updated = await self.repo.update(campaign_id, **update_fields)
+        if updated is None:
+            # Defensive: get_by_id succeeded above, so this shouldn't happen
+            raise CampaignNotFoundError(campaign_id)
+
+        self.log_completed(
+            "update_campaign",
+            campaign_id=str(campaign_id),
+            changed=len(update_fields),
+        )
+        return updated
 
     # ================================================================
     # send_campaign — Req 45.4, 45.6, 45.7, 45.8
@@ -358,6 +449,17 @@ class CampaignService(LoggerMixin):
                 status=campaign.status,
             )
             raise CampaignAlreadySentError(campaign_id)
+
+        # Defensive: reject sending a campaign with an empty body.
+        # Draft creation allows empty body so the wizard can persist before
+        # composition, but we must never actually send an empty message.
+        if not (campaign.body and campaign.body.strip()):
+            self.log_rejected(
+                "enqueue_campaign_send",
+                reason="empty_body",
+                campaign_id=str(campaign_id),
+            )
+            raise EmptyCampaignBodyError(campaign_id)
 
         recipients = await self._filter_recipients(db, campaign)
         if not recipients:
@@ -666,6 +768,8 @@ class CampaignService(LoggerMixin):
         self,
         db: AsyncSession,
         campaign: Campaign,
+        *,
+        create_ghost_leads: bool = True,
     ) -> list[Recipient]:
         """Filter recipients from Customer + Lead + ad-hoc sources.
 
@@ -675,6 +779,14 @@ class CampaignService(LoggerMixin):
         Supports both the new structured ``TargetAudience`` format (keys:
         ``customers``, ``leads``, ``ad_hoc``) and the legacy flat format
         (keys: ``lead_source``, ``is_active``, ``no_appointment_in_days``).
+
+        Args:
+            db: Async database session.
+            campaign: Campaign (or fake audience wrapper) to filter for.
+            create_ghost_leads: When True (send path), create ghost leads
+                for ad-hoc CSV rows that don't match any existing
+                customer/lead. When False (preview path), ad-hoc rows are
+                returned with lead_id=None and no DB writes happen.
 
         Validates: Requirements 13.1, 13.6, 5.5
         """
@@ -879,21 +991,98 @@ class CampaignService(LoggerMixin):
                     seen_phones[phone] = Recipient.from_lead(lead)
 
         # ----------------------------------------------------------
-        # 3. Ad-hoc CSV source (ghost leads resolved at send time)
+        # 3. Ad-hoc CSV source
         # ----------------------------------------------------------
-        # CSV upload endpoint (task 8.6) stages rows; ghost leads are
-        # created only on final send to avoid orphans.  Until that
-        # endpoint exists, ad-hoc returns empty.
+        # CSV upload endpoint (task 8.6) stages rows in Redis at key
+        # ``sms:csv_upload:{upload_id}`` with 1h TTL. Preview reads
+        # without creating ghost leads; send creates ghost leads so
+        # each recipient can be tracked via campaign_recipients.lead_id.
         if adhoc_filters and adhoc_filters.get("csv_upload_id"):
-            # Placeholder: will be wired when POST /campaigns/audience/csv
-            # creates staged rows.  For now, log and skip.
-            self.logger.debug(
-                "campaign.filter_recipients.adhoc_skipped",
-                csv_upload_id=str(adhoc_filters["csv_upload_id"]),
-                reason="csv_upload_endpoint_not_yet_implemented",
+            staged_rows = await self._load_staged_adhoc(
+                adhoc_filters["csv_upload_id"],
             )
+            if staged_rows:
+                from grins_platform.services.sms.ghost_lead import (  # noqa: PLC0415
+                    create_or_get as create_ghost,
+                )
+
+                for row in staged_rows:
+                    phone = row.get("phone")
+                    if not phone:
+                        continue
+                    # Customer/lead from steps 1 and 2 win on phone collision
+                    if phone in seen_phones:
+                        continue
+                    first_name = row.get("first_name")
+                    last_name = row.get("last_name")
+                    lead_id: UUID | None = None
+                    if create_ghost_leads:
+                        try:
+                            lead = await create_ghost(
+                                db,
+                                phone=phone,
+                                first_name=first_name,
+                                last_name=last_name,
+                            )
+                            lead_id = lead.id
+                        except Exception:
+                            self.logger.debug(
+                                "campaign.filter_recipients.ghost_lead_failed",
+                                phone=phone,
+                            )
+                            continue
+                    seen_phones[phone] = Recipient.from_adhoc(
+                        phone=phone,
+                        lead_id=lead_id,
+                        first_name=first_name,
+                        last_name=last_name,
+                    )
 
         return list(seen_phones.values())
+
+    async def _load_staged_adhoc(
+        self,
+        upload_id: str | UUID,
+    ) -> list[dict[str, Any]]:
+        """Load staged ad-hoc CSV rows from Redis.
+
+        Returns an empty list if Redis is unavailable or the upload
+        has expired.
+
+        Validates: Requirement 35
+        """
+        import json as _json  # noqa: PLC0415
+        import os  # noqa: PLC0415
+
+        redis_url = os.environ.get("REDIS_URL")
+        if not redis_url:
+            return []
+
+        try:
+            from redis.asyncio import Redis  # noqa: PLC0415
+        except ImportError:
+            return []
+
+        redis_client = None
+        try:
+            redis_client = Redis.from_url(redis_url, decode_responses=True)
+            raw = await redis_client.get(f"sms:csv_upload:{upload_id}")
+            if not raw:
+                return []
+            staged = _json.loads(raw)
+            recipients = staged.get("recipients") or []
+            if isinstance(recipients, list):
+                return recipients
+            return []
+        except Exception:
+            self.logger.debug(
+                "campaign.load_staged_adhoc.failed",
+                upload_id=str(upload_id),
+            )
+            return []
+        finally:
+            if redis_client:
+                await redis_client.aclose()
 
     async def preview_audience(
         self,
@@ -914,7 +1103,11 @@ class CampaignService(LoggerMixin):
                 self.target_audience = ta
 
         fake = _FakeAudience(target_audience)
-        recipients = await self._filter_recipients(db, fake)  # type: ignore[arg-type]
+        recipients = await self._filter_recipients(
+            db,
+            fake,  # type: ignore[arg-type]
+            create_ghost_leads=False,
+        )
 
         customers_count = sum(1 for r in recipients if r.source_type == "customer")
         leads_count = sum(1 for r in recipients if r.source_type == "lead")

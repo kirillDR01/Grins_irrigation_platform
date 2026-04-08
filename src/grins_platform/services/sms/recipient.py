@@ -62,11 +62,15 @@ class Recipient:
     def from_adhoc(
         cls,
         phone: str,
-        lead_id: UUID,
+        lead_id: UUID | None = None,
         first_name: str | None = None,
         last_name: str | None = None,
     ) -> Recipient:
-        """Create a Recipient from an ad-hoc phone (ghost lead)."""
+        """Create a Recipient from an ad-hoc phone (ghost lead).
+
+        ``lead_id`` is None at preview time (no ghost lead has been
+        created yet) and is a real UUID at send time.
+        """
         return cls(
             phone=phone,
             source_type="ad_hoc",

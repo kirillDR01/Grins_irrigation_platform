@@ -83,7 +83,16 @@ export interface CampaignCreate {
   campaign_type: CampaignType;
   target_audience?: TargetAudience | null;
   subject?: string | null;
-  body: string;
+  /** Optional at draft-create time; required before send. */
+  body?: string;
+  scheduled_at?: string | null;
+}
+
+export interface CampaignUpdate {
+  name?: string;
+  target_audience?: TargetAudience | null;
+  subject?: string | null;
+  body?: string;
   scheduled_at?: string | null;
 }
 
