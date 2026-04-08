@@ -16,7 +16,11 @@ from typing import Any
 import httpx
 
 from grins_platform.log_config import LoggerMixin
-from grins_platform.services.sms.base import InboundSMS, ProviderSendResult
+from grins_platform.services.sms.base import (
+    InboundSMS,
+    ProviderSendResult,
+    enforce_recipient_allowlist,
+)
 
 # ---------------------------------------------------------------------------
 # Typed exceptions
@@ -104,6 +108,11 @@ class CallRailProvider(LoggerMixin):
 
     async def send_text(self, to: str, body: str) -> ProviderSendResult:
         """Send SMS via POST /v3/a/{account_id}/text-messages.json."""
+        # Hard allow-list guard — no-op in production (env var unset),
+        # enforced in dev/staging. Runs BEFORE any logging or network
+        # I/O so a blocked send leaves no trail beyond the refusal log.
+        enforce_recipient_allowlist(to, provider=self.provider_name)
+
         url = f"/v3/a/{self._account_id}/text-messages.json"
         payload = {
             "company_id": self._company_id,

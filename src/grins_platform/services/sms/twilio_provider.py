@@ -11,7 +11,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from grins_platform.services.sms.base import InboundSMS, ProviderSendResult
+from grins_platform.services.sms.base import (
+    InboundSMS,
+    ProviderSendResult,
+    enforce_recipient_allowlist,
+)
 
 
 class TwilioProvider:
@@ -27,6 +31,10 @@ class TwilioProvider:
         Mirrors the original ``SMSService._send_via_twilio()`` behaviour:
         returns a synthetic SID without making a real API call.
         """
+        # Parity with CallRailProvider — same allow-list guard applies
+        # regardless of which provider is active.
+        enforce_recipient_allowlist(to, provider=self.provider_name)
+
         sid = f"SM{datetime.now().strftime('%Y%m%d%H%M%S')}"
         return ProviderSendResult(provider_message_id=sid, status="sent")
 
