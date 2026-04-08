@@ -715,22 +715,136 @@ Rough phases once the blocking prerequisite (§2) is complete:
 
 ---
 
-## 11. Inbound Webhook Payload Reference (TO BE FILLED IN)
+## 11. Inbound Webhook Payload Reference (VERIFIED 2026-04-08)
 
-> This section is a placeholder. After step 4 in §2.1, paste the raw captured payload here and annotate each field with its meaning and the name our parser uses.
+> Captured from a real CallRail inbound webhook hit on the Railway dev
+> environment on 2026-04-08 during the initial end-to-end smoke test.
+> The test phone (`+19527373312`) sent the text body `test3` to the
+> Grins tracking number (`+19525293750`), CallRail POSTed to
+> `https://grins-dev-dev.up.railway.app/api/v1/webhooks/callrail/inbound`,
+> and the signed payload was verified + accepted (HTTP 200).
 
-Expected fields (guessed from CallRail docs — unconfirmed):
+### 11.1 HMAC signature format
 
-| Field | Our parser uses | Notes |
-|---|---|---|
-| `customer_phone_number` | `inbound.from_phone` | The customer's phone (who sent the reply) |
-| `content` | `inbound.body` | The reply text |
-| `id` (or `message_id`?) | `inbound.provider_sid` | For idempotency/dedup (24h Redis key per parent spec) |
-| `tracking_phone_number` | `inbound.to_phone` | Our CallRail tracking number (+19525293750) |
-| `created_at` | `inbound.received_at` | Provider-reported receive time |
-| `sms_thread.id` | TBD | Correlate to the outbound conversation thread |
+| Aspect | Verified value |
+|---|---|
+| Header name | `signature` (lowercase, no `x-` prefix) |
+| Algorithm | **HMAC-SHA1** (not SHA256) |
+| Secret encoding | UTF-8 bytes of `CALLRAIL_WEBHOOK_SECRET` (passed directly, no hex-decode) |
+| Output encoding | **Base64** of the raw HMAC digest (not hex) |
+| Signed input | Raw request body, no canonicalization or timestamp prefix |
 
-HMAC signature header — **unconfirmed**. Currently assumed to be `x-callrail-signature` with HMAC-SHA256. To verify: check headers of the real inbound POST against `CALLRAIL_WEBHOOK_SECRET` using the `CallRailProvider.verify_webhook_signature` helper.
+Example signature from the verified sample:
+```
+signature: TtgcarAPNUJFtEBZ+PaYm5tywEc=
+```
+
+Reference implementation in `services/sms/callrail_provider.py::verify_webhook_signature`:
+```python
+import base64, hmac, hashlib
+expected = base64.b64encode(
+    hmac.new(secret.encode(), raw_body, hashlib.sha1).digest()
+).decode()
+return hmac.compare_digest(expected, headers.get("signature", ""))
+```
+
+### 11.2 Request headers (canonical sample)
+
+```json
+{
+  "accept": "*/*",
+  "accept-encoding": "gzip;q=1.0,deflate;q=0.6,identity;q=0.3",
+  "content-length": "561",
+  "content-type": "application/json",
+  "host": "grins-dev-dev.up.railway.app",
+  "signature": "TtgcarAPNUJFtEBZ+PaYm5tywEc=",
+  "user-agent": "CallRail Webhook/1.0",
+  "x-forwarded-for": "54.198.229.112, 167.82.233.164",
+  "x-forwarded-host": "grins-dev-dev.up.railway.app",
+  "x-forwarded-proto": "https",
+  "x-real-ip": "54.198.229.112",
+  "traceparent": "00-69d6d667000000002f8f2dcd57f14b8e-0dd48e0c34ccd01f-00",
+  "tracestate": "dd=p:0dd48e0c34ccd01f;s:0",
+  "x-datadog-parent-id": "996577600632311839",
+  "x-datadog-sampling-priority": "0",
+  "x-datadog-tags": "_dd.p.tid=69d6d66700000000",
+  "x-datadog-trace-id": "3427008201419213710"
+}
+```
+
+**Notes:**
+- CallRail's webhook sender IP is `54.198.229.112` (AWS us-east-1). If we ever want to harden the endpoint further we can add an IP allowlist on top of HMAC.
+- `User-Agent: CallRail Webhook/1.0` is stable and uniquely identifies their sender — useful for observability dashboards or fallback checks.
+- `x-datadog-*` / `traceparent` / `tracestate` headers indicate CallRail uses DataDog for their own distributed tracing. These are passed through untouched and can be ignored by us.
+
+### 11.3 Request body (canonical sample)
+
+```json
+{
+  "resource_id": "SCI019d6f3583427ec1aef4f611818ddfa9",
+  "source_number": "***3312",
+  "destination_number": "***3750",
+  "lead_status": null,
+  "conversation_id": "k8mc8",
+  "company_id": 167957839,
+  "person_id": "PER019d69f77f3776278fa13b10514a131f",
+  "thread_resource_id": "SMT019d69f77fb472829bfb403cc4104584",
+  "company_resource_id": "COM019c31a27f5b732b9d214e04eaa3061f",
+  "person_resource_id": "PER019d69f77f3776278fa13b10514a131f",
+  "message_type": "sms",
+  "media_urls": [],
+  "content": "test3",
+  "received_at": "2026-04-08T18:27:51.236-04:00",
+  "timestamp": "2026-04-08T18:27:51.236-04:00"
+}
+```
+
+### 11.4 Field dictionary
+
+| Field | Type | Our parser uses | Meaning |
+|---|---|---|---|
+| `resource_id` | `SCI` + hex string | `inbound.provider_sid` | **Per-message** unique id. Different for every inbound message. Use for Redis idempotency dedupe. |
+| `source_number` | masked string `***NNNN` | `inbound.from_phone` | **Masked** — last 4 digits only. Cannot be used for correlation. |
+| `destination_number` | masked string `***NNNN` | `inbound.to_phone` | **Masked** — our tracking number (`+19525293750`), shown as `***3750`. |
+| `content` | string | `inbound.body` | The reply text — this is what the poll parser reads. |
+| `conversation_id` | short id (e.g. `k8mc8`) | — | Conversation id. **Stable across all messages from the same phone to the same tracker.** Duplicate of the top-level `id` in the outbound response. |
+| `thread_resource_id` | `SMT` + hex string | `inbound.thread_id` | **Per-conversation thread id.** Matches `provider_thread_id` stored on the outbound `SentMessage` row — this is the **canonical correlation key** for poll-response routing. |
+| `person_id` / `person_resource_id` | `PER` + hex | — | CallRail's internal person/contact id. Can be used to correlate across multiple conversations from the same human. Not used today. |
+| `company_id` / `company_resource_id` | int / `COM` + hex | — | Our CallRail company. Confirms the payload is for the Grins account. |
+| `lead_status` | string | — | CallRail's own lead classification. `null` for unknown senders. Not used today. |
+| `media_urls` | array | — | MMS attachment URLs. Empty for SMS. Future-proofing for MMS support. |
+| `received_at` / `timestamp` | ISO8601 w/ offset | `inbound.received_at` | Provider-reported receive time. Both fields are identical; `received_at` is the canonical name we read. |
+| `message_type` | `"sms"` | — | Always `sms` for text messages. Would be `mms` if `media_urls` is populated. |
+
+### 11.5 CRITICAL: phone masking changes the correlation strategy
+
+CallRail masks `source_number` and `destination_number` in inbound webhook payloads — we only see `***3312`, not `+19527373312`. This **breaks the originally-planned poll-response correlator** described in §5.2.1 ("match by phone within 14 days").
+
+**Updated correlation strategy for poll responses:**
+
+Instead of `(phone, 14-day window)`, use `(thread_resource_id)`:
+
+1. When we send an outbound campaign SMS, `CallRailProvider.send_text()` returns `provider_thread_id` in `ProviderSendResult` and we store it on the `SentMessage` row (already done in Phase 0.5).
+2. When an inbound webhook arrives, read `payload["thread_resource_id"]`.
+3. Correlate: `SELECT * FROM sent_messages WHERE provider_thread_id = :thread_id ORDER BY created_at DESC LIMIT 1`.
+4. That row's `campaign_id` tells us which campaign this is a reply to.
+5. That row's `customer_id` / `lead_id` tells us who the recipient is (so we can resolve name + address for the CSV export).
+
+**This is strictly better than the phone-based approach:**
+- No time window ambiguity — threads are 1:1 with conversations, so an old reply from months later still correlates cleanly.
+- No phone-normalization drift issues.
+- No need to deal with masked phones at all.
+- Works even if the customer deleted their profile — we still have the `thread_resource_id` lock.
+
+**Action:** update §5.2.1 `correlate_reply()` pseudocode to query by `thread_id` instead of phone+window. The `CampaignResponse` table schema in §4.2 should **add** a `provider_thread_id` column (indexed) and we match on that.
+
+### 11.6 Observations worth remembering
+
+- Two consecutive inbound messages from the same phone to the same tracker share the same `conversation_id` (`k8mc8`) AND `thread_resource_id` (`SMT019d69f77fb472829bfb403cc4104584`). So thread is stable per (source, destination) pair.
+- Only `resource_id` is per-message unique.
+- `received_at` and `timestamp` are always identical in the sample — CallRail ships them redundantly.
+- `content` preserves the user's text exactly (whitespace, case, punctuation). Our parser doesn't need to worry about additional sanitization.
+- There is NO `sms_thread` nested object like Phase 0.5 outbound responses — the thread id is flat at `thread_resource_id`.
 
 ---
 

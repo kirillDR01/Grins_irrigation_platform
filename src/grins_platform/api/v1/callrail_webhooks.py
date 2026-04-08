@@ -86,81 +86,13 @@ async def callrail_inbound(
     raw_body = await request.body()
     headers = dict(request.headers)
 
-    # DEV DIAGNOSTIC: log the raw shape of every inbound webhook so we
-    # can populate the spec's §11 with a canonical sample. This block
-    # is intentionally tagged "remove_after_capture" — strip in a
-    # follow-up commit once one good sample is captured.
-    SAFE_SKIP_OK = {"authorization", "cookie", "set-cookie", "x-api-key"}
-    debug_headers_ok = {
-        k: v for k, v in headers.items() if k.lower() not in SAFE_SKIP_OK
-    }
-    logger.info(
-        "sms.webhook.diagnostic_inbound_received",
-        provider="callrail",
-        request_headers=debug_headers_ok,
-        request_body_preview=raw_body[:4096].decode("utf-8", errors="replace"),
-        request_body_length=len(raw_body),
-        remove_after_capture=True,
-    )
-
     # 1. Verify webhook signature
     provider = get_sms_provider()
     sig_valid = await provider.verify_webhook_signature(headers, raw_body)
     if not sig_valid:
-        # DEV DIAGNOSTIC: log full request shape so we can reverse-engineer
-        # CallRail's actual signing format. The parent CallRail spec notes
-        # the HMAC mechanism is unverified — first real inbound rejection
-        # is the only way to confirm header name + algorithm + encoding.
-        # Sensitive headers are stripped; body is truncated to 4 KB.
-        SAFE_SKIP = {"authorization", "cookie", "set-cookie", "x-api-key"}
-        debug_headers = {
-            k: v for k, v in headers.items() if k.lower() not in SAFE_SKIP
-        }
-        body_preview = raw_body[:4096].decode("utf-8", errors="replace")
-        body_truncated = len(raw_body) > 4096
-
-        # Compute what we *expected* using each plausible variant so we
-        # can spot the mismatch by eye in the logs without another
-        # round-trip.
-        import hashlib  # noqa: PLC0415
-        import hmac  # noqa: PLC0415
-
-        secret = os.environ.get("CALLRAIL_WEBHOOK_SECRET", "")
-        diag_signatures: dict[str, str] = {}
-        if secret:
-            for label, key_bytes in (
-                ("secret_utf8", secret.encode()),
-                ("secret_hex_decoded", bytes.fromhex(secret) if all(
-                    c in "0123456789abcdefABCDEF" for c in secret
-                ) and len(secret) % 2 == 0 else b""),
-            ):
-                if not key_bytes:
-                    continue
-                for algo_name, algo in (
-                    ("sha256_hex", hashlib.sha256),
-                    ("sha1_hex", hashlib.sha1),
-                ):
-                    h = hmac.new(key_bytes, raw_body, algo).hexdigest()
-                    diag_signatures[f"{label}__{algo_name}"] = h
-                # base64-encoded variants
-                import base64  # noqa: PLC0415
-                for algo_name, algo in (
-                    ("sha256_b64", hashlib.sha256),
-                    ("sha1_b64", hashlib.sha1),
-                ):
-                    h = base64.b64encode(
-                        hmac.new(key_bytes, raw_body, algo).digest(),
-                    ).decode()
-                    diag_signatures[f"{label}__{algo_name}"] = h
-
         logger.warning(
             "sms.webhook.signature_invalid",
             provider="callrail",
-            request_headers=debug_headers,
-            request_body_preview=body_preview,
-            request_body_truncated=body_truncated,
-            request_body_length=len(raw_body),
-            expected_signatures_for_diff=diag_signatures,
         )
         return Response(
             content='{"error": "Invalid webhook signature"}',
