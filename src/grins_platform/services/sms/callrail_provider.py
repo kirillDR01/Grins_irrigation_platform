@@ -212,28 +212,65 @@ class CallRailProvider(LoggerMixin):
         headers: dict[str, str],
         raw_body: bytes,
     ) -> bool:
-        """Verify CallRail webhook HMAC signature."""
+        """Verify CallRail webhook HMAC signature.
+
+        Verified against a real inbound payload on 2026-04-08:
+        - Header name: ``signature`` (lowercase, no ``x-`` prefix)
+        - Algorithm: HMAC-SHA1 (NOT SHA256)
+        - Secret: passed as UTF-8 bytes
+        - Encoding: base64 of the raw HMAC digest
+        - Signed input: raw request body (no canonicalization, no
+          timestamp prefix)
+
+        Returns False on missing secret, missing header, or any
+        cryptographic mismatch — the route maps False to HTTP 403.
+        """
+        import base64  # noqa: PLC0415
+
         if not self._webhook_secret:
             return False
-        signature = headers.get("x-callrail-signature", "")
+        signature = headers.get("signature", "")
         if not signature:
             return False
-        expected = hmac.new(
-            self._webhook_secret.encode(),
-            raw_body,
-            hashlib.sha256,
-        ).hexdigest()
+        expected = base64.b64encode(
+            hmac.new(
+                self._webhook_secret.encode(),
+                raw_body,
+                hashlib.sha1,
+            ).digest(),
+        ).decode()
         return hmac.compare_digest(expected, signature)
 
     # -- Inbound parsing -----------------------------------------------------
 
     def parse_inbound_webhook(self, payload: dict[str, Any]) -> InboundSMS:
-        """Parse CallRail inbound SMS webhook payload."""
+        """Parse CallRail inbound SMS webhook payload.
+
+        Field names verified against a real inbound payload on
+        2026-04-08:
+
+        - ``resource_id`` — unique inbound message id (was guessed as
+          ``id``)
+        - ``source_number`` — customer's phone, **masked** by CallRail
+          (e.g. ``***3312``); was guessed as ``customer_phone_number``
+        - ``destination_number`` — our tracking number, also masked
+          (was guessed as ``tracking_phone_number``)
+        - ``content`` — the reply text (matches our guess)
+        - ``thread_resource_id`` — the per-conversation SMS thread id
+          that uniquely identifies which outbound campaign this is a
+          reply to. This is the **canonical correlation key** for
+          poll-response routing because the phone is masked.
+        - ``conversation_id`` — short conversation id (e.g. ``k8mc8``);
+          duplicate of ``id`` field, kept for parity with the outbound
+          response shape from Phase 0.5.
+        """
         return InboundSMS(
-            from_phone=str(payload.get("customer_phone_number", "")),
+            from_phone=str(payload.get("source_number", "")),
             body=str(payload.get("content", "")),
-            provider_sid=str(payload.get("id", "")),
-            to_phone=str(payload.get("tracking_phone_number", "")),
+            provider_sid=str(payload.get("resource_id", "")),
+            to_phone=str(payload.get("destination_number", "")) or None,
+            thread_id=str(payload.get("thread_resource_id", "")) or None,
+            conversation_id=str(payload.get("conversation_id", "")) or None,
         )
 
     # -- Rate-limit header extraction ----------------------------------------

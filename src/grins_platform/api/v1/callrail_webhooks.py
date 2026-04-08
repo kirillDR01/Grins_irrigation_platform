@@ -86,6 +86,23 @@ async def callrail_inbound(
     raw_body = await request.body()
     headers = dict(request.headers)
 
+    # DEV DIAGNOSTIC: log the raw shape of every inbound webhook so we
+    # can populate the spec's §11 with a canonical sample. This block
+    # is intentionally tagged "remove_after_capture" — strip in a
+    # follow-up commit once one good sample is captured.
+    SAFE_SKIP_OK = {"authorization", "cookie", "set-cookie", "x-api-key"}
+    debug_headers_ok = {
+        k: v for k, v in headers.items() if k.lower() not in SAFE_SKIP_OK
+    }
+    logger.info(
+        "sms.webhook.diagnostic_inbound_received",
+        provider="callrail",
+        request_headers=debug_headers_ok,
+        request_body_preview=raw_body[:4096].decode("utf-8", errors="replace"),
+        request_body_length=len(raw_body),
+        remove_after_capture=True,
+    )
+
     # 1. Verify webhook signature
     provider = get_sms_provider()
     sig_valid = await provider.verify_webhook_signature(headers, raw_body)

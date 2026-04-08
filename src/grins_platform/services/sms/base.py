@@ -111,12 +111,22 @@ class ProviderSendResult:
 
 @dataclass(frozen=True)
 class InboundSMS:
-    """Parsed inbound SMS from any provider."""
+    """Parsed inbound SMS from any provider.
 
-    from_phone: str  # E.164
+    Note on ``from_phone``: CallRail masks customer phone numbers in
+    inbound webhook payloads (e.g. ``***3312``), so for CallRail this
+    field is the masked form, not E.164. Correlation back to a sent
+    campaign must go through ``thread_id`` (the provider's conversation
+    thread), not phone matching. Twilio and other providers that send
+    full phone numbers can populate ``from_phone`` normally.
+    """
+
+    from_phone: str
     body: str
     provider_sid: str
     to_phone: str | None = None
+    thread_id: str | None = None
+    conversation_id: str | None = None
 
 
 @runtime_checkable
