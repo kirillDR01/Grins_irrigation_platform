@@ -15,8 +15,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import { useAudiencePreview } from '../hooks';
-import type { TargetAudience, AudiencePreviewRecipient } from '../types/campaign';
+import type { TargetAudience, AudiencePreviewRecipient, PollOption } from '../types/campaign';
 import {
   SENDER_PREFIX,
   STOP_FOOTER,
@@ -25,6 +26,8 @@ import {
   findInvalidMergeFields,
   renderTemplate,
 } from '../utils/segmentCounter';
+import { renderPollOptionsBlock } from '../utils/pollOptions';
+import { PollOptionsEditor } from './PollOptionsEditor';
 
 // --- Props ---
 
@@ -35,9 +38,25 @@ export interface MessageComposerProps {
   onChange: (body: string) => void;
   /** Current audience (for live preview) */
   audience: TargetAudience;
+  /** Whether poll options editor is enabled */
+  pollEnabled?: boolean;
+  /** Callback when poll toggle changes */
+  onPollEnabledChange?: (enabled: boolean) => void;
+  /** Current poll options */
+  pollOptions?: PollOption[];
+  /** Callback when poll options change */
+  onPollOptionsChange?: (options: PollOption[]) => void;
 }
 
-export function MessageComposer({ value, onChange, audience }: MessageComposerProps) {
+export function MessageComposer({
+  value,
+  onChange,
+  audience,
+  pollEnabled = false,
+  onPollEnabledChange,
+  pollOptions = [],
+  onPollOptionsChange,
+}: MessageComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [previewRecipients, setPreviewRecipients] = useState<AudiencePreviewRecipient[]>([]);
   const audiencePreviewMutation = useAudiencePreview();
@@ -56,8 +75,17 @@ export function MessageComposer({ value, onChange, audience }: MessageComposerPr
     }
   }, [audience]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // --- Segment counting ---
-  const { encoding, segments, chars } = useMemo(() => countSegments(value), [value]);
+  // --- Poll options block for segment counting ---
+  const pollBlock = useMemo(
+    () => (pollEnabled ? renderPollOptionsBlock(pollOptions) : ''),
+    [pollEnabled, pollOptions],
+  );
+
+  // --- Segment counting (includes poll options block) ---
+  const { encoding, segments, chars } = useMemo(
+    () => countSegments(value + pollBlock),
+    [value, pollBlock],
+  );
 
   // --- Merge-field linting ---
   const invalidFields = useMemo(() => findInvalidMergeFields(value), [value]);
@@ -100,10 +128,10 @@ export function MessageComposer({ value, onChange, audience }: MessageComposerPr
       const rendered = renderTemplate(value, context);
       return {
         recipient: r,
-        message: `${SENDER_PREFIX}${rendered}${STOP_FOOTER}`,
+        message: `${SENDER_PREFIX}${rendered}${pollBlock}${STOP_FOOTER}`,
       };
     });
-  }, [value, previewRecipients]);
+  }, [value, previewRecipients, pollBlock]);
 
   return (
     <div data-testid="message-composer" className="space-y-4">
@@ -151,6 +179,19 @@ export function MessageComposer({ value, onChange, audience }: MessageComposerPr
             {ALLOWED_MERGE_FIELDS.map((f) => `{${f}}`).join(', ')}.
           </AlertDescription>
         </Alert>
+      )}
+
+      {/* Poll options editor */}
+      {onPollEnabledChange && onPollOptionsChange && (
+        <>
+          <Separator />
+          <PollOptionsEditor
+            enabled={pollEnabled}
+            onEnabledChange={onPollEnabledChange}
+            options={pollOptions}
+            onOptionsChange={onPollOptionsChange}
+          />
+        </>
       )}
 
       {/* Character counter + segment badge */}

@@ -6,7 +6,10 @@ export { AudienceBuilder } from './components';
 export { MessageComposer } from './components';
 export { NewTextCampaignModal } from './components';
 export { CampaignsList } from './components';
+export { PollOptionsEditor } from './components';
+export { renderPollOptionsBlock } from './utils/pollOptions';
 export type { AudienceBuilderProps } from './components/AudienceBuilder';
+export type { PollOptionsEditorProps } from './components/PollOptionsEditor';
 export type { MessageComposerProps } from './components/MessageComposer';
 export type { NewTextCampaignModalProps } from './components/NewTextCampaignModal';
 
@@ -34,6 +37,10 @@ export {
   useAudienceCsv,
   useCampaignProgress,
   useWorkerHealth,
+  // Campaign response hooks
+  campaignResponseKeys,
+  useCampaignResponseSummary,
+  useCampaignResponses,
 } from './hooks';
 
 // Types
@@ -64,8 +71,13 @@ export type {
   CsvUploadResult,
   RateLimitInfo,
   WorkerHealth,
+  PollOption,
+  CampaignResponseRow,
+  CampaignResponseBucket,
+  CampaignResponseSummary,
 } from './types';
 
 // API
 export { communicationsApi } from './api/communicationsApi';
 export { campaignsApi } from './api/campaignsApi';
+export type { CampaignResponseListParams } from './hooks';

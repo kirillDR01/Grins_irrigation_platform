@@ -21,6 +21,7 @@ from grins_platform.api.v1.appointments import router as appointments_router
 from grins_platform.api.v1.audit import router as audit_router
 from grins_platform.api.v1.auth import router as auth_router
 from grins_platform.api.v1.callrail_webhooks import router as callrail_webhooks_router
+from grins_platform.api.v1.campaign_responses import router as campaign_responses_router
 from grins_platform.api.v1.campaigns import router as campaigns_router
 from grins_platform.api.v1.chat import router as chat_router
 from grins_platform.api.v1.checkout import router as checkout_router
@@ -280,6 +281,13 @@ api_router.include_router(
     campaigns_router,
     prefix="/campaigns",
     tags=["campaigns"],
+)
+
+# Include Campaign Response endpoints (Scheduling Poll Req 9, 10, 11)
+api_router.include_router(
+    campaign_responses_router,
+    prefix="/campaigns",
+    tags=["campaign-responses"],
 )
 
 # Include Marketing endpoints (Req 58, 63, 64, 65)

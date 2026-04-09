@@ -55,3 +55,5 @@ export { useSendCampaign, useCancelCampaign, useRetryFailed } from './useSendCam
 export { useAudiencePreview } from './useAudiencePreview';
 export { useAudienceCsv } from './useAudienceCsv';
 export { useCampaignProgress, useWorkerHealth } from './useCampaignProgress';
+export { campaignResponseKeys, useCampaignResponseSummary, useCampaignResponses } from './useCampaignResponses';
+export type { CampaignResponseListParams } from './useCampaignResponses';

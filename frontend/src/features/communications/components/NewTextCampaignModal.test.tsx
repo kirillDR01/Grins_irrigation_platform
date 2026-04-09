@@ -6,6 +6,7 @@ import { NewTextCampaignModal } from './NewTextCampaignModal';
 // --- Mocks ---
 
 const mockCreateCampaign = { mutateAsync: vi.fn(), isPending: false };
+const mockUpdateCampaign = { mutateAsync: vi.fn(), isPending: false };
 const mockSendCampaign = { mutateAsync: vi.fn(), isPending: false };
 const mockAudiencePreview = { mutate: vi.fn(), isPending: false };
 
@@ -15,6 +16,7 @@ vi.mock('@/features/auth', () => ({
 
 vi.mock('../hooks', () => ({
   useCreateCampaign: () => mockCreateCampaign,
+  useUpdateCampaign: () => mockUpdateCampaign,
   useSendCampaign: () => mockSendCampaign,
   useAudiencePreview: () => mockAudiencePreview,
 }));

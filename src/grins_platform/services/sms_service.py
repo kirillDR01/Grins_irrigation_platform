@@ -301,10 +301,7 @@ class SMSService(LoggerMixin):
             # Update rate limit tracker from provider response headers
             rl_hourly_remaining: int | None = None
             rl_daily_remaining: int | None = None
-            if (
-                self.rate_limit_tracker is not None
-                and result.raw_response is not None
-            ):
+            if self.rate_limit_tracker is not None and result.raw_response is not None:
                 raw_resp = result.raw_response
                 if "_response_headers" in raw_resp:
                     await self.rate_limit_tracker.update_from_headers(
@@ -465,18 +462,20 @@ class SMSService(LoggerMixin):
         from_phone: str,
         body: str,
         provider_sid: str,
+        thread_id: str | None = None,
     ) -> dict[str, Any]:
-        """Handle incoming SMS with STOP keyword and informal opt-out processing.
+        """Handle incoming SMS with STOP keyword, opt-out, and poll reply processing.
 
         Args:
             from_phone: Sender phone number
             body: Message body
             provider_sid: Provider message SID
+            thread_id: Provider thread/conversation ID for campaign correlation
 
         Returns:
             Processing result
 
-        Validates: Requirements 8.1-8.5
+        Validates: Requirements 6.1-6.4, 7.1-7.4, 8.1-8.5
         """
         self.log_started("handle_inbound", from_phone=_mask_phone(from_phone))
 
@@ -485,14 +484,117 @@ class SMSService(LoggerMixin):
 
         # 10.1: Exact opt-out keyword match (Req 8.1, 8.2, 8.3, 8.4)
         if body_lower in EXACT_OPT_OUT_KEYWORDS:
-            return await self._process_exact_opt_out(from_phone, body_lower)
+            result = await self._process_exact_opt_out(from_phone, body_lower)
+            # Bookkeeping: record STOP as campaign response (Req 6.1-6.4)
+            # Independent — failure must not block consent revocation
+            if thread_id:
+                await self._record_opt_out_bookkeeping(
+                    from_phone,
+                    body,
+                    provider_sid,
+                    thread_id,
+                )
+            return result
 
         # 10.2: Informal opt-out phrase detection (Req 8.5)
         if self._matches_informal_opt_out(body_lower):
             return await self._flag_informal_opt_out(from_phone, body_stripped)
 
+        # Poll reply branch: attempt correlation when thread_id present (Req 7.1-7.4)
+        if thread_id:
+            poll_result = await self._try_poll_reply(
+                from_phone,
+                body,
+                provider_sid,
+                thread_id,
+            )
+            if poll_result is not None:
+                return poll_result
+
         # Delegate to existing webhook handler for other messages
         return await self.handle_webhook(from_phone, body, provider_sid)
+
+    async def _record_opt_out_bookkeeping(
+        self,
+        from_phone: str,
+        body: str,
+        provider_sid: str,
+        thread_id: str,
+    ) -> None:
+        """Record STOP reply as campaign_responses row (independent bookkeeping).
+
+        Failure here does not block consent revocation.
+
+        Validates: Req 6.2, 6.4
+        """
+        try:
+            from grins_platform.services.campaign_response_service import (  # noqa: PLC0415
+                CampaignResponseService,
+            )
+            from grins_platform.services.sms.base import InboundSMS  # noqa: PLC0415
+
+            svc = CampaignResponseService(self.session)
+            await svc.record_opt_out_as_response(
+                InboundSMS(
+                    from_phone=from_phone,
+                    body=body,
+                    provider_sid=provider_sid,
+                    thread_id=thread_id,
+                ),
+            )
+        except Exception:
+            logger.warning(
+                "campaign.response.opt_out_bookkeeping_failed",
+                phone_masked=_mask_phone(from_phone),
+                exc_info=True,
+            )
+
+    async def _try_poll_reply(
+        self,
+        from_phone: str,
+        body: str,
+        provider_sid: str,
+        thread_id: str,
+    ) -> dict[str, Any] | None:
+        """Attempt to route inbound as a poll reply.
+
+        Returns a result dict if the reply was parsed or needs_review
+        (suppressing communications table write). Returns None for orphans
+        so they fall through to the existing handle_webhook handler.
+
+        Validates: Req 7.1, 7.2, 7.3, 7.4
+        """
+        from grins_platform.services.campaign_response_service import (  # noqa: PLC0415
+            CampaignResponseService,
+        )
+        from grins_platform.services.sms.base import InboundSMS  # noqa: PLC0415
+
+        svc = CampaignResponseService(self.session)
+        inbound = InboundSMS(
+            from_phone=from_phone,
+            body=body,
+            provider_sid=provider_sid,
+            thread_id=thread_id,
+        )
+        row = await svc.record_poll_reply(inbound)
+
+        # parsed/needs_review → return without writing to communications (Req 7.2, 7.3)
+        if row.status in ("parsed", "needs_review"):
+            self.log_completed(
+                "handle_inbound",
+                webhook_action="poll_reply",
+                status=row.status,
+                phone=_mask_phone(from_phone),
+            )
+            return {
+                "action": "poll_reply",
+                "phone": from_phone,
+                "status": row.status,
+                "option_key": row.selected_option_key,
+            }
+
+        # orphan → fall through to handle_webhook (Req 7.4)
+        return None
 
     async def _process_exact_opt_out(
         self,

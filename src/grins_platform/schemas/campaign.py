@@ -8,9 +8,10 @@ from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from grins_platform.models.enums import CampaignStatus, CampaignType
+from grins_platform.schemas.campaign_response import PollOption
 
 # --- Target Audience Filter Models (Requirement 13) ---
 
@@ -197,6 +198,23 @@ class CampaignCreate(BaseModel):
         default=None,
         description="Scheduled send time",
     )
+    poll_options: list[PollOption] | None = Field(
+        default=None,
+        description="2-5 numbered scheduling options for poll campaigns",
+    )
+
+    @model_validator(mode="after")  # type: ignore[untyped-decorator]
+    def validate_poll_options(self) -> "CampaignCreate":
+        opts = self.poll_options
+        if opts is not None:
+            if not (2 <= len(opts) <= 5):
+                msg = "poll_options must contain 2-5 entries"
+                raise ValueError(msg)
+            expected = [str(i) for i in range(1, len(opts) + 1)]
+            if [o.key for o in opts] != expected:
+                msg = "poll_options keys must be sequential starting from '1'"
+                raise ValueError(msg)
+        return self
 
 
 class CampaignUpdate(BaseModel):
@@ -230,6 +248,23 @@ class CampaignUpdate(BaseModel):
         default=None,
         description="Scheduled send time",
     )
+    poll_options: list[PollOption] | None = Field(
+        default=None,
+        description="2-5 numbered scheduling options for poll campaigns",
+    )
+
+    @model_validator(mode="after")  # type: ignore[untyped-decorator]
+    def validate_poll_options(self) -> "CampaignUpdate":
+        opts = self.poll_options
+        if opts is not None:
+            if not (2 <= len(opts) <= 5):
+                msg = "poll_options must contain 2-5 entries"
+                raise ValueError(msg)
+            expected = [str(i) for i in range(1, len(opts) + 1)]
+            if [o.key for o in opts] != expected:
+                msg = "poll_options keys must be sequential starting from '1'"
+                raise ValueError(msg)
+        return self
 
 
 class CampaignResponse(BaseModel):
@@ -261,6 +296,10 @@ class CampaignResponse(BaseModel):
     )
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Record update timestamp")
+    poll_options: list[PollOption] | None = Field(
+        default=None,
+        description="Poll scheduling options (null for non-poll campaigns)",
+    )
 
 
 class CampaignRecipientResponse(BaseModel):

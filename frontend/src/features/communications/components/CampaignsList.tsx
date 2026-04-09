@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useCampaigns, useCampaignStats, useWorkerHealth } from '../hooks';
+import { useCampaigns, useCampaignStats, useWorkerHealth, useCampaignResponseSummary } from '../hooks';
 import type { Campaign, CampaignStatus, WorkerHealth } from '../types/campaign';
 
 // --- Status badge mapping (Requirement 27) ---
@@ -197,6 +197,7 @@ export function CampaignsList({ onSelectCampaign }: CampaignsListProps) {
                   <TableHead>Name</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-[200px]">Progress</TableHead>
+                  <TableHead>Responses</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead>Scheduled</TableHead>
                 </TableRow>
@@ -275,6 +276,13 @@ function CampaignRow({
           <span className="text-xs text-slate-400">—</span>
         )}
       </TableCell>
+      <TableCell>
+        {campaign.poll_options != null ? (
+          <PollResponseCount campaignId={campaign.id} />
+        ) : (
+          <span className="text-xs text-slate-400">—</span>
+        )}
+      </TableCell>
       <TableCell className="text-xs text-slate-500">
         {formatDate(campaign.created_at)}
       </TableCell>
@@ -282,6 +290,16 @@ function CampaignRow({
         {campaign.scheduled_at ? formatDate(campaign.scheduled_at) : '—'}
       </TableCell>
     </TableRow>
+  );
+}
+
+function PollResponseCount({ campaignId }: { campaignId: string }) {
+  const { data: summary } = useCampaignResponseSummary(campaignId);
+  if (!summary) return <span className="text-xs text-slate-400">—</span>;
+  return (
+    <Badge variant="info" data-testid="poll-response-count">
+      {summary.total_replied} responses
+    </Badge>
   );
 }
 

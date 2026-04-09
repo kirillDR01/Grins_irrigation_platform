@@ -6,6 +6,7 @@ import { CommunicationsQueue } from './CommunicationsQueue';
 import { SentMessagesLog } from './SentMessagesLog';
 import { CampaignsList } from './CampaignsList';
 import { FailedRecipientsDetail } from './FailedRecipientsDetail';
+import { CampaignResponsesView } from './CampaignResponsesView';
 import { NewTextCampaignModal } from './NewTextCampaignModal';
 import type { Campaign } from '../types/campaign';
 
@@ -72,10 +73,17 @@ export function CommunicationsDashboard() {
 
         <TabsContent value="campaigns" className="mt-4">
           {selectedCampaign ? (
-            <FailedRecipientsDetail
-              campaign={selectedCampaign}
-              onBack={handleBackFromDetail}
-            />
+            selectedCampaign.poll_options != null ? (
+              <CampaignResponsesView
+                campaign={selectedCampaign}
+                onBack={handleBackFromDetail}
+              />
+            ) : (
+              <FailedRecipientsDetail
+                campaign={selectedCampaign}
+                onBack={handleBackFromDetail}
+              />
+            )
           ) : (
             <CampaignsList onSelectCampaign={handleSelectCampaign} />
           )}

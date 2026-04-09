@@ -28,7 +28,7 @@ import {
   useSendCampaign,
   useAudiencePreview,
 } from '../hooks';
-import type { TargetAudience, AudiencePreview } from '../types/campaign';
+import type { TargetAudience, AudiencePreview, PollOption } from '../types/campaign';
 
 // --- Constants ---
 
@@ -72,6 +72,8 @@ export function NewTextCampaignModal({
   const [audience, setAudience] = useState<TargetAudience>({});
   const [messageBody, setMessageBody] = useState('');
   const [campaignId, setCampaignId] = useState<string | null>(null);
+  const [pollEnabled, setPollEnabled] = useState(false);
+  const [pollOptions, setPollOptions] = useState<PollOption[]>([]);
   const draftCheckedRef = useRef(false);
 
   // --- Preview state (fetched when entering step 2) ---
@@ -173,6 +175,7 @@ export function NewTextCampaignModal({
             campaign_type: 'sms',
             target_audience: audience,
             body: messageBody || '',
+            poll_options: pollEnabled && pollOptions.length >= 2 ? pollOptions : null,
           });
           setCampaignId(campaign.id);
         } catch {
@@ -194,7 +197,7 @@ export function NewTextCampaignModal({
       }
       setStep(2);
     }
-  }, [step, hasAudience, campaignId, audience, messageBody, createCampaign, audiencePreviewMutation]);
+  }, [step, hasAudience, campaignId, audience, messageBody, pollEnabled, pollOptions, createCampaign, audiencePreviewMutation]);
 
   const handleBack = useCallback(() => {
     if (step > 0) setStep((s) => (s - 1) as Step);
@@ -207,6 +210,8 @@ export function NewTextCampaignModal({
     setMessageBody('');
     setCampaignId(null);
     setPreview(null);
+    setPollEnabled(false);
+    setPollOptions([]);
   }, []);
 
   // --- Send / Schedule ---
@@ -223,6 +228,7 @@ export function NewTextCampaignModal({
         data: {
           target_audience: audience,
           body: messageBody,
+          poll_options: pollEnabled && pollOptions.length >= 2 ? pollOptions : null,
         },
       });
       await sendCampaign.mutateAsync(campaignId);
@@ -233,7 +239,7 @@ export function NewTextCampaignModal({
     } catch {
       toast.error('Failed to send campaign.');
     }
-  }, [campaignId, messageBody, audience, updateCampaign, sendCampaign, userId, onOpenChange, resetWizard]);
+  }, [campaignId, messageBody, audience, pollEnabled, pollOptions, updateCampaign, sendCampaign, userId, onOpenChange, resetWizard]);
 
   const handleSchedule = useCallback(
     async (scheduledAt: string) => {
@@ -250,6 +256,7 @@ export function NewTextCampaignModal({
             target_audience: audience,
             body: messageBody,
             scheduled_at: scheduledAt,
+            poll_options: pollEnabled && pollOptions.length >= 2 ? pollOptions : null,
           },
         });
         await sendCampaign.mutateAsync(campaignId);
@@ -261,7 +268,7 @@ export function NewTextCampaignModal({
         toast.error('Failed to schedule campaign.');
       }
     },
-    [campaignId, audience, messageBody, updateCampaign, sendCampaign, userId, onOpenChange, resetWizard],
+    [campaignId, audience, messageBody, pollEnabled, pollOptions, updateCampaign, sendCampaign, userId, onOpenChange, resetWizard],
   );
 
   // Reset on close
@@ -316,6 +323,10 @@ export function NewTextCampaignModal({
             value={messageBody}
             onChange={setMessageBody}
             audience={audience}
+            pollEnabled={pollEnabled}
+            onPollEnabledChange={setPollEnabled}
+            pollOptions={pollOptions}
+            onPollOptionsChange={setPollOptions}
           />
         )}
 

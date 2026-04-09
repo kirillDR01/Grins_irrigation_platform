@@ -75,6 +75,47 @@ export interface TargetAudience {
 
 // --- Campaign ---
 
+// --- Poll Options & Responses (Scheduling Poll) ---
+
+export interface PollOption {
+  key: '1' | '2' | '3' | '4' | '5';
+  label: string;
+  start_date: string;
+  end_date: string;
+}
+
+export interface CampaignResponseRow {
+  id: string;
+  campaign_id: string | null;
+  sent_message_id: string | null;
+  customer_id: string | null;
+  lead_id: string | null;
+  phone: string;
+  recipient_name: string | null;
+  recipient_address: string | null;
+  selected_option_key: string | null;
+  selected_option_label: string | null;
+  raw_reply_body: string;
+  provider_message_id: string | null;
+  status: 'parsed' | 'needs_review' | 'opted_out' | 'orphan';
+  received_at: string;
+  created_at: string;
+}
+
+export interface CampaignResponseBucket {
+  option_key: string | null;
+  option_label: string | null;
+  status: string;
+  count: number;
+}
+
+export interface CampaignResponseSummary {
+  campaign_id: string;
+  total_sent: number;
+  total_replied: number;
+  buckets: CampaignResponseBucket[];
+}
+
 export interface Campaign {
   id: string;
   name: string;
@@ -88,6 +129,7 @@ export interface Campaign {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  poll_options: PollOption[] | null;
 }
 
 export interface CampaignCreate {
@@ -98,6 +140,7 @@ export interface CampaignCreate {
   /** Optional at draft-create time; required before send. */
   body?: string;
   scheduled_at?: string | null;
+  poll_options?: PollOption[] | null;
 }
 
 export interface CampaignUpdate {
@@ -106,6 +149,7 @@ export interface CampaignUpdate {
   subject?: string | null;
   body?: string;
   scheduled_at?: string | null;
+  poll_options?: PollOption[] | null;
 }
 
 // --- Campaign Recipient ---

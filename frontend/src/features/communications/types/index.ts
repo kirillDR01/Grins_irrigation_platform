@@ -74,4 +74,8 @@ export type {
   CsvUploadResult,
   RateLimitInfo,
   WorkerHealth,
+  PollOption,
+  CampaignResponseRow,
+  CampaignResponseBucket,
+  CampaignResponseSummary,
 } from './campaign';

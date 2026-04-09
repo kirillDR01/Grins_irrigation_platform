@@ -24,6 +24,7 @@ from grins_platform.models.appointment import Appointment
 from grins_platform.models.audit_log import AuditLog
 from grins_platform.models.business_setting import BusinessSetting
 from grins_platform.models.campaign import Campaign, CampaignRecipient
+from grins_platform.models.campaign_response import CampaignResponse
 from grins_platform.models.communication import Communication
 from grins_platform.models.consent_language_version import ConsentLanguageVersion
 from grins_platform.models.contract_template import ContractTemplate
@@ -115,6 +116,7 @@ __all__ = [
     "BusinessSetting",
     "Campaign",
     "CampaignRecipient",
+    "CampaignResponse",
     "CampaignStatus",
     "CampaignType",
     "Communication",

@@ -151,6 +151,7 @@ async def callrail_inbound(
         from_phone=inbound.from_phone,
         body=inbound.body,
         provider_sid=inbound.provider_sid,
+        thread_id=inbound.thread_id,
     )
 
     logger.info(

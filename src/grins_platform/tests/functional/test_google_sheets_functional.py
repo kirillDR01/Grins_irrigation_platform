@@ -46,6 +46,9 @@ def _make_submission(
     sub.phone = "6125559876"
     sub.email = "jane@example.com"
     sub.client_type = "new"
+    sub.zip_code = None
+    sub.work_requested = None
+    sub.agreed_to_terms = None
     for attr in (
         "timestamp",
         "spring_startup",

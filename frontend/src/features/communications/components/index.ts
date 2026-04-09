@@ -7,3 +7,5 @@ export { CampaignReview } from './CampaignReview';
 export { NewTextCampaignModal } from './NewTextCampaignModal';
 export { CampaignsList } from './CampaignsList';
 export { FailedRecipientsDetail } from './FailedRecipientsDetail';
+export { PollOptionsEditor } from './PollOptionsEditor';
+export { CampaignResponsesView } from './CampaignResponsesView';

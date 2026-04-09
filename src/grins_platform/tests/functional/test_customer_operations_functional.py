@@ -175,7 +175,7 @@ class TestCustomerMergeWorkflow:
         db.add.assert_called_once()
         audit_entry = db.add.call_args[0][0]
         assert audit_entry.action == "customer.merge"
-        assert audit_entry.resource_id == str(primary.id)
+        assert audit_entry.resource_id == primary.id
         assert str(dup1.id) in audit_entry.details["merged_customer_ids"]
         assert str(dup2.id) in audit_entry.details["merged_customer_ids"]
 
