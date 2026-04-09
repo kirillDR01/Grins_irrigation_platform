@@ -178,6 +178,17 @@ class CampaignService(LoggerMixin):
             campaign_type=data.campaign_type.value,
         )
 
+        # Serialize poll_options through Pydantic JSON mode so bare
+        # ``date`` instances become ISO strings before the JSONB write.
+        # SQLAlchemy's JSON encoder cannot serialize raw ``date`` values
+        # and would otherwise raise at flush time. Mirrors the same
+        # handling in ``update_campaign`` below.
+        poll_options_json: list[dict[str, Any]] | None = None
+        if data.poll_options is not None:
+            poll_options_json = [
+                opt.model_dump(mode="json") for opt in data.poll_options
+            ]
+
         campaign = await self.repo.create(
             name=data.name,
             campaign_type=data.campaign_type.value,
@@ -186,6 +197,7 @@ class CampaignService(LoggerMixin):
             subject=data.subject,
             body=data.body,
             scheduled_at=data.scheduled_at,
+            poll_options=poll_options_json,
             created_by=created_by,
         )
 
@@ -240,9 +252,14 @@ class CampaignService(LoggerMixin):
             raise CampaignNotDraftError(campaign_id, campaign.status)
 
         update_fields = data.model_dump(exclude_unset=True, exclude_none=False)
-        # Drop keys that were never set (exclude_unset above) but also drop
-        # keys whose value is None so we don't overwrite existing data.
-        update_fields = {k: v for k, v in update_fields.items() if v is not None}
+        # Keys that were never set are already excluded above. We deliberately
+        # keep keys whose caller-provided value is ``None`` so that a draft
+        # edit can CLEAR nullable fields (``poll_options``, ``subject``,
+        # ``scheduled_at``, ``target_audience``). The only exception is
+        # ``body``, which is NOT NULL on the model — dropping it here
+        # preserves the existing body rather than triggering an IntegrityError.
+        if "body" in update_fields and update_fields["body"] is None:
+            del update_fields["body"]
 
         # poll_options is a JSONB column and each PollOption contains
         # `start_date` / `end_date` as `datetime.date` objects. SQLAlchemy's

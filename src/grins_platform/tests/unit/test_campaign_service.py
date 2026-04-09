@@ -19,7 +19,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from grins_platform.models.enums import CampaignStatus, CampaignType
-from grins_platform.schemas.campaign import CampaignCreate
+from grins_platform.schemas.campaign import CampaignCreate, CampaignUpdate
 from grins_platform.services.campaign_service import (
     _DEFAULT_ADDRESS,
     CampaignAlreadySentError,
@@ -201,6 +201,150 @@ class TestProperty48CampaignRecipientFilteringByConsent:
         assert call_kwargs["status"] == CampaignStatus.DRAFT.value
         assert call_kwargs["name"] == "Fall Promo"
         assert call_kwargs["campaign_type"] == CampaignType.SMS.value
+
+    @pytest.mark.asyncio
+    async def test_create_campaign_persists_poll_options_as_json(
+        self,
+    ) -> None:
+        """Poll campaigns must persist ``poll_options`` through to the repo.
+
+        Regression guard: ``create_campaign`` previously dropped the
+        ``poll_options`` field entirely, which meant poll campaigns
+        created via the wizard's "Next" button silently lost their
+        options until the wizard later issued a PATCH. Any interruption
+        between create and update left the draft un-poll-able.
+        """
+        from datetime import date  # noqa: PLC0415
+
+        from grins_platform.schemas.campaign_response import (  # noqa: PLC0415
+            PollOption,
+        )
+
+        repo = AsyncMock()
+        repo.create.return_value = _make_campaign_mock(
+            status=CampaignStatus.DRAFT.value,
+        )
+        svc = _build_service(repo=repo)
+
+        data = CampaignCreate(
+            name="Scheduling Poll",
+            campaign_type=CampaignType.SMS,
+            body="Pick a week:",
+            poll_options=[
+                PollOption(
+                    key="1",
+                    label="Week of Apr 13",
+                    start_date=date(2026, 4, 13),
+                    end_date=date(2026, 4, 19),
+                ),
+                PollOption(
+                    key="2",
+                    label="Week of Apr 20",
+                    start_date=date(2026, 4, 20),
+                    end_date=date(2026, 4, 26),
+                ),
+            ],
+        )
+
+        await svc.create_campaign(data, created_by=uuid4())
+
+        call_kwargs = repo.create.call_args.kwargs
+        assert "poll_options" in call_kwargs
+        poll_opts = call_kwargs["poll_options"]
+        assert poll_opts is not None
+        assert len(poll_opts) == 2
+        # Dates must be ISO strings so the SQLAlchemy JSONB write does not
+        # choke on bare ``datetime.date`` instances.
+        assert poll_opts[0]["key"] == "1"
+        assert poll_opts[0]["start_date"] == "2026-04-13"
+        assert poll_opts[0]["end_date"] == "2026-04-19"
+        assert poll_opts[1]["key"] == "2"
+        assert poll_opts[1]["start_date"] == "2026-04-20"
+
+    @pytest.mark.asyncio
+    async def test_create_campaign_without_poll_options_sends_none(
+        self,
+    ) -> None:
+        """Non-poll campaigns pass ``poll_options=None`` (not omitted)."""
+        repo = AsyncMock()
+        repo.create.return_value = _make_campaign_mock(
+            status=CampaignStatus.DRAFT.value,
+        )
+        svc = _build_service(repo=repo)
+
+        data = CampaignCreate(
+            name="Plain SMS",
+            campaign_type=CampaignType.SMS,
+            body="Hello",
+        )
+        await svc.create_campaign(data, created_by=uuid4())
+
+        call_kwargs = repo.create.call_args.kwargs
+        assert call_kwargs["poll_options"] is None
+
+    # ----------------------------------------------------------------
+    # 1b. update_campaign — draft-edit semantics
+    # ----------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_update_campaign_clears_poll_options_when_set_to_null(
+        self,
+    ) -> None:
+        """Explicit ``poll_options=None`` must clear the JSONB column.
+
+        Regression guard: the service previously filtered out all None
+        values before applying the update, which meant toggling off the
+        poll editor in the wizard could not actually disable the poll —
+        the stored options would survive and the background worker would
+        still append the rendered options block to the outbound SMS.
+        """
+        campaign_id = uuid4()
+        existing = _make_campaign_mock(
+            campaign_id=campaign_id,
+            status=CampaignStatus.DRAFT.value,
+        )
+        repo = AsyncMock()
+        repo.get_by_id.return_value = existing
+        repo.update.return_value = existing
+        svc = _build_service(repo=repo)
+
+        payload = CampaignUpdate(poll_options=None)
+        # exclude_unset=True must see `poll_options` as explicitly set.
+        assert "poll_options" in payload.model_dump(exclude_unset=True)
+
+        await svc.update_campaign(campaign_id, payload)
+
+        repo.update.assert_called_once()
+        call_kwargs = repo.update.call_args.kwargs
+        assert "poll_options" in call_kwargs
+        assert call_kwargs["poll_options"] is None
+
+    @pytest.mark.asyncio
+    async def test_update_campaign_ignores_null_body(
+        self,
+    ) -> None:
+        """Body is NOT NULL on the model — ``body=None`` must be dropped.
+
+        A draft edit that explicitly sets body to None must NOT attempt
+        to write NULL into the column (the model's ``body`` mapping is
+        ``nullable=False`` and would raise IntegrityError at flush).
+        """
+        campaign_id = uuid4()
+        existing = _make_campaign_mock(
+            campaign_id=campaign_id,
+            status=CampaignStatus.DRAFT.value,
+        )
+        repo = AsyncMock()
+        repo.get_by_id.return_value = existing
+        repo.update.return_value = existing
+        svc = _build_service(repo=repo)
+
+        payload = CampaignUpdate(body=None, subject="Keep me")
+        await svc.update_campaign(campaign_id, payload)
+
+        call_kwargs = repo.update.call_args.kwargs
+        assert "body" not in call_kwargs
+        assert call_kwargs["subject"] == "Keep me"
 
     # ----------------------------------------------------------------
     # 2. send_campaign filters recipients by consent (SMS)
