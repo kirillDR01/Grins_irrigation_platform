@@ -15,8 +15,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
-import type { AudiencePreview } from '../types/campaign';
+import type { AudiencePreview, PollOption } from '../types/campaign';
 import { countSegments } from '../utils/segmentCounter';
+import { renderPollOptionsBlock } from '../utils/pollOptions';
 
 // --- Constants ---
 
@@ -32,6 +33,10 @@ export interface CampaignReviewProps {
   preview: AudiencePreview | null;
   /** Message body (for segment count) */
   messageBody: string;
+  /** Whether the poll-options editor was enabled in the Message step */
+  pollEnabled?: boolean;
+  /** Poll options configured in the Message step (empty if poll disabled) */
+  pollOptions?: PollOption[];
   /** Callback when user confirms send-now */
   onSendNow: () => void;
   /** Callback when user confirms schedule */
@@ -62,6 +67,8 @@ function formatEstimate(totalRecipients: number): string {
 export function CampaignReview({
   preview,
   messageBody,
+  pollEnabled = false,
+  pollOptions = [],
   onSendNow,
   onSchedule,
   isSending = false,
@@ -78,8 +85,16 @@ export function CampaignReview({
   const rawTotal = customersCount + leadsCount + adHocCount;
   const blocked = rawTotal - total;
 
-  // Segment info
-  const { segments } = useMemo(() => countSegments(messageBody), [messageBody]);
+  // Segment info — include the rendered poll-options block so the
+  // count matches what customers actually receive for poll campaigns.
+  const pollBlock = useMemo(
+    () => (pollEnabled ? renderPollOptionsBlock(pollOptions) : ''),
+    [pollEnabled, pollOptions],
+  );
+  const { segments } = useMemo(
+    () => countSegments(messageBody + pollBlock),
+    [messageBody, pollBlock],
+  );
 
   // Determine if large audience (typed confirmation required)
   const isLargeAudience = total >= LARGE_AUDIENCE_THRESHOLD;

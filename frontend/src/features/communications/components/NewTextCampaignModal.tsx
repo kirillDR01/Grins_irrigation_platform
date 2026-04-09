@@ -45,6 +45,8 @@ function getDraftKey(userId: string): string {
 interface DraftState {
   audience: TargetAudience;
   messageBody: string;
+  pollEnabled?: boolean;
+  pollOptions?: PollOption[];
   savedAt: string;
 }
 
@@ -93,6 +95,8 @@ export function NewTextCampaignModal({
     const draft: DraftState = {
       audience,
       messageBody,
+      pollEnabled,
+      pollOptions,
       savedAt: new Date().toISOString(),
     };
     try {
@@ -100,7 +104,7 @@ export function NewTextCampaignModal({
     } catch {
       // localStorage full or unavailable — ignore
     }
-  }, [audience, messageBody, userId]);
+  }, [audience, messageBody, pollEnabled, pollOptions, userId]);
 
   // Debounced auto-save on field change
   useEffect(() => {
@@ -110,7 +114,7 @@ export function NewTextCampaignModal({
     return () => {
       if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
     };
-  }, [audience, messageBody, open, saveDraft]);
+  }, [audience, messageBody, pollEnabled, pollOptions, open, saveDraft]);
 
   // --- Draft restoration prompt on open ---
   useEffect(() => {
@@ -136,6 +140,12 @@ export function NewTextCampaignModal({
           onClick: () => {
             setAudience(draft.audience);
             setMessageBody(draft.messageBody);
+            if (typeof draft.pollEnabled === 'boolean') {
+              setPollEnabled(draft.pollEnabled);
+            }
+            if (Array.isArray(draft.pollOptions)) {
+              setPollOptions(draft.pollOptions);
+            }
           },
         },
         cancel: {
@@ -359,6 +369,8 @@ export function NewTextCampaignModal({
           <CampaignReview
             preview={preview}
             messageBody={messageBody}
+            pollEnabled={pollEnabled}
+            pollOptions={pollOptions}
             onSendNow={handleSendNow}
             onSchedule={handleSchedule}
             isSending={isSending}
