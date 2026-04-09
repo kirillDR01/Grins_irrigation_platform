@@ -244,6 +244,20 @@ class CampaignService(LoggerMixin):
         # keys whose value is None so we don't overwrite existing data.
         update_fields = {k: v for k, v in update_fields.items() if v is not None}
 
+        # poll_options is a JSONB column and each PollOption contains
+        # `start_date` / `end_date` as `datetime.date` objects. SQLAlchemy's
+        # JSON encoder can't serialize bare `date` instances, so the default
+        # `model_dump()` above produces a payload that fails at flush time
+        # with `TypeError: Object of type date is not JSON serializable`.
+        # Re-serialize just this field through Pydantic's JSON mode so the
+        # dates land as ISO strings. Leave other fields (notably
+        # `scheduled_at`, which is a SQLAlchemy DateTime column that
+        # expects a real datetime instance) untouched.
+        if "poll_options" in update_fields and data.poll_options is not None:
+            update_fields["poll_options"] = [
+                opt.model_dump(mode="json") for opt in data.poll_options
+            ]
+
         if not update_fields:
             self.log_completed(
                 "update_campaign",
