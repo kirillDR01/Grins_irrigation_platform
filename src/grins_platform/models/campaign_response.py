@@ -90,6 +90,12 @@ class CampaignResponse(Base):
         ),
         Index("ix_campaign_responses_campaign_id", "campaign_id"),
         Index("ix_campaign_responses_status", "status"),
+        Index(
+            "ix_campaign_responses_campaign_phone_received",
+            "campaign_id",
+            "phone",
+            received_at.desc(),
+        ),
     )
 
     def __repr__(self) -> str:

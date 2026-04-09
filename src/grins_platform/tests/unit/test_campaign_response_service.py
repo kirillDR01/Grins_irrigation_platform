@@ -432,3 +432,91 @@ class TestRecordPollReply:
             row = await svc.record_poll_reply(inbound)
 
         assert row.recipient_name == "Jane Doe"
+
+
+# =============================================================================
+# Bug 1 — SentMessage.campaign relationship exists
+# =============================================================================
+
+
+@pytest.mark.unit
+def test_sent_message_model_has_campaign_relationship() -> None:
+    from grins_platform.models.sent_message import SentMessage
+    from sqlalchemy import inspect
+
+    mapper = inspect(SentMessage)
+    rel_names = [r.key for r in mapper.relationships]
+    assert "campaign" in rel_names
+
+
+# =============================================================================
+# Bug 4 — Broader punctuation stripping
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestCommonSmsPunctuationStripped:
+    """Ensure common SMS punctuation wrappers are stripped before parsing."""
+
+    @pytest.mark.parametrize(
+        ("body", "expected_key"),
+        [
+            ("(1)", "1"),
+            ('"1"', "1"),
+            ("'2'", "2"),
+            ("#3", "3"),
+            ("1:", "1"),
+            ("-2-", "2"),
+            ("#3;", "3"),
+            ("(Option 1)", "1"),
+        ],
+    )
+    def test_common_sms_punctuation_stripped(self, body: str, expected_key: str) -> None:
+        result = CampaignResponseService.parse_poll_reply(body, _POLL_OPTIONS)
+        assert result.ok is True
+        assert result.option_key == expected_key
+
+
+# =============================================================================
+# Bug 6 — total_replied excludes opted_out/orphan
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestTotalRepliedExcludesOptedOutOrphan:
+    """total_replied should only sum parsed + needs_review buckets."""
+
+    @pytest.mark.asyncio
+    async def test_total_replied_excludes_opted_out_and_orphan(self) -> None:
+        campaign_id = uuid4()
+
+        # Mock count_by_status_and_option to return all 4 statuses
+        mock_counts = [
+            {"status": "parsed", "option_key": "1", "count": 5},
+            {"status": "needs_review", "option_key": None, "count": 2},
+            {"status": "opted_out", "option_key": None, "count": 3},
+            {"status": "orphan", "option_key": None, "count": 1},
+        ]
+
+        session = AsyncMock()
+        svc = CampaignResponseService(session)
+        svc.repo = AsyncMock()
+        svc.repo.count_by_status_and_option = AsyncMock(return_value=mock_counts)
+
+        # Mock the campaign poll_options lookup
+        mock_camp_result = MagicMock()
+        mock_camp_result.scalar_one_or_none.return_value = [
+            {"key": "1", "label": "Week of Apr 6"},
+        ]
+        # Mock the total_sent count
+        mock_sent_result = MagicMock()
+        mock_sent_result.scalar.return_value = 10
+
+        session.execute = AsyncMock(side_effect=[mock_camp_result, mock_sent_result])
+
+        summary = await svc.get_response_summary(campaign_id)
+
+        # total_replied should be 5 + 2 = 7 (parsed + needs_review only)
+        assert summary.total_replied == 7
+        # But all 4 buckets should still be present
+        assert len(summary.buckets) == 4

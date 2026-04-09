@@ -138,33 +138,19 @@ async def export_responses_csv(
     campaign = await _get_campaign_or_404(campaign_id, session)
     svc = CampaignResponseService(session)
 
-    # Collect rows (service already applies latest-wins + name split)
-    rows: list[list[str]] = [
-        [
-            csv_row.first_name,
-            csv_row.last_name,
-            csv_row.phone,
-            csv_row.selected_option_label,
-            csv_row.raw_reply,
-            csv_row.received_at,
-        ]
-        async for csv_row in svc.iter_csv_rows(campaign_id, option_key)
-    ]
-
-    # Build CSV in memory
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(
-        [
-            "first_name",
-            "last_name",
-            "phone",
-            "selected_option_label",
-            "raw_reply",
-            "received_at",
-        ],
-    )
-    writer.writerows(rows)
+    writer.writerow([
+        "first_name", "last_name", "phone",
+        "selected_option_label", "raw_reply", "received_at",
+    ])
+    row_count = 0
+    async for csv_row in svc.iter_csv_rows(campaign_id, option_key):
+        writer.writerow([
+            csv_row.first_name, csv_row.last_name, csv_row.phone,
+            csv_row.selected_option_label, csv_row.raw_reply, csv_row.received_at,
+        ])
+        row_count += 1
 
     slug = _slugify(campaign.name)
     today = date.today().isoformat()
@@ -173,7 +159,7 @@ async def export_responses_csv(
     _ep.logger.info(
         "campaign.response.csv_exported",
         campaign_id=str(campaign_id),
-        row_count=len(rows),
+        row_count=row_count,
         actor_id=str(current_user.id),
     )
     _ep.log_completed("export_responses_csv", campaign_id=str(campaign_id))

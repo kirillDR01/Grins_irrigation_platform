@@ -114,6 +114,10 @@ class SentMessage(Base):
         back_populates="sent_messages",
         lazy="selectin",
     )
+    campaign: Mapped["Campaign | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "Campaign",
+        lazy="selectin",
+    )
 
     __table_args__ = (
         CheckConstraint(

@@ -1247,8 +1247,11 @@ class CampaignService(LoggerMixin):
 
         Validates: CRM Gap Closure Req 45.4, 45.8, CallRail B2 fix, CallRail 4.8, 19.1
         """
+        from grins_platform.services.campaign_utils import render_poll_block  # noqa: PLC0415
+
+        composed_body = (campaign.body or "") + render_poll_block(campaign.poll_options)
         compliant_body = self._apply_can_spam(
-            campaign.body,
+            composed_body,
             business_address,
         )
 

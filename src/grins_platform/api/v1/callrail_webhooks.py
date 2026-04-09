@@ -50,7 +50,7 @@ async def _is_duplicate(
     conversation_id: str,
     created_at: str,
 ) -> bool:
-    """Check if this webhook was already processed via Redis SET NX.
+    """Check if this webhook was already processed (read-only check).
 
     Returns True if already seen (duplicate).
     """
@@ -58,12 +58,25 @@ async def _is_duplicate(
         return False
     key = f"{_REDIS_KEY_PREFIX}:{conversation_id}:{created_at}"
     try:
-        added = await redis.set(key, "1", nx=True, ex=_REDIS_TTL_SECONDS)
+        return (await redis.get(key)) is not None
     except Exception:
         logger.warning("sms.webhook.redis_unavailable")
         return False
-    else:
-        return added is None  # None means key already existed
+
+
+async def _mark_processed(
+    redis: Redis | None,
+    conversation_id: str,
+    created_at: str,
+) -> None:
+    """Mark a webhook as processed after successful handling."""
+    if redis is None:
+        return
+    key = f"{_REDIS_KEY_PREFIX}:{conversation_id}:{created_at}"
+    try:
+        await redis.set(key, "1", nx=True, ex=_REDIS_TTL_SECONDS)
+    except Exception:
+        logger.warning("sms.webhook.redis_mark_failed")
 
 
 @router.post(
@@ -146,13 +159,21 @@ async def callrail_inbound(
             media_type="application/json",
         )
 
-    sms_service = SMSService(db)
+    sms_service = SMSService(db, provider=provider)
     result = await sms_service.handle_inbound(
         from_phone=inbound.from_phone,
         body=inbound.body,
         provider_sid=inbound.provider_sid,
         thread_id=inbound.thread_id,
     )
+
+    mark_redis = await _get_redis()
+    try:
+        await _mark_processed(mark_redis, conversation_id, created_at)
+    finally:
+        if mark_redis is not None:
+            with contextlib.suppress(Exception):
+                await mark_redis.aclose()
 
     logger.info(
         "sms.webhook.inbound",

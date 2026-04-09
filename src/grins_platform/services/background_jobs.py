@@ -342,32 +342,7 @@ _DEFAULT_PREFIX = "Grins Irrigation: "
 _DEFAULT_FOOTER = " Reply STOP to opt out."
 
 
-def _render_poll_block(poll_options: list[dict] | None) -> str:
-    """Build the text block appended to a poll campaign's message body.
-
-    The trailing ``\\n\\n`` ensures the STOP footer lands on its own
-    paragraph below the options list instead of gluing onto the last
-    option line. Mirrors
-    ``frontend/src/features/communications/utils/pollOptions.ts::renderPollOptionsBlock``
-    exactly so the preview shown in the wizard matches what customers
-    actually receive.
-
-    Args:
-        poll_options: Parsed JSONB array from ``campaigns.poll_options``,
-            or ``None`` for non-poll campaigns.
-
-    Returns:
-        The rendered block (including leading/trailing blank lines), or
-        an empty string for non-poll campaigns.
-    """
-    if not poll_options:
-        return ""
-    lines = [
-        f"{opt.get('key', '?')}. {opt.get('label') or '(no label)'}"
-        for opt in poll_options
-    ]
-    keys = ", ".join(str(opt.get("key", "?")) for opt in poll_options)
-    return f"\n\nReply with {keys}:\n" + "\n".join(lines) + "\n\n"
+from grins_platform.services.campaign_utils import render_poll_block as _render_poll_block
 
 
 def _mask_phone(phone: str) -> str:

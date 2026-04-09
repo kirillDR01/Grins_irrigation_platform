@@ -45,8 +45,8 @@ def _mask_phone(phone: str) -> str:
     return "***"
 
 
-# Regex to strip trailing punctuation from reply body
-_STRIP_PUNCT_RE = re.compile(r"^[\s.,!?)]+|[\s.,!?)]+$")
+# Regex to strip leading/trailing whitespace and common SMS punctuation
+_STRIP_PUNCT_RE = re.compile(r"^[\s.,!?()\"\\'#:;\-]+|[\s.,!?()\"\\'#:;\-]+$")
 
 # Pattern for "Option N" format (case-insensitive)
 _OPTION_N_RE = re.compile(r"^option\s+(\d)$", re.IGNORECASE)
@@ -439,7 +439,9 @@ class CampaignResponseService(LoggerMixin):
         total_replied = 0
         for row in counts:
             cnt = int(row["count"])  # type: ignore[call-overload]
-            total_replied += cnt
+            # Only count actual poll replies, not STOP messages or orphans
+            if row["status"] in ("parsed", "needs_review"):
+                total_replied += cnt
             okey = row["option_key"]
             buckets.append(
                 CampaignResponseBucket(
