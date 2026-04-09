@@ -607,6 +607,46 @@ class TestProperty8GhostLeadPhoneDeduplication:
         assert result.status == "contacted"
         assert result.sms_consent is True
 
+    @given(phone=_generated_phone)
+    @settings(max_examples=30, deadline=None)
+    def test_existing_lead_name_updated_from_csv(self, phone: str) -> None:
+        """CSV name overwrites stale DB name on existing lead."""
+        existing = Lead(
+            name="Claude test",
+            phone=normalize_to_e164(phone),
+            situation="exploring",
+            lead_source="campaign_import",
+            source_site="campaign_csv_import",
+            status="new",
+            sms_consent=False,
+        )
+        existing.id = uuid4()
+
+        session = _make_mock_session(existing_lead=existing)
+        result = asyncio.run(create_or_get(session, phone, "John", "Smith"))
+
+        assert result.name == "John Smith"
+
+    @given(phone=_generated_phone)
+    @settings(max_examples=30, deadline=None)
+    def test_existing_lead_name_preserved_when_csv_has_no_name(self, phone: str) -> None:
+        """Existing lead name is kept when CSV provides no name."""
+        existing = Lead(
+            name="Claude test",
+            phone=normalize_to_e164(phone),
+            situation="exploring",
+            lead_source="campaign_import",
+            source_site="campaign_csv_import",
+            status="new",
+            sms_consent=False,
+        )
+        existing.id = uuid4()
+
+        session = _make_mock_session(existing_lead=existing)
+        result = asyncio.run(create_or_get(session, phone, None, None))
+
+        assert result.name == "Claude test"
+
 
 # ---------------------------------------------------------------------------
 # Property 24: Template rendering with safe defaults

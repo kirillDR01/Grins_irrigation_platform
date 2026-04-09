@@ -57,6 +57,10 @@ async def create_or_get(
     existing: Lead | None = result.scalar_one_or_none()
 
     if existing is not None:
+        new_name = " ".join(filter(None, [first_name, last_name])) or None
+        if new_name and existing.name != new_name:
+            existing.name = new_name
+            logger.debug("sms.ghost_lead.updated_name", lead_id=str(existing.id), new_name=new_name)
         logger.debug(
             "sms.ghost_lead.found_existing",
             lead_id=str(existing.id),
