@@ -70,7 +70,7 @@ function FailureBadge({ campaignId }: { campaignId: string }) {
 function ProgressBar({ sent, failed, total }: { sent: number; failed: number; total: number }) {
   if (total === 0) return null;
   const sentPct = Math.round((sent / total) * 100);
-  const failedPct = Math.round((failed / total) * 100);
+  const failedPct = Math.min(Math.round((failed / total) * 100), 100 - sentPct);
 
   return (
     <div className="flex items-center gap-2">

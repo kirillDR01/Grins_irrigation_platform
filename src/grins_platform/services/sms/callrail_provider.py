@@ -265,12 +265,12 @@ class CallRailProvider(LoggerMixin):
           response shape from Phase 0.5.
         """
         return InboundSMS(
-            from_phone=str(payload.get("source_number", "")),
-            body=str(payload.get("content", "")),
-            provider_sid=str(payload.get("resource_id", "")),
-            to_phone=str(payload.get("destination_number", "")) or None,
-            thread_id=str(payload.get("thread_resource_id", "")) or None,
-            conversation_id=str(payload.get("conversation_id", "")) or None,
+            from_phone=str(payload.get("source_number") or ""),
+            body=str(payload.get("content") or ""),
+            provider_sid=str(payload.get("resource_id") or ""),
+            to_phone=str(payload.get("destination_number") or "") or None,
+            thread_id=str(payload.get("thread_resource_id") or "") or None,
+            conversation_id=str(payload.get("conversation_id") or "") or None,
         )
 
     # -- Rate-limit header extraction ----------------------------------------

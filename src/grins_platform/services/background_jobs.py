@@ -401,7 +401,10 @@ class CampaignWorker(LoggerMixin):
                 .where(
                     CampaignRecipient.delivery_status == RecipientState.pending.value,
                     CampaignRecipient.channel == "sms",
-                    Campaign.status == CampaignStatus.SENDING.value,
+                    Campaign.status.in_([
+                        CampaignStatus.SENDING.value,
+                        CampaignStatus.SENT.value,
+                    ]),
                     (Campaign.scheduled_at.is_(None)) | (Campaign.scheduled_at <= now),
                 )
                 .order_by(CampaignRecipient.created_at.asc())
@@ -419,9 +422,24 @@ class CampaignWorker(LoggerMixin):
             # 4. Process each claimed recipient
             provider = get_sms_provider()
 
-            for cr in recipients:
-                await self._process_recipient(session, cr, provider)
-                processed += 1
+            # L10: Create Redis client once for the whole batch
+            redis_url = os.environ.get("REDIS_URL")
+            redis_client = None
+            if redis_url:
+                try:
+                    from redis.asyncio import Redis  # noqa: PLC0415
+
+                    redis_client = Redis.from_url(redis_url, decode_responses=True)
+                except Exception:
+                    logger.debug("campaign.worker.redis_connect_failed")
+
+            try:
+                for cr in recipients:
+                    await self._process_recipient(session, cr, provider, redis_client)
+                    processed += 1
+            finally:
+                if redis_client:
+                    await redis_client.aclose()
 
             # 5. Update campaign status if all recipients are terminal
             campaign_ids = {cr.campaign_id for cr in recipients}
@@ -448,6 +466,7 @@ class CampaignWorker(LoggerMixin):
         session: AsyncSession,
         cr: CampaignRecipient,
         provider: object,
+        redis_client: object | None = None,
     ) -> None:
         """Process a single campaign recipient through the state machine."""
         from grins_platform.services.sms.base import BaseSMSProvider  # noqa: PLC0415
@@ -483,29 +502,9 @@ class CampaignWorker(LoggerMixin):
             cr.error_message = "campaign_not_found"
             return
 
-        # Consent check
-        has_consent = await check_sms_consent(session, recipient.phone, "marketing")
-        if not has_consent:
-            _ = transition(RecipientState.sending, RecipientState.failed)
-            cr.delivery_status = RecipientState.failed.value
-            cr.error_message = "consent_denied"
-            logger.info(
-                "campaign.worker.consent_denied",
-                phone=_mask_phone(recipient.phone),
-            )
-            return
+        # L11: Consent check handled by SMSService.send_message()
 
-        # Rate limit check
-        redis_url = os.environ.get("REDIS_URL")
-        redis_client = None
-        if redis_url:
-            try:
-                from redis.asyncio import Redis  # noqa: PLC0415
-
-                redis_client = Redis.from_url(redis_url, decode_responses=True)
-            except Exception:
-                logger.debug("campaign.worker.redis_connect_failed")
-
+        # Rate limit check (Redis client created once per batch — L10)
         tracker = SMSRateLimitTracker(
             provider=provider.provider_name,
             account_id=os.environ.get("CALLRAIL_ACCOUNT_ID", ""),
@@ -514,15 +513,13 @@ class CampaignWorker(LoggerMixin):
         rl_result = await tracker.check()
         if not rl_result.allowed:
             # Revert to pending - will be retried next tick
-            _ = transition(RecipientState.sending, RecipientState.failed)
-            cr.delivery_status = RecipientState.pending.value  # back to pending
+            _ = transition(RecipientState.sending, RecipientState.pending)
+            cr.delivery_status = RecipientState.pending.value
             cr.sending_started_at = None
             logger.info(
                 "campaign.worker.rate_limited",
                 retry_after=rl_result.retry_after_seconds,
             )
-            if redis_client:
-                await redis_client.aclose()
             return
 
         # Send via provider (SMSService handles merge fields + formatting)
@@ -577,8 +574,6 @@ class CampaignWorker(LoggerMixin):
                 error=str(e),
             )
         finally:
-            if redis_client:
-                await redis_client.aclose()
             # Persist the recipient's terminal state before the tick's
             # aggregate COUNT in _update_campaign_status runs. The session
             # is created with autoflush=False, so without this explicit
@@ -612,6 +607,11 @@ class CampaignWorker(LoggerMixin):
 
         cid = campaign_id if isinstance(campaign_id, UUID) else UUID(str(campaign_id))
 
+        # Respect explicit user cancellation — never overwrite CANCELLED
+        campaign = await session.get(Campaign, cid)
+        if campaign is not None and campaign.status == CampaignStatus.CANCELLED.value:
+            return
+
         # Count recipients by status
         count_stmt = (
             select(
@@ -640,7 +640,6 @@ class CampaignWorker(LoggerMixin):
         if total == 0:
             return
 
-        campaign = await session.get(Campaign, cid)
         if campaign is None:
             return
 

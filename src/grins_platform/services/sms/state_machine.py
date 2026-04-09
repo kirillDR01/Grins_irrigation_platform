@@ -57,6 +57,7 @@ _ALLOWED_TRANSITIONS: dict[
             RecipientState.sent,
             RecipientState.failed,
             RecipientState.cancelled,
+            RecipientState.pending,  # rate-limit revert
         },
     ),
     RecipientState.sent: frozenset(),  # terminal
@@ -82,11 +83,14 @@ def transition(
 
 
 _ORPHAN_RECOVERY_SQL = text(
-    "UPDATE campaign_recipients "
+    "UPDATE campaign_recipients cr "
     "SET delivery_status = 'failed', "
     "    error_message = 'worker_interrupted' "
-    "WHERE delivery_status = 'sending' "
-    "  AND sending_started_at < now() - interval '5 minutes'",
+    "FROM campaigns c "
+    "WHERE cr.campaign_id = c.id "
+    "  AND c.status = 'sending' "
+    "  AND cr.delivery_status = 'sending' "
+    "  AND cr.sending_started_at < now() - interval '5 minutes'",
 )
 
 

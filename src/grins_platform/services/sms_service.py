@@ -484,7 +484,7 @@ class SMSService(LoggerMixin):
 
         # 10.1: Exact opt-out keyword match (Req 8.1, 8.2, 8.3, 8.4)
         if body_lower in EXACT_OPT_OUT_KEYWORDS:
-            result = await self._process_exact_opt_out(from_phone, body_lower)
+            result = await self._process_exact_opt_out(from_phone, body_lower, thread_id=thread_id)
             # Bookkeeping: record STOP as campaign response (Req 6.1-6.4)
             # Independent — failure must not block consent revocation
             if thread_id:
@@ -600,12 +600,15 @@ class SMSService(LoggerMixin):
         self,
         phone: str,
         keyword: str,
+        *,
+        thread_id: str | None = None,
     ) -> dict[str, Any]:
         """Process exact opt-out keyword: create consent record and send confirmation.
 
         Args:
             phone: Sender phone number
             keyword: The matched keyword
+            thread_id: Provider thread/conversation ID for resolving masked phones
 
         Returns:
             Processing result
@@ -613,7 +616,37 @@ class SMSService(LoggerMixin):
         Validates: Requirements 8.1, 8.2, 8.3, 8.4
         """
         now = datetime.now(timezone.utc)
-        formatted_phone = self._format_phone(phone)
+
+        # Resolve real phone from thread_id when provider masks the sender
+        # (e.g. CallRail sends "***3312" instead of the full number).
+        real_phone = phone
+        if thread_id:
+            try:
+                from grins_platform.services.campaign_response_service import (  # noqa: PLC0415
+                    CampaignResponseService,
+                )
+
+                svc = CampaignResponseService(self.session)
+                corr = await svc.correlate_reply(thread_id)
+                if corr.sent_message and corr.sent_message.recipient_phone:
+                    real_phone = corr.sent_message.recipient_phone
+            except Exception:
+                logger.warning(
+                    "sms.opt_out.phone_resolution_failed",
+                    phone_masked=_mask_phone(phone),
+                    thread_id=thread_id,
+                    exc_info=True,
+                )
+
+        from grins_platform.services.sms.phone_normalizer import (  # noqa: PLC0415
+            PhoneNormalizationError,
+            normalize_to_e164,
+        )
+
+        try:
+            formatted_phone = normalize_to_e164(real_phone)
+        except PhoneNormalizationError:
+            formatted_phone = self._format_phone(real_phone)
 
         record = SmsConsentRecord(
             phone_number=formatted_phone,

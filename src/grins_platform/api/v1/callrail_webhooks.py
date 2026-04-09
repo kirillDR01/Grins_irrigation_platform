@@ -125,7 +125,7 @@ async def callrail_inbound(
         )
 
     # 3. Idempotency dedupe via Redis
-    conversation_id = str(payload.get("id", ""))
+    conversation_id = str(payload.get("resource_id", ""))
     created_at = str(payload.get("created_at", ""))
     redis = await _get_redis()
     try:
@@ -160,12 +160,20 @@ async def callrail_inbound(
         )
 
     sms_service = SMSService(db, provider=provider)
-    result = await sms_service.handle_inbound(
-        from_phone=inbound.from_phone,
-        body=inbound.body,
-        provider_sid=inbound.provider_sid,
-        thread_id=inbound.thread_id,
-    )
+    try:
+        result = await sms_service.handle_inbound(
+            from_phone=inbound.from_phone,
+            body=inbound.body,
+            provider_sid=inbound.provider_sid,
+            thread_id=inbound.thread_id,
+        )
+    except Exception:
+        logger.exception("sms.webhook.handle_inbound_failed", provider="callrail")
+        return Response(
+            content='{"status": "error_logged"}',
+            status_code=status.HTTP_200_OK,
+            media_type="application/json",
+        )
 
     mark_redis = await _get_redis()
     try:

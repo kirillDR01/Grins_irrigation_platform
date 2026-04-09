@@ -191,6 +191,10 @@ def parse_csv(raw_bytes: bytes) -> CsvParseResult:
             ),
         )
 
+    if result.total_rows == 0:
+        msg = "CSV contains no data rows"
+        raise ValueError(msg)
+
     return result
 
 

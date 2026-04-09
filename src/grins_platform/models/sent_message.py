@@ -143,6 +143,7 @@ class SentMessage(Base):
         Index("idx_sent_messages_delivery_status", "delivery_status"),
         Index("idx_sent_messages_scheduled_for", "scheduled_for"),
         Index("ix_sent_messages_campaign_id", "campaign_id"),
+        Index("ix_sent_messages_provider_thread_id", "provider_thread_id"),
     )
 
     def __repr__(self) -> str:

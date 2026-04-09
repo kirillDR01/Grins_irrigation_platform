@@ -24,6 +24,7 @@ export function useCancelCampaign() {
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: campaignKeys.detail(id) });
       qc.invalidateQueries({ queryKey: campaignKeys.lists() });
+      qc.invalidateQueries({ queryKey: campaignKeys.stats(id) });
     },
   });
 }

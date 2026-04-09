@@ -148,6 +148,7 @@ class CampaignResponseRepository(LoggerMixin):
         self,
         campaign_id: UUID,
         option_key: str | None = None,
+        status: str | None = None,
     ) -> AsyncIterator[CampaignResponse]:
         """Stream latest-wins rows in batches of 100 for CSV export.
 
@@ -160,6 +161,8 @@ class CampaignResponseRepository(LoggerMixin):
         )
         if option_key is not None:
             base = base.where(CampaignResponse.selected_option_key == option_key)
+        if status is not None:
+            base = base.where(CampaignResponse.status == status)
         base = base.order_by(CampaignResponse.received_at.desc())
 
         result = await self.session.stream(base)

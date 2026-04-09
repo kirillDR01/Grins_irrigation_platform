@@ -97,4 +97,6 @@ class CampaignResponseCsvRow(BaseModel):
     phone: str = ""
     selected_option_label: str = ""
     raw_reply: str = ""
+    status: str = ""
+    address: str = ""
     received_at: str = ""

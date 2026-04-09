@@ -184,7 +184,7 @@ async def bulk_insert_attestation_consent(
     if not rows:
         return 0
 
-    stmt = pg_insert(SmsConsentRecord).values(rows)
+    stmt = pg_insert(SmsConsentRecord).values(rows).on_conflict_do_nothing()
     _ = await session.execute(stmt)
     await session.flush()
     return len(rows)

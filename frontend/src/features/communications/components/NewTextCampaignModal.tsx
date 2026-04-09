@@ -219,9 +219,24 @@ export function NewTextCampaignModal({
         );
         return;
       }
+      // Persist composed body + poll options to the draft before entering Review
+      if (campaignId) {
+        try {
+          await updateCampaign.mutateAsync({
+            id: campaignId,
+            data: {
+              body: messageBody,
+              poll_options: pollEnabled && pollOptions.length >= 2 ? pollOptions : null,
+            },
+          });
+        } catch {
+          toast.error('Failed to save message draft.');
+          return;
+        }
+      }
       setStep(2);
     }
-  }, [step, hasAudience, campaignId, audience, messageBody, pollEnabled, pollOptions, pollOptionsValid, createCampaign, audiencePreviewMutation]);
+  }, [step, hasAudience, campaignId, audience, messageBody, pollEnabled, pollOptions, pollOptionsValid, createCampaign, updateCampaign, audiencePreviewMutation]);
 
   const handleBack = useCallback(() => {
     if (step > 0) setStep((s) => (s - 1) as Step);

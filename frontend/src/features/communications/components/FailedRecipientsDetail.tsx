@@ -16,7 +16,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { useCampaignRecipients, useCampaignStats, useRetryFailed, useCancelCampaign } from '../hooks';
 import type { Campaign, CampaignRecipient } from '../types/campaign';
@@ -64,7 +63,6 @@ function StatusBadge({ status }: { status: string }) {
 
 export function FailedRecipientsDetail({ campaign, onBack }: FailedRecipientsDetailProps) {
   const [page, setPage] = useState(1);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const { data: statsData } = useCampaignStats(campaign.id);
   const { data, isLoading } = useCampaignRecipients(campaign.id, {
@@ -80,30 +78,10 @@ export function FailedRecipientsDetail({ campaign, onBack }: FailedRecipientsDet
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / 50);
 
-  const allSelected = recipients.length > 0 && recipients.every((r) => selectedIds.has(r.id));
-
-  const toggleAll = () => {
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(recipients.map((r) => r.id)));
-    }
-  };
-
-  const toggleOne = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
   const handleRetry = async () => {
     try {
       const result = await retryMutation.mutateAsync(campaign.id);
       toast.success(`${result.retried_recipients} recipients re-queued for sending.`);
-      setSelectedIds(new Set());
     } catch {
       toast.error('Could not retry recipients.');
     }
@@ -136,7 +114,7 @@ export function FailedRecipientsDetail({ campaign, onBack }: FailedRecipientsDet
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          {hasFailed && (
+          {hasFailed && campaign.status !== 'cancelled' && (
             <Button
               size="sm"
               onClick={handleRetry}
@@ -179,9 +157,18 @@ export function FailedRecipientsDetail({ campaign, onBack }: FailedRecipientsDet
           </div>
         )}
 
-        {!isLoading && recipients.length === 0 && (
+        {!isLoading && !hasFailed && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6 text-center" data-testid="success-card">
+            <p className="text-lg font-semibold text-emerald-700">All recipients sent successfully</p>
+            <p className="text-sm text-emerald-600 mt-1">
+              {statsData?.sent ?? 0} messages delivered with no failures.
+            </p>
+          </div>
+        )}
+
+        {!isLoading && hasFailed && recipients.length === 0 && (
           <div className="py-8 text-center text-sm text-slate-400">
-            No failed recipients.
+            No failed recipients on this page.
           </div>
         )}
 
@@ -190,13 +177,6 @@ export function FailedRecipientsDetail({ campaign, onBack }: FailedRecipientsDet
             <Table data-testid="failed-recipients-table">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10">
-                    <Checkbox
-                      checked={allSelected}
-                      onCheckedChange={toggleAll}
-                      aria-label="Select all"
-                    />
-                  </TableHead>
                   <TableHead>Recipient</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead>Status</TableHead>
@@ -207,13 +187,6 @@ export function FailedRecipientsDetail({ campaign, onBack }: FailedRecipientsDet
               <TableBody>
                 {recipients.map((r) => (
                   <TableRow key={r.id} data-testid="failed-recipient-row">
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedIds.has(r.id)}
-                        onCheckedChange={() => toggleOne(r.id)}
-                        aria-label={`Select recipient ${shortId(r.id)}`}
-                      />
-                    </TableCell>
                     <TableCell className="text-sm">
                       {r.recipient_name || r.recipient_phone || shortId(r.id)}
                     </TableCell>

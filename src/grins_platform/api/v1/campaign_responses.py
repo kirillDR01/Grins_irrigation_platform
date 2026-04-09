@@ -11,10 +11,11 @@ import csv
 import io
 import re
 from datetime import date
+from collections.abc import AsyncGenerator
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
@@ -98,9 +99,9 @@ async def list_responses(
     _current_user: ManagerOrAdminUser,
     session: Annotated[AsyncSession, Depends(get_db_session)],
     option_key: str | None = None,
-    status: str | None = None,
+    response_status: str | None = None,
     page: int = 1,
-    page_size: int = 20,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PaginatedCampaignResponseOut:
     """Validates: Scheduling Poll Req 10.1-10.4."""
     _ep.log_started("list_responses", campaign_id=str(campaign_id))
@@ -109,7 +110,7 @@ async def list_responses(
     rows, total = await repo.list_for_campaign(
         campaign_id,
         option_key=option_key,
-        status=status,
+        status=response_status,
         page=page,
         page_size=page_size,
     )
@@ -138,34 +139,40 @@ async def export_responses_csv(
     campaign = await _get_campaign_or_404(campaign_id, session)
     svc = CampaignResponseService(session)
 
-    buf = io.StringIO()
-    writer = csv.writer(buf, quoting=csv.QUOTE_ALL)
-    writer.writerow([
-        "first_name", "last_name", "phone",
-        "selected_option_label", "raw_reply", "received_at",
-    ])
-    row_count = 0
-    async for csv_row in svc.iter_csv_rows(campaign_id, option_key):
-        writer.writerow([
-            csv_row.first_name, csv_row.last_name, csv_row.phone,
-            csv_row.selected_option_label, csv_row.raw_reply, csv_row.received_at,
-        ])
-        row_count += 1
-
     slug = _slugify(campaign.name)
     today = date.today().isoformat()
     filename = f"campaign_{slug}_{today}_responses.csv"
 
+    async def _csv_stream() -> AsyncGenerator[str, None]:
+        buf = io.StringIO()
+        writer = csv.writer(buf, quoting=csv.QUOTE_ALL)
+        writer.writerow([
+            "first_name", "last_name", "phone",
+            "selected_option_label", "raw_reply", "status", "address", "received_at",
+        ])
+        yield buf.getvalue()
+        buf.seek(0)
+        buf.truncate(0)
+
+        async for csv_row in svc.iter_csv_rows(campaign_id, option_key):
+            writer.writerow([
+                csv_row.first_name, csv_row.last_name, csv_row.phone,
+                csv_row.selected_option_label, csv_row.raw_reply,
+                csv_row.status, csv_row.address, csv_row.received_at,
+            ])
+            yield buf.getvalue()
+            buf.seek(0)
+            buf.truncate(0)
+
     _ep.logger.info(
         "campaign.response.csv_exported",
         campaign_id=str(campaign_id),
-        row_count=row_count,
         actor_id=str(current_user.id),
     )
     _ep.log_completed("export_responses_csv", campaign_id=str(campaign_id))
 
     return StreamingResponse(
-        iter([buf.getvalue()]),
+        _csv_stream(),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

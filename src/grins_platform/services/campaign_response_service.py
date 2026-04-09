@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.campaign_response import (
@@ -43,6 +44,8 @@ if TYPE_CHECKING:
 
 def _mask_phone(phone: str) -> str:
     """Mask phone for logging: +1XXX***XXXX."""
+    if "*" in phone:
+        return phone
     if len(phone) >= 10:
         return phone[:4] + "***" + phone[-4:]
     return "***"
@@ -52,7 +55,7 @@ def _mask_phone(phone: str) -> str:
 _STRIP_PUNCT_RE = re.compile(r"^[\s.,!?()\"\\'#:;\-]+|[\s.,!?()\"\\'#:;\-]+$")
 
 # Pattern for "Option N" format (case-insensitive)
-_OPTION_N_RE = re.compile(r"^option\s+(\d)$", re.IGNORECASE)
+_OPTION_N_RE = re.compile(r"^option\s+([0-9])$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -70,6 +73,29 @@ class ParseResult:
     ok: bool
     option_key: str | None = None
     option_label: str | None = None
+
+
+def _snapshot_recipient_info(
+    sent_msg: SentMessage | None,
+) -> tuple[str | None, str | None]:
+    """Extract recipient name + address from sent_message relationships.
+
+    Returns (recipient_name, recipient_address).
+    """
+    recipient_name: str | None = None
+    recipient_address: str | None = None
+
+    if sent_msg and sent_msg.customer:
+        c = sent_msg.customer
+        first = getattr(c, "first_name", "") or ""
+        last = getattr(c, "last_name", "") or ""
+        recipient_name = f"{first} {last}".strip() or None
+    elif sent_msg and sent_msg.lead:
+        lead = sent_msg.lead
+        recipient_name = getattr(lead, "name", None)
+        recipient_address = getattr(lead, "address", None)
+
+    return recipient_name, recipient_address
 
 
 class CampaignResponseService(LoggerMixin):
@@ -107,9 +133,14 @@ class CampaignResponseService(LoggerMixin):
 
         stmt = (
             select(SentMessage)
+            .options(
+                selectinload(SentMessage.customer),
+                selectinload(SentMessage.lead),
+                selectinload(SentMessage.campaign),
+            )
             .where(
                 SentMessage.provider_thread_id == thread_resource_id,
-                SentMessage.delivery_status == "sent",
+                SentMessage.delivery_status.in_(["sent", "delivered"]),
             )
             .order_by(SentMessage.created_at.desc())
             .limit(1)
@@ -170,7 +201,7 @@ class CampaignResponseService(LoggerMixin):
         }
 
         # Try single digit match
-        if len(cleaned) == 1 and cleaned.isdigit():
+        if len(cleaned) == 1 and cleaned in "123456789":
             if cleaned in valid_keys:
                 return ParseResult(
                     ok=True,
@@ -266,18 +297,7 @@ class CampaignResponseService(LoggerMixin):
             if sent_msg and sent_msg.recipient_phone
             else inbound.from_phone
         )
-        recipient_name: str | None = None
-        recipient_address: str | None = None
-
-        if sent_msg and sent_msg.customer:
-            c = sent_msg.customer
-            first = getattr(c, "first_name", "") or ""
-            last = getattr(c, "last_name", "") or ""
-            recipient_name = f"{first} {last}".strip() or None
-        elif sent_msg and sent_msg.lead:
-            lead = sent_msg.lead
-            recipient_name = getattr(lead, "name", None)
-            recipient_address = getattr(lead, "address", None)
+        recipient_name, recipient_address = _snapshot_recipient_info(sent_msg)
 
         # Campaign has no poll_options → needs_review
         if not campaign.poll_options:
@@ -372,6 +392,7 @@ class CampaignResponseService(LoggerMixin):
                 if sent_msg and sent_msg.recipient_phone
                 else inbound.from_phone
             )
+            recipient_name, recipient_address = _snapshot_recipient_info(sent_msg)
 
             await self.repo.add(
                 CampaignResponse(
@@ -380,6 +401,8 @@ class CampaignResponseService(LoggerMixin):
                     customer_id=sent_msg.customer_id if sent_msg else None,
                     lead_id=sent_msg.lead_id if sent_msg else None,
                     phone=real_phone,
+                    recipient_name=recipient_name,
+                    recipient_address=recipient_address,
                     raw_reply_body=inbound.body,
                     provider_message_id=inbound.provider_sid,
                     status=CampaignResponseStatus.OPTED_OUT,
@@ -533,6 +556,8 @@ class CampaignResponseService(LoggerMixin):
                 phone=row.phone,
                 selected_option_label=row.selected_option_label or "",
                 raw_reply=row.raw_reply_body,
+                status=row.status or "",
+                address=row.recipient_address or "",
                 received_at=(row.received_at.isoformat() if row.received_at else ""),
             )
 

@@ -276,7 +276,7 @@ export function SentMessagesLog() {
                             : undefined
                         }
                       >
-                        {msg.delivery_status}
+                        {msg.delivery_status.charAt(0).toUpperCase() + msg.delivery_status.slice(1)}
                       </span>
                     </TableCell>
                     <TableCell className="text-sm text-slate-500 whitespace-nowrap">

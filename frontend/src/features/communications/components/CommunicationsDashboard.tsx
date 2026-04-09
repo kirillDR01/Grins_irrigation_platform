@@ -9,19 +9,21 @@ import { FailedRecipientsDetail } from './FailedRecipientsDetail';
 import { CampaignResponsesView } from './CampaignResponsesView';
 import { DraftCampaignDetail } from './DraftCampaignDetail';
 import { NewTextCampaignModal } from './NewTextCampaignModal';
+import { useCampaign } from '../hooks/useCampaigns';
 import type { Campaign } from '../types/campaign';
 
 export function CommunicationsDashboard() {
   const [activeTab, setActiveTab] = useState('needs-attention');
   const [campaignModalOpen, setCampaignModalOpen] = useState(false);
-  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const { data: selectedCampaign } = useCampaign(selectedCampaignId ?? '');
 
   const handleSelectCampaign = useCallback((campaign: Campaign) => {
-    setSelectedCampaign(campaign);
+    setSelectedCampaignId(campaign.id);
   }, []);
 
   const handleBackFromDetail = useCallback(() => {
-    setSelectedCampaign(null);
+    setSelectedCampaignId(null);
   }, []);
 
   return (
@@ -67,23 +69,25 @@ export function CommunicationsDashboard() {
         </TabsContent>
 
         <TabsContent value="campaigns" className="mt-4">
-          {selectedCampaign ? (
-            selectedCampaign.status === 'draft' ? (
-              <DraftCampaignDetail
-                campaign={selectedCampaign}
-                onBack={handleBackFromDetail}
-              />
-            ) : selectedCampaign.poll_options != null ? (
-              <CampaignResponsesView
-                campaign={selectedCampaign}
-                onBack={handleBackFromDetail}
-              />
-            ) : (
-              <FailedRecipientsDetail
-                campaign={selectedCampaign}
-                onBack={handleBackFromDetail}
-              />
-            )
+          {selectedCampaignId ? (
+            selectedCampaign ? (
+              selectedCampaign.status === 'draft' ? (
+                <DraftCampaignDetail
+                  campaign={selectedCampaign}
+                  onBack={handleBackFromDetail}
+                />
+              ) : selectedCampaign.poll_options != null ? (
+                <CampaignResponsesView
+                  campaign={selectedCampaign}
+                  onBack={handleBackFromDetail}
+                />
+              ) : (
+                <FailedRecipientsDetail
+                  campaign={selectedCampaign}
+                  onBack={handleBackFromDetail}
+                />
+              )
+            ) : null
           ) : (
             <CampaignsList onSelectCampaign={handleSelectCampaign} />
           )}

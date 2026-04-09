@@ -144,6 +144,7 @@ export interface LeadListParams extends PaginationParams {
   lead_source?: string;
   intake_tag?: string;
   action_tag?: ActionTag;
+  sms_consent?: boolean;
 }
 
 // Paginated lead response

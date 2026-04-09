@@ -82,7 +82,7 @@ class Campaign(Base):
         "CampaignRecipient",
         back_populates="campaign",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        lazy="noload",
     )
 
     __table_args__ = (

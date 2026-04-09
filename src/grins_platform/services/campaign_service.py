@@ -275,6 +275,9 @@ class CampaignService(LoggerMixin):
                 opt.model_dump(mode="json") for opt in data.poll_options
             ]
 
+        if "target_audience" in update_fields and data.target_audience is not None:
+            update_fields["target_audience"] = _audience_to_dict(data.target_audience)
+
         if not update_fields:
             self.log_completed(
                 "update_campaign",
@@ -484,6 +487,15 @@ class CampaignService(LoggerMixin):
         """
         self.log_started("enqueue_campaign_send", campaign_id=str(campaign_id))
 
+        # Advisory lock to prevent concurrent /send requests creating duplicate recipients
+        from sqlalchemy import text as sa_text  # noqa: PLC0415
+
+        lock_key = f"send:{campaign_id}"
+        await self.repo.session.execute(
+            sa_text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+            {"key": lock_key},
+        )
+
         campaign = await self.repo.get_by_id(campaign_id)
         if campaign is None:
             self.log_failed(
@@ -524,15 +536,23 @@ class CampaignService(LoggerMixin):
             )
             raise NoRecipientsError(campaign_id)
 
-        # Create CampaignRecipient rows with pending status
-        for recipient in recipients:
-            _ = await self.repo.add_recipient(
+        # Create CampaignRecipient rows with pending status (bulk insert)
+        from grins_platform.models.campaign import (  # noqa: PLC0415
+            CampaignRecipient,
+        )
+
+        rows = [
+            CampaignRecipient(
                 campaign_id=campaign_id,
                 customer_id=recipient.customer_id,
                 lead_id=recipient.lead_id,
-                channel=campaign.campaign_type,
+                channel="sms",
                 delivery_status="pending",
             )
+            for recipient in recipients
+        ]
+        self.repo.session.add_all(rows)
+        await self.repo.session.flush()
 
         # Transition to SENDING so background worker picks up
         _ = await self.repo.update(
@@ -575,6 +595,18 @@ class CampaignService(LoggerMixin):
                 error=CampaignNotFoundError(campaign_id),
             )
             raise CampaignNotFoundError(campaign_id)
+
+        if campaign.status not in (
+            CampaignStatus.SENDING.value,
+            CampaignStatus.SCHEDULED.value,
+        ):
+            self.log_rejected(
+                "cancel_campaign",
+                reason="invalid_status",
+                campaign_id=str(campaign_id),
+                status=campaign.status,
+            )
+            raise CampaignNotDraftError(campaign_id, campaign.status)
 
         cancelled = await self.repo.cancel_pending_recipients(campaign_id)
         await self.repo.update(campaign_id, status=CampaignStatus.CANCELLED.value)
@@ -702,9 +734,8 @@ class CampaignService(LoggerMixin):
             campaign_id, recipient_ids,
         )
 
-        # Re-activate campaign so the worker picks up the new rows
-        if created > 0:
-            await self.repo.update(campaign_id, status=CampaignStatus.SENDING.value)
+        # Leave campaign status as SENT — the worker claim query accepts
+        # SENT status when pending recipients exist (M22)
 
         self.log_completed(
             "retry_failed_recipients",
@@ -977,6 +1008,13 @@ class CampaignService(LoggerMixin):
             svc_range = cust_filters.get("last_service_between")
             if svc_range and len(svc_range) == 2:
                 start_d, end_d = svc_range
+                # JSONB stores dates as ISO strings — parse back to date objects
+                from datetime import date as _date  # noqa: PLC0415
+
+                if isinstance(start_d, str):
+                    start_d = _date.fromisoformat(start_d)
+                if isinstance(end_d, str):
+                    end_d = _date.fromisoformat(end_d)
                 start_dt = datetime(
                     start_d.year,
                     start_d.month,
@@ -1016,7 +1054,13 @@ class CampaignService(LoggerMixin):
                         customer_id=str(cust.id),
                     )
                     continue
-                seen_phones[phone] = Recipient.from_customer(cust)
+                seen_phones[phone] = Recipient(
+                    phone=phone,
+                    source_type="customer",
+                    customer_id=cust.id,
+                    first_name=cust.first_name,
+                    last_name=cust.last_name,
+                )
 
         # ----------------------------------------------------------
         # 2. Lead source
@@ -1054,6 +1098,13 @@ class CampaignService(LoggerMixin):
             created_range = lead_filters.get("created_between")
             if created_range and len(created_range) == 2:
                 start_d, end_d = created_range
+                # JSONB stores dates as ISO strings — parse back to date objects
+                from datetime import date as _date  # noqa: PLC0415
+
+                if isinstance(start_d, str):
+                    start_d = _date.fromisoformat(start_d)
+                if isinstance(end_d, str):
+                    end_d = _date.fromisoformat(end_d)
                 start_dt = datetime(
                     start_d.year,
                     start_d.month,
@@ -1092,7 +1143,16 @@ class CampaignService(LoggerMixin):
                     continue
                 # Customer wins on phone collision
                 if phone not in seen_phones:
-                    seen_phones[phone] = Recipient.from_lead(lead)
+                    parts = lead.name.strip().split(None, 1) if lead.name else []
+                    first_name = parts[0] if parts else None
+                    last_name = parts[1] if len(parts) > 1 else None
+                    seen_phones[phone] = Recipient(
+                        phone=phone,
+                        source_type="lead",
+                        lead_id=lead.id,
+                        first_name=first_name,
+                        last_name=last_name,
+                    )
 
         # ----------------------------------------------------------
         # 3. Ad-hoc CSV source
@@ -1135,7 +1195,7 @@ class CampaignService(LoggerMixin):
                         )
                         lead_id = lead.id
                     except Exception:
-                        self.logger.debug(
+                        self.logger.warning(
                             "campaign.filter_recipients.ghost_lead_failed",
                             phone=phone,
                         )

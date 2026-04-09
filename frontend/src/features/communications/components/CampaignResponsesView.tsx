@@ -72,9 +72,13 @@ export function CampaignResponsesView({
       .filter((b) => b.status === 'parsed')
       .reduce((s, b) => s + b.count, 0) ?? 0;
   const needsReviewCount =
-    summary?.buckets.find((b) => b.status === 'needs_review')?.count ?? 0;
+    summary?.buckets
+      .filter((b) => b.status === 'needs_review')
+      .reduce((s, b) => s + b.count, 0) ?? 0;
   const optedOutCount =
-    summary?.buckets.find((b) => b.status === 'opted_out')?.count ?? 0;
+    summary?.buckets
+      .filter((b) => b.status === 'opted_out')
+      .reduce((s, b) => s + b.count, 0) ?? 0;
 
   const parsedBuckets =
     summary?.buckets.filter((b) => b.status === 'parsed') ?? [];

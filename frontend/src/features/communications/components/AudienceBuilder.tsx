@@ -126,6 +126,7 @@ export function AudienceBuilder({
   const { data: leadsData, isLoading: leadsLoading } = useLeads({
     ...leadParams,
     search: debouncedLeadSearch || undefined,
+    sms_consent: leadSmsFilter || undefined,
   });
   const audiencePreviewMutation = useAudiencePreview();
   const csvUploadMutation = useAudienceCsv();
@@ -193,7 +194,7 @@ export function AudienceBuilder({
         onError: () => setPreview(null),
       });
     }
-  }, [selectedCustomerIds.length, selectedLeadIds.length, csvResult]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [buildAudience]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Derive effective preview — null when nothing selected
   const effectivePreview = hasSelection ? preview : null;
@@ -204,7 +205,7 @@ export function AudienceBuilder({
     selectedLeadIds.length +
     (csvResult ? csvResult.total_rows - csvResult.rejected - csvResult.duplicates_collapsed : 0);
 
-  const dedupeCount = effectivePreview
+  const excludedCount = effectivePreview
     ? totalSelected - effectivePreview.total
     : 0;
 
@@ -335,19 +336,18 @@ export function AudienceBuilder({
           {effectivePreview && (
             <span className="text-slate-500">
               {' '}
-              ({effectivePreview.total} after consent filter)
+              ({effectivePreview.total} after audience filter)
             </span>
           )}
         </div>
       </div>
 
       {/* Dedupe warning */}
-      {dedupeCount > 0 && (
+      {excludedCount > 0 && (
         <Alert data-testid="dedupe-warning">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            {dedupeCount} phone{dedupeCount > 1 ? 's are' : ' is'} in multiple
-            sources — they&apos;ll only be texted once.
+            {excludedCount} recipient{excludedCount > 1 ? 's' : ''} excluded by filters or dedup.
           </AlertDescription>
         </Alert>
       )}

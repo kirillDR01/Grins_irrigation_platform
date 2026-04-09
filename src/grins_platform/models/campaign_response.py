@@ -78,19 +78,19 @@ class CampaignResponse(Base):
     # Relationships
     campaign: Mapped["Campaign | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "Campaign",
-        lazy="selectin",
+        lazy="noload",
     )
     sent_message: Mapped["SentMessage | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "SentMessage",
-        lazy="selectin",
+        lazy="noload",
     )
     customer: Mapped["Customer | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "Customer",
-        lazy="selectin",
+        lazy="noload",
     )
     lead: Mapped["Lead | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "Lead",
-        lazy="selectin",
+        lazy="noload",
     )
 
     __table_args__ = (
@@ -105,6 +105,12 @@ class CampaignResponse(Base):
             "campaign_id",
             "phone",
             received_at.desc(),
+        ),
+        Index(
+            "ix_campaign_responses_provider_message_id",
+            "provider_message_id",
+            unique=True,
+            postgresql_where=provider_message_id.isnot(None),
         ),
     )
 

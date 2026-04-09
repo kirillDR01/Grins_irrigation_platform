@@ -99,17 +99,29 @@ export function CampaignReview({
   // Determine if large audience (typed confirmation required)
   const isLargeAudience = total >= LARGE_AUDIENCE_THRESHOLD;
   const expectedConfirmation = `SEND ${total}`;
-  const confirmationValid = !isLargeAudience || typedConfirmation === expectedConfirmation;
+  const confirmationValid = !isLargeAudience || typedConfirmation.trim().toUpperCase() === expectedConfirmation;
 
   // Estimated completion time
   const estimatedTime = formatEstimate(total);
 
-  // Handle confirm
+  // Handle confirm — explicit mode checks to prevent schedule falling through to send-now
   const handleConfirm = () => {
     if (!confirmationValid) return;
-    if (mode === 'schedule' && scheduledDate) {
-      const isoDate = `${scheduledDate}T${scheduledTime}:00`;
-      onSchedule(isoDate);
+    if (mode === 'schedule') {
+      if (!scheduledDate) return;
+      // Append CT timezone offset so the backend receives an unambiguous timestamp.
+      // America/Chicago is UTC-6 (CST) or UTC-5 (CDT). We compute the current
+      // offset dynamically so the value is correct year-round.
+      const ctOffset = (() => {
+        const sample = new Date(`${scheduledDate}T${scheduledTime}:00`);
+        const ct = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', timeZoneName: 'shortOffset' }).format(sample);
+        const m = ct.match(/GMT([+-]\d+)/);
+        if (!m) return '-06:00'; // fallback CST
+        const h = parseInt(m[1], 10);
+        const sign = h >= 0 ? '+' : '-';
+        return `${sign}${String(Math.abs(h)).padStart(2, '0')}:00`;
+      })();
+      onSchedule(`${scheduledDate}T${scheduledTime}:00${ctOffset}`);
     } else {
       onSendNow();
     }
