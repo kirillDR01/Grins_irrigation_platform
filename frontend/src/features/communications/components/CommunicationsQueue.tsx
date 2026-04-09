@@ -65,6 +65,7 @@ export function CommunicationsQueue() {
             All caught up — no unaddressed messages.
           </p>
         ) : (
+          <>
           <Table data-testid="communications-queue-table">
             <TableHeader>
               <TableRow>
@@ -146,6 +147,7 @@ export function CommunicationsQueue() {
               </div>
             </div>
           )}
+          </>
         )}
       </CardContent>
     </Card>
