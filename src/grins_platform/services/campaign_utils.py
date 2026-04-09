@@ -12,8 +12,8 @@ def render_poll_block(poll_options: list[dict[str, Any]] | None) -> str:
     if not poll_options:
         return ""
     lines = [
-        f"{opt.get('key', '?')}. {opt.get('label') or '(no label)'}"
+        f"{opt.get('key', '')}. {opt.get('label') or '(no label)'}"
         for opt in poll_options
     ]
-    keys = ", ".join(str(opt.get("key", "?")) for opt in poll_options)
+    keys = ", ".join(str(opt.get("key", "")) for opt in poll_options)
     return f"\n\nReply with {keys}:\n" + "\n".join(lines) + "\n\n"

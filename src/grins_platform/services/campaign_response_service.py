@@ -18,7 +18,10 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import select
 
 from grins_platform.log_config import LoggerMixin
-from grins_platform.models.campaign_response import CampaignResponse
+from grins_platform.models.campaign_response import (
+    CampaignResponse,
+    CampaignResponseStatus,
+)
 from grins_platform.models.sent_message import SentMessage
 from grins_platform.repositories.campaign_response_repository import (
     CampaignResponseRepository,
@@ -233,7 +236,7 @@ class CampaignResponseService(LoggerMixin):
                     phone=inbound.from_phone,
                     raw_reply_body=inbound.body,
                     provider_message_id=inbound.provider_sid,
-                    status="orphan",
+                    status=CampaignResponseStatus.ORPHAN,
                     received_at=now,
                 ),
             )
@@ -296,27 +299,27 @@ class CampaignResponseService(LoggerMixin):
                     recipient_address=recipient_address,
                     raw_reply_body=inbound.body,
                     provider_message_id=inbound.provider_sid,
-                    status="needs_review",
+                    status=CampaignResponseStatus.NEEDS_REVIEW,
                     received_at=now,
                 ),
             )
-            self.log_completed("record_poll_reply", status="needs_review")
+            self.log_completed("record_poll_reply", status=CampaignResponseStatus.NEEDS_REVIEW)
             return row
 
         # Parse the reply
         parse = self.parse_poll_reply(inbound.body, campaign.poll_options)
 
         if parse.ok:
-            status = "parsed"
+            status = CampaignResponseStatus.PARSED
             self.logger.info(
                 "campaign.response.received",
                 phone_masked=_mask_phone(inbound.from_phone),
                 campaign_id=str(campaign.id),
-                status="parsed",
+                status=status,
                 option_key=parse.option_key,
             )
         else:
-            status = "needs_review"
+            status = CampaignResponseStatus.NEEDS_REVIEW
             self.logger.info(
                 "campaign.response.parse_failed",
                 phone_masked=_mask_phone(inbound.from_phone),
@@ -379,7 +382,7 @@ class CampaignResponseService(LoggerMixin):
                     phone=real_phone,
                     raw_reply_body=inbound.body,
                     provider_message_id=inbound.provider_sid,
-                    status="opted_out",
+                    status=CampaignResponseStatus.OPTED_OUT,
                     received_at=now,
                 ),
             )
@@ -451,6 +454,33 @@ class CampaignResponseService(LoggerMixin):
                     count=cnt,
                 ),
             )
+
+        # Inject zero-count buckets for poll options with no parsed responses
+        if option_labels:
+            existing_parsed_keys = {b.option_key for b in buckets if b.status == "parsed"}
+            for key, label in option_labels.items():
+                if key not in existing_parsed_keys:
+                    buckets.append(
+                        CampaignResponseBucket(
+                            option_key=key,
+                            option_label=label,
+                            status="parsed",
+                            count=0,
+                        ),
+                    )
+
+        # Ensure needs_review and opted_out buckets always exist
+        existing_statuses = {b.status for b in buckets}
+        for status_name in ("needs_review", "opted_out"):
+            if status_name not in existing_statuses:
+                buckets.append(
+                    CampaignResponseBucket(
+                        option_key=None,
+                        option_label=None,
+                        status=status_name,
+                        count=0,
+                    ),
+                )
 
         # Get total_sent from campaign recipients (count sent_messages)
         from sqlalchemy import func as sa_func  # noqa: PLC0415

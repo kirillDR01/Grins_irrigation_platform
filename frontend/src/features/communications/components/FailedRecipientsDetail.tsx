@@ -197,7 +197,7 @@ export function FailedRecipientsDetail({ campaign, onBack }: FailedRecipientsDet
                       aria-label="Select all"
                     />
                   </TableHead>
-                  <TableHead>Recipient ID</TableHead>
+                  <TableHead>Recipient</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Error</TableHead>
@@ -214,15 +214,18 @@ export function FailedRecipientsDetail({ campaign, onBack }: FailedRecipientsDet
                         aria-label={`Select recipient ${shortId(r.id)}`}
                       />
                     </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {shortId(r.id)}
+                    <TableCell className="text-sm">
+                      {r.recipient_name || r.recipient_phone || shortId(r.id)}
                     </TableCell>
                     <TableCell className="text-xs">{sourceLabel(r)}</TableCell>
                     <TableCell>
                       <StatusBadge status={r.delivery_status} />
                     </TableCell>
-                    <TableCell className="text-xs text-slate-500 max-w-[200px] truncate">
-                      {r.error_message ?? '—'}
+                    <TableCell
+                      className="text-xs text-slate-500 max-w-[300px]"
+                      title={r.error_message ?? undefined}
+                    >
+                      <span className="line-clamp-2">{r.error_message ?? '—'}</span>
                     </TableCell>
                     <TableCell className="text-xs text-slate-500">
                       {r.created_at

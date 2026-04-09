@@ -349,6 +349,10 @@ class CampaignService(LoggerMixin):
             )
             raise CampaignAlreadySentError(campaign_id)
 
+        if not (campaign.body and campaign.body.strip()):
+            self.log_rejected("send_campaign", reason="empty_body", campaign_id=str(campaign_id))
+            raise EmptyCampaignBodyError(campaign_id)
+
         # Transition to SENDING
         await self.repo.update(
             campaign_id,
@@ -665,6 +669,15 @@ class CampaignService(LoggerMixin):
         """
         self.log_started("retry_failed_recipients", campaign_id=str(campaign_id))
 
+        # Advisory lock to prevent concurrent retries creating duplicate rows
+        from sqlalchemy import text as sa_text  # noqa: PLC0415
+
+        lock_key = f"retry:{campaign_id}"
+        await self.repo.session.execute(
+            sa_text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+            {"key": lock_key},
+        )
+
         campaign = await self.repo.get_by_id(campaign_id)
         if campaign is None:
             self.log_failed(
@@ -699,6 +712,36 @@ class CampaignService(LoggerMixin):
             retried=created,
         )
         return created
+
+    # ================================================================
+    # finalize_stale_campaigns — stale SENDING recovery
+    # ================================================================
+
+    async def finalize_stale_campaigns(self, stale_minutes: int = 30) -> int:
+        """Finalize campaigns stuck in SENDING with no pending recipients.
+
+        Args:
+            stale_minutes: Minutes after which a SENDING campaign is considered stale.
+
+        Returns:
+            Number of campaigns finalized.
+        """
+        self.log_started("finalize_stale_campaigns", stale_minutes=stale_minutes)
+        stale = await self.repo.get_stale_sending_campaigns(stale_minutes)
+        finalized = 0
+        for campaign in stale:
+            stats = await self.repo.get_campaign_stats(campaign.id)
+            pending = stats.get("pending", 0) + stats.get("sending", 0)
+            if pending == 0:
+                await self.repo.update(campaign.id, status=CampaignStatus.SENT.value)
+                self.logger.info(
+                    "campaign.finalize_stale",
+                    campaign_id=str(campaign.id),
+                    stats=stats,
+                )
+                finalized += 1
+        self.log_completed("finalize_stale_campaigns", finalized=finalized)
+        return finalized
 
     # ================================================================
     # evaluate_automation_rules — Req 45.10
@@ -755,6 +798,7 @@ class CampaignService(LoggerMixin):
                     target_audience=campaign.target_audience,
                     subject=campaign.subject,
                     body=campaign.body,
+                    poll_options=campaign.poll_options,
                     created_by=campaign.created_by,
                 )
 
@@ -967,7 +1011,7 @@ class CampaignService(LoggerMixin):
                 try:
                     phone = normalize_to_e164(cust.phone)
                 except Exception:
-                    self.logger.debug(
+                    self.logger.warning(
                         "campaign.filter_recipients.bad_phone",
                         customer_id=str(cust.id),
                     )
@@ -1041,7 +1085,7 @@ class CampaignService(LoggerMixin):
                 try:
                     phone = normalize_to_e164(lead.phone)
                 except Exception:
-                    self.logger.debug(
+                    self.logger.warning(
                         "campaign.filter_recipients.bad_phone",
                         lead_id=str(lead.id),
                     )
@@ -1070,7 +1114,7 @@ class CampaignService(LoggerMixin):
                 try:
                     phone = normalize_to_e164(phone_raw)
                 except Exception:
-                    self.logger.debug(
+                    self.logger.warning(
                         "campaign.filter_recipients.adhoc_bad_phone",
                         phone_raw=phone_raw,
                     )

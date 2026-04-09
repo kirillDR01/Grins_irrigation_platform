@@ -510,15 +510,21 @@ async def delete_campaign(
     _current_user: AdminUser,
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> None:
-    """Delete a campaign by ID."""
+    """Delete a campaign by ID. Only draft and cancelled campaigns can be deleted."""
     _endpoints.log_started("delete_campaign", campaign_id=str(campaign_id))
     repo = CampaignRepository(session)
-    deleted = await repo.delete(campaign_id)
-    if not deleted:
+    campaign = await repo.get_by_id(campaign_id)
+    if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Campaign not found: {campaign_id}",
         )
+    if campaign.status not in ("draft", "cancelled"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot delete campaign in '{campaign.status}' status. Only draft and cancelled campaigns can be deleted.",
+        )
+    await repo.delete(campaign_id)
     _endpoints.log_completed("delete_campaign", campaign_id=str(campaign_id))
 
 

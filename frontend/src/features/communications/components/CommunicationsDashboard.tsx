@@ -7,6 +7,7 @@ import { SentMessagesLog } from './SentMessagesLog';
 import { CampaignsList } from './CampaignsList';
 import { FailedRecipientsDetail } from './FailedRecipientsDetail';
 import { CampaignResponsesView } from './CampaignResponsesView';
+import { DraftCampaignDetail } from './DraftCampaignDetail';
 import { NewTextCampaignModal } from './NewTextCampaignModal';
 import type { Campaign } from '../types/campaign';
 
@@ -25,13 +26,7 @@ export function CommunicationsDashboard() {
 
   return (
     <div data-testid="communications-page" className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Communications</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Manage inbound messages, outbound notifications, and text campaigns
-          </p>
-        </div>
+      <div className="flex items-center justify-end">
         <Button
           onClick={() => setCampaignModalOpen(true)}
           data-testid="new-text-campaign-btn"
@@ -73,7 +68,12 @@ export function CommunicationsDashboard() {
 
         <TabsContent value="campaigns" className="mt-4">
           {selectedCampaign ? (
-            selectedCampaign.poll_options != null ? (
+            selectedCampaign.status === 'draft' ? (
+              <DraftCampaignDetail
+                campaign={selectedCampaign}
+                onBack={handleBackFromDetail}
+              />
+            ) : selectedCampaign.poll_options != null ? (
               <CampaignResponsesView
                 campaign={selectedCampaign}
                 onBack={handleBackFromDetail}

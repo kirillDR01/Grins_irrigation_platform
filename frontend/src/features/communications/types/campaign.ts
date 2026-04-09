@@ -164,6 +164,8 @@ export interface CampaignRecipient {
   sent_at: string | null;
   error_message: string | null;
   created_at: string;
+  recipient_name: string | null;
+  recipient_phone: string | null;
 }
 
 // --- Campaign Results ---

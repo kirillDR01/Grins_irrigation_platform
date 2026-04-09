@@ -184,6 +184,17 @@ export function CampaignReview({
         </div>
       </div>
 
+      {/* Message Preview */}
+      <div className="rounded-lg border border-slate-200 p-4 space-y-2">
+        <h4 className="text-sm font-semibold text-slate-700">Message Preview</h4>
+        <p className="text-sm text-slate-600 whitespace-pre-wrap">
+          {messageBody}{pollBlock}
+        </p>
+        <p className="text-xs text-slate-400">
+          {segments} segment{segments !== 1 ? 's' : ''} per message
+        </p>
+      </div>
+
       {/* Send mode selection */}
       <div className="space-y-3">
         <Label className="text-sm font-semibold text-slate-700">When to send</Label>
@@ -213,7 +224,7 @@ export function CampaignReview({
         </div>
 
         {mode === 'schedule' && (
-          <div className="flex gap-3 items-end" data-testid="schedule-inputs">
+          <div className="flex flex-wrap gap-3 items-end" data-testid="schedule-inputs">
             <div className="space-y-1">
               <Label className="text-xs text-slate-500">Date</Label>
               <Input

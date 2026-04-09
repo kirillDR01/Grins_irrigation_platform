@@ -139,7 +139,7 @@ async def export_responses_csv(
     svc = CampaignResponseService(session)
 
     buf = io.StringIO()
-    writer = csv.writer(buf)
+    writer = csv.writer(buf, quoting=csv.QUOTE_ALL)
     writer.writerow([
         "first_name", "last_name", "phone",
         "selected_option_label", "raw_reply", "received_at",

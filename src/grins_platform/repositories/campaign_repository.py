@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
+from sqlalchemy.orm import selectinload
 
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.campaign import Campaign, CampaignRecipient
@@ -270,8 +271,13 @@ class CampaignRepository(LoggerMixin):
         """
         self.log_started("get_recipients", campaign_id=str(campaign_id))
 
-        base_query = select(CampaignRecipient).where(
-            CampaignRecipient.campaign_id == campaign_id,
+        base_query = (
+            select(CampaignRecipient)
+            .where(CampaignRecipient.campaign_id == campaign_id)
+            .options(
+                selectinload(CampaignRecipient.customer),
+                selectinload(CampaignRecipient.lead),
+            )
         )
         count_query = select(func.count(CampaignRecipient.id)).where(
             CampaignRecipient.campaign_id == campaign_id,
@@ -467,6 +473,34 @@ class CampaignRepository(LoggerMixin):
 
         self.log_completed("clone_recipients_as_pending", created=created)
         return created
+
+    async def get_stale_sending_campaigns(
+        self,
+        stale_minutes: int = 30,
+    ) -> list[Campaign]:
+        """Find campaigns stuck in SENDING for longer than ``stale_minutes``.
+
+        Args:
+            stale_minutes: Minutes after which a SENDING campaign is stale.
+
+        Returns:
+            List of stale Campaign instances.
+        """
+        self.log_started("get_stale_sending_campaigns", stale_minutes=stale_minutes)
+
+        stmt = (
+            select(Campaign)
+            .where(Campaign.status == "sending")
+            .where(
+                Campaign.updated_at < func.now() - text(f"interval '{stale_minutes} minutes'"),
+            )
+        )
+
+        result = await self.session.execute(stmt)
+        campaigns = list(result.scalars().all())
+
+        self.log_completed("get_stale_sending_campaigns", count=len(campaigns))
+        return campaigns
 
     async def cancel_pending_recipients(self, campaign_id: UUID) -> int:
         """Transition all ``pending`` recipients to ``cancelled``.

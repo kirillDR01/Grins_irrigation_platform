@@ -204,6 +204,7 @@ export function NewTextCampaignModal({
       // Fetch preview for step 2 and 3
       audiencePreviewMutation.mutate(audience, {
         onSuccess: (data) => setPreview(data),
+        onError: () => setPreview(null),
       });
 
       setStep(1);
@@ -306,10 +307,13 @@ export function NewTextCampaignModal({
     [campaignId, audience, messageBody, pollEnabled, pollOptions, pollOptionsValid, updateCampaign, sendCampaign, userId, onOpenChange, resetWizard],
   );
 
-  // Reset on close
+  // Reset on close — cancel pending debounce to prevent saving an empty draft
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
-      if (!nextOpen) resetWizard();
+      if (!nextOpen) {
+        if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+        resetWizard();
+      }
       onOpenChange(nextOpen);
     },
     [onOpenChange, resetWizard],
@@ -392,6 +396,7 @@ export function NewTextCampaignModal({
               onClick={handleNext}
               disabled={
                 isSending ||
+                (step === 1 && !messageBody.trim()) ||
                 (step === 1 && pollEnabled && !pollOptionsValid)
               }
               data-testid="wizard-next-btn"

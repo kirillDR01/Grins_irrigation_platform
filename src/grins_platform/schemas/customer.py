@@ -341,6 +341,10 @@ class CustomerListParams(BaseModel):
         default=None,
         description="Filter by slow payer flag",
     )
+    sms_opt_in: bool | None = Field(
+        default=None,
+        description="Filter by SMS opt-in status",
+    )
     search: str | None = Field(
         default=None,
         description="Search by name or email (case-insensitive)",

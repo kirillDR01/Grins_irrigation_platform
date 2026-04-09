@@ -436,6 +436,10 @@ async def list_customers(
         default=None,
         description="Filter by slow payer flag",
     ),
+    sms_opt_in: bool | None = Query(
+        default=None,
+        description="Filter by SMS opt-in status",
+    ),
     search: str | None = Query(
         default=None,
         description="Search by name or email (case-insensitive)",
@@ -488,6 +492,7 @@ async def list_customers(
         is_priority=is_priority,
         is_red_flag=is_red_flag,
         is_slow_payer=is_slow_payer,
+        sms_opt_in=sms_opt_in,
         search=search,
         sort_by=sort_by,
         sort_order=sort_order,

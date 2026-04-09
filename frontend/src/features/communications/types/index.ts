@@ -49,6 +49,7 @@ export interface SentMessage {
   delivery_status: DeliveryStatus;
   error_message: string | null;
   sent_at: string | null;
+  created_at: string;
 }
 
 // Sent messages filter params

@@ -154,6 +154,7 @@ export interface CustomerListParams extends PaginationParams {
   is_priority?: boolean;
   is_red_flag?: boolean;
   is_slow_payer?: boolean;
+  sms_opt_in?: boolean;
 }
 
 // Customer flags for display

@@ -4,6 +4,7 @@ Validates: Scheduling Poll Req 2.1-2.7, 15.4
 """
 
 from datetime import datetime
+from enum import StrEnum
 from uuid import UUID
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text
@@ -12,6 +13,15 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from grins_platform.database import Base
+
+
+class CampaignResponseStatus(StrEnum):
+    """Valid statuses for campaign responses — mirrors DB CHECK constraint."""
+
+    PARSED = "parsed"
+    NEEDS_REVIEW = "needs_review"
+    OPTED_OUT = "opted_out"
+    ORPHAN = "orphan"
 
 
 class CampaignResponse(Base):

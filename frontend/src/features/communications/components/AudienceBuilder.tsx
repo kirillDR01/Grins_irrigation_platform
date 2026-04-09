@@ -121,6 +121,7 @@ export function AudienceBuilder({
   const { data: customersData, isLoading: customersLoading } = useCustomers({
     ...customerParams,
     search: debouncedCustomerSearch || undefined,
+    sms_opt_in: customerSmsFilter || undefined,
   });
   const { data: leadsData, isLoading: leadsLoading } = useLeads({
     ...leadParams,
@@ -189,6 +190,7 @@ export function AudienceBuilder({
       const audience = buildAudience();
       audiencePreviewMutation.mutate(audience, {
         onSuccess: (data) => setPreview(data),
+        onError: () => setPreview(null),
       });
     }
   }, [selectedCustomerIds.length, selectedLeadIds.length, csvResult]); // eslint-disable-line react-hooks/exhaustive-deps

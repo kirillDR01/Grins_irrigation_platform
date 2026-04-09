@@ -280,7 +280,7 @@ export function SentMessagesLog() {
                       </span>
                     </TableCell>
                     <TableCell className="text-sm text-slate-500 whitespace-nowrap">
-                      {formatSentAt(msg.sent_at)}
+                      {formatSentAt(msg.sent_at ?? msg.created_at)}
                     </TableCell>
                   </TableRow>
                 ))}

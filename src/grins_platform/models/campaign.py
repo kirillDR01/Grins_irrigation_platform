@@ -148,6 +148,14 @@ class CampaignRecipient(Base):
         "Campaign",
         back_populates="recipients",
     )
+    customer: Mapped["Customer | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "Customer",
+        lazy="noload",
+    )
+    lead: Mapped["Lead | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "Lead",
+        lazy="noload",
+    )
 
     __table_args__ = (
         Index("idx_campaign_recipients_campaign_id", "campaign_id"),

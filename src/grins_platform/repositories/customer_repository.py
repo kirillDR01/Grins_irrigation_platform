@@ -349,6 +349,9 @@ class CustomerRepository(LoggerMixin):
                 Customer.is_slow_payer == params.is_slow_payer,
             )
 
+        if params.sms_opt_in is not None:
+            base_query = base_query.where(Customer.sms_opt_in == params.sms_opt_in)
+
         # Search by name or email (case-insensitive)
         if params.search:
             search_term = f"%{params.search}%"
