@@ -91,6 +91,28 @@ from grins_platform.services.sms_service import (
 )
 
 # ---------------------------------------------------------------------------
+# Shared autouse fixture: disable the SMS recipient allow-list guard
+#
+# ``enforce_recipient_allowlist`` blocks any outbound send whose phone is
+# not in ``SMS_TEST_PHONE_ALLOWLIST``. In production that env var is unset
+# (guard is a no-op); in this test suite the owner's `.env` pins the
+# allowlist to a single real phone so stray debugging scripts cannot page
+# customers. Hypothesis here generates arbitrary E.164 phones, so every
+# property test would trip the guard even though all HTTP calls are
+# intercepted by ``httpx.MockTransport`` and never hit the network.
+# Scrub the env var for the duration of each test so the property tests
+# can exercise ``CallRailProvider.send_text`` without the guard firing.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _disable_sms_allowlist_for_pbt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SMS_TEST_PHONE_ALLOWLIST", raising=False)
+
+
+# ---------------------------------------------------------------------------
 # Strategies
 # ---------------------------------------------------------------------------
 
@@ -2503,7 +2525,13 @@ class TestProperty10InboundWebhookParsing:
         conv_id: str,
         tracking: str,
     ) -> None:
-        """All payload fields map to InboundSMS attributes."""
+        """All payload fields map to InboundSMS attributes.
+
+        Field names mirror the real CallRail inbound webhook payload
+        verified on 2026-04-08: ``source_number`` /
+        ``destination_number`` / ``resource_id`` (NOT the
+        ``customer_phone_number`` / ``id`` we originally guessed).
+        """
         provider = CallRailProvider(
             api_key="k",
             account_id="acc",
@@ -2511,10 +2539,10 @@ class TestProperty10InboundWebhookParsing:
             tracking_number="+19525293750",
         )
         payload = {
-            "customer_phone_number": phone,
+            "source_number": phone,
             "content": body,
-            "id": conv_id,
-            "tracking_phone_number": tracking,
+            "resource_id": conv_id,
+            "destination_number": tracking,
         }
         result = provider.parse_inbound_webhook(payload)
         assert result.from_phone == phone
@@ -2529,7 +2557,14 @@ class TestProperty10InboundWebhookParsing:
         phone: str,
         body: str,
     ) -> None:
-        """Missing fields default to empty string."""
+        """Missing optional fields default to empty-string / None.
+
+        ``provider_sid`` is a required string column in the consumer
+        (``SentMessage.provider_message_id``) so it defaults to ``""``.
+        ``to_phone`` / ``thread_id`` / ``conversation_id`` are
+        Optional[str] on ``InboundSMS`` and the provider explicitly
+        coalesces empty payload values to ``None``.
+        """
         provider = CallRailProvider(
             api_key="k",
             account_id="acc",
@@ -2537,14 +2572,14 @@ class TestProperty10InboundWebhookParsing:
             tracking_number="+19525293750",
         )
         payload = {
-            "customer_phone_number": phone,
+            "source_number": phone,
             "content": body,
         }
         result = provider.parse_inbound_webhook(payload)
         assert result.from_phone == phone
         assert result.body == body
         assert result.provider_sid == ""
-        assert result.to_phone == ""
+        assert result.to_phone is None
 
     @given(data=st.data())
     @settings(max_examples=30, deadline=None)
@@ -2552,7 +2587,14 @@ class TestProperty10InboundWebhookParsing:
         self,
         data: st.DataObject,
     ) -> None:
-        """Completely empty payload returns InboundSMS with empty strings."""
+        """Completely empty payload returns an InboundSMS with safe defaults.
+
+        Required-on-consumer fields (``from_phone``, ``body``,
+        ``provider_sid``) default to ``""``; Optional fields
+        (``to_phone``, ``thread_id``, ``conversation_id``) default to
+        ``None`` so downstream code can distinguish "not provided"
+        from "empty string".
+        """
         _ = data
         provider = CallRailProvider(
             api_key="k",
@@ -2564,7 +2606,9 @@ class TestProperty10InboundWebhookParsing:
         assert result.from_phone == ""
         assert result.body == ""
         assert result.provider_sid == ""
-        assert result.to_phone == ""
+        assert result.to_phone is None
+        assert result.thread_id is None
+        assert result.conversation_id is None
 
     @given(
         phone=e164_phone,
@@ -2716,7 +2760,16 @@ class TestProperty42WebhookSignatureRejection:
         body: bytes,
         secret: str,
     ) -> None:
-        """Correct HMAC-SHA256 signature is accepted."""
+        """Correct HMAC-SHA1 / base64 signature is accepted.
+
+        Matches the real CallRail webhook contract verified on
+        2026-04-08:
+        - Header name: ``signature`` (lowercase, no ``x-`` prefix)
+        - Algorithm: HMAC-SHA1 (NOT SHA256)
+        - Encoding: base64 of the raw digest
+        """
+        import base64  # noqa: PLC0415
+
         provider = CallRailProvider(
             api_key="k",
             account_id="acc",
@@ -2724,8 +2777,10 @@ class TestProperty42WebhookSignatureRejection:
             tracking_number="+19525293750",
             webhook_secret=secret,
         )
-        sig = _hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-        headers = {"x-callrail-signature": sig}
+        sig = base64.b64encode(
+            _hmac.new(secret.encode(), body, hashlib.sha1).digest(),
+        ).decode()
+        headers = {"signature": sig}
 
         result = asyncio.run(provider.verify_webhook_signature(headers, body))
         assert result is True
@@ -2743,6 +2798,8 @@ class TestProperty42WebhookSignatureRejection:
         bad_sig: str,
     ) -> None:
         """Incorrect signature is rejected."""
+        import base64  # noqa: PLC0415
+
         provider = CallRailProvider(
             api_key="k",
             account_id="acc",
@@ -2750,11 +2807,13 @@ class TestProperty42WebhookSignatureRejection:
             tracking_number="+19525293750",
             webhook_secret=secret,
         )
-        # Ensure bad_sig differs from the real one
-        real_sig = _hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+        # Ensure bad_sig differs from the real one (HMAC-SHA1/base64).
+        real_sig = base64.b64encode(
+            _hmac.new(secret.encode(), body, hashlib.sha1).digest(),
+        ).decode()
         if bad_sig == real_sig:
             return  # skip degenerate case
-        headers = {"x-callrail-signature": bad_sig}
+        headers = {"signature": bad_sig}
 
         result = asyncio.run(provider.verify_webhook_signature(headers, body))
         assert result is False
@@ -2769,7 +2828,7 @@ class TestProperty42WebhookSignatureRejection:
         body: bytes,
         secret: str,
     ) -> None:
-        """Missing x-callrail-signature header is rejected."""
+        """Missing ``signature`` header is rejected."""
         provider = CallRailProvider(
             api_key="k",
             account_id="acc",

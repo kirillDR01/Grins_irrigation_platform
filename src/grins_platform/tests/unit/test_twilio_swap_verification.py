@@ -128,6 +128,22 @@ class TestRateLimitKeyNamespacing:
 class TestTwilioProviderProtocolConformance:
     """Verify TwilioProvider has the same interface as other providers."""
 
+    @pytest.fixture(autouse=True)
+    def _disable_sms_allowlist(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """``TwilioProvider.send_text`` calls ``enforce_recipient_allowlist``
+        which blocks any phone not pinned in ``SMS_TEST_PHONE_ALLOWLIST``.
+        The owner's dev ``.env`` pins that list to their personal phone so
+        debugging scripts can't ping customers — harmless for real sends,
+        fatal for this stubbed protocol-conformance test that uses a
+        different number. ``TwilioProvider.send_text`` currently returns
+        a fake SID without hitting the network, so disabling the guard
+        here is safe.
+        """
+        monkeypatch.delenv("SMS_TEST_PHONE_ALLOWLIST", raising=False)
+
     @pytest.mark.asyncio
     async def test_send_text_returns_provider_send_result(self) -> None:
         provider = TwilioProvider()
