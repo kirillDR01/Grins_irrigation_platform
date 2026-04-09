@@ -20,6 +20,7 @@ from grins_platform.repositories.communication_repository import (
 from grins_platform.repositories.sent_message_repository import SentMessageRepository
 from grins_platform.schemas.ai import DeliveryStatus
 from grins_platform.schemas.communication import UnaddressedCountResponse
+from grins_platform.models.enums import CampaignStatus
 from grins_platform.schemas.sms import (
     BulkSendAcceptedResponse,
     BulkSendRequest,
@@ -245,7 +246,7 @@ async def send_bulk(
     campaign = await repo.create(
         name=f"Bulk SMS ({len(request.recipients)} recipients)",
         campaign_type="SMS",
-        status="pending",
+        status=CampaignStatus.SENDING.value,
         body=request.message,
     )
 

@@ -387,6 +387,7 @@ class CampaignRepository(LoggerMixin):
             "bounced": status_counts.get("bounced", 0),
             "opted_out": status_counts.get("opted_out", 0),
             "pending": status_counts.get("pending", 0),
+            "sending": status_counts.get("sending", 0),
         }
 
         self.log_completed("get_campaign_stats", total=total)

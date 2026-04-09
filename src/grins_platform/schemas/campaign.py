@@ -350,6 +350,8 @@ class CampaignStats(BaseModel):
 
     campaign_id: UUID = Field(..., description="Campaign UUID")
     total: int = Field(..., ge=0, description="Total recipients")
+    pending: int = Field(default=0, ge=0, description="Pending count")
+    sending: int = Field(default=0, ge=0, description="Currently sending count")
     sent: int = Field(..., ge=0, description="Sent count")
     delivered: int = Field(..., ge=0, description="Delivered count")
     failed: int = Field(..., ge=0, description="Failed count")

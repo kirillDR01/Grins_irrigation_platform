@@ -23,6 +23,7 @@ from grins_platform.schemas.campaign import CampaignCreate, CampaignUpdate
 from grins_platform.services.campaign_service import (
     _DEFAULT_ADDRESS,
     CampaignAlreadySentError,
+    CampaignNotDraftError,
     CampaignNotFoundError,
     CampaignService,
     NoRecipientsError,
@@ -1102,3 +1103,52 @@ class TestProperty48CampaignRecipientFilteringByConsent:
 
         assert _DEFAULT_ADDRESS in result
         assert "unsubscribe" in result.lower()
+
+    # ----------------------------------------------------------------
+    # 16. get_campaign_stats includes pending + sending
+    # ----------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_get_campaign_stats_includes_pending_and_sending(self) -> None:
+        """CampaignStats schema passes through pending and sending counts."""
+        campaign_id = uuid4()
+        repo = AsyncMock()
+        repo.get_by_id.return_value = _make_campaign_mock(campaign_id=campaign_id)
+        repo.get_campaign_stats.return_value = {
+            "total": 100,
+            "pending": 30,
+            "sending": 10,
+            "sent": 40,
+            "delivered": 35,
+            "failed": 5,
+            "bounced": 2,
+            "opted_out": 3,
+        }
+        service = _build_service(repo=repo)
+
+        stats = await service.get_campaign_stats(campaign_id)
+
+        assert stats.pending == 30
+        assert stats.sending == 10
+        assert stats.total == 100
+
+    # ----------------------------------------------------------------
+    # 17. retry_failed_recipients rejects cancelled campaigns
+    # ----------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_retry_failed_recipients_rejects_cancelled(self) -> None:
+        """Retrying a cancelled campaign raises CampaignNotDraftError."""
+        campaign_id = uuid4()
+        repo = AsyncMock()
+        repo.get_by_id.return_value = _make_campaign_mock(
+            campaign_id=campaign_id,
+            status=CampaignStatus.CANCELLED.value,
+        )
+        service = _build_service(repo=repo)
+
+        with pytest.raises(CampaignNotDraftError) as exc_info:
+            await service.retry_failed_recipients(campaign_id)
+
+        assert exc_info.value.status == CampaignStatus.CANCELLED.value
+        repo.clone_recipients_as_pending.assert_not_called()

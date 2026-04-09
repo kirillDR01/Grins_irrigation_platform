@@ -188,6 +188,8 @@ export interface CampaignRetryResult {
 export interface CampaignStats {
   campaign_id: string;
   total: number;
+  pending: number;
+  sending: number;
   sent: number;
   delivered: number;
   failed: number;

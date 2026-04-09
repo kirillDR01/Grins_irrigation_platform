@@ -623,6 +623,8 @@ class CampaignService(LoggerMixin):
         result = CampaignStats(
             campaign_id=campaign_id,
             total=stats_dict.get("total", 0),
+            pending=stats_dict.get("pending", 0),
+            sending=stats_dict.get("sending", 0),
             sent=stats_dict.get("sent", 0),
             delivered=stats_dict.get("delivered", 0),
             failed=stats_dict.get("failed", 0),
@@ -670,6 +672,14 @@ class CampaignService(LoggerMixin):
                 error=CampaignNotFoundError(campaign_id),
             )
             raise CampaignNotFoundError(campaign_id)
+
+        if campaign.status == CampaignStatus.CANCELLED.value:
+            self.log_rejected(
+                "retry_failed_recipients",
+                reason="campaign_cancelled",
+                campaign_id=str(campaign_id),
+            )
+            raise CampaignNotDraftError(campaign_id, campaign.status)
 
         if recipient_ids is None:
             failed = await self.repo.get_failed_recipients(campaign_id)

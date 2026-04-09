@@ -154,10 +154,12 @@ class SMSRateLimitTracker(LoggerMixin):
     async def _load_state(self) -> RateLimitState:
         """Load state from Redis, falling back to in-memory cache."""
         if self._redis is not None:
-            with contextlib.suppress(Exception):
+            try:
                 raw = await self._redis.get(self._redis_key)
                 if raw is not None:
                     return self._deserialize(raw)
+            except Exception:
+                _logger.warning("sms.rate_limit.redis_load_failed", exc_info=True)
         return self._mem
 
     async def _save_to_redis(self, state: RateLimitState) -> None:
@@ -186,6 +188,9 @@ class SMSRateLimitTracker(LoggerMixin):
     def _deserialize(raw: str | bytes) -> RateLimitState:
         text = raw.decode() if isinstance(raw, bytes) else raw
         parts = text.split(",")
+        if len(parts) < 5:
+            msg = f"Malformed rate-limit state in Redis: {text!r}"
+            raise ValueError(msg)
         return RateLimitState(
             hourly_allowed=int(parts[0]),
             hourly_used=int(parts[1]),
