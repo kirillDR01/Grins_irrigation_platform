@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import type { AudiencePreview, PollOption } from '../types/campaign';
-import { countSegments } from '../utils/segmentCounter';
+import { countSegments, renderTemplate } from '../utils/segmentCounter';
 import { renderPollOptionsBlock } from '../utils/pollOptions';
 
 // --- Constants ---
@@ -95,6 +95,17 @@ export function CampaignReview({
     () => countSegments(messageBody + pollBlock),
     [messageBody, pollBlock],
   );
+
+  // Pick first recipient for merge-field preview
+  const previewRecipient = preview?.matches?.[0] ?? null;
+  const previewMessage = useMemo(() => {
+    if (!previewRecipient) return messageBody;
+    const context: Record<string, string> = {
+      first_name: previewRecipient.first_name ?? '',
+      last_name: previewRecipient.last_name ?? '',
+    };
+    return renderTemplate(messageBody, context);
+  }, [messageBody, previewRecipient]);
 
   // Determine if large audience (typed confirmation required)
   const isLargeAudience = total >= LARGE_AUDIENCE_THRESHOLD;
@@ -199,9 +210,14 @@ export function CampaignReview({
       {/* Message Preview */}
       <div className="rounded-lg border border-slate-200 p-4 space-y-2">
         <h4 className="text-sm font-semibold text-slate-700">Message Preview</h4>
-        <p className="text-sm text-slate-600 whitespace-pre-wrap">
-          {messageBody}{pollBlock}
+        <p className="text-sm text-slate-600 whitespace-pre-wrap" data-testid="message-preview-body">
+          {previewMessage}{pollBlock}
         </p>
+        {previewRecipient && (
+          <p className="text-xs text-slate-400" data-testid="preview-recipient-note">
+            Preview for: {previewRecipient.first_name ?? ''} {previewRecipient.last_name ?? ''}
+          </p>
+        )}
         <p className="text-xs text-slate-400">
           {segments} segment{segments !== 1 ? 's' : ''} per message
         </p>

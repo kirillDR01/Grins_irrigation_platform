@@ -6,6 +6,9 @@ import type { AudiencePreview } from '../types/campaign';
 // Mock the segment counter to avoid coupling
 vi.mock('../utils/segmentCounter', () => ({
   countSegments: vi.fn(() => ({ encoding: 'GSM-7', segments: 1, chars: 50 })),
+  renderTemplate: vi.fn((text: string, ctx: Record<string, string>) =>
+    text.replace(/\{(\w+)\}/g, (_, key: string) => ctx[key] ?? ''),
+  ),
   SENDER_PREFIX: 'Grins Irrigation: ',
   STOP_FOOTER: ' Reply STOP to opt out.',
   ALLOWED_MERGE_FIELDS: ['first_name', 'last_name', 'next_appointment_date'],
@@ -141,5 +144,44 @@ describe('CampaignReview', () => {
     renderReview();
     expect(screen.getByTestId('timezone-warning')).toBeInTheDocument();
     expect(screen.getByTestId('timezone-warning')).toHaveTextContent('8 AM');
+  });
+
+  describe('merge field interpolation', () => {
+    const previewWithRecipients: AudiencePreview = {
+      ...basePreview,
+      matches: [
+        { phone_masked: '***1234', source_type: 'customer', first_name: 'John', last_name: 'Smith' },
+        { phone_masked: '***5678', source_type: 'lead', first_name: 'Jane', last_name: 'Doe' },
+      ],
+    };
+
+    it('interpolates {first_name} and {last_name} in the message preview', () => {
+      renderReview({
+        preview: previewWithRecipients,
+        messageBody: 'Hi {first_name} {last_name}, your appointment is ready!',
+      });
+      const body = screen.getByTestId('message-preview-body');
+      expect(body).toHaveTextContent('Hi John Smith, your appointment is ready!');
+      expect(body).not.toHaveTextContent('{first_name}');
+      expect(body).not.toHaveTextContent('{last_name}');
+    });
+
+    it('shows which recipient the preview is for', () => {
+      renderReview({
+        preview: previewWithRecipients,
+        messageBody: 'Hi {first_name}!',
+      });
+      const note = screen.getByTestId('preview-recipient-note');
+      expect(note).toHaveTextContent('Preview for: John Smith');
+    });
+
+    it('renders raw message when no recipients available', () => {
+      renderReview({
+        preview: { ...basePreview, matches: [] },
+        messageBody: 'Hi {first_name}!',
+      });
+      expect(screen.getByTestId('message-preview-body')).toHaveTextContent('Hi {first_name}!');
+      expect(screen.queryByTestId('preview-recipient-note')).not.toBeInTheDocument();
+    });
   });
 });
