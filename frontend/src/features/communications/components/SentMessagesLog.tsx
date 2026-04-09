@@ -28,7 +28,9 @@ const STATUS_BADGE_CLASSES: Record<DeliveryStatus, string> = {
   delivered: 'bg-emerald-100 text-emerald-700',
   sent: 'bg-blue-100 text-blue-700',
   pending: 'bg-amber-100 text-amber-700',
+  scheduled: 'bg-indigo-100 text-indigo-700',
   failed: 'bg-red-100 text-red-700',
+  cancelled: 'bg-slate-100 text-slate-600',
 };
 
 // Radix Select does not allow empty-string values for SelectItem or the
@@ -50,10 +52,12 @@ const MESSAGE_TYPES = [
 
 const DELIVERY_STATUSES = [
   { value: ALL_FILTER_VALUE, label: 'All Statuses' },
-  { value: 'delivered', label: 'Delivered' },
   { value: 'sent', label: 'Sent' },
+  { value: 'scheduled', label: 'Scheduled' },
   { value: 'pending', label: 'Pending' },
   { value: 'failed', label: 'Failed' },
+  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'delivered', label: 'Delivered' },
 ];
 
 function truncateContent(content: string | null | undefined, maxLength = 80): string {

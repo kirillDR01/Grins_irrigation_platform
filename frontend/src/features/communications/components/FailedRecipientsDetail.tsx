@@ -26,13 +26,19 @@ export interface FailedRecipientsDetailProps {
   onBack: () => void;
 }
 
-function maskPhone(phone: string | null | undefined): string {
-  if (!phone) return '—';
-  // Show last 4 digits only
-  if (phone.length >= 4) {
-    return '***' + phone.slice(-4);
-  }
-  return '****';
+/**
+ * Render a short, human-identifiable stub from a recipient UUID.
+ *
+ * The backend ``CampaignRecipientResponse`` intentionally does NOT include
+ * a phone number (phones live on the related Customer/Lead row), so the
+ * detail table cannot surface the actual phone here without a join the
+ * list endpoint does not perform. We show the first 8 chars of the
+ * recipient row's UUID instead — enough for an operator to cross-reference
+ * a specific failed row in the logs without claiming to be a phone.
+ */
+function shortId(id: string | null | undefined): string {
+  if (!id) return '—';
+  return id.slice(0, 8);
 }
 
 function sourceLabel(r: CampaignRecipient): string {
@@ -191,7 +197,7 @@ export function FailedRecipientsDetail({ campaign, onBack }: FailedRecipientsDet
                       aria-label="Select all"
                     />
                   </TableHead>
-                  <TableHead>Phone</TableHead>
+                  <TableHead>Recipient ID</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Error</TableHead>
@@ -205,11 +211,11 @@ export function FailedRecipientsDetail({ campaign, onBack }: FailedRecipientsDet
                       <Checkbox
                         checked={selectedIds.has(r.id)}
                         onCheckedChange={() => toggleOne(r.id)}
-                        aria-label={`Select recipient ${maskPhone(r.id)}`}
+                        aria-label={`Select recipient ${shortId(r.id)}`}
                       />
                     </TableCell>
                     <TableCell className="font-mono text-sm">
-                      {maskPhone(r.id)}
+                      {shortId(r.id)}
                     </TableCell>
                     <TableCell className="text-xs">{sourceLabel(r)}</TableCell>
                     <TableCell>

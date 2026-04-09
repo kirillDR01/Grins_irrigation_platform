@@ -18,8 +18,20 @@ export interface Communication {
   created_at: string;
 }
 
-// Delivery status for outbound messages
-export type DeliveryStatus = 'pending' | 'sent' | 'delivered' | 'failed';
+// Delivery status for outbound messages.
+//
+// Mirrors the backend ``sent_messages.delivery_status`` CHECK constraint
+// (``pending``, ``scheduled``, ``sent``, ``delivered``, ``failed``,
+// ``cancelled``). ``delivered`` is kept for legacy rows but the current
+// CallRail provider has no delivery-status callbacks, so ``sent`` is the
+// terminal state for new sends.
+export type DeliveryStatus =
+  | 'pending'
+  | 'scheduled'
+  | 'sent'
+  | 'delivered'
+  | 'failed'
+  | 'cancelled';
 
 // Sent message (outbound notification)
 //
