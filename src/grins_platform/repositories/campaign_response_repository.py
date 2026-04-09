@@ -104,31 +104,28 @@ class CampaignResponseRepository(LoggerMixin):
         base = select(CampaignResponse).where(
             CampaignResponse.id.in_(select(sub.c.id)),
         )
-        count_q = select(func.count()).select_from(
+
+        # Build count subquery incrementally so that BOTH filters are
+        # applied when both are provided. The previous implementation
+        # rebuilt count_q from scratch inside each ``if`` block, which
+        # meant that when both option_key AND status were supplied the
+        # count only reflected the status filter (the last one applied).
+        count_sub = (
             select(literal_column("1"))
             .where(CampaignResponse.id.in_(select(sub.c.id)))
             .select_from(CampaignResponse)
-            .subquery(),
         )
 
         if option_key is not None:
             base = base.where(CampaignResponse.selected_option_key == option_key)
-            count_q = select(func.count()).select_from(
-                select(literal_column("1"))
-                .where(CampaignResponse.id.in_(select(sub.c.id)))
-                .where(CampaignResponse.selected_option_key == option_key)
-                .select_from(CampaignResponse)
-                .subquery(),
+            count_sub = count_sub.where(
+                CampaignResponse.selected_option_key == option_key,
             )
         if status is not None:
             base = base.where(CampaignResponse.status == status)
-            count_q = select(func.count()).select_from(
-                select(literal_column("1"))
-                .where(CampaignResponse.id.in_(select(sub.c.id)))
-                .where(CampaignResponse.status == status)
-                .select_from(CampaignResponse)
-                .subquery(),
-            )
+            count_sub = count_sub.where(CampaignResponse.status == status)
+
+        count_q = select(func.count()).select_from(count_sub.subquery())
 
         total_result = await self.session.execute(count_q)
         total = total_result.scalar() or 0

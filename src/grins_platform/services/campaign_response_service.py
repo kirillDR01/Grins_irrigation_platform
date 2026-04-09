@@ -252,9 +252,17 @@ class CampaignResponseService(LoggerMixin):
             thread_resource_id=inbound.thread_id,
         )
 
-        # Snapshot recipient info from sent_message relationships
+        # Snapshot recipient info from sent_message relationships.
+        # Use the real phone from the outbound sent_message (E.164) rather
+        # than ``inbound.from_phone`` which for CallRail is the **masked**
+        # form (e.g. ``***3312``). The CSV export needs a callable phone.
         customer_id = sent_msg.customer_id if sent_msg else None
         lead_id = sent_msg.lead_id if sent_msg else None
+        real_phone: str = (
+            sent_msg.recipient_phone
+            if sent_msg and sent_msg.recipient_phone
+            else inbound.from_phone
+        )
         recipient_name: str | None = None
         recipient_address: str | None = None
 
@@ -283,7 +291,7 @@ class CampaignResponseService(LoggerMixin):
                     sent_message_id=sent_msg.id if sent_msg else None,
                     customer_id=customer_id,
                     lead_id=lead_id,
-                    phone=inbound.from_phone,
+                    phone=real_phone,
                     recipient_name=recipient_name,
                     recipient_address=recipient_address,
                     raw_reply_body=inbound.body,
@@ -322,7 +330,7 @@ class CampaignResponseService(LoggerMixin):
                 sent_message_id=sent_msg.id if sent_msg else None,
                 customer_id=customer_id,
                 lead_id=lead_id,
-                phone=inbound.from_phone,
+                phone=real_phone,
                 recipient_name=recipient_name,
                 recipient_address=recipient_address,
                 selected_option_key=parse.option_key if parse.ok else None,
@@ -356,6 +364,11 @@ class CampaignResponseService(LoggerMixin):
 
             sent_msg = corr.sent_message
             now = datetime.now(timezone.utc)
+            real_phone = (
+                sent_msg.recipient_phone
+                if sent_msg and sent_msg.recipient_phone
+                else inbound.from_phone
+            )
 
             await self.repo.add(
                 CampaignResponse(
@@ -363,7 +376,7 @@ class CampaignResponseService(LoggerMixin):
                     sent_message_id=sent_msg.id if sent_msg else None,
                     customer_id=sent_msg.customer_id if sent_msg else None,
                     lead_id=sent_msg.lead_id if sent_msg else None,
-                    phone=inbound.from_phone,
+                    phone=real_phone,
                     raw_reply_body=inbound.body,
                     provider_message_id=inbound.provider_sid,
                     status="opted_out",
@@ -400,14 +413,38 @@ class CampaignResponseService(LoggerMixin):
 
         counts = await self.repo.count_by_status_and_option(campaign_id)
 
+        # Build a key→label lookup from the campaign's poll_options so
+        # summary buckets carry the human-readable label (e.g.
+        # "Week of Apr 13") instead of falling back to "Option 1" on
+        # the frontend. The count_by_status_and_option query groups by
+        # (status, option_key) but doesn't return labels.
+        from grins_platform.models.campaign import (  # noqa: PLC0415
+            Campaign as CampaignModel,
+        )
+
+        camp_result = await self.session.execute(
+            select(CampaignModel.poll_options).where(
+                CampaignModel.id == campaign_id,
+            ),
+        )
+        poll_options_raw: list[dict[str, Any]] | None = camp_result.scalar_one_or_none()
+        option_labels: dict[str, str] = {}
+        if poll_options_raw:
+            for opt in poll_options_raw:
+                option_labels[str(opt.get("key", ""))] = str(
+                    opt.get("label", ""),
+                )
+
         buckets: list[CampaignResponseBucket] = []
         total_replied = 0
         for row in counts:
             cnt = int(row["count"])  # type: ignore[call-overload]
             total_replied += cnt
+            okey = row["option_key"]
             buckets.append(
                 CampaignResponseBucket(
-                    option_key=row["option_key"],  # type: ignore[arg-type]
+                    option_key=okey,  # type: ignore[arg-type]
+                    option_label=option_labels.get(str(okey)) if okey else None,
                     status=str(row["status"]),
                     count=cnt,
                 ),

@@ -51,6 +51,7 @@ def _make_sent_message(
     delivery_status: str = "sent",
     customer_id: Any | None = None,
     lead_id: Any | None = None,
+    recipient_phone: str | None = None,
 ) -> MagicMock:
     msg = MagicMock()
     msg.id = uuid4()
@@ -60,6 +61,7 @@ def _make_sent_message(
     msg.lead_id = lead_id
     msg.customer = None
     msg.lead = None
+    msg.recipient_phone = recipient_phone
     msg.created_at = datetime.now(timezone.utc)
     return msg
 

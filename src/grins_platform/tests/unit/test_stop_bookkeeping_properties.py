@@ -55,6 +55,7 @@ def _mock_sent_message(campaign: MagicMock) -> MagicMock:
     msg.campaign_id = campaign.id
     msg.customer_id = None
     msg.lead_id = None
+    msg.recipient_phone = None
     return msg
 
 
