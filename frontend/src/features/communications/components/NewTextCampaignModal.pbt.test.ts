@@ -33,8 +33,15 @@ interface LeadAudienceFilter {
   cities?: string[] | null;
 }
 
+interface AdHocRecipientPayload {
+  phone: string;
+  first_name?: string | null;
+  last_name?: string | null;
+}
+
 interface AdHocAudienceFilter {
   csv_upload_id?: string | null;
+  recipients?: AdHocRecipientPayload[] | null;
   staff_attestation_confirmed: boolean;
   attestation_text_shown: string;
   attestation_version: string;
@@ -78,8 +85,17 @@ const arbLeadFilter: fc.Arbitrary<LeadAudienceFilter> = fc.record({
   cities: fc.option(fc.array(fc.string({ minLength: 1, maxLength: 30 }), { maxLength: 3 }), { nil: null }),
 });
 
+const arbAdHocRecipient: fc.Arbitrary<AdHocRecipientPayload> = fc.record({
+  phone: fc.string({ minLength: 10, maxLength: 15 }),
+  first_name: fc.option(fc.string({ minLength: 1, maxLength: 30 }), { nil: null }),
+  last_name: fc.option(fc.string({ minLength: 1, maxLength: 30 }), { nil: null }),
+});
+
 const arbAdHocFilter: fc.Arbitrary<AdHocAudienceFilter> = fc.record({
   csv_upload_id: fc.option(fc.uuid(), { nil: undefined }),
+  recipients: fc.option(fc.array(arbAdHocRecipient, { maxLength: 5 }), {
+    nil: undefined,
+  }),
   staff_attestation_confirmed: fc.boolean(),
   attestation_text_shown: fc.string({ minLength: 1, maxLength: 200 }),
   attestation_version: fc.string({ minLength: 1, maxLength: 10 }),

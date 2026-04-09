@@ -39,6 +39,7 @@ from grins_platform.models.staff import (
 )
 from grins_platform.repositories.campaign_repository import CampaignRepository
 from grins_platform.schemas.campaign import (
+    AdHocRecipientPayload,
     AudiencePreviewResponse,
     CampaignCancelResult,
     CampaignCreate,
@@ -338,13 +339,15 @@ async def upload_csv_audience(
         Form(description="Attestation form version"),
     ] = "CSV_ATTESTATION_V1",
 ) -> CsvUploadResult:
-    """Upload and stage a CSV audience file.
+    """Parse a CSV audience file and return normalized recipients inline.
+
+    Recipients are returned directly in the response so the frontend can embed
+    them in ``target_audience.ad_hoc.recipients``. This removes the previous
+    Redis-staging dependency (which failed when Redis was unavailable or the
+    1-hour TTL expired between upload and send).
 
     Validates: Requirements 13.9, 23.5, 25, 30, 31, 35, 41
     """
-    import json as _json  # noqa: PLC0415
-    import os  # noqa: PLC0415
-
     from grins_platform.services.sms.audit import (  # noqa: PLC0415
         log_csv_attestation_submitted,
     )
@@ -392,39 +395,6 @@ async def upload_csv_audience(
             attestation_text=attestation_text_shown,
         )
 
-    # Stage parsed data + attestation in Redis (1h TTL) for send time
-    redis_url = os.environ.get("REDIS_URL")
-    if redis_url:
-        try:
-            from redis.asyncio import Redis  # noqa: PLC0415
-
-            redis_client = Redis.from_url(redis_url, decode_responses=True)
-            try:
-                staged = {
-                    "recipients": [
-                        {
-                            "phone": r.phone_e164,
-                            "first_name": r.first_name,
-                            "last_name": r.last_name,
-                        }
-                        for r in parse_result.recipients
-                    ],
-                    "attestation_text_shown": attestation_text_shown,
-                    "attestation_version": attestation_version,
-                }
-                await redis_client.setex(
-                    f"sms:csv_upload:{parse_result.upload_id}",
-                    3600,
-                    _json.dumps(staged),
-                )
-            finally:
-                await redis_client.aclose()
-        except Exception:
-            _endpoints.log_failed(
-                "upload_csv_audience",
-                reason="redis_stage_failed",
-            )
-
     # Emit audit event
     await log_csv_attestation_submitted(
         session,
@@ -458,6 +428,14 @@ async def upload_csv_audience(
                 reason=r.reason,
             )
             for r in parse_result.rejected
+        ],
+        recipients=[
+            AdHocRecipientPayload(
+                phone=r.phone_e164,
+                first_name=r.first_name,
+                last_name=r.last_name,
+            )
+            for r in parse_result.recipients
         ],
     )
 

@@ -48,8 +48,20 @@ export interface LeadAudienceFilter {
   created_between?: [string, string] | null;
 }
 
+export interface AdHocRecipientPayload {
+  phone: string;
+  first_name?: string | null;
+  last_name?: string | null;
+}
+
 export interface AdHocAudienceFilter {
   csv_upload_id?: string | null;
+  /**
+   * Parsed CSV recipients embedded directly in the audience. Preferred over
+   * csv_upload_id — travels with the draft and doesn't depend on server-side
+   * staging.
+   */
+  recipients?: AdHocRecipientPayload[] | null;
   staff_attestation_confirmed: boolean;
   attestation_text_shown: string;
   attestation_version: string;
@@ -173,6 +185,8 @@ export interface CsvUploadResult {
   rejected: number;
   duplicates_collapsed: number;
   rejected_rows: CsvRejectedRow[];
+  /** Parsed and normalized recipients — embed in target_audience.ad_hoc.recipients */
+  recipients: AdHocRecipientPayload[];
 }
 
 // --- Worker Health ---

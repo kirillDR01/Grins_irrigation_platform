@@ -33,6 +33,7 @@ from grins_platform.schemas.campaign import (
     CampaignSendResult,
     CampaignStats,
     CampaignUpdate,
+    TargetAudience,
 )
 from grins_platform.services.sms.phone_normalizer import normalize_to_e164
 from grins_platform.services.sms.recipient import Recipient
@@ -104,6 +105,24 @@ class EmptyCampaignBodyError(Exception):
         )
 
 
+def _audience_to_dict(
+    value: TargetAudience | dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Normalize ``target_audience`` inputs into a plain JSONB-ready dict.
+
+    Pydantic's Union[TargetAudience, dict] resolution is input-dependent —
+    some payloads resolve to ``TargetAudience`` and some to ``dict``. JSONB
+    columns can't serialize Pydantic models, so always coerce here.
+    """
+    if value is None:
+        return None
+    if isinstance(value, TargetAudience):
+        return value.model_dump(mode="json", exclude_none=True)
+    if isinstance(value, dict):
+        return value
+    return None
+
+
 class CampaignService(LoggerMixin):
     """Service for marketing campaign lifecycle management.
 
@@ -163,7 +182,7 @@ class CampaignService(LoggerMixin):
             name=data.name,
             campaign_type=data.campaign_type.value,
             status=CampaignStatus.DRAFT.value,
-            target_audience=data.target_audience,
+            target_audience=_audience_to_dict(data.target_audience),
             subject=data.subject,
             body=data.body,
             scheduled_at=data.scheduled_at,
@@ -993,96 +1012,78 @@ class CampaignService(LoggerMixin):
         # ----------------------------------------------------------
         # 3. Ad-hoc CSV source
         # ----------------------------------------------------------
-        # CSV upload endpoint (task 8.6) stages rows in Redis at key
-        # ``sms:csv_upload:{upload_id}`` with 1h TTL. Preview reads
-        # without creating ghost leads; send creates ghost leads so
-        # each recipient can be tracked via campaign_recipients.lead_id.
-        if adhoc_filters and adhoc_filters.get("csv_upload_id"):
-            staged_rows = await self._load_staged_adhoc(
-                adhoc_filters["csv_upload_id"],
+        # Recipients are embedded inline in ``target_audience.ad_hoc.recipients``
+        # by the CSV upload endpoint. Preview reads without creating ghost
+        # leads; send creates ghost leads so each recipient can be tracked
+        # via campaign_recipients.lead_id.
+        adhoc_rows = self._extract_adhoc_rows(adhoc_filters)
+        if adhoc_rows:
+            from grins_platform.services.sms.ghost_lead import (  # noqa: PLC0415
+                create_or_get as create_ghost,
             )
-            if staged_rows:
-                from grins_platform.services.sms.ghost_lead import (  # noqa: PLC0415
-                    create_or_get as create_ghost,
-                )
 
-                for row in staged_rows:
-                    phone = row.get("phone")
-                    if not phone:
-                        continue
-                    # Customer/lead from steps 1 and 2 win on phone collision
-                    if phone in seen_phones:
-                        continue
-                    first_name = row.get("first_name")
-                    last_name = row.get("last_name")
-                    lead_id: UUID | None = None
-                    if create_ghost_leads:
-                        try:
-                            lead = await create_ghost(
-                                db,
-                                phone=phone,
-                                first_name=first_name,
-                                last_name=last_name,
-                            )
-                            lead_id = lead.id
-                        except Exception:
-                            self.logger.debug(
-                                "campaign.filter_recipients.ghost_lead_failed",
-                                phone=phone,
-                            )
-                            continue
-                    seen_phones[phone] = Recipient.from_adhoc(
-                        phone=phone,
-                        lead_id=lead_id,
-                        first_name=first_name,
-                        last_name=last_name,
+            for row in adhoc_rows:
+                phone_raw = row.get("phone")
+                if not phone_raw:
+                    continue
+                try:
+                    phone = normalize_to_e164(phone_raw)
+                except Exception:
+                    self.logger.debug(
+                        "campaign.filter_recipients.adhoc_bad_phone",
+                        phone_raw=phone_raw,
                     )
+                    continue
+                # Customer/lead from steps 1 and 2 win on phone collision
+                if phone in seen_phones:
+                    continue
+                first_name = row.get("first_name")
+                last_name = row.get("last_name")
+                lead_id: UUID | None = None
+                if create_ghost_leads:
+                    try:
+                        lead = await create_ghost(
+                            db,
+                            phone=phone,
+                            first_name=first_name,
+                            last_name=last_name,
+                        )
+                        lead_id = lead.id
+                    except Exception:
+                        self.logger.debug(
+                            "campaign.filter_recipients.ghost_lead_failed",
+                            phone=phone,
+                        )
+                        continue
+                seen_phones[phone] = Recipient.from_adhoc(
+                    phone=phone,
+                    lead_id=lead_id,
+                    first_name=first_name,
+                    last_name=last_name,
+                )
 
         return list(seen_phones.values())
 
-    async def _load_staged_adhoc(
-        self,
-        upload_id: str | UUID,
+    @staticmethod
+    def _extract_adhoc_rows(
+        adhoc_filters: dict[str, Any],
     ) -> list[dict[str, Any]]:
-        """Load staged ad-hoc CSV rows from Redis.
+        """Extract ad-hoc recipient rows from the audience filter.
 
-        Returns an empty list if Redis is unavailable or the upload
-        has expired.
-
-        Validates: Requirement 35
+        Only supports the inline ``recipients`` payload embedded in
+        ``target_audience.ad_hoc.recipients``. Returns an empty list when
+        no recipients are present or the payload is malformed.
         """
-        import json as _json  # noqa: PLC0415
-        import os  # noqa: PLC0415
-
-        redis_url = os.environ.get("REDIS_URL")
-        if not redis_url:
+        if not adhoc_filters:
             return []
-
-        try:
-            from redis.asyncio import Redis  # noqa: PLC0415
-        except ImportError:
+        raw = adhoc_filters.get("recipients")
+        if not isinstance(raw, list):
             return []
-
-        redis_client = None
-        try:
-            redis_client = Redis.from_url(redis_url, decode_responses=True)
-            raw = await redis_client.get(f"sms:csv_upload:{upload_id}")
-            if not raw:
-                return []
-            staged = _json.loads(raw)
-            recipients = staged.get("recipients") or []
-            if isinstance(recipients, list):
-                return recipients
-            return []
-        except Exception:
-            self.logger.debug(
-                "campaign.load_staged_adhoc.failed",
-                upload_id=str(upload_id),
-            )
-            return []
-        finally:
-            if redis_client:
-                await redis_client.aclose()
+        rows: list[dict[str, Any]] = []
+        for item in raw:
+            if isinstance(item, dict):
+                rows.append(item)
+        return rows
 
     async def preview_audience(
         self,

@@ -96,6 +96,21 @@ class LeadAudienceFilter(BaseModel):
     )
 
 
+class AdHocRecipientPayload(BaseModel):
+    """A single normalized ad-hoc recipient (persisted inline in target_audience).
+
+    These rows are parsed from the CSV upload and embedded in the campaign's
+    ``target_audience.ad_hoc.recipients`` so preview/send no longer depend on
+    a TTL-bound Redis cache.
+
+    Validates: Requirements 13.5, 35
+    """
+
+    phone: str = Field(..., description="Phone number in E.164 format")
+    first_name: str | None = Field(default=None, description="Optional first name")
+    last_name: str | None = Field(default=None, description="Optional last name")
+
+
 class AdHocAudienceFilter(BaseModel):
     """Filter criteria for ad-hoc CSV audience source.
 
@@ -104,7 +119,15 @@ class AdHocAudienceFilter(BaseModel):
 
     csv_upload_id: UUID | None = Field(
         default=None,
-        description="Staged CSV upload ID",
+        description="Staged CSV upload ID (audit reference)",
+    )
+    recipients: list[AdHocRecipientPayload] | None = Field(
+        default=None,
+        description=(
+            "Inline parsed CSV recipients. Preferred over csv_upload_id; "
+            "embedded directly in target_audience so send-time doesn't "
+            "depend on Redis staging."
+        ),
     )
     staff_attestation_confirmed: bool = Field(
         default=False,
@@ -403,10 +426,13 @@ class CsvRejectedRow(BaseModel):
 class CsvUploadResult(BaseModel):
     """Response from CSV audience upload endpoint.
 
+    Returns the parsed recipients inline so the frontend can embed them
+    directly in the campaign's target_audience. No Redis staging required.
+
     Validates: Requirement 35
     """
 
-    upload_id: str = Field(..., description="Staged upload identifier")
+    upload_id: str = Field(..., description="Upload identifier (audit reference)")
     total_rows: int = Field(default=0, ge=0, description="Total data rows parsed")
     matched_customers: int = Field(default=0, ge=0)
     matched_leads: int = Field(default=0, ge=0)
@@ -414,6 +440,14 @@ class CsvUploadResult(BaseModel):
     rejected: int = Field(default=0, ge=0)
     duplicates_collapsed: int = Field(default=0, ge=0)
     rejected_rows: list[CsvRejectedRow] = Field(default_factory=list)
+    recipients: list[AdHocRecipientPayload] = Field(
+        default_factory=list,
+        description=(
+            "Parsed and normalized recipients. Embed these in "
+            "target_audience.ad_hoc.recipients when creating/updating the "
+            "campaign draft."
+        ),
+    )
 
 
 class AudiencePreviewRecipient(BaseModel):

@@ -47,7 +47,7 @@ export function MessageComposer({ value, onChange, audience }: MessageComposerPr
     const hasAudience =
       audience.customers?.ids_include?.length ||
       audience.leads?.ids_include?.length ||
-      audience.ad_hoc?.csv_upload_id;
+      audience.ad_hoc?.recipients?.length;
 
     if (hasAudience) {
       audiencePreviewMutation.mutate(audience, {

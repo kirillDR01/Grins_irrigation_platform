@@ -151,9 +151,10 @@ export function AudienceBuilder({
       audience.leads = filter;
     }
 
-    if (csvResult) {
+    if (csvResult && csvResult.recipients.length > 0) {
       audience.ad_hoc = {
         csv_upload_id: csvResult.upload_id,
+        recipients: csvResult.recipients,
         staff_attestation_confirmed: attestationChecked,
         attestation_text_shown: ATTESTATION_TEXT,
         attestation_version: ATTESTATION_VERSION,
