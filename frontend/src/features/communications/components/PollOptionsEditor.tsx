@@ -20,7 +20,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import type { PollOption } from '../types/campaign';
-import { defaultPollLabel, renderPollOptionsBlock } from '../utils/pollOptions';
+import {
+  defaultPollLabel,
+  renderPollOptionsBlock,
+  validatePollOptions,
+} from '../utils/pollOptions';
 
 // --- Constants ---
 
@@ -86,14 +90,22 @@ export function PollOptionsEditor({
     [options, onOptionsChange],
   );
 
-  // --- Date validation errors ---
-  const dateErrors = options
-    .map((o) =>
-      o.start_date && o.end_date && o.end_date < o.start_date
-        ? `Option ${o.key}: end date must be on or after start date`
-        : null,
-    )
-    .filter(Boolean) as string[];
+  // --- Per-row validation (mirrors backend Pydantic PollOption schema) ---
+  const { rowErrors } = validatePollOptions(options);
+
+  // --- Aggregated errors for the summary alert (preserves pre-existing
+  //     `poll-date-errors` testid so old tests keep asserting against it) ---
+  const errorMessages: string[] = [];
+  rowErrors.forEach((e, idx) => {
+    const key = options[idx]?.key ?? String(idx + 1);
+    if (e.label) errorMessages.push(`Option ${key}: ${e.label.toLowerCase()}`);
+    if (e.start) errorMessages.push(`Option ${key}: ${e.start.toLowerCase()}`);
+    if (e.end) errorMessages.push(`Option ${key}: ${e.end.toLowerCase()}`);
+    if (e.range)
+      errorMessages.push(
+        `Option ${key}: end date must be on or after start date`,
+      );
+  });
 
   // --- Preview text ---
   const previewBlock = enabled ? renderPollOptionsBlock(options) : '';
@@ -116,10 +128,21 @@ export function PollOptionsEditor({
         <>
           {/* Option rows */}
           <div className="space-y-3">
-            {options.map((option, index) => (
+            {options.map((option, index) => {
+              const rowError = rowErrors[index];
+              const rowHasError =
+                !!rowError &&
+                (!!rowError.label ||
+                  !!rowError.start ||
+                  !!rowError.end ||
+                  !!rowError.range);
+              return (
               <div
                 key={option.key}
-                className="flex items-start gap-2 rounded-lg border border-slate-200 p-3"
+                className={cn(
+                  'flex items-start gap-2 rounded-lg border p-3',
+                  rowHasError ? 'border-red-300 bg-red-50/40' : 'border-slate-200',
+                )}
                 data-testid={`poll-option-row-${option.key}`}
               >
                 {/* Key badge */}
@@ -173,8 +196,22 @@ export function PollOptionsEditor({
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
+
+                {/* Per-row inline error hint (rendered inside the row wrapper
+                    via an absolute note below the key badge column) */}
+                {rowHasError && (
+                  <span
+                    className="sr-only"
+                    data-testid={`poll-option-error-${option.key}`}
+                  >
+                    {[rowError.label, rowError.start, rowError.end, rowError.range]
+                      .filter(Boolean)
+                      .join('; ')}
+                  </span>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Add option button */}
@@ -191,11 +228,11 @@ export function PollOptionsEditor({
             Add option
           </Button>
 
-          {/* Date validation errors */}
-          {dateErrors.length > 0 && (
+          {/* Validation errors (label required, dates required, end >= start) */}
+          {errorMessages.length > 0 && (
             <Alert variant="destructive" data-testid="poll-date-errors">
               <AlertDescription>
-                {dateErrors.map((e, i) => (
+                {errorMessages.map((e, i) => (
                   <div key={i}>{e}</div>
                 ))}
               </AlertDescription>

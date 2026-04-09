@@ -29,6 +29,7 @@ import {
   useAudiencePreview,
 } from '../hooks';
 import type { TargetAudience, AudiencePreview, PollOption } from '../types/campaign';
+import { validatePollOptions } from '../utils/pollOptions';
 
 // --- Constants ---
 
@@ -159,6 +160,12 @@ export function NewTextCampaignModal({
     );
   }, [audience]);
 
+  // --- Poll-options validity (mirrors backend Pydantic PollOption schema) ---
+  const pollOptionsValid = useMemo(
+    () => (pollEnabled ? validatePollOptions(pollOptions).valid : true),
+    [pollEnabled, pollOptions],
+  );
+
   // --- Step navigation ---
   const handleNext = useCallback(async () => {
     if (step === 0) {
@@ -195,9 +202,15 @@ export function NewTextCampaignModal({
         toast.error('Message body cannot be empty.');
         return;
       }
+      if (pollEnabled && !pollOptionsValid) {
+        toast.error(
+          'Fill in labels and start/end dates for every poll option before continuing.',
+        );
+        return;
+      }
       setStep(2);
     }
-  }, [step, hasAudience, campaignId, audience, messageBody, pollEnabled, pollOptions, createCampaign, audiencePreviewMutation]);
+  }, [step, hasAudience, campaignId, audience, messageBody, pollEnabled, pollOptions, pollOptionsValid, createCampaign, audiencePreviewMutation]);
 
   const handleBack = useCallback(() => {
     if (step > 0) setStep((s) => (s - 1) as Step);
@@ -221,6 +234,12 @@ export function NewTextCampaignModal({
       toast.error('Message body cannot be empty.');
       return;
     }
+    if (pollEnabled && !pollOptionsValid) {
+      toast.error(
+        'Fill in labels and start/end dates for every poll option before sending.',
+      );
+      return;
+    }
     try {
       // Persist the composed body + latest audience to the draft before sending.
       await updateCampaign.mutateAsync({
@@ -239,13 +258,19 @@ export function NewTextCampaignModal({
     } catch {
       toast.error('Failed to send campaign.');
     }
-  }, [campaignId, messageBody, audience, pollEnabled, pollOptions, updateCampaign, sendCampaign, userId, onOpenChange, resetWizard]);
+  }, [campaignId, messageBody, audience, pollEnabled, pollOptions, pollOptionsValid, updateCampaign, sendCampaign, userId, onOpenChange, resetWizard]);
 
   const handleSchedule = useCallback(
     async (scheduledAt: string) => {
       if (!campaignId) return;
       if (!messageBody.trim()) {
         toast.error('Message body cannot be empty.');
+        return;
+      }
+      if (pollEnabled && !pollOptionsValid) {
+        toast.error(
+          'Fill in labels and start/end dates for every poll option before scheduling.',
+        );
         return;
       }
       try {
@@ -268,7 +293,7 @@ export function NewTextCampaignModal({
         toast.error('Failed to schedule campaign.');
       }
     },
-    [campaignId, audience, messageBody, pollEnabled, pollOptions, updateCampaign, sendCampaign, userId, onOpenChange, resetWizard],
+    [campaignId, audience, messageBody, pollEnabled, pollOptions, pollOptionsValid, updateCampaign, sendCampaign, userId, onOpenChange, resetWizard],
   );
 
   // Reset on close
@@ -353,8 +378,16 @@ export function NewTextCampaignModal({
             </Button>
             <Button
               onClick={handleNext}
-              disabled={isSending}
+              disabled={
+                isSending ||
+                (step === 1 && pollEnabled && !pollOptionsValid)
+              }
               data-testid="wizard-next-btn"
+              title={
+                step === 1 && pollEnabled && !pollOptionsValid
+                  ? 'Fill in labels and dates for every poll option'
+                  : undefined
+              }
             >
               {isSending ? 'Saving...' : 'Next'}
             </Button>

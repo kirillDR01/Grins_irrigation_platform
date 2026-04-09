@@ -342,6 +342,34 @@ _DEFAULT_PREFIX = "Grins Irrigation: "
 _DEFAULT_FOOTER = " Reply STOP to opt out."
 
 
+def _render_poll_block(poll_options: list[dict] | None) -> str:
+    """Build the text block appended to a poll campaign's message body.
+
+    The trailing ``\\n\\n`` ensures the STOP footer lands on its own
+    paragraph below the options list instead of gluing onto the last
+    option line. Mirrors
+    ``frontend/src/features/communications/utils/pollOptions.ts::renderPollOptionsBlock``
+    exactly so the preview shown in the wizard matches what customers
+    actually receive.
+
+    Args:
+        poll_options: Parsed JSONB array from ``campaigns.poll_options``,
+            or ``None`` for non-poll campaigns.
+
+    Returns:
+        The rendered block (including leading/trailing blank lines), or
+        an empty string for non-poll campaigns.
+    """
+    if not poll_options:
+        return ""
+    lines = [
+        f"{opt.get('key', '?')}. {opt.get('label') or '(no label)'}"
+        for opt in poll_options
+    ]
+    keys = ", ".join(str(opt.get("key", "?")) for opt in poll_options)
+    return f"\n\nReply with {keys}:\n" + "\n".join(lines) + "\n\n"
+
+
 def _mask_phone(phone: str) -> str:
     """Mask phone for logging: +1XXX***XXXX."""
     if len(phone) >= 10:
@@ -523,6 +551,12 @@ class CampaignWorker(LoggerMixin):
             return
 
         # Send via provider (SMSService handles merge fields + formatting)
+        # For poll campaigns, append the rendered poll block to the body
+        # before handing off to SMSService. SMSService still applies the
+        # sender prefix + STOP footer.
+        composed_body = (campaign.body or "") + _render_poll_block(
+            campaign.poll_options,
+        )
         try:
             sms_svc = SMSService(
                 session=session,
@@ -531,7 +565,7 @@ class CampaignWorker(LoggerMixin):
             )
             result = await sms_svc.send_message(
                 recipient=recipient,
-                message=campaign.body,
+                message=composed_body,
                 message_type=MessageType.CAMPAIGN,
                 consent_type="marketing",
                 campaign_id=campaign.id,
