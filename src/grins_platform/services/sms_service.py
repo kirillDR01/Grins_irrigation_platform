@@ -63,6 +63,17 @@ OPT_OUT_CONFIRMATION_MSG = (
     "You've been unsubscribed from Grins Irrigation texts. Reply START to re-subscribe."
 )
 
+# Poll reply auto-confirmation messages
+POLL_REPLY_CONFIRMED_MSG = (
+    "Thanks! We received your response: {option_label}. "
+    "We'll be in touch to confirm your appointment."
+)
+
+POLL_REPLY_UNCLEAR_MSG = (
+    "Thanks for your reply! We received your message and "
+    "will follow up shortly."
+)
+
 # Sender prefix and STOP footer
 _DEFAULT_PREFIX = "Grins Irrigation: "
 _DEFAULT_FOOTER = " Reply STOP to opt out."
@@ -578,8 +589,34 @@ class SMSService(LoggerMixin):
         )
         row = await svc.record_poll_reply(inbound)
 
-        # parsed/needs_review → return without writing to communications (Req 7.2, 7.3)
+        # parsed/needs_review → send auto-reply confirmation, then return
+        # without writing to communications (Req 7.2, 7.3)
         if row.status in ("parsed", "needs_review"):
+            # Send auto-reply confirmation to the real E.164 phone
+            # (row.phone is resolved from the outbound sent_message, not the
+            # masked inbound from_phone).
+            try:
+                if row.status == "parsed":
+                    confirmation_msg = POLL_REPLY_CONFIRMED_MSG.format(
+                        option_label=row.selected_option_label or row.selected_option_key,
+                    )
+                else:
+                    confirmation_msg = POLL_REPLY_UNCLEAR_MSG
+
+                await self.provider.send_text(row.phone, confirmation_msg)
+                logger.info(
+                    "sms.poll_reply.auto_reply_sent",
+                    status=row.status,
+                    phone=_mask_phone(row.phone),
+                )
+            except Exception:
+                logger.warning(
+                    "sms.poll_reply.auto_reply_failed",
+                    status=row.status,
+                    phone=_mask_phone(row.phone),
+                    exc_info=True,
+                )
+
             self.log_completed(
                 "handle_inbound",
                 webhook_action="poll_reply",
