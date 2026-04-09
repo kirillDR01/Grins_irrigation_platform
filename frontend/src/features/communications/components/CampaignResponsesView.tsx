@@ -17,7 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ArrowLeft, Download } from 'lucide-react';
-import { config } from '@/core/config';
+import { apiClient } from '@/core/api';
 import {
   useCampaignResponseSummary,
   useCampaignResponses,
@@ -29,9 +29,23 @@ export interface CampaignResponsesViewProps {
   onBack: () => void;
 }
 
-function csvExportUrl(campaignId: string, optionKey?: string): string {
-  const base = `${config.apiBaseUrl}/api/${config.apiVersion}/campaigns/${campaignId}/responses/export.csv`;
-  return optionKey ? `${base}?option_key=${optionKey}` : base;
+function downloadCsv(campaignId: string, optionKey?: string) {
+  const path = optionKey
+    ? `/campaigns/${campaignId}/responses/export.csv?option_key=${optionKey}`
+    : `/campaigns/${campaignId}/responses/export.csv`;
+  apiClient.get(path, { responseType: 'blob' }).then((resp) => {
+    const disposition = resp.headers['content-disposition'] ?? '';
+    const match = disposition.match(/filename="(.+?)"/);
+    const filename = match?.[1] ?? `campaign_${campaignId}_responses.csv`;
+    const url = URL.createObjectURL(resp.data as Blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
 }
 
 function formatDate(iso: string): string {
@@ -126,15 +140,14 @@ export function CampaignResponsesView({
               <CardTitle className="text-base font-semibold">
                 Response Buckets
               </CardTitle>
-              <a
-                href={csvExportUrl(campaign.id)}
-                download
+              <Button
+                variant="outline"
+                size="sm"
                 data-testid="export-all-csv-btn"
+                onClick={() => downloadCsv(campaign.id)}
               >
-                <Button variant="outline" size="sm">
-                  <Download className="h-4 w-4 mr-1" /> Export all CSV
-                </Button>
-              </a>
+                <Download className="h-4 w-4 mr-1" /> Export all CSV
+              </Button>
             </CardHeader>
             <CardContent className="space-y-2">
               {parsedBuckets.map((b) => (
@@ -263,15 +276,14 @@ function BucketRow({
         >
           View
         </Button>
-        <a
-          href={csvExportUrl(campaignId, bucket.option_key ?? undefined)}
-          download
+        <Button
+          variant="outline"
+          size="sm"
           data-testid={`csv-option-${bucket.option_key}-btn`}
+          onClick={() => downloadCsv(campaignId, bucket.option_key ?? undefined)}
         >
-          <Button variant="outline" size="sm">
-            CSV
-          </Button>
-        </a>
+          CSV
+        </Button>
       </div>
     </div>
   );
