@@ -8,6 +8,7 @@ Validates: CRM Gap Closure Req 45.3, 45.4, 45.5, 45.6, 45.7, 45.8, 45.9, 45.10
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -1179,11 +1180,20 @@ class CampaignService(LoggerMixin):
                         phone_raw=phone_raw,
                     )
                     continue
-                # Customer/lead from steps 1 and 2 win on phone collision
-                if phone in seen_phones:
-                    continue
                 first_name = row.get("first_name")
                 last_name = row.get("last_name")
+                # CSV is the authoritative source for names in ad-hoc
+                # campaigns. If this phone already exists from a customer or
+                # lead source, replace the names with whatever the CSV says
+                # (even if blank — the CSV is the single source of truth).
+                if phone in seen_phones:
+                    existing = seen_phones[phone]
+                    seen_phones[phone] = dataclasses.replace(
+                        existing,
+                        first_name=first_name,
+                        last_name=last_name,
+                    )
+                    continue
                 lead_id: UUID | None = None
                 if create_ghost_leads:
                     try:
