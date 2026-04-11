@@ -529,6 +529,18 @@ export function LeadDetail() {
                     </p>
                   </div>
                 </div>
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${lead.terms_accepted ? 'bg-green-100' : 'bg-gray-100'}`}>
+                    <FileCheck className={`h-5 w-5 ${lead.terms_accepted ? 'text-green-600' : 'text-gray-400'}`} />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Terms &amp; Conditions</p>
+                    <p className={`text-sm font-medium ${lead.terms_accepted ? 'text-green-700' : 'text-gray-500'}`}
+                       data-testid={`terms-accepted-${lead.id}`}>
+                      {lead.terms_accepted ? 'Accepted' : 'Not accepted'}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 

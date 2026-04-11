@@ -449,6 +449,9 @@ describe('LeadDetail', () => {
 
     const emailMarketing = screen.getByTestId('email-marketing-consent-lead-001');
     expect(emailMarketing).toHaveTextContent('Opted in');
+
+    const termsAccepted = screen.getByTestId('terms-accepted-lead-001');
+    expect(termsAccepted).toHaveTextContent('Accepted');
   });
 
   it('renders consent indicators as "Not given"/"Not accepted" when false', async () => {
@@ -472,6 +475,9 @@ describe('LeadDetail', () => {
 
     const emailMarketing = screen.getByTestId('email-marketing-consent-lead-no-consent');
     expect(emailMarketing).toHaveTextContent('Not opted in');
+
+    const termsAccepted = screen.getByTestId('terms-accepted-lead-no-consent');
+    expect(termsAccepted).toHaveTextContent('Not accepted');
   });
 
   // ---- Lead Deletion Flow (Req 5) ----

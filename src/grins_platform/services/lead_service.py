@@ -339,6 +339,9 @@ class LeadService(LoggerMixin):
             if data.situation.value != existing_lead.situation:
                 update_data["situation"] = data.situation.value
 
+            if data.terms_accepted and not existing_lead.terms_accepted:
+                update_data["terms_accepted"] = True
+
             await self.lead_repository.update(existing_lead.id, update_data)
 
             self.logger.info(
@@ -382,6 +385,7 @@ class LeadService(LoggerMixin):
             source_detail=source_detail,
             intake_tag=intake_tag,
             sms_consent=data.sms_consent,
+            terms_accepted=data.terms_accepted,
             email_marketing_consent=data.email_marketing_consent,
             page_url=data.page_url,
             city=city,
