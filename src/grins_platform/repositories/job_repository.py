@@ -16,9 +16,15 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import joinedload, selectinload
 
 from grins_platform.log_config import LoggerMixin
-from grins_platform.models.enums import JobCategory, JobStatus  # noqa: TC001
+from grins_platform.models.enums import (  # noqa: TC001
+    JobCategory,
+    JobStatus,
+    PropertyType,
+)
 from grins_platform.models.job import Job
 from grins_platform.models.job_status_history import JobStatusHistory
+from grins_platform.models.property import Property
+from grins_platform.models.service_agreement import ServiceAgreement
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -353,6 +359,9 @@ class JobRepository(LoggerMixin):
         date_to: datetime | None = None,
         search: str | None = None,
         has_service_agreement: bool | None = None,
+        property_type: PropertyType | None = None,
+        is_hoa: bool | None = None,
+        is_subscription_property: bool | None = None,
         target_date_from: date | None = None,
         target_date_to: date | None = None,
         sort_by: str = "created_at",
@@ -438,6 +447,43 @@ class JobRepository(LoggerMixin):
             base_query = base_query.where(Job.service_agreement_id.isnot(None))
         elif has_service_agreement is False:
             base_query = base_query.where(Job.service_agreement_id.is_(None))
+
+        # Filter by property type (Req 8.5)
+        if property_type is not None:
+            base_query = base_query.where(
+                Job.property_id.in_(
+                    select(Property.id).where(
+                        Property.property_type == property_type.value,
+                    ),
+                ),
+            )
+
+        # Filter by HOA flag (Req 8.5)
+        if is_hoa is not None:
+            base_query = base_query.where(
+                Job.property_id.in_(
+                    select(Property.id).where(Property.is_hoa == is_hoa),
+                ),
+            )
+
+        # Filter by subscription property (Req 8.5)
+        if is_subscription_property is not None:
+            sub = (
+                select(Property.id)
+                .join(
+                    ServiceAgreement,
+                    ServiceAgreement.property_id == Property.id,
+                )
+                .where(ServiceAgreement.status == "active")
+                .distinct()
+            )
+            if is_subscription_property:
+                base_query = base_query.where(Job.property_id.in_(sub))
+            else:
+                base_query = base_query.where(
+                    (Job.property_id.is_(None))
+                    | (Job.property_id.notin_(sub)),
+                )
 
         # Apply target date range filters
         if target_date_from is not None:

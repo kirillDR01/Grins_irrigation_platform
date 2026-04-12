@@ -113,7 +113,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
   - Save all screenshots to `e2e-screenshots/crm-changes-update-2/blocker-fix/`
   - If any visual or functional issue is found, fix it and re-validate
 
-- [ ] 6. Auth & Dashboard Domain (Req 1–4, 38–39)
+- [x] 6. Auth & Dashboard Domain (Req 1–4, 38–39)
   - [x] 6.1 Implement password hardening migration script
     - Standalone script (not Alembic) that reads `NEW_ADMIN_PASSWORD` env var, validates 16+ chars/mixed case/digits/symbol, hashes with bcrypt cost 12, updates admin staff row
     - Abort with descriptive error if env var missing or password fails criteria
@@ -139,14 +139,14 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - Remove standalone Estimates card/section and New Leads section from Dashboard view
     - _Requirements: 4.1, 4.2, 4.3_
 
-  - [ ] 6.6 Write unit tests for password hardening and dashboard navigation
+  - [x] 6.6 Write unit tests for password hardening and dashboard navigation
     - Test password validation criteria, bcrypt hashing, env var missing abort
     - Test highlight URL param parsing, alert target URL generation
     - _Requirements: 1.1, 1.2, 1.4, 3.1, 3.4_
 
 - [ ] 7. Customers Domain — Duplicate Detection, Merge, Preferences, Property Tags (Req 5–8)
 
-- [ ] 6.7 E2E Visual Validation — Auth & Dashboard Domain
+- [x] 6.7 E2E Visual Validation — Auth & Dashboard Domain
   - Use agent-browser to navigate to /dashboard, verify Estimates section and New Leads section are removed
   - Verify the dashboard still renders all remaining sections correctly (no layout breakage)
   - Click a single-record dashboard alert — verify navigation goes directly to the record's detail page (not the list)
@@ -158,7 +158,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
   - Check `agent-browser console` and `agent-browser errors` for any JS errors
   - Save all screenshots to `e2e-screenshots/crm-changes-update-2/auth-dashboard/`
   - If any visual or functional issue is found, fix it and re-validate
-  - [ ] 7.1 Implement DuplicateDetectionService
+  - [x] 7.1 Implement DuplicateDetectionService
     - Create `src/grins_platform/services/duplicate_detection_service.py`
     - `compute_score(customer_a, customer_b) -> int` with weighted signals: phone E.164 (+60), email lowercased (+50), Jaro-Winkler name ≥0.92 (+25), normalized address (+20), ZIP+last name (+10), capped at 100
     - `run_nightly_sweep(db) -> int` with pre-filtered candidate pairs (shared phone/email/ZIP/last name), upsert into customer_merge_candidates
@@ -166,7 +166,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - Register nightly sweep in background_jobs.py scheduler
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8_
 
-  - [ ] 7.2 Write property tests for duplicate score computation
+  - [x] 7.2 Write property tests for duplicate score computation
     - **Property 1: Duplicate Score Commutativity** — score(A,B) == score(B,A)
     - **Validates: Requirements 32.1**
     - **Property 2: Duplicate Score Self-Identity** — score(A,A) == max_possible_score
@@ -176,7 +176,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - **Property 4: Duplicate Score Bounded** — 0 <= score <= 100
     - **Validates: Requirements 32.4**
 
-  - [ ] 7.3 Implement CustomerMergeService
+  - [x] 7.3 Implement CustomerMergeService
     - Create `src/grins_platform/services/customer_merge_service.py`
     - `check_merge_blockers(db, primary_id, duplicate_id)` — block if both have active Stripe subscriptions
     - `preview_merge(db, primary_id, duplicate_id, field_selections) -> MergePreview`
@@ -184,23 +184,23 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - Default non-empty field values when one record has empty, allow admin override via radio buttons
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 6.11, 6.12_
 
-  - [ ] 7.4 Write property test for customer merge data conservation
+  - [x] 7.4 Write property test for customer merge data conservation
     - **Property 11: Customer Merge Data Conservation** — total jobs/invoices/communications before == total after on surviving record, duplicate.merged_into_customer_id == primary.id, audit log exists
     - **Validates: Requirements 35.1, 35.2, 35.3**
 
-  - [ ] 7.5 Implement customer duplicate check on create/convert
+  - [x] 7.5 Implement customer duplicate check on create/convert
     - Synchronous Tier 1 check (exact phone or email) when customer is created or lead is converted
     - Display inline "Possible match found" warning with "Use existing customer" button
     - _Requirements: 6.13_
 
-  - [ ] 7.6 Implement customer service preferences CRUD
+  - [x] 7.6 Implement customer service preferences CRUD
     - Add `service_preferences` JSON array field handling on customer model
     - CRUD endpoints for service preferences: Add, Edit, Delete
     - Modal with fields: service type dropdown, preferred week (week picker), preferred date, time window dropdown, notes
     - Auto-populate job Week_Of from matching preference on job creation
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6_
 
-  - [ ] 7.7 Implement property type tagging
+  - [x] 7.7 Implement property type tagging
     - Ensure `property_type` enum (residential/commercial) is required on Property model
     - Add `is_hoa` boolean field support
     - Derive `is_subscription_property` at query time from active service_agreement

@@ -98,16 +98,13 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Apply highlight from URL on mount
+  // Apply highlight from URL on mount (param stays in URL for refresh persistence)
   useEffect(() => {
     if (urlHighlight) {
       setHighlightedJobId(urlHighlight);
       const timer = setTimeout(() => {
         setHighlightedJobId(null);
       }, 3000);
-      const newParams = new URLSearchParams(searchParams);
-      newParams.delete('highlight');
-      setSearchParams(newParams, { replace: true });
       return () => clearTimeout(timer);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -497,6 +494,36 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
             </SelectContent>
           </Select>
 
+          {/* Property Type Filter (Req 8.5) */}
+          <Select
+            value={params.property_type ?? 'all'}
+            onValueChange={(v) => setParams((p) => ({ ...p, page: 1, property_type: v === 'all' ? undefined : (v as 'residential' | 'commercial') }))}
+          >
+            <SelectTrigger className="w-[150px]" data-testid="property-type-filter">
+              <SelectValue placeholder="Property Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="residential">Residential</SelectItem>
+              <SelectItem value="commercial">Commercial</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* HOA Filter (Req 8.5) */}
+          <Select
+            value={params.is_hoa === undefined ? 'all' : params.is_hoa ? 'yes' : 'no'}
+            onValueChange={(v) => setParams((p) => ({ ...p, page: 1, is_hoa: v === 'all' ? undefined : v === 'yes' }))}
+          >
+            <SelectTrigger className="w-[120px]" data-testid="hoa-filter">
+              <SelectValue placeholder="HOA" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="yes">HOA</SelectItem>
+              <SelectItem value="no">Non-HOA</SelectItem>
+            </SelectContent>
+          </Select>
+
           {/* Target Date Range Filter */}
           <Popover>
             <PopoverTrigger asChild>
@@ -606,7 +633,7 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
                   data-testid="job-row"
                   data-job-id={row.original.id}
                   className={`hover:bg-slate-50/80 transition-colors ${
-                    highlightedJobId === row.original.id ? 'animate-highlight-fade' : ''
+                    highlightedJobId === row.original.id ? 'animate-highlight-pulse' : ''
                   }`}
                 >
                   {row.getVisibleCells().map((cell) => (

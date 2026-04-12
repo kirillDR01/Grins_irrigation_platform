@@ -11,6 +11,7 @@ export interface Property extends BaseEntity {
   system_type: string;
   property_type: string;
   is_primary: boolean;
+  is_hoa: boolean;
   access_instructions: string | null;
   gate_code: string | null;
   has_dogs: boolean;
@@ -115,6 +116,18 @@ export interface SentMessage {
   created_at: string;
 }
 
+// Service preference entity (CRM2 Req 7)
+export interface ServicePreference {
+  id: string;
+  service_type: string;
+  preferred_week: string | null;
+  preferred_date: string | null;
+  time_window: string;
+  notes: string | null;
+}
+
+export type ServicePreferenceCreate = Omit<ServicePreference, 'id'>;
+
 // Re-export PaginatedResponse for convenience
 export type { PaginatedResponse };
 
@@ -155,6 +168,9 @@ export interface CustomerListParams extends PaginationParams {
   is_red_flag?: boolean;
   is_slow_payer?: boolean;
   sms_opt_in?: boolean;
+  property_type?: 'residential' | 'commercial';
+  is_hoa?: boolean;
+  is_subscription_property?: boolean;
 }
 
 // Customer flags for display

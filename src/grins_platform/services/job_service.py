@@ -29,6 +29,7 @@ from grins_platform.models.enums import (
     JobSource,
     JobStatus,
     PricingModel,
+    PropertyType,
 )
 
 if TYPE_CHECKING:
@@ -439,6 +440,9 @@ class JobService(LoggerMixin):
         date_to: datetime | None = None,
         search: str | None = None,
         has_service_agreement: bool | None = None,
+        property_type: PropertyType | None = None,
+        is_hoa: bool | None = None,
+        is_subscription_property: bool | None = None,
         target_date_from: date | None = None,
         target_date_to: date | None = None,
         sort_by: str = "created_at",
@@ -459,6 +463,9 @@ class JobService(LoggerMixin):
             date_to: Filter by created_at <= date_to
             search: Search by job type or description
             has_service_agreement: Filter by subscription source
+            property_type: Filter by property type
+            is_hoa: Filter by HOA property flag
+            is_subscription_property: Filter by subscription property
             target_date_from: Filter by target_start_date >= date
             target_date_to: Filter by target_start_date <= date
             sort_by: Field to sort by
@@ -467,7 +474,7 @@ class JobService(LoggerMixin):
         Returns:
             Tuple of (list of jobs, total count)
 
-        Validates: Requirement 6.1-6.9
+        Validates: Requirement 6.1-6.9, 8.5
         """
         self.log_started("list_jobs", page=page, page_size=page_size, search=search)
 
@@ -484,6 +491,9 @@ class JobService(LoggerMixin):
             date_to=date_to,
             search=search,
             has_service_agreement=has_service_agreement,
+            property_type=property_type,
+            is_hoa=is_hoa,
+            is_subscription_property=is_subscription_property,
             target_date_from=target_date_from,
             target_date_to=target_date_to,
             sort_by=sort_by,

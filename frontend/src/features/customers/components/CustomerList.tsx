@@ -20,6 +20,18 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Table,
   TableBody,
   TableCell,
@@ -252,10 +264,81 @@ export function CustomerList({ onEdit, onDelete }: CustomerListProps) {
             <CustomerSearch onSearch={handleSearch} />
           </div>
           {/* Filter Button */}
-          <Button variant="outline" size="sm" className="gap-2">
-            <Filter className="h-4 w-4" />
-            Filter
-          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2" data-testid="filter-btn">
+                <Filter className="h-4 w-4" />
+                Filter
+                {(params.property_type || params.is_hoa !== undefined || params.is_subscription_property !== undefined) && (
+                  <span className="ml-1 rounded-full bg-teal-100 text-teal-700 px-1.5 text-xs">
+                    {[params.property_type, params.is_hoa !== undefined ? 'hoa' : null, params.is_subscription_property !== undefined ? 'sub' : null].filter(Boolean).length}
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-4 space-y-3" align="start">
+              <div className="text-sm font-medium text-slate-700">Property Filters</div>
+              <div className="space-y-2">
+                <label className="text-xs text-slate-500">Property Type</label>
+                <Select
+                  value={params.property_type ?? 'all'}
+                  onValueChange={(v) => setParams((p) => ({ ...p, page: 1, property_type: v === 'all' ? undefined : (v as 'residential' | 'commercial') }))}
+                >
+                  <SelectTrigger className="h-8 text-sm" data-testid="filter-property-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="residential">Residential</SelectItem>
+                    <SelectItem value="commercial">Commercial</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs text-slate-500">HOA</label>
+                <Select
+                  value={params.is_hoa === undefined ? 'all' : params.is_hoa ? 'yes' : 'no'}
+                  onValueChange={(v) => setParams((p) => ({ ...p, page: 1, is_hoa: v === 'all' ? undefined : v === 'yes' }))}
+                >
+                  <SelectTrigger className="h-8 text-sm" data-testid="filter-is-hoa">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="yes">HOA Only</SelectItem>
+                    <SelectItem value="no">Non-HOA Only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs text-slate-500">Subscription</label>
+                <Select
+                  value={params.is_subscription_property === undefined ? 'all' : params.is_subscription_property ? 'yes' : 'no'}
+                  onValueChange={(v) => setParams((p) => ({ ...p, page: 1, is_subscription_property: v === 'all' ? undefined : v === 'yes' }))}
+                >
+                  <SelectTrigger className="h-8 text-sm" data-testid="filter-subscription">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="yes">Subscription Only</SelectItem>
+                    <SelectItem value="no">Non-Subscription Only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {(params.property_type || params.is_hoa !== undefined || params.is_subscription_property !== undefined) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-xs"
+                  onClick={() => setParams((p) => ({ ...p, page: 1, property_type: undefined, is_hoa: undefined, is_subscription_property: undefined }))}
+                  data-testid="clear-property-filters"
+                >
+                  Clear property filters
+                </Button>
+              )}
+            </PopoverContent>
+          </Popover>
           {/* Export Button */}
           <Button variant="outline" size="sm" className="gap-2">
             <Download className="h-4 w-4" />

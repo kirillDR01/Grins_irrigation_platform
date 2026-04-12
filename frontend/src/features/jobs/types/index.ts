@@ -127,6 +127,9 @@ export interface JobListParams extends PaginationParams {
   date_to?: string;
   search?: string;
   has_service_agreement?: boolean;
+  property_type?: 'residential' | 'commercial';
+  is_hoa?: boolean;
+  is_subscription_property?: boolean;
   target_date_from?: string;
   target_date_to?: string;
   sort_by?: string;

@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 from grins_platform.api.v1.dependencies import get_db_session, get_job_service
 from grins_platform.exceptions import (
     CustomerNotFoundError,
+    InvalidInvoiceOperationError,
     InvalidStatusTransitionError,
     JobNotFoundError,
     PropertyCustomerMismatchError,
@@ -40,10 +41,14 @@ from grins_platform.models.enums import (
     JobCategory,
     JobStatus,
     PricingModel,
+    PropertyType,
 )
 from grins_platform.models.estimate import Estimate
 from grins_platform.repositories.job_repository import JobRepository
 from grins_platform.schemas.dashboard import JobStatusByCategoryResponse
+from grins_platform.schemas.invoice import (
+    InvoiceResponse,
+)
 from grins_platform.schemas.job import (
     JobCreate,
     JobResponse,
@@ -200,6 +205,18 @@ async def list_jobs(
         default=None,
         description="Filter by subscription source",
     ),
+    property_type: PropertyType | None = Query(
+        default=None,
+        description="Filter by property type (residential/commercial)",
+    ),
+    is_hoa: bool | None = Query(
+        default=None,
+        description="Filter by HOA property flag",
+    ),
+    is_subscription_property: bool | None = Query(
+        default=None,
+        description="Filter by subscription property (has active service agreement)",
+    ),
     target_date_from: date | None = Query(
         default=None,
         description="Filter by target_start_date >= this date",
@@ -264,6 +281,9 @@ async def list_jobs(
         date_to=date_to,
         search=search,
         has_service_agreement=has_service_agreement,
+        property_type=property_type,
+        is_hoa=is_hoa,
+        is_subscription_property=is_subscription_property,
         target_date_from=target_date_from,
         target_date_to=target_date_to,
         sort_by=sort_by,
@@ -817,3 +837,92 @@ async def get_job_costs(
         "page": page,
         "page_size": page_size,
     }
+
+
+# =============================================================================
+# POST /api/v1/jobs/{job_id}/complete - Mark job as complete (Req 21.2)
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{job_id}/complete",
+    response_model=JobResponse,
+    summary="Mark job as complete",
+    description="Transition job status to COMPLETED.",
+)
+async def complete_job(
+    job_id: UUID,
+    service: Annotated[JobService, Depends(get_job_service)],
+) -> JobResponse:
+    """Mark a job as complete.
+
+    Validates: Requirement 21.2
+    """
+    _endpoints.log_started("complete_job", job_id=str(job_id))
+    try:
+        result = await service.update_status(
+            job_id,
+            JobStatusUpdate(status=JobStatus.COMPLETED),
+        )
+    except JobNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job not found: {e.job_id}",
+        ) from e
+    except InvalidStatusTransitionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status transition from {e.current_status.value} "
+            f"to {e.requested_status.value}",
+        ) from e
+    else:
+        _endpoints.log_completed("complete_job", job_id=str(job_id))
+        return JobResponse.model_validate(result)  # type: ignore[no-any-return]
+
+
+# =============================================================================
+# POST /api/v1/jobs/{job_id}/invoice - Create invoice from job (Req 21.1)
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{job_id}/invoice",
+    response_model=InvoiceResponse,
+    summary="Create invoice from job",
+    description="Generate an invoice for the job.",
+)
+async def create_job_invoice(
+    job_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> InvoiceResponse:
+    """Create an invoice from a job.
+
+    Validates: Requirement 21.1
+    """
+    from grins_platform.repositories.invoice_repository import (  # noqa: PLC0415
+        InvoiceRepository,
+    )
+    from grins_platform.services.invoice_service import (  # noqa: PLC0415
+        InvoiceService,
+    )
+
+    _endpoints.log_started("create_job_invoice", job_id=str(job_id))
+    invoice_repo = InvoiceRepository(session=session)
+    job_repo = JobRepository(session=session)
+    invoice_service = InvoiceService(
+        invoice_repository=invoice_repo,
+        job_repository=job_repo,
+    )
+    try:
+        result = await invoice_service.generate_from_job(job_id)
+    except InvalidInvoiceOperationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    else:
+        _endpoints.log_completed(
+            "create_job_invoice",
+            job_id=str(job_id),
+        )
+        return result  # type: ignore[return-value]

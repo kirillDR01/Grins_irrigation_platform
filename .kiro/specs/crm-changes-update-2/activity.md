@@ -1,6 +1,302 @@
+## [2026-04-11 22:10] Task 7.7: Implement property type tagging
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Verified `property_type` enum (residential/commercial) is already required on Property model
+- Verified `is_hoa` boolean field already exists on Property model
+- Implemented `is_subscription_property` derived at query time from active service_agreement (joins Property → ServiceAgreement where status='active')
+- Added `property_type`, `is_hoa`, `is_subscription_property` filter params to CustomerListParams schema
+- Added property filters to CustomerRepository.list_with_filters using subqueries
+- Added property filter query params to list_customers API endpoint
+- Added `property_type`, `is_hoa`, `is_subscription_property` filter params to JobRepository.list_with_filters, JobService.list_jobs, and list_jobs API endpoint
+- Updated frontend CustomerListParams and JobListParams types with new filter fields
+- Added `is_hoa` to frontend Property interface
+- Added property filter popover UI to CustomerList component (Popover with Select dropdowns for property type, HOA, subscription)
+- Added property type and HOA filter dropdowns to JobList component
+- All filters compose via AND (intersection) with existing filters
+
+### Files Modified
+- `src/grins_platform/schemas/customer.py` — Added PropertyType import, property_type/is_hoa/is_subscription_property to CustomerListParams
+- `src/grins_platform/repositories/customer_repository.py` — Added ServiceAgreement import, property filter subqueries
+- `src/grins_platform/api/v1/customers.py` — Added PropertyType import, filter query params, pass to CustomerListParams
+- `src/grins_platform/services/job_service.py` — Added PropertyType import, new params to list_jobs
+- `src/grins_platform/repositories/job_repository.py` — Added Property/ServiceAgreement/PropertyType imports, filter subqueries
+- `src/grins_platform/api/v1/jobs.py` — Added PropertyType import, filter query params, pass to service
+- `frontend/src/features/customers/types/index.ts` — Added is_hoa to Property, property filters to CustomerListParams
+- `frontend/src/features/jobs/types/index.ts` — Added property filters to JobListParams
+- `frontend/src/features/customers/components/CustomerList.tsx` — Added Popover/Select imports, property filter popover UI
+- `frontend/src/features/jobs/components/JobList.tsx` — Added property type and HOA filter Select dropdowns
+
+### Quality Check Results
+- Ruff: ✅ Pass (2 pre-existing E501 warnings in unmodified lines)
+- MyPy: ✅ Pass (1 pre-existing error in unmodified get_job_financials)
+- TypeScript: ✅ Pass (zero errors)
+- ESLint: ✅ Pass (zero errors)
+- Tests: ✅ 215 backend tests passing, 42 frontend tests passing (CustomerList + JobList)
+
+### Notes
+- Sales list view filtering deferred to task 10.5+ when the Sales list API is implemented
+- Pre-existing test failures (39 backend, 13 frontend) are unrelated to this task
+
+---
+
+## [2026-04-11 21:57] Task 7.6: Implement customer service preferences CRUD
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Implemented full CRUD for customer service preferences stored as JSON array on `preferred_service_times` field
+- Backend: Added `ServicePreferenceCreate`, `ServicePreferenceUpdate`, `ServicePreferenceResponse` Pydantic schemas with validation for service_type and time_window enums
+- Backend: Added `_normalize_prefs()` helper to handle legacy single-dict format and new list format
+- Backend: Added `get_service_preferences()`, `add_service_preference()`, `update_service_preference()`, `delete_service_preference()` methods to CustomerService
+- Backend: Added 4 API endpoints: GET/POST `/{customer_id}/service-preferences`, PUT/DELETE `/{customer_id}/service-preferences/{preference_id}`
+- Frontend: Added `ServicePreference` and `ServicePreferenceCreate` types
+- Frontend: Added API methods for list/add/update/delete service preferences
+- Frontend: Added `useServicePreferences` query hook and `useAddServicePreference`, `useUpdateServicePreference`, `useDeleteServicePreference` mutation hooks
+- Frontend: Created `ServicePreferenceModal.tsx` — form with service type dropdown, week picker, date picker, time window dropdown, notes
+- Frontend: Created `ServicePreferencesSection.tsx` — list with Add/Edit/Delete actions, wired into CustomerDetail overview tab
+- Frontend: Replaced old simple service time preference card with new full-featured ServicePreferencesSection
+- Updated `CustomerDetail.test.tsx` to mock new hooks and test new service preferences section
+
+### Files Modified
+- `src/grins_platform/schemas/customer.py` — Added ServicePreference schemas
+- `src/grins_platform/services/customer_service.py` — Added CRUD methods + _normalize_prefs helper
+- `src/grins_platform/api/v1/customers.py` — Added 4 service preference endpoints
+- `frontend/src/features/customers/types/index.ts` — Added ServicePreference types
+- `frontend/src/features/customers/api/customerApi.ts` — Added API methods
+- `frontend/src/features/customers/hooks/useCustomers.ts` — Added useServicePreferences hook
+- `frontend/src/features/customers/hooks/useCustomerMutations.ts` — Added 3 mutation hooks
+- `frontend/src/features/customers/hooks/index.ts` — Updated exports
+- `frontend/src/features/customers/components/ServicePreferenceModal.tsx` — NEW
+- `frontend/src/features/customers/components/ServicePreferencesSection.tsx` — NEW
+- `frontend/src/features/customers/components/CustomerDetail.tsx` — Replaced old service time card
+- `frontend/src/features/customers/components/CustomerDetail.test.tsx` — Updated mocks and tests
+- `frontend/src/features/customers/components/index.ts` — Updated exports
+
+### Quality Check Results
+- Ruff: ✅ Pass
+- MyPy: ✅ Pass (0 new errors, 3 pre-existing)
+- ESLint: ✅ Pass
+- TypeScript: ✅ Pass
+- Tests: ✅ CustomerDetail tests 10/10 passing
+
+### Notes
+- Service types: spring_startup, mid_season_inspection, fall_winterization, monthly_visit, custom
+- Time windows: morning, afternoon, evening, any
+- Legacy single-dict format in preferred_service_times is handled via _normalize_prefs()
+- Auto-populate job Week_Of from matching preference is wired in task 19.2 (not this task)
+
+---
+
+## [2026-04-11 21:41] Task 7.5: Implement customer duplicate check on create/convert
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Implemented Tier 1 synchronous duplicate check (exact phone or email) on customer create and lead conversion
+- Backend: Added `check_tier1_duplicates()` method to `CustomerService` — checks phone (normalized) and email, returns matching customers, supports `exclude_id` for edit scenarios
+- Backend: Added `GET /api/v1/customers/check-duplicate` endpoint with `phone`, `email`, and `exclude_id` query params
+- Frontend: Created `useCheckDuplicate` hook — callback-based check with loading state
+- Frontend: Created `DuplicateWarning.tsx` component — amber inline warning with "Use existing" button per match
+- Frontend: Modified `CustomerForm.tsx` — triggers duplicate check on phone/email blur, shows warning for new customers only
+- Frontend: Modified `ConvertLeadDialog.tsx` — triggers duplicate check on mount using lead's phone/email, shows warning with "Use existing" navigation
+
+### Files Modified
+- `src/grins_platform/services/customer_service.py` — added `check_tier1_duplicates()` method
+- `src/grins_platform/api/v1/customers.py` — added `check_duplicate` endpoint
+- `frontend/src/features/customers/api/customerApi.ts` — added `checkDuplicate` API method
+- `frontend/src/features/customers/hooks/useCheckDuplicate.ts` — new hook (created)
+- `frontend/src/features/customers/hooks/index.ts` — exported new hook
+- `frontend/src/features/customers/components/DuplicateWarning.tsx` — new component (created)
+- `frontend/src/features/customers/components/CustomerForm.tsx` — integrated duplicate check on blur
+- `frontend/src/features/leads/components/ConvertLeadDialog.tsx` — integrated duplicate check on mount
+
+### Quality Check Results
+- Ruff: ✅ Pass
+- MyPy: ✅ Pass (3 pre-existing errors in unrelated methods)
+- ESLint: ✅ Pass
+- TypeScript: ✅ Pass (0 errors)
+- Backend Tests: ✅ 41/41 customer API, 26/26 customer service
+- Frontend Tests: ✅ 13/13 ConvertLeadDialog, 28/28 customer hooks, 18/18 customer API
+
+### Notes
+- Requirement 6.13: "WHEN a customer is created or a lead is converted, THE Platform SHALL synchronously check for Tier 1 matches (exact phone or email) and display an inline 'Possible match found' warning with a 'Use existing customer' button"
+- The check is non-blocking — users can still proceed with creation even if matches are found
+- "Use existing" navigates to the existing customer's detail page
+
+---
+
+## [2026-04-11 21:35] Task 7.4: Write property test for customer merge data conservation
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Created `test_pbt_customer_merge_conservation.py` with 4 property-based tests covering Property 11 (Req 35.1, 35.2, 35.3)
+- **test_all_related_records_reassigned**: Verifies every table in `_REASSIGN_TABLES` gets an UPDATE statement during merge (data conservation)
+- **test_duplicate_soft_deleted_with_pointer**: Verifies `duplicate.merged_into_customer_id == primary.id` and `is_deleted == True`
+- **test_audit_log_created**: Verifies audit log entry with correct action, actor_id, primary_id, duplicate_id
+- **test_field_selections_applied_to_primary**: Verifies field selections from duplicate are applied to primary record
+
+### Files Modified
+- `src/grins_platform/tests/unit/test_pbt_customer_merge_conservation.py` — new PBT test file
+
+### Quality Check Results
+- Ruff: ✅ Pass
+- MyPy: ✅ Pass (0 errors)
+- Pyright: ✅ Pass (0 errors)
+- Tests: ✅ 4/4 passing
+
+### Notes
+- Uses mocked AsyncSession and patches `_get_customer` and `check_merge_blockers` to isolate merge logic
+- Hypothesis generates varied admin_ids, field selection counts to exercise different code paths
+
+---
+
 # CRM Changes Update 2 — Activity Log
 
 ## Recent Activity
+
+## [2026-04-12 02:25] Task 7.3: Implement CustomerMergeService
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Created `CustomerMergeService` in `src/grins_platform/services/customer_merge_service.py`
+- `check_merge_blockers()` — blocks merge when both customers have active Stripe subscriptions
+- `preview_merge()` — returns MergePreviewResponse with merged fields, record counts, and blockers
+- `execute_merge()` — reassigns all related records (11 tables), applies field selections, soft-deletes duplicate via merged_into_customer_id, resolves merge candidates, writes audit log
+- `_compute_merged_fields()` — admin field selection override with non-empty default fallback (primary wins ties)
+- `_count_related_records()` — counts jobs, invoices, properties, communications, agreements on duplicate
+
+### Files Modified
+- `src/grins_platform/services/customer_merge_service.py` — NEW (created)
+
+### Quality Check Results
+- Ruff: ✅ Pass
+- MyPy: ✅ Pass (0 errors)
+- Pyright: ✅ Pass (0 errors, 5 warnings)
+- Tests: ✅ No new failures (39 pre-existing failures unchanged)
+
+### Notes
+- Uses raw SQL text() for reassignment across 11 tables to avoid importing all models
+- Leverages existing MergeConflictError, CustomerNotFoundError exceptions
+- Follows LoggerMixin pattern with DOMAIN = "customer"
+
+---
+
+## [2026-04-12 03:17] Task 7.2: Write property tests for duplicate score computation
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Created 4 Hypothesis property-based tests for `DuplicateDetectionService.compute_score()`
+- Property 1: Commutativity — score(A,B) == score(B,A) (Req 32.1)
+- Property 2: Self-Identity — score(A,A) == MAX_SCORE (Req 32.2)
+- Property 3: Zero Floor — no matching signals → score == 0 (Req 32.3)
+- Property 4: Bounded — 0 <= score <= 100 (Req 32.4)
+
+### Files Modified
+- `src/grins_platform/tests/unit/test_pbt_duplicate_score.py` — new file with 4 PBT tests
+
+### Quality Check Results
+- Ruff: ✅ Pass
+- MyPy: ✅ Pass
+- Pyright: ✅ Pass
+- Tests: ✅ 4/4 passing
+
+### Notes
+- Uses MagicMock for Customer objects to avoid DB dependency
+- 200 examples per commutativity/zero-floor/bounded tests, 100 for self-identity
+
+---
+
+## [2026-04-12 02:15] Task 7.1: Implement DuplicateDetectionService
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Created `src/grins_platform/services/duplicate_detection_service.py` with:
+  - `compute_score(customer_a, customer_b)` - weighted 0-100 scoring using phone E.164 (+60), email (+50), Jaro-Winkler name >= 0.92 (+25), normalized address (+20), ZIP+last name (+10), capped at 100
+  - `run_nightly_sweep(db)` - pre-filtered candidate pairs via shared phone/email/last name indexes, upserts into customer_merge_candidates with score >= 50
+  - `get_review_queue(db, skip, limit)` - paginated queue sorted by score descending
+  - Pure Python Jaro-Winkler implementation (no external dependency)
+  - Address normalization with street abbreviation handling
+- Registered nightly sweep in `background_jobs.py` as cron job at 1:30 AM
+
+### Files Modified
+- `src/grins_platform/services/duplicate_detection_service.py` - NEW: full service implementation
+- `src/grins_platform/services/background_jobs.py` - Added import and nightly sweep job registration
+
+### Quality Check Results
+- Ruff: ✅ Pass (0 new errors)
+- MyPy: ✅ Pass (0 errors)
+- Pyright: ✅ Pass (0 errors, 1 warning)
+- Tests: ✅ 3894 passing (38 pre-existing failures unchanged)
+
+### Notes
+- Jaro-Winkler implemented in pure Python to avoid adding jellyfish/rapidfuzz dependency
+- Pre-filtering strategy avoids O(n^2) by indexing on phone, email, last name
+
+---
+
+## [2026-04-12 02:05] Task 6.7: E2E Visual Validation — Auth & Dashboard Domain
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Rebuilt Docker backend image to include latest code (alerts endpoint was missing from stale image)
+- Verified Estimates section removed from dashboard (5 categories: New Requests, Pending Approval, To Be Scheduled, In Progress, Complete)
+- Verified New Leads section removed from dashboard
+- Verified dashboard renders all remaining sections correctly (metrics cards, Today's Schedule, Overdue Invoices, Lien Deadlines, Quick Actions, Recent Activity, Technician Availability)
+- Tested multi-record alert navigation: clicked "73 To Be Scheduled" → navigated to `/jobs?status=to_be_scheduled` with correct filter
+- Tested highlight URL param: navigated to `/jobs?status=to_be_scheduled&highlight=<id>` → first row showed amber pulse animation
+- **Found and fixed bug: highlight param stripped from URL after animation** — JobList.tsx and LeadsList.tsx were deleting the `highlight` param from URL after applying the animation, preventing refresh persistence
+- Verified highlight param now survives page refresh and re-triggers animation
+- Tested session persistence: navigated through Dashboard → Customers → Leads → Jobs → Schedule → Invoices without premature logout
+- Checked console for JS errors — clean (only Vite/React DevTools info messages)
+- Saved 12 screenshots to `e2e-screenshots/crm-changes-update-2/auth-dashboard/`
+
+### Files Modified
+- `frontend/src/features/jobs/components/JobList.tsx` — Removed highlight param deletion from URL (keeps param for refresh persistence)
+- `frontend/src/features/leads/components/LeadsList.tsx` — Same fix as JobList.tsx
+
+### Quality Check Results
+- ESLint: ✅ Pass
+- TypeScript: ✅ Pass (zero errors)
+- Tests: ✅ 1300/1303 passing (3 pre-existing failures in CampaignReview/CampaignResponsesView timezone tests, unrelated)
+
+### Notes
+- Dashboard alerts API endpoint (`GET /api/v1/dashboard/alerts`) returns 2 alerts: uncontacted_leads (5) and jobs_to_schedule (73)
+- Single-record alert navigation not testable (no overdue invoices or lien deadlines in current data)
+- The Overdue Invoices and Lien Deadlines sections show "No overdue invoices" / "No approaching lien deadlines" — correct for current data state
+
+---
+
+## [2026-04-12 02:51] Task 6.6: Write unit tests for password hardening and dashboard navigation
+
+### Status: ✅ COMPLETE
+
+### What Was Done
+- Created 21 unit tests covering password hardening script and dashboard alert navigation
+- Password validation tests: valid password, too short, missing lowercase/uppercase/digit/symbol, multiple failures, boundary (exactly 16 chars)
+- Bcrypt tests: hash verification, cost 12 prefix check
+- Script behavior tests: missing env var exits with code 1, weak password exits with code 1
+- Dashboard alert URL tests: single overdue invoice → detail URL, multiple → filtered list with highlight, single/multiple lien warnings, jobs to schedule, uncontacted leads, no alerts when empty
+- Dashboard schema tests: highlight URL param acceptance, detail URL acceptance
+
+### Files Modified
+- `src/grins_platform/tests/unit/test_password_hardening_and_dashboard_nav.py` — New file with 21 unit tests
+
+### Quality Check Results
+- Ruff: ✅ Pass
+- Tests: ✅ 21/21 passing
+
+### Notes
+- Tests use mocked repositories for DashboardService to isolate alert URL generation logic
+- Password script tests use patch.dict for env vars and patch for load_dotenv
+
+---
 
 ## [2026-04-12 01:50] Task 6.5: Remove Estimates and New Leads sections from Dashboard
 

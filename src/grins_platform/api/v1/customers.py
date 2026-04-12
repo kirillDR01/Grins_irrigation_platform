@@ -43,6 +43,7 @@ from grins_platform.exceptions import (
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import (
     CustomerStatus,  # noqa: TC001 - Required at runtime for FastAPI query params
+    PropertyType,  # noqa: TC001 - Required at runtime for FastAPI query params
 )
 from grins_platform.schemas.customer import (
     BulkPreferencesUpdate,
@@ -61,6 +62,8 @@ from grins_platform.schemas.customer import (
     PaginatedCustomerResponse,
     PaymentMethodResponse,
     ServiceHistorySummary,
+    ServicePreferenceCreate,
+    ServicePreferenceUpdate,
 )
 from grins_platform.services.customer_service import (
     CustomerService,  # noqa: TC001 - Required at runtime for FastAPI DI
@@ -131,6 +134,48 @@ async def create_customer(
     else:
         _endpoints.log_completed("create_customer", customer_id=str(result.id))
         return result
+
+
+# =============================================================================
+# CRM Changes Update 2 — Req 6.13: Tier 1 duplicate check on create/convert
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/check-duplicate",
+    response_model=list[CustomerResponse],
+    summary="Tier 1 duplicate check by phone or email",
+    description="Returns existing customers matching the given phone or email. "
+    "Used inline during customer creation or lead conversion.",
+)
+async def check_duplicate(
+    service: Annotated[CustomerService, Depends(get_customer_service)],
+    phone: Annotated[
+        str | None,
+        Query(description="Phone number"),
+    ] = None,
+    email: Annotated[
+        str | None,
+        Query(description="Email address"),
+    ] = None,
+    exclude_id: Annotated[
+        str | None,
+        Query(description="Customer ID to exclude"),
+    ] = None,
+) -> list[CustomerResponse]:
+    """Check for Tier 1 duplicate customers.
+
+    Validates: Requirement 6.13
+    """
+    _endpoints.log_started("check_duplicate")
+    exc_id = UUID(exclude_id) if exclude_id else None
+    result = await service.check_tier1_duplicates(
+        phone=phone,
+        email=email,
+        exclude_id=exc_id,
+    )
+    _endpoints.log_completed("check_duplicate", count=len(result))
+    return result
 
 
 # =============================================================================
@@ -444,6 +489,18 @@ async def list_customers(
         default=None,
         description="Search by name or email (case-insensitive)",
     ),
+    property_type: PropertyType | None = Query(
+        default=None,
+        description="Filter by property type (residential/commercial)",
+    ),
+    is_hoa: bool | None = Query(
+        default=None,
+        description="Filter by HOA property flag",
+    ),
+    is_subscription_property: bool | None = Query(
+        default=None,
+        description="Filter by subscription property (has active service agreement)",
+    ),
     sort_by: str = Query(
         default="last_name",
         description="Field to sort by",
@@ -494,6 +551,9 @@ async def list_customers(
         is_slow_payer=is_slow_payer,
         sms_opt_in=sms_opt_in,
         search=search,
+        property_type=property_type,
+        is_hoa=is_hoa,
+        is_subscription_property=is_subscription_property,
         sort_by=sort_by,
         sort_order=sort_order,
     )
@@ -906,6 +966,88 @@ async def patch_customer(
     else:
         _endpoints.log_completed("patch_customer", customer_id=str(customer_id))
         return result
+
+
+# =============================================================================
+# CRM2 Req 7: Service Preferences CRUD
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/{customer_id}/service-preferences",
+    summary="List service preferences",
+)
+async def list_service_preferences(
+    customer_id: UUID,
+    service: Annotated[CustomerService, Depends(get_customer_service)],
+) -> list[dict[str, Any]]:
+    """Get all service preferences for a customer."""
+    try:
+        return await service.get_service_preferences(customer_id)
+    except CustomerNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{customer_id}/service-preferences",
+    status_code=status.HTTP_201_CREATED,
+    summary="Add service preference",
+)
+async def add_service_preference(
+    customer_id: UUID,
+    data: ServicePreferenceCreate,
+    service: Annotated[CustomerService, Depends(get_customer_service)],
+) -> list[dict[str, Any]]:
+    """Add a service preference entry for a customer."""
+    try:
+        return await service.add_service_preference(
+            customer_id,
+            data.model_dump(exclude_none=True),
+        )
+    except CustomerNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+
+
+@router.put(  # type: ignore[untyped-decorator]
+    "/{customer_id}/service-preferences/{preference_id}",
+    summary="Update service preference",
+)
+async def update_service_preference(
+    customer_id: UUID,
+    preference_id: str,
+    data: ServicePreferenceUpdate,
+    service: Annotated[CustomerService, Depends(get_customer_service)],
+) -> list[dict[str, Any]]:
+    """Update a service preference entry."""
+    try:
+        return await service.update_service_preference(
+            customer_id,
+            preference_id,
+            data.model_dump(exclude_none=True),
+        )
+    except CustomerNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+
+
+@router.delete(  # type: ignore[untyped-decorator]
+    "/{customer_id}/service-preferences/{preference_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Delete service preference",
+)
+async def delete_service_preference(
+    customer_id: UUID,
+    preference_id: str,
+    service: Annotated[CustomerService, Depends(get_customer_service)],
+) -> list[dict[str, Any]]:
+    """Delete a service preference entry."""
+    try:
+        return await service.delete_service_preference(customer_id, preference_id)
+    except CustomerNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
 
 # =============================================================================
