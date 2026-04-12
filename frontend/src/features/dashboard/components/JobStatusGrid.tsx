@@ -1,8 +1,7 @@
 /**
- * JobStatusGrid — displays 6 job status category cards on the dashboard.
+ * JobStatusGrid — displays 5 job status category cards on the dashboard.
  * Each card is clickable and navigates to /jobs?status={status}.
- *
- * Validates: Requirements 6.1
+ * Estimates section removed per Req 4.1 (accessible via Sales tab).
  */
 
 import { useNavigate } from 'react-router-dom';
@@ -10,7 +9,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import {
   Inbox,
-  FileText,
   Clock,
   CalendarCheck,
   Loader,
@@ -39,15 +37,6 @@ const STATUS_CATEGORIES: StatusCategory[] = [
     iconBg: 'bg-amber-100',
     iconColor: 'text-amber-600',
     testId: 'job-status-new-requests',
-  },
-  {
-    key: 'estimates',
-    label: 'Estimates',
-    queryParam: 'requires_estimate',
-    icon: FileText,
-    iconBg: 'bg-blue-100',
-    iconColor: 'text-blue-600',
-    testId: 'job-status-estimates',
   },
   {
     key: 'pending_approval',
@@ -94,7 +83,7 @@ export function JobStatusGrid() {
   return (
     <div
       data-testid="job-status-grid"
-      className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
+      className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4"
     >
       {STATUS_CATEGORIES.map((category) => {
         const Icon = category.icon;
