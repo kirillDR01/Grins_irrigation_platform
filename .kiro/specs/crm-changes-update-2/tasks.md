@@ -10,7 +10,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
 
 ## Tasks
 
-- [ ] 1. Database Migrations — All 8 Alembic migrations in dependency order
+- [x] 1. Database Migrations — All 8 Alembic migrations in dependency order
   - [x] 1.1 Create migration `001_crm2_customer_extensions` — column additions to existing tables
     - Add `customers.merged_into_customer_id UUID REFERENCES customers(id)` with partial index
     - Add `properties.is_hoa BOOLEAN NOT NULL DEFAULT false`
@@ -144,7 +144,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - Test highlight URL param parsing, alert target URL generation
     - _Requirements: 1.1, 1.2, 1.4, 3.1, 3.4_
 
-- [ ] 7. Customers Domain — Duplicate Detection, Merge, Preferences, Property Tags (Req 5–8)
+- [x] 7. Customers Domain — Duplicate Detection, Merge, Preferences, Property Tags (Req 5–8)
 
 - [x] 6.7 E2E Visual Validation — Auth & Dashboard Domain
   - Use agent-browser to navigate to /dashboard, verify Estimates section and New Leads section are removed
@@ -207,12 +207,12 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - Add filtering by property_type, is_hoa, is_subscription_property on Customers, Jobs, Sales list views
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-  - [ ] 7.8 Implement customer duplicate/merge API endpoints
+  - [x] 7.8 Implement customer duplicate/merge API endpoints
     - `GET /api/v1/customers/duplicates` — paginated review queue
     - `POST /api/v1/customers/{id}/merge` — execute merge with field_selections
     - _Requirements: 6.1, 6.3_
 
-  - [ ] 7.9 Implement customer documents API endpoints
+  - [x] 7.9 Implement customer documents API endpoints
     - `POST /api/v1/customers/{id}/documents` — upload (max 25MB, validated MIME types)
     - `GET /api/v1/customers/{id}/documents` — list documents
     - `GET /api/v1/customers/{id}/documents/{doc_id}/download` — presigned S3 URL
@@ -220,31 +220,31 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - Use existing PhotoService S3 infrastructure
     - _Requirements: 17.2, 17.3_
 
-  - [ ] 7.10 Build customer duplicate review and merge frontend
+  - [x] 7.10 Build customer duplicate review and merge frontend
     - `DuplicateReviewQueue.tsx` — review queue with count badge, sorted by score descending
     - `MergeComparisonModal.tsx` — side-by-side field comparison with radio buttons, preview, confirm
     - Stripe subscription blocker error display, ambiguity resolution modal
     - _Requirements: 6.1, 6.2, 6.3, 6.7, 6.12_
 
-  - [ ] 7.11 Build customer service preferences frontend
+  - [x] 7.11 Build customer service preferences frontend
     - `ServicePreferencesSection.tsx` — list preferences with Add/Edit/Delete on customer detail
     - `ServicePreferenceModal.tsx` — form with service type, week picker, date picker, time window, notes
     - _Requirements: 7.5, 7.6_
 
-  - [ ] 7.12 Build PropertyTags shared component
+  - [x] 7.12 Build PropertyTags shared component
     - `PropertyTags.tsx` in `frontend/src/shared/components/` — compact badges for Residential/Commercial, HOA, Subscription
     - Reusable across Jobs, Customers, Sales (3+ features)
     - _Requirements: 8.4_
 
-  - [ ] 7.13 Write unit tests for DuplicateDetectionService and CustomerMergeService
+  - [x] 7.13 Write unit tests for DuplicateDetectionService and CustomerMergeService
     - Test scoring algorithm with various signal combinations
     - Test merge blockers (dual Stripe subscriptions), reassignment logic, soft-delete
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 6.4, 6.5, 6.7_
 
-- [ ] 8. Checkpoint — Customers domain complete
+- [x] 8. Checkpoint — Customers domain complete
   - Ensure duplicate detection, merge, preferences, and property tags all work. Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 8.1 E2E Visual Validation — Customers Domain
+- [x] 8.1 E2E Visual Validation — Customers Domain
   - Use agent-browser to navigate to /customers, verify "Review Duplicates" button with count badge is visible
   - Click "Review Duplicates" — verify the review queue loads with pairs sorted by score descending
   - Click a duplicate pair — verify side-by-side comparison modal opens with radio buttons for each conflicting field
@@ -264,8 +264,8 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
   - Save all screenshots to `e2e-screenshots/crm-changes-update-2/customers/`
   - If any visual or functional issue is found, fix it and re-validate
 
-- [ ] 9. Leads Domain — Deletion, Column Reorder, Status, Move-Out (Req 9–12)
-  - [ ] 9.1 Implement lead deletion and move-out backend
+- [x] 9. Leads Domain — Deletion, Column Reorder, Status, Move-Out (Req 9–12)
+  - [x] 9.1 Implement lead deletion and move-out backend
     - `DELETE /api/v1/leads/{id}` — hard delete with confirmation
     - `POST /api/v1/leads/{id}/move-to-jobs` — auto-generate customer if needed, create Job with TO_BE_SCHEDULED, set lead.moved_to='jobs'
     - `POST /api/v1/leads/{id}/move-to-sales` — auto-generate customer if needed, create SalesEntry with 'schedule_estimate', set lead.moved_to='sales'
@@ -273,11 +273,11 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - Filter leads list query to exclude `moved_to IS NOT NULL`
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 11.1, 11.2, 12.1, 12.2_
 
-  - [ ] 9.2 Implement auto-update of last_contacted_at from SMS/email
+  - [x] 9.2 Implement auto-update of last_contacted_at from SMS/email
     - When outbound/inbound SMS/email tied to a lead is processed, auto-update lead's last_contacted_at
     - _Requirements: 11.3_
 
-  - [ ] 9.3 Update LeadsList frontend — column reorder and new columns
+  - [x] 9.3 Update LeadsList frontend — column reorder and new columns
     - Remove color highlighting from lead source column
     - Move lead source column to far right
     - Add "Job Requested" column in source's old position
@@ -289,14 +289,14 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - Support exactly two statuses: "New" (default) and "Contacted (Awaiting Response)"
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 11.1, 11.4, 12.3_
 
-  - [ ] 9.4 Write unit tests for lead move-out and deletion
+  - [x] 9.4 Write unit tests for lead move-out and deletion
     - Test customer auto-generation on move, job/sales entry creation, lead filtering
     - Test hard delete, confirmation flow
     - _Requirements: 9.1, 9.2, 12.1, 12.2_
 
 - [ ] 10. Sales Pipeline Domain — New Tab, Statuses, Calendar, SignWell, Documents (Req 13–18)
 
-- [ ] 9.5 E2E Visual Validation — Leads Domain
+- [x] 9.5 E2E Visual Validation — Leads Domain
   - Use agent-browser to navigate to /leads, verify column order: Job Requested visible in source's old position, City column after address, lead source at far right, Intake column removed
   - Verify no color highlighting on lead source column
   - Verify "Last Contacted Date" column is visible
@@ -313,7 +313,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
   - Check `agent-browser console` for any JS errors during the flow
   - Save all screenshots to `e2e-screenshots/crm-changes-update-2/leads/`
   - If any visual or functional issue is found, fix it and re-validate
-  - [ ] 10.1 Implement SalesPipelineService
+  - [x] 10.1 Implement SalesPipelineService
     - Create `src/grins_platform/services/sales_pipeline_service.py`
     - `create_from_lead(db, lead_id) -> SalesEntry` — create pipeline entry from lead move-out
     - `advance_status(db, entry_id, action) -> SalesEntry` — enforce VALID_TRANSITIONS, one step forward per action
@@ -321,7 +321,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - `convert_to_job(db, entry_id, force=False) -> Job` — create job from sales entry, signature gating, force override with audit log
     - _Requirements: 14.3, 14.4, 14.5, 14.7, 14.8, 14.9, 16.1, 16.2, 16.3, 16.4_
 
-  - [ ] 10.2 Write property tests for sales pipeline status transitions
+  - [x] 10.2 Write property tests for sales pipeline status transitions
     - **Property 5: Sales Pipeline Status Transition Validity** — advance_status result ∈ VALID_TRANSITIONS[current_status]
     - **Validates: Requirements 33.1**
     - **Property 6: Sales Pipeline Terminal State Immutability** — CLOSED_WON/CLOSED_LOST raise InvalidSalesTransitionError
@@ -329,19 +329,19 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - **Property 7: Sales Pipeline Idempotent Advance** — action advances exactly one step forward
     - **Validates: Requirements 33.3**
 
-  - [ ] 10.3 Implement SignWellClient service
+  - [x] 10.3 Implement SignWellClient service
     - Create `src/grins_platform/services/signwell/__init__.py`, `config.py`, `client.py`
     - `SignWellSettings` with SIGNWELL_API_KEY, SIGNWELL_WEBHOOK_SECRET env vars
     - `create_document_for_email(pdf_url, email, name)`, `create_document_for_embedded(pdf_url, signer_name)`, `get_embedded_url(document_id)`, `fetch_signed_pdf(document_id)`, `verify_webhook_signature(payload, signature)`
     - _Requirements: 18.1, 18.3, 18.5, 18.6_
 
-  - [ ] 10.4 Implement SignWell webhook endpoint
+  - [x] 10.4 Implement SignWell webhook endpoint
     - `POST /api/v1/webhooks/signwell` — verify HMAC-SHA256 signature, handle document_completed event
     - Fetch signed PDF, store as CustomerDocument with document_type "signed_contract"
     - Advance sales_entry status from pending_approval to send_contract
     - _Requirements: 14.6, 17.4, 18.4_
 
-  - [ ] 10.5 Implement Sales API endpoints
+  - [x] 10.5 Implement Sales API endpoints
     - `GET /api/v1/sales` — list pipeline entries with summary boxes
     - `GET /api/v1/sales/{id}` — detail view
     - `POST /api/v1/sales/{id}/advance` — action-button status advance
@@ -353,7 +353,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - `DELETE /api/v1/sales/{id}` — mark lost
     - _Requirements: 14.1, 14.2, 14.4, 14.5, 14.8, 14.10, 16.1, 16.2, 16.3, 16.4, 18.1, 18.2, 18.3_
 
-  - [ ] 10.6 Implement Sales Calendar API endpoints
+  - [x] 10.6 Implement Sales Calendar API endpoints
     - `GET /api/v1/sales/calendar/events` — list estimate appointments
     - `POST /api/v1/sales/calendar/events` — create estimate appointment
     - `PUT /api/v1/sales/calendar/events/{id}` — update
@@ -361,7 +361,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - Keep separate from main Jobs schedule calendar
     - _Requirements: 15.1, 15.2, 15.3_
 
-  - [ ] 10.7 Implement Work Requests → Sales data migration script
+  - [x] 10.7 Implement Work Requests → Sales data migration script
     - One-time migration converting existing work request records to sales_entries
     - Map work request status to closest SalesEntryStatus, preserve customer_id, property_id, notes
     - _Requirements: 13.3_
