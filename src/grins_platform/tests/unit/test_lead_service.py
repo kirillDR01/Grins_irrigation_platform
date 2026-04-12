@@ -94,6 +94,10 @@ def _make_lead_mock(
     lead.action_tags = action_tags
     lead.customer_type = customer_type
     lead.property_type = property_type
+    lead.moved_to = None
+    lead.moved_at = None
+    lead.last_contacted_at = None
+    lead.job_requested = None
     return lead
 
 

@@ -53,6 +53,7 @@ from grins_platform.schemas.lead import (
     LeadConversionResponse,
     LeadListParams,
     LeadMetricsBySourceResponse,
+    LeadMoveResponse,
     LeadResponse,
     LeadSubmission,
     LeadSubmissionResponse,
@@ -512,6 +513,94 @@ async def delete_lead(
     await service.delete_lead(lead_id)
 
     _endpoints.log_completed("delete_lead", lead_id=str(lead_id))
+
+
+# =============================================================================
+# POST /api/v1/leads/{lead_id}/move-to-jobs — Admin auth required
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{lead_id}/move-to-jobs",
+    response_model=LeadMoveResponse,
+    summary="Move lead to Jobs",
+    description=(
+        "Auto-generate customer if needed, create a Job with TO_BE_SCHEDULED, "
+        "and remove the lead from the Leads list. Admin auth required."
+    ),
+)
+async def move_lead_to_jobs(
+    lead_id: UUID,
+    _current_user: CurrentActiveUser,
+    service: Annotated[LeadService, Depends(_get_lead_service)],
+) -> LeadMoveResponse:
+    """Move a lead to the Jobs tab.
+
+    Validates: CRM2 Req 9.2, 12.1
+    """
+    _endpoints.log_started("move_lead_to_jobs", lead_id=str(lead_id))
+    result = await service.move_to_jobs(lead_id)
+    _endpoints.log_completed("move_lead_to_jobs", lead_id=str(lead_id))
+    return result
+
+
+# =============================================================================
+# POST /api/v1/leads/{lead_id}/move-to-sales — Admin auth required
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{lead_id}/move-to-sales",
+    response_model=LeadMoveResponse,
+    summary="Move lead to Sales",
+    description=(
+        "Auto-generate customer if needed, create a SalesEntry with "
+        "schedule_estimate status, and remove the lead from the Leads list. "
+        "Admin auth required."
+    ),
+)
+async def move_lead_to_sales(
+    lead_id: UUID,
+    _current_user: CurrentActiveUser,
+    service: Annotated[LeadService, Depends(_get_lead_service)],
+) -> LeadMoveResponse:
+    """Move a lead to the Sales tab.
+
+    Validates: CRM2 Req 9.2, 12.2
+    """
+    _endpoints.log_started("move_lead_to_sales", lead_id=str(lead_id))
+    result = await service.move_to_sales(lead_id)
+    _endpoints.log_completed("move_lead_to_sales", lead_id=str(lead_id))
+    return result
+
+
+# =============================================================================
+# PUT /api/v1/leads/{lead_id}/contacted — Admin auth required
+# =============================================================================
+
+
+@router.put(  # type: ignore[untyped-decorator]
+    "/{lead_id}/contacted",
+    response_model=LeadResponse,
+    summary="Mark lead as contacted",
+    description=(
+        "Set lead status to Contacted (Awaiting Response) and update "
+        "last_contacted_at timestamp. Admin auth required."
+    ),
+)
+async def mark_lead_contacted(
+    lead_id: UUID,
+    _current_user: CurrentActiveUser,
+    service: Annotated[LeadService, Depends(_get_lead_service)],
+) -> LeadResponse:
+    """Mark a lead as contacted.
+
+    Validates: CRM2 Req 11.1, 11.2
+    """
+    _endpoints.log_started("mark_lead_contacted", lead_id=str(lead_id))
+    result = await service.mark_contacted(lead_id)
+    _endpoints.log_completed("mark_lead_contacted", lead_id=str(lead_id))
+    return result
 
 
 # =============================================================================

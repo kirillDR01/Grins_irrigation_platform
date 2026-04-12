@@ -43,8 +43,15 @@ if TYPE_CHECKING:
 
 # Valid status transitions (Requirement 4.2-4.7)
 VALID_STATUS_TRANSITIONS: dict[str, list[str]] = {
-    JobStatus.TO_BE_SCHEDULED.value: [JobStatus.IN_PROGRESS.value, JobStatus.CANCELLED.value],
-    JobStatus.IN_PROGRESS.value: [JobStatus.COMPLETED.value, JobStatus.CANCELLED.value, JobStatus.TO_BE_SCHEDULED.value],
+    JobStatus.TO_BE_SCHEDULED.value: [
+        JobStatus.IN_PROGRESS.value,
+        JobStatus.CANCELLED.value,
+    ],
+    JobStatus.IN_PROGRESS.value: [
+        JobStatus.COMPLETED.value,
+        JobStatus.CANCELLED.value,
+        JobStatus.TO_BE_SCHEDULED.value,
+    ],
     JobStatus.COMPLETED.value: [],  # Terminal state
     JobStatus.CANCELLED.value: [],  # Terminal state
 }
@@ -171,7 +178,7 @@ class Job(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    # Status Timestamps (Requirement 4.9)
+    # Status Timestamps (Requirement 4.9, 27.1, 27.6)
     requested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -181,6 +188,10 @@ class Job(Base):
         nullable=True,
     )
     scheduled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    on_my_way_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -194,6 +205,12 @@ class Job(Base):
     )
     closed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
+        nullable=True,
+    )
+
+    # Time tracking metadata (Requirement 27.6)
+    time_tracking_metadata: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON,
         nullable=True,
     )
 
@@ -347,6 +364,9 @@ class Job(Base):
             "approved_at": self.approved_at.isoformat() if self.approved_at else None,
             "scheduled_at": self.scheduled_at.isoformat()
             if self.scheduled_at
+            else None,
+            "on_my_way_at": self.on_my_way_at.isoformat()
+            if self.on_my_way_at
             else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat()

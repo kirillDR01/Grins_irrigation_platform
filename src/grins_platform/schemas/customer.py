@@ -266,6 +266,17 @@ class CustomerResponse(BaseModel):
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Record last update timestamp")
 
+    @field_validator("preferred_service_times", mode="before")  # type: ignore[misc,untyped-decorator]
+    @classmethod
+    def coerce_service_times(
+        cls,
+        v: dict[str, Any] | list[Any] | None,
+    ) -> dict[str, Any] | None:
+        """Coerce non-dict values (e.g. empty list from DB) to None."""
+        if isinstance(v, dict):
+            return v
+        return None
+
     @field_validator("status", mode="before")  # type: ignore[misc,untyped-decorator]
     @classmethod
     def convert_status(cls, v: str | CustomerStatus) -> CustomerStatus:

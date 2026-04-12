@@ -126,6 +126,11 @@ class TestRoutingProperty13:
             ) as mock_poll,
             patch.object(
                 svc,
+                "_try_confirmation_reply",
+                return_value=None,
+            ),
+            patch.object(
+                svc,
                 "handle_webhook",
                 return_value=webhook_result,
             ) as mock_webhook,

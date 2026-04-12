@@ -8,7 +8,7 @@
  * Validates: Requirement 10.5-10.8
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { UserPlus, Briefcase, Loader2 } from 'lucide-react';
@@ -28,7 +28,10 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 
 import { useConvertLead } from '../hooks';
+import { useCheckDuplicate } from '@/features/customers/hooks';
+import { DuplicateWarning } from '@/features/customers/components/DuplicateWarning';
 import type { Lead, LeadSituation } from '../types';
+import type { Customer } from '@/features/customers/types';
 
 interface ConvertLeadDialogProps {
   /** The lead to convert */
@@ -101,6 +104,7 @@ interface ConvertLeadFormProps {
 function ConvertLeadForm({ lead, onOpenChange }: ConvertLeadFormProps) {
   const navigate = useNavigate();
   const convertMutation = useConvertLead();
+  const { matches: duplicateMatches, check: checkDuplicate } = useCheckDuplicate();
 
   // Auto-split lead name into first/last on mount
   const [defaultFirst, defaultLast] = splitName(lead.name);
@@ -111,6 +115,16 @@ function ConvertLeadForm({ lead, onOpenChange }: ConvertLeadFormProps) {
   const [jobDescription, setJobDescription] = useState(
     SITUATION_JOB_DESCRIPTIONS[lead.situation] ?? ''
   );
+
+  // Check for duplicates on mount using lead's phone/email
+  useEffect(() => {
+    checkDuplicate({ phone: lead.phone, email: lead.email || undefined });
+  }, [lead.phone, lead.email, checkDuplicate]);
+
+  const handleUseExisting = (existing: Customer) => {
+    onOpenChange(false);
+    navigate(`/customers/${existing.id}`);
+  };
 
   const handleSubmit = async () => {
     try {
@@ -164,6 +178,9 @@ function ConvertLeadForm({ lead, onOpenChange }: ConvertLeadFormProps) {
       </DialogHeader>
 
       <div className="space-y-5 py-4">
+        {/* Tier 1 Duplicate Warning (Req 6.13) */}
+        <DuplicateWarning matches={duplicateMatches} onUseExisting={handleUseExisting} />
+
         {/* Name Fields */}
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">

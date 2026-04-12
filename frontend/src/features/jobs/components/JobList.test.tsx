@@ -296,9 +296,9 @@ describe('JobList', () => {
     expect(Number(daysEl.textContent)).toBeGreaterThanOrEqual(0);
   });
 
-  it('displays Due By column with "No deadline" for null dates (Req 23)', async () => {
+  it('displays Week Of column with "No week set" for null dates (CRM2 Req 20)', async () => {
     vi.mocked(jobApi.list).mockResolvedValue({
-      items: [mockJobs[0]], // No target_end_date
+      items: [mockJobs[0]], // No target_start_date
       total: 1,
       page: 1,
       page_size: 20,
@@ -308,10 +308,10 @@ describe('JobList', () => {
     render(<JobList />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByTestId(`due-by-${mockJobs[0].id}`)).toBeInTheDocument();
+      expect(screen.getByTestId(`week-of-${mockJobs[0].id}`)).toBeInTheDocument();
     });
 
-    expect(screen.getByText('No deadline')).toBeInTheDocument();
+    expect(screen.getByText('No week set')).toBeInTheDocument();
   });
 
   it('displays summary column (Req 20)', async () => {
@@ -527,10 +527,10 @@ describe('JobList', () => {
       render(<JobList />, { wrapper: createWrapper() });
 
       await waitFor(() => {
-        expect(screen.getByTestId('target-date-filter')).toBeInTheDocument();
+        expect(screen.getByTestId('target-week-filter')).toBeInTheDocument();
       });
 
-      expect(screen.getByText('Target dates')).toBeInTheDocument();
+      expect(screen.getByText('Filter by week')).toBeInTheDocument();
     });
   });
 
@@ -606,7 +606,7 @@ describe('JobList', () => {
         (row) => row.getAttribute('data-job-id') === highlightJobId
       );
       expect(highlightedRow).toBeDefined();
-      expect(highlightedRow!.className).toContain('animate-highlight-fade');
+      expect(highlightedRow!.className).toContain('animate-highlight-pulse');
     });
 
     it('does not apply highlight class to non-matching rows', async () => {
@@ -632,7 +632,7 @@ describe('JobList', () => {
         (row) => row.getAttribute('data-job-id') !== highlightJobId
       );
       expect(nonHighlightedRow).toBeDefined();
-      expect(nonHighlightedRow!.className).not.toContain('animate-highlight-fade');
+      expect(nonHighlightedRow!.className).not.toContain('animate-highlight-pulse');
     });
 
     it('works correctly without any URL parameters (default state)', async () => {
@@ -658,7 +658,7 @@ describe('JobList', () => {
 
       const rows = screen.getAllByTestId('job-row');
       rows.forEach((row) => {
-        expect(row.className).not.toContain('animate-highlight-fade');
+        expect(row.className).not.toContain('animate-highlight-pulse');
       });
     });
 
@@ -713,7 +713,7 @@ describe('JobList', () => {
         (row) => row.getAttribute('data-job-id') === highlightJobId
       );
       expect(highlightedRow).toBeDefined();
-      expect(highlightedRow!.className).toContain('animate-highlight-fade');
+      expect(highlightedRow!.className).toContain('animate-highlight-pulse');
     });
   });
 });

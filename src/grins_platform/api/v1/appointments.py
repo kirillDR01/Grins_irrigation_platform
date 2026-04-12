@@ -349,6 +349,62 @@ async def get_weekly_schedule(
 # =============================================================================
 
 
+async def _send_appointment_confirmation_sms(
+    db: AsyncSession,
+    appointment: object,
+) -> None:
+    """Send APPOINTMENT_CONFIRMATION SMS after creating an appointment.
+
+    Fire-and-forget: failures are logged but do not block appointment creation.
+
+    Validates: CRM Changes Update 2 Req 24.1
+    """
+    from grins_platform.log_config import get_logger as _get_logger  # noqa: PLC0415
+    from grins_platform.models.customer import Customer  # noqa: PLC0415
+    from grins_platform.models.job import Job  # noqa: PLC0415
+    from grins_platform.schemas.ai import MessageType  # noqa: PLC0415
+    from grins_platform.services.sms.factory import (  # noqa: PLC0415
+        get_sms_provider,
+    )
+    from grins_platform.services.sms.recipient import Recipient  # noqa: PLC0415
+    from grins_platform.services.sms_service import SMSService  # noqa: PLC0415
+
+    _log = _get_logger(__name__)
+    try:
+        job = await db.get(Job, appointment.job_id)  # type: ignore[union-attr]
+        if job is None:
+            return
+        customer = await db.get(Customer, job.customer_id)
+        if customer is None or not customer.phone:
+            return
+
+        sms_service = SMSService(db, provider=get_sms_provider())
+        recipient = Recipient.from_customer(customer)
+
+        date_str = str(appointment.scheduled_date)  # type: ignore[union-attr]
+        window_start = getattr(appointment, "time_window_start", None)
+        time_part = f" between {window_start}" if window_start else ""
+        msg = (
+            f"Your appointment on {date_str}{time_part} has been scheduled. "
+            "Reply Y to confirm, R to reschedule, or C to cancel."
+        )
+
+        await sms_service.send_message(
+            recipient=recipient,
+            message=msg,
+            message_type=MessageType.APPOINTMENT_CONFIRMATION,
+            consent_type="transactional",
+            job_id=job.id,
+            appointment_id=appointment.id,  # type: ignore[union-attr]
+        )
+    except Exception:
+        _log.warning(
+            "appointment.confirmation_sms.failed",
+            appointment_id=str(getattr(appointment, "id", None)),
+            exc_info=True,
+        )
+
+
 @router.post(  # type: ignore[untyped-decorator]
     "",
     response_model=AppointmentResponse,
@@ -359,10 +415,12 @@ async def get_weekly_schedule(
 async def create_appointment(
     data: AppointmentCreate,
     service: Annotated[AppointmentService, Depends(get_appointment_service)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> AppointmentResponse:
     """Create a new appointment.
 
     Validates: Admin Dashboard Requirement 1.1
+    Validates: CRM Changes Update 2 Req 24.1 (send confirmation SMS)
     """
     _endpoints.log_started(
         "create_appointment",
@@ -385,6 +443,9 @@ async def create_appointment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Staff not found: {e.staff_id}",
         ) from e
+
+    # CRM2 Req 24.1: Send appointment confirmation SMS
+    await _send_appointment_confirmation_sms(db, result)
 
     _endpoints.log_completed("create_appointment", appointment_id=str(result.id))
     return AppointmentResponse.model_validate(result)  # type: ignore[no-any-return]

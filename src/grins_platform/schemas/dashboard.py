@@ -186,6 +186,53 @@ class TodayScheduleResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class DashboardAlert(BaseModel):
+    """A single dashboard alert with navigation target.
+
+    Validates: CRM Changes Update 2 Req 3.1, 3.2, 3.4
+    """
+
+    id: str = Field(..., description="Unique alert identifier")
+    title: str = Field(..., description="Alert title")
+    description: str = Field(..., description="Human-readable alert description")
+    severity: str = Field(
+        ...,
+        description="Alert severity: info, warning, critical",
+    )
+    count: int = Field(
+        ...,
+        ge=1,
+        description="Number of records this alert covers",
+    )
+    target_url: str = Field(
+        ...,
+        description="Navigation URL. Single-record: detail page. "
+        "Multi-record: filtered list with ?highlight=<id>",
+    )
+    record_ids: list[str] = Field(
+        default_factory=list,
+        description="IDs of the records referenced by this alert",
+    )
+    created_at: datetime = Field(..., description="When the alert was generated")
+
+    model_config = {"from_attributes": True}
+
+
+class DashboardAlertsResponse(BaseModel):
+    """Response containing all active dashboard alerts.
+
+    Validates: CRM Changes Update 2 Req 3.1, 3.2, 3.4
+    """
+
+    alerts: list[DashboardAlert] = Field(
+        default_factory=list,
+        description="Active dashboard alerts",
+    )
+    total: int = Field(default=0, description="Total number of alerts")
+
+    model_config = {"from_attributes": True}
+
+
 class PendingInvoiceMetricsResponse(BaseModel):
     """Pending invoice metrics for the dashboard.
 

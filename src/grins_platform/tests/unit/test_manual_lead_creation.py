@@ -66,6 +66,10 @@ def _make_lead_mock(
     lead.action_tags = ["needs_contact"]
     lead.customer_type = None
     lead.property_type = None
+    lead.moved_to = None
+    lead.moved_at = None
+    lead.last_contacted_at = None
+    lead.job_requested = None
     return lead
 
 
@@ -140,7 +144,9 @@ class TestManualLeadCreateSchema:
     def test_html_stripped_from_notes(self) -> None:
         """HTML tags are stripped from notes."""
         data = ManualLeadCreate(
-            name="Test", phone="6125550123", notes="<script>alert('xss')</script>Hello",
+            name="Test",
+            phone="6125550123",
+            notes="<script>alert('xss')</script>Hello",
         )
         assert data.notes == "alert('xss')Hello"
 

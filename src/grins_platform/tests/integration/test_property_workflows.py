@@ -726,7 +726,7 @@ class TestPropertyValidationWorkflow:
     def test_zone_count_validation(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
         sample_customer_id: uuid.UUID,
     ) -> None:
         """Test zone count validation (1-50 range).
@@ -758,7 +758,7 @@ class TestPropertyValidationWorkflow:
     def test_system_type_validation(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
         sample_customer_id: uuid.UUID,
     ) -> None:
         """Test system type validation (standard or lake_pump).
@@ -778,7 +778,7 @@ class TestPropertyValidationWorkflow:
     def test_property_type_validation(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
         sample_customer_id: uuid.UUID,
     ) -> None:
         """Test property type validation (residential or commercial).
@@ -1016,7 +1016,7 @@ class TestPropertyUpdateWorkflow:
     def test_update_zone_count_validation(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
         sample_property_id: uuid.UUID,
     ) -> None:
         """Test zone count validation on update.

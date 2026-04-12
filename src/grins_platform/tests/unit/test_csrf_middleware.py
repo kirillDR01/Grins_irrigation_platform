@@ -29,27 +29,27 @@ if TYPE_CHECKING:
 
 
 # Test application routes
-async def get_endpoint(request: Request) -> Response:  # noqa: ARG001
+async def get_endpoint(request: Request) -> Response:
     """Simple GET endpoint for testing."""
     return JSONResponse({"status": "ok"})
 
 
-async def post_endpoint(request: Request) -> Response:  # noqa: ARG001
+async def post_endpoint(request: Request) -> Response:
     """Simple POST endpoint for testing."""
     return JSONResponse({"status": "created"})
 
 
-async def put_endpoint(request: Request) -> Response:  # noqa: ARG001
+async def put_endpoint(request: Request) -> Response:
     """Simple PUT endpoint for testing."""
     return JSONResponse({"status": "updated"})
 
 
-async def delete_endpoint(request: Request) -> Response:  # noqa: ARG001
+async def delete_endpoint(request: Request) -> Response:
     """Simple DELETE endpoint for testing."""
     return JSONResponse({"status": "deleted"})
 
 
-async def login_endpoint(request: Request) -> Response:  # noqa: ARG001
+async def login_endpoint(request: Request) -> Response:
     """Login endpoint (exempt from CSRF)."""
     return JSONResponse({"status": "logged_in"})
 

@@ -24,7 +24,7 @@ if config.config_file_name is not None:
 
 # Add your model's MetaData object here for 'autogenerate' support
 # Import all models here so they are registered with Base.metadata
-from grins_platform.models import Customer, Property  # noqa: F401, E402
+from grins_platform.models import Customer, Property  # noqa: F401
 
 target_metadata = Base.metadata
 

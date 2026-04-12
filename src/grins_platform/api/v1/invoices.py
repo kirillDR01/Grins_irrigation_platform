@@ -8,7 +8,8 @@ Validates: Requirements 7.1-7.10, 8.1-8.10, 9.1-9.7, 10.1-10.7,
            11.1-11.8, 12.1-12.5, 13.1-13.7, 17.7-17.8, 22.1-22.7
 """
 
-from datetime import date as date_type
+from datetime import date as date_cls
+from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
@@ -37,6 +38,8 @@ from grins_platform.schemas.invoice import (
     InvoiceUpdate,
     LienDeadlineResponse,
     LienFiledRequest,
+    MassNotifyRequest,
+    MassNotifyResponse,
     PaginatedInvoiceResponse,
     PaymentRecord,
 )
@@ -153,7 +156,7 @@ async def create_invoice(
     "",
     response_model=PaginatedInvoiceResponse,
     summary="List invoices",
-    description="List invoices with pagination and filters.",
+    description="List invoices with 9-axis composable AND filtering.",
 )
 async def list_invoices(
     _current_user: ManagerOrAdminUser,
@@ -165,9 +168,52 @@ async def list_invoices(
         alias="status",
         description="Filter by status",
     ),
-    customer_id: UUID | None = Query(default=None, description="Filter by customer"),
+    customer_id: UUID | None = Query(default=None, description="Filter by customer ID"),
+    customer_search: str | None = Query(
+        default=None,
+        description="Search by customer name",
+    ),
+    job_id: UUID | None = Query(default=None, description="Filter by job"),
     date_from: str | None = Query(default=None, description="Filter from date"),
     date_to: str | None = Query(default=None, description="Filter to date"),
+    date_type: str = Query(
+        default="created",
+        description="Date field: created, due, or paid",
+    ),
+    amount_min: float | None = Query(
+        default=None,
+        ge=0,
+        description="Minimum total amount",
+    ),
+    amount_max: float | None = Query(
+        default=None,
+        ge=0,
+        description="Maximum total amount",
+    ),
+    payment_types: str | None = Query(
+        default=None,
+        description="Comma-separated payment methods",
+    ),
+    days_until_due_min: int | None = Query(
+        default=None,
+        description="Minimum days until due",
+    ),
+    days_until_due_max: int | None = Query(
+        default=None,
+        description="Maximum days until due",
+    ),
+    days_past_due_min: int | None = Query(
+        default=None,
+        description="Minimum days past due",
+    ),
+    days_past_due_max: int | None = Query(
+        default=None,
+        description="Maximum days past due",
+    ),
+    invoice_number: str | None = Query(
+        default=None,
+        description="Exact invoice number match",
+    ),
     lien_eligible: bool | None = Query(
         default=None,
         description="Filter by lien eligibility",
@@ -175,35 +221,28 @@ async def list_invoices(
     sort_by: str = Query(default="created_at", description="Sort field"),
     sort_order: str = Query(default="desc", description="Sort order (asc/desc)"),
 ) -> PaginatedInvoiceResponse:
-    """List invoices with pagination and filters.
+    """List invoices with 9-axis composable AND filtering.
 
-    Requires manager or admin role.
-
-    Args:
-        _current_user: Authenticated manager or admin user (for auth)
-        service: InvoiceService instance
-        page: Page number
-        page_size: Items per page
-        status_filter: Filter by invoice status
-        customer_id: Filter by customer ID
-        date_from: Filter from date (YYYY-MM-DD)
-        date_to: Filter to date (YYYY-MM-DD)
-        lien_eligible: Filter by lien eligibility
-        sort_by: Field to sort by
-        sort_order: Sort order (asc/desc)
-
-    Returns:
-        Paginated invoice response
-
-    Validates: Requirements 13.1-13.7
+    Validates: Requirements 13.1-13.7, 28.1
     """
     params = InvoiceListParams(
         page=page,
         page_size=page_size,
         status=status_filter,
         customer_id=customer_id,
-        date_from=date_type.fromisoformat(date_from) if date_from else None,
-        date_to=date_type.fromisoformat(date_to) if date_to else None,
+        customer_search=customer_search,
+        job_id=job_id,
+        date_from=date_cls.fromisoformat(date_from) if date_from else None,
+        date_to=date_cls.fromisoformat(date_to) if date_to else None,
+        date_type=date_type if date_type in ("created", "due", "paid") else "created",
+        amount_min=Decimal(str(amount_min)) if amount_min is not None else None,
+        amount_max=Decimal(str(amount_max)) if amount_max is not None else None,
+        payment_types=payment_types,
+        days_until_due_min=days_until_due_min,
+        days_until_due_max=days_until_due_max,
+        days_past_due_min=days_past_due_min,
+        days_past_due_max=days_past_due_max,
+        invoice_number=invoice_number,
         lien_eligible=lien_eligible,
         sort_by=sort_by,
         sort_order=sort_order,
@@ -685,6 +724,48 @@ async def bulk_notify_invoices(
         "skipped": skipped,
         "total": len(invoice_ids),
     }
+
+
+# =============================================================================
+# Mass Notify — Req 29.3, 29.4
+# =============================================================================
+
+
+@router.post(
+    "/mass-notify",
+    response_model=MassNotifyResponse,
+    summary="Mass notify customers by invoice criteria",
+    description="Send bulk SMS to past-due, due-soon, or lien-eligible customers.",
+)
+async def mass_notify_invoices(
+    request: MassNotifyRequest,
+    _current_user: AdminUser,
+    service: Annotated[InvoiceService, Depends(get_invoice_service)],
+) -> MassNotifyResponse:
+    """Send mass notifications based on invoice criteria.
+
+    Validates: Requirements 29.3, 29.4
+    """
+    _invoice_endpoints.log_started(
+        "mass_notify_invoices",
+        notification_type=request.notification_type,
+    )
+
+    result = await service.mass_notify(
+        notification_type=request.notification_type,
+        due_soon_days=request.due_soon_days,
+        lien_days_past_due=request.lien_days_past_due,
+        lien_min_amount=request.lien_min_amount,
+        template=request.template,
+    )
+
+    _invoice_endpoints.log_completed(
+        "mass_notify_invoices",
+        notification_type=request.notification_type,
+        targeted=result.targeted,
+        sent=result.sent,
+    )
+    return result
 
 
 # =============================================================================

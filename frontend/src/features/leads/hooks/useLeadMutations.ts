@@ -47,6 +47,48 @@ export function useDeleteLead() {
   });
 }
 
+// Move lead to Jobs (CRM2 Req 12.1)
+export function useMoveToJobs() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => leadApi.moveToJobs(id),
+    onSuccess: (_data, id) => {
+      queryClient.removeQueries({ queryKey: leadKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });
+    },
+  });
+}
+
+// Move lead to Sales (CRM2 Req 12.2)
+export function useMoveToSales() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => leadApi.moveToSales(id),
+    onSuccess: (_data, id) => {
+      queryClient.removeQueries({ queryKey: leadKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });
+    },
+  });
+}
+
+// Mark lead as contacted (CRM2 Req 11.1)
+export function useMarkContacted() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => leadApi.markContacted(id),
+    onSuccess: (updatedLead) => {
+      queryClient.setQueryData(leadKeys.detail(updatedLead.id), updatedLead);
+      queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });
+    },
+  });
+}
+
 // Create lead from phone call (admin-only)
 export function useCreateFromCall() {
   const queryClient = useQueryClient();

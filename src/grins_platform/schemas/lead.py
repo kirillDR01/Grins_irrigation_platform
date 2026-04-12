@@ -278,7 +278,7 @@ class LeadUpdate(BaseModel):
 class LeadResponse(BaseModel):
     """Full lead response for admin endpoints.
 
-    Validates: Requirement 5.8
+    Validates: Requirement 5.8, CRM2 Req 9.2, 10.3, 11.2
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -310,6 +310,11 @@ class LeadResponse(BaseModel):
     converted_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    # CRM2 fields (Req 9.2, 10.3, 11.2)
+    moved_to: str | None = None
+    moved_at: datetime | None = None
+    last_contacted_at: datetime | None = None
+    job_requested: str | None = None
 
     @field_validator("status", mode="before")  # type: ignore[misc,untyped-decorator]
     @classmethod
@@ -553,6 +558,20 @@ class LeadMetricsBySourceResponse(BaseModel):
     total: int
     date_from: datetime
     date_to: datetime
+
+
+class LeadMoveResponse(BaseModel):
+    """Response for lead move-to-jobs or move-to-sales.
+
+    Validates: CRM2 Req 12.1, 12.2
+    """
+
+    success: bool = True
+    lead_id: UUID
+    customer_id: UUID
+    job_id: UUID | None = None
+    sales_entry_id: UUID | None = None
+    message: str
 
 
 class BulkOutreachRequest(BaseModel):

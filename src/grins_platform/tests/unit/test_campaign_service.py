@@ -215,9 +215,9 @@ class TestProperty48CampaignRecipientFilteringByConsent:
         options until the wizard later issued a PATCH. Any interruption
         between create and update left the draft un-poll-able.
         """
-        from datetime import date  # noqa: PLC0415
+        from datetime import date
 
-        from grins_platform.schemas.campaign_response import (  # noqa: PLC0415
+        from grins_platform.schemas.campaign_response import (
             PollOption,
         )
 

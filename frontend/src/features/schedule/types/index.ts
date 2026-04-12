@@ -424,6 +424,25 @@ export interface ScheduleRestoreResponse {
 // Staff Workflow Types (Req 30-36)
 // =============================================================================
 
+// =============================================================================
+// Reschedule Request Types (Req 25)
+// =============================================================================
+
+export interface RescheduleRequestDetail {
+  id: string;
+  job_id: string;
+  appointment_id: string;
+  customer_id: string;
+  customer_name: string;
+  original_appointment_date: string | null;
+  original_appointment_staff: string | null;
+  requested_alternatives: Record<string, unknown> | null;
+  raw_alternatives_text: string | null;
+  status: string;
+  created_at: string;
+  resolved_at: string | null;
+}
+
 export type PaymentMethod = 'credit_card' | 'cash' | 'check' | 'venmo' | 'zelle' | 'send_invoice';
 
 export interface CollectPaymentRequest {

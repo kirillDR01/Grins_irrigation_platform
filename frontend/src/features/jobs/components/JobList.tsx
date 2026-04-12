@@ -8,9 +8,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, MoreHorizontal, Search, FileText, CalendarIcon } from 'lucide-react';
-import { format } from 'date-fns';
-import { parseLocalDate } from '@/shared/utils/dateUtils';
+import { ArrowUpDown, MoreHorizontal, Search, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -35,13 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { LoadingPage, ErrorMessage } from '@/shared/components';
+import { LoadingPage, ErrorMessage, WeekPicker, PropertyTags } from '@/shared/components';
 import { useJobs } from '../hooks';
 import type { Job, JobListParams, JobStatus, JobStatusLabel } from '../types';
 import {
@@ -162,6 +154,11 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
                 Sub
               </span>
             )}
+            <PropertyTags
+              propertyType={job.property_type}
+              isHoa={job.property_is_hoa ?? false}
+              isSubscription={job.property_is_subscription ?? false}
+            />
           </div>
         );
       },
@@ -287,22 +284,23 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
       id: 'due_by',
       header: () => (
         <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
-          Due By
+          Week Of
         </span>
       ),
       cell: ({ row }) => {
-        const targetEnd = row.original.target_end_date;
-        if (!targetEnd) {
+        const targetStart = row.original.target_start_date;
+        if (!targetStart) {
           return (
-            <span className="text-sm text-slate-400 italic" data-testid={`due-by-${row.original.id}`}>
-              No deadline
+            <span className="text-sm text-slate-400 italic" data-testid={`week-of-${row.original.id}`}>
+              No week set
             </span>
           );
         }
-        const colorClass = getDueByColorClass(targetEnd);
+        const colorClass = getDueByColorClass(row.original.target_end_date);
+        const [year, month, day] = targetStart.split('T')[0].split('-').map(Number);
         return (
-          <span className={`text-sm ${colorClass}`} data-testid={`due-by-${row.original.id}`}>
-            {format(parseLocalDate(targetEnd), 'MMM d, yyyy')}
+          <span className={`text-sm ${colorClass}`} data-testid={`week-of-${row.original.id}`}>
+            Week of {month}/{day}/{year}
           </span>
         );
       },
@@ -524,90 +522,27 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
             </SelectContent>
           </Select>
 
-          {/* Target Date Range Filter */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-[200px] justify-start text-left font-normal"
-                data-testid="target-date-filter"
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {params.target_date_from || params.target_date_to ? (
-                  <span className="text-sm">
-                    {params.target_date_from
-                      ? format(parseLocalDate(params.target_date_from), 'MMM d')
-                      : '...'}
-                    {' – '}
-                    {params.target_date_to
-                      ? format(parseLocalDate(params.target_date_to), 'MMM d')
-                      : '...'}
-                  </span>
-                ) : (
-                  <span className="text-sm text-muted-foreground">Target dates</span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-4" align="start">
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs font-medium text-slate-500">From</label>
-                  <Calendar
-                    mode="single"
-                    selected={
-                      params.target_date_from
-                        ? parseLocalDate(params.target_date_from)
-                        : undefined
-                    }
-                    onSelect={(date) =>
-                      setParams((p) => ({
-                        ...p,
-                        target_date_from: date ? format(date, 'yyyy-MM-dd') : undefined,
-                        page: 1,
-                      }))
-                    }
-                    data-testid="target-date-from-calendar"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-slate-500">To</label>
-                  <Calendar
-                    mode="single"
-                    selected={
-                      params.target_date_to
-                        ? parseLocalDate(params.target_date_to)
-                        : undefined
-                    }
-                    onSelect={(date) =>
-                      setParams((p) => ({
-                        ...p,
-                        target_date_to: date ? format(date, 'yyyy-MM-dd') : undefined,
-                        page: 1,
-                      }))
-                    }
-                    data-testid="target-date-to-calendar"
-                  />
-                </div>
-                {(params.target_date_from || params.target_date_to) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full"
-                    onClick={() =>
-                      setParams((p) => ({
-                        ...p,
-                        target_date_from: undefined,
-                        target_date_to: undefined,
-                        page: 1,
-                      }))
-                    }
-                  >
-                    Clear dates
-                  </Button>
-                )}
-              </div>
-            </PopoverContent>
-          </Popover>
+          {/* Week Of Filter (CRM2 Req 20) */}
+          <WeekPicker
+            value={params.target_date_from ?? null}
+            onChange={(mondayIso) =>
+              setParams((p) => ({
+                ...p,
+                target_date_from: mondayIso ?? undefined,
+                target_date_to: mondayIso
+                  ? (() => {
+                      const [y, m, d] = mondayIso.split('-').map(Number);
+                      const sun = new Date(y, m - 1, d + 6);
+                      return `${sun.getFullYear()}-${String(sun.getMonth() + 1).padStart(2, '0')}-${String(sun.getDate()).padStart(2, '0')}`;
+                    })()
+                  : undefined,
+                page: 1,
+              }))
+            }
+            placeholder="Filter by week"
+            className="w-[200px]"
+            data-testid="target-week-filter"
+          />
         </div>
 
         {/* Table */}

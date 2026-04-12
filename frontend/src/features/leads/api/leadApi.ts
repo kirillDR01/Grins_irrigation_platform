@@ -5,6 +5,7 @@ import type {
   LeadUpdate,
   LeadConversionRequest,
   LeadConversionResponse,
+  LeadMoveResponse,
   PaginatedLeadResponse,
   PaginatedFollowUpResponse,
   FromCallRequest,
@@ -55,6 +56,24 @@ export const leadApi = {
   // Delete lead
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`${BASE_PATH}/${id}`);
+  },
+
+  // Move lead to Jobs (CRM2 Req 12.1)
+  moveToJobs: async (id: string): Promise<LeadMoveResponse> => {
+    const response = await apiClient.post<LeadMoveResponse>(`${BASE_PATH}/${id}/move-to-jobs`);
+    return response.data;
+  },
+
+  // Move lead to Sales (CRM2 Req 12.2)
+  moveToSales: async (id: string): Promise<LeadMoveResponse> => {
+    const response = await apiClient.post<LeadMoveResponse>(`${BASE_PATH}/${id}/move-to-sales`);
+    return response.data;
+  },
+
+  // Mark lead as contacted (CRM2 Req 11.1)
+  markContacted: async (id: string): Promise<Lead> => {
+    const response = await apiClient.put<Lead>(`${BASE_PATH}/${id}/contacted`);
+    return response.data;
   },
 
   // Follow-up queue

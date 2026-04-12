@@ -32,10 +32,16 @@ from grins_platform.models.lead import Lead
 from grins_platform.models.service_agreement import ServiceAgreement
 from grins_platform.models.sms_consent_record import SmsConsentRecord
 from grins_platform.schemas.ai import MessageType
+from grins_platform.services.campaign_utils import (
+    render_poll_block as _render_poll_block,
+)
 from grins_platform.services.compliance_service import ComplianceService
+from grins_platform.services.duplicate_detection_service import (
+    DuplicateDetectionService,
+)
 from grins_platform.services.email_service import EmailService
 from grins_platform.services.onboarding_reminder_job import OnboardingReminderJob
-from grins_platform.services.sms.consent import check_sms_consent
+from grins_platform.services.sms.consent import check_sms_consent  # noqa: F401
 from grins_platform.services.sms.factory import get_sms_provider
 from grins_platform.services.sms.recipient import Recipient
 from grins_platform.services.sms.state_machine import (
@@ -342,9 +348,6 @@ _DEFAULT_PREFIX = "Grins Irrigation: "
 _DEFAULT_FOOTER = " Reply STOP to opt out."
 
 
-from grins_platform.services.campaign_utils import render_poll_block as _render_poll_block
-
-
 def _mask_phone(phone: str) -> str:
     """Mask phone for logging: +1XXX***XXXX."""
     if len(phone) >= 10:
@@ -401,10 +404,12 @@ class CampaignWorker(LoggerMixin):
                 .where(
                     CampaignRecipient.delivery_status == RecipientState.pending.value,
                     CampaignRecipient.channel == "sms",
-                    Campaign.status.in_([
-                        CampaignStatus.SENDING.value,
-                        CampaignStatus.SENT.value,
-                    ]),
+                    Campaign.status.in_(
+                        [
+                            CampaignStatus.SENDING.value,
+                            CampaignStatus.SENT.value,
+                        ]
+                    ),
                     (Campaign.scheduled_at.is_(None)) | (Campaign.scheduled_at <= now),
                 )
                 .order_by(CampaignRecipient.created_at.asc())
@@ -700,6 +705,17 @@ _onboarding_reminder = OnboardingReminderJob()
 _campaign_worker = CampaignWorker()
 
 
+async def run_duplicate_detection_sweep_job() -> None:
+    """Entry point for the nightly duplicate detection sweep.
+
+    Validates: CRM Changes Update 2 Req 5.6
+    """
+    service = DuplicateDetectionService()
+    db_manager = get_database_manager()
+    async for session in db_manager.get_session():
+        await service.run_nightly_sweep(session)
+
+
 async def escalate_failed_payments_job() -> None:
     """Entry point for the escalate_failed_payments scheduled job."""
     await _escalator.run()
@@ -789,6 +805,15 @@ def register_scheduled_jobs(scheduler: BackgroundScheduler) -> None:
         replace_existing=True,
     )
 
+    scheduler.add_job(
+        run_duplicate_detection_sweep_job,
+        "cron",
+        hour=1,
+        minute=30,
+        id="duplicate_detection_sweep",
+        replace_existing=True,
+    )
+
     logger.info(
         "scheduler.jobs.registered",
         jobs=[
@@ -798,5 +823,6 @@ def register_scheduled_jobs(scheduler: BackgroundScheduler) -> None:
             "cleanup_orphaned_consent_records",
             "remind_incomplete_onboarding",
             "process_pending_campaign_recipients",
+            "duplicate_detection_sweep",
         ],
     )

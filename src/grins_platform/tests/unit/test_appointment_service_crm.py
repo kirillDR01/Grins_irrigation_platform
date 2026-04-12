@@ -353,7 +353,10 @@ class TestProperty28ConflictDetectionOnReschedule:
 
         svc = _build_service(appt_repo=appt_repo)
         result = await svc.reschedule(
-            apt_id, date(2025, 8, 1), time(9, 0), time(10, 0),
+            apt_id,
+            date(2025, 8, 1),
+            time(9, 0),
+            time(10, 0),
         )
         assert result is not None
 
@@ -366,7 +369,10 @@ class TestProperty28ConflictDetectionOnReschedule:
         svc = _build_service(appt_repo=appt_repo)
         with pytest.raises(AppointmentNotFoundError):
             await svc.reschedule(
-                uuid4(), date(2025, 8, 1), time(9, 0), time(10, 0),
+                uuid4(),
+                date(2025, 8, 1),
+                time(9, 0),
+                time(10, 0),
             )
 
     @pytest.mark.asyncio
@@ -392,7 +398,10 @@ class TestProperty28ConflictDetectionOnReschedule:
         svc = _build_service(appt_repo=appt_repo)
         # Reschedule to same time — should not conflict with itself
         result = await svc.reschedule(
-            apt_id, date(2025, 8, 1), time(9, 0), time(10, 0),
+            apt_id,
+            date(2025, 8, 1),
+            time(9, 0),
+            time(10, 0),
         )
         assert result is not None
 
@@ -530,7 +539,7 @@ class TestProperty30JobFilterReturnsMatching:
     @pytest.mark.asyncio
     async def test_list_appointments_with_status_filter_returns_matching(
         self,
-        job_type: str,  # noqa: ARG002
+        job_type: str,
     ) -> None:
         """Filtering appointments by status returns only matching ones.
 
@@ -1426,7 +1435,9 @@ class TestProperty38StatusTransitionStateMachine:
 
         svc = _build_service(appt_repo=appt_repo)
         await svc.transition_status(
-            apt_id, AppointmentStatus.EN_ROUTE, actor_id,
+            apt_id,
+            AppointmentStatus.EN_ROUTE,
+            actor_id,
         )
 
         # Verify en_route_at timestamp was set
@@ -1458,7 +1469,9 @@ class TestProperty38StatusTransitionStateMachine:
 
         svc = _build_service(appt_repo=appt_repo)
         await svc.transition_status(
-            apt_id, AppointmentStatus.IN_PROGRESS, actor_id,
+            apt_id,
+            AppointmentStatus.IN_PROGRESS,
+            actor_id,
         )
 
         update_data = appt_repo.update.call_args[0][1]
@@ -1498,7 +1511,9 @@ class TestProperty38StatusTransitionStateMachine:
         svc._has_payment_or_invoice = AsyncMock(return_value=True)
 
         await svc.transition_status(
-            apt_id, AppointmentStatus.COMPLETED, actor_id,
+            apt_id,
+            AppointmentStatus.COMPLETED,
+            actor_id,
         )
 
         update_data = appt_repo.update.call_args[0][1]
@@ -1506,11 +1521,13 @@ class TestProperty38StatusTransitionStateMachine:
         assert "completed_at" in update_data
 
     @given(
-        current=st.sampled_from([
-            AppointmentStatus.CONFIRMED,
-            AppointmentStatus.EN_ROUTE,
-            AppointmentStatus.IN_PROGRESS,
-        ]),
+        current=st.sampled_from(
+            [
+                AppointmentStatus.CONFIRMED,
+                AppointmentStatus.EN_ROUTE,
+                AppointmentStatus.IN_PROGRESS,
+            ]
+        ),
     )
     @settings(max_examples=20)
     @pytest.mark.asyncio
@@ -1569,7 +1586,9 @@ class TestProperty38StatusTransitionStateMachine:
 
         with pytest.raises(InvalidStatusTransitionError):
             await svc.transition_status(
-                apt_id, AppointmentStatus.CONFIRMED, actor_id,
+                apt_id,
+                AppointmentStatus.CONFIRMED,
+                actor_id,
             )
 
     @pytest.mark.asyncio
@@ -1606,7 +1625,9 @@ class TestProperty38StatusTransitionStateMachine:
 
             svc = _build_service(appt_repo=appt_repo)
             result = await svc.transition_status(
-                apt_id, AppointmentStatus.CANCELLED, actor_id,
+                apt_id,
+                AppointmentStatus.CANCELLED,
+                actor_id,
             )
             assert result is not None
 
@@ -1625,7 +1646,9 @@ class TestProperty38StatusTransitionStateMachine:
         svc = _build_service(appt_repo=appt_repo)
         with pytest.raises(InvalidStatusTransitionError):
             await svc.transition_status(
-                apt_id, AppointmentStatus.CANCELLED, uuid4(),
+                apt_id,
+                AppointmentStatus.CANCELLED,
+                uuid4(),
             )
 
     @pytest.mark.asyncio
@@ -1650,7 +1673,9 @@ class TestProperty38StatusTransitionStateMachine:
 
         svc = _build_service(appt_repo=appt_repo)
         result = await svc.transition_status(
-            apt_id, AppointmentStatus.NO_SHOW, uuid4(),
+            apt_id,
+            AppointmentStatus.NO_SHOW,
+            uuid4(),
         )
         assert result is not None
 
@@ -1663,7 +1688,9 @@ class TestProperty38StatusTransitionStateMachine:
         svc = _build_service(appt_repo=appt_repo)
         with pytest.raises(AppointmentNotFoundError):
             await svc.transition_status(
-                uuid4(), AppointmentStatus.EN_ROUTE, uuid4(),
+                uuid4(),
+                AppointmentStatus.EN_ROUTE,
+                uuid4(),
             )
 
 
@@ -1708,7 +1735,9 @@ class TestProperty39PaymentGate:
 
         with pytest.raises(PaymentRequiredError) as exc_info:
             await svc.transition_status(
-                apt_id, AppointmentStatus.COMPLETED, actor_id,
+                apt_id,
+                AppointmentStatus.COMPLETED,
+                actor_id,
             )
         assert exc_info.value.appointment_id == apt_id
 
@@ -1740,7 +1769,9 @@ class TestProperty39PaymentGate:
         svc._has_payment_or_invoice = AsyncMock(return_value=True)
 
         result = await svc.transition_status(
-            apt_id, AppointmentStatus.COMPLETED, actor_id,
+            apt_id,
+            AppointmentStatus.COMPLETED,
+            actor_id,
         )
         assert result is not None
 

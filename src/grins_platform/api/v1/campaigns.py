@@ -522,7 +522,11 @@ async def delete_campaign(
     if campaign.status not in ("draft", "cancelled"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot delete campaign in '{campaign.status}' status. Only draft and cancelled campaigns can be deleted.",
+            detail=(
+                f"Cannot delete campaign in '{campaign.status}' "
+                "status. Only draft and cancelled campaigns "
+                "can be deleted."
+            ),
         )
     await repo.delete(campaign_id)
     _endpoints.log_completed("delete_campaign", campaign_id=str(campaign_id))
@@ -699,7 +703,10 @@ async def list_campaign_recipients(
     _endpoints.log_started("list_recipients", campaign_id=str(campaign_id))
     repo = CampaignRepository(session)
     recipients, total = await repo.get_recipients(
-        campaign_id, page=page, page_size=page_size, delivery_status=delivery_status,
+        campaign_id,
+        page=page,
+        page_size=page_size,
+        delivery_status=delivery_status,
     )
     items = [CampaignRecipientResponse.model_validate(r) for r in recipients]
     _endpoints.log_completed("list_recipients", count=len(items), total=total)

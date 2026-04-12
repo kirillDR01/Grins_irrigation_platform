@@ -328,7 +328,7 @@ class TestFromCallEndpoint:
     async def test_from_call_requires_auth(
         self,
         public_client: AsyncClient,
-        mock_lead_service: AsyncMock,  # noqa: ARG002
+        mock_lead_service: AsyncMock,
     ) -> None:
         """From-call endpoint requires authentication."""
         resp = await public_client.post(

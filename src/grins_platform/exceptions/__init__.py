@@ -656,6 +656,53 @@ class ConsentRequiredError(Exception):
         )
 
 
+# =========================================================================
+# Sales Pipeline Errors (CRM Changes Update 2 Req 14, 16)
+# =========================================================================
+
+
+class SalesEntryNotFoundError(Exception):
+    """Raised when a sales entry is not found.
+
+    Validates: CRM Changes Update 2 Req 14.1
+    """
+
+    def __init__(self, entry_id: UUID) -> None:
+        """Initialize with entry ID."""
+        self.entry_id = entry_id
+        super().__init__(f"Sales entry not found: {entry_id}")
+
+
+class InvalidSalesTransitionError(Exception):
+    """Raised when a sales pipeline status transition is invalid.
+
+    Validates: CRM Changes Update 2 Req 14.3, 33.1
+    """
+
+    def __init__(self, current_status: str, target_status: str) -> None:
+        """Initialize with current and target statuses."""
+        self.current_status = current_status
+        self.target_status = target_status
+        super().__init__(
+            f"Cannot transition from {current_status} to {target_status}",
+        )
+
+
+class SignatureRequiredError(Exception):
+    """Raised when convert-to-job is blocked by missing signature.
+
+    Validates: CRM Changes Update 2 Req 16.1
+    """
+
+    def __init__(self, entry_id: UUID) -> None:
+        """Initialize with entry ID."""
+        self.entry_id = entry_id
+        super().__init__(
+            f"Sales entry {entry_id}: waiting for customer signature. "
+            "Use force=True to override.",
+        )
+
+
 __all__ = [
     "AccountLockedError",
     "AgreementError",
@@ -681,6 +728,7 @@ __all__ = [
     "InvalidInvoiceOperationError",
     "InvalidLeadStatusTransitionError",
     "InvalidPromotionCodeError",
+    "InvalidSalesTransitionError",
     "InvalidStatusTransitionError",
     "InvalidTokenError",
     "InvoiceNotFoundError",
@@ -693,9 +741,11 @@ __all__ = [
     "PropertyCustomerMismatchError",
     "PropertyNotFoundError",
     "ReviewAlreadyRequestedError",
+    "SalesEntryNotFoundError",
     "ScheduleClearAuditNotFoundError",
     "ServiceOfferingInactiveError",
     "ServiceOfferingNotFoundError",
+    "SignatureRequiredError",
     "StaffAvailabilityNotFoundError",
     "StaffConflictError",
     "StaffNotFoundError",

@@ -66,6 +66,8 @@ class MessageType(str, Enum):
     REVIEW_REQUEST = "review_request"
     CAMPAIGN = "campaign"
     CUSTOM = "custom"
+    GOOGLE_REVIEW_REQUEST = "google_review_request"
+    ON_MY_WAY = "on_my_way"
 
 
 class DeliveryStatus(str, Enum):

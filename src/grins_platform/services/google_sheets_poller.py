@@ -306,8 +306,7 @@ class GoogleSheetsPoller:
 
         # Filter to only new rows
         new_rows = [
-            (rn, rd, ch) for rn, rd, ch in row_hashes
-            if ch not in existing_hashes
+            (rn, rd, ch) for rn, rd, ch in row_hashes if ch not in existing_hashes
         ]
 
         logger.info(

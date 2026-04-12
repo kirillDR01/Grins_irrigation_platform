@@ -54,9 +54,16 @@ apiClient.interceptors.response.use(
         isRefreshing = true;
 
         try {
-          await apiClient.post('/auth/refresh', null, { withCredentials: true });
+          const refreshResponse = await apiClient.post('/auth/refresh', null, { withCredentials: true });
+          const { access_token, expires_in } = refreshResponse.data;
+          // Update the default Authorization header so subsequent requests use the fresh token
+          if (access_token) {
+            apiClient.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+          }
           isRefreshing = false;
           processQueue(null);
+          // Notify AuthProvider to reschedule its proactive refresh timer
+          window.dispatchEvent(new CustomEvent('token-refreshed', { detail: { access_token, expires_in } }));
           // Retry the original request
           return apiClient(originalRequest);
         } catch (refreshError) {

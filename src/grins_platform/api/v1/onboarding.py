@@ -139,6 +139,10 @@ class CompleteOnboardingRequest(BaseModel):
         default=None,
         description="Free-text details for 'Other' schedule preference",
     )
+    service_week_preferences: dict[str, str] | None = Field(
+        default=None,
+        description="Per-service week selections as {job_type: ISO Monday date}",
+    )
 
     @model_validator(mode="after")
     def validate_preferred_schedule(self) -> "CompleteOnboardingRequest":
@@ -375,6 +379,7 @@ async def complete_onboarding(
             preferred_times=data.preferred_times,
             preferred_schedule=data.preferred_schedule,
             preferred_schedule_details=data.preferred_schedule_details,
+            service_week_preferences=data.service_week_preferences,
         )
     except SessionNotFoundError:
         _endpoints.log_rejected(

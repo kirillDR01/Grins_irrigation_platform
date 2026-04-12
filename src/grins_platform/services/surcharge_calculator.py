@@ -40,10 +40,26 @@ class SurchargeBreakdown:
 
 # (zone_rate_per_extra_zone, lake_pump_flat_rate, rpz_backflow_flat_rate)
 _RATES: dict[tuple[str, str], tuple[Decimal, Decimal, Decimal]] = {
-    ("standard", "residential"): (Decimal("8.00"), Decimal("125.00"), Decimal("110.00")),
-    ("standard", "commercial"): (Decimal("11.00"), Decimal("150.00"), Decimal("110.00")),
-    ("winterization-only", "residential"): (Decimal("8.00"), Decimal("125.00"), Decimal("55.00")),
-    ("winterization-only", "commercial"): (Decimal("11.00"), Decimal("150.00"), Decimal("55.00")),
+    ("standard", "residential"): (
+        Decimal("8.00"),
+        Decimal("125.00"),
+        Decimal("110.00"),
+    ),
+    ("standard", "commercial"): (
+        Decimal("11.00"),
+        Decimal("150.00"),
+        Decimal("110.00"),
+    ),
+    ("winterization-only", "residential"): (
+        Decimal("8.00"),
+        Decimal("125.00"),
+        Decimal("55.00"),
+    ),
+    ("winterization-only", "commercial"): (
+        Decimal("11.00"),
+        Decimal("150.00"),
+        Decimal("55.00"),
+    ),
 }
 
 _ZONE_THRESHOLD = 10

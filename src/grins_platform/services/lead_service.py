@@ -34,6 +34,7 @@ from grins_platform.models.enums import (
     LeadSourceExtended,
     LeadStatus,
 )
+from grins_platform.models.sales import SalesEntry as SalesEntryModel
 from grins_platform.models.sms_consent_record import SmsConsentRecord
 from grins_platform.schemas.customer import CustomerCreate
 from grins_platform.schemas.job import JobCreate
@@ -45,6 +46,7 @@ from grins_platform.schemas.lead import (
     LeadConversionResponse,
     LeadListParams,
     LeadMetricsBySourceResponse,
+    LeadMoveResponse,
     LeadResponse,
     LeadSourceCount,
     LeadSubmission,
@@ -894,13 +896,151 @@ class LeadService(LoggerMixin):
         Raises:
             LeadNotFoundError: If lead not found
 
-        Validates: Requirement 5.9
+        Validates: Requirement 5.9, CRM2 Req 9.1
         """
         lead = await self.lead_repository.get_by_id(lead_id)
         if not lead:
             raise LeadNotFoundError(lead_id)
 
         await self.lead_repository.delete(lead_id)
+
+    async def _ensure_customer_for_lead(self, lead: Lead) -> UUID:
+        """Auto-generate a customer from a lead if one doesn't exist.
+
+        Returns the customer_id (existing or newly created).
+        If a customer with the same phone already exists, reuses that customer.
+
+        Validates: CRM2 Req 12.1, 12.2
+        """
+        if lead.customer_id:
+            return lead.customer_id  # type: ignore[no-any-return]
+
+        # Check for existing customer by phone first
+        existing_list = await self.customer_service.lookup_by_phone(lead.phone)
+        if existing_list:
+            existing_id = existing_list[0].id
+            await self.lead_repository.update(
+                lead_id=lead.id,
+                update_data={"customer_id": existing_id},
+            )
+            return existing_id
+
+        first_name, last_name = self.split_name(lead.name)
+        customer_last_name = last_name if last_name else first_name
+
+        customer_data = CustomerCreate(
+            first_name=first_name,
+            last_name=customer_last_name,
+            phone=lead.phone,
+            email=lead.email,
+            lead_source=LeadSource.WEBSITE,
+            sms_opt_in=lead.sms_consent,
+        )
+        customer = await self.customer_service.create_customer(customer_data)
+
+        # Link lead to customer
+        await self.lead_repository.update(
+            lead_id=lead.id,
+            update_data={"customer_id": customer.id},
+        )
+
+        return customer.id
+
+    async def move_to_jobs(self, lead_id: UUID) -> LeadMoveResponse:
+        """Move a lead to the Jobs tab.
+
+        Auto-generates a customer if needed, creates a Job with TO_BE_SCHEDULED,
+        and marks the lead as moved.
+
+        Validates: CRM2 Req 9.2, 12.1
+        """
+        self.log_started("move_to_jobs", lead_id=str(lead_id))
+
+        lead = await self.lead_repository.get_by_id(lead_id)
+        if not lead:
+            raise LeadNotFoundError(lead_id)
+        if lead.moved_to:
+            raise LeadAlreadyConvertedError(lead_id)
+
+        customer_id = await self._ensure_customer_for_lead(lead)
+
+        # Map situation to job type
+        situation_key = lead.situation
+        _category, default_description = self.SITUATION_JOB_MAP.get(
+            situation_key,
+            ("requires_estimate", "Consultation"),
+        )
+        description = lead.job_requested or default_description
+
+        job_data = JobCreate(
+            customer_id=customer_id,
+            job_type=_category,
+            description=description,
+        )
+        job = await self.job_service.create_job(job_data)
+
+        now = datetime.now(tz=timezone.utc)
+        await self.lead_repository.update(
+            lead_id,
+            {"moved_to": "jobs", "moved_at": now},
+        )
+
+        self.log_completed("move_to_jobs", lead_id=str(lead_id), job_id=str(job.id))
+        return LeadMoveResponse(
+            lead_id=lead_id,
+            customer_id=customer_id,
+            job_id=job.id,
+            message="Lead moved to Jobs",
+        )
+
+    async def move_to_sales(self, lead_id: UUID) -> LeadMoveResponse:
+        """Move a lead to the Sales tab.
+
+        Auto-generates a customer if needed, creates a SalesEntry with
+        schedule_estimate status, and marks the lead as moved.
+
+        Validates: CRM2 Req 9.2, 12.2
+        """
+        self.log_started("move_to_sales", lead_id=str(lead_id))
+
+        lead = await self.lead_repository.get_by_id(lead_id)
+        if not lead:
+            raise LeadNotFoundError(lead_id)
+        if lead.moved_to:
+            raise LeadAlreadyConvertedError(lead_id)
+
+        customer_id = await self._ensure_customer_for_lead(lead)
+
+        # Create SalesEntry directly via session
+        session = self.lead_repository.session
+        sales_entry = SalesEntryModel(
+            customer_id=customer_id,
+            lead_id=lead_id,
+            job_type=lead.job_requested or lead.situation,
+            status="schedule_estimate",
+            notes=lead.notes,
+        )
+        session.add(sales_entry)
+        await session.flush()
+        await session.refresh(sales_entry)
+
+        now = datetime.now(tz=timezone.utc)
+        await self.lead_repository.update(
+            lead_id,
+            {"moved_to": "sales", "moved_at": now},
+        )
+
+        self.log_completed(
+            "move_to_sales",
+            lead_id=str(lead_id),
+            sales_entry_id=str(sales_entry.id),
+        )
+        return LeadMoveResponse(
+            lead_id=lead_id,
+            customer_id=customer_id,
+            sales_entry_id=sales_entry.id,
+            message="Lead moved to Sales",
+        )
 
     async def get_follow_up_queue(
         self,
@@ -1068,18 +1208,11 @@ class LeadService(LoggerMixin):
         return LeadResponse.model_validate(updated_lead)
 
     async def mark_contacted(self, lead_id: UUID) -> LeadResponse:
-        """Mark a lead as contacted: remove NEEDS_CONTACT, set contacted_at.
+        """Mark a lead as Contacted (Awaiting Response).
 
-        Args:
-            lead_id: UUID of the lead.
+        Also removes NEEDS_CONTACT tag and sets last_contacted_at.
 
-        Returns:
-            LeadResponse with updated lead data.
-
-        Raises:
-            LeadNotFoundError: If lead not found.
-
-        Validates: Requirements 13.3
+        Validates: CRM2 Req 11.1, 11.2, Requirements 13.3
         """
         self.log_started("mark_contacted", lead_id=str(lead_id))
 
@@ -1096,14 +1229,10 @@ class LeadService(LoggerMixin):
             lead_id,
             {
                 "action_tags": current_tags,
-                "contacted_at": now,
+                "status": LeadStatus.CONTACTED.value,
+                "contacted_at": now if lead.contacted_at is None else lead.contacted_at,
+                "last_contacted_at": now,
             },
-        )
-
-        self.logger.info(
-            "lead.contacted",
-            lead_id=str(lead_id),
-            contacted_at=now.isoformat(),
         )
 
         self.log_completed("mark_contacted", lead_id=str(lead_id))

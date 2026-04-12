@@ -323,7 +323,9 @@ class CampaignResponseService(LoggerMixin):
                     received_at=now,
                 ),
             )
-            self.log_completed("record_poll_reply", status=CampaignResponseStatus.NEEDS_REVIEW)
+            self.log_completed(
+                "record_poll_reply", status=CampaignResponseStatus.NEEDS_REVIEW
+            )
             return row
 
         # Parse the reply
@@ -480,7 +482,9 @@ class CampaignResponseService(LoggerMixin):
 
         # Inject zero-count buckets for poll options with no parsed responses
         if option_labels:
-            existing_parsed_keys = {b.option_key for b in buckets if b.status == "parsed"}
+            existing_parsed_keys = {
+                b.option_key for b in buckets if b.status == "parsed"
+            }
             for key, label in option_labels.items():
                 if key not in existing_parsed_keys:
                     buckets.append(
@@ -494,16 +498,16 @@ class CampaignResponseService(LoggerMixin):
 
         # Ensure needs_review and opted_out buckets always exist
         existing_statuses = {b.status for b in buckets}
-        for status_name in ("needs_review", "opted_out"):
-            if status_name not in existing_statuses:
-                buckets.append(
-                    CampaignResponseBucket(
-                        option_key=None,
-                        option_label=None,
-                        status=status_name,
-                        count=0,
-                    ),
-                )
+        buckets.extend(
+            CampaignResponseBucket(
+                option_key=None,
+                option_label=None,
+                status=status_name,
+                count=0,
+            )
+            for status_name in ("needs_review", "opted_out")
+            if status_name not in existing_statuses
+        )
 
         # Get total_sent from campaign recipients (count sent_messages)
         from sqlalchemy import func as sa_func  # noqa: PLC0415

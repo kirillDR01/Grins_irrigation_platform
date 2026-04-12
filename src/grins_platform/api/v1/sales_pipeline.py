@@ -6,16 +6,15 @@ Validates: CRM Changes Update 2 Req 14.1, 14.2, 14.4, 14.5, 14.8, 14.10,
            15.1, 15.2, 15.3, 16.1, 16.2, 16.3, 16.4, 18.1, 18.2, 18.3
 """
 
-from __future__ import annotations
-
 import datetime as _dt
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from grins_platform.api.v1.auth_dependencies import CurrentActiveUser  # noqa: TC001
+from grins_platform.api.v1.auth_dependencies import CurrentActiveUser
 from grins_platform.api.v1.dependencies import get_db_session, get_job_service
 from grins_platform.exceptions import (
     InvalidSalesTransitionError,
@@ -32,12 +31,8 @@ from grins_platform.schemas.sales_pipeline import (
     SalesEntryStatusUpdate,
 )
 from grins_platform.services.audit_service import AuditService
+from grins_platform.services.job_service import JobService
 from grins_platform.services.sales_pipeline_service import SalesPipelineService
-
-if TYPE_CHECKING:
-    from uuid import UUID
-
-    from grins_platform.services.job_service import JobService
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -59,9 +54,7 @@ def _entry_to_response(entry: SalesEntry) -> SalesEntryResponse:
     """Build response with denormalized customer/property fields."""
     customer = entry.customer
     prop = entry.property
-    customer_name = (
-        f"{customer.first_name} {customer.last_name}" if customer else None
-    )
+    customer_name = f"{customer.first_name} {customer.last_name}" if customer else None
     customer_phone = customer.phone if customer else None
     property_address: str | None = None
     if prop:

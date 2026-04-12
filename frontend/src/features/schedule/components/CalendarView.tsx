@@ -133,6 +133,13 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
         `${appointment.scheduled_date}T${appointment.time_window_end}`
       );
 
+      // Confirmed statuses get solid border; unconfirmed get dashed/muted (Req 22)
+      const isConfirmed = ['confirmed', 'en_route', 'in_progress', 'completed'].includes(appointment.status);
+      const confirmationClass = isConfirmed ? 'appointment-confirmed' : 'appointment-unconfirmed';
+      const classNames = isOnSelectedDate
+        ? ['selected-day-event', confirmationClass]
+        : [confirmationClass];
+
       return {
         id: appointment.id,
         title: isOnSelectedDate ? `⚠️ ${displayTitle}` : displayTitle,
@@ -141,7 +148,7 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
         backgroundColor: colors.bg,
         borderColor: colors.border,
         textColor: '#1f2937',
-        classNames: isOnSelectedDate ? ['selected-day-event'] : [],
+        classNames,
         extendedProps: {
           appointment,
           status: appointment.status,

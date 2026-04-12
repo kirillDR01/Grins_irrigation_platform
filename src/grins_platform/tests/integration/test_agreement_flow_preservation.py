@@ -56,7 +56,6 @@ def _make_tier(**overrides: Any) -> MagicMock:
     return tier
 
 
-
 def _make_agreement(**overrides: Any) -> MagicMock:
     """Build a mock service agreement."""
     agr = MagicMock()
@@ -69,14 +68,16 @@ def _make_agreement(**overrides: Any) -> MagicMock:
     agr.annual_price = overrides.get("annual_price", Decimal("399.00"))
     agr.auto_renew = overrides.get("auto_renew", True)
     agr.stripe_subscription_id = overrides.get(
-        "stripe_subscription_id", "sub_123",
+        "stripe_subscription_id",
+        "sub_123",
     )
     agr.stripe_customer_id = overrides.get("stripe_customer_id", "cus_123")
     agr.payment_status = overrides.get("payment_status", "current")
     agr.pause_reason = overrides.get("pause_reason")
     agr.jobs = overrides.get("jobs", [])
     agr.customer = overrides.get(
-        "customer", MagicMock(email="test@example.com"),
+        "customer",
+        MagicMock(email="test@example.com"),
     )
     agr.tier = overrides.get("tier", _make_tier())
     agr.status_logs = overrides.get("status_logs", [])
@@ -112,7 +113,9 @@ def _make_service() -> tuple[AgreementService, AsyncMock, AsyncMock]:
     a_repo = AsyncMock(spec=AgreementRepository)
     t_repo = AsyncMock(spec=AgreementTierRepository)
     svc = AgreementService(
-        a_repo, t_repo, stripe_settings=MagicMock(is_configured=False),
+        a_repo,
+        t_repo,
+        stripe_settings=MagicMock(is_configured=False),
     )
     return svc, a_repo, t_repo
 
@@ -182,17 +185,21 @@ class TestAgreementFlowPreservation:
         agr_id = uuid4()
 
         pending = _make_agreement(
-            id=agr_id, status=AgreementStatus.PENDING.value,
+            id=agr_id,
+            status=AgreementStatus.PENDING.value,
         )
         active = _make_agreement(
-            id=agr_id, status=AgreementStatus.ACTIVE.value,
+            id=agr_id,
+            status=AgreementStatus.ACTIVE.value,
         )
         a_repo.get_by_id.return_value = pending
         a_repo.update.return_value = active
         a_repo.add_status_log.return_value = None
 
         result = await svc.transition_status(
-            agr_id, AgreementStatus.ACTIVE, reason="First invoice paid",
+            agr_id,
+            AgreementStatus.ACTIVE,
+            reason="First invoice paid",
         )
 
         assert result.status == AgreementStatus.ACTIVE.value
@@ -236,7 +243,9 @@ class TestAgreementFlowPreservation:
         a_repo.update.return_value = active_agr
 
         activated = await svc.transition_status(
-            agr_id, AgreementStatus.ACTIVE, reason="Payment confirmed",
+            agr_id,
+            AgreementStatus.ACTIVE,
+            reason="Payment confirmed",
         )
         assert activated.status == AgreementStatus.ACTIVE.value
 
@@ -252,7 +261,6 @@ class TestAgreementFlowPreservation:
             assert job.property_id == property_id
             assert job.status == JobStatus.TO_BE_SCHEDULED.value
             assert job.category == JobCategory.READY_TO_SCHEDULE.value
-
 
 
 # =============================================================================
@@ -323,7 +331,8 @@ class TestCheckoutWebhookPreservation:
         # Agreement service
         agr_svc = AsyncMock()
         agreement = _make_agreement(
-            customer_id=customer.id, tier_id=tier.id,
+            customer_id=customer.id,
+            tier_id=tier.id,
         )
         agr_svc.create_agreement.return_value = agreement
         mock_agr_svc_cls.return_value = agr_svc
@@ -421,7 +430,8 @@ class TestCheckoutWebhookPreservation:
         mock_email_cls.return_value = email_svc
 
         event = _make_event(
-            "invoice.upcoming", {"subscription": "sub_123"},
+            "invoice.upcoming",
+            {"subscription": "sub_123"},
         )
         await handler._handle_invoice_upcoming(event)
 
@@ -453,7 +463,8 @@ class TestCheckoutWebhookPreservation:
 
         agr_svc = AsyncMock()
         cancelled = _make_agreement(
-            id=agr.id, status=AgreementStatus.CANCELLED.value,
+            id=agr.id,
+            status=AgreementStatus.CANCELLED.value,
         )
         agr_svc.cancel_agreement.return_value = cancelled
         mock_agr_svc_cls.return_value = agr_svc
@@ -482,7 +493,6 @@ class TestCheckoutWebhookPreservation:
         compliance.create_disclosure.assert_called_once()
         call_kwargs = compliance.create_disclosure.call_args[1]
         assert call_kwargs["disclosure_type"] == DisclosureType.CANCELLATION_CONF
-
 
 
 # =============================================================================
@@ -618,7 +628,6 @@ class TestJobGenerationPreservation:
         assert fall.target_end_date.month == 10
 
 
-
 # =============================================================================
 # 4. TestAgreementStatusTransitionsPreservation — All valid transitions
 # =============================================================================
@@ -639,15 +648,19 @@ class TestAgreementStatusTransitionsPreservation:
         svc, a_repo, _ = _make_service()
         agr_id = uuid4()
         a_repo.get_by_id.return_value = _make_agreement(
-            id=agr_id, status=AgreementStatus.PENDING.value,
+            id=agr_id,
+            status=AgreementStatus.PENDING.value,
         )
         a_repo.update.return_value = _make_agreement(
-            id=agr_id, status=AgreementStatus.ACTIVE.value,
+            id=agr_id,
+            status=AgreementStatus.ACTIVE.value,
         )
         a_repo.add_status_log.return_value = None
 
         result = await svc.transition_status(
-            agr_id, AgreementStatus.ACTIVE, reason="Payment confirmed",
+            agr_id,
+            AgreementStatus.ACTIVE,
+            reason="Payment confirmed",
         )
         assert result.status == AgreementStatus.ACTIVE.value
 
@@ -658,15 +671,19 @@ class TestAgreementStatusTransitionsPreservation:
         svc, a_repo, _ = _make_service()
         agr_id = uuid4()
         a_repo.get_by_id.return_value = _make_agreement(
-            id=agr_id, status=AgreementStatus.ACTIVE.value,
+            id=agr_id,
+            status=AgreementStatus.ACTIVE.value,
         )
         a_repo.update.return_value = _make_agreement(
-            id=agr_id, status=AgreementStatus.PAST_DUE.value,
+            id=agr_id,
+            status=AgreementStatus.PAST_DUE.value,
         )
         a_repo.add_status_log.return_value = None
 
         result = await svc.transition_status(
-            agr_id, AgreementStatus.PAST_DUE, reason="Payment failed",
+            agr_id,
+            AgreementStatus.PAST_DUE,
+            reason="Payment failed",
         )
         assert result.status == AgreementStatus.PAST_DUE.value
 
@@ -677,15 +694,19 @@ class TestAgreementStatusTransitionsPreservation:
         svc, a_repo, _ = _make_service()
         agr_id = uuid4()
         a_repo.get_by_id.return_value = _make_agreement(
-            id=agr_id, status=AgreementStatus.PAST_DUE.value,
+            id=agr_id,
+            status=AgreementStatus.PAST_DUE.value,
         )
         a_repo.update.return_value = _make_agreement(
-            id=agr_id, status=AgreementStatus.PAUSED.value,
+            id=agr_id,
+            status=AgreementStatus.PAUSED.value,
         )
         a_repo.add_status_log.return_value = None
 
         result = await svc.transition_status(
-            agr_id, AgreementStatus.PAUSED, reason="Retries exhausted",
+            agr_id,
+            AgreementStatus.PAUSED,
+            reason="Retries exhausted",
         )
         assert result.status == AgreementStatus.PAUSED.value
 
@@ -704,7 +725,8 @@ class TestAgreementStatusTransitionsPreservation:
             ],
         )
         cancelled = _make_agreement(
-            id=agr_id, status=AgreementStatus.CANCELLED.value,
+            id=agr_id,
+            status=AgreementStatus.CANCELLED.value,
         )
         a_repo.get_by_id.return_value = paused
         a_repo.update.return_value = cancelled
@@ -720,10 +742,12 @@ class TestAgreementStatusTransitionsPreservation:
         svc, a_repo, _ = _make_service()
         agr_id = uuid4()
         a_repo.get_by_id.return_value = _make_agreement(
-            id=agr_id, status=AgreementStatus.ACTIVE.value,
+            id=agr_id,
+            status=AgreementStatus.ACTIVE.value,
         )
         a_repo.update.return_value = _make_agreement(
-            id=agr_id, status=AgreementStatus.PENDING_RENEWAL.value,
+            id=agr_id,
+            status=AgreementStatus.PENDING_RENEWAL.value,
         )
         a_repo.add_status_log.return_value = None
 
@@ -741,15 +765,19 @@ class TestAgreementStatusTransitionsPreservation:
         svc, a_repo, _ = _make_service()
         agr_id = uuid4()
         a_repo.get_by_id.return_value = _make_agreement(
-            id=agr_id, status=AgreementStatus.PENDING_RENEWAL.value,
+            id=agr_id,
+            status=AgreementStatus.PENDING_RENEWAL.value,
         )
         a_repo.update.return_value = _make_agreement(
-            id=agr_id, status=AgreementStatus.ACTIVE.value,
+            id=agr_id,
+            status=AgreementStatus.ACTIVE.value,
         )
         a_repo.add_status_log.return_value = None
 
         result = await svc.transition_status(
-            agr_id, AgreementStatus.ACTIVE, reason="Renewal paid",
+            agr_id,
+            AgreementStatus.ACTIVE,
+            reason="Renewal paid",
         )
         assert result.status == AgreementStatus.ACTIVE.value
 
@@ -762,33 +790,27 @@ class TestAgreementStatusTransitionsPreservation:
         assert AgreementStatus.ACTIVE in VALID_AGREEMENT_STATUS_TRANSITIONS
         assert AgreementStatus.PAST_DUE in VALID_AGREEMENT_STATUS_TRANSITIONS
         assert AgreementStatus.PAUSED in VALID_AGREEMENT_STATUS_TRANSITIONS
-        assert (
-            AgreementStatus.PENDING_RENEWAL
-            in VALID_AGREEMENT_STATUS_TRANSITIONS
-        )
-        assert (
-            AgreementStatus.CANCELLED in VALID_AGREEMENT_STATUS_TRANSITIONS
-        )
+        assert AgreementStatus.PENDING_RENEWAL in VALID_AGREEMENT_STATUS_TRANSITIONS
+        assert AgreementStatus.CANCELLED in VALID_AGREEMENT_STATUS_TRANSITIONS
         assert AgreementStatus.EXPIRED in VALID_AGREEMENT_STATUS_TRANSITIONS
 
         # Verify key transitions exist
-        pending_targets = VALID_AGREEMENT_STATUS_TRANSITIONS[
-            AgreementStatus.PENDING
-        ]
+        pending_targets = VALID_AGREEMENT_STATUS_TRANSITIONS[AgreementStatus.PENDING]
         assert AgreementStatus.ACTIVE in pending_targets
         assert AgreementStatus.CANCELLED in pending_targets
 
-        active_targets = VALID_AGREEMENT_STATUS_TRANSITIONS[
-            AgreementStatus.ACTIVE
-        ]
+        active_targets = VALID_AGREEMENT_STATUS_TRANSITIONS[AgreementStatus.ACTIVE]
         assert AgreementStatus.PAST_DUE in active_targets
         assert AgreementStatus.PENDING_RENEWAL in active_targets
         assert AgreementStatus.CANCELLED in active_targets
 
         # CANCELLED is terminal
-        assert len(
-            VALID_AGREEMENT_STATUS_TRANSITIONS[AgreementStatus.CANCELLED],
-        ) == 0
+        assert (
+            len(
+                VALID_AGREEMENT_STATUS_TRANSITIONS[AgreementStatus.CANCELLED],
+            )
+            == 0
+        )
 
     async def test_subscription_updated_recovery_works_with_existing_handler(
         self,
@@ -832,10 +854,7 @@ class TestAgreementStatusTransitionsPreservation:
             await handler._handle_subscription_updated(event)
 
             agr_svc.transition_status.assert_called_once()
-            assert (
-                agr_svc.transition_status.call_args[0][1]
-                == AgreementStatus.ACTIVE
-            )
+            assert agr_svc.transition_status.call_args[0][1] == AgreementStatus.ACTIVE
 
             agr_repo.update.assert_called()
             update_data = agr_repo.update.call_args[0][1]
@@ -844,7 +863,6 @@ class TestAgreementStatusTransitionsPreservation:
                 update_data.get("payment_status")
                 == AgreementPaymentStatus.CURRENT.value
             )
-
 
 
 # =============================================================================

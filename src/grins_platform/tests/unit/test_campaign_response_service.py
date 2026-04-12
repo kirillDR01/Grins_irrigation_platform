@@ -441,8 +441,9 @@ class TestRecordPollReply:
 
 @pytest.mark.unit
 def test_sent_message_model_has_campaign_relationship() -> None:
-    from grins_platform.models.sent_message import SentMessage
     from sqlalchemy import inspect
+
+    from grins_platform.models.sent_message import SentMessage
 
     mapper = inspect(SentMessage)
     rel_names = [r.key for r in mapper.relationships]
@@ -471,7 +472,9 @@ class TestCommonSmsPunctuationStripped:
             ("(Option 1)", "1"),
         ],
     )
-    def test_common_sms_punctuation_stripped(self, body: str, expected_key: str) -> None:
+    def test_common_sms_punctuation_stripped(
+        self, body: str, expected_key: str
+    ) -> None:
         result = CampaignResponseService.parse_poll_reply(body, _POLL_OPTIONS)
         assert result.ok is True
         assert result.option_key == expected_key

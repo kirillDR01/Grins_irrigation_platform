@@ -10,8 +10,8 @@ from __future__ import annotations
 import csv
 import io
 import re
-from datetime import date
 from collections.abc import AsyncGenerator
+from datetime import date
 from typing import Annotated
 from uuid import UUID
 
@@ -146,20 +146,35 @@ async def export_responses_csv(
     async def _csv_stream() -> AsyncGenerator[str, None]:
         buf = io.StringIO()
         writer = csv.writer(buf, quoting=csv.QUOTE_ALL)
-        writer.writerow([
-            "first_name", "last_name", "phone",
-            "selected_option_label", "raw_reply", "status", "address", "received_at",
-        ])
+        writer.writerow(
+            [
+                "first_name",
+                "last_name",
+                "phone",
+                "selected_option_label",
+                "raw_reply",
+                "status",
+                "address",
+                "received_at",
+            ]
+        )
         yield buf.getvalue()
         buf.seek(0)
         buf.truncate(0)
 
         async for csv_row in svc.iter_csv_rows(campaign_id, option_key):
-            writer.writerow([
-                csv_row.first_name, csv_row.last_name, csv_row.phone,
-                csv_row.selected_option_label, csv_row.raw_reply,
-                csv_row.status, csv_row.address, csv_row.received_at,
-            ])
+            writer.writerow(
+                [
+                    csv_row.first_name,
+                    csv_row.last_name,
+                    csv_row.phone,
+                    csv_row.selected_option_label,
+                    csv_row.raw_reply,
+                    csv_row.status,
+                    csv_row.address,
+                    csv_row.received_at,
+                ]
+            )
             yield buf.getvalue()
             buf.seek(0)
             buf.truncate(0)

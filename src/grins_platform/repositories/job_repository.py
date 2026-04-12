@@ -73,6 +73,8 @@ class JobRepository(LoggerMixin):
         quoted_amount: float | None = None,
         source: str | None = None,
         source_details: dict[str, Any] | None = None,
+        target_start_date: date | None = None,
+        target_end_date: date | None = None,
     ) -> Job:
         """Create a new job record.
 
@@ -118,6 +120,8 @@ class JobRepository(LoggerMixin):
             quoted_amount=quoted_amount,
             source=source,
             source_details=source_details,
+            target_start_date=target_start_date,
+            target_end_date=target_end_date,
             requested_at=datetime.now(),
         )
 
@@ -401,8 +405,11 @@ class JobRepository(LoggerMixin):
             search=search,
         )
 
-        # Base query — eager-load customer for customer_name in list response
-        base_query = select(Job).options(joinedload(Job.customer))
+        # Base query — eager-load customer + property for list response
+        base_query = select(Job).options(
+            joinedload(Job.customer),
+            joinedload(Job.job_property),
+        )
 
         if not include_deleted:
             base_query = base_query.where(Job.is_deleted == False)  # noqa: E712
@@ -481,8 +488,7 @@ class JobRepository(LoggerMixin):
                 base_query = base_query.where(Job.property_id.in_(sub))
             else:
                 base_query = base_query.where(
-                    (Job.property_id.is_(None))
-                    | (Job.property_id.notin_(sub)),
+                    (Job.property_id.is_(None)) | (Job.property_id.notin_(sub)),
                 )
 
         # Apply target date range filters

@@ -27,7 +27,7 @@ def create_mock_session() -> MagicMock:
         return mock_result
 
     # Create an async function that returns the mock result
-    async def mock_execute(*args, **kwargs):  # noqa: ARG001
+    async def mock_execute(*args, **kwargs):
         return create_mock_result(scalar_value=0, all_value=[])
 
     # Mock execute to return proper result objects

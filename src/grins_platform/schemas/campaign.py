@@ -327,12 +327,16 @@ class CampaignRecipientResponse(BaseModel):
         description="Error details if failed",
     )
     created_at: datetime = Field(..., description="Record creation timestamp")
-    recipient_name: str | None = Field(default=None, description="Customer or lead name")
-    recipient_phone: str | None = Field(default=None, description="Customer or lead phone")
+    recipient_name: str | None = Field(
+        default=None, description="Customer or lead name"
+    )
+    recipient_phone: str | None = Field(
+        default=None, description="Customer or lead phone"
+    )
 
     @model_validator(mode="before")
     @classmethod
-    def populate_recipient_info(cls, data: Any) -> Any:
+    def populate_recipient_info(cls, data: Any) -> Any:  # noqa: ANN401
         """Pull name/phone from loaded customer/lead relationships."""
         if hasattr(data, "customer") and data.customer:
             c = data.customer

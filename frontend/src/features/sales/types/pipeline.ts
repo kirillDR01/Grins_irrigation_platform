@@ -94,3 +94,35 @@ export const ALL_STATUSES: SalesEntryStatus[] = [
   'closed_won',
   'closed_lost',
 ];
+
+// Sales calendar event types — Req 15.1, 15.2, 15.3
+export interface SalesCalendarEvent {
+  id: string;
+  sales_entry_id: string;
+  customer_id: string;
+  title: string;
+  scheduled_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SalesCalendarEventCreate {
+  sales_entry_id: string;
+  customer_id: string;
+  title: string;
+  scheduled_date: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  notes?: string | null;
+}
+
+export interface SalesCalendarEventUpdate {
+  title?: string;
+  scheduled_date?: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  notes?: string | null;
+}

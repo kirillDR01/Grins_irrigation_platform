@@ -7,3 +7,7 @@ export { InvoiceHistory } from './InvoiceHistory';
 export { PaymentMethods } from './PaymentMethods';
 export { CustomerMessages } from './CustomerMessages';
 export { DuplicateReview } from './DuplicateReview';
+export { DuplicateReviewQueue } from './DuplicateReviewQueue';
+export { MergeComparisonModal } from './MergeComparisonModal';
+export { ServicePreferencesSection } from './ServicePreferencesSection';
+export { ServicePreferenceModal } from './ServicePreferenceModal';

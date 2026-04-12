@@ -27,6 +27,9 @@ from grins_platform.api.v1.chat import router as chat_router
 from grins_platform.api.v1.checkout import router as checkout_router
 from grins_platform.api.v1.communications import router as communications_v2_router
 from grins_platform.api.v1.conflict_resolution import router as conflict_router
+from grins_platform.api.v1.contract_renewals import (
+    router as contract_renewals_router,
+)
 from grins_platform.api.v1.customers import router as customers_router
 from grins_platform.api.v1.dashboard import router as dashboard_router
 from grins_platform.api.v1.email import router as email_router
@@ -41,13 +44,18 @@ from grins_platform.api.v1.notifications import router as notifications_router
 from grins_platform.api.v1.onboarding import router as onboarding_router
 from grins_platform.api.v1.portal import router as portal_router
 from grins_platform.api.v1.properties import router as properties_router
+from grins_platform.api.v1.reschedule_requests import (
+    router as reschedule_requests_router,
+)
 from grins_platform.api.v1.sales import router as sales_router
+from grins_platform.api.v1.sales_pipeline import router as sales_pipeline_router
 from grins_platform.api.v1.schedule import router as schedule_router
 from grins_platform.api.v1.schedule_clear import router as schedule_clear_router
 from grins_platform.api.v1.sent_messages import router as sent_messages_router
 from grins_platform.api.v1.services import router as services_router
 from grins_platform.api.v1.settings import router as settings_router
 from grins_platform.api.v1.sheet_submissions import router as sheet_submissions_router
+from grins_platform.api.v1.signwell_webhooks import router as signwell_webhooks_router
 from grins_platform.api.v1.sms import (
     communications_router,
     router as sms_router,
@@ -152,6 +160,12 @@ api_router.include_router(
     tags=["schedule-clear"],
 )
 
+# Include reschedule requests endpoints (CRM Changes Update 2 Req 25)
+api_router.include_router(
+    reschedule_requests_router,
+    tags=["reschedule-requests"],
+)
+
 # Include invoice endpoints
 api_router.include_router(
     invoices_router,
@@ -207,6 +221,12 @@ api_router.include_router(
     tags=["callrail-webhooks"],
 )
 
+# Include SignWell Webhook endpoints (excluded from CSRF)
+api_router.include_router(
+    signwell_webhooks_router,
+    tags=["signwell-webhooks"],
+)
+
 # Include Onboarding endpoints (public pre-checkout consent)
 api_router.include_router(
     onboarding_router,
@@ -260,6 +280,19 @@ api_router.include_router(
     sales_router,
     prefix="/sales",
     tags=["sales"],
+)
+
+# Include Contract Renewals endpoints (CRM Changes Update 2 Req 31)
+api_router.include_router(
+    contract_renewals_router,
+    tags=["contract-renewals"],
+)
+
+# Include Sales Pipeline endpoints (CRM Changes Update 2)
+api_router.include_router(
+    sales_pipeline_router,
+    prefix="/sales",
+    tags=["sales-pipeline"],
 )
 
 # Include Accounting endpoints (Req 52, 59, 61, 62)

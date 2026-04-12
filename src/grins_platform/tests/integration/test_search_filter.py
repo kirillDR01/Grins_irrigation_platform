@@ -287,7 +287,7 @@ class TestPaginationWithLargeDatasets:
     def test_pagination_exceeds_max_page_size_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test that page_size > 100 returns validation error.
 
@@ -1104,7 +1104,7 @@ class TestSortingOptions:
     def test_invalid_sort_order_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test that invalid sort_order returns validation error.
 

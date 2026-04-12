@@ -26,9 +26,11 @@ import { ClearDayButton } from './ClearDayButton';
 import { ClearDayDialog } from './ClearDayDialog';
 import { RecentlyClearedSection } from './RecentlyClearedSection';
 import { RestoreScheduleDialog } from './RestoreScheduleDialog';
+import { RescheduleRequestsQueue } from './RescheduleRequestsQueue';
 import { DaySelector } from './DaySelector';
 import { LeadTimeIndicator } from './LeadTimeIndicator';
 import { JobSelector } from './JobSelector';
+import { JobPickerPopup } from './JobPickerPopup';
 import { InlineCustomerPanel } from './InlineCustomerPanel';
 import { scheduleGenerationApi } from '../api/scheduleGenerationApi';
 import { useDailySchedule, useWeeklySchedule, appointmentKeys } from '../hooks/useAppointments';
@@ -52,6 +54,7 @@ export function SchedulePage() {
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
   const [showJobSelector, setShowJobSelector] = useState(false);
+  const [showJobPicker, setShowJobPicker] = useState(false);
   const [inlinePanelAppointmentId, setInlinePanelAppointmentId] = useState<string | null>(null);
   
   // Track the current week displayed in the calendar
@@ -317,7 +320,7 @@ export function SchedulePage() {
               </TabsList>
             </Tabs>
             <Button
-              onClick={() => setShowJobSelector(true)}
+              onClick={() => setShowJobPicker(true)}
               variant="outline"
               data-testid="add-jobs-btn"
               className="border-teal-200 text-teal-600 hover:bg-teal-50"
@@ -363,6 +366,11 @@ export function SchedulePage() {
           />
         )}
       </div>
+
+      {/* Reschedule Requests Queue (Req 25) */}
+      <RescheduleRequestsQueue
+        onAppointmentClick={(id) => setSelectedAppointmentId(id)}
+      />
 
       {/* Recently Cleared Section */}
       <RecentlyClearedSection onViewDetails={handleViewClearDetails} />
@@ -432,7 +440,14 @@ export function SchedulePage() {
         auditId={selectedAuditId}
       />
 
-      {/* Job Selector Modal (Req 26) */}
+      {/* Job Picker Popup (Req 22, 23) — bulk assignment with per-job time adjustments */}
+      <JobPickerPopup
+        open={showJobPicker}
+        onOpenChange={setShowJobPicker}
+        defaultDate={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined}
+      />
+
+      {/* Legacy Job Selector Modal (Req 26) */}
       <JobSelector
         open={showJobSelector}
         onOpenChange={setShowJobSelector}

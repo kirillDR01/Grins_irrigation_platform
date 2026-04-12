@@ -565,6 +565,149 @@ class FollowUpStatus(str, Enum):
 
 
 # =============================================================================
+# CRM Changes Update 2 Enums
+# =============================================================================
+
+
+class SalesEntryStatus(str, Enum):
+    """Sales pipeline entry status.
+
+    Validates: CRM Changes Update 2 Req 14.3
+    """
+
+    SCHEDULE_ESTIMATE = "schedule_estimate"
+    ESTIMATE_SCHEDULED = "estimate_scheduled"
+    SEND_ESTIMATE = "send_estimate"
+    PENDING_APPROVAL = "pending_approval"
+    SEND_CONTRACT = "send_contract"
+    CLOSED_WON = "closed_won"
+    CLOSED_LOST = "closed_lost"
+
+
+# Ordered pipeline for auto-advance (non-terminal only)
+SALES_PIPELINE_ORDER: list[SalesEntryStatus] = [
+    SalesEntryStatus.SCHEDULE_ESTIMATE,
+    SalesEntryStatus.ESTIMATE_SCHEDULED,
+    SalesEntryStatus.SEND_ESTIMATE,
+    SalesEntryStatus.PENDING_APPROVAL,
+    SalesEntryStatus.SEND_CONTRACT,
+    SalesEntryStatus.CLOSED_WON,
+]
+
+SALES_TERMINAL_STATUSES: set[SalesEntryStatus] = {
+    SalesEntryStatus.CLOSED_WON,
+    SalesEntryStatus.CLOSED_LOST,
+}
+
+VALID_SALES_TRANSITIONS: dict[SalesEntryStatus, set[SalesEntryStatus]] = {
+    SalesEntryStatus.SCHEDULE_ESTIMATE: {
+        SalesEntryStatus.ESTIMATE_SCHEDULED,
+        SalesEntryStatus.CLOSED_LOST,
+    },
+    SalesEntryStatus.ESTIMATE_SCHEDULED: {
+        SalesEntryStatus.SEND_ESTIMATE,
+        SalesEntryStatus.CLOSED_LOST,
+    },
+    SalesEntryStatus.SEND_ESTIMATE: {
+        SalesEntryStatus.PENDING_APPROVAL,
+        SalesEntryStatus.CLOSED_LOST,
+    },
+    SalesEntryStatus.PENDING_APPROVAL: {
+        SalesEntryStatus.SEND_CONTRACT,
+        SalesEntryStatus.CLOSED_LOST,
+    },
+    SalesEntryStatus.SEND_CONTRACT: {
+        SalesEntryStatus.CLOSED_WON,
+        SalesEntryStatus.CLOSED_LOST,
+    },
+    SalesEntryStatus.CLOSED_WON: set(),
+    SalesEntryStatus.CLOSED_LOST: set(),
+}
+
+
+class ConfirmationKeyword(str, Enum):
+    """Y/R/C confirmation reply keywords.
+
+    Validates: CRM Changes Update 2 Req 24.1
+    """
+
+    CONFIRM = "confirm"
+    RESCHEDULE = "reschedule"
+    CANCEL = "cancel"
+
+
+class DocumentType(str, Enum):
+    """Customer document type classification.
+
+    Validates: CRM Changes Update 2 Req 17.3
+    """
+
+    ESTIMATE = "estimate"
+    CONTRACT = "contract"
+    PHOTO = "photo"
+    DIAGRAM = "diagram"
+    REFERENCE = "reference"
+    SIGNED_CONTRACT = "signed_contract"
+
+
+class ProposalStatus(str, Enum):
+    """Contract renewal proposal status.
+
+    Validates: CRM Changes Update 2 Req 31.1
+    """
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    PARTIALLY_APPROVED = "partially_approved"
+    REJECTED = "rejected"
+
+
+class ProposedJobStatus(str, Enum):
+    """Contract renewal proposed job status.
+
+    Validates: CRM Changes Update 2 Req 31.1
+    """
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class MessageType(str, Enum):
+    """SMS message type classification.
+
+    Validates: CRM Changes Update 2 Req 14.3, 24.1
+    """
+
+    APPOINTMENT_CONFIRMATION = "appointment_confirmation"
+    APPOINTMENT_REMINDER = "appointment_reminder"
+    ON_THE_WAY = "on_the_way"
+    ARRIVAL = "arrival"
+    COMPLETION = "completion"
+    INVOICE = "invoice"
+    PAYMENT_REMINDER = "payment_reminder"
+    CUSTOM = "custom"
+    LEAD_CONFIRMATION = "lead_confirmation"
+    ESTIMATE_SENT = "estimate_sent"
+    CONTRACT_SENT = "contract_sent"
+    REVIEW_REQUEST = "review_request"
+    CAMPAIGN = "campaign"
+    GOOGLE_REVIEW_REQUEST = "google_review_request"
+    ON_MY_WAY = "on_my_way"
+
+
+class MergeCandidateStatus(str, Enum):
+    """Customer merge candidate review status.
+
+    Validates: CRM Changes Update 2 Req 5.6
+    """
+
+    PENDING = "pending"
+    MERGED = "merged"
+    DISMISSED = "dismissed"
+
+
+# =============================================================================
 # Valid Appointment Status Transitions
 # =============================================================================
 

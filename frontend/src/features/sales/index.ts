@@ -1,6 +1,7 @@
 // Components
 export { SalesDashboard } from './components';
 export { SalesPipeline } from './components';
+export { SalesCalendar } from './components';
 export { StatusActionButton } from './components';
 export { EstimateBuilder } from './components';
 export { MediaLibrary } from './components';
@@ -8,6 +9,9 @@ export { DiagramBuilder } from './components';
 export { FollowUpQueue } from './components';
 export { EstimateDetail } from './components';
 export { EstimateList } from './components';
+export { SalesDetail } from './components';
+export { DocumentsSection } from './components';
+export { SignWellEmbeddedSigner } from './components';
 
 // Hooks
 export {
@@ -34,6 +38,16 @@ export {
   useConvertToJob,
   useForceConvertToJob,
   useMarkSalesLost,
+  useTriggerEmailSigning,
+  useGetEmbeddedSigningUrl,
+  useSalesDocuments,
+  useUploadSalesDocument,
+  useDownloadSalesDocument,
+  useDeleteSalesDocument,
+  useSalesCalendarEvents,
+  useCreateCalendarEvent,
+  useUpdateCalendarEvent,
+  useDeleteCalendarEvent,
 } from './hooks/useSalesPipeline';
 
 // Types

@@ -6,6 +6,7 @@ pattern used by all read queries (summary, list, export).
 Revision ID: 20260410_100000
 Revises: 20260409_100000
 """
+
 from collections.abc import Sequence
 from typing import Union
 

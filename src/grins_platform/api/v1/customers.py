@@ -20,7 +20,6 @@ from fastapi import (
     File,
     HTTPException,
     Query,
-    Request,
     Response,
     UploadFile,
     status,
@@ -30,8 +29,10 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from grins_platform.api.v1.dependencies import (
+    get_customer_merge_service,
     get_customer_service,
     get_db_session,
+    get_duplicate_detection_service,
     get_photo_service,
 )
 from grins_platform.exceptions import (
@@ -57,16 +58,29 @@ from grins_platform.schemas.customer import (
     CustomerPhotoResponse,
     CustomerResponse,
     CustomerUpdate,
-    DuplicateGroup,
-    MergeCustomersRequest,
     PaginatedCustomerResponse,
     PaymentMethodResponse,
     ServiceHistorySummary,
     ServicePreferenceCreate,
     ServicePreferenceUpdate,
 )
+from grins_platform.schemas.customer_document import (
+    CustomerDocumentResponse,
+)
+from grins_platform.schemas.customer_merge import (
+    MergeCandidateResponse,
+    MergeExecuteBody,
+    MergePreviewResponse,
+    PaginatedMergeCandidateResponse,
+)
+from grins_platform.services.customer_merge_service import (
+    CustomerMergeService,  # noqa: TC001 - Required at runtime for FastAPI DI
+)
 from grins_platform.services.customer_service import (
     CustomerService,  # noqa: TC001 - Required at runtime for FastAPI DI
+)
+from grins_platform.services.duplicate_detection_service import (
+    DuplicateDetectionService,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
 from grins_platform.services.photo_service import (
     PhotoService,
@@ -179,92 +193,85 @@ async def check_duplicate(
 
 
 # =============================================================================
-# CRM Gap Closure 7.3: GET /api/v1/customers/duplicates
+# CRM Changes Update 2: GET /api/v1/customers/duplicates — paginated review queue
 # =============================================================================
 
 
 @router.get(  # type: ignore[untyped-decorator]
     "/duplicates",
-    response_model=list[DuplicateGroup],
-    summary="Get potential duplicate customer groups",
-    description="Returns groups of potential duplicate customers identified "
-    "by matching phone, email, or similar name.",
+    response_model=PaginatedMergeCandidateResponse,
+    summary="Get paginated duplicate review queue",
+    description="Returns paginated merge candidates sorted by score descending.",
 )
 async def get_duplicates(
-    service: Annotated[CustomerService, Depends(get_customer_service)],
     db: Annotated[AsyncSession, Depends(get_db_session)],
-) -> list[DuplicateGroup]:
-    """Get potential duplicate customer groups.
+    detection_service: Annotated[
+        DuplicateDetectionService,
+        Depends(get_duplicate_detection_service),
+    ],
+    skip: int = Query(0, ge=0, description="Records to skip"),
+    limit: int = Query(20, ge=1, le=100, description="Max records to return"),
+) -> PaginatedMergeCandidateResponse:
+    """Get paginated duplicate review queue.
 
-    Args:
-        service: Injected CustomerService
-        db: Async database session
-
-    Returns:
-        List of DuplicateGroup with potential duplicates
-
-    Validates: CRM Gap Closure Req 7.1
+    Validates: CRM Changes Update 2 Req 6.1, 6.3
     """
-    _endpoints.log_started("get_duplicates")
+    _endpoints.log_started("get_duplicates", skip=skip, limit=limit)
 
-    result = await service.find_duplicates(db)
+    candidates, total = await detection_service.get_review_queue(
+        db,
+        skip=skip,
+        limit=limit,
+    )
 
-    _endpoints.log_completed("get_duplicates", group_count=len(result))
-    return result
+    items = [MergeCandidateResponse.model_validate(c) for c in candidates]
+    _endpoints.log_completed("get_duplicates", total=total, returned=len(items))
+    return PaginatedMergeCandidateResponse(
+        items=items,
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
 
 
 # =============================================================================
-# CRM Gap Closure 7.3: POST /api/v1/customers/merge
+# CRM Changes Update 2: POST /api/v1/customers/{id}/merge — execute merge
 # =============================================================================
 
 
 @router.post(  # type: ignore[untyped-decorator]
-    "/merge",
-    response_model=CustomerResponse,
-    summary="Merge duplicate customers",
-    description="Merge duplicate customers into a primary customer. "
-    "All related records are reassigned and duplicates are soft-deleted.",
+    "/{customer_id}/merge",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Merge a duplicate customer into this customer",
+    description="Execute merge with field_selections. Primary customer survives.",
 )
 async def merge_customers(
-    data: MergeCustomersRequest,
-    service: Annotated[CustomerService, Depends(get_customer_service)],
+    customer_id: UUID,
+    data: MergeExecuteBody,
+    merge_service: Annotated[
+        CustomerMergeService,
+        Depends(get_customer_merge_service),
+    ],
     db: Annotated[AsyncSession, Depends(get_db_session)],
-    request: Request,
-) -> CustomerResponse:
-    """Merge duplicate customers into a primary customer.
+) -> None:
+    """Merge duplicate into primary customer.
 
-    Args:
-        data: MergeCustomersRequest with primary and duplicate IDs
-        service: Injected CustomerService
-        db: Async database session
-        request: FastAPI request for IP address
-
-    Returns:
-        CustomerResponse of the primary customer after merge
-
-    Raises:
-        HTTPException: 404 if customer not found, 409 on merge conflict
-
-    Validates: CRM Gap Closure Req 7.2
+    Validates: CRM Changes Update 2 Req 6.1, 6.3
     """
     _endpoints.log_started(
         "merge_customers",
-        primary_id=str(data.primary_customer_id),
-        duplicate_count=len(data.duplicate_customer_ids),
+        primary_id=str(customer_id),
+        duplicate_id=str(data.duplicate_id),
     )
 
-    # Extract actor_id — use a placeholder for now (no auth in this context)
-    actor_id = data.primary_customer_id  # Admin performing the merge
-    ip_address = request.client.host if request.client else "unknown"
-
     try:
-        result = await service.merge_customers(
+        await merge_service.execute_merge(
             db=db,
-            primary_id=data.primary_customer_id,
-            duplicate_ids=data.duplicate_customer_ids,
-            actor_id=actor_id,
-            ip_address=ip_address,
+            primary_id=customer_id,
+            duplicate_id=data.duplicate_id,
+            field_selections=data.field_selections,
         )
+        await db.commit()
     except CustomerNotFoundError as e:
         _endpoints.log_rejected("merge_customers", reason="not_found")
         raise HTTPException(
@@ -277,12 +284,59 @@ async def merge_customers(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(e),
         ) from e
-    else:
-        _endpoints.log_completed(
-            "merge_customers",
-            primary_id=str(data.primary_customer_id),
+
+    _endpoints.log_completed(
+        "merge_customers",
+        primary_id=str(customer_id),
+    )
+
+
+# =============================================================================
+# CRM Changes Update 2: POST /api/v1/customers/{id}/merge/preview
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{customer_id}/merge/preview",
+    response_model=MergePreviewResponse,
+    summary="Preview merge result",
+    description="Preview what a merge would produce without executing it.",
+)
+async def preview_merge(
+    customer_id: UUID,
+    data: MergeExecuteBody,
+    merge_service: Annotated[
+        CustomerMergeService,
+        Depends(get_customer_merge_service),
+    ],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> MergePreviewResponse:
+    """Preview merge result without executing.
+
+    Validates: CRM Changes Update 2 Req 6.2
+    """
+    _endpoints.log_started(
+        "preview_merge",
+        primary_id=str(customer_id),
+        duplicate_id=str(data.duplicate_id),
+    )
+
+    try:
+        result = await merge_service.preview_merge(
+            db=db,
+            primary_id=customer_id,
+            duplicate_id=data.duplicate_id,
+            field_selections=data.field_selections,
         )
-        return result
+    except CustomerNotFoundError as e:
+        _endpoints.log_rejected("preview_merge", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer not found: {e.customer_id}",
+        ) from e
+
+    _endpoints.log_completed("preview_merge", primary_id=str(customer_id))
+    return result
 
 
 # =============================================================================
@@ -1612,3 +1666,226 @@ async def get_customer_sent_messages(
         "page_size": page_size,
         "total_pages": total_pages,
     }
+
+
+# =============================================================================
+# Customer Documents — Req 17.2, 17.3
+# =============================================================================
+
+
+@router.post(
+    "/{customer_id}/documents",
+    response_model=CustomerDocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload a customer document",
+    description="Upload a document for a customer. Max 25 MB.",
+)
+async def upload_customer_document(
+    customer_id: UUID,
+    service: Annotated[CustomerService, Depends(get_customer_service)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    photo_service: Annotated[PhotoService, Depends(get_photo_service)],
+    file: Annotated[UploadFile, File(description="Document file to upload")],
+    document_type: str = Query(
+        description="Document type: estimate, contract, "
+        "photo, diagram, reference, signed_contract",
+    ),
+) -> CustomerDocumentResponse:
+    """Upload a document for a customer.
+
+    Validates: CRM Changes Update 2 Req 17.2, 17.3
+    """
+    from grins_platform.models.customer_document import (  # noqa: PLC0415
+        CustomerDocument,
+    )
+    from grins_platform.models.enums import DocumentType  # noqa: PLC0415
+
+    _endpoints.log_started(
+        "upload_customer_document",
+        customer_id=str(customer_id),
+        file_name=file.filename or "unknown",
+    )
+
+    # Validate document_type enum
+    try:
+        doc_type = DocumentType(document_type)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid document_type: {document_type}",
+        ) from e
+
+    # Verify customer exists
+    try:
+        await service.get_customer(customer_id, include_properties=False)
+    except CustomerNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer not found: {e.customer_id}",
+        ) from e
+
+    file_data = await file.read()
+    file_name = file.filename or "document"
+
+    try:
+        upload_result = photo_service.upload_file(
+            data=file_data,
+            file_name=file_name,
+            context=UploadContext.CUSTOMER_DOCUMENT,
+            strip_metadata=False,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+
+    doc = CustomerDocument(
+        customer_id=customer_id,
+        file_key=upload_result.file_key,
+        file_name=upload_result.file_name,
+        document_type=doc_type.value,
+        mime_type=upload_result.content_type,
+        size_bytes=upload_result.file_size,
+    )
+    db.add(doc)
+    await db.flush()
+    await db.refresh(doc)
+
+    _endpoints.log_completed(
+        "upload_customer_document",
+        customer_id=str(customer_id),
+        document_id=str(doc.id),
+    )
+
+    resp: CustomerDocumentResponse = CustomerDocumentResponse.model_validate(doc)
+    return resp
+
+
+@router.get(
+    "/{customer_id}/documents",
+    summary="List customer documents",
+    description="List all documents for a customer.",
+)
+async def list_customer_documents(
+    customer_id: UUID,
+    service: Annotated[CustomerService, Depends(get_customer_service)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> list[CustomerDocumentResponse]:
+    """List documents for a customer.
+
+    Validates: CRM Changes Update 2 Req 17.2
+    """
+    from grins_platform.models.customer_document import (  # noqa: PLC0415
+        CustomerDocument,
+    )
+
+    # Verify customer exists
+    try:
+        await service.get_customer(customer_id, include_properties=False)
+    except CustomerNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer not found: {e.customer_id}",
+        ) from e
+
+    from sqlalchemy import select  # noqa: PLC0415
+
+    stmt = (
+        select(CustomerDocument)
+        .where(CustomerDocument.customer_id == customer_id)
+        .order_by(CustomerDocument.uploaded_at.desc())
+    )
+    result = await db.execute(stmt)
+    docs = list(result.scalars().all())
+
+    return [CustomerDocumentResponse.model_validate(d) for d in docs]
+
+
+@router.get(
+    "/{customer_id}/documents/{document_id}/download",
+    summary="Get document download URL",
+    description="Generate a pre-signed download URL for a customer document.",
+)
+async def download_customer_document(
+    customer_id: UUID,
+    document_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    photo_service: Annotated[PhotoService, Depends(get_photo_service)],
+) -> dict[str, str]:
+    """Get a pre-signed download URL for a customer document.
+
+    Validates: CRM Changes Update 2 Req 17.2
+    """
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from grins_platform.models.customer_document import (  # noqa: PLC0415
+        CustomerDocument,
+    )
+
+    stmt = select(CustomerDocument).where(
+        CustomerDocument.id == document_id,
+        CustomerDocument.customer_id == customer_id,
+    )
+    result = await db.execute(stmt)
+    doc = result.scalar_one_or_none()
+
+    if doc is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+
+    url = photo_service.generate_presigned_url(doc.file_key)
+    return {"download_url": url, "file_name": doc.file_name}
+
+
+@router.delete(
+    "/{customer_id}/documents/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a customer document",
+    description="Delete a customer document from storage and database.",
+)
+async def delete_customer_document(
+    customer_id: UUID,
+    document_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    photo_service: Annotated[PhotoService, Depends(get_photo_service)],
+) -> None:
+    """Delete a customer document.
+
+    Validates: CRM Changes Update 2 Req 17.2
+    """
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from grins_platform.models.customer_document import (  # noqa: PLC0415
+        CustomerDocument,
+    )
+
+    stmt = select(CustomerDocument).where(
+        CustomerDocument.id == document_id,
+        CustomerDocument.customer_id == customer_id,
+    )
+    result = await db.execute(stmt)
+    doc = result.scalar_one_or_none()
+
+    if doc is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+
+    _endpoints.log_started(
+        "delete_customer_document",
+        customer_id=str(customer_id),
+        document_id=str(document_id),
+    )
+
+    photo_service.delete_file(doc.file_key)
+    await db.delete(doc)
+
+    _endpoints.log_completed(
+        "delete_customer_document",
+        customer_id=str(customer_id),
+        document_id=str(document_id),
+    )

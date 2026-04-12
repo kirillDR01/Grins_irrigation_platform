@@ -414,7 +414,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
   - Save all screenshots to `e2e-screenshots/crm-changes-update-2/sales-pipeline/`
   - If any visual or functional issue is found, fix it and re-validate
 
-- [ ] 12. Jobs Domain — Property Tags, Week Of, On-Site Operations (Req 19–20, 26–27)
+- [x] 12. Jobs Domain — Property Tags, Week Of, On-Site Operations (Req 19–20, 26–27)
   - [x] 12.1 Implement Week Of semantic rename and WeekPicker
     - Create `WeekPicker.tsx` shared component in `frontend/src/shared/components/` — calendar highlighting full weeks, selects Monday–Sunday range
     - Backend `align_to_week(date) -> (Monday, Sunday)` utility function
@@ -464,7 +464,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - Test align_to_week function, week picker date range
     - _Requirements: 20.2, 27.1, 27.3, 27.4_
 
-- [ ] 13. Schedule & Confirmation Domain — Job Picker, Y/R/C Flow, Reschedule Queue (Req 22–25)
+- [x] 13. Schedule & Confirmation Domain — Job Picker, Y/R/C Flow, Reschedule Queue (Req 22–25)
   - [x] 13.1 Implement JobConfirmationService
     - Create `src/grins_platform/services/job_confirmation_service.py`
     - `parse_confirmation_reply(body) -> ConfirmationKeyword | None` — Y/R/C keyword parser (case-insensitive, whitespace-trimmed)
@@ -476,7 +476,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - Correlate via provider_thread_id, use only abstract InboundSMS dataclass
     - _Requirements: 24.1, 24.2, 24.3, 24.4, 24.5, 24.6, 24.7, 24.8_
 
-  - [ ] 13.2 Write property tests for Y/R/C keyword parser
+  - [x] 13.2 Write property tests for Y/R/C keyword parser
     - **Property 8: Y/R/C Keyword Parser Completeness** — all known keywords map correctly, unknown inputs return None
     - **Validates: Requirements 34.1, 34.2, 34.3, 34.4**
     - **Property 9: Y/R/C Parser Idempotency** — parse(input) == parse(input)
@@ -484,39 +484,39 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - **Property 10: Y/R/C Parser Case Insensitivity** — parse(upper) == parse(lower)
     - **Validates: Requirements 34.1, 34.2, 34.3**
 
-  - [ ] 13.3 Wire Y/R/C confirmation into existing SMS inbound webhook
+  - [x] 13.3 Wire Y/R/C confirmation into existing SMS inbound webhook
     - Extend existing CallRail inbound webhook handler to detect APPOINTMENT_CONFIRMATION thread_id
     - Route to JobConfirmationService.handle_confirmation when matched
     - Send outbound confirmation SMS on appointment creation via SMSService
     - _Requirements: 24.1, 24.2, 24.3, 24.4_
 
-  - [ ] 13.4 Implement reschedule requests API and admin queue
+  - [x] 13.4 Implement reschedule requests API and admin queue
     - `GET /api/v1/schedule/reschedule-requests` — list open requests grouped by status
     - `PUT /api/v1/schedule/reschedule-requests/{id}/resolve` — mark resolved
     - _Requirements: 25.1, 25.2, 25.3, 25.4_
 
-  - [ ] 13.5 Implement schedule visual distinction and job picker
+  - [x] 13.5 Implement schedule visual distinction and job picker
     - CSS for confirmed (solid border, full color) vs unconfirmed (dashed border, muted) appointments
     - `JobPickerPopup.tsx` — popup mirroring Jobs tab columns/filters/search for manual schedule assignment
     - Bulk assignment: select multiple jobs → assign to date + staff member with global time allocation
     - Per-job time adjustments after bulk assignment
     - _Requirements: 22.1, 22.2, 22.3, 23.1, 23.2_
 
-  - [ ] 13.6 Build reschedule requests queue frontend
+  - [x] 13.6 Build reschedule requests queue frontend
     - `RescheduleRequestsQueue.tsx` — admin queue showing customer name, original appointment, requested alternatives, action buttons
     - "Reschedule to Alternative" opens appointment editor pre-filled
     - "Mark Resolved" closes the request
     - _Requirements: 25.1, 25.2, 25.3, 25.4_
 
-  - [ ] 13.7 Write unit tests for JobConfirmationService
+  - [x] 13.7 Write unit tests for JobConfirmationService
     - Test keyword parsing, confirmation handling, reschedule request creation, cancel flow
     - Test thread_id correlation, needs_review fallback
     - _Requirements: 24.2, 24.3, 24.4, 24.5_
 
-- [ ] 14. Checkpoint — Jobs, Schedule, and Confirmation domains complete
+- [x] 14. Checkpoint — Jobs, Schedule, and Confirmation domains complete
   - Ensure Week Of, property tags, on-site ops, Y/R/C flow, reschedule queue, and job picker all work. Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 14.1 E2E Visual Validation — Jobs Domain
+- [x] 14.1 E2E Visual Validation — Jobs Domain
   - Use agent-browser to navigate to /jobs, verify "Week Of" column label (not "Due By"), verify week picker renders on click
   - Click the week picker — select a week, verify it writes "Week of M/D/YYYY" format with the Monday date
   - Verify the week picker selects the full Monday–Sunday range (not a single day)
@@ -540,7 +540,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
   - Save all screenshots to `e2e-screenshots/crm-changes-update-2/jobs/`
   - If any visual or functional issue is found, fix it and re-validate
 
-- [ ] 14.2 E2E Visual Validation — Schedule & Confirmation Domain
+- [x] 14.2 E2E Visual Validation — Schedule & Confirmation Domain
   - Use agent-browser to navigate to /schedule, verify confirmed appointments have solid border/full color and unconfirmed have dashed border/muted background
   - Take side-by-side screenshots of confirmed vs unconfirmed appointments for visual comparison
   - Open the job picker popup — verify it mirrors the Jobs tab columns/filters/search exactly
@@ -554,14 +554,14 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
   - Save all screenshots to `e2e-screenshots/crm-changes-update-2/schedule/`
   - If any visual or functional issue is found, fix it and re-validate
 
-- [ ] 15. Invoice Domain — Full Filtering, Status Colors, Mass Notifications (Req 28–29)
-  - [ ] 15.1 Implement 9-axis invoice filtering backend
+- [x] 15. Invoice Domain — Full Filtering, Status Colors, Mass Notifications (Req 28–29)
+  - [x] 15.1 Implement 9-axis invoice filtering backend
     - Extend `GET /api/v1/invoices` with composable AND-based query builder
     - 9 axes: date range (created/due/paid), status, customer, job, amount range, payment type, days until due, days past due, invoice number
     - All filters compose via AND (intersection)
     - _Requirements: 28.1_
 
-  - [ ] 15.2 Write property tests for invoice filter composition
+  - [x] 15.2 Write property tests for invoice filter composition
     - **Property 14: Invoice Filter Composition** — result(A ∪ B) == result(A) ∩ result(B)
     - **Validates: Requirements 37.1**
     - **Property 15: Invoice Filter URL Round-Trip** — deserialize(serialize(filter_state)) == filter_state
@@ -569,27 +569,27 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - **Property 16: Invoice Filter Clear-All Identity** — clear_all returns unfiltered result set
     - **Validates: Requirements 37.3**
 
-  - [ ] 15.3 Implement mass notification endpoint
+  - [x] 15.3 Implement mass notification endpoint
     - `POST /api/v1/invoices/mass-notify` — bulk SMS/email to past-due, due-soon, lien-eligible customers
     - Configurable templates per notification type
     - Lien eligibility: 60+ days past due AND over $500 (configurable)
     - _Requirements: 29.3, 29.4_
 
-  - [ ] 15.4 Build FilterPanel shared component
+  - [x] 15.4 Build FilterPanel shared component
     - `FilterPanel.tsx` in `frontend/src/shared/components/` — collapsible panel with all 9 filter axes
     - Chip badges for active filters, "Clear all filters" button
     - URL persistence via useSearchParams() for bookmarkable/shareable filtered views
     - Reusable across Invoices, Jobs, Customers, Sales (4+ features)
     - _Requirements: 28.2, 28.3, 28.4, 28.5_
 
-  - [ ] 15.5 Update InvoiceList frontend
+  - [x] 15.5 Update InvoiceList frontend
     - Columns: Invoice Number, Customer Name, Job (link), Cost, Status, Days Until Due, Days Past Due, Payment Type
     - Status colors: green (Complete), yellow (Pending), red (Past Due)
     - Mass notification action buttons
     - Real-time invoice state changes reflected in Customer detail view
     - _Requirements: 29.1, 29.2, 29.3, 29.5_
 
-  - [ ] 15.6 Write unit tests for invoice filtering and mass notifications
+  - [x] 15.6 Write unit tests for invoice filtering and mass notifications
     - Test each filter axis individually and in combination
     - Test URL serialization/deserialization round-trip
     - Test mass notification targeting logic
@@ -597,7 +597,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
 
 - [ ] 16. Onboarding & Contract Renewals Domain (Req 30–31)
 
-- [ ] 15.7 E2E Visual Validation — Invoice Domain
+- [x] 15.7 E2E Visual Validation — Invoice Domain
   - Use agent-browser to navigate to /invoices, verify FilterPanel is visible (collapsible sidebar or drawer)
   - Test each of the 9 filter axes individually:
     - Date range: set a created date range, verify results narrow
@@ -623,18 +623,18 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
   - Check `agent-browser console` for any JS errors during the flow
   - Save all screenshots to `e2e-screenshots/crm-changes-update-2/invoices/`
   - If any visual or functional issue is found, fix it and re-validate
-  - [ ] 16.1 Implement week-based job auto-population in onboarding
+  - [x] 16.1 Implement week-based job auto-population in onboarding
     - Add `WeekPickerStep.tsx` to onboarding wizard — per-service week selection restricted to valid month ranges
     - Store selections as `service_week_preferences` JSON on ServiceAgreement
     - Extend job generator to read service_week_preferences and set target_start_date/target_end_date via align_to_week()
     - Fall back to existing calendar-month defaults if preferences are null
     - _Requirements: 30.1, 30.2, 30.3, 30.4, 30.5_
 
-  - [ ] 16.2 Write property test for onboarding week preference round-trip
+  - [x] 16.2 Write property test for onboarding week preference round-trip
     - **Property 17: Onboarding Week Preference Round-Trip** — generate_jobs(preferences).week_of_display == preferences.values()
     - **Validates: Requirements 30.6**
 
-  - [ ] 16.3 Implement ContractRenewalReviewService
+  - [x] 16.3 Implement ContractRenewalReviewService
     - Create `src/grins_platform/services/contract_renewal_service.py`
     - `generate_proposal(db, agreement_id)` — create proposal with proposed jobs, roll forward prior-year preferences by +1 year
     - `approve_all(db, proposal_id, admin_id)` — bulk approve, create real Job records
@@ -644,12 +644,12 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - Fall back to hardcoded calendar-month defaults if no prior preferences
     - _Requirements: 31.1, 31.2, 31.3, 31.6, 31.7, 31.8, 31.10_
 
-  - [ ] 16.4 Wire contract renewal into Stripe webhook
+  - [x] 16.4 Wire contract renewal into Stripe webhook
     - On `invoice.paid` for auto_renew=true agreements, call generate_proposal() instead of creating jobs directly
     - Fire dashboard alert: "1 contract renewal ready for review: {customer_name}"
     - _Requirements: 31.1, 31.4_
 
-  - [ ] 16.5 Implement Contract Renewals API endpoints
+  - [x] 16.5 Implement Contract Renewals API endpoints
     - `GET /api/v1/contract-renewals` — list pending proposals
     - `GET /api/v1/contract-renewals/{id}` — proposal detail with proposed jobs
     - `POST /api/v1/contract-renewals/{id}/approve-all` — bulk approve
@@ -659,19 +659,19 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - `PUT /api/v1/contract-renewals/{id}/jobs/{job_id}` — modify proposed job (Week Of, admin_notes)
     - _Requirements: 31.5, 31.6, 31.7, 31.8, 31.9, 31.10, 31.11_
 
-  - [ ] 16.6 Build Contract Renewals frontend
+  - [x] 16.6 Build Contract Renewals frontend
     - Create `frontend/src/features/contract-renewals/` feature slice
     - `RenewalReviewList.tsx` — pending proposals with columns: Customer, Agreement, Proposed job count, Created date, Actions
     - `RenewalProposalDetail.tsx` — per-job approve/reject/modify with admin_notes, "Approve All" and "Reject All" bulk actions
     - Add Contract Renewals navigation entry
     - _Requirements: 31.5, 31.6, 31.7, 31.8, 31.9, 31.10, 31.11_
 
-  - [ ] 16.7 Write unit tests for ContractRenewalReviewService
+  - [x] 16.7 Write unit tests for ContractRenewalReviewService
     - Test proposal generation, date rolling (+1 year), approve/reject flows
     - Test fallback to calendar-month defaults
     - _Requirements: 31.1, 31.2, 31.3, 31.6, 31.10_
 
-- [ ] 17. Checkpoint — Onboarding and renewals complete
+- [x] 17. Checkpoint — Onboarding and renewals complete
   - Ensure week-based onboarding, contract renewal review queue, and all approval flows work. Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 17.1 E2E Visual Validation — Onboarding & Contract Renewals Domain

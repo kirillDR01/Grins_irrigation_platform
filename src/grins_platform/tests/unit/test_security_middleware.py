@@ -74,11 +74,11 @@ pytestmark = pytest.mark.unit
 # ============================================================================
 
 
-async def _ok_endpoint(request: Request) -> Response:  # noqa: ARG001
+async def _ok_endpoint(request: Request) -> Response:
     return JSONResponse({"ok": True})
 
 
-async def _post_endpoint(request: Request) -> Response:  # noqa: ARG001
+async def _post_endpoint(request: Request) -> Response:
     return JSONResponse({"ok": True})
 
 

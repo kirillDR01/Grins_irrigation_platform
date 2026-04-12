@@ -1,4 +1,3 @@
-# ruff: noqa: E501
 """Seed demo data for demonstration purposes.
 
 Revision ID: 20250626_100000

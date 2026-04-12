@@ -357,8 +357,8 @@ describe('LeadDetail', () => {
       expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
     });
 
-    // Contacted timestamp label (use getAllByText since "Contacted" also appears in status badge)
-    expect(screen.getAllByText('Contacted').length).toBeGreaterThanOrEqual(2);
+    // Contacted timestamp label and status badge (badge now says "Contacted (Awaiting Response)")
+    expect(screen.getByText('Contacted (Awaiting Response)')).toBeInTheDocument();
   });
 
   it('shows converted_at timestamp for converted lead', async () => {

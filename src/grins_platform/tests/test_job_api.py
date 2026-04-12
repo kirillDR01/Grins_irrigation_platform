@@ -60,6 +60,7 @@ def mock_job():
     job.requested_at = datetime.now()
     job.approved_at = None
     job.scheduled_at = None
+    job.on_my_way_at = None
     job.started_at = None
     job.completed_at = None
     job.closed_at = None
@@ -68,6 +69,13 @@ def mock_job():
     job.customer_name = None
     job.customer_phone = None
     job.customer = None
+    job.job_property = None
+    job.property_address = None
+    job.property_city = None
+    job.property_type = None
+    job.property_is_hoa = None
+    job.property_is_subscription = None
+    job.time_tracking_metadata = None
     job.created_at = datetime.now()
     job.updated_at = datetime.now()
     return job

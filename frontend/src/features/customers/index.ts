@@ -9,6 +9,8 @@ export {
   PaymentMethods,
   CustomerMessages,
   DuplicateReview,
+  DuplicateReviewQueue,
+  MergeComparisonModal,
 } from './components';
 
 // Hooks
@@ -47,6 +49,10 @@ export type {
   ChargeRequest,
   DuplicateGroup,
   MergeRequest,
+  MergeCandidate,
+  PaginatedMergeCandidates,
+  MergeFieldSelection,
+  MergePreview,
   SentMessage,
 } from './types';
 export { getCustomerFlags, getCustomerFullName, invoiceStatusColors } from './types';

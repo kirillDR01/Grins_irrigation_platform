@@ -10,6 +10,7 @@ Validates: Requirement 2.1-2.12, 3.1-3.7, 4.1-4.10, 5.1-5.7, 6.1-6.9, 7.1-7.4
 
 from __future__ import annotations
 
+import contextlib
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING, ClassVar
@@ -31,6 +32,7 @@ from grins_platform.models.enums import (
     PricingModel,
     PropertyType,
 )
+from grins_platform.utils.week_alignment import align_to_week
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -66,7 +68,11 @@ class JobService(LoggerMixin):
     # Valid status transitions
     VALID_TRANSITIONS: ClassVar[dict[JobStatus, set[JobStatus]]] = {
         JobStatus.TO_BE_SCHEDULED: {JobStatus.IN_PROGRESS, JobStatus.CANCELLED},
-        JobStatus.IN_PROGRESS: {JobStatus.COMPLETED, JobStatus.CANCELLED, JobStatus.TO_BE_SCHEDULED},
+        JobStatus.IN_PROGRESS: {
+            JobStatus.COMPLETED,
+            JobStatus.CANCELLED,
+            JobStatus.TO_BE_SCHEDULED,
+        },
         JobStatus.COMPLETED: set(),  # Terminal state
         JobStatus.CANCELLED: set(),  # Terminal state
     }
@@ -143,6 +149,35 @@ class JobService(LoggerMixin):
         }
         return timestamp_map.get(status)
 
+    @staticmethod
+    def _week_from_preference(
+        prefs: dict[str, object] | list[dict[str, object]] | None,
+        job_type: str,
+    ) -> tuple[date | None, date | None]:
+        """Extract aligned week range from customer service preferences.
+
+        Scans the preference list for a matching service_type and returns
+        the aligned Monday-Sunday range if a preferred_date is present.
+
+        Returns (None, None) when no match is found.
+        """
+        if not prefs:
+            return None, None
+        normalized: list[object] = list(prefs) if isinstance(prefs, list) else [prefs]
+        for pref in normalized:
+            if not isinstance(pref, dict):
+                continue
+            svc = pref.get("service_type", "")
+            if svc and str(svc).lower() == job_type.lower():
+                preferred_date = pref.get("preferred_date")
+                if preferred_date:
+                    parsed = None
+                    with contextlib.suppress(ValueError, TypeError):
+                        parsed = date.fromisoformat(str(preferred_date))
+                    if parsed is not None:
+                        return align_to_week(parsed)
+        return None, None
+
     async def create_job(self, data: JobCreate) -> Job:
         """Create a new job request with auto-categorization.
 
@@ -199,6 +234,15 @@ class JobService(LoggerMixin):
         # Auto-categorize the job
         category = self._determine_category(data)
 
+        # Auto-populate Week_Of from customer service preference (CRM2 Req 20.5)
+        target_start: date | None = None
+        target_end: date | None = None
+        if customer.preferred_service_times:
+            target_start, target_end = self._week_from_preference(
+                customer.preferred_service_times,
+                data.job_type,
+            )
+
         # Create the job
         job = await self.job_repository.create(
             customer_id=data.customer_id,
@@ -217,6 +261,8 @@ class JobService(LoggerMixin):
             quoted_amount=float(data.quoted_amount) if data.quoted_amount else None,
             source=data.source.value if data.source else None,
             source_details=data.source_details,
+            target_start_date=target_start,
+            target_end_date=target_end,
         )
 
         # Record initial status in history

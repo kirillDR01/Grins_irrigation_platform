@@ -13,19 +13,24 @@ import math
 from datetime import (
     date,
     datetime,
+    timezone,
 )
 from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import (
     func as sa_func,
     select as sa_select,
 )
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
-from grins_platform.api.v1.dependencies import get_db_session, get_job_service
+from grins_platform.api.v1.dependencies import (
+    get_db_session,
+    get_job_service,
+    get_photo_service,
+)
 from grins_platform.exceptions import (
     CustomerNotFoundError,
     InvalidInvoiceOperationError,
@@ -45,13 +50,22 @@ from grins_platform.models.enums import (
 )
 from grins_platform.models.estimate import Estimate
 from grins_platform.repositories.job_repository import JobRepository
+from grins_platform.schemas.ai import MessageType
+from grins_platform.schemas.customer import (
+    CustomerPhotoResponse,
+)
 from grins_platform.schemas.dashboard import JobStatusByCategoryResponse
 from grins_platform.schemas.invoice import (
     InvoiceResponse,
 )
 from grins_platform.schemas.job import (
+    JobCompleteRequest,
+    JobCompleteResponse,
     JobCreate,
+    JobNoteCreate,
+    JobNoteResponse,
     JobResponse,
+    JobReviewPushResponse,
     JobStatusHistoryResponse,
     JobStatusUpdate,
     JobUpdate,
@@ -60,6 +74,10 @@ from grins_platform.schemas.job import (
 )
 from grins_platform.services.job_service import (
     JobService,  # noqa: TC001 - Required at runtime for FastAPI DI
+)
+from grins_platform.services.photo_service import (
+    PhotoService,
+    UploadContext,
 )
 
 router = APIRouter()
@@ -72,6 +90,26 @@ class JobEndpoints(LoggerMixin):
 
 
 _endpoints = JobEndpoints()
+
+
+def _populate_property_fields(job: object, resp: JobResponse) -> None:
+    """Populate property address and tag fields on a JobResponse.
+
+    Validates: Requirement 19.1-19.4
+    """
+    prop = getattr(job, "job_property", None)
+    if prop is None:
+        return
+    parts = [prop.address, prop.city, prop.state]
+    if prop.zip_code:
+        parts.append(prop.zip_code)
+    resp.property_address = ", ".join(parts)
+    resp.property_city = prop.city
+    resp.property_type = prop.property_type
+    resp.property_is_hoa = prop.is_hoa
+    # Subscription = job has a service agreement
+    sa_id = getattr(job, "service_agreement_id", None)
+    resp.property_is_subscription = sa_id is not None
 
 
 # =============================================================================
@@ -238,7 +276,8 @@ async def list_jobs(
         default=None,
         ge=1,
         le=100,
-        description="Max items to return (alias for page_size). Takes precedence over page_size when provided.",
+        description="Max items to return (alias for page_size). "
+        "Takes precedence over page_size when provided.",
     ),
     offset: int | None = Query(
         default=None,
@@ -300,6 +339,7 @@ async def list_jobs(
         if hasattr(j, "customer") and j.customer is not None:
             resp.customer_name = f"{j.customer.first_name} {j.customer.last_name}"
             resp.customer_phone = j.customer.phone
+        _populate_property_fields(j, resp)
         items.append(resp)
 
     return PaginatedJobResponse(
@@ -532,12 +572,12 @@ async def get_job(
 ) -> JobResponse:
     """Get job by ID.
 
-    Validates: Requirement 6.1, 12.1, 12.3
+    Validates: Requirement 6.1, 12.1, 12.3, 19.1-19.4
     """
     _endpoints.log_started("get_job", job_id=str(job_id))
 
     try:
-        result = await service.get_job(job_id)
+        result = await service.get_job(job_id, include_relationships=True)
     except JobNotFoundError as e:
         _endpoints.log_rejected("get_job", reason="not_found")
         raise HTTPException(
@@ -546,7 +586,14 @@ async def get_job(
         ) from e
     else:
         _endpoints.log_completed("get_job", job_id=str(job_id))
-        return JobResponse.model_validate(result)  # type: ignore[no-any-return]
+        resp = JobResponse.model_validate(result)
+        if hasattr(result, "customer") and result.customer is not None:
+            first = result.customer.first_name
+            last = result.customer.last_name
+            resp.customer_name = f"{first} {last}"
+            resp.customer_phone = result.customer.phone
+        _populate_property_fields(result, resp)
+        return resp  # type: ignore[no-any-return]
 
 
 # =============================================================================
@@ -840,27 +887,75 @@ async def get_job_costs(
 
 
 # =============================================================================
-# POST /api/v1/jobs/{job_id}/complete - Mark job as complete (Req 21.2)
+# POST /api/v1/jobs/{job_id}/complete - Mark job as complete (Req 21.2, 27.3-27.7)
 # =============================================================================
 
 
 @router.post(  # type: ignore[untyped-decorator]
     "/{job_id}/complete",
-    response_model=JobResponse,
-    summary="Mark job as complete",
-    description="Transition job status to COMPLETED.",
+    response_model=JobCompleteResponse,
+    summary="Mark job as complete with payment warning",
+    description=(
+        "Transition job status to COMPLETED. Returns a warning if no "
+        "payment/invoice exists. Use force=true to complete anyway."
+    ),
 )
 async def complete_job(
     job_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
     service: Annotated[JobService, Depends(get_job_service)],
-) -> JobResponse:
-    """Mark a job as complete.
+    body: JobCompleteRequest | None = None,
+) -> JobCompleteResponse:
+    """Mark a job as complete with payment/invoice check.
 
-    Validates: Requirement 21.2
+    Validates: Requirement 21.2, 27.3, 27.4, 27.5, 27.6, 27.7
     """
+    from grins_platform.models.invoice import Invoice  # noqa: PLC0415
+    from grins_platform.models.job import Job  # noqa: PLC0415
+
     _endpoints.log_started("complete_job", job_id=str(job_id))
+    force = body.force if body else False
+
+    # Load job
+    stmt = sa_select(Job).where(Job.id == job_id, Job.is_deleted.is_(False))
+    result = await session.execute(stmt)
+    job = result.scalar_one_or_none()
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job not found: {job_id}",
+        )
+
+    # Check for payment or invoice (Req 27.3, 27.4)
+    has_payment = bool(job.payment_collected_on_site)
+    if not has_payment:
+        inv_stmt = (
+            sa_select(sa_func.count())
+            .select_from(Invoice)
+            .where(
+                Invoice.job_id == job_id,
+            )
+        )
+        inv_result = await session.execute(inv_stmt)
+        has_invoice = (inv_result.scalar() or 0) > 0
+    else:
+        has_invoice = True
+
+    if not has_payment and not has_invoice and not force:
+        _endpoints.log_completed(
+            "complete_job",
+            job_id=str(job_id),
+            warning="no_payment_or_invoice",
+        )
+        return JobCompleteResponse(
+            completed=False,
+            warning="No Payment or Invoice on File",
+            job=None,
+        )
+
+    # Complete the job via service
     try:
-        result = await service.update_status(
+        updated = await service.update_status(
             job_id,
             JobStatusUpdate(status=JobStatus.COMPLETED),
         )
@@ -875,9 +970,52 @@ async def complete_job(
             detail=f"Invalid status transition from {e.current_status.value} "
             f"to {e.requested_status.value}",
         ) from e
-    else:
-        _endpoints.log_completed("complete_job", job_id=str(job_id))
-        return JobResponse.model_validate(result)  # type: ignore[no-any-return]
+
+    # Compute time tracking metadata (Req 27.6)
+    now = datetime.now(tz=timezone.utc)
+    tracking: dict[str, object] = {"job_type": job.job_type}
+    if job.on_my_way_at and job.started_at:
+        tracking["travel_minutes"] = round(
+            (job.started_at - job.on_my_way_at).total_seconds() / 60,
+            1,
+        )
+    if job.started_at:
+        tracking["work_minutes"] = round(
+            (now - job.started_at).total_seconds() / 60,
+            1,
+        )
+    if job.on_my_way_at:
+        tracking["total_minutes"] = round(
+            (now - job.on_my_way_at).total_seconds() / 60,
+            1,
+        )
+
+    # Refresh to get the updated job and store metadata
+    await session.refresh(job)
+    job.time_tracking_metadata = tracking  # type: ignore[assignment]
+    await session.flush()
+    await session.refresh(job)
+
+    # Write audit log if force-completed without payment (Req 27.5)
+    if force and not has_payment and not has_invoice:
+        from grins_platform.services.audit_service import AuditService  # noqa: PLC0415
+
+        audit = AuditService()
+        _ = await audit.log_action(
+            session,
+            action="job.complete_without_payment",
+            resource_type="job",
+            resource_id=job_id,
+            details={
+                "override": True,
+                "reason": "Admin force-completed without payment or invoice",
+            },
+        )
+
+    resp = JobResponse.model_validate(updated)
+    _populate_property_fields(job, resp)
+    _endpoints.log_completed("complete_job", job_id=str(job_id))
+    return JobCompleteResponse(completed=True, warning=None, job=resp)
 
 
 # =============================================================================
@@ -926,3 +1064,330 @@ async def create_job_invoice(
             job_id=str(job_id),
         )
         return result  # type: ignore[return-value]
+
+
+# =============================================================================
+# On-Site Operation Endpoints (Req 26, 27)
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{job_id}/on-my-way",
+    response_model=JobResponse,
+    summary="Send On My Way SMS and log timestamp",
+    description="Send an On My Way SMS to the customer and log the timestamp.",
+)
+async def on_my_way(
+    job_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> JobResponse:
+    """Send On My Way SMS and log timestamp.
+
+    Validates: Requirement 27.1
+    """
+    from grins_platform.models.customer import Customer  # noqa: PLC0415
+    from grins_platform.models.job import Job  # noqa: PLC0415
+    from grins_platform.services.sms.recipient import Recipient  # noqa: PLC0415
+    from grins_platform.services.sms_service import SMSService  # noqa: PLC0415
+
+    _endpoints.log_started("on_my_way", job_id=str(job_id))
+
+    stmt = sa_select(Job).where(Job.id == job_id, Job.is_deleted.is_(False))
+    result = await session.execute(stmt)
+    job = result.scalar_one_or_none()
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found",
+        )
+
+    # Log timestamp
+    job.on_my_way_at = datetime.now(tz=timezone.utc)
+
+    # Send SMS
+    cust_stmt = sa_select(Customer).where(Customer.id == job.customer_id)
+    cust_result = await session.execute(cust_stmt)
+    customer = cust_result.scalar_one_or_none()
+    if customer and customer.phone:
+        recipient = Recipient.from_customer(customer)
+        sms_service = SMSService(session)
+        try:
+            _ = await sms_service.send_message(
+                recipient=recipient,
+                message=(
+                    "We're on our way! Your technician is heading to your location now."
+                ),
+                message_type=MessageType.ON_MY_WAY,
+                consent_type="transactional",
+                job_id=job_id,
+            )
+        except Exception:
+            _endpoints.log_failed(
+                "on_my_way_sms",
+                error=None,
+                job_id=str(job_id),
+            )
+
+    await session.flush()
+    await session.refresh(job)
+    _endpoints.log_completed("on_my_way", job_id=str(job_id))
+    return JobResponse.model_validate(job)  # type: ignore[no-any-return]
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{job_id}/started",
+    response_model=JobResponse,
+    summary="Log job started timestamp",
+    description="Log the timestamp when the technician starts work on the job.",
+)
+async def job_started(
+    job_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> JobResponse:
+    """Log job started timestamp.
+
+    Validates: Requirement 27.2
+    """
+    from grins_platform.models.job import Job  # noqa: PLC0415
+
+    _endpoints.log_started("job_started", job_id=str(job_id))
+
+    stmt = sa_select(Job).where(Job.id == job_id, Job.is_deleted.is_(False))
+    result = await session.execute(stmt)
+    job = result.scalar_one_or_none()
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found",
+        )
+
+    job.started_at = datetime.now(tz=timezone.utc)
+    await session.flush()
+    await session.refresh(job)
+    _endpoints.log_completed("job_started", job_id=str(job_id))
+    return JobResponse.model_validate(job)  # type: ignore[no-any-return]
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{job_id}/notes",
+    response_model=JobNoteResponse,
+    summary="Add note to job and sync to customer",
+    description="Add a note to the job and sync it to the customer record.",
+)
+async def add_job_note(
+    job_id: UUID,
+    body: JobNoteCreate,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> JobNoteResponse:
+    """Add a note to a job and sync to customer record.
+
+    Validates: Requirement 26.3
+    """
+    from grins_platform.models.customer import Customer  # noqa: PLC0415
+    from grins_platform.models.job import Job  # noqa: PLC0415
+
+    _endpoints.log_started("add_job_note", job_id=str(job_id))
+
+    stmt = sa_select(Job).where(Job.id == job_id, Job.is_deleted.is_(False))
+    result = await session.execute(stmt)
+    job = result.scalar_one_or_none()
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found",
+        )
+
+    # Append note to job
+    timestamp = datetime.now(tz=timezone.utc).strftime(
+        "%Y-%m-%d %H:%M",
+    )
+    entry = f"[{timestamp}] {body.note}"
+    job.notes = f"{job.notes}\n{entry}" if job.notes else entry
+
+    # Sync to customer internal_notes
+    synced = False
+    cust_stmt = sa_select(Customer).where(Customer.id == job.customer_id)
+    cust_result = await session.execute(cust_stmt)
+    customer = cust_result.scalar_one_or_none()
+    if customer is not None:
+        job_ref = f"[Job {job_id}] {entry}"
+        customer.internal_notes = (
+            f"{customer.internal_notes}\n{job_ref}"
+            if customer.internal_notes
+            else job_ref
+        )
+        synced = True
+
+    await session.flush()
+    _endpoints.log_completed("add_job_note", job_id=str(job_id), synced=synced)
+    return JobNoteResponse(
+        job_id=job_id,
+        note=body.note,
+        synced_to_customer=synced,
+    )
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{job_id}/photos",
+    response_model=CustomerPhotoResponse,
+    summary="Upload photo linked to job",
+    description="Upload a photo via PhotoService and link to job_id.",
+)
+async def upload_job_photo(
+    job_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    photo_service: Annotated[PhotoService, Depends(get_photo_service)],
+    file: Annotated[UploadFile, File(description="Photo file to upload")],
+    caption: str | None = Query(
+        default=None,
+        max_length=500,
+        description="Optional photo caption",
+    ),
+) -> CustomerPhotoResponse:
+    """Upload a photo linked to a job.
+
+    Validates: Requirement 26.3
+    """
+    from grins_platform.models.customer_photo import CustomerPhoto  # noqa: PLC0415
+    from grins_platform.models.job import Job  # noqa: PLC0415
+
+    _endpoints.log_started("upload_job_photo", job_id=str(job_id))
+
+    stmt = sa_select(Job).where(Job.id == job_id, Job.is_deleted.is_(False))
+    result = await session.execute(stmt)
+    job = result.scalar_one_or_none()
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found",
+        )
+
+    file_data = await file.read()
+    file_name = file.filename or "photo"
+
+    try:
+        upload_result = photo_service.upload_file(
+            data=file_data,
+            file_name=file_name,
+            context=UploadContext.CUSTOMER_PHOTO,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+
+    photo = CustomerPhoto(
+        customer_id=job.customer_id,
+        file_key=upload_result.file_key,
+        file_name=upload_result.file_name,
+        file_size=upload_result.file_size,
+        content_type=upload_result.content_type,
+        caption=caption,
+        job_id=job_id,
+    )
+    session.add(photo)
+    await session.flush()
+    await session.refresh(photo)
+
+    download_url = photo_service.generate_presigned_url(photo.file_key)
+
+    _endpoints.log_completed(
+        "upload_job_photo",
+        job_id=str(job_id),
+        photo_id=str(photo.id),
+    )
+    return CustomerPhotoResponse(
+        id=photo.id,
+        customer_id=photo.customer_id,
+        file_key=photo.file_key,
+        file_name=photo.file_name,
+        file_size=photo.file_size,
+        content_type=photo.content_type,
+        caption=photo.caption,
+        uploaded_by=photo.uploaded_by,
+        download_url=download_url,
+        created_at=photo.created_at,
+    )
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{job_id}/review-push",
+    response_model=JobReviewPushResponse,
+    summary="Send Google review request SMS",
+    description="Send a Google review request SMS to the customer.",
+)
+async def review_push(
+    job_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> JobReviewPushResponse:
+    """Send a Google review request SMS.
+
+    Validates: Requirement 26.4
+    """
+    from grins_platform.models.customer import Customer  # noqa: PLC0415
+    from grins_platform.models.job import Job  # noqa: PLC0415
+    from grins_platform.services.sms.recipient import Recipient  # noqa: PLC0415
+    from grins_platform.services.sms_service import SMSService  # noqa: PLC0415
+
+    _endpoints.log_started("review_push", job_id=str(job_id))
+
+    stmt = sa_select(Job).where(Job.id == job_id, Job.is_deleted.is_(False))
+    result = await session.execute(stmt)
+    job = result.scalar_one_or_none()
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found",
+        )
+
+    cust_stmt = sa_select(Customer).where(Customer.id == job.customer_id)
+    cust_result = await session.execute(cust_stmt)
+    customer = cust_result.scalar_one_or_none()
+    if customer is None or not customer.phone:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Customer has no phone number for review push",
+        )
+
+    review_url = "https://g.page/r/grins-irrigations/review"
+    message = (
+        f"Hi {customer.first_name or 'there'}! "
+        "Thank you for choosing Grin's Irrigations. "
+        "We'd love your feedback — please leave us a Google review: "
+        f"{review_url}"
+    )
+
+    recipient = Recipient.from_customer(customer)
+    sms_service = SMSService(session)
+    message_id = None
+    sms_sent = False
+    try:
+        send_result = await sms_service.send_message(
+            recipient=recipient,
+            message=message,
+            message_type=MessageType.GOOGLE_REVIEW_REQUEST,
+            consent_type="transactional",
+            job_id=job_id,
+        )
+        sms_sent = send_result.get("success", False)
+        mid = send_result.get("message_id")
+        if mid:
+            message_id = UUID(mid) if isinstance(mid, str) else mid
+    except Exception:
+        _endpoints.log_failed(
+            "review_push_sms",
+            error=None,
+            job_id=str(job_id),
+        )
+
+    _endpoints.log_completed(
+        "review_push",
+        job_id=str(job_id),
+        sms_sent=sms_sent,
+    )
+    return JobReviewPushResponse(
+        job_id=job_id,
+        sms_sent=sms_sent,
+        message_id=message_id,
+    )

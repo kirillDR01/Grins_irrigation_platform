@@ -173,7 +173,7 @@ class TestCreateCustomer:
     def test_create_customer_invalid_phone_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test invalid phone format returns 422."""
         response = client.post(
@@ -190,7 +190,7 @@ class TestCreateCustomer:
     def test_create_customer_missing_required_fields_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test missing required fields returns 422."""
         response = client.post(
@@ -266,7 +266,7 @@ class TestGetCustomer:
     def test_get_customer_invalid_uuid_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test invalid UUID format returns 422."""
         response = client.get("/api/v1/customers/not-a-uuid")
@@ -498,7 +498,7 @@ class TestListCustomers:
     def test_list_customers_invalid_page_size_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test invalid page_size returns 422."""
         response = client.get(
@@ -917,7 +917,7 @@ class TestExportCustomers:
     def test_export_customers_limit_exceeds_max_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test export with limit > 1000 returns 422."""
         response = client.post(
@@ -1020,7 +1020,7 @@ class TestBulkUpdatePreferences:
     def test_bulk_update_preferences_empty_ids_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test bulk update with empty customer_ids returns 422."""
         response = client.put(
@@ -1036,7 +1036,7 @@ class TestBulkUpdatePreferences:
     def test_bulk_update_preferences_too_many_ids_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test bulk update with > 1000 customer_ids returns 422."""
         response = client.put(

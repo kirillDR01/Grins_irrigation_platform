@@ -17,6 +17,7 @@ export {
   useMarkLienFiled,
   useGenerateInvoiceFromJob,
   useBulkNotify,
+  useMassNotify,
   useGeneratePdf,
   useGetPdfUrl,
 } from './useInvoiceMutations';

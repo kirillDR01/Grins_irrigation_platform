@@ -55,6 +55,10 @@ def _make_lead(
     lead.converted_at = None
     lead.created_at = _NOW
     lead.updated_at = _NOW
+    lead.moved_to = None
+    lead.moved_at = None
+    lead.last_contacted_at = None
+    lead.job_requested = None
     return lead
 
 

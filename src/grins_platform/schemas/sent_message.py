@@ -3,6 +3,7 @@
 Validates: CRM Gap Closure Req 82.2, 82.3
 """
 
+import contextlib
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -28,7 +29,9 @@ class SentMessageResponse(BaseModel):
     customer_id: UUID | None = Field(default=None, description="Customer UUID")
     lead_id: UUID | None = Field(default=None, description="Lead UUID")
     message_type: str = Field(
-        ..., max_length=50, description="Message type",
+        ...,
+        max_length=50,
+        description="Message type",
     )
     # The ORM column is ``message_content`` but the frontend (and the rest
     # of this schema's historical consumers) expect ``content``. Accept
@@ -53,17 +56,21 @@ class SentMessageResponse(BaseModel):
         ),
     )
     delivery_status: str | None = Field(
-        default=None, max_length=20, description="Delivery status",
+        default=None,
+        max_length=20,
+        description="Delivery status",
     )
     error_message: str | None = Field(
-        default=None, max_length=1000, description="Error details if failed",
+        default=None,
+        max_length=1000,
+        description="Error details if failed",
     )
     sent_at: datetime | None = Field(default=None, description="Send timestamp")
     created_at: datetime = Field(..., description="Record creation timestamp")
 
     @model_validator(mode="before")
     @classmethod
-    def _resolve_recipient_name(cls, value: Any) -> Any:
+    def _resolve_recipient_name(cls, value: Any) -> Any:  # noqa: ANN401
         """Derive ``recipient_name`` from the loaded Customer/Lead relationship.
 
         ``SentMessage.customer`` and ``SentMessage.lead`` are both
@@ -83,7 +90,7 @@ class SentMessageResponse(BaseModel):
         if existing:
             return value
 
-        def _extract_name(rel: Any) -> str:
+        def _extract_name(rel: object) -> str:
             # Customer: first_name + last_name
             first = (getattr(rel, "first_name", None) or "").strip()
             last = (getattr(rel, "last_name", None) or "").strip()
@@ -91,8 +98,7 @@ class SentMessageResponse(BaseModel):
             if joined:
                 return joined
             # Lead (and anything else with a single ``name`` column)
-            single = (getattr(rel, "name", None) or "").strip()
-            return single
+            return (getattr(rel, "name", None) or "").strip()
 
         for rel_name in ("customer", "lead"):
             rel = getattr(value, rel_name, None)
@@ -104,11 +110,8 @@ class SentMessageResponse(BaseModel):
                 # ``from_attributes`` read picks it up. SQLAlchemy allows
                 # setting non-mapped attributes on ORM instances without
                 # tracking them as dirty.
-                try:
+                with contextlib.suppress(AttributeError):
                     value.recipient_name = full  # type: ignore[attr-defined]
-                except AttributeError:
-                    # Frozen / slotted rows — skip silently.
-                    pass
                 break
 
         return value
@@ -121,7 +124,8 @@ class SentMessageListResponse(BaseModel):
     """
 
     items: list[SentMessageResponse] = Field(
-        ..., description="List of sent messages",
+        ...,
+        description="List of sent messages",
     )
     total: int = Field(..., ge=0, description="Total matching records")
     page: int = Field(..., ge=1, description="Current page")
@@ -138,15 +142,22 @@ class SentMessageFilters(BaseModel):
     page: int = Field(default=1, ge=1, description="Page number")
     page_size: int = Field(default=20, ge=1, le=100, description="Items per page")
     message_type: str | None = Field(
-        default=None, max_length=50, description="Filter by message type",
+        default=None,
+        max_length=50,
+        description="Filter by message type",
     )
     delivery_status: str | None = Field(
-        default=None, max_length=20, description="Filter by delivery status",
+        default=None,
+        max_length=20,
+        description="Filter by delivery status",
     )
     date_from: datetime | None = Field(
-        default=None, description="Filter from date",
+        default=None,
+        description="Filter from date",
     )
     date_to: datetime | None = Field(default=None, description="Filter to date")
     search: str | None = Field(
-        default=None, max_length=200, description="Search in content",
+        default=None,
+        max_length=200,
+        description="Search in content",
     )

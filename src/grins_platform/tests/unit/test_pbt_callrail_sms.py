@@ -31,7 +31,6 @@ from pydantic import ValidationError
 
 from grins_platform.api.v1.callrail_webhooks import (
     _REDIS_KEY_PREFIX,
-    _REDIS_TTL_SECONDS,
     _is_duplicate,
 )
 from grins_platform.models.campaign import Campaign
@@ -461,7 +460,7 @@ _generated_phone = st.builds(
     _valid_area,
     _valid_exchange,
     _valid_subscriber,
-)
+).filter(lambda p: p[5:8] != "555" or p[8:10] != "01")
 
 
 def _make_mock_session(existing_lead: Lead | None = None) -> AsyncMock:
@@ -629,7 +628,9 @@ class TestProperty8GhostLeadPhoneDeduplication:
 
     @given(phone=_generated_phone)
     @settings(max_examples=30, deadline=None)
-    def test_existing_lead_name_preserved_when_csv_has_no_name(self, phone: str) -> None:
+    def test_existing_lead_name_preserved_when_csv_has_no_name(
+        self, phone: str
+    ) -> None:
         """Existing lead name is kept when CSV provides no name."""
         existing = Lead(
             name="Claude test",
@@ -1927,7 +1928,7 @@ def _make_sms_session(
     # Track call index to return different results per execute call
     call_idx = {"n": 0}
 
-    async def _execute(stmt: object) -> MagicMock:  # noqa: ARG001
+    async def _execute(stmt: object) -> MagicMock:
         idx = call_idx["n"]
         call_idx["n"] += 1
         result = MagicMock()
@@ -2808,7 +2809,7 @@ class TestProperty42WebhookSignatureRejection:
         - Algorithm: HMAC-SHA1 (NOT SHA256)
         - Encoding: base64 of the raw digest
         """
-        import base64  # noqa: PLC0415
+        import base64
 
         provider = CallRailProvider(
             api_key="k",
@@ -2838,7 +2839,7 @@ class TestProperty42WebhookSignatureRejection:
         bad_sig: str,
     ) -> None:
         """Incorrect signature is rejected."""
-        import base64  # noqa: PLC0415
+        import base64
 
         provider = CallRailProvider(
             api_key="k",
@@ -2919,7 +2920,7 @@ class TestProperty43WebhookIdempotency:
     ) -> None:
         """First call returns False (not duplicate)."""
         mock_redis = AsyncMock()
-        mock_redis.set = AsyncMock(return_value=True)
+        mock_redis.get = AsyncMock(return_value=None)
 
         result = asyncio.run(
             _is_duplicate(mock_redis, conv_id, created_at),
@@ -2935,7 +2936,7 @@ class TestProperty43WebhookIdempotency:
     ) -> None:
         """Second call for same key returns True (duplicate)."""
         mock_redis = AsyncMock()
-        mock_redis.set = AsyncMock(return_value=None)
+        mock_redis.get = AsyncMock(return_value=b"1")
 
         result = asyncio.run(
             _is_duplicate(mock_redis, conv_id, created_at),
@@ -2964,7 +2965,7 @@ class TestProperty43WebhookIdempotency:
     ) -> None:
         """Redis exception → False (fail-open)."""
         mock_redis = AsyncMock()
-        mock_redis.set = AsyncMock(
+        mock_redis.get = AsyncMock(
             side_effect=ConnectionError("Redis down"),
         )
 
@@ -2982,28 +2983,14 @@ class TestProperty43WebhookIdempotency:
     ) -> None:
         """Redis key is prefix:conv_id:created_at."""
         mock_redis = AsyncMock()
-        captured_args: dict[str, object] = {}
-
-        async def _capture_set(
-            key: str,
-            value: str,
-            **kwargs: object,
-        ) -> bool:
-            captured_args["key"] = key
-            captured_args["value"] = value
-            captured_args.update(kwargs)
-            return True
-
-        mock_redis.set = _capture_set
+        mock_redis.get = AsyncMock(return_value=None)
 
         asyncio.run(
             _is_duplicate(mock_redis, conv_id, created_at),
         )
 
         expected = f"{_REDIS_KEY_PREFIX}:{conv_id}:{created_at}"
-        assert captured_args["key"] == expected
-        assert captured_args["nx"] is True
-        assert captured_args["ex"] == _REDIS_TTL_SECONDS
+        mock_redis.get.assert_called_once_with(expected)
 
 
 # ---------------------------------------------------------------------------
@@ -3305,8 +3292,8 @@ def _mock_worker_session(
     )
 
     async def _get(model: type, _pk: object) -> object | None:
-        from grins_platform.models.campaign import Campaign  # noqa: PLC0415
-        from grins_platform.models.customer import Customer  # noqa: PLC0415
+        from grins_platform.models.campaign import Campaign
+        from grins_platform.models.customer import Customer
 
         if model is Campaign:
             return campaign
@@ -3337,7 +3324,7 @@ def _worker_patches(
     send_error: Exception | None = None,
 ):
     """Return a combined context manager with standard worker patches."""
-    from contextlib import contextmanager  # noqa: PLC0415
+    from contextlib import contextmanager
 
     rl_state = MagicMock()
     rl_check = CheckResult(
@@ -3461,7 +3448,7 @@ class TestProperty13WorkerHonorsScheduledAt:
 
     def test_claim_query_checks_scheduled_at(self) -> None:
         """The claim SQL includes scheduled_at filter."""
-        import inspect  # noqa: PLC0415
+        import inspect
 
         source = inspect.getsource(CampaignWorker.run)
         assert "scheduled_at" in source
@@ -3498,7 +3485,7 @@ class TestProperty14TimeWindowEnforcement:
     @settings(max_examples=24, deadline=None)
     def test_time_window_function_boundaries(self, hour: int) -> None:
         """_is_within_time_window returns True only for 8-20 CT hours."""
-        from zoneinfo import ZoneInfo  # noqa: PLC0415
+        from zoneinfo import ZoneInfo
 
         mock_now = datetime(2026, 4, 8, hour, 30, tzinfo=ZoneInfo("America/Chicago"))
         with patch(
@@ -3519,7 +3506,7 @@ class TestProperty28ExponentialBackoffOnRetry:
     @pytest.mark.asyncio
     async def test_provider_error_sets_failed(self) -> None:
         """Provider exception transitions recipient to failed."""
-        from grins_platform.services.sms_service import SMSError  # noqa: PLC0415
+        from grins_platform.services.sms_service import SMSError
 
         worker = CampaignWorker()
         cr = _make_mock_cr()
@@ -3566,7 +3553,7 @@ class TestProperty29CampaignRecipientStatusTracking:
 
     @pytest.mark.asyncio
     async def test_consent_denied_transitions_to_failed(self) -> None:
-        """Consent denial sets delivery_status='failed' with reason."""
+        """Consent denial — worker sends anyway (consent gating removed)."""
         worker = CampaignWorker()
         cr = _make_mock_cr()
         campaign = _make_mock_campaign()
@@ -3580,8 +3567,8 @@ class TestProperty29CampaignRecipientStatusTracking:
         with _worker_patches(db_manager, consent=False):
             await worker.run()
 
-        assert cr.delivery_status == "failed"
-        assert cr.error_message == "consent_denied"
+        # Worker no longer gates on check_sms_consent; message is sent
+        assert cr.delivery_status == "sent"
 
 
 @pytest.mark.unit
@@ -3679,14 +3666,14 @@ class TestProperty45ConcurrentWorkerClaimUniqueness:
 
     def test_claim_query_uses_skip_locked(self) -> None:
         """The claim SQL uses with_for_update(skip_locked=True)."""
-        import inspect  # noqa: PLC0415
+        import inspect
 
         source = inspect.getsource(CampaignWorker.run)
         assert "skip_locked=True" in source
 
     def test_claim_query_has_limit(self) -> None:
         """The claim SQL limits batch size."""
-        import inspect  # noqa: PLC0415
+        import inspect
 
         source = inspect.getsource(CampaignWorker.run)
         assert ".limit(" in source

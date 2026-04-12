@@ -295,6 +295,10 @@ class JobResponse(BaseModel):
         default=None,
         description="When the job was scheduled",
     )
+    on_my_way_at: datetime | None = Field(
+        default=None,
+        description="When On My Way was triggered",
+    )
     started_at: datetime | None = Field(
         default=None,
         description="When work started",
@@ -319,6 +323,31 @@ class JobResponse(BaseModel):
     customer_phone: str | None = Field(
         default=None,
         description="Customer phone for quick contact",
+    )
+    # Property summary for list/detail views (Req 19.1-19.4)
+    property_address: str | None = Field(
+        default=None,
+        description="Full property address (street, city, state, ZIP)",
+    )
+    property_city: str | None = Field(
+        default=None,
+        description="Property city",
+    )
+    property_type: str | None = Field(
+        default=None,
+        description="Property type (residential/commercial)",
+    )
+    property_is_hoa: bool | None = Field(
+        default=None,
+        description="Whether property is HOA",
+    )
+    property_is_subscription: bool | None = Field(
+        default=None,
+        description="Whether property has active service agreement",
+    )
+    time_tracking_metadata: dict[str, Any] | None = Field(
+        default=None,
+        description="Time tracking metadata (on_my_way→started→complete durations)",
     )
 
     @field_validator("category", mode="before")  # type: ignore[misc,untyped-decorator]
@@ -540,4 +569,62 @@ class PaginatedJobResponse(BaseModel):
         ...,
         ge=0,
         description="Total number of pages",
+    )
+
+
+# =============================================================================
+# On-Site Operation Schemas (Req 26, 27)
+# =============================================================================
+
+
+class JobNoteCreate(BaseModel):
+    """Schema for adding a note to a job."""
+
+    note: str = Field(..., min_length=1, max_length=5000, description="Note text")
+
+
+class JobNoteResponse(BaseModel):
+    """Response after adding a note."""
+
+    job_id: UUID
+    note: str
+    synced_to_customer: bool
+
+
+class JobReviewPushResponse(BaseModel):
+    """Response after sending a Google review push."""
+
+    job_id: UUID
+    sms_sent: bool
+    message_id: UUID | None = None
+
+
+class JobCompleteRequest(BaseModel):
+    """Request body for completing a job.
+
+    Validates: Requirement 27.3, 27.4, 27.5
+    """
+
+    force: bool = Field(
+        default=False,
+        description="Force complete even without payment/invoice",
+    )
+
+
+class JobCompleteResponse(BaseModel):
+    """Response for job completion attempt.
+
+    Validates: Requirement 27.3, 27.4
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    completed: bool = Field(description="Whether the job was completed")
+    warning: str | None = Field(
+        default=None,
+        description="Warning message if payment/invoice missing",
+    )
+    job: JobResponse | None = Field(
+        default=None,
+        description="Updated job if completed",
     )

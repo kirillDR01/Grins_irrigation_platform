@@ -341,9 +341,9 @@ class LienDeadlineResponse(BaseModel):
 
 
 class InvoiceListParams(BaseModel):
-    """Query parameters for listing invoices.
+    """Query parameters for listing invoices with 9-axis filtering.
 
-    Validates: Requirements 13.1-13.7
+    Validates: Requirements 13.1-13.7, 28.1
     """
 
     page: int = Field(
@@ -357,22 +357,79 @@ class InvoiceListParams(BaseModel):
         le=100,
         description="Number of items per page (max 100)",
     )
+    # Axis 1: Status
     status: InvoiceStatus | None = Field(
         default=None,
         description="Filter by invoice status",
     )
+    # Axis 2: Customer
     customer_id: UUID | None = Field(
         default=None,
-        description="Filter by customer",
+        description="Filter by customer ID",
     )
+    customer_search: str | None = Field(
+        default=None,
+        description="Search by customer name (partial match)",
+    )
+    # Axis 3: Job
+    job_id: UUID | None = Field(
+        default=None,
+        description="Filter by job",
+    )
+    # Axis 4: Date range (created/due/paid)
     date_from: date | None = Field(
         default=None,
-        description="Filter invoices created on or after this date",
+        description="Filter invoices from this date",
     )
     date_to: date | None = Field(
         default=None,
-        description="Filter invoices created on or before this date",
+        description="Filter invoices to this date",
     )
+    date_type: str = Field(
+        default="created",
+        pattern="^(created|due|paid)$",
+        description="Which date field to filter on: created, due, or paid",
+    )
+    # Axis 5: Amount range
+    amount_min: Decimal | None = Field(
+        default=None,
+        ge=0,
+        description="Minimum total amount",
+    )
+    amount_max: Decimal | None = Field(
+        default=None,
+        ge=0,
+        description="Maximum total amount",
+    )
+    # Axis 6: Payment type (multi-select, comma-separated)
+    payment_types: str | None = Field(
+        default=None,
+        description="Comma-separated payment methods (e.g. cash,check,stripe)",
+    )
+    # Axis 7: Days until due
+    days_until_due_min: int | None = Field(
+        default=None,
+        description="Minimum days until due date",
+    )
+    days_until_due_max: int | None = Field(
+        default=None,
+        description="Maximum days until due date",
+    )
+    # Axis 8: Days past due
+    days_past_due_min: int | None = Field(
+        default=None,
+        description="Minimum days past due",
+    )
+    days_past_due_max: int | None = Field(
+        default=None,
+        description="Maximum days past due",
+    )
+    # Axis 9: Invoice number (exact match)
+    invoice_number: str | None = Field(
+        default=None,
+        description="Exact invoice number match",
+    )
+    # Legacy filter (kept for backward compat)
     lien_eligible: bool | None = Field(
         default=None,
         description="Filter by lien eligibility",
@@ -418,3 +475,49 @@ class PaginatedInvoiceResponse(BaseModel):
         ge=0,
         description="Total number of pages",
     )
+
+
+class MassNotifyRequest(BaseModel):
+    """Request schema for mass invoice notifications.
+
+    Validates: Requirement 29.3, 29.4
+    """
+
+    notification_type: str = Field(
+        ...,
+        description="Type: past_due, due_soon, or lien_eligible",
+        pattern="^(past_due|due_soon|lien_eligible)$",
+    )
+    due_soon_days: int = Field(
+        default=7,
+        ge=1,
+        le=90,
+        description="Days window for due-soon notifications",
+    )
+    lien_days_past_due: int = Field(
+        default=60,
+        ge=1,
+        description="Minimum days past due for lien eligibility",
+    )
+    lien_min_amount: float = Field(
+        default=500.0,
+        ge=0,
+        description="Minimum amount for lien eligibility",
+    )
+    template: str | None = Field(
+        default=None,
+        description="Custom message template (uses default if None)",
+    )
+
+
+class MassNotifyResponse(BaseModel):
+    """Response schema for mass invoice notifications.
+
+    Validates: Requirement 29.3
+    """
+
+    notification_type: str
+    targeted: int = Field(description="Number of invoices matching criteria")
+    sent: int = Field(description="Number of notifications sent")
+    failed: int = Field(description="Number of send failures")
+    skipped: int = Field(description="Number skipped (no phone, consent denied)")

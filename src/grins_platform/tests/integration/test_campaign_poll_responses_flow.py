@@ -389,6 +389,8 @@ class TestCsvExport:
             "phone",
             "selected_option_label",
             "raw_reply",
+            "status",
+            "address",
             "received_at",
         ]
         assert len(rows) == 3  # header + 2 data rows

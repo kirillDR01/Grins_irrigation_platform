@@ -126,7 +126,6 @@ def _make_invoice_mock(
     return inv
 
 
-
 # =============================================================================
 # Property 7: Duplicate detection finds matching records
 # Validates: Requirements 7.1
@@ -170,9 +169,7 @@ class TestProperty7DuplicateDetection:
 
         # Should find at least one group with phone match
         assert len(groups) >= 1
-        phone_groups = [
-            g for g in groups if g.customers[0].match_type == "phone"
-        ]
+        phone_groups = [g for g in groups if g.customers[0].match_type == "phone"]
         assert len(phone_groups) >= 1
         group_ids = {c.id for c in phone_groups[0].customers}
         assert c1.id in group_ids
@@ -215,9 +212,7 @@ class TestProperty7DuplicateDetection:
         svc = _build_service(repo=repo)
         groups = await svc.find_duplicates(db)
 
-        email_groups = [
-            g for g in groups if g.customers[0].match_type == "email"
-        ]
+        email_groups = [g for g in groups if g.customers[0].match_type == "email"]
         assert len(email_groups) >= 1
         group_ids = {c.id for c in email_groups[0].customers}
         assert c1.id in group_ids
@@ -290,12 +285,9 @@ class TestProperty7DuplicateDetection:
         svc = _build_service()
         groups = await svc.find_duplicates(db)
 
-        name_groups = [
-            g for g in groups if g.customers[0].match_type == "name"
-        ]
+        name_groups = [g for g in groups if g.customers[0].match_type == "name"]
         assert len(name_groups) == 1
         assert name_groups[0].customers[0].similarity_score == 0.85
-
 
 
 # =============================================================================
@@ -382,7 +374,7 @@ class TestProperty8CustomerMerge:
         db.add.assert_called_once()
         audit_entry = db.add.call_args[0][0]
         assert audit_entry.action == "customer.merge"
-        assert audit_entry.resource_id == str(primary_id)
+        assert str(audit_entry.resource_id) == str(primary_id)
         assert str(primary_id) in audit_entry.details["primary_customer_id"]
 
         # Verify flush was called
@@ -443,7 +435,6 @@ class TestProperty8CustomerMerge:
                 actor_id=uuid4(),
                 ip_address="127.0.0.1",
             )
-
 
 
 # =============================================================================
@@ -631,7 +622,6 @@ class TestProperty10CustomerPhotoLifecycle:
         assert all(p.id != delete_id for p in remaining)
 
 
-
 # =============================================================================
 # Property 12: Customer invoice history is correctly filtered and sorted
 # Validates: Requirements 10.1, 10.3
@@ -772,7 +762,10 @@ class TestProperty12CustomerInvoiceHistory:
 
         svc = _build_service(repo=repo)
         result = await svc.get_customer_invoices(
-            db, customer_id, page=2, page_size=10,
+            db,
+            customer_id,
+            page=2,
+            page_size=10,
         )
 
         assert result["total"] == 25
@@ -795,12 +788,14 @@ class TestProperty13PreferredServiceTimes:
     """
 
     @given(
-        preference=st.sampled_from([
-            "morning",
-            "afternoon",
-            "evening",
-            "no_preference",
-        ]),
+        preference=st.sampled_from(
+            [
+                "morning",
+                "afternoon",
+                "evening",
+                "no_preference",
+            ]
+        ),
         specific_window=st.one_of(
             st.none(),
             st.tuples(
@@ -893,7 +888,9 @@ class TestProperty13PreferredServiceTimes:
 
         assert result.preferred_service_times == prefs
         assert result.preferred_service_times["days"] == [
-            "monday", "wednesday", "friday",
+            "monday",
+            "wednesday",
+            "friday",
         ]
 
 
@@ -967,7 +964,10 @@ class TestCustomerPaymentMethods:
         svc = _build_service(repo=repo)
         with pytest.raises(MergeConflictError):
             await svc.charge_customer(
-                AsyncMock(), customer.id, 5000, "Test charge",
+                AsyncMock(),
+                customer.id,
+                5000,
+                "Test charge",
             )
 
     @pytest.mark.asyncio
@@ -981,5 +981,8 @@ class TestCustomerPaymentMethods:
         svc = _build_service(repo=repo)
         with pytest.raises(CustomerNotFoundError):
             await svc.charge_customer(
-                AsyncMock(), uuid4(), 5000, "Test charge",
+                AsyncMock(),
+                uuid4(),
+                5000,
+                "Test charge",
             )

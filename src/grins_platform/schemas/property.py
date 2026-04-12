@@ -146,6 +146,10 @@ class PropertyCreate(BaseModel):
         default=False,
         description="Whether this is the customer's primary property",
     )
+    is_hoa: bool = Field(
+        default=False,
+        description="Whether this is an HOA property",
+    )
     access_instructions: str | None = Field(
         default=None,
         description="Special entry instructions",
@@ -240,6 +244,10 @@ class PropertyUpdate(BaseModel):
         default=None,
         description="Type of property",
     )
+    is_hoa: bool | None = Field(
+        default=None,
+        description="Whether this is an HOA property",
+    )
     access_instructions: str | None = Field(
         default=None,
         description="Special entry instructions",
@@ -300,6 +308,7 @@ class PropertyResponse(BaseModel):
     system_type: SystemType = Field(..., description="Type of irrigation system")
     property_type: PropertyType = Field(..., description="Type of property")
     is_primary: bool = Field(..., description="Primary property flag")
+    is_hoa: bool = Field(default=False, description="HOA property flag")
     access_instructions: str | None = Field(
         default=None,
         description="Special entry instructions",

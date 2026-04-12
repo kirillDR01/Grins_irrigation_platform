@@ -261,13 +261,15 @@ class TestProperty44StaffLocationRoundTrip:
         """get_location retrieves stored location correctly."""
         staff_id = uuid4()
         redis = _make_async_redis()
-        stored_data = json.dumps({
-            "staff_id": str(staff_id),
-            "latitude": 30.2672,
-            "longitude": -97.7431,
-            "timestamp": "2025-01-15T12:00:00+00:00",
-            "appointment_id": None,
-        })
+        stored_data = json.dumps(
+            {
+                "staff_id": str(staff_id),
+                "latitude": 30.2672,
+                "longitude": -97.7431,
+                "timestamp": "2025-01-15T12:00:00+00:00",
+                "appointment_id": None,
+            }
+        )
         redis.get = AsyncMock(return_value=stored_data)
         svc = StaffLocationService(redis_client=redis)
 
@@ -591,7 +593,7 @@ class TestProperty70AuditLogCreation:
         mock_repo.create.assert_awaited_once_with(
             action="customer.merge",
             resource_type="customer",
-            resource_id=str(resource_id),
+            resource_id=resource_id,
             actor_id=actor_id,
             actor_role="admin",
             details={"merged_ids": ["a", "b"]},
@@ -736,8 +738,7 @@ class TestProperty81PortalInvoiceAccess:
         token = uuid4()
         invoice = _mock_invoice(
             invoice_token=token,
-            invoice_token_expires_at=datetime.now(tz=timezone.utc)
-            + timedelta(days=30),
+            invoice_token_expires_at=datetime.now(tz=timezone.utc) + timedelta(days=30),
             total_amount=Decimal("500.00"),
             paid_amount=Decimal("100.00"),
         )
@@ -772,8 +773,7 @@ class TestProperty81PortalInvoiceAccess:
         token = uuid4()
         invoice = _mock_invoice(
             invoice_token=token,
-            invoice_token_expires_at=datetime.now(tz=timezone.utc)
-            - timedelta(days=1),
+            invoice_token_expires_at=datetime.now(tz=timezone.utc) - timedelta(days=1),
         )
         db = _make_db_returning(invoice)
 

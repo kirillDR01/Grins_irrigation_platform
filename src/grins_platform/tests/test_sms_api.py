@@ -239,7 +239,7 @@ class TestBulkSendEndpoint:
         mock_repo.create.assert_called_once()
         call_kwargs = mock_repo.create.call_args[1]
         assert call_kwargs["campaign_type"] == "SMS"
-        assert call_kwargs["status"] == "pending"
+        assert call_kwargs["status"] == "sending"
         assert call_kwargs["body"] == "Test bulk message"
 
         # Verify recipients were enqueued

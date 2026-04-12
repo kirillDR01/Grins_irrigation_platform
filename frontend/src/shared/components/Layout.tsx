@@ -20,6 +20,7 @@ import {
   DollarSign,
   Megaphone,
   MessageSquare,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -97,6 +98,12 @@ const navItems: NavItem[] = [
     href: '/agreements',
     icon: <ScrollText className="h-5 w-5" />,
     testId: 'nav-agreements',
+  },
+  {
+    label: 'Renewals',
+    href: '/contract-renewals',
+    icon: <RefreshCw className="h-5 w-5" />,
+    testId: 'nav-renewals',
   },
   {
     label: 'Sales',

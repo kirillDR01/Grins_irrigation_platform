@@ -207,8 +207,8 @@ class LeadRepository(LoggerMixin):
             page_size=params.page_size,
         )
 
-        # Base query
-        base_query = select(Lead)
+        # Base query — exclude moved-out leads (CRM2 Req 9.3)
+        base_query = select(Lead).where(Lead.moved_to.is_(None))
 
         # Apply filters
         if params.status is not None:

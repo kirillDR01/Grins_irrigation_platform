@@ -8,7 +8,6 @@ This file covers the REMAINING uncovered properties:
   60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 76, 77,
   78, 79, 80, 81, 82, 83, 84
 """
-# ruff: noqa: PLC0415, ARG001, ARG002
 
 from __future__ import annotations
 

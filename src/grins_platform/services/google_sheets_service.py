@@ -281,8 +281,11 @@ class GoogleSheetsService(LoggerMixin):
         zip_code = extras.get("zip_code") or None
 
         # Determine if they agreed to terms of service
-        agreed = (extras.get("agreed_to_terms", "").strip().lower()
-                  in ("yes", "true", "1"))
+        agreed = extras.get("agreed_to_terms", "").strip().lower() in (
+            "yes",
+            "true",
+            "1",
+        )
 
         if existing_lead:
             lead_id = existing_lead.id
@@ -390,8 +393,11 @@ class GoogleSheetsService(LoggerMixin):
                 sub_extras["agreed_to_terms"] = submission.agreed_to_terms
 
             work_req = sub_extras.get("work_requested", "")
-            agreed = (sub_extras.get("agreed_to_terms", "").strip().lower()
-                      in ("yes", "true", "1"))
+            agreed = sub_extras.get("agreed_to_terms", "").strip().lower() in (
+                "yes",
+                "true",
+                "1",
+            )
 
             lead = await lead_repo.create(
                 name=self.normalize_name(submission.name or ""),
@@ -472,7 +478,7 @@ class GoogleSheetsService(LoggerMixin):
         return submission
 
     @staticmethod
-    def map_situation(
+    def map_situation(  # noqa: PLR0911
         row: list[str],
         work_requested: str = "",
     ) -> LeadSituation:

@@ -20,7 +20,7 @@ interface DuplicateReviewProps {
 
 export function DuplicateReview({ customerId }: DuplicateReviewProps) {
   const { data: duplicateGroup, isLoading } = useCustomerDuplicates(customerId);
-  const mergeMutation = useMergeCustomers();
+  const mergeMutation = useMergeCustomers(customerId);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [selectedDuplicateId, setSelectedDuplicateId] = useState<string | null>(null);
 
@@ -32,8 +32,8 @@ export function DuplicateReview({ customerId }: DuplicateReviewProps) {
   const handleMerge = async (duplicateId: string) => {
     try {
       await mergeMutation.mutateAsync({
-        primary_customer_id: customerId,
-        duplicate_customer_ids: [duplicateId],
+        duplicate_id: duplicateId,
+        field_selections: [],
       });
       toast.success('Customers merged successfully');
       setMergeDialogOpen(false);

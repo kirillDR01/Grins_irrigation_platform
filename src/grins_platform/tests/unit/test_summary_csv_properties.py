@@ -54,6 +54,7 @@ def _make_row(
     row.received_at = received_at
     row.recipient_name = recipient_name
     row.raw_reply_body = raw_reply_body
+    row.recipient_address = None
     return row
 
 
@@ -141,8 +142,12 @@ class TestSummaryBucketCountsProperty9:
 
         summary = await svc.get_response_summary(uuid4())
 
-        assert summary.total_replied == sum(b.count for b in summary.buckets)
-        assert summary.total_replied == len(latest)
+        assert summary.total_replied == sum(
+            b.count for b in summary.buckets if b.status in ("parsed", "needs_review")
+        )
+        assert summary.total_replied == len(
+            [r for r in latest if r.status in ("parsed", "needs_review")],
+        )
 
     @given(rows=_response_set())
     @settings(max_examples=50)

@@ -159,6 +159,9 @@ export type {
   SalesPipelineListResponse,
   SalesEntryStatusUpdate,
   SalesEntryStatus,
+  SalesCalendarEvent,
+  SalesCalendarEventCreate,
+  SalesCalendarEventUpdate,
 } from './pipeline';
 
 export {

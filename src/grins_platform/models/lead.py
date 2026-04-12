@@ -113,10 +113,12 @@ class Lead(Base):
 
     # Customer classification fields
     customer_type: Mapped[Optional[str]] = mapped_column(
-        String(20), nullable=True,
+        String(20),
+        nullable=True,
     )
     property_type: Mapped[Optional[str]] = mapped_column(
-        String(20), nullable=True,
+        String(20),
+        nullable=True,
     )
 
     # Source page URL (Req 5.1)
@@ -135,6 +137,18 @@ class Lead(Base):
         JSONB,
         nullable=True,
     )
+
+    # CRM2: Move-out tracking and last contacted (Req 9.2, 11.2, 10.3)
+    moved_to: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    moved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    last_contacted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    job_requested: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Status tracking
     status: Mapped[str] = mapped_column(

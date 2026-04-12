@@ -55,6 +55,18 @@ export interface Lead extends BaseEntity {
   sms_consent: boolean;
   terms_accepted: boolean;
   email_marketing_consent: boolean;
+  job_requested: string | null;
+  last_contacted_at: string | null;
+}
+
+// Lead move response (CRM2 Req 12.1, 12.2)
+export interface LeadMoveResponse {
+  success: boolean;
+  lead_id: string;
+  customer_id: string;
+  job_id: string | null;
+  sales_entry_id: string | null;
+  message: string;
 }
 
 // Lead attachment (Req 15)
@@ -203,7 +215,7 @@ export interface PaginatedFollowUpResponse {
 // Status display helpers
 export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
   new: 'New',
-  contacted: 'Contacted',
+  contacted: 'Contacted (Awaiting Response)',
   qualified: 'Qualified',
   converted: 'Converted',
   lost: 'Lost',

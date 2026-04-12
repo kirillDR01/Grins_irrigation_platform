@@ -2,11 +2,16 @@ import { apiClient } from '@/core/api';
 import type { PaginatedResponse } from '@/core/api';
 import type {
   Job,
+  JobCompleteResponse,
   JobCreate,
   JobUpdate,
   JobStatusUpdate,
   JobListParams,
   JobFinancials,
+  JobNoteCreate,
+  JobNoteResponse,
+  JobReviewPushResponse,
+  JobPhoto,
 } from '../types';
 
 const BASE_PATH = '/jobs';
@@ -118,6 +123,57 @@ export const jobApi = {
   // Get per-job financials (Req 57)
   getFinancials: async (id: string): Promise<JobFinancials> => {
     const response = await apiClient.get<JobFinancials>(`${BASE_PATH}/${id}/financials`);
+    return response.data;
+  },
+
+  // Complete job via dedicated endpoint (Req 21.2, 27.3-27.5)
+  completeJob: async (id: string, force = false): Promise<JobCompleteResponse> => {
+    const response = await apiClient.post<JobCompleteResponse>(
+      `${BASE_PATH}/${id}/complete`,
+      { force },
+    );
+    return response.data;
+  },
+
+  // Create invoice from job via dedicated endpoint (Req 21.1)
+  createInvoice: async (id: string): Promise<Record<string, unknown>> => {
+    const response = await apiClient.post<Record<string, unknown>>(`${BASE_PATH}/${id}/invoice`);
+    return response.data;
+  },
+
+  // On My Way — send SMS and log timestamp (Req 27.1)
+  onMyWay: async (id: string): Promise<Job> => {
+    const response = await apiClient.post<Job>(`${BASE_PATH}/${id}/on-my-way`);
+    return response.data;
+  },
+
+  // Job Started — log timestamp (Req 27.2)
+  jobStarted: async (id: string): Promise<Job> => {
+    const response = await apiClient.post<Job>(`${BASE_PATH}/${id}/started`);
+    return response.data;
+  },
+
+  // Add note to job (Req 26.3)
+  addNote: async (id: string, data: JobNoteCreate): Promise<JobNoteResponse> => {
+    const response = await apiClient.post<JobNoteResponse>(`${BASE_PATH}/${id}/notes`, data);
+    return response.data;
+  },
+
+  // Upload photo linked to job (Req 26.3)
+  uploadPhoto: async (id: string, file: File, caption?: string): Promise<JobPhoto> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const params = caption ? { caption } : undefined;
+    const response = await apiClient.post<JobPhoto>(`${BASE_PATH}/${id}/photos`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params,
+    });
+    return response.data;
+  },
+
+  // Send Google review push SMS (Req 26.4)
+  reviewPush: async (id: string): Promise<JobReviewPushResponse> => {
+    const response = await apiClient.post<JobReviewPushResponse>(`${BASE_PATH}/${id}/review-push`);
     return response.data;
   },
 };

@@ -394,6 +394,48 @@ class CustomerService(LoggerMixin):
         self.log_completed("lookup_by_email", count=len(customers))
         return [CustomerResponse.model_validate(c) for c in customers]
 
+    async def check_tier1_duplicates(
+        self,
+        phone: str | None = None,
+        email: str | None = None,
+        exclude_id: UUID | None = None,
+    ) -> list[CustomerResponse]:
+        """Tier 1 duplicate check: exact phone or email match.
+
+        Args:
+            phone: Phone number to check.
+            email: Email address to check.
+            exclude_id: Customer ID to exclude (for edit scenarios).
+
+        Returns:
+            List of matching customers.
+
+        Validates: Requirement 6.13
+        """
+        self.log_started("check_tier1_duplicates")
+        matches: dict[str, CustomerResponse] = {}
+
+        if phone:
+            try:
+                normalized = normalize_phone(phone)
+            except ValueError:
+                normalized = "".join(filter(str.isdigit, phone))
+            customer = await self.repository.find_by_phone(normalized)
+            if customer and (not exclude_id or customer.id != exclude_id):
+                matches[str(customer.id)] = CustomerResponse.model_validate(
+                    customer,
+                )
+
+        if email and email.strip():
+            customers = await self.repository.find_by_email(email)
+            for c in customers:
+                if not exclude_id or c.id != exclude_id:
+                    matches[str(c.id)] = CustomerResponse.model_validate(c)
+
+        result = list(matches.values())
+        self.log_completed("check_tier1_duplicates", count=len(result))
+        return result
+
     async def get_service_history(
         self,
         customer_id: UUID,
@@ -1113,6 +1155,133 @@ class CustomerService(LoggerMixin):
             customer_id=str(customer_id),
         )
         return CustomerResponse.model_validate(updated)
+
+    # =========================================================================
+    # CRM2: Service Preferences CRUD (Req 7.1-7.6)
+    # =========================================================================
+
+    @staticmethod
+    def _normalize_prefs(
+        raw: dict[str, Any] | list[dict[str, Any]] | None,
+    ) -> list[dict[str, Any]]:
+        """Normalize preferred_service_times to a list.
+
+        Handles legacy single-dict format and new list format.
+        """
+        if not raw:
+            return []
+        if isinstance(raw, list):
+            return raw  # type: ignore[return-value]
+        # dict case (legacy single-preference format)
+        return [raw]
+
+    async def get_service_preferences(
+        self,
+        customer_id: UUID,
+    ) -> list[dict[str, Any]]:
+        """Get all service preferences for a customer.
+
+        Validates: CRM2 Req 7.5
+        """
+        self.log_started("get_service_preferences", customer_id=str(customer_id))
+        customer = await self.repository.get_by_id(customer_id)
+        if not customer:
+            raise CustomerNotFoundError(customer_id)
+        prefs = self._normalize_prefs(customer.preferred_service_times)
+        self.log_completed("get_service_preferences", customer_id=str(customer_id))
+        return prefs
+
+    async def add_service_preference(
+        self,
+        customer_id: UUID,
+        preference: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Add a service preference entry.
+
+        Validates: CRM2 Req 7.1, 7.6
+        """
+        import uuid as _uuid  # noqa: PLC0415
+
+        self.log_started("add_service_preference", customer_id=str(customer_id))
+        customer = await self.repository.get_by_id(customer_id)
+        if not customer:
+            raise CustomerNotFoundError(customer_id)
+
+        prefs = self._normalize_prefs(customer.preferred_service_times)
+        entry = {"id": str(_uuid.uuid4()), **preference}
+        prefs.append(entry)
+
+        await self.repository.update(customer_id, {"preferred_service_times": prefs})
+        self.log_completed("add_service_preference", customer_id=str(customer_id))
+        return prefs
+
+    async def update_service_preference(
+        self,
+        customer_id: UUID,
+        preference_id: str,
+        preference: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Update a service preference entry by id.
+
+        Validates: CRM2 Req 7.5
+        """
+        self.log_started(
+            "update_service_preference",
+            customer_id=str(customer_id),
+            preference_id=preference_id,
+        )
+        customer = await self.repository.get_by_id(customer_id)
+        if not customer:
+            raise CustomerNotFoundError(customer_id)
+
+        prefs = self._normalize_prefs(customer.preferred_service_times)
+
+        found = False
+        for i, p in enumerate(prefs):
+            if p.get("id") == preference_id:
+                prefs[i] = {"id": preference_id, **preference}
+                found = True
+                break
+
+        if not found:
+            self.log_rejected("update_service_preference", reason="not_found")
+            msg = f"Service preference {preference_id} not found"
+            raise ValueError(msg)
+
+        await self.repository.update(customer_id, {"preferred_service_times": prefs})
+        self.log_completed("update_service_preference", customer_id=str(customer_id))
+        return prefs
+
+    async def delete_service_preference(
+        self,
+        customer_id: UUID,
+        preference_id: str,
+    ) -> list[dict[str, Any]]:
+        """Delete a service preference entry by id.
+
+        Validates: CRM2 Req 7.5
+        """
+        self.log_started(
+            "delete_service_preference",
+            customer_id=str(customer_id),
+            preference_id=preference_id,
+        )
+        customer = await self.repository.get_by_id(customer_id)
+        if not customer:
+            raise CustomerNotFoundError(customer_id)
+
+        prefs = self._normalize_prefs(customer.preferred_service_times)
+        original_len = len(prefs)
+        prefs = [p for p in prefs if p.get("id") != preference_id]
+
+        if len(prefs) == original_len:
+            self.log_rejected("delete_service_preference", reason="not_found")
+            msg = f"Service preference {preference_id} not found"
+            raise ValueError(msg)
+
+        await self.repository.update(customer_id, {"preferred_service_times": prefs})
+        self.log_completed("delete_service_preference", customer_id=str(customer_id))
+        return prefs
 
     # =========================================================================
     # CRM Gap Closure: Customer Invoice History (Req 10)

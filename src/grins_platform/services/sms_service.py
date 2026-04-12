@@ -70,8 +70,7 @@ POLL_REPLY_CONFIRMED_MSG = (
 )
 
 POLL_REPLY_UNCLEAR_MSG = (
-    "Thanks for your reply! We received your message and "
-    "will follow up shortly."
+    "Thanks for your reply! We received your message and will follow up shortly."
 )
 
 # Sender prefix and STOP footer
@@ -342,6 +341,10 @@ class SMSService(LoggerMixin):
                 x_request_id=result.request_id,
             )
             self.log_completed("send_message", message_id=str(sent_message.id))
+
+            # CRM2 Req 11.3: auto-update lead last_contacted_at on outbound
+            await self._touch_lead_last_contacted(lead_id=recipient.lead_id)
+
             return {
                 "success": True,
                 "message_id": str(sent_message.id),
@@ -468,6 +471,55 @@ class SMSService(LoggerMixin):
             digits = "1" + digits
         return f"+{digits}"
 
+    async def _touch_lead_last_contacted(
+        self,
+        *,
+        lead_id: UUID | None = None,
+        phone: str | None = None,
+    ) -> None:
+        """Update lead.last_contacted_at on outbound/inbound SMS.
+
+        Looks up by lead_id (outbound) or phone (inbound). Silently
+        returns if no matching active lead is found.
+
+        Validates: Requirement 11.3
+        """
+        from grins_platform.models.lead import Lead  # noqa: PLC0415
+
+        if lead_id is None and phone is None:
+            return
+
+        try:
+            if lead_id is not None:
+                stmt = select(Lead).where(Lead.id == lead_id).limit(1)
+            else:
+                # Normalize phone to 10-digit for lead lookup
+                assert phone is not None
+                digits = re.sub(r"\D", "", phone)
+                if len(digits) == 11 and digits.startswith("1"):
+                    digits = digits[1:]
+                if len(digits) != 10:
+                    return
+                stmt = (
+                    select(Lead)
+                    .where(Lead.phone == digits, Lead.moved_to.is_(None))
+                    .order_by(Lead.created_at.desc())
+                    .limit(1)
+                )
+
+            result = await self.session.execute(stmt)
+            lead: Lead | None = result.scalar_one_or_none()
+            if lead is not None:
+                lead.last_contacted_at = datetime.now(tz=timezone.utc)
+                await self.session.flush()
+        except Exception:
+            logger.warning(
+                "sms.lead_contact_update.failed",
+                lead_id=str(lead_id) if lead_id else None,
+                phone=_mask_phone(phone) if phone else None,
+                exc_info=True,
+            )
+
     async def handle_inbound(
         self,
         from_phone: str,
@@ -493,9 +545,14 @@ class SMSService(LoggerMixin):
         body_stripped = body.strip()
         body_lower = body_stripped.lower()
 
+        # CRM2 Req 11.3: auto-update lead last_contacted_at on inbound SMS
+        await self._touch_lead_last_contacted(phone=from_phone)
+
         # 10.1: Exact opt-out keyword match (Req 8.1, 8.2, 8.3, 8.4)
         if body_lower in EXACT_OPT_OUT_KEYWORDS:
-            result = await self._process_exact_opt_out(from_phone, body_lower, thread_id=thread_id)
+            result = await self._process_exact_opt_out(
+                from_phone, body_lower, thread_id=thread_id
+            )
             # Bookkeeping: record STOP as campaign response (Req 6.1-6.4)
             # Independent — failure must not block consent revocation
             if thread_id:
@@ -521,6 +578,17 @@ class SMSService(LoggerMixin):
             )
             if poll_result is not None:
                 return poll_result
+
+        # Y/R/C confirmation reply branch (CRM2 Req 24.1-24.8)
+        if thread_id:
+            confirmation_result = await self._try_confirmation_reply(
+                from_phone,
+                body_stripped,
+                provider_sid,
+                thread_id,
+            )
+            if confirmation_result is not None:
+                return confirmation_result
 
         # Delegate to existing webhook handler for other messages
         return await self.handle_webhook(from_phone, body, provider_sid)
@@ -598,7 +666,8 @@ class SMSService(LoggerMixin):
             try:
                 if row.status == "parsed":
                     confirmation_msg = POLL_REPLY_CONFIRMED_MSG.format(
-                        option_label=row.selected_option_label or row.selected_option_key,
+                        option_label=row.selected_option_label
+                        or row.selected_option_key,
                     )
                 else:
                     confirmation_msg = POLL_REPLY_UNCLEAR_MSG
@@ -632,6 +701,67 @@ class SMSService(LoggerMixin):
 
         # orphan → fall through to handle_webhook (Req 7.4)
         return None
+
+    async def _try_confirmation_reply(
+        self,
+        from_phone: str,
+        body: str,
+        provider_sid: str,
+        thread_id: str,
+    ) -> dict[str, Any] | None:
+        """Route inbound SMS to JobConfirmationService if thread matches a confirmation.
+
+        Returns result dict if matched, None to fall through.
+
+        Validates: CRM Changes Update 2 Req 24.1-24.4
+        """
+        from grins_platform.services.job_confirmation_service import (  # noqa: PLC0415
+            JobConfirmationService,
+            parse_confirmation_reply,
+        )
+
+        svc = JobConfirmationService(self.session)
+        # Check if thread_id correlates to an APPOINTMENT_CONFIRMATION message
+        original = await svc._find_confirmation_message(thread_id)  # noqa: SLF001
+        if original is None:
+            return None
+
+        keyword = parse_confirmation_reply(body)
+        result = await svc.handle_confirmation(
+            thread_id=thread_id,
+            keyword=keyword,
+            raw_body=body,
+            from_phone=from_phone,
+            provider_sid=provider_sid,
+        )
+
+        # Send auto-reply if present
+        auto_reply = result.get("auto_reply")
+        if auto_reply:
+            try:
+                await self.provider.send_text(
+                    self._format_phone(from_phone),
+                    f"{self._prefix}{auto_reply}",
+                )
+            except Exception:
+                logger.warning(
+                    "sms.confirmation.auto_reply_failed",
+                    phone=_mask_phone(from_phone),
+                    exc_info=True,
+                )
+
+        self.log_completed(
+            "handle_inbound",
+            webhook_action="confirmation_reply",
+            keyword=keyword.value if keyword else None,
+            phone=_mask_phone(from_phone),
+        )
+        return {
+            "action": "confirmation_reply",
+            "phone": from_phone,
+            "keyword": keyword.value if keyword else None,
+            **result,
+        }
 
     async def _process_exact_opt_out(
         self,

@@ -27,9 +27,7 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-_IS_PRODUCTION = (
-    os.getenv("ENVIRONMENT", "development").lower() == "production"
-)
+_IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
 
 # CSP built as a single string to avoid long lines
 _CSP_DIRECTIVES = [
@@ -39,15 +37,9 @@ _CSP_DIRECTIVES = [
         "https://maps.googleapis.com https://js.stripe.com"
     ),
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    (
-        "img-src 'self' data: blob: "
-        "https://*.googleapis.com https://*.gstatic.com"
-    ),
+    ("img-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com"),
     "font-src 'self' https://fonts.gstatic.com",
-    (
-        "connect-src 'self' "
-        "https://*.googleapis.com https://api.stripe.com"
-    ),
+    ("connect-src 'self' https://*.googleapis.com https://api.stripe.com"),
     "frame-src https://js.stripe.com https://maps.google.com",
 ]
 _CSP = "; ".join(_CSP_DIRECTIVES)
@@ -67,9 +59,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Referrer-Policy"] = (
-            "strict-origin-when-cross-origin"
-        )
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = (
             "camera=(), microphone=(), geolocation=(self), payment=()"
         )

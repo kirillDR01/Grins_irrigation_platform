@@ -54,6 +54,14 @@ export interface Job extends BaseEntity {
   // Nested customer summary (Req 22)
   customer_name: string | null;
   customer_tags: CustomerTag[] | null;
+  // Property summary (Req 19)
+  property_address: string | null;
+  property_city: string | null;
+  property_type: 'residential' | 'commercial' | null;
+  property_is_hoa: boolean | null;
+  property_is_subscription: boolean | null;
+  on_my_way_at: string | null;
+  time_tracking_metadata: Record<string, unknown> | null;
 }
 
 // Per-job financials (Req 57)
@@ -85,6 +93,43 @@ export interface JobCreate {
   quoted_amount?: number | null;
   source?: JobSource | null;
   source_details?: Record<string, unknown> | null;
+}
+
+// Job complete response (Req 27.3-27.5)
+export interface JobCompleteResponse {
+  completed: boolean;
+  warning: string | null;
+  job: Job | null;
+}
+
+// On-site operation types (Req 26, 27)
+export interface JobNoteCreate {
+  note: string;
+}
+
+export interface JobNoteResponse {
+  job_id: string;
+  note: string;
+  synced_to_customer: boolean;
+}
+
+export interface JobReviewPushResponse {
+  job_id: string;
+  sms_sent: boolean;
+  message_id: string | null;
+}
+
+export interface JobPhoto {
+  id: string;
+  customer_id: string;
+  file_key: string;
+  file_name: string;
+  file_size: number;
+  content_type: string;
+  caption: string | null;
+  uploaded_by: string | null;
+  download_url: string;
+  created_at: string;
 }
 
 // Update job request

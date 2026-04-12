@@ -6,7 +6,6 @@ import {
   Clock,
   DollarSign,
   User,
-  Wrench,
   Users,
   FileText,
   CreditCard,
@@ -16,6 +15,7 @@ import {
   Save,
   TrendingUp,
   Pencil,
+  MapPin,
 } from 'lucide-react';
 import { parseLocalDate } from '@/shared/utils/dateUtils';
 import { Button } from '@/components/ui/button';
@@ -24,10 +24,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoadingPage, ErrorMessage } from '@/shared/components';
-import { useJob, useUpdateJobStatus, useUpdateJob, useJobFinancials } from '../hooks';
+import { LoadingPage, ErrorMessage, PropertyTags } from '@/shared/components';
+import { useJob, useUpdateJob, useJobFinancials } from '../hooks';
 import { JobStatusBadge } from './JobStatusBadge';
-import type { Job, JobStatus } from '../types';
+import { OnSiteOperations } from './OnSiteOperations';
+import type { Job } from '../types';
 import {
   formatJobType,
   formatDuration,
@@ -50,7 +51,6 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
   const id = propJobId || paramId || '';
 
   const { data: job, isLoading, error, refetch } = useJob(id);
-  const updateStatusMutation = useUpdateJobStatus();
   const updateJobMutation = useUpdateJob();
   const { data: financials, isLoading: financialsLoading } = useJobFinancials(id);
 
@@ -64,18 +64,6 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
 
   // Initialize notes from job data
   const currentNotes = notesValue !== null ? notesValue : (job?.notes ?? '');
-
-  const handleStatusChange = async (newStatus: JobStatus) => {
-    if (!job) return;
-    try {
-      await updateStatusMutation.mutateAsync({
-        id: job.id,
-        data: { status: newStatus },
-      });
-    } catch (err) {
-      console.error('Failed to update status:', err);
-    }
-  };
 
   const handlePaymentCollectedChange = async (checked: boolean) => {
     if (!job) return;
@@ -180,7 +168,20 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
         >
           {priorityConfig.label}
         </span>
+        <PropertyTags
+          propertyType={job.property_type}
+          isHoa={job.property_is_hoa ?? false}
+          isSubscription={job.property_is_subscription ?? false}
+        />
       </div>
+
+      {/* Property Address (Req 19.1) */}
+      {job.property_address && (
+        <div className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-lg" data-testid="job-property-address">
+          <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
+          <p className="text-sm text-slate-700">{job.property_address}</p>
+        </div>
+      )}
 
       {/* Description */}
       {job.description && (
@@ -323,7 +324,7 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
         )}
 
         {/* Generate Invoice Button */}
-        {!linkedInvoice && ['completed', 'closed'].includes(job.status) && (
+        {!linkedInvoice && job.status === 'completed' && (
           <div className="mt-3" data-testid="generate-invoice-section">
             <GenerateInvoiceButton job={job} />
           </div>
@@ -423,83 +424,10 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
 
       <Separator />
 
-      {/* Actions Section */}
-      <div>
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-          <Wrench className="h-3.5 w-3.5" />
-          Actions
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {job.status === 'requested' && (
-            <Button
-              size="sm"
-              className="bg-teal-500 hover:bg-teal-600 text-white"
-              onClick={() => handleStatusChange('approved')}
-              disabled={updateStatusMutation.isPending}
-              data-testid="approve-job-btn"
-            >
-              Approve Job
-            </Button>
-          )}
-          {job.status === 'approved' && (
-            <Button
-              size="sm"
-              className="bg-violet-500 hover:bg-violet-600 text-white"
-              onClick={() => handleStatusChange('scheduled')}
-              disabled={updateStatusMutation.isPending}
-              data-testid="schedule-job-btn"
-            >
-              Mark as Scheduled
-            </Button>
-          )}
-          {job.status === 'scheduled' && (
-            <Button
-              size="sm"
-              className="bg-orange-500 hover:bg-orange-600 text-white"
-              onClick={() => handleStatusChange('in_progress')}
-              disabled={updateStatusMutation.isPending}
-              data-testid="start-job-btn"
-            >
-              Start Job
-            </Button>
-          )}
-          {job.status === 'in_progress' && (
-            <Button
-              size="sm"
-              className="bg-emerald-500 hover:bg-emerald-600 text-white"
-              onClick={() => handleStatusChange('completed')}
-              disabled={updateStatusMutation.isPending}
-              data-testid="complete-job-btn"
-            >
-              Mark Complete
-            </Button>
-          )}
-          {job.status === 'completed' && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleStatusChange('closed')}
-              disabled={updateStatusMutation.isPending}
-              data-testid="close-job-btn"
-            >
-              Close Job
-            </Button>
-          )}
-          {!['cancelled', 'closed'].includes(job.status) && (
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => handleStatusChange('cancelled')}
-              disabled={updateStatusMutation.isPending}
-              data-testid="cancel-job-btn"
-            >
-              Cancel Job
-            </Button>
-          )}
-        </div>
-      </div>
+      {/* On-Site Operations (Req 26, 27) */}
+      <OnSiteOperations job={job} />
 
-      {/* AI Communication Section */}
+      <Separator />
       <Card className="bg-slate-50 border-slate-100">
         <CardHeader className="p-4 pb-2">
           <CardTitle className="flex items-center gap-2 text-sm font-medium text-slate-700">

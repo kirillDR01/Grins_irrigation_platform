@@ -90,3 +90,17 @@
 .fc .fc-event.selected-day-event:hover {
   @apply opacity-100;
 }
+
+/* Confirmed appointment: solid border, full color (Req 22) */
+.fc .fc-event.appointment-confirmed {
+  border-style: solid;
+  border-width: 2px;
+  opacity: 1;
+}
+
+/* Unconfirmed appointment: dashed border, muted (Req 22) */
+.fc .fc-event.appointment-unconfirmed {
+  border-style: dashed;
+  border-width: 2px;
+  opacity: 0.65;
+}

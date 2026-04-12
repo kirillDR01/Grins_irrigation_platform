@@ -560,7 +560,7 @@ class TestDuplicatePhoneDeduplicationProperty:
 
 
 # --- Property 12: Token refresh triggers within expiry buffer ---
-from grins_platform.services.google_sheets_poller import (  # noqa: E402
+from grins_platform.services.google_sheets_poller import (
     _TOKEN_EXPIRY_BUFFER,
     GoogleSheetsPoller,
     detect_header_row,
@@ -842,7 +842,9 @@ class TestOnlyNewRowsProcessedProperty:
         from grins_platform.services.google_sheets_service import compute_row_hash
 
         # Make each row unique by including its index
-        rows = [[f"row_{i}_col"] + [""] * (EXPECTED_COLUMNS - 1) for i in range(total_rows)]
+        rows = [
+            [f"row_{i}_col"] + [""] * (EXPECTED_COLUMNS - 1) for i in range(total_rows)
+        ]
 
         # Mark the first num_existing rows as "already imported"
         num_existing = min(num_existing, total_rows)
@@ -1280,9 +1282,9 @@ class TestNewSubmissionInvariantsProperty:
 
 # --- Property 7: Sheet-created leads have null zip_code ---
 
-from datetime import datetime, timezone  # noqa: E402
+from datetime import datetime, timezone
 
-from grins_platform.schemas.lead import LeadResponse  # noqa: E402
+from grins_platform.schemas.lead import LeadResponse
 
 
 @pytest.mark.unit
@@ -1472,6 +1474,10 @@ class TestSheetCreatedLeadsHaveNullZipCodeProperty:
         lead.email_marketing_consent = False
         lead.customer_type = None
         lead.property_type = None
+        lead.moved_to = None
+        lead.moved_at = None
+        lead.last_contacted_at = None
+        lead.job_requested = None
         lead.created_at = now
         lead.updated_at = now
 
@@ -1486,9 +1492,9 @@ class TestSheetCreatedLeadsHaveNullZipCodeProperty:
 
 # --- Property 8: Public form submission requires address ---
 
-from pydantic import ValidationError  # noqa: E402
+from pydantic import ValidationError
 
-from grins_platform.schemas.lead import LeadSubmission  # noqa: E402
+from grins_platform.schemas.lead import LeadSubmission
 
 
 @pytest.mark.unit
@@ -1581,7 +1587,7 @@ class TestPublicFormRequiresAddressProperty:
     )
     @settings(max_examples=200)
     def test_fewer_than_5_digits_zip_rejected(self, zip_code: str) -> None:
-        """Fewer than 5 digits → ValidationError (zip format still validated when provided)."""
+        """Fewer than 5 digits → ValidationError."""
         with pytest.raises(ValidationError):
             LeadSubmission(**self._base, zip_code=zip_code)
 
@@ -1594,7 +1600,7 @@ class TestPublicFormRequiresAddressProperty:
     )
     @settings(max_examples=200)
     def test_more_than_5_digits_zip_rejected(self, zip_code: str) -> None:
-        """More than 5 digits → ValidationError (zip format still validated when provided)."""
+        """More than 5 digits → ValidationError."""
         with pytest.raises(ValidationError):
             LeadSubmission(**self._base, zip_code=zip_code)
 

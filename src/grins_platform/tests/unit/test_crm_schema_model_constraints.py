@@ -233,9 +233,7 @@ class TestSentMessageConstraints:
         """
 
         constraints = SentMessage.__table__.constraints
-        check_names = [
-            c.name for c in constraints if hasattr(c, "sqltext") and c.name
-        ]
+        check_names = [c.name for c in constraints if hasattr(c, "sqltext") and c.name]
         assert "ck_sent_messages_recipient" in check_names
 
     def test_sent_message_model_with_recipient_check_text_returns_correct(
@@ -291,13 +289,15 @@ class TestSentMessageConstraints:
 
     @given(
         lead_id=st.uuids(),
-        message_type=st.sampled_from([
-            "lead_confirmation",
-            "estimate_sent",
-            "contract_sent",
-            "review_request",
-            "campaign",
-        ]),
+        message_type=st.sampled_from(
+            [
+                "lead_confirmation",
+                "estimate_sent",
+                "contract_sent",
+                "review_request",
+                "campaign",
+            ]
+        ),
     )
     @settings(max_examples=100)
     def test_sent_message_with_lead_only_recipient_returns_valid_model_attrs(

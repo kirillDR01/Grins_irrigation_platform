@@ -162,7 +162,9 @@ class TestScheduleClearAuditCompletenessProperty:
         # Track expected job IDs
         expected_job_ids: set[Any] = set()
         for appt in appointments:
-            job = create_mock_job(job_id=appt.job_id, status=JobStatus.IN_PROGRESS.value)
+            job = create_mock_job(
+                job_id=appt.job_id, status=JobStatus.IN_PROGRESS.value
+            )
             expected_job_ids.add(job.id)
             mock_job_repo.get_by_id.return_value = job
 

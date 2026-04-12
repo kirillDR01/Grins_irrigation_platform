@@ -1,4 +1,6 @@
-"""Unit tests for subscription management: create_portal_session and manage-subscription endpoint.
+"""Unit tests for subscription management.
+
+Covers create_portal_session and manage-subscription endpoint.
 
 Validates: Requirements 2.1, 2.2, 2.3
 """
@@ -27,6 +29,7 @@ def _reset_checkout_rate_limiter() -> None:
     suite (e.g. test_integration_gaps_api), causing 429 responses.
     """
     checkout_module._rate_store.clear()
+
 
 # =============================================================================
 # Helpers
@@ -76,7 +79,8 @@ class TestCreatePortalSession:
 
         assert url == "https://billing.stripe.com/session/test_sess"
         mock_stripe.Customer.list.assert_called_once_with(
-            email="subscriber@example.com", limit=1,
+            email="subscriber@example.com",
+            limit=1,
         )
         mock_stripe.billing_portal.Session.create.assert_called_once_with(
             customer="cus_test_123",

@@ -421,7 +421,7 @@ def get_jobs_ready_to_schedule(
             select(Job, Customer, Property)
             .join(Customer, Job.customer_id == Customer.id)
             .outerjoin(Property, Job.property_id == Property.id)
-            .where(Job.status.in_(["approved", "requested"]))
+            .where(Job.status.in_(["approved", "requested", "to_be_scheduled"]))
             .where(Job.scheduled_at.is_(None))  # Only unscheduled jobs
         )
 

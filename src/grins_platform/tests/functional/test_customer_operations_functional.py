@@ -360,19 +360,16 @@ class TestCustomerPhotoWorkflow:
         )
 
         # Create a minimal valid JPEG (magic bytes)
-        jpeg_data = (
-            b"\xff\xd8\xff\xe0"
-            + b"\x00" * 100
-            + b"\xff\xd9"
-        )
+        jpeg_data = b"\xff\xd8\xff\xe0" + b"\x00" * 100 + b"\xff\xd9"
 
         # Mock magic.from_buffer to return image/jpeg
-        import magic as magic_mod  # noqa: PLC0415
+        import magic as magic_mod
 
         original_from_buffer = magic_mod.from_buffer
 
         def mock_from_buffer(
-            data: bytes, mime: bool = False,
+            data: bytes,
+            mime: bool = False,
         ) -> str:
             if mime and data[:2] == b"\xff\xd8":
                 return "image/jpeg"
@@ -434,12 +431,13 @@ class TestCustomerPhotoWorkflow:
         # PDF magic bytes
         pdf_data = b"%PDF-1.4" + b"\x00" * 100
 
-        import magic as magic_mod  # noqa: PLC0415
+        import magic as magic_mod
 
         original_from_buffer = magic_mod.from_buffer
 
         def mock_from_buffer(
-            data: bytes, mime: bool = False,
+            data: bytes,
+            mime: bool = False,
         ) -> str:
             if mime and data[:5] == b"%PDF-":
                 return "application/pdf"
@@ -502,18 +500,15 @@ class TestCustomerPhotoWorkflow:
         )
 
         # Create minimal JPEG data
-        jpeg_data = (
-            b"\xff\xd8\xff\xe0"
-            + b"\x00" * 100
-            + b"\xff\xd9"
-        )
+        jpeg_data = b"\xff\xd8\xff\xe0" + b"\x00" * 100 + b"\xff\xd9"
 
-        import magic as magic_mod  # noqa: PLC0415
+        import magic as magic_mod
 
         original_from_buffer = magic_mod.from_buffer
 
         def mock_from_buffer(
-            data: bytes, mime: bool = False,
+            data: bytes,
+            mime: bool = False,
         ) -> str:
             if mime and data[:2] == b"\xff\xd8":
                 return "image/jpeg"

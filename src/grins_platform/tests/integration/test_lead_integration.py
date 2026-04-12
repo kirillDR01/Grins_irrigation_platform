@@ -59,6 +59,10 @@ def _make_lead_model(**overrides: Any) -> MagicMock:
     lead.property_type = overrides.get("property_type")
     lead.created_at = overrides.get("created_at", now)
     lead.updated_at = overrides.get("updated_at", now)
+    lead.moved_to = overrides.get("moved_to")
+    lead.moved_at = overrides.get("moved_at")
+    lead.last_contacted_at = overrides.get("last_contacted_at")
+    lead.job_requested = overrides.get("job_requested")
     return lead
 
 
@@ -283,7 +287,7 @@ class TestLeadLifecycle:
         self,
         lead_service: LeadService,
         mock_lead_repo: AsyncMock,
-        mock_customer_service: AsyncMock,  # noqa: ARG002
+        mock_customer_service: AsyncMock,
         mock_job_service: AsyncMock,
     ) -> None:
         """Test conversion without creating a job."""

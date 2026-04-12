@@ -10,12 +10,14 @@ Validates: Admin Dashboard Requirements 1.6
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import AppointmentStatus, JobStatus
 from grins_platform.schemas.dashboard import (
+    DashboardAlert,
+    DashboardAlertsResponse,
     DashboardMetrics,
     JobsByStatusResponse,
     PaymentStatusOverview,
@@ -25,10 +27,13 @@ from grins_platform.schemas.dashboard import (
 )
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from grins_platform.repositories.appointment_repository import (
         AppointmentRepository,
     )
     from grins_platform.repositories.customer_repository import CustomerRepository
+    from grins_platform.repositories.invoice_repository import InvoiceRepository
     from grins_platform.repositories.job_repository import JobRepository
     from grins_platform.repositories.lead_repository import LeadRepository
     from grins_platform.repositories.staff_repository import StaffRepository
@@ -59,6 +64,8 @@ class DashboardService(LoggerMixin):
         staff_repository: StaffRepository,
         appointment_repository: AppointmentRepository,
         lead_repository: LeadRepository | None = None,
+        invoice_repository: InvoiceRepository | None = None,
+        session: AsyncSession | None = None,
     ) -> None:
         """Initialize service with repositories.
 
@@ -68,6 +75,8 @@ class DashboardService(LoggerMixin):
             staff_repository: StaffRepository for staff data
             appointment_repository: AppointmentRepository for appointment data
             lead_repository: LeadRepository for lead data (optional)
+            invoice_repository: InvoiceRepository for invoice data (optional)
+            session: Database session for direct queries (optional)
         """
         super().__init__()
         self.customer_repository = customer_repository
@@ -75,6 +84,8 @@ class DashboardService(LoggerMixin):
         self.staff_repository = staff_repository
         self.appointment_repository = appointment_repository
         self.lead_repository = lead_repository
+        self.invoice_repository = invoice_repository
+        self._session = session
 
     async def get_overview_metrics(self) -> DashboardMetrics:
         """Get overall dashboard metrics.
@@ -358,3 +369,159 @@ class DashboardService(LoggerMixin):
             Dictionary mapping status string to count
         """
         return await self.job_repository.count_by_status()
+
+    async def get_alerts(self) -> DashboardAlertsResponse:
+        """Get active dashboard alerts with navigation target URLs.
+
+        Aggregates alerts from overdue invoices, lien deadlines,
+        uncontacted leads, and jobs needing scheduling.
+
+        Single-record alerts link to the detail page.
+        Multi-record alerts link to filtered list with ?highlight=<id>.
+
+        Returns:
+            DashboardAlertsResponse with structured alerts
+
+        Validates: CRM Changes Update 2 Req 3.1, 3.2, 3.4
+        """
+        self.log_started("get_alerts")
+        now = datetime.now(tz=timezone.utc)
+        alerts: list[DashboardAlert] = []
+
+        def _plural(n: int, word: str) -> str:
+            return f"{n} {word}{'s' if n != 1 else ''}"
+
+        # Overdue invoices alert
+        if self.invoice_repository is not None:
+            overdue = await self.invoice_repository.find_overdue()
+            if overdue:
+                ids = [str(inv.id) for inv in overdue]
+                if len(overdue) == 1:
+                    target_url = f"/invoices/{ids[0]}"
+                else:
+                    target_url = f"/invoices?status=overdue&highlight={ids[0]}"
+                desc = f"{_plural(len(overdue), 'invoice')} past due"
+                alerts.append(
+                    DashboardAlert(
+                        id="overdue_invoices",
+                        title="Overdue Invoices",
+                        description=desc,
+                        severity="critical",
+                        count=len(overdue),
+                        target_url=target_url,
+                        record_ids=ids,
+                        created_at=now,
+                    ),
+                )
+
+            # Lien warning alerts
+            lien_warning = await self.invoice_repository.find_lien_warning_due()
+            if lien_warning:
+                ids = [str(inv.id) for inv in lien_warning]
+                if len(lien_warning) == 1:
+                    target_url = f"/invoices/{ids[0]}"
+                else:
+                    target_url = f"/invoices?lien_warning=true&highlight={ids[0]}"
+                n = len(lien_warning)
+                desc = f"{_plural(n, 'invoice')} approaching 45-day lien deadline"
+                alerts.append(
+                    DashboardAlert(
+                        id="lien_warnings",
+                        title="Lien Warning Due",
+                        description=desc,
+                        severity="critical",
+                        count=n,
+                        target_url=target_url,
+                        record_ids=ids,
+                        created_at=now,
+                    ),
+                )
+
+        # Uncontacted leads alert
+        if self.lead_repository is not None:
+            uncontacted_count = await self.lead_repository.count_uncontacted()
+            if uncontacted_count > 0:
+                desc = f"{_plural(uncontacted_count, 'lead')} awaiting contact"
+                alerts.append(
+                    DashboardAlert(
+                        id="uncontacted_leads",
+                        title="Uncontacted Leads",
+                        description=desc,
+                        severity="warning",
+                        count=uncontacted_count,
+                        target_url="/leads?status=new",
+                        record_ids=[],
+                        created_at=now,
+                    ),
+                )
+
+        # Jobs needing scheduling alert
+        jobs_by_status = await self._get_jobs_by_status_dict()
+        to_schedule = jobs_by_status.get(
+            JobStatus.TO_BE_SCHEDULED.value,
+            0,
+        )
+        if to_schedule > 0:
+            desc = f"{_plural(to_schedule, 'job')} awaiting scheduling"
+            sev = "warning" if to_schedule <= 5 else "critical"
+            alerts.append(
+                DashboardAlert(
+                    id="jobs_to_schedule",
+                    title="Jobs To Be Scheduled",
+                    description=desc,
+                    severity=sev,
+                    count=to_schedule,
+                    target_url="/jobs?status=to_be_scheduled",
+                    record_ids=[],
+                    created_at=now,
+                ),
+            )
+
+        # Contract renewal proposals pending review (Req 31.4)
+        if self._session is not None:
+            from sqlalchemy import select  # noqa: PLC0415
+
+            from grins_platform.models.contract_renewal import (  # noqa: PLC0415
+                ContractRenewalProposal,
+            )
+            from grins_platform.models.enums import ProposalStatus  # noqa: PLC0415
+
+            stmt = select(ContractRenewalProposal).where(
+                ContractRenewalProposal.status == ProposalStatus.PENDING.value,
+            )
+            result = await self._session.execute(stmt)
+            pending_proposals = list(result.scalars().all())
+            if pending_proposals:
+                ids = [str(p.id) for p in pending_proposals]
+                descriptions: list[str] = []
+                for p in pending_proposals:
+                    cust = p.customer
+                    name = f"{cust.first_name} {cust.last_name}" if cust else "Unknown"
+                    descriptions.append(name)
+                if len(pending_proposals) == 1:
+                    desc = f"1 contract renewal ready for review: {descriptions[0]}"
+                    target_url = f"/contract-renewals/{ids[0]}"
+                else:
+                    n = len(pending_proposals)
+                    desc = f"{n} contract renewals ready for review"
+                    target_url = f"/contract-renewals?highlight={ids[0]}"
+                alerts.append(
+                    DashboardAlert(
+                        id="pending_renewals",
+                        title="Contract Renewals Pending",
+                        description=desc,
+                        severity="warning",
+                        count=len(pending_proposals),
+                        target_url=target_url,
+                        record_ids=ids,
+                        created_at=now,
+                    ),
+                )
+
+        response = DashboardAlertsResponse(
+            alerts=alerts,
+            total=len(alerts),
+        )
+
+        self.log_completed("get_alerts", total_alerts=len(alerts))
+        return response

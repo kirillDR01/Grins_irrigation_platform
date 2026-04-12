@@ -63,8 +63,8 @@ def _build_mock_s3_client() -> MagicMock:
 
     def generate_presigned_url(
         _method: str,
-        Params: dict[str, str],  # noqa: N803
-        ExpiresIn: int = 3600,  # noqa: N803
+        Params: dict[str, str],
+        ExpiresIn: int = 3600,
     ) -> str:
         key = Params["Key"]
         bucket = Params["Bucket"]
@@ -260,7 +260,7 @@ class TestS3FileRoundTrip:
         self,
     ) -> None:
         """Customer photo: upload → get URL → verify key → delete."""
-        import magic as magic_mod  # noqa: PLC0415
+        import magic as magic_mod
 
         s3_client = _build_mock_s3_client()
         photo_svc = PhotoService(
@@ -302,7 +302,7 @@ class TestS3FileRoundTrip:
         self,
     ) -> None:
         """Lead attachment: upload PDF → get URL → delete."""
-        import magic as magic_mod  # noqa: PLC0415
+        import magic as magic_mod
 
         s3_client = _build_mock_s3_client()
         photo_svc = PhotoService(
@@ -340,7 +340,7 @@ class TestS3FileRoundTrip:
         self,
     ) -> None:
         """Media library: upload PNG → get URL → delete."""
-        import magic as magic_mod  # noqa: PLC0415
+        import magic as magic_mod
 
         s3_client = _build_mock_s3_client()
         photo_svc = PhotoService(
@@ -378,7 +378,7 @@ class TestS3FileRoundTrip:
         self,
     ) -> None:
         """Multiple files across different contexts coexist in S3."""
-        import magic as magic_mod  # noqa: PLC0415
+        import magic as magic_mod
 
         s3_client = _build_mock_s3_client()
         photo_svc = PhotoService(
@@ -884,7 +884,7 @@ class TestEstimatePortalEndToEnd:
         (S3), then an estimate is created and approved (portal flow),
         verifying both external services work together.
         """
-        import magic as magic_mod  # noqa: PLC0415
+        import magic as magic_mod
 
         # --- S3: Upload customer photo ---
         s3_client = _build_mock_s3_client()

@@ -15,7 +15,7 @@ describe('LeadStatusBadge', () => {
 
   const expectedLabels: Record<LeadStatus, string> = {
     new: 'New',
-    contacted: 'Contacted',
+    contacted: 'Contacted (Awaiting Response)',
     qualified: 'Qualified',
     converted: 'Converted',
     lost: 'Lost',

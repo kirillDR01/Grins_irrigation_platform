@@ -7,7 +7,6 @@ Covers Properties 4-13 (backend only; Properties 1-3 are frontend).
 - Properties 11, 12: Manual lead creation (lead_service)
 - Property 13: Job type update (job_service)
 """
-# ruff: noqa: PLC0415, ARG002
 
 from __future__ import annotations
 
@@ -40,6 +39,7 @@ def _run_async(coro: Awaitable[_T]) -> _T:
         return loop.run_until_complete(coro)
     finally:
         loop.close()
+
 
 from grins_platform.exceptions import (
     LeadAlreadyConvertedError,
@@ -89,21 +89,25 @@ non_empty_description = st.text(
 lead_situations = st.sampled_from(list(LeadSituation))
 
 # Valid job types from the design doc
-valid_job_types = st.sampled_from([
-    "spring_startup",
-    "summer_tuneup",
-    "winterization",
-    "repair",
-    "diagnostic",
-    "installation",
-    "landscaping",
-])
+valid_job_types = st.sampled_from(
+    [
+        "spring_startup",
+        "summer_tuneup",
+        "winterization",
+        "repair",
+        "diagnostic",
+        "installation",
+        "landscaping",
+    ]
+)
 
-non_converted_statuses = st.sampled_from([
-    LeadStatus.NEW,
-    LeadStatus.CONTACTED,
-    LeadStatus.QUALIFIED,
-])
+non_converted_statuses = st.sampled_from(
+    [
+        LeadStatus.NEW,
+        LeadStatus.CONTACTED,
+        LeadStatus.QUALIFIED,
+    ]
+)
 
 
 # ---------------------------------------------------------------------------
@@ -163,13 +167,12 @@ def _make_lead_service():
     customer_service = AsyncMock()
     job_service = AsyncMock()
     staff_repo = AsyncMock()
-    svc = LeadService(
+    return LeadService(
         lead_repository=lead_repo,
         customer_service=customer_service,
         job_service=job_service,
         staff_repository=staff_repo,
     )
-    return svc
 
 
 def _make_job_service():
@@ -180,13 +183,12 @@ def _make_job_service():
     customer_repo = AsyncMock()
     property_repo = AsyncMock()
     service_repo = AsyncMock()
-    svc = JobService(
+    return JobService(
         job_repository=job_repo,
         customer_repository=customer_repo,
         property_repository=property_repo,
         service_repository=service_repo,
     )
-    return svc
 
 
 # ===================================================================
@@ -218,7 +220,9 @@ class TestProperty4TokenExpiry:
         token = svc._create_access_token(user_id, role)
 
         payload = jose_jwt.decode(
-            token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM],
+            token,
+            JWT_SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
         )
         exp = datetime.fromtimestamp(payload["exp"], tz=UTC)
         min_expected = before + timedelta(minutes=60)
@@ -243,7 +247,9 @@ class TestProperty4TokenExpiry:
         token = svc._create_refresh_token(user_id)
 
         payload = jose_jwt.decode(
-            token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM],
+            token,
+            JWT_SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
         )
         exp = datetime.fromtimestamp(payload["exp"], tz=UTC)
         min_expected = before + timedelta(days=30)
@@ -292,7 +298,9 @@ class TestProperty5RefreshTokenValidity:
 
         # Should return a valid access token
         payload = jose_jwt.decode(
-            access_token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM],
+            access_token,
+            JWT_SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
         )
         assert payload["type"] == "access"
         assert payload["sub"] == str(user_id)
@@ -305,7 +313,8 @@ class TestProperty5RefreshTokenValidity:
 
         # Create a token that expired 1 day ago
         expired_token = svc._create_refresh_token(
-            user_id, expires_delta=timedelta(seconds=-1),
+            user_id,
+            expires_delta=timedelta(seconds=-1),
         )
 
         with pytest.raises(TokenExpiredError):
@@ -384,7 +393,8 @@ class TestProperty7ConversionJobDescription:
 
         svc = _make_lead_service()
         mock_lead = _make_mock_lead(
-            lead_id=lead_id, status=LeadStatus.NEW.value,
+            lead_id=lead_id,
+            status=LeadStatus.NEW.value,
         )
         svc.lead_repository.get_by_id = AsyncMock(return_value=mock_lead)
         svc.lead_repository.update = AsyncMock()
@@ -446,7 +456,8 @@ class TestProperty8ConversionStatusUpdate:
 
         svc = _make_lead_service()
         mock_lead = _make_mock_lead(
-            lead_id=lead_id, status=initial_status.value,
+            lead_id=lead_id,
+            status=initial_status.value,
         )
         svc.lead_repository.get_by_id = AsyncMock(return_value=mock_lead)
         svc.lead_repository.update = AsyncMock()
@@ -492,7 +503,8 @@ class TestProperty9ConversionWithoutJob:
 
         svc = _make_lead_service()
         mock_lead = _make_mock_lead(
-            lead_id=lead_id, status=LeadStatus.NEW.value,
+            lead_id=lead_id,
+            status=LeadStatus.NEW.value,
         )
         svc.lead_repository.get_by_id = AsyncMock(return_value=mock_lead)
         svc.lead_repository.update = AsyncMock()
@@ -541,7 +553,8 @@ class TestProperty10AlreadyConvertedRejection:
 
         svc = _make_lead_service()
         mock_lead = _make_mock_lead(
-            lead_id=lead_id, status=LeadStatus.CONVERTED.value,
+            lead_id=lead_id,
+            status=LeadStatus.CONVERTED.value,
         )
         svc.lead_repository.get_by_id = AsyncMock(return_value=mock_lead)
 
@@ -668,6 +681,10 @@ class TestProperty12ManualLeadRoundTrip:
         created_lead.email_marketing_consent = False
         created_lead.created_at = now
         created_lead.updated_at = now
+        created_lead.moved_to = None
+        created_lead.moved_at = None
+        created_lead.last_contacted_at = None
+        created_lead.job_requested = None
 
         svc.lead_repository.create = AsyncMock(return_value=created_lead)
 
@@ -675,12 +692,15 @@ class TestProperty12ManualLeadRoundTrip:
         svc.lead_repository.get_by_id = AsyncMock(return_value=created_lead)
 
         # Create the lead
-        with patch(
-            "grins_platform.services.lead_service.extract_zip_from_address",
-            return_value=None,
-        ), patch(
-            "grins_platform.services.lead_service.lookup_zip",
-            return_value=(None, None),
+        with (
+            patch(
+                "grins_platform.services.lead_service.extract_zip_from_address",
+                return_value=None,
+            ),
+            patch(
+                "grins_platform.services.lead_service.lookup_zip",
+                return_value=(None, None),
+            ),
         ):
             create_result = _run_async(svc.create_manual_lead(data))
 

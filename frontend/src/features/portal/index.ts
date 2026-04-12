@@ -4,6 +4,8 @@ export { ContractSigning } from './components';
 export { ApprovalConfirmation } from './components';
 export { InvoicePortal } from './components';
 export { SubscriptionManagement } from './components';
+export { WeekPickerStep } from './components';
+export type { WeekPickerStepProps, ServiceWeekSelection } from './components';
 
 // Hooks
 export {

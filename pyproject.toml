@@ -248,6 +248,8 @@ ignore = [
     "FBT001", "FBT002", "FBT003",
     # Allow runtime imports of typing constructs (we use from __future__ import annotations)
     "TC003",
+    # COM812 conflicts with ruff formatter
+    "COM812",
 ]
 
 # Enable automatic fixing for all fixable rules
@@ -264,12 +266,34 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "PLR2004", # Allow magic values in tests
     "ANN",     # Don't require type annotations in tests
     "SLF001",  # Allow private member access in tests
+    "N806",    # Allow uppercase variable names in tests (e.g., fixtures)
+    "N803",    # Allow uppercase argument names in tests
+    "PLC0415", # Allow non-top-level imports in tests
+    "E402",    # Allow late imports in tests
+    "ARG001",  # Allow unused first arguments in tests (fixtures)
+    "ARG002",  # Allow unused method arguments in tests
+    "PERF401", # Allow manual list iteration in tests
 ]
 "tests/*.py" = [
     "S101",    # Allow assert statements in tests
     "PLR2004", # Allow magic values in tests  
     "ANN",     # Don't require type annotations in tests
     "SLF001",  # Allow private member access in tests
+    "N806",    # Allow uppercase variable names in tests
+    "N803",    # Allow uppercase argument names in tests
+    "PLC0415", # Allow non-top-level imports in tests
+    "E402",    # Allow late imports in tests
+    "ARG001",  # Allow unused first arguments in tests
+    "ARG002",  # Allow unused method arguments in tests
+    "PERF401", # Allow manual list iteration in tests
+]
+# Migration files have auto-generated SQL and special patterns
+"**/migrations/**/*.py" = [
+    "E501",    # Allow long lines in migrations (SQL strings)
+    "S608",    # Allow SQL string construction in migrations
+    "N806",    # Allow uppercase variable names in migrations
+    "PLC0415", # Allow non-top-level imports in migrations
+    "E402",    # Allow late imports in migrations
 ]
 # Example/demo files can be more relaxed
 "examples/*.py" = [

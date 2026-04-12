@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -23,9 +24,10 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { X, Plus } from 'lucide-react';
-import { useCreateCustomer, useUpdateCustomer } from '../hooks';
+import { useCreateCustomer, useUpdateCustomer, useCheckDuplicate } from '../hooks';
 import type { Customer, CustomerCreate, CustomerUpdate } from '../types';
 import { toast } from 'sonner';
+import { DuplicateWarning } from './DuplicateWarning';
 
 // Validation schema
 const customerSchema = z.object({
@@ -70,6 +72,24 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
   const updateMutation = useUpdateCustomer();
   const isEditing = !!customer;
   const [newCustomFlag, setNewCustomFlag] = useState('');
+  const navigate = useNavigate();
+  const { matches: duplicateMatches, check: checkDuplicate } = useCheckDuplicate();
+
+  const runDuplicateCheck = useCallback(
+    (phone?: string, email?: string) => {
+      if (isEditing) return;
+      checkDuplicate({
+        phone: phone || undefined,
+        email: email || undefined,
+        exclude_id: customer?.id,
+      });
+    },
+    [isEditing, checkDuplicate, customer?.id],
+  );
+
+  const handleUseExisting = (existing: Customer) => {
+    navigate(`/customers/${existing.id}`);
+  };
 
   const form = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
@@ -203,6 +223,10 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
                           placeholder="612-555-1234"
                           data-testid="phone-input"
                           className="border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                          onBlur={(e) => {
+                            field.onBlur();
+                            runDuplicateCheck(e.target.value, form.getValues('email'));
+                          }}
                         />
                       </FormControl>
                       <FormMessage className="text-sm text-red-500 mt-1" data-testid="phone-error" />
@@ -222,6 +246,10 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
                           placeholder="john@example.com"
                           data-testid="email-input"
                           className="border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                          onBlur={(e) => {
+                            field.onBlur();
+                            runDuplicateCheck(form.getValues('phone'), e.target.value);
+                          }}
                         />
                       </FormControl>
                       <FormMessage className="text-sm text-red-500 mt-1" data-testid="email-error" />
@@ -229,6 +257,9 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
                   )}
                 />
               </div>
+
+              {/* Tier 1 Duplicate Warning (Req 6.13) */}
+              {!isEditing && <DuplicateWarning matches={duplicateMatches} onUseExisting={handleUseExisting} />}
 
               <FormField
                 control={form.control}

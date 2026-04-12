@@ -60,7 +60,7 @@ class TestJobCreationDefaults:
         ),
     )
     @settings(max_examples=50)
-    def test_default_status_is_to_be_scheduled(self, job_type: str) -> None:  # noqa: ARG002
+    def test_default_status_is_to_be_scheduled(self, job_type: str) -> None:
         """
         Feature: field-operations, Property 1: Job Creation Defaults
         For any job type, the default status should be 'to_be_scheduled'.
@@ -321,7 +321,11 @@ class TestStatusTransitions:
 
     VALID_TRANSITIONS: ClassVar[dict[JobStatus, set[JobStatus]]] = {
         JobStatus.TO_BE_SCHEDULED: {JobStatus.IN_PROGRESS, JobStatus.CANCELLED},
-        JobStatus.IN_PROGRESS: {JobStatus.COMPLETED, JobStatus.CANCELLED, JobStatus.TO_BE_SCHEDULED},
+        JobStatus.IN_PROGRESS: {
+            JobStatus.COMPLETED,
+            JobStatus.CANCELLED,
+            JobStatus.TO_BE_SCHEDULED,
+        },
         JobStatus.COMPLETED: set(),  # Terminal state
         JobStatus.CANCELLED: set(),  # Terminal state
     }
@@ -341,7 +345,7 @@ class TestStatusTransitions:
         Feature: field-operations, Property 4: Status Transition Validity
         For any job status transition attempt, only valid transitions are allowed.
         """
-        from grins_platform.services.job_service import (  # noqa: PLC0415
+        from grins_platform.services.job_service import (
             JobService,
         )
 

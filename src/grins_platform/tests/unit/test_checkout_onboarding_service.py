@@ -801,7 +801,8 @@ class TestCheckoutSessionSurcharges:
         rpz_item = items[1]
         assert rpz_item["price_data"]["unit_amount"] == 11000
         assert (
-            rpz_item["price_data"]["product_data"]["name"] == "RPZ/backflow connection"
+            rpz_item["price_data"]["product_data"]["name"]
+            == "RPZ/backflow connection & removal"
         )
 
     @pytest.mark.asyncio

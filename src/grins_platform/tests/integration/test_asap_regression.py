@@ -109,6 +109,10 @@ def _make_lead_model(**overrides: object) -> MagicMock:
     lead.property_type = overrides.get("property_type")
     lead.created_at = overrides.get("created_at", now)
     lead.updated_at = overrides.get("updated_at", now)
+    lead.moved_to = overrides.get("moved_to")
+    lead.moved_at = overrides.get("moved_at")
+    lead.last_contacted_at = overrides.get("last_contacted_at")
+    lead.job_requested = overrides.get("job_requested")
     return lead
 
 
@@ -286,10 +290,12 @@ class TestAuthTokenRegressionCustomerAPI:
 
         Validates: Requirement 9.4
         """
-        mock_customer_service.list_customers.return_value = (
-            PaginatedCustomerResponse(
-                items=[], total=0, page=1, page_size=20, total_pages=0,
-            )
+        mock_customer_service.list_customers.return_value = PaginatedCustomerResponse(
+            items=[],
+            total=0,
+            page=1,
+            page_size=20,
+            total_pages=0,
         )
         app.dependency_overrides[get_customer_service] = lambda: mock_customer_service
 
@@ -338,7 +344,11 @@ class TestAuthTokenRegressionLeadAPI:
         Validates: Requirement 9.4
         """
         mock_lead_service.list_leads.return_value = PaginatedLeadResponse(
-            items=[], total=0, page=1, page_size=20, total_pages=0,
+            items=[],
+            total=0,
+            page=1,
+            page_size=20,
+            total_pages=0,
         )
         app.dependency_overrides[_get_lead_service] = lambda: mock_lead_service
 
@@ -516,7 +526,8 @@ class TestAuthTokenRegressionRefreshFlow:
         try:
             transport = ASGITransport(app=app)
             async with AsyncClient(
-                transport=transport, base_url="http://test",
+                transport=transport,
+                base_url="http://test",
             ) as client:
                 response = await client.post(
                     "/api/v1/auth/refresh",
@@ -547,7 +558,8 @@ class TestAuthTokenRegressionRefreshFlow:
         try:
             transport = ASGITransport(app=app)
             async with AsyncClient(
-                transport=transport, base_url="http://test",
+                transport=transport,
+                base_url="http://test",
             ) as client:
                 response = await client.post(
                     "/api/v1/auth/refresh",
@@ -556,7 +568,6 @@ class TestAuthTokenRegressionRefreshFlow:
                 assert response.status_code == 401
         finally:
             app.dependency_overrides.clear()
-
 
 
 # =============================================================================
@@ -907,7 +918,6 @@ class TestLeadServiceRegressionSMSDeferred:
         assert result.lead_id == new_lead.id
 
 
-
 # =============================================================================
 # Task 11.3: Customer Search Changes Don't Break Customer Operations
 # Validates: Requirement 9.6
@@ -1045,10 +1055,12 @@ class TestCustomerSearchRegressionPropertyListing:
 
         Validates: Requirement 9.6
         """
-        mock_customer_service.list_customers.return_value = (
-            PaginatedCustomerResponse(
-                items=[], total=2, page=1, page_size=20, total_pages=1,
-            )
+        mock_customer_service.list_customers.return_value = PaginatedCustomerResponse(
+            items=[],
+            total=2,
+            page=1,
+            page_size=20,
+            total_pages=1,
         )
         app.dependency_overrides[get_customer_service] = lambda: mock_customer_service
 

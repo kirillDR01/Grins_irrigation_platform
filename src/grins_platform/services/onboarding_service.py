@@ -194,6 +194,7 @@ class OnboardingService(LoggerMixin):
         preferred_times: str = "NO_PREFERENCE",
         preferred_schedule: str = "ASAP",
         preferred_schedule_details: str | None = None,
+        service_week_preferences: dict[str, str] | None = None,
     ) -> ServiceAgreement:
         """Complete onboarding by creating property and linking to agreement/jobs.
 
@@ -294,13 +295,16 @@ class OnboardingService(LoggerMixin):
         )
 
         # Link property to agreement and save schedule preference
+        update_data: dict[str, Any] = {
+            "property_id": prop.id,
+            "preferred_schedule": preferred_schedule,
+            "preferred_schedule_details": preferred_schedule_details,
+        }
+        if service_week_preferences:
+            update_data["service_week_preferences"] = service_week_preferences
         agreement = await self.agreement_repo.update(
             agreement,
-            {
-                "property_id": prop.id,
-                "preferred_schedule": preferred_schedule,
-                "preferred_schedule_details": preferred_schedule_details,
-            },
+            update_data,
         )
 
         # Update all linked jobs with property_id

@@ -6,10 +6,19 @@ import {
   useReactTable,
   type ColumnDef,
 } from '@tanstack/react-table';
-import { Phone, Inbox, MessageSquare, FileCheck, Plus, X } from 'lucide-react';
+import { Phone, Inbox, MessageSquare, Plus, X, Trash2, ArrowRightCircle, Briefcase, ShoppingCart } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Table,
   TableBody,
@@ -20,9 +29,8 @@ import {
 } from '@/components/ui/table';
 import { LoadingPage, ErrorMessage } from '@/shared/components';
 import { useLeads } from '../hooks/useLeads';
+import { useDeleteLead, useMoveToJobs, useMoveToSales, useMarkContacted } from '../hooks/useLeadMutations';
 import { LeadStatusBadge } from './LeadStatusBadge';
-import { LeadSourceBadge } from './LeadSourceBadge';
-import { IntakeTagBadge } from './IntakeTagBadge';
 import { LeadTagBadges } from './LeadTagBadges';
 import { LeadFilters } from './LeadFilters';
 import { FollowUpQueue } from './FollowUpQueue';
@@ -31,6 +39,7 @@ import { SheetsSync } from './SheetsSync';
 import { CreateLeadDialog } from './CreateLeadDialog';
 import { NewTextCampaignModal } from '@/features/communications';
 import type { Lead, LeadListParams } from '../types';
+import { LEAD_SOURCE_LABELS } from '../types';
 
 export function LeadsList() {
   const navigate = useNavigate();
@@ -39,8 +48,8 @@ export function LeadsList() {
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [campaignModalOpen, setCampaignModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
 
-  // Parse initial status from URL query params
   const urlStatus = searchParams.get('status') as LeadListParams['status'] | null;
   const urlHighlight = searchParams.get('highlight');
 
@@ -49,26 +58,24 @@ export function LeadsList() {
     page_size: 20,
     sort_by: 'created_at',
     sort_order: 'desc',
-    status: urlStatus && ['new', 'contacted', 'qualified', 'converted', 'lost', 'spam'].includes(urlStatus)
+    status: urlStatus && ['new', 'contacted'].includes(urlStatus)
       ? (urlStatus as LeadListParams['status'])
       : undefined,
   });
 
-  // Apply highlight from URL on mount
   useEffect(() => {
     if (urlHighlight) {
       setHighlightedLeadId(urlHighlight);
-      const timer = setTimeout(() => {
-        setHighlightedLeadId(null);
-      }, 3000);
-      const newParams = new URLSearchParams(searchParams);
-      newParams.delete('highlight');
-      setSearchParams(newParams, { replace: true });
+      const timer = setTimeout(() => setHighlightedLeadId(null), 3000);
       return () => clearTimeout(timer);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data, isLoading, error, refetch } = useLeads(params);
+  const deleteLead = useDeleteLead();
+  const moveToJobs = useMoveToJobs();
+  const moveToSales = useMoveToSales();
+  const markContacted = useMarkContacted();
 
   const handleFilterChange = useCallback(
     (changes: Partial<LeadListParams>) => {
@@ -93,16 +100,63 @@ export function LeadsList() {
     [navigate]
   );
 
+  const handleMoveToJobs = useCallback(
+    async (e: React.MouseEvent, lead: Lead) => {
+      e.stopPropagation();
+      try {
+        await moveToJobs.mutateAsync(lead.id);
+        toast.success(`${lead.name} moved to Jobs`);
+      } catch {
+        toast.error('Failed to move lead to Jobs');
+      }
+    },
+    [moveToJobs]
+  );
+
+  const handleMoveToSales = useCallback(
+    async (e: React.MouseEvent, lead: Lead) => {
+      e.stopPropagation();
+      try {
+        await moveToSales.mutateAsync(lead.id);
+        toast.success(`${lead.name} moved to Sales`);
+      } catch {
+        toast.error('Failed to move lead to Sales');
+      }
+    },
+    [moveToSales]
+  );
+
+  const handleMarkContacted = useCallback(
+    async (e: React.MouseEvent, lead: Lead) => {
+      e.stopPropagation();
+      try {
+        await markContacted.mutateAsync(lead.id);
+        toast.success(`${lead.name} marked as contacted`);
+      } catch {
+        toast.error('Failed to mark lead as contacted');
+      }
+    },
+    [markContacted]
+  );
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteLead.mutateAsync(deleteTarget.id);
+      toast.success(`${deleteTarget.name} permanently deleted`);
+    } catch {
+      toast.error('Failed to delete lead');
+    } finally {
+      setDeleteTarget(null);
+    }
+  }, [deleteTarget, deleteLead]);
+
   // Select all / individual selection
   const allLeadIds = data?.items?.map((l) => l.id) ?? [];
   const allSelected = allLeadIds.length > 0 && selectedLeadIds.length === allLeadIds.length;
 
   const toggleSelectAll = () => {
-    if (allSelected) {
-      setSelectedLeadIds([]);
-    } else {
-      setSelectedLeadIds(allLeadIds);
-    }
+    setSelectedLeadIds(allSelected ? [] : allLeadIds);
   };
 
   const toggleSelectLead = (id: string) => {
@@ -164,6 +218,19 @@ export function LeadsList() {
       ),
     },
     {
+      accessorKey: 'address',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
+          Job Address
+        </span>
+      ),
+      cell: ({ row }) => (
+        <span className="text-sm text-slate-600">
+          {row.original.address ?? '—'}
+        </span>
+      ),
+    },
+    {
       accessorKey: 'city',
       header: () => (
         <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
@@ -172,19 +239,21 @@ export function LeadsList() {
       ),
       cell: ({ row }) => (
         <span className="text-sm text-slate-600" data-testid={`lead-city-${row.original.id}`}>
-          {row.original.city ?? row.original.address ?? '—'}
+          {row.original.city ?? '—'}
         </span>
       ),
     },
     {
-      id: 'lead_source',
+      accessorKey: 'job_requested',
       header: () => (
         <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
-          Source
+          Job Requested
         </span>
       ),
       cell: ({ row }) => (
-        <LeadSourceBadge source={row.original.lead_source} />
+        <span className="text-sm text-slate-600" data-testid={`lead-job-requested-${row.original.id}`}>
+          {row.original.job_requested ?? '—'}
+        </span>
       ),
     },
     {
@@ -199,17 +268,6 @@ export function LeadsList() {
       ),
     },
     {
-      id: 'intake_tag',
-      header: () => (
-        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
-          Intake
-        </span>
-      ),
-      cell: ({ row }) => (
-        <IntakeTagBadge tag={row.original.intake_tag} />
-      ),
-    },
-    {
       accessorKey: 'status',
       header: () => (
         <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
@@ -219,32 +277,22 @@ export function LeadsList() {
       cell: ({ row }) => <LeadStatusBadge status={row.original.status} />,
     },
     {
-      id: 'consent',
+      accessorKey: 'last_contacted_at',
       header: () => (
         <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
-          Consent
+          Last Contacted
         </span>
       ),
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <span
-            title={row.original.sms_consent ? 'SMS consent given' : 'No SMS consent'}
-            data-testid={`sms-consent-${row.original.id}`}
-          >
-            <MessageSquare
-              className={`h-4 w-4 ${row.original.sms_consent ? 'text-green-500' : 'text-gray-300'}`}
-            />
+      cell: ({ row }) => {
+        const val = row.original.last_contacted_at;
+        if (!val) return <span className="text-sm text-slate-400">—</span>;
+        const date = new Date(val);
+        return (
+          <span className="text-sm text-slate-500" title={date.toLocaleString()}>
+            {formatDistanceToNow(date, { addSuffix: true })}
           </span>
-          <span
-            title={row.original.terms_accepted ? 'Terms accepted' : 'Terms not accepted'}
-            data-testid={`terms-accepted-${row.original.id}`}
-          >
-            <FileCheck
-              className={`h-4 w-4 ${row.original.terms_accepted ? 'text-green-500' : 'text-gray-300'}`}
-            />
-          </span>
-        </div>
-      ),
+        );
+      },
     },
     {
       accessorKey: 'created_at',
@@ -261,6 +309,79 @@ export function LeadsList() {
           </span>
         );
       },
+    },
+    {
+      id: 'lead_source',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
+          Source
+        </span>
+      ),
+      cell: ({ row }) => (
+        <span
+          className="text-sm text-slate-600"
+          data-testid={`lead-source-${row.original.lead_source}`}
+        >
+          {LEAD_SOURCE_LABELS[row.original.lead_source] ?? row.original.lead_source}
+        </span>
+      ),
+    },
+    {
+      id: 'actions',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
+          Actions
+        </span>
+      ),
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          {row.original.status === 'new' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
+              onClick={(e) => handleMarkContacted(e, row.original)}
+              data-testid={`mark-contacted-${row.original.id}`}
+              title="Mark as Contacted"
+            >
+              <ArrowRightCircle className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+            onClick={(e) => handleMoveToJobs(e, row.original)}
+            data-testid={`move-to-jobs-${row.original.id}`}
+            title="Move to Jobs"
+          >
+            <Briefcase className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+            onClick={(e) => handleMoveToSales(e, row.original)}
+            data-testid={`move-to-sales-${row.original.id}`}
+            title="Move to Sales"
+          >
+            <ShoppingCart className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-red-500 hover:text-red-700 hover:bg-red-50"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget(row.original);
+            }}
+            data-testid={`delete-lead-${row.original.id}`}
+            title="Delete lead"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ),
     },
   ];
 
@@ -349,7 +470,7 @@ export function LeadsList() {
                   data-testid="lead-row"
                   data-lead-id={row.original.id}
                   className={`hover:bg-slate-50/80 transition-colors cursor-pointer ${
-                    highlightedLeadId === row.original.id ? 'animate-highlight-fade' : ''
+                    highlightedLeadId === row.original.id ? 'animate-highlight-pulse' : ''
                   }`}
                   onClick={() => handleRowClick(row.original)}
                 >
@@ -465,6 +586,35 @@ export function LeadsList() {
         }}
         preSelectedLeadIds={selectedLeadIds}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent data-testid="delete-lead-dialog">
+          <DialogHeader>
+            <DialogTitle>Delete Lead</DialogTitle>
+            <DialogDescription>
+              This will permanently delete <strong>{deleteTarget?.name}</strong>. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              data-testid="cancel-delete-btn"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={deleteLead.isPending}
+              data-testid="confirm-delete-btn"
+            >
+              {deleteLead.isPending ? 'Deleting...' : 'Delete Permanently'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

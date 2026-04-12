@@ -492,7 +492,8 @@ class CampaignRepository(LoggerMixin):
             select(Campaign)
             .where(Campaign.status == "sending")
             .where(
-                Campaign.updated_at < func.now() - text(f"interval '{stale_minutes} minutes'"),
+                Campaign.updated_at
+                < func.now() - text(f"interval '{stale_minutes} minutes'"),
             )
         )
 

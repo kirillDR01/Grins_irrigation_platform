@@ -36,6 +36,7 @@ from grins_platform.schemas.campaign import (
     CampaignUpdate,
     TargetAudience,
 )
+from grins_platform.services.campaign_utils import render_poll_block
 from grins_platform.services.sms.phone_normalizer import normalize_to_e164
 from grins_platform.services.sms.recipient import Recipient
 from grins_platform.services.sms_service import SMSConsentDeniedError
@@ -92,7 +93,8 @@ class CampaignNotDraftError(Exception):
         self.campaign_id = campaign_id
         self.status = status
         super().__init__(
-            f"Campaign {campaign_id} is in '{status}' status; only DRAFT campaigns can be edited.",
+            f"Campaign {campaign_id} is in '{status}' status;"
+            " only DRAFT campaigns can be edited.",
         )
 
 
@@ -102,7 +104,8 @@ class EmptyCampaignBodyError(Exception):
     def __init__(self, campaign_id: UUID) -> None:
         self.campaign_id = campaign_id
         super().__init__(
-            f"Campaign {campaign_id}: message body is empty. Compose a message before sending.",
+            f"Campaign {campaign_id}: message body is empty."
+            " Compose a message before sending.",
         )
 
 
@@ -354,7 +357,9 @@ class CampaignService(LoggerMixin):
             raise CampaignAlreadySentError(campaign_id)
 
         if not (campaign.body and campaign.body.strip()):
-            self.log_rejected("send_campaign", reason="empty_body", campaign_id=str(campaign_id))
+            self.log_rejected(
+                "send_campaign", reason="empty_body", campaign_id=str(campaign_id)
+            )
             raise EmptyCampaignBodyError(campaign_id)
 
         # Transition to SENDING
@@ -488,7 +493,8 @@ class CampaignService(LoggerMixin):
         """
         self.log_started("enqueue_campaign_send", campaign_id=str(campaign_id))
 
-        # Advisory lock to prevent concurrent /send requests creating duplicate recipients
+        # Advisory lock to prevent concurrent /send requests
+        # creating duplicate recipients
         from sqlalchemy import text as sa_text  # noqa: PLC0415
 
         lock_key = f"send:{campaign_id}"
@@ -732,7 +738,8 @@ class CampaignService(LoggerMixin):
             recipient_ids = [r.id for r in failed]
 
         created = await self.repo.clone_recipients_as_pending(
-            campaign_id, recipient_ids,
+            campaign_id,
+            recipient_ids,
         )
 
         # Leave campaign status as SENT — the worker claim query accepts
@@ -1234,10 +1241,9 @@ class CampaignService(LoggerMixin):
         raw = adhoc_filters.get("recipients")
         if not isinstance(raw, list):
             return []
-        rows: list[dict[str, Any]] = []
-        for item in raw:
-            if isinstance(item, dict):
-                rows.append(item)
+        rows: list[dict[str, Any]] = [
+            item for item in raw if isinstance(item, dict)
+        ]
         return rows
 
     async def preview_audience(
@@ -1371,8 +1377,6 @@ class CampaignService(LoggerMixin):
 
         Validates: CRM Gap Closure Req 45.4, 45.8, CallRail B2 fix, CallRail 4.8, 19.1
         """
-        from grins_platform.services.campaign_utils import render_poll_block  # noqa: PLC0415
-
         composed_body = (campaign.body or "") + render_poll_block(campaign.poll_options)
         compliant_body = self._apply_can_spam(
             composed_body,

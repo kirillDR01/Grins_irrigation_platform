@@ -49,9 +49,12 @@ def _make_estimate(**overrides: Any) -> MagicMock:
     est.job_id = overrides.get("job_id")
     est.template_id = overrides.get("template_id")
     est.status = overrides.get("status", EstimateStatus.DRAFT.value)
-    est.line_items = overrides.get("line_items", [
-        {"item": "Sprinkler Head", "unit_price": "25.00", "quantity": "4"},
-    ])
+    est.line_items = overrides.get(
+        "line_items",
+        [
+            {"item": "Sprinkler Head", "unit_price": "25.00", "quantity": "4"},
+        ],
+    )
     est.options = overrides.get("options")
     est.subtotal = overrides.get("subtotal", Decimal("100.00"))
     est.tax_amount = overrides.get("tax_amount", Decimal("8.25"))
@@ -95,11 +98,14 @@ def _make_template(**overrides: Any) -> MagicMock:
     tpl.id = overrides.get("id", uuid4())
     tpl.name = overrides.get("name", "Standard Irrigation Install")
     tpl.description = overrides.get("description", "Full system install")
-    tpl.line_items = overrides.get("line_items", [
-        {"item": "Controller", "unit_price": "150.00", "quantity": "1"},
-        {"item": "Valve", "unit_price": "45.00", "quantity": "6"},
-        {"item": "Sprinkler Head", "unit_price": "12.00", "quantity": "20"},
-    ])
+    tpl.line_items = overrides.get(
+        "line_items",
+        [
+            {"item": "Controller", "unit_price": "150.00", "quantity": "1"},
+            {"item": "Valve", "unit_price": "45.00", "quantity": "6"},
+            {"item": "Sprinkler Head", "unit_price": "12.00", "quantity": "20"},
+        ],
+    )
     tpl.terms = overrides.get("terms", "Net 30")
     tpl.is_active = overrides.get("is_active", True)
     tpl.created_at = datetime.now(tz=timezone.utc)
@@ -175,7 +181,6 @@ def _build_service(
         portal_base_url=portal_base_url,
     )
     return svc, estimate_repo
-
 
 
 # =============================================================================

@@ -36,8 +36,12 @@ from grins_platform.repositories.service_offering_repository import (
 from grins_platform.repositories.staff_repository import StaffRepository
 from grins_platform.services.appointment_service import AppointmentService
 from grins_platform.services.campaign_service import CampaignService
+from grins_platform.services.customer_merge_service import CustomerMergeService
 from grins_platform.services.customer_service import CustomerService
 from grins_platform.services.dashboard_service import DashboardService
+from grins_platform.services.duplicate_detection_service import (
+    DuplicateDetectionService,
+)
 from grins_platform.services.email_service import EmailService
 from grins_platform.services.estimate_service import EstimateService
 from grins_platform.services.google_sheets_service import GoogleSheetsService
@@ -77,6 +81,16 @@ async def get_customer_service(
     """
     repository = CustomerRepository(session=session)
     return CustomerService(repository=repository)
+
+
+def get_duplicate_detection_service() -> DuplicateDetectionService:
+    """Get DuplicateDetectionService dependency."""
+    return DuplicateDetectionService()
+
+
+def get_customer_merge_service() -> CustomerMergeService:
+    """Get CustomerMergeService dependency."""
+    return CustomerMergeService()
 
 
 async def get_property_service(
@@ -230,17 +244,24 @@ async def get_dashboard_service(
     Returns:
         DashboardService instance
     """
+    from grins_platform.repositories.invoice_repository import (  # noqa: PLC0415
+        InvoiceRepository,
+    )
+
     customer_repository = CustomerRepository(session=session)
     job_repository = JobRepository(session=session)
     staff_repository = StaffRepository(session=session)
     appointment_repository = AppointmentRepository(session=session)
     lead_repository = LeadRepository(session=session)
+    invoice_repository = InvoiceRepository(session=session)
     return DashboardService(
         customer_repository=customer_repository,
         job_repository=job_repository,
         staff_repository=staff_repository,
         appointment_repository=appointment_repository,
         lead_repository=lead_repository,
+        invoice_repository=invoice_repository,
+        session=session,
     )
 
 

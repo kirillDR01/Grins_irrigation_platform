@@ -2214,3 +2214,535 @@ class TestInvoiceServiceListInvoicesFilters:
         assert len(result.items) == 0
         assert result.total == 0
         assert result.total_pages == 0
+
+
+@pytest.mark.unit
+class TestInvoiceServiceFilterAxes:
+    """Tests for each of the 9 filter axes individually and in combination.
+
+    Validates: Requirements 28.1, 28.3
+    """
+
+    @pytest.fixture
+    def mock_invoice_repo(self) -> AsyncMock:
+        return AsyncMock()
+
+    @pytest.fixture
+    def mock_job_repo(self) -> AsyncMock:
+        return AsyncMock()
+
+    @pytest.fixture
+    def service(
+        self,
+        mock_invoice_repo: AsyncMock,
+        mock_job_repo: AsyncMock,
+    ) -> InvoiceService:
+        return InvoiceService(
+            invoice_repository=mock_invoice_repo,
+            job_repository=mock_job_repo,
+        )
+
+    def _mock_invoice(self, **overrides: object) -> MagicMock:
+        inv = MagicMock()
+        inv.id = uuid4()
+        inv.invoice_number = "INV-2025-000001"
+        inv.job_id = uuid4()
+        inv.customer_id = uuid4()
+        inv.amount = Decimal("150.00")
+        inv.late_fee_amount = Decimal("0.00")
+        inv.total_amount = Decimal("150.00")
+        inv.invoice_date = date.today()
+        inv.due_date = date.today() + timedelta(days=30)
+        inv.status = InvoiceStatus.DRAFT.value
+        inv.paid_amount = None
+        inv.payment_method = None
+        inv.payment_reference = None
+        inv.paid_at = None
+        inv.reminder_count = 0
+        inv.last_reminder_sent = None
+        inv.lien_eligible = False
+        inv.lien_warning_sent = None
+        inv.lien_filed_date = None
+        inv.line_items = None
+        inv.notes = None
+        inv.document_url = None
+        inv.invoice_token = None
+        inv.customer_name = None
+        inv.created_at = datetime.now(timezone.utc)
+        inv.updated_at = datetime.now(timezone.utc)
+        for k, v in overrides.items():
+            setattr(inv, k, v)
+        return inv
+
+    # --- Axis 3: Job filter ---
+
+    @pytest.mark.asyncio
+    async def test_filter_by_job_id(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """Axis 3: job_id filter passes through to repository."""
+        job_id = uuid4()
+        mock_invoice_repo.list_with_filters.return_value = (
+            [self._mock_invoice()],
+            1,
+        )
+        params = InvoiceListParams(job_id=job_id)
+        result = await service.list_invoices(params)
+        assert result.total == 1
+        call_params = mock_invoice_repo.list_with_filters.call_args[0][0]
+        assert call_params.job_id == job_id
+
+    # --- Axis 5: Amount range ---
+
+    @pytest.mark.asyncio
+    async def test_filter_by_amount_min(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """Axis 5: amount_min filter."""
+        mock_invoice_repo.list_with_filters.return_value = (
+            [self._mock_invoice()],
+            1,
+        )
+        params = InvoiceListParams(amount_min=Decimal("100.00"))
+        result = await service.list_invoices(params)
+        assert result.total == 1
+        call_params = mock_invoice_repo.list_with_filters.call_args[0][0]
+        assert call_params.amount_min == Decimal("100.00")
+
+    @pytest.mark.asyncio
+    async def test_filter_by_amount_range(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """Axis 5: amount_min + amount_max compose."""
+        mock_invoice_repo.list_with_filters.return_value = ([], 0)
+        params = InvoiceListParams(
+            amount_min=Decimal("50.00"),
+            amount_max=Decimal("200.00"),
+        )
+        result = await service.list_invoices(params)
+        assert result.total == 0
+        call_params = mock_invoice_repo.list_with_filters.call_args[0][0]
+        assert call_params.amount_min == Decimal("50.00")
+        assert call_params.amount_max == Decimal("200.00")
+
+    # --- Axis 6: Payment type ---
+
+    @pytest.mark.asyncio
+    async def test_filter_by_payment_types(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """Axis 6: payment_types multi-select filter."""
+        mock_invoice_repo.list_with_filters.return_value = (
+            [self._mock_invoice()],
+            1,
+        )
+        params = InvoiceListParams(payment_types="cash,check")
+        result = await service.list_invoices(params)
+        assert result.total == 1
+        call_params = mock_invoice_repo.list_with_filters.call_args[0][0]
+        assert call_params.payment_types == "cash,check"
+
+    # --- Axis 7: Days until due ---
+
+    @pytest.mark.asyncio
+    async def test_filter_by_days_until_due(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """Axis 7: days_until_due_min/max filter."""
+        mock_invoice_repo.list_with_filters.return_value = (
+            [self._mock_invoice()],
+            1,
+        )
+        params = InvoiceListParams(days_until_due_min=0, days_until_due_max=7)
+        result = await service.list_invoices(params)
+        assert result.total == 1
+        call_params = mock_invoice_repo.list_with_filters.call_args[0][0]
+        assert call_params.days_until_due_min == 0
+        assert call_params.days_until_due_max == 7
+
+    # --- Axis 8: Days past due ---
+
+    @pytest.mark.asyncio
+    async def test_filter_by_days_past_due(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """Axis 8: days_past_due_min/max filter."""
+        mock_invoice_repo.list_with_filters.return_value = (
+            [self._mock_invoice()],
+            1,
+        )
+        params = InvoiceListParams(days_past_due_min=30, days_past_due_max=90)
+        result = await service.list_invoices(params)
+        assert result.total == 1
+        call_params = mock_invoice_repo.list_with_filters.call_args[0][0]
+        assert call_params.days_past_due_min == 30
+        assert call_params.days_past_due_max == 90
+
+    # --- Axis 9: Invoice number ---
+
+    @pytest.mark.asyncio
+    async def test_filter_by_invoice_number(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """Axis 9: exact invoice number match."""
+        mock_invoice_repo.list_with_filters.return_value = (
+            [self._mock_invoice()],
+            1,
+        )
+        params = InvoiceListParams(invoice_number="INV-2025-000042")
+        result = await service.list_invoices(params)
+        assert result.total == 1
+        call_params = mock_invoice_repo.list_with_filters.call_args[0][0]
+        assert call_params.invoice_number == "INV-2025-000042"
+
+    # --- Axis 4 date_type variants ---
+
+    @pytest.mark.asyncio
+    async def test_filter_by_due_date_type(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """Axis 4: date_type='due' variant."""
+        mock_invoice_repo.list_with_filters.return_value = ([], 0)
+        params = InvoiceListParams(
+            date_type="due",
+            date_from=date.today(),
+            date_to=date.today() + timedelta(days=7),
+        )
+        await service.list_invoices(params)
+        call_params = mock_invoice_repo.list_with_filters.call_args[0][0]
+        assert call_params.date_type == "due"
+
+    @pytest.mark.asyncio
+    async def test_filter_by_paid_date_type(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """Axis 4: date_type='paid' variant."""
+        mock_invoice_repo.list_with_filters.return_value = ([], 0)
+        params = InvoiceListParams(
+            date_type="paid",
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 3, 31),
+        )
+        await service.list_invoices(params)
+        call_params = mock_invoice_repo.list_with_filters.call_args[0][0]
+        assert call_params.date_type == "paid"
+
+    # --- Multi-axis combination ---
+
+    @pytest.mark.asyncio
+    async def test_combined_three_axis_filter(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """Multiple axes compose via AND."""
+        customer_id = uuid4()
+        mock_invoice_repo.list_with_filters.return_value = (
+            [self._mock_invoice()],
+            1,
+        )
+        params = InvoiceListParams(
+            status=InvoiceStatus.OVERDUE,
+            customer_id=customer_id,
+            amount_min=Decimal("100.00"),
+        )
+        result = await service.list_invoices(params)
+        assert result.total == 1
+        call_params = mock_invoice_repo.list_with_filters.call_args[0][0]
+        assert call_params.status == InvoiceStatus.OVERDUE
+        assert call_params.customer_id == customer_id
+        assert call_params.amount_min == Decimal("100.00")
+
+    @pytest.mark.asyncio
+    async def test_all_nine_axes_combined(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """All 9 axes can be set simultaneously."""
+        customer_id = uuid4()
+        job_id = uuid4()
+        mock_invoice_repo.list_with_filters.return_value = ([], 0)
+        params = InvoiceListParams(
+            status=InvoiceStatus.SENT,
+            customer_id=customer_id,
+            job_id=job_id,
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 12, 31),
+            date_type="created",
+            amount_min=Decimal("50.00"),
+            amount_max=Decimal("500.00"),
+            payment_types="cash,stripe",
+            days_until_due_min=0,
+            days_until_due_max=30,
+            days_past_due_min=0,
+            days_past_due_max=60,
+            invoice_number="INV-2025-000001",
+        )
+        result = await service.list_invoices(params)
+        assert result.total == 0
+        mock_invoice_repo.list_with_filters.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_no_filters_returns_all(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """No filters returns unfiltered result set (clear-all identity)."""
+        invoices = [self._mock_invoice() for _ in range(5)]
+        mock_invoice_repo.list_with_filters.return_value = (invoices, 5)
+        params = InvoiceListParams()
+        result = await service.list_invoices(params)
+        assert result.total == 5
+        assert len(result.items) == 5
+
+
+@pytest.mark.unit
+class TestInvoiceListParamsRoundTrip:
+    """Test InvoiceListParams serialization/deserialization round-trip.
+
+    Validates: Requirements 28.3 (URL persistence)
+    """
+
+    def test_round_trip_with_all_axes(self) -> None:
+        """Serialize then deserialize preserves all filter values."""
+        customer_id = uuid4()
+        job_id = uuid4()
+        original = InvoiceListParams(
+            status=InvoiceStatus.OVERDUE,
+            customer_id=customer_id,
+            job_id=job_id,
+            date_from=date(2025, 3, 1),
+            date_to=date(2025, 3, 31),
+            date_type="due",
+            amount_min=Decimal("100.00"),
+            amount_max=Decimal("999.99"),
+            payment_types="cash,check",
+            days_until_due_min=0,
+            days_until_due_max=14,
+            days_past_due_min=30,
+            days_past_due_max=90,
+            invoice_number="INV-2025-000042",
+        )
+        data = original.model_dump(mode="json")
+        restored = InvoiceListParams.model_validate(data)
+        assert restored.status == original.status
+        assert restored.customer_id == original.customer_id
+        assert restored.job_id == original.job_id
+        assert restored.date_from == original.date_from
+        assert restored.date_to == original.date_to
+        assert restored.date_type == original.date_type
+        assert restored.amount_min == original.amount_min
+        assert restored.amount_max == original.amount_max
+        assert restored.payment_types == original.payment_types
+        assert restored.days_until_due_min == original.days_until_due_min
+        assert restored.days_until_due_max == original.days_until_due_max
+        assert restored.days_past_due_min == original.days_past_due_min
+        assert restored.days_past_due_max == original.days_past_due_max
+        assert restored.invoice_number == original.invoice_number
+
+    def test_round_trip_defaults(self) -> None:
+        """Default params survive round-trip."""
+        original = InvoiceListParams()
+        data = original.model_dump(mode="json")
+        restored = InvoiceListParams.model_validate(data)
+        assert restored.page == original.page
+        assert restored.page_size == original.page_size
+        assert restored.sort_by == original.sort_by
+        assert restored.sort_order == original.sort_order
+        assert restored.status is None
+        assert restored.customer_id is None
+
+
+@pytest.mark.unit
+class TestInvoiceServiceMassNotify:
+    """Tests for InvoiceService.mass_notify targeting logic.
+
+    Validates: Requirements 29.3, 29.4
+    """
+
+    @pytest.fixture
+    def mock_invoice_repo(self) -> AsyncMock:
+        repo = AsyncMock()
+        repo.update = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_job_repo(self) -> AsyncMock:
+        return AsyncMock()
+
+    @pytest.fixture
+    def service(
+        self,
+        mock_invoice_repo: AsyncMock,
+        mock_job_repo: AsyncMock,
+    ) -> InvoiceService:
+        return InvoiceService(
+            invoice_repository=mock_invoice_repo,
+            job_repository=mock_job_repo,
+        )
+
+    def _mock_invoice_with_customer(
+        self,
+        *,
+        phone: str | None = "+16125551234",
+    ) -> MagicMock:
+        customer = MagicMock()
+        customer.first_name = "Jane"
+        customer.last_name = "Doe"
+        customer.phone = phone
+        customer.id = uuid4()
+        customer.sms_opt_in = True
+        customer.sms_consent_type = "transactional"
+        customer.sms_consent_date = datetime.now(timezone.utc)
+
+        inv = MagicMock()
+        inv.id = uuid4()
+        inv.invoice_number = "INV-2025-000001"
+        inv.total_amount = Decimal("250.00")
+        inv.due_date = date.today() - timedelta(days=45)
+        inv.reminder_count = 0
+        inv.customer = customer
+        return inv
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_past_due_targets_correct_invoices(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """past_due type calls find_past_due."""
+        invoices = [self._mock_invoice_with_customer()]
+        mock_invoice_repo.find_past_due.return_value = invoices
+        result = await service.mass_notify("past_due")
+        mock_invoice_repo.find_past_due.assert_called_once()
+        assert result.notification_type == "past_due"
+        assert result.targeted == 1
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_due_soon_targets_correct_invoices(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """due_soon type calls find_due_soon with days param."""
+        mock_invoice_repo.find_due_soon.return_value = []
+        result = await service.mass_notify("due_soon", due_soon_days=14)
+        mock_invoice_repo.find_due_soon.assert_called_once_with(14)
+        assert result.notification_type == "due_soon"
+        assert result.targeted == 0
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_lien_eligible_targets_correct_invoices(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """lien_eligible type calls find_lien_eligible with configurable params."""
+        mock_invoice_repo.find_lien_eligible.return_value = []
+        result = await service.mass_notify(
+            "lien_eligible",
+            lien_days_past_due=90,
+            lien_min_amount=1000.0,
+        )
+        mock_invoice_repo.find_lien_eligible.assert_called_once_with(
+            days_past_due=90,
+            min_amount=Decimal("1000.0"),
+        )
+        assert result.notification_type == "lien_eligible"
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_invalid_type_targets_nothing(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """Unknown notification_type targets zero invoices."""
+        result = await service.mass_notify("nonexistent")
+        assert result.targeted == 0
+        assert result.sent == 0
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_skips_customer_without_phone(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """Customers without phone are skipped."""
+        inv = self._mock_invoice_with_customer(phone=None)
+        mock_invoice_repo.find_past_due.return_value = [inv]
+        result = await service.mass_notify("past_due")
+        assert result.targeted == 1
+        assert result.skipped == 1
+        assert result.sent == 0
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_skips_customer_with_no_customer(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """Invoices with no customer relationship are skipped."""
+        inv = MagicMock()
+        inv.id = uuid4()
+        inv.customer = None
+        inv.reminder_count = 0
+        mock_invoice_repo.find_past_due.return_value = [inv]
+        result = await service.mass_notify("past_due")
+        assert result.targeted == 1
+        assert result.skipped == 1
+        assert result.sent == 0
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_counts_send_failures(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """SMS send failures are counted, not raised."""
+        from unittest.mock import patch
+
+        inv = self._mock_invoice_with_customer()
+        mock_invoice_repo.find_past_due.return_value = [inv]
+
+        with patch(
+            "grins_platform.services.sms_service.SMSService",
+            side_effect=Exception("SMS down"),
+        ):
+            result = await service.mass_notify("past_due")
+        assert result.targeted == 1
+        assert result.failed == 1
+        assert result.sent == 0
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_default_lien_thresholds(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """Default lien thresholds: 60 days, $500."""
+        mock_invoice_repo.find_lien_eligible.return_value = []
+        await service.mass_notify("lien_eligible")
+        mock_invoice_repo.find_lien_eligible.assert_called_once_with(
+            days_past_due=60,
+            min_amount=Decimal("500.0"),
+        )

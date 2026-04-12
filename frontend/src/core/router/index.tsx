@@ -63,6 +63,11 @@ const EstimateDetailPage = lazy(() =>
     default: m.EstimateDetailPage,
   }))
 );
+const ContractRenewalsPage = lazy(() =>
+  import('@/pages/ContractRenewals').then((m) => ({
+    default: m.ContractRenewalsPage,
+  }))
+);
 
 // Portal pages (public, no auth, no layout)
 const EstimateReviewPage = lazy(() =>
@@ -244,6 +249,14 @@ export const router = createBrowserRouter([
       {
         path: 'estimates/:id',
         element: <EstimateDetailPage />,
+      },
+      {
+        path: 'contract-renewals',
+        element: <ContractRenewalsPage />,
+      },
+      {
+        path: 'contract-renewals/:id',
+        element: <ContractRenewalsPage />,
       },
       {
         path: 'settings',

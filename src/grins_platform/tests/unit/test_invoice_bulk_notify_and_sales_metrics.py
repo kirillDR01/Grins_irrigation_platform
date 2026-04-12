@@ -330,7 +330,7 @@ class TestProperty50SalesPipelineMetricsAccuracy:
     @pytest.mark.asyncio
     async def test_metrics_with_no_estimates_returns_all_zeros(self) -> None:
         """No estimates → all counts zero, revenue zero, conversion 0.0."""
-        from grins_platform.api.v1.sales import get_sales_metrics  # noqa: PLC0415
+        from grins_platform.api.v1.sales import get_sales_metrics
 
         mock_session = self._build_mock_session()
         mock_user = MagicMock()
@@ -351,7 +351,7 @@ class TestProperty50SalesPipelineMetricsAccuracy:
         self,
     ) -> None:
         """Draft estimates counted as needing writeup."""
-        from grins_platform.api.v1.sales import get_sales_metrics  # noqa: PLC0415
+        from grins_platform.api.v1.sales import get_sales_metrics
 
         mock_session = self._build_mock_session(
             draft_count=5,
@@ -371,7 +371,7 @@ class TestProperty50SalesPipelineMetricsAccuracy:
         self,
     ) -> None:
         """SENT and VIEWED estimates counted as pending approval."""
-        from grins_platform.api.v1.sales import get_sales_metrics  # noqa: PLC0415
+        from grins_platform.api.v1.sales import get_sales_metrics
 
         mock_session = self._build_mock_session(
             pending_count=8,
@@ -391,7 +391,7 @@ class TestProperty50SalesPipelineMetricsAccuracy:
         self,
     ) -> None:
         """Estimates with PENDING follow-ups counted correctly."""
-        from grins_platform.api.v1.sales import get_sales_metrics  # noqa: PLC0415
+        from grins_platform.api.v1.sales import get_sales_metrics
 
         mock_session = self._build_mock_session(
             followup_count=3,
@@ -411,7 +411,7 @@ class TestProperty50SalesPipelineMetricsAccuracy:
         self,
     ) -> None:
         """Pipeline revenue sums totals of DRAFT/SENT/VIEWED estimates."""
-        from grins_platform.api.v1.sales import get_sales_metrics  # noqa: PLC0415
+        from grins_platform.api.v1.sales import get_sales_metrics
 
         mock_session = self._build_mock_session(
             draft_count=2,
@@ -433,7 +433,7 @@ class TestProperty50SalesPipelineMetricsAccuracy:
         self,
     ) -> None:
         """Conversion rate = (approved / total) * 100, rounded to 1 decimal."""
-        from grins_platform.api.v1.sales import get_sales_metrics  # noqa: PLC0415
+        from grins_platform.api.v1.sales import get_sales_metrics
 
         mock_session = self._build_mock_session(
             total_estimates=20,
@@ -454,7 +454,7 @@ class TestProperty50SalesPipelineMetricsAccuracy:
         self,
     ) -> None:
         """Zero total estimates → conversion rate is 0.0 (no division by zero)."""
-        from grins_platform.api.v1.sales import get_sales_metrics  # noqa: PLC0415
+        from grins_platform.api.v1.sales import get_sales_metrics
 
         mock_session = self._build_mock_session(
             total_estimates=0,
@@ -474,7 +474,7 @@ class TestProperty50SalesPipelineMetricsAccuracy:
         self,
     ) -> None:
         """Full pipeline scenario: all metrics populated and accurate."""
-        from grins_platform.api.v1.sales import get_sales_metrics  # noqa: PLC0415
+        from grins_platform.api.v1.sales import get_sales_metrics
 
         mock_session = self._build_mock_session(
             draft_count=4,
@@ -502,7 +502,7 @@ class TestProperty50SalesPipelineMetricsAccuracy:
         self,
     ) -> None:
         """All estimates approved → 100% conversion rate."""
-        from grins_platform.api.v1.sales import get_sales_metrics  # noqa: PLC0415
+        from grins_platform.api.v1.sales import get_sales_metrics
 
         mock_session = self._build_mock_session(
             total_estimates=5,

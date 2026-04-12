@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from grins_platform.database import get_db_session as get_db
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.customer import Customer
+from grins_platform.models.enums import CampaignStatus
 from grins_platform.repositories.campaign_repository import CampaignRepository
 from grins_platform.repositories.communication_repository import (
     CommunicationRepository,
@@ -20,7 +21,6 @@ from grins_platform.repositories.communication_repository import (
 from grins_platform.repositories.sent_message_repository import SentMessageRepository
 from grins_platform.schemas.ai import DeliveryStatus
 from grins_platform.schemas.communication import UnaddressedCountResponse
-from grins_platform.models.enums import CampaignStatus
 from grins_platform.schemas.sms import (
     BulkSendAcceptedResponse,
     BulkSendRequest,
