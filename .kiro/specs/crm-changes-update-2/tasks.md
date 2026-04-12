@@ -415,7 +415,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
   - If any visual or functional issue is found, fix it and re-validate
 
 - [ ] 12. Jobs Domain — Property Tags, Week Of, On-Site Operations (Req 19–20, 26–27)
-  - [ ] 12.1 Implement Week Of semantic rename and WeekPicker
+  - [x] 12.1 Implement Week Of semantic rename and WeekPicker
     - Create `WeekPicker.tsx` shared component in `frontend/src/shared/components/` — calendar highlighting full weeks, selects Monday–Sunday range
     - Backend `align_to_week(date) -> (Monday, Sunday)` utility function
     - Rename UI column "Due By" to "Week Of" in Jobs list, replace date picker with week picker
@@ -423,20 +423,20 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - Auto-populate Week_Of from customer service preference on job creation
     - _Requirements: 20.1, 20.2, 20.3, 20.4, 20.5_
 
-  - [ ] 12.2 Write property tests for Week Of date alignment
+  - [x] 12.2 Write property tests for Week Of date alignment
     - **Property 12: Week Of Date Alignment** — target_start_date is Monday, target_end_date is Sunday, end == start + 6 days
     - **Validates: Requirements 36.1, 36.2**
     - **Property 13: Week Of Round-Trip** — align_to_week(monday) == (monday, monday + 6 days)
     - **Validates: Requirements 36.3**
 
-  - [ ] 12.3 Update Job detail view with property address and tags
+  - [x] 12.3 Update Job detail view with property address and tags
     - Display full street address (street, city, state, ZIP) on job detail
     - Display PropertyTags badges (Residential/Commercial, HOA, Subscription)
     - Show same badges on Jobs list view per row
     - Support filtering Jobs list by property_type, is_hoa, is_subscription_property
     - _Requirements: 19.1, 19.2, 19.3, 19.4_
 
-  - [ ] 12.4 Implement on-site operation endpoints
+  - [x] 12.4 Implement on-site operation endpoints
     - `POST /api/v1/jobs/{id}/on-my-way` — send SMS via SMSService (ON_MY_WAY), log timestamp
     - `POST /api/v1/jobs/{id}/started` — log timestamp
     - `POST /api/v1/jobs/{id}/notes` — add note, sync to customer record + link to job_id
@@ -444,7 +444,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - `POST /api/v1/jobs/{id}/review-push` — send SMS (GOOGLE_REVIEW_REQUEST) with tracked deep link
     - _Requirements: 26.1, 26.2, 26.3, 26.4, 27.1, 27.2_
 
-  - [ ] 12.5 Implement job complete with payment warning modal
+  - [x] 12.5 Implement job complete with payment warning modal
     - Update `POST /api/v1/jobs/{id}/complete` to check for payment/invoice before completing
     - If no payment and no invoice: return warning requiring confirmation
     - "Complete Anyway" path writes audit log entry recording override
@@ -452,20 +452,20 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - Archive completed jobs out of active schedule view, keep in Jobs tab under "Completed" filter
     - _Requirements: 27.3, 27.4, 27.5, 27.6, 27.7_
 
-  - [ ] 12.6 Build on-site operations frontend on job detail view
+  - [x] 12.6 Build on-site operations frontend on job detail view
     - Add "On My Way", "Job Started", "Job Complete" status buttons
     - Payment warning modal with Cancel / "Complete Anyway" options
     - Notes and photos sections linked to job_id
     - Google review push button
     - _Requirements: 26.1, 26.2, 26.3, 26.4, 27.1, 27.2, 27.3, 27.4, 27.5_
 
-  - [ ] 12.7 Write unit tests for on-site operations and week alignment
+  - [x] 12.7 Write unit tests for on-site operations and week alignment
     - Test on-my-way SMS sending, timestamp logging, payment warning logic
     - Test align_to_week function, week picker date range
     - _Requirements: 20.2, 27.1, 27.3, 27.4_
 
 - [ ] 13. Schedule & Confirmation Domain — Job Picker, Y/R/C Flow, Reschedule Queue (Req 22–25)
-  - [ ] 13.1 Implement JobConfirmationService
+  - [x] 13.1 Implement JobConfirmationService
     - Create `src/grins_platform/services/job_confirmation_service.py`
     - `parse_confirmation_reply(body) -> ConfirmationKeyword | None` — Y/R/C keyword parser (case-insensitive, whitespace-trimmed)
     - `handle_confirmation(db, thread_id, keyword, raw_body, from_phone)` — orchestrate appointment status transition + auto-reply
