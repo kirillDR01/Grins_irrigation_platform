@@ -15,7 +15,6 @@ import {
   FileText,
   Bell,
   Funnel,
-  ClipboardList,
   ScrollText,
   TrendingUp,
   DollarSign,
@@ -62,12 +61,6 @@ const navItems: NavItem[] = [
     href: '/leads',
     icon: <Funnel className="h-5 w-5" />,
     testId: 'nav-leads',
-  },
-  {
-    label: 'Work Requests',
-    href: '/work-requests',
-    icon: <ClipboardList className="h-5 w-5" />,
-    testId: 'nav-work-requests',
   },
   {
     label: 'Jobs',

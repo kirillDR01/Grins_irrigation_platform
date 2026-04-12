@@ -1,4 +1,6 @@
 export { SalesDashboard } from './SalesDashboard';
+export { SalesPipeline } from './SalesPipeline';
+export { StatusActionButton } from './StatusActionButton';
 export { EstimateBuilder } from './EstimateBuilder';
 export { MediaLibrary } from './MediaLibrary';
 export { DiagramBuilder } from './DiagramBuilder';

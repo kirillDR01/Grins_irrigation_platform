@@ -152,3 +152,17 @@ export const ESTIMATE_STATUS_CONFIG: Record<EstimateStatus, { label: string; cla
   cancelled: { label: 'Cancelled', className: 'bg-slate-100 text-slate-500' },
   expired: { label: 'Expired', className: 'bg-amber-100 text-amber-700' },
 };
+
+// Pipeline types (CRM Changes Update 2)
+export type {
+  SalesEntry,
+  SalesPipelineListResponse,
+  SalesEntryStatusUpdate,
+  SalesEntryStatus,
+} from './pipeline';
+
+export {
+  SALES_STATUS_CONFIG,
+  TERMINAL_STATUSES,
+  ALL_STATUSES,
+} from './pipeline';

@@ -1,5 +1,7 @@
 // Components
 export { SalesDashboard } from './components';
+export { SalesPipeline } from './components';
+export { StatusActionButton } from './components';
 export { EstimateBuilder } from './components';
 export { MediaLibrary } from './components';
 export { DiagramBuilder } from './components';
@@ -22,6 +24,17 @@ export {
   useCancelEstimate,
   useCreateJobFromEstimate,
 } from './hooks';
+
+export {
+  pipelineKeys,
+  useSalesPipeline,
+  useSalesEntry,
+  useAdvanceSalesEntry,
+  useOverrideSalesStatus,
+  useConvertToJob,
+  useForceConvertToJob,
+  useMarkSalesLost,
+} from './hooks/useSalesPipeline';
 
 // Types
 export type {
@@ -46,3 +59,4 @@ export { ESTIMATE_STATUS_CONFIG } from './types';
 
 // API
 export { salesApi } from './api/salesApi';
+export { salesPipelineApi } from './api/salesPipelineApi';
