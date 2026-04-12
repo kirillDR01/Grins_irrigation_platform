@@ -3,7 +3,22 @@ import type {
   SalesEntry,
   SalesPipelineListResponse,
   SalesEntryStatusUpdate,
+  SalesCalendarEvent,
+  SalesCalendarEventCreate,
+  SalesCalendarEventUpdate,
 } from '../types/pipeline';
+
+export interface SalesDocument {
+  id: string;
+  customer_id: string;
+  file_key: string;
+  file_name: string;
+  document_type: string;
+  mime_type: string;
+  size_bytes: number;
+  uploaded_at: string;
+  uploaded_by: string | null;
+}
 
 export const salesPipelineApi = {
   list: async (params?: {
@@ -67,5 +82,106 @@ export const salesPipelineApi = {
       { params: closedReason ? { closed_reason: closedReason } : undefined },
     );
     return response.data;
+  },
+
+  // Signing — Req 18.1, 18.2, 18.3
+  triggerEmailSigning: async (
+    id: string,
+  ): Promise<{ document_id: string; status: string }> => {
+    const response = await apiClient.post<{
+      document_id: string;
+      status: string;
+    }>(`/sales/pipeline/${id}/sign/email`);
+    return response.data;
+  },
+
+  getEmbeddedSigningUrl: async (
+    id: string,
+  ): Promise<{ signing_url: string }> => {
+    const response = await apiClient.post<{ signing_url: string }>(
+      `/sales/pipeline/${id}/sign/embedded`,
+    );
+    return response.data;
+  },
+
+  // Documents — Req 17.1, 17.2
+  listDocuments: async (customerId: string): Promise<SalesDocument[]> => {
+    const response = await apiClient.get<SalesDocument[]>(
+      `/customers/${customerId}/documents`,
+    );
+    return response.data;
+  },
+
+  uploadDocument: async (
+    customerId: string,
+    file: File,
+    documentType: string,
+  ): Promise<SalesDocument> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await apiClient.post<SalesDocument>(
+      `/customers/${customerId}/documents?document_type=${encodeURIComponent(documentType)}`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return response.data;
+  },
+
+  downloadDocument: async (
+    customerId: string,
+    documentId: string,
+  ): Promise<{ download_url: string; file_name: string }> => {
+    const response = await apiClient.get<{
+      download_url: string;
+      file_name: string;
+    }>(`/customers/${customerId}/documents/${documentId}/download`);
+    return response.data;
+  },
+
+  deleteDocument: async (
+    customerId: string,
+    documentId: string,
+  ): Promise<void> => {
+    await apiClient.delete(
+      `/customers/${customerId}/documents/${documentId}`,
+    );
+  },
+
+  // Calendar events — Req 15.1, 15.2, 15.3
+  listCalendarEvents: async (params?: {
+    start_date?: string;
+    end_date?: string;
+    sales_entry_id?: string;
+  }): Promise<SalesCalendarEvent[]> => {
+    const response = await apiClient.get<SalesCalendarEvent[]>(
+      '/sales/calendar/events',
+      { params },
+    );
+    return response.data;
+  },
+
+  createCalendarEvent: async (
+    body: SalesCalendarEventCreate,
+  ): Promise<SalesCalendarEvent> => {
+    const response = await apiClient.post<SalesCalendarEvent>(
+      '/sales/calendar/events',
+      body,
+    );
+    return response.data;
+  },
+
+  updateCalendarEvent: async (
+    eventId: string,
+    body: SalesCalendarEventUpdate,
+  ): Promise<SalesCalendarEvent> => {
+    const response = await apiClient.put<SalesCalendarEvent>(
+      `/sales/calendar/events/${eventId}`,
+      body,
+    );
+    return response.data;
+  },
+
+  deleteCalendarEvent: async (eventId: string): Promise<void> => {
+    await apiClient.delete(`/sales/calendar/events/${eventId}`);
   },
 };

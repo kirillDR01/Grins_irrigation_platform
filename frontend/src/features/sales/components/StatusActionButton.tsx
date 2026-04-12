@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   useAdvanceSalesEntry,
+  useConvertToJob,
   useForceConvertToJob,
   useMarkSalesLost,
 } from '../hooks/useSalesPipeline';
@@ -26,6 +27,7 @@ interface StatusActionButtonProps {
 
 export function StatusActionButton({ entry }: StatusActionButtonProps) {
   const advance = useAdvanceSalesEntry();
+  const convertToJob = useConvertToJob();
   const forceConvert = useForceConvertToJob();
   const markLost = useMarkSalesLost();
   const [showForceConfirm, setShowForceConfirm] = useState(false);
@@ -33,11 +35,31 @@ export function StatusActionButton({ entry }: StatusActionButtonProps) {
 
   const config = SALES_STATUS_CONFIG[entry.status];
   const isTerminal = TERMINAL_STATUSES.includes(entry.status);
+  const isSendContract = entry.status === 'send_contract';
 
   if (isTerminal) return null;
 
   const handleAdvance = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isSendContract) {
+      // Use convert endpoint with signature gating
+      convertToJob.mutate(entry.id, {
+        onSuccess: () => {
+          toast.success('Converted to job');
+        },
+        onError: (err) => {
+          const msg =
+            (err as { response?: { data?: { detail?: string } } })?.response
+              ?.data?.detail ?? 'Failed to convert';
+          if (msg.includes('signature') || msg.includes('Signature')) {
+            setShowForceConfirm(true);
+          } else {
+            toast.error('Error', { description: msg });
+          }
+        },
+      });
+      return;
+    }
     advance.mutate(entry.id, {
       onSuccess: () => {
         toast.success('Status advanced');
@@ -96,10 +118,10 @@ export function StatusActionButton({ entry }: StatusActionButtonProps) {
           size="sm"
           variant="outline"
           onClick={handleAdvance}
-          disabled={advance.isPending}
+          disabled={advance.isPending || convertToJob.isPending}
           data-testid={`advance-btn-${entry.id}`}
         >
-          {advance.isPending ? 'Processing...' : config.action}
+          {(advance.isPending || convertToJob.isPending) ? 'Processing...' : config.action}
         </Button>
       )}
       <Button

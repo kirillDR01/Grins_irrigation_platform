@@ -294,7 +294,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - Test hard delete, confirmation flow
     - _Requirements: 9.1, 9.2, 12.1, 12.2_
 
-- [ ] 10. Sales Pipeline Domain — New Tab, Statuses, Calendar, SignWell, Documents (Req 13–18)
+- [x] 10. Sales Pipeline Domain — New Tab, Statuses, Calendar, SignWell, Documents (Req 13–18)
 
 - [x] 9.5 E2E Visual Validation — Leads Domain
   - Use agent-browser to navigate to /leads, verify column order: Job Requested visible in source's old position, City column after address, lead source at far right, Intake column removed
@@ -366,32 +366,32 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - Map work request status to closest SalesEntryStatus, preserve customer_id, property_id, notes
     - _Requirements: 13.3_
 
-  - [ ] 10.8 Build Sales Pipeline frontend — main list view
+  - [x] 10.8 Build Sales Pipeline frontend — main list view
     - Create `frontend/src/features/sales/` feature slice
     - `SalesPipeline.tsx` — 4 summary boxes (migrated from Work Requests) + pipeline table with columns: Customer Name, Phone, Address, Job Type, Status, Last Contact Date
     - `StatusActionButton.tsx` — auto-advancing action buttons per status
     - Add Sales tab to navigation, remove Work Requests tab
     - _Requirements: 13.1, 13.2, 14.1, 14.2, 14.3, 14.4_
 
-  - [ ] 10.9 Build Sales Detail view frontend
+  - [x] 10.9 Build Sales Detail view frontend
     - `SalesDetail.tsx` — expanded per-entry view with documents section, email signing action, embedded on-site signing action
     - `DocumentsSection.tsx` — upload/download/preview/delete documents (PDFs, images, docs up to 25MB)
     - `SignWellEmbeddedSigner.tsx` — iframe + postMessage listener for on-site signing (~50 lines)
     - _Requirements: 14.10, 17.1, 17.2, 18.1, 18.3_
 
-  - [ ] 10.10 Build Sales Calendar frontend
+  - [x] 10.10 Build Sales Calendar frontend
     - `SalesCalendar.tsx` — dedicated estimate scheduling calendar, independent from main schedule
     - _Requirements: 15.1, 15.2, 15.3_
 
-  - [ ] 10.11 Write unit tests for SalesPipelineService and SignWellClient
+  - [x] 10.11 Write unit tests for SalesPipelineService and SignWellClient
     - Test status transitions, terminal state enforcement, convert-to-job with/without signature
     - Test SignWell HTTP calls mocked via respx, webhook signature verification
     - _Requirements: 14.3, 14.6, 16.1, 16.2, 18.5_
 
-- [ ] 11. Checkpoint — Sales pipeline complete
+- [x] 11. Checkpoint — Sales pipeline complete
   - Ensure Sales tab, pipeline statuses, SignWell integration, documents, and calendar all work. Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 11.1 E2E Visual Validation — Sales Pipeline Domain
+- [x] 11.1 E2E Visual Validation — Sales Pipeline Domain
   - Use agent-browser to verify Work Requests tab is removed from navigation and Sales tab is present
   - Navigate to /sales, verify 4 summary boxes at top are unchanged from old Work Requests
   - Verify pipeline list view with columns: Customer Name, Phone, Address, Job Type, Status, Last Contact Date
