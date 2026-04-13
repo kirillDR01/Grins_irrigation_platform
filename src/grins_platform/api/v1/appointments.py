@@ -383,7 +383,22 @@ async def _send_appointment_confirmation_sms(
 
         date_str = str(appointment.scheduled_date)  # type: ignore[union-attr]
         window_start = getattr(appointment, "time_window_start", None)
-        time_part = f" between {window_start}" if window_start else ""
+        window_end = getattr(appointment, "time_window_end", None)
+
+        def _fmt_time_12h(t: object) -> str:
+            """Format a time string like '09:00:00' to '9:00 AM'."""
+            s = str(t)[:5]  # "09:00"
+            h, m = int(s[:2]), int(s[3:5])
+            suffix = "AM" if h < 12 else "PM"
+            h = h % 12 or 12
+            return f"{h}:{m:02d} {suffix}"
+
+        if window_start and window_end:
+            time_part = f" between {_fmt_time_12h(window_start)} and {_fmt_time_12h(window_end)}"
+        elif window_start:
+            time_part = f" at {_fmt_time_12h(window_start)}"
+        else:
+            time_part = ""
         msg = (
             f"Your appointment on {date_str}{time_part} has been scheduled. "
             "Reply Y to confirm, R to reschedule, or C to cancel."
