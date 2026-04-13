@@ -477,6 +477,94 @@ class DashboardService(LoggerMixin):
                 ),
             )
 
+        # Sales pipeline alerts — entries needing attention (Req 3.1, 3.2)
+        if self._session is not None:
+            from sqlalchemy import select  # noqa: PLC0415
+
+            from grins_platform.models.enums import SalesEntryStatus  # noqa: PLC0415
+            from grins_platform.models.sales import SalesEntry  # noqa: PLC0415
+
+            # New sales entries at "schedule_estimate" that need action
+            sales_stmt = select(SalesEntry).where(
+                SalesEntry.status == SalesEntryStatus.SCHEDULE_ESTIMATE.value,
+            )
+            sales_result = await self._session.execute(sales_stmt)
+            new_sales = list(sales_result.scalars().all())
+            if new_sales:
+                ids = [str(s.id) for s in new_sales]
+                if len(new_sales) == 1:
+                    entry = new_sales[0]
+                    cust = entry.customer
+                    name = (
+                        f"{cust.first_name} {cust.last_name}" if cust else "Unknown"
+                    )
+                    desc = f"New sales entry needs estimate scheduling: {name}"
+                    target_url = f"/sales/{ids[0]}"
+                else:
+                    n = len(new_sales)
+                    desc = (
+                        f"{n} sales entries awaiting estimate scheduling"
+                    )
+                    target_url = (
+                        f"/sales?status=schedule_estimate&highlight={ids[0]}"
+                    )
+                alerts.append(
+                    DashboardAlert(
+                        id="sales_needing_action",
+                        title="Sales Pipeline — Action Needed",
+                        description=desc,
+                        severity="info",
+                        count=len(new_sales),
+                        target_url=target_url,
+                        record_ids=ids,
+                        created_at=now,
+                    ),
+                )
+
+        # Reschedule request alerts — customers requesting reschedule (Req 3.1, 3.2)
+        if self._session is not None:
+            from grins_platform.models.job_confirmation import (  # noqa: PLC0415
+                RescheduleRequest,
+            )
+
+            resched_stmt = select(RescheduleRequest).where(
+                RescheduleRequest.status.in_(
+                    ["open", "awaiting_alternatives", "awaiting_admin_action"]
+                ),
+            )
+            resched_result = await self._session.execute(resched_stmt)
+            open_reschedules = list(resched_result.scalars().all())
+            if open_reschedules:
+                ids = [str(r.id) for r in open_reschedules]
+                if len(open_reschedules) == 1:
+                    req = open_reschedules[0]
+                    cust = req.customer
+                    name = (
+                        f"{cust.first_name} {cust.last_name}" if cust else "Unknown"
+                    )
+                    desc = f"Customer requested reschedule: {name}"
+                    target_url = (
+                        f"/schedule/reschedule-requests?highlight={ids[0]}"
+                    )
+                else:
+                    n = len(open_reschedules)
+                    desc = f"{n} reschedule requests awaiting action"
+                    target_url = (
+                        f"/schedule/reschedule-requests?highlight={ids[0]}"
+                    )
+                alerts.append(
+                    DashboardAlert(
+                        id="reschedule_requests",
+                        title="Reschedule Requests",
+                        description=desc,
+                        severity="warning",
+                        count=len(open_reschedules),
+                        target_url=target_url,
+                        record_ids=ids,
+                        created_at=now,
+                    ),
+                )
+
         # Contract renewal proposals pending review (Req 31.4)
         if self._session is not None:
             from sqlalchemy import select  # noqa: PLC0415

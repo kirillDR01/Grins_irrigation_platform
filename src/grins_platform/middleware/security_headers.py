@@ -40,7 +40,7 @@ _CSP_DIRECTIVES = [
     ("img-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com"),
     "font-src 'self' https://fonts.gstatic.com",
     ("connect-src 'self' https://*.googleapis.com https://api.stripe.com"),
-    "frame-src https://js.stripe.com https://maps.google.com",
+    "frame-src https://js.stripe.com https://maps.google.com https://app.signwell.com",
 ]
 _CSP = "; ".join(_CSP_DIRECTIVES)
 

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from grins_platform.api.v1.auth_dependencies import (
     AdminUser,
+    CurrentActiveUser,
     ManagerOrAdminUser,
 )
 from grins_platform.api.v1.dependencies import get_db_session
@@ -739,12 +740,13 @@ async def bulk_notify_invoices(
 )
 async def mass_notify_invoices(
     request: MassNotifyRequest,
-    _current_user: AdminUser,
+    _current_user: CurrentActiveUser,
     service: Annotated[InvoiceService, Depends(get_invoice_service)],
 ) -> MassNotifyResponse:
     """Send mass notifications based on invoice criteria.
 
     Validates: Requirements 29.3, 29.4
+    Single-admin scope: Req 38.1 — all logged-in users have full privileges.
     """
     _invoice_endpoints.log_started(
         "mass_notify_invoices",

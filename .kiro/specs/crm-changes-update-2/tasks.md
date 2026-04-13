@@ -595,7 +595,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - Test mass notification targeting logic
     - _Requirements: 28.1, 28.3, 29.3_
 
-- [ ] 16. Onboarding & Contract Renewals Domain (Req 30–31)
+- [x] 16. Onboarding & Contract Renewals Domain (Req 30–31)
 
 - [x] 15.7 E2E Visual Validation — Invoice Domain
   - Use agent-browser to navigate to /invoices, verify FilterPanel is visible (collapsible sidebar or drawer)
@@ -674,7 +674,7 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
 - [x] 17. Checkpoint — Onboarding and renewals complete
   - Ensure week-based onboarding, contract renewal review queue, and all approval flows work. Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 17.1 E2E Visual Validation — Onboarding & Contract Renewals Domain
+[ ] 17.1 E2E Visual Validation — Onboarding & Contract Renewals Domain
   - Use agent-browser to navigate to the onboarding wizard, verify the week picker step appears for each service in the package
   - Verify week pickers are restricted to valid month ranges per service type (e.g., Spring Startup only selectable in March–May)
   - Select weeks for each service — verify the selections are visually confirmed
@@ -692,40 +692,40 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
   - Save all screenshots to `e2e-screenshots/crm-changes-update-2/onboarding-renewals/`
   - If any visual or functional issue is found, fix it and re-validate
 
-- [ ] 18. Error Handling and Exception Classes
-  - [ ] 18.1 Create domain-specific exception classes
+- [x] 18. Error Handling and Exception Classes
+  - [x] 18.1 Create domain-specific exception classes
     - `MergeBlockerError`, `InvalidSalesTransitionError`, `SignWellError`, `SignWellDocumentNotFoundError`, `SignWellWebhookVerificationError`, `ConfirmationCorrelationError`, `RenewalProposalNotFoundError`, `DocumentUploadError`
     - Register in global exception handler with correct HTTP status codes (409, 422, 502, 401, 404, 400)
     - _Requirements: 6.7, 14.3, 18.5_
 
-- [ ] 19. Integration Wiring and Cross-Domain Connections
-  - [ ] 19.1 Wire dashboard alerts to new domains
+- [x] 19. Integration Wiring and Cross-Domain Connections
+  - [x] 19.1 Wire dashboard alerts to new domains
     - Sales pipeline alerts, contract renewal alerts, reschedule request alerts
     - Alert-to-record navigation for all new record types
     - _Requirements: 3.1, 3.2, 31.4_
 
-  - [ ] 19.2 Wire service preferences into job creation flow
+  - [x] 19.2 Wire service preferences into job creation flow
     - When creating a job for a customer with matching service_type preference, auto-populate Week_Of
     - Display preference notes as read-only hint on job detail
     - _Requirements: 7.2, 7.3_
 
-  - [ ] 19.3 Ensure single-admin scope compliance
+  - [x] 19.3 Ensure single-admin scope compliance
     - Verify no RBAC enforcement in new endpoints — all logged-in users have full admin privileges
     - Do not enforce "staff cannot delete jobs" restriction
     - Do not expose staff user management UI
     - _Requirements: 38.1, 38.2, 38.3, 38.4, 38.5_
 
-  - [ ] 19.4 Verify out-of-scope items are not implemented
+  - [x] 19.4 Verify out-of-scope items are not implemented
     - Confirm no Generate Routes, Marketing, Accounting, or removed Work Requests sub-features are included
     - Confirm Sales and Jobs calendars remain separate
     - _Requirements: 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.7, 39.8_
 
-  - [ ] 19.5 Add CSP frame-src for SignWell embedded signing
+  - [x] 19.5 Add CSP frame-src for SignWell embedded signing
     - Add `https://app.signwell.com` to Content-Security-Policy `frame-src` directive
     - _Requirements: 18.3_
 
-- [ ] 20. Comprehensive Property-Based Tests
-  - [ ] 20.1 Write PBT file `test_pbt_crm_changes_update_2.py` with all 17 correctness properties
+- [x] 20. Comprehensive Property-Based Tests
+  - [x] 20.1 Write PBT file `test_pbt_crm_changes_update_2.py` with all 17 correctness properties
     - **Property 1: Duplicate Score Commutativity** — Validates: Req 32.1
     - **Property 2: Duplicate Score Self-Identity** — Validates: Req 32.2
     - **Property 3: Duplicate Score Zero Floor** — Validates: Req 32.3
@@ -744,47 +744,47 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
     - **Property 16: Invoice Filter Clear-All Identity** — Validates: Req 37.3
     - **Property 17: Onboarding Week Preference Round-Trip** — Validates: Req 30.6
 
-- [ ] 21. Functional Tests
-  - [ ] 21.1 Write functional tests for sales pipeline flow
+- [x] 21. Functional Tests
+  - [x] 21.1 Write functional tests for sales pipeline flow
     - Full pipeline: create from lead → advance through all statuses → convert to job
     - Test with real DB
     - _Requirements: 14.3, 14.4, 14.5, 14.6, 16.2_
 
-  - [ ] 21.2 Write functional tests for customer merge flow
+  - [x] 21.2 Write functional tests for customer merge flow
     - Merge with real DB, verify data conservation across jobs/invoices/communications
     - Test Stripe subscription blocker
     - _Requirements: 6.4, 6.5, 6.7, 35.1_
 
-  - [ ] 21.3 Write functional tests for invoice filtering
+  - [x] 21.3 Write functional tests for invoice filtering
     - 9-axis filtering with real DB, test AND composition
     - _Requirements: 28.1, 37.1_
 
-  - [ ] 21.4 Write functional tests for Y/R/C confirmation flow
+  - [x] 21.4 Write functional tests for Y/R/C confirmation flow
     - Full flow with real DB + mocked SMS: send confirmation → receive Y/R/C → verify transitions
     - _Requirements: 24.2, 24.3, 24.4, 24.5_
 
-  - [ ] 21.5 Write functional tests for contract renewal flow
+  - [x] 21.5 Write functional tests for contract renewal flow
     - Proposal generation → approve/reject with real DB
     - _Requirements: 31.1, 31.6, 31.7, 31.10_
 
-- [ ] 22. Integration Tests
-  - [ ] 22.1 Write integration test for SignWell webhook processing
+- [x] 22. Integration Tests
+  - [x] 22.1 Write integration test for SignWell webhook processing
     - End-to-end: webhook payload → signature verification → PDF storage → status advance
     - _Requirements: 14.6, 17.4, 18.4_
 
-  - [ ] 22.2 Write integration test for Lead → Sales → Job pipeline
+  - [x] 22.2 Write integration test for Lead → Sales → Job pipeline
     - Full pipeline: lead creation → move to sales → advance through statuses → convert to job
     - _Requirements: 12.1, 12.2, 14.3, 16.2_
 
-  - [ ] 22.3 Write integration test for onboarding week preferences → job generation
+  - [x] 22.3 Write integration test for onboarding week preferences → job generation
     - Onboarding with week selections → Stripe webhook → job generation with correct Week_Of dates
     - _Requirements: 30.3, 30.4, 30.6_
 
-- [ ] 23. Final Checkpoint — All domains complete
+- [x] 23. Final Checkpoint — All domains complete
   - Ensure all 39 requirements are covered, all tests pass, all property-based tests pass. Ask the user if questions arise.
 
-- [ ] 24. Final Comprehensive E2E Visual Validation
-  - [ ] 24.1 Full regression E2E pass across all features
+- [x] 24. Final Comprehensive E2E Visual Validation
+  - [x] 24.1 Full regression E2E pass across all features
     - Use agent-browser to perform a complete walkthrough of every feature implemented in this update
     - Navigate through: Dashboard → Customers → Leads → Sales → Jobs → Schedule → Invoices → Contract Renewals
     - Verify each page loads without errors, all new UI elements render correctly

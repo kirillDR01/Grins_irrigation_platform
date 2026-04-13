@@ -703,6 +703,75 @@ class SignatureRequiredError(Exception):
         )
 
 
+# =========================================================================
+# CRM Changes Update 2 — Domain-Specific Exceptions (Task 18.1)
+# =========================================================================
+
+
+class MergeBlockerError(CustomerError):
+    """Raised when a customer merge is blocked by a business rule.
+
+    Validates: CRM Changes Update 2 Req 6.7
+    """
+
+    def __init__(self, message: str) -> None:
+        """Initialize with blocker description.
+
+        Args:
+            message: Description of the merge blocker
+        """
+        super().__init__(message)
+
+
+class ConfirmationCorrelationError(Exception):
+    """Raised when an inbound SMS cannot be correlated to a confirmation.
+
+    Validates: CRM Changes Update 2 Req 24.2
+    """
+
+    def __init__(self, thread_id: str) -> None:
+        """Initialize with thread ID.
+
+        Args:
+            thread_id: The thread_id that could not be correlated
+        """
+        self.thread_id = thread_id
+        super().__init__(
+            f"No appointment confirmation found for thread: {thread_id}",
+        )
+
+
+class RenewalProposalNotFoundError(Exception):
+    """Raised when a contract renewal proposal is not found.
+
+    Validates: CRM Changes Update 2 Req 31.5
+    """
+
+    def __init__(self, proposal_id: UUID) -> None:
+        """Initialize with proposal ID.
+
+        Args:
+            proposal_id: UUID of the proposal that was not found
+        """
+        self.proposal_id = proposal_id
+        super().__init__(f"Renewal proposal not found: {proposal_id}")
+
+
+class DocumentUploadError(Exception):
+    """Raised when a document upload fails validation or processing.
+
+    Validates: CRM Changes Update 2 Req 17.2
+    """
+
+    def __init__(self, message: str) -> None:
+        """Initialize with error message.
+
+        Args:
+            message: Description of the upload failure
+        """
+        super().__init__(message)
+
+
 __all__ = [
     "AccountLockedError",
     "AgreementError",
@@ -710,10 +779,12 @@ __all__ = [
     "AppointmentNotFoundError",
     "AuthenticationError",
     "BulkOperationError",
+    "ConfirmationCorrelationError",
     "ConsentRequiredError",
     "ConsentValidationError",
     "CustomerError",
     "CustomerNotFoundError",
+    "DocumentUploadError",
     "DuplicateCustomerError",
     "DuplicateLeadError",
     "EstimateAlreadyApprovedError",
@@ -736,10 +807,12 @@ __all__ = [
     "LeadAlreadyConvertedError",
     "LeadError",
     "LeadNotFoundError",
+    "MergeBlockerError",
     "MidSeasonTierChangeError",
     "PaymentRequiredError",
     "PropertyCustomerMismatchError",
     "PropertyNotFoundError",
+    "RenewalProposalNotFoundError",
     "ReviewAlreadyRequestedError",
     "SalesEntryNotFoundError",
     "ScheduleClearAuditNotFoundError",

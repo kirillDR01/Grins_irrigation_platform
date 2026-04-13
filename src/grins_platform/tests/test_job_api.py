@@ -76,6 +76,7 @@ def mock_job():
     job.property_is_hoa = None
     job.property_is_subscription = None
     job.time_tracking_metadata = None
+    job.service_preference_notes = None
     job.created_at = datetime.now()
     job.updated_at = datetime.now()
     return job

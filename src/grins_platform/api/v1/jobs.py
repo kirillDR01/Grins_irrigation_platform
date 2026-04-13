@@ -112,6 +112,22 @@ def _populate_property_fields(job: object, resp: JobResponse) -> None:
     resp.property_is_subscription = sa_id is not None
 
 
+def _populate_preference_notes(job: object, resp: JobResponse) -> None:
+    """Populate service preference notes hint on a JobResponse.
+
+    Validates: CRM2 Req 7.3 — display preference notes as read-only hint.
+    """
+    customer = getattr(job, "customer", None)
+    if customer is None:
+        return
+    prefs = getattr(customer, "preferred_service_times", None)
+    if not prefs:
+        return
+    resp.service_preference_notes = JobService._notes_from_preference(
+        prefs, resp.job_type,
+    )
+
+
 # =============================================================================
 # GET /api/v1/jobs/metrics/by-status - Job Status Counts by Category
 # NOTE: Static routes must come BEFORE dynamic routes like /{job_id}
@@ -340,6 +356,7 @@ async def list_jobs(
             resp.customer_name = f"{j.customer.first_name} {j.customer.last_name}"
             resp.customer_phone = j.customer.phone
         _populate_property_fields(j, resp)
+        _populate_preference_notes(j, resp)
         items.append(resp)
 
     return PaginatedJobResponse(
@@ -593,6 +610,7 @@ async def get_job(
             resp.customer_name = f"{first} {last}"
             resp.customer_phone = result.customer.phone
         _populate_property_fields(result, resp)
+        _populate_preference_notes(result, resp)
         return resp  # type: ignore[no-any-return]
 
 

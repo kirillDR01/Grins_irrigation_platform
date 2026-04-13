@@ -62,6 +62,8 @@ export interface Job extends BaseEntity {
   property_is_subscription: boolean | null;
   on_my_way_at: string | null;
   time_tracking_metadata: Record<string, unknown> | null;
+  // Service preference notes hint (CRM2 Req 7.3)
+  service_preference_notes: string | null;
 }
 
 // Per-job financials (Req 57)

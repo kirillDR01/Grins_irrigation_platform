@@ -349,6 +349,11 @@ class JobResponse(BaseModel):
         default=None,
         description="Time tracking metadata (on_my_way→started→complete durations)",
     )
+    # Service preference notes hint (CRM2 Req 7.3)
+    service_preference_notes: str | None = Field(
+        default=None,
+        description="Read-only notes from matching customer service preference",
+    )
 
     @field_validator("category", mode="before")  # type: ignore[misc,untyped-decorator]
     @classmethod

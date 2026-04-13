@@ -183,6 +183,17 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
         </div>
       )}
 
+      {/* Service Preference Notes Hint (CRM2 Req 7.3) */}
+      {job.service_preference_notes && (
+        <div className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg" data-testid="service-preference-notes">
+          <Clock className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs font-medium text-amber-700 uppercase tracking-wider">Service Preference</p>
+            <p className="text-sm text-amber-800 mt-0.5">{job.service_preference_notes}</p>
+          </div>
+        </div>
+      )}
+
       {/* Description */}
       {job.description && (
         <div className="bg-slate-50 rounded-lg p-3">

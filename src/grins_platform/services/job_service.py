@@ -157,9 +157,11 @@ class JobService(LoggerMixin):
         """Extract aligned week range from customer service preferences.
 
         Scans the preference list for a matching service_type and returns
-        the aligned Monday-Sunday range if a preferred_date is present.
+        the aligned Monday-Sunday range from preferred_week or preferred_date.
 
         Returns (None, None) when no match is found.
+
+        Validates: CRM2 Req 7.2 (auto-populate Week_Of from preferred_week)
         """
         if not prefs:
             return None, None
@@ -169,14 +171,38 @@ class JobService(LoggerMixin):
                 continue
             svc = pref.get("service_type", "")
             if svc and str(svc).lower() == job_type.lower():
-                preferred_date = pref.get("preferred_date")
-                if preferred_date:
-                    parsed = None
-                    with contextlib.suppress(ValueError, TypeError):
-                        parsed = date.fromisoformat(str(preferred_date))
-                    if parsed is not None:
-                        return align_to_week(parsed)
+                # Try preferred_week first (CRM2 Req 7.2), then preferred_date
+                for key in ("preferred_week", "preferred_date"):
+                    raw_val = pref.get(key)
+                    if raw_val:
+                        parsed = None
+                        with contextlib.suppress(ValueError, TypeError):
+                            parsed = date.fromisoformat(str(raw_val))
+                        if parsed is not None:
+                            return align_to_week(parsed)
         return None, None
+
+    @staticmethod
+    def _notes_from_preference(
+        prefs: dict[str, object] | list[dict[str, object]] | None,
+        job_type: str,
+    ) -> str | None:
+        """Extract notes from a matching customer service preference.
+
+        Validates: CRM2 Req 7.3 (display preference notes on job detail)
+        """
+        if not prefs:
+            return None
+        normalized: list[object] = list(prefs) if isinstance(prefs, list) else [prefs]
+        for pref in normalized:
+            if not isinstance(pref, dict):
+                continue
+            svc = pref.get("service_type", "")
+            if svc and str(svc).lower() == job_type.lower():
+                notes = pref.get("notes")
+                if notes:
+                    return str(notes)
+        return None
 
     async def create_job(self, data: JobCreate) -> Job:
         """Create a new job request with auto-categorization.
