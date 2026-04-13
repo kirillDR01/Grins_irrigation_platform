@@ -234,8 +234,8 @@ This is the core flow of how a customer moves through the system. Every record e
           (Appointment still: CONFIRMED)
               |
           "Job Started" -> Logs started_at timestamp.
-              |             No SMS sent. No status changes.
-              |             (Job still: TO BE SCHEDULED)
+              |             No SMS sent.
+              |             Job: TO BE SCHEDULED -> IN PROGRESS
               |             (Appointment still: CONFIRMED)
               |
           During the visit:
@@ -243,7 +243,7 @@ This is the core flow of how a customer moves through the system. Every record e
               |  - Collect payment on site
               |  - Create and send invoice
               |
-          "Job Complete" -> Job: TO BE SCHEDULED -> COMPLETED
+          "Job Complete" -> Job: IN PROGRESS -> COMPLETED
               |              (payment/invoice check first —
               |               warning if neither exists)
               |              (Appointment still: CONFIRMED —
@@ -307,7 +307,7 @@ Here's the step-by-step:
 3. **Contact them** — call or text the lead
 4. **Click "Mark Contacted"** — this changes the status to "Contacted (Awaiting Response)" and timestamps the contact
 5. **Based on the conversation**, route them:
-   - **"Move to Jobs"** — The job is confirmed and ready to schedule. The system auto-creates a customer record and a job with status "To Be Scheduled." The lead disappears from the Leads tab.
+   - **"Move to Jobs"** — The job is confirmed and ready to schedule. The system auto-creates a customer record and a job with status "To Be Scheduled." The lead disappears from the Leads tab. **Note:** If the lead's situation maps to "requires estimate" (e.g., Exploring, New System, Upgrade), the system will automatically redirect the lead to the Sales pipeline instead of creating a job — this prevents unestimated work from entering the Jobs tab.
    - **"Move to Sales"** — They need an estimate before committing. The system auto-creates a customer record and a Sales pipeline entry with status "Schedule Estimate." The lead disappears from the Leads tab.
    - **Delete** — They're not interested or it's spam.
 
@@ -336,12 +336,12 @@ One important concept: **job status and appointment status are two separate thin
 
 | Status | Meaning |
 |--------|---------|
-| **To Be Scheduled** | Job exists but hasn't been completed yet. This is the status from creation through scheduling, confirmation, and even during the on-site visit — it only changes when "Job Complete" is clicked. |
-| **In Progress** | Exists in the status model but is not currently set by any button. See note below. |
+| **To Be Scheduled** | Job exists but hasn't started yet. This is the status from creation through scheduling and confirmation. |
+| **In Progress** | Technician has started work on the job (set by clicking "Job Started"). |
 | **Completed** | Work is done (triggered by clicking "Job Complete") |
 | **Cancelled** | Job was cancelled |
 
-**Important note about "In Progress":** The "On My Way" and "Job Started" buttons **do not change the job status** — they only log timestamps for time tracking. The job stays "To Be Scheduled" all the way through until "Job Complete" is clicked, at which point it jumps directly to "Completed." This is a known gap (see the smoothing-out doc for the planned fix to add proper status progression).
+**Status progression:** "On My Way" does not change the job status — it only logs a timestamp and sends an SMS. "Job Started" transitions the job from "To Be Scheduled" to "In Progress." "Job Complete" transitions from "In Progress" to "Completed."
 
 **Appointment status** tracks the scheduling confirmation:
 
@@ -353,9 +353,10 @@ One important concept: **job status and appointment status are two separate thin
 | **Cancelled** | Customer replied "C" or admin cancelled |
 
 **Key points:**
-- Creating an appointment on the schedule does **not** change the job's status. The job stays "To Be Scheduled" through the entire process until "Job Complete" is clicked.
+- Creating an appointment on the schedule does **not** change the job's status. The job stays "To Be Scheduled" until "Job Started" is clicked.
+- "Job Started" transitions the job to "In Progress." "Job Complete" transitions from "In Progress" to "Completed."
 - Completing a job does **not** auto-complete the appointment. The appointment stays in its current status (usually "Confirmed") even after the job is done.
-- The two tracks are fully independent — no automatic sync between them.
+- The two tracks (job status and appointment status) are fully independent — no automatic sync between them.
 
 ---
 
@@ -634,10 +635,10 @@ The job detail view has three status buttons that track the lifecycle of a field
 | Button | What It Does | Job Status Change |
 |--------|-------------|-------------------|
 | **On My Way** | Sends an SMS to the customer: "We're on our way!" Logs the `on_my_way_at` timestamp. | No change (still To Be Scheduled) |
-| **Job Started** | Logs the `started_at` timestamp. | No change (still To Be Scheduled) |
-| **Job Complete** | Marks the job as complete (with a payment check — see below). Logs the `completed_at` timestamp. | **To Be Scheduled -> Completed** |
+| **Job Started** | Logs the `started_at` timestamp. | **To Be Scheduled -> In Progress** |
+| **Job Complete** | Marks the job as complete (with a payment check — see below). Logs the `completed_at` timestamp. | **In Progress -> Completed** |
 
-**Important:** "On My Way" and "Job Started" do **not** change the job's status — they only log timestamps. The job stays in "To Be Scheduled" until "Job Complete" is clicked, which moves it directly to "Completed." The "In Progress" status exists in the system but is not currently set by any of these buttons.
+**Important:** "On My Way" does **not** change the job's status — it only logs a timestamp and sends an SMS. "Job Started" transitions the job from "To Be Scheduled" to "In Progress." "Job Complete" transitions from "In Progress" to "Completed."
 
 **Time tracking:** The system automatically calculates the time elapsed between these three timestamps — travel time (On My Way to Started), work time (Started to Complete), and total time. This metadata is stored per job type and staff member for future scheduling optimization.
 
@@ -954,7 +955,7 @@ When the system sends an appointment confirmation SMS, it tracks the message wit
 
 1. Open the job detail on your device
 2. Click **"On My Way"** — sends SMS to customer ("We're on our way!"), logs your departure time
-3. Arrive at site, click **"Job Started"** — logs your arrival time (no SMS sent, no status change)
+3. Arrive at site, click **"Job Started"** — logs your arrival time, transitions job status to "In Progress" (no SMS sent)
 4. Perform the work
 5. Add **notes** and **photos** from the job during the visit
 6. **Collect payment** on site if possible (Cash, Check, Venmo, Zelle, or Stripe — updates the invoice to Paid)
@@ -964,7 +965,7 @@ When the system sends an appointment confirmation SMS, it tracks the message wit
    - If neither: warning modal appears — you can "Complete Anyway" or go back
 9. Optionally send a **Google Review** request via SMS
 
-**Note:** "On My Way" and "Job Started" don't change any status — they just log timestamps for time tracking. "Job Complete" is the only button that changes the job status. The system calculates travel time, work time, and total time from these three timestamps.
+**Note:** "On My Way" doesn't change the job status — it just logs a timestamp and sends an SMS. "Job Started" transitions the job to "In Progress." "Job Complete" transitions from "In Progress" to "Completed." The system calculates travel time, work time, and total time from these three timestamps.
 
 ### "I need to find a specific invoice"
 
@@ -985,4 +986,4 @@ When the system sends an appointment confirmation SMS, it tracks the message wit
 
 ---
 
-*Last updated: April 2026 — CRM Changes Update 2*
+*Last updated: April 13, 2026 — E2E Bug Fixes (Job Started status progression, Move to Jobs guard, SMS dedupe scoping)*
