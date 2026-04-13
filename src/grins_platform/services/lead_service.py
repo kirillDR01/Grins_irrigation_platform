@@ -93,12 +93,12 @@ class LeadService(LoggerMixin):
 
     DOMAIN = "lead"
 
-    # Mapping from LeadSituation to (job_category, job_description)
-    SITUATION_JOB_MAP: ClassVar[dict[str, tuple[str, str]]] = {
-        LeadSituation.NEW_SYSTEM.value: ("requires_estimate", "Installation Estimate"),
-        LeadSituation.UPGRADE.value: ("requires_estimate", "System Upgrade Estimate"),
-        LeadSituation.REPAIR.value: ("ready_to_schedule", "Repair Request"),
-        LeadSituation.EXPLORING.value: ("requires_estimate", "Consultation"),
+    # Mapping from LeadSituation to (job_category, job_type, job_description)
+    SITUATION_JOB_MAP: ClassVar[dict[str, tuple[str, str, str]]] = {
+        LeadSituation.NEW_SYSTEM.value: ("requires_estimate", "new_system", "Installation Estimate"),
+        LeadSituation.UPGRADE.value: ("requires_estimate", "upgrade", "System Upgrade Estimate"),
+        LeadSituation.REPAIR.value: ("ready_to_schedule", "small_repair", "Repair Request"),
+        LeadSituation.EXPLORING.value: ("requires_estimate", "consultation", "Consultation"),
     }
 
     def __init__(
@@ -840,9 +840,9 @@ class LeadService(LoggerMixin):
         if data.create_job:
             # Map situation to job type and description
             situation_key = lead.situation
-            _category, default_description = self.SITUATION_JOB_MAP.get(
+            _category, _job_type, default_description = self.SITUATION_JOB_MAP.get(
                 situation_key,
-                ("requires_estimate", "Consultation"),
+                ("requires_estimate", "consultation", "Consultation"),
             )
 
             description = (
@@ -853,7 +853,7 @@ class LeadService(LoggerMixin):
 
             job_data = JobCreate(
                 customer_id=customer.id,
-                job_type=_category,
+                job_type=_job_type,
                 description=description,
             )
             job = await self.job_service.create_job(job_data)
@@ -964,9 +964,9 @@ class LeadService(LoggerMixin):
 
         # Map situation to job type
         situation_key = lead.situation
-        _category, default_description = self.SITUATION_JOB_MAP.get(
+        _category, _job_type, default_description = self.SITUATION_JOB_MAP.get(
             situation_key,
-            ("requires_estimate", "Consultation"),
+            ("requires_estimate", "consultation", "Consultation"),
         )
 
         # Bug #2 fix: requires_estimate leads should go to Sales, not Jobs
@@ -994,7 +994,7 @@ class LeadService(LoggerMixin):
 
         job_data = JobCreate(
             customer_id=customer_id,
-            job_type=_category,
+            job_type=_job_type,
             description=description,
         )
         job = await self.job_service.create_job(job_data)
