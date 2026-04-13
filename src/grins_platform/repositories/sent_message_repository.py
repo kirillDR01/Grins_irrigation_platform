@@ -209,6 +209,7 @@ class SentMessageRepository(LoggerMixin):
         customer_id: UUID,
         message_type: MessageType,
         hours_back: int = 24,
+        appointment_id: UUID | None = None,
     ) -> list[SentMessage]:
         """Get recent messages for a customer of a specific type.
 
@@ -218,6 +219,7 @@ class SentMessageRepository(LoggerMixin):
             customer_id: The customer ID
             message_type: Type of message
             hours_back: How many hours back to search
+            appointment_id: Optional appointment ID for per-appointment dedupe
 
         Returns:
             List of matching messages
@@ -231,15 +233,17 @@ class SentMessageRepository(LoggerMixin):
 
         cutoff = datetime.now() - timedelta(hours=hours_back)
 
+        conditions = [
+            SentMessage.customer_id == customer_id,
+            SentMessage.message_type == message_type.value,
+            SentMessage.created_at >= cutoff,
+        ]
+        if appointment_id is not None:
+            conditions.append(SentMessage.appointment_id == appointment_id)
+
         result = await self.session.execute(
             select(SentMessage)
-            .where(
-                and_(
-                    SentMessage.customer_id == customer_id,
-                    SentMessage.message_type == message_type.value,
-                    SentMessage.created_at >= cutoff,
-                ),
-            )
+            .where(and_(*conditions))
             .order_by(SentMessage.created_at.desc()),
         )
         messages = list(result.scalars().all())

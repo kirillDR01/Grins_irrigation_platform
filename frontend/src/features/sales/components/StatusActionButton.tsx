@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
+import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -48,13 +49,13 @@ export function StatusActionButton({ entry }: StatusActionButtonProps) {
           toast.success('Converted to job');
         },
         onError: (err) => {
-          const msg =
-            (err as { response?: { data?: { detail?: string } } })?.response
-              ?.data?.detail ?? 'Failed to convert';
-          if (msg.includes('signature') || msg.includes('Signature')) {
+          const msg = axios.isAxiosError(err)
+            ? (err.response?.data?.detail ?? 'Failed to convert')
+            : 'Failed to convert';
+          if (typeof msg === 'string' && (msg.includes('signature') || msg.includes('Signature'))) {
             setShowForceConfirm(true);
           } else {
-            toast.error('Error', { description: msg });
+            toast.error('Error', { description: typeof msg === 'string' ? msg : 'Failed to convert' });
           }
         },
       });
@@ -65,13 +66,13 @@ export function StatusActionButton({ entry }: StatusActionButtonProps) {
         toast.success('Status advanced');
       },
       onError: (err) => {
-        const msg =
-          (err as { response?: { data?: { detail?: string } } })?.response
-            ?.data?.detail ?? 'Failed to advance';
-        if (msg.includes('signature')) {
+        const msg = axios.isAxiosError(err)
+          ? (err.response?.data?.detail ?? 'Failed to advance')
+          : 'Failed to advance';
+        if (typeof msg === 'string' && msg.includes('signature')) {
           setShowForceConfirm(true);
         } else {
-          toast.error('Error', { description: msg });
+          toast.error('Error', { description: typeof msg === 'string' ? msg : 'Failed to advance' });
         }
       },
     });

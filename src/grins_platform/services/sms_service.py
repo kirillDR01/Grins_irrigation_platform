@@ -221,10 +221,18 @@ class SMSService(LoggerMixin):
                     "recent_message_sent_at": dupes[0].created_at.isoformat(),
                 }
         elif recipient.customer_id is not None:
+            # Bug #4 fix: scope appointment_confirmation dedupe per appointment_id
+            dedupe_appointment_id = (
+                appointment_id
+                if message_type == MessageType.APPOINTMENT_CONFIRMATION
+                   and appointment_id is not None
+                else None
+            )
             legacy_dupes = await self.message_repo.get_by_customer_and_type(
                 customer_id=recipient.customer_id,
                 message_type=message_type,
                 hours_back=24,
+                appointment_id=dedupe_appointment_id,
             )
             if legacy_dupes:
                 self.log_rejected(

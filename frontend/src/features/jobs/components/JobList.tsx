@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useDebounce } from '@/shared/hooks/useDebounce';
 import {
   flexRender,
   getCoreRowModel,
@@ -66,6 +67,7 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
   const [searchParams, setSearchParams] = useSearchParams();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 300);
   const [highlightedJobId, setHighlightedJobId] = useState<string | null>(null);
   const [simplifiedFilter, setSimplifiedFilter] = useState<string>('all');
 
@@ -100,6 +102,15 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
       return () => clearTimeout(timer);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Wire debounced search to API params (Bug #1 fix)
+  useEffect(() => {
+    setParams((p) => ({
+      ...p,
+      search: debouncedSearch || undefined,
+      page: 1,
+    }));
+  }, [debouncedSearch]);
 
   // Handle simplified status filter change (Req 21)
   const handleStatusChange = useCallback(

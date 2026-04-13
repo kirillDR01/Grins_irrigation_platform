@@ -1161,10 +1161,11 @@ async def on_my_way(
 async def job_started(
     job_id: UUID,
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    service: Annotated[JobService, Depends(get_job_service)],
 ) -> JobResponse:
-    """Log job started timestamp.
+    """Log job started timestamp and transition status to in_progress.
 
-    Validates: Requirement 27.2
+    Validates: Requirement 27.2, Bug #7 fix
     """
     from grins_platform.models.job import Job  # noqa: PLC0415
 
@@ -1181,6 +1182,14 @@ async def job_started(
 
     job.started_at = datetime.now(tz=timezone.utc)
     await session.flush()
+
+    # Bug #7 fix: transition status to in_progress if currently to_be_scheduled
+    if job.status == JobStatus.TO_BE_SCHEDULED.value:
+        await service.update_status(
+            job_id,
+            JobStatusUpdate(status=JobStatus.IN_PROGRESS),
+        )
+
     await session.refresh(job)
     _endpoints.log_completed("job_started", job_id=str(job_id))
     return JobResponse.model_validate(job)  # type: ignore[no-any-return]

@@ -962,14 +962,34 @@ class LeadService(LoggerMixin):
         if lead.moved_to:
             raise LeadAlreadyConvertedError(lead_id)
 
-        customer_id = await self._ensure_customer_for_lead(lead)
-
         # Map situation to job type
         situation_key = lead.situation
         _category, default_description = self.SITUATION_JOB_MAP.get(
             situation_key,
             ("requires_estimate", "Consultation"),
         )
+
+        # Bug #2 fix: requires_estimate leads should go to Sales, not Jobs
+        if _category == "requires_estimate":
+            self.log_started(
+                "move_to_jobs.redirect_to_sales",
+                lead_id=str(lead_id),
+                reason="requires_estimate",
+            )
+            result = await self.move_to_sales(lead_id)
+            self.log_completed(
+                "move_to_jobs.redirect_to_sales",
+                lead_id=str(lead_id),
+                sales_entry_id=str(result.sales_entry_id),
+            )
+            return LeadMoveResponse(
+                lead_id=lead_id,
+                customer_id=result.customer_id,
+                sales_entry_id=result.sales_entry_id,
+                message="Lead requires estimate — redirected to Sales pipeline",
+            )
+
+        customer_id = await self._ensure_customer_for_lead(lead)
         description = lead.job_requested or default_description
 
         job_data = JobCreate(

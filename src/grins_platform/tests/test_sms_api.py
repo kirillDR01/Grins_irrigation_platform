@@ -119,6 +119,46 @@ class TestSMSSendEndpoint:
         )
         assert response.status_code == 422
 
+    @patch("grins_platform.api.v1.sms.SMSService")
+    async def test_send_dedupe_blocked_returns_json_not_500(
+        self,
+        mock_sms_cls: Mock,
+        client: AsyncClient,
+    ) -> None:
+        """Bug #5 fix: dedupe-blocked result returns proper JSON, not 500."""
+        mock_sms = mock_sms_cls.return_value
+        customer_id = uuid4()
+        mock_sms.send_message = AsyncMock(
+            return_value={
+                "success": False,
+                "reason": "Duplicate message prevented",
+                "recent_message_id": str(uuid4()),
+                "recent_message_sent_at": "2026-04-13T10:22:33+00:00",
+            },
+        )
+
+        mock_customer = _mock_customer(customer_id)
+        mock_db = _mock_db_with_customer(mock_customer)
+
+        app.dependency_overrides[get_db_session] = lambda: mock_db
+        try:
+            response = await client.post(
+                "/api/v1/sms/send",
+                json={
+                    "customer_id": str(customer_id),
+                    "phone": "6125551234",
+                    "message": "Your appointment is confirmed",
+                    "message_type": "appointment_confirmation",
+                    "sms_opt_in": True,
+                },
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is False
+            assert data["message_id"] is None
+        finally:
+            app.dependency_overrides.pop(get_db_session, None)
+
 
 @pytest.mark.asyncio
 class TestSMSWebhookEndpoint:

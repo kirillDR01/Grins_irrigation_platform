@@ -207,6 +207,67 @@ class TestMoveToJobs:
         with pytest.raises(LeadAlreadyConvertedError):
             await svc.move_to_jobs(lead.id)
 
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_move_to_jobs_requires_estimate_redirects_to_sales(self) -> None:
+        """Bug #2 fix: leads with requires_estimate category redirect to Sales."""
+        customer_id = uuid4()
+        lead = _make_lead(
+            customer_id=customer_id,
+            situation=LeadSituation.EXPLORING.value,
+        )
+        session = AsyncMock()
+        session.add = MagicMock()
+        session.flush = AsyncMock()
+
+        async def fake_refresh(obj):
+            obj.id = uuid4()
+
+        session.refresh = AsyncMock(side_effect=fake_refresh)
+
+        repo = AsyncMock()
+        repo.get_by_id = AsyncMock(return_value=lead)
+        repo.update = AsyncMock()
+        repo.session = session
+
+        job_service = AsyncMock()
+
+        svc = _build_service(lead_repo=repo, job_service=job_service)
+        result = await svc.move_to_jobs(lead.id)
+
+        # Should NOT create a job
+        job_service.create_job.assert_not_awaited()
+        # Should have a sales_entry_id (redirected to sales)
+        assert result.sales_entry_id is not None
+        assert result.job_id is None
+        assert "Sales" in result.message or "estimate" in result.message
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_move_to_jobs_repair_creates_job_normally(self) -> None:
+        """Bug #2 preservation: Repair leads still create jobs in Jobs tab."""
+        customer_id = uuid4()
+        lead = _make_lead(
+            customer_id=customer_id,
+            situation=LeadSituation.REPAIR.value,
+        )
+        repo = AsyncMock()
+        repo.get_by_id = AsyncMock(return_value=lead)
+        repo.update = AsyncMock()
+
+        job_mock = MagicMock()
+        job_mock.id = uuid4()
+        job_service = AsyncMock()
+        job_service.create_job = AsyncMock(return_value=job_mock)
+
+        svc = _build_service(lead_repo=repo, job_service=job_service)
+        result = await svc.move_to_jobs(lead.id)
+
+        # Should create a job
+        job_service.create_job.assert_awaited_once()
+        assert result.job_id == job_mock.id
+        assert result.sales_entry_id is None
+
 
 # =============================================================================
 # Move to Sales — Req 9.2, 12.2

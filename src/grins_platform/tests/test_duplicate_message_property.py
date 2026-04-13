@@ -161,4 +161,45 @@ class TestDuplicateMessageProperty:
             customer_id=recipient.customer_id,
             message_type=MessageType.APPOINTMENT_CONFIRMATION,
             hours_back=24,
+            appointment_id=None,
         )
+
+    async def test_appointment_confirmation_dedupe_scoped_per_appointment(
+        self,
+    ) -> None:
+        """Bug #4 fix: different appointment_ids for same customer both succeed."""
+        mock_session = AsyncMock()
+        service = SMSService(mock_session)
+        recipient, _ = _make_recipient()
+        appt_1 = uuid4()
+        appt_2 = uuid4()
+
+        # No prior messages for either appointment
+        service.message_repo.get_by_customer_and_type = AsyncMock(
+            return_value=[],
+        )
+
+        with patch(
+            "grins_platform.services.sms_service.check_sms_consent",
+            return_value=True,
+        ):
+            result1 = await service.send_message(
+                recipient=recipient,
+                message="Appt 1 confirmed",
+                message_type=MessageType.APPOINTMENT_CONFIRMATION,
+                appointment_id=appt_1,
+            )
+            result2 = await service.send_message(
+                recipient=recipient,
+                message="Appt 2 confirmed",
+                message_type=MessageType.APPOINTMENT_CONFIRMATION,
+                appointment_id=appt_2,
+            )
+
+        assert result1["success"] is True
+        assert result2["success"] is True
+
+        # Verify dedupe was scoped per appointment_id
+        calls = service.message_repo.get_by_customer_and_type.call_args_list
+        assert calls[0].kwargs.get("appointment_id") == appt_1 or calls[0][1].get("appointment_id") == appt_1
+        assert calls[1].kwargs.get("appointment_id") == appt_2 or calls[1][1].get("appointment_id") == appt_2

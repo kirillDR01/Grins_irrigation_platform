@@ -200,7 +200,7 @@ export function AppointmentForm({
                   )}
                   {jobs.map((job) => (
                     <SelectItem key={job.id} value={job.id}>
-                      {job.job_type} - {job.description?.slice(0, 40) || 'No description'}
+                      {job.customer_name ? `${job.customer_name} — ` : ''}{job.job_type} - {job.description?.slice(0, 40) || 'No description'}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -1,118 +1,69 @@
-# Bug Fix Plan — E2E Battle Test (2026-03-26)
+# Bug Fix Tasks — E2E Bug Hunt (2026-04-13)
 
 ## Overview
 
-Fix 12 bugs found during battle testing. Grouped into 3 phases by repo/blast radius. Each phase can be committed and deployed independently.
+Fix 7 bugs discovered during E2E bug hunt testing of the CRM admin platform. Bugs span frontend (React/TypeScript) and backend (FastAPI/Python) across the Jobs, Schedule, SMS, Sales, and Lead-to-Jobs workflows.
 
-**Source:** `bughunt/2026-03-26-e2e-battle-test.md`
+**Source:** `e2e-screenshots/bug-hunt/` (7 bug reports)
 
-## Phase 1: Frontend Fixes (Grins_irrigation repo) — HIGH + MEDIUM
+## Phase 1: Frontend Fixes
 
-These all touch the customer-facing frontend. Do in one branch, one PR.
+- [x] 1. Wire Jobs tab search to API params (Bug #1 — LOW-MEDIUM)
+  - [x] 1.1 In `frontend/src/features/jobs/components/JobList.tsx`, add `searchQuery` to the `params` object passed to `useJobs()` with ~300ms debounce
+  - [x] 1.2 Reset `params.page` to 1 when search query changes
+  - [x] 1.3 When search is cleared, remove `search` from params so full list returns
+  - _Files: JobList.tsx_
 
-- [ ] 1. Fix surcharge display text (BUG-001, HIGH)
-  - Edit `frontend/src/shared/components/sections/PricingSection.tsx` lines 16-20
-  - Replace hardcoded values with rates from `surcharge.ts`: zone $8/$11, lake pump $125/$150, RPZ $110/$55
-  - Import constants or derive from `calculateSurcharge` so there's a single source of truth
-  - _Files: PricingSection.tsx_
+- [x] 2. Prepend customer name in job selector dropdown (Bug #3 — MEDIUM-HIGH)
+  - [x] 2.1 In `frontend/src/features/schedule/components/AppointmentForm.tsx`, change the job `SelectItem` display from `{job.job_type} - {job.description}` to `{job.customer_name} — {job.job_type} - {job.description}`
+  - [x] 2.2 Verify `customer_name` is available on the job objects returned by `useJobsReadyToSchedule()`; if not, update the hook/API to include it
+  - _Files: AppointmentForm.tsx, possibly jobs hooks/API_
 
-- [ ] 2. Validate zone count ≥ 1 in modal (BUG-002, HIGH — frontend half)
-  - Edit `frontend/src/features/service-packages/components/SubscriptionConfirmModal.tsx`
-  - Clamp zone input `onChange` to `Math.max(1, value)` instead of only on blur
-  - Disable Confirm button when `zoneCount < 1`
-  - _Files: SubscriptionConfirmModal.tsx_
+- [x] 3. Fix Convert to Job error extraction (Bug #6 — LOW)
+  - [x] 3.1 In `frontend/src/features/sales/components/StatusActionButton.tsx`, use `axios.isAxiosError(err)` for robust error extraction in the `onError` handler for `convertToJob.mutate`
+  - [x] 3.2 Ensure the "signature" string check works with the actual 422 error message "Waiting for customer signature" so the force-convert dialog appears
+  - _Files: StatusActionButton.tsx_
 
-- [ ] 3. Render TermsCheckbox in lead form (BUG-005, HIGH)
-  - Edit `frontend/src/features/lead-form/components/LeadForm.tsx`
-  - Add `<TermsCheckbox>` to the JSX (already imported at line 8, never rendered)
-  - Make `termsAccepted` required for submit button to enable
-  - Update consent metadata capture to fire on `termsAccepted || smsConsent`
-  - _Files: LeadForm.tsx, possibly leadApi.ts line 102_
+## Phase 2: Backend Fixes
 
-- [ ] 4. Hide mobile sticky bar when modal is open (BUG-003, MEDIUM)
-  - Edit the sticky bar component (likely in `frontend/src/shared/components/layout/`)
-  - Add a CSS class or React context that hides the bar when any modal is open
-  - Simplest: `z-index` fix or conditional render based on modal state
-  - _Files: Layout component, possibly MobileBottomBar or similar_
+- [x] 4. Guard move_to_jobs for requires_estimate leads (Bug #2 — MEDIUM)
+  - [x] 4.1 In `src/grins_platform/services/lead_service.py` `move_to_jobs()`, after resolving `_category` from `SITUATION_JOB_MAP`, check if `_category == "requires_estimate"`
+  - [x] 4.2 If category is `requires_estimate`, call `self.move_to_sales(lead_id)` instead of creating a job, and return a response indicating the lead was redirected to Sales pipeline
+  - [x] 4.3 Add unit test: lead with situation "Exploring" → `move_to_jobs()` redirects to sales; lead with "Repair" → creates job normally
+  - _Files: lead_service.py, test files_
 
-- [ ] 5. Wrap API .json() calls in try/catch (BUG-006, MEDIUM)
-  - Edit `checkoutApi.ts`, `onboardingApi.ts`, `chatbotApi.ts`
-  - Wrap all `.json()` calls in try/catch, return `{ ok: false, error: 'server' }` on failure
-  - Add null check for `data.response` in chatbotApi
-  - _Files: 3 API files_
+- [x] 5. Scope SMS dedupe per appointment_id (Bug #4 — MEDIUM-HIGH)
+  - [x] 5.1 In `src/grins_platform/services/sms_service.py` `send_message()`, in the legacy dedupe branch (customer_id + message_type), when `appointment_id` is provided and `message_type` is `appointment_confirmation`, add `appointment_id` to the dedupe query
+  - [x] 5.2 Update `get_by_customer_and_type()` in the message repository to accept an optional `appointment_id` filter, or write an inline query that includes the filter
+  - [x] 5.3 Add unit test: two `appointment_confirmation` sends for different `appointment_id`s to the same customer within 24h → both succeed
+  - _Files: sms_service.py, sent_message_repository.py, test files_
 
-- [ ] 6. Add email validation to lead form (BUG-007, MEDIUM)
-  - Edit `frontend/src/features/lead-form/components/LeadForm.tsx` validate() function (line ~42-52)
-  - Add email format regex check when email is non-empty
-  - Show inline error below email field matching existing error styling
-  - _Files: LeadForm.tsx_
+- [x] 6. Fix SMS send endpoint 500 on dedupe block (Bug #5 — MEDIUM)
+  - [x] 6.1 In `src/grins_platform/api/v1/sms.py` `send_sms()`, check `send_result["success"]` before accessing `send_result["message_id"]`
+  - [x] 6.2 When `success` is `False`, return an `SMSSendResponse` with `success=False`, `message_id=None` (or the `recent_message_id`), and appropriate status instead of crashing with KeyError
+  - [x] 6.3 Update `SMSSendResponse` schema if needed to allow `message_id` to be optional
+  - [x] 6.4 Add unit test: mock `send_message()` returning dedupe-blocked result → endpoint returns proper JSON, no 500
+  - _Files: sms.py, sms schemas, test files_
 
-- [ ] 7. Validate service address on onboarding (BUG-008, MEDIUM)
-  - Edit `frontend/src/features/onboarding/components/OnboardingPage.tsx`
-  - When same-as-billing unchecked, require street/city/state/zip non-empty
-  - Disable Complete Onboarding button until fields valid
-  - _Files: OnboardingPage.tsx_
-
-- [ ] 8. Replace hardcoded Customer Portal URL (BUG-011, MEDIUM)
-  - Edit `frontend/src/core/config.ts` line 24
-  - Replace hardcoded production URL with `import.meta.env.VITE_STRIPE_CUSTOMER_PORTAL_URL || ''`
-  - In Footer.tsx, hide the Customer Portal link when URL is empty
-  - _Files: config.ts, Footer.tsx_
-
-- [ ] 9. Fix CSP connect-src (BUG-009, LOW)
-  - Edit `frontend/index.html` CSP `connect-src`
-  - Replace hardcoded Railway URLs with `https://*.up.railway.app` wildcard
-  - _Files: index.html_
-
-- [ ] 10. Add loading spinner to Suspense fallback (BUG-010, LOW)
-  - Edit `frontend/src/core/router.tsx` line 42
-  - Replace empty div with a centered spinner using existing brand colors
-  - _Files: router.tsx_
-
-- [ ] 11. Create accessibility page or remove link (BUG-012, LOW)
-  - Option A: Add `/accessibility` route with basic accessibility statement
-  - Option B: Remove the Accessibility link from Footer.tsx
-  - Recommend Option A for compliance optics
-  - _Files: router.tsx + new AccessibilityPage.tsx, OR Footer.tsx_
-
-## Phase 2: Backend Validation Fix (Grins_irrigation_platform repo)
-
-- [ ] 12. Validate zone_count ≥ 1 on backend (BUG-002, HIGH — backend half)
-  - Edit `src/grins_platform/services/checkout_service.py` or the pre-checkout-consent endpoint
-  - Add validation: if `zone_count < 1`, return HTTP 422
-  - Update backend test comments for correct surcharge amounts (BUG-001 related)
-  - _Files: checkout_service.py or agreements/routes.py, test_checkout_onboarding_service.py_
-
-- [ ] 13. Fix backend test comments (BUG-001 related)
-  - Edit `test_checkout_onboarding_service.py` lines ~681 and ~780
-  - Update comments from "$175" to "$125" and "$50" to "$110"
-  - _Files: test_checkout_onboarding_service.py_
-
-## Phase 3: Vercel Environment Configuration
-
-- [ ] 14. Add missing env vars to frontend Vercel project (BUG-004 + BUG-011)
-  - `VITE_GOOGLE_MAPS_API_KEY` — Preview + Production (copy from admin dashboard project)
-  - `VITE_STRIPE_CUSTOMER_PORTAL_URL` — Preview: `https://billing.stripe.com/p/login/test_6oU8wR0zu8QUcQ4amueQM00`, Production: `https://billing.stripe.com/p/login/00waEXaaqack8zGa7N5Ne00`
-  - `VITE_GA4_MEASUREMENT_ID` — Production only (when ready)
-  - `VITE_GTM_CONTAINER_ID` — Production only (when ready)
-  - Run via `vercel env add` CLI
+- [x] 7. Make job_started transition status to in_progress (Bug #7 — HIGH)
+  - [x] 7.1 In `src/grins_platform/api/v1/jobs.py` `job_started()`, after logging `started_at`, call `JobService.update_status()` to transition the job from `to_be_scheduled` to `in_progress`
+  - [x] 7.2 Handle the case where the job is already `in_progress` (idempotent — skip the status update gracefully)
+  - [x] 7.3 Add `JobService` as a dependency to the `job_started` endpoint if not already injected
+  - [x] 7.4 Add unit test: job at `to_be_scheduled` → `job_started` → status is `in_progress`; then `complete_job` → status is `completed`
+  - _Files: jobs.py, job_service.py, test files_
 
 ## Execution Order
 
 ```
-Phase 1 (items 1-11) ← All in Grins_irrigation repo, one branch
-    ↓ push to dev → Vercel auto-deploys
-Phase 2 (items 12-13) ← Grins_irrigation_platform repo
-    ↓ push to dev → Railway auto-deploys
-Phase 3 (item 14)    ← Vercel CLI, no code changes
-    ↓ redeploy frontend to pick up new env vars
-    ↓
-Verification: Re-run E2E battle test on all 12 bugs
+Phase 1 (tasks 1-3) ← Frontend fixes, can be done in parallel
+Phase 2 (tasks 4-7) ← Backend fixes
+  Task 7 is highest priority (blocks entire field workflow)
+  Tasks 5+6 are related (SMS) and should be done together
+  Task 4 is independent
 ```
 
 ## Estimated Scope
 
-- **Phase 1:** ~10 files modified in Grins_irrigation repo
-- **Phase 2:** ~2-3 files modified in Grins_irrigation_platform repo
-- **Phase 3:** CLI commands only, no code
-- **Total:** ~13 file changes across 2 repos
+- **Phase 1:** ~3 frontend files modified
+- **Phase 2:** ~5-6 backend files modified + tests
+- **Total:** ~9 file changes + test files

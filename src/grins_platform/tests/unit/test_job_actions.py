@@ -255,6 +255,62 @@ class TestCompleteJob:
 
 
 @pytest.mark.unit()
+class TestJobStarted:
+    """Tests for POST /api/v1/jobs/{id}/started — Bug #7 fix."""
+
+    def test_job_started_transitions_to_in_progress(
+        self,
+        mock_job: Mock,
+        mock_job_service: AsyncMock,
+        mock_session: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Bug #7: job_started should transition status to in_progress."""
+        mock_job.status = JobStatus.TO_BE_SCHEDULED.value
+
+        # Mock the DB query to return the job
+        mock_result = Mock()
+        mock_result.scalar_one_or_none.return_value = mock_job
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.flush = AsyncMock()
+        mock_session.refresh = AsyncMock()
+
+        # Mock update_status to succeed
+        mock_job_service.update_status = AsyncMock(return_value=mock_job)
+
+        response = client.post(f"/api/v1/jobs/{mock_job.id}/started")
+
+        assert response.status_code == status.HTTP_200_OK
+        # Verify update_status was called with IN_PROGRESS
+        mock_job_service.update_status.assert_awaited_once()
+        call_args = mock_job_service.update_status.call_args
+        assert call_args[0][0] == mock_job.id
+        assert call_args[0][1].status == JobStatus.IN_PROGRESS
+
+    def test_job_started_already_in_progress_skips_transition(
+        self,
+        mock_job: Mock,
+        mock_job_service: AsyncMock,
+        mock_session: AsyncMock,
+        client: TestClient,
+    ) -> None:
+        """Bug #7 idempotent: already in_progress skips status update."""
+        mock_job.status = JobStatus.IN_PROGRESS.value
+
+        mock_result = Mock()
+        mock_result.scalar_one_or_none.return_value = mock_job
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.flush = AsyncMock()
+        mock_session.refresh = AsyncMock()
+
+        response = client.post(f"/api/v1/jobs/{mock_job.id}/started")
+
+        assert response.status_code == status.HTTP_200_OK
+        # Should NOT call update_status since already in_progress
+        mock_job_service.update_status.assert_not_awaited()
+
+
+@pytest.mark.unit()
 class TestCreateJobInvoice:
     """Tests for POST /api/v1/jobs/{id}/invoice."""
 

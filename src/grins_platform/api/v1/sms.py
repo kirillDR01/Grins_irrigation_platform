@@ -75,6 +75,15 @@ async def send_sms(
             appointment_id=request.appointment_id,
         )
 
+        # Bug #5 fix: handle dedupe-blocked results gracefully
+        if not send_result.get("success", True):
+            return SMSSendResponse(
+                success=False,
+                message_id=None,
+                status=send_result.get("reason", "blocked"),
+                reason=send_result.get("reason"),
+            )
+
         return SMSSendResponse(
             success=send_result["success"],
             message_id=UUID(send_result["message_id"]),

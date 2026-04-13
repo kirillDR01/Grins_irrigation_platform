@@ -31,9 +31,10 @@ class SMSSendResponse(BaseModel):
     """Response from sending an SMS."""
 
     success: bool
-    message_id: UUID
+    message_id: UUID | None = None
     provider_message_id: str | None = None
     status: str
+    reason: str | None = None
 
 
 class SMSWebhookPayload(BaseModel):
