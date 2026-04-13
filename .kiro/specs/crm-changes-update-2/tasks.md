@@ -675,17 +675,17 @@ This plan implements all 39 requirements across 7 domains: Auth & Dashboard, Cus
   - Ensure week-based onboarding, contract renewal review queue, and all approval flows work. Ensure all tests pass, ask the user if questions arise.
 
 [x] 17.1 E2E Visual Validation — Onboarding & Contract Renewals Domain
-  - [BLOCKED] Onboarding wizard E2E: WeekPickerStep component is implemented (platform repo) but NOT yet integrated into the customer-facing OnboardingPage in Grins_irrigation repo. The Grins_irrigation OnboardingFormData type and completeOnboarding API call lack the service_week_preferences field. Cross-repo integration needed.
-  - [BLOCKED] Stripe checkout flow: requires live Stripe test session to walk through; cannot be automated without Stripe session_id
+  - [IMPLEMENTED] Cross-repo integration: ServiceWeekPreferences component added to Grins_irrigation OnboardingPage with <select> dropdowns per service; backend verify-session now returns services_with_types; types and API call updated to include service_week_preferences
+  - [BLOCKED] Full Stripe checkout E2E: requires live Stripe test session to walk through; onboarding page correctly shows "Session Verification Failed" for invalid sessions — backend gating works
   - [VALIDATED] Contract Renewal Reviews page — renders correctly with columns: Customer, Agreement, Proposed job count, Created date, Status, Actions
   - [VALIDATED] Proposal detail view — per-job Approve/Reject/Modify actions all functional
   - [VALIDATED] admin_notes free-text field present on each proposed job in edit mode
   - [VALIDATED] Modifying proposed job Week Of — WeekPicker renders inline, Save/Cancel work
-  - [VALIDATED] "Approve All" — all jobs become real Job records visible in Jobs tab with "Sub" (Subscription) tag
+  - [VALIDATED] "Approve All" — all jobs become real Job records visible in Jobs tab with "Sub" (Subscription) tag and "Job created" confirmation
   - [VALIDATED] "Reject All" — proposal status changes to "rejected", no jobs created
   - [VALIDATED] Partial approval — proposal status becomes "partially_approved" with mix of Approved/Rejected jobs
-  - [VALIDATED] Console clean — no JS errors during the flow
-  - [VALIDATED] Screenshots saved to `e2e-screenshots/crm-changes-update-2/onboarding-renewals/`
+  - [VALIDATED] Console clean — no JS errors during the contract renewals flow
+  - [VALIDATED] Screenshots saved to `e2e-screenshots/crm-changes-update-2/onboarding-renewals/` (13 screenshots)
   - [FIX APPLIED] RenewalProposalResponse now includes customer_name and agreement_number (was showing truncated UUIDs)
 
 - [x] 18. Error Handling and Exception Classes
