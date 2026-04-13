@@ -106,6 +106,7 @@ class VerifySessionResponse(BaseModel):
     already_completed: bool = False
     stripe_customer_portal_url: str = ""
     services_included: list[str] = []
+    services_with_types: list[dict[str, str]] = []
 
 
 class CompleteOnboardingRequest(BaseModel):
@@ -332,6 +333,7 @@ async def verify_session(
         already_completed=info.already_completed,
         stripe_customer_portal_url=info.stripe_customer_portal_url,
         services_included=info.services_included,
+        services_with_types=info.services_with_types,
     )
 
 

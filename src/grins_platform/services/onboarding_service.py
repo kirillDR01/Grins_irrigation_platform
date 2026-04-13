@@ -67,11 +67,14 @@ class VerifiedSessionInfo:
     already_completed: bool = False
     stripe_customer_portal_url: str = ""
     services_included: list[str] | None = None
+    services_with_types: list[dict[str, str]] | None = None
 
     def __post_init__(self) -> None:
-        """Default services_included to empty list."""
+        """Default list fields to empty lists."""
         if self.services_included is None:
             self.services_included = []
+        if self.services_with_types is None:
+            self.services_with_types = []
 
 
 class OnboardingService(LoggerMixin):
@@ -150,16 +153,21 @@ class OnboardingService(LoggerMixin):
 
         # Look up tier for included_services descriptions
         services_included: list[str] = []
+        services_with_types: list[dict[str, str]] = []
         tier_slug = metadata.get("package_tier", "")
         pkg_type = metadata.get("package_type", "")
         if self.tier_repo and tier_slug and pkg_type:
             tier = await self.tier_repo.get_by_slug_and_type(tier_slug, pkg_type)
             if tier and tier.included_services:
-                services_included = [
-                    svc.get("description", "")
-                    for svc in tier.included_services
-                    if svc.get("description")
-                ]
+                for svc in tier.included_services:
+                    desc = svc.get("description", "")
+                    svc_type = svc.get("service_type", "")
+                    if desc:
+                        services_included.append(desc)
+                    if svc_type:
+                        services_with_types.append(
+                            {"service_type": svc_type, "description": desc},
+                        )
 
         info = VerifiedSessionInfo(
             customer_name=(customer_details.name or "") if customer_details else "",
@@ -176,6 +184,7 @@ class OnboardingService(LoggerMixin):
             already_completed=already_completed,
             stripe_customer_portal_url=portal_url,
             services_included=services_included,
+            services_with_types=services_with_types,
         )
 
         self.log_completed("verify_session", session_id=session_id)
