@@ -1,38 +1,45 @@
 # Deployment Instructions: dev → main (April 9, 2026)
 
-**Date:** April 9, 2026
+**Date:** April 9, 2026 (updated April 13, 2026)
 **Source branch:** `dev`
 **Target branch:** `main`
-**Commits:** 27 commits (f308749..1c67bb3)
+**Commits:** 44 commits (f308749..7b882a3)
 
 ---
 
 ## Summary
 
-This deployment brings four major feature areas from dev to production:
+This deployment brings seven major feature areas from dev to production:
 
 1. **CallRail SMS Integration** — New SMS provider replacing Twilio, with provider abstraction layer
 2. **Scheduling Poll & Response Collection** — Send date-range polls via SMS, collect and export responses
 3. **Communications Dashboard Overhaul** — Campaign creation wizard, CSV audience upload, draft editing, campaign lifecycle management
 4. **Google Sheets Pipeline Fix** — Header-based column mapping for the restructured form
+5. **CRM Changes Update 2** — Sales pipeline, contract renewals, customer merge detection, document management, property type tagging, job confirmation flow
+6. **SignWell E-Signature Integration** — Email and embedded document signing for sales pipeline contracts
+7. **Dashboard & Onboarding Enhancements** — Removed Estimates/New Leads sections, added services_with_types to onboarding verify-session
 
 ---
 
 ## Pre-Deployment Checklist
 
 - [ ] Back up the production database
-- [ ] Verify CallRail account credentials are ready (API key, account ID, company ID, tracker ID)
-- [ ] Generate webhook secret: `openssl rand -hex 32`
+- [ ] Verify CallRail account credentials are ready (API key, account ID, company ID)
+- [ ] Generate CallRail webhook secret: `openssl rand -hex 32`
+- [ ] Obtain SignWell API key and webhook secret (if enabling e-signatures)
+- [ ] Generate SignWell webhook secret: `openssl rand -hex 32`
 - [ ] Confirm Redis is available (or provision one on Railway)
+- [ ] Verify S3 bucket (`grins-platform-files`) is accessible — customer document uploads use it (no new config, reuses existing PhotoService)
 - [ ] Coordinate with team — campaign worker will start processing pending recipients within 60s of deploy
+- [ ] Coordinate with team — nightly duplicate detection sweep runs at 1:30 AM CT
 
 ---
 
-## 1. Database Migrations (10 new migrations)
+## 1. Database Migrations (20 new migrations)
 
 ### Migration Chain
 
-The production DB head is currently at `20260328_110000`. This deploy adds 10 sequential migrations:
+The production DB head is currently at `20260328_110000`. This deploy adds 20 sequential migrations:
 
 | # | Migration | Description |
 |---|-----------|-------------|
@@ -46,28 +53,30 @@ The production DB head is currently at `20260328_110000`. This deploy adds 10 se
 | 8 | `20260409_100000_add_poll_options_and_campaign_responses` | Adds `poll_options` (JSONB) to `campaigns`; creates new `campaign_responses` table with 4 FKs and 3 indexes |
 | 9 | `20260410_100000_add_campaign_responses_dedup_index` | Composite index on `campaign_responses(campaign_id, phone, received_at DESC)` |
 | 10 | `20260410_100100_add_thread_id_and_response_indexes` | Index on `sent_messages.provider_thread_id`; unique partial index on `campaign_responses.provider_message_id` |
+| 11 | `20260411_100000_crm2_customer_extensions` | Adds `merged_into_customer_id` (FK) to `customers`; `is_hoa` to `properties`; `moved_to`, `moved_at`, `last_contacted_at`, `job_requested` to `leads`; `job_id` (FK) to `customer_photos` |
+| 12 | `20260411_100100_crm2_customer_merge_candidates` | Creates `customer_merge_candidates` table (score-based duplicate detection queue) |
+| 13 | `20260411_100200_crm2_customer_documents` | Creates `customer_documents` table (S3-linked file metadata) |
+| 14 | `20260411_100300_crm2_sales_pipeline` | Creates `sales_entries` and `sales_calendar_events` tables |
+| 15 | `20260411_100400_crm2_confirmation_flow` | Creates `job_confirmation_responses` and `reschedule_requests` tables |
+| 16 | `20260411_100500_crm2_contract_renewals` | Creates `contract_renewal_proposals` and `contract_renewal_proposed_jobs` tables |
+| 17 | `20260411_100600_crm2_service_week_preferences` | Adds `service_week_preferences` (JSON) to `service_agreements` |
+| 18 | `20260411_100700_crm2_enums` | Updates `ck_sent_messages_message_type` to include `google_review_request`, `on_my_way`; adds CHECK constraints on `sales_entries`, `job_confirmation_responses`, `customer_documents`, `contract_renewal_proposals`, `contract_renewal_proposed_jobs` |
+| 19 | `20260412_100000_add_on_my_way_at_to_jobs` | Adds `on_my_way_at` (DateTime) to `jobs` |
+| 20 | `20260412_100100_add_time_tracking_metadata_to_jobs` | Adds `time_tracking_metadata` (JSON) to `jobs` |
 
-> **Note:** Migration #10 (`20260410_100100`) is currently untracked locally. It must be committed to dev before merging to main.
+### New Tables (8 total)
 
-### New Table: `campaign_responses`
-
-| Column | Type | Nullable | Notes |
-|--------|------|----------|-------|
-| `id` | UUID | No | PK, gen_random_uuid() |
-| `campaign_id` | UUID | Yes | FK → campaigns.id (SET NULL) |
-| `sent_message_id` | UUID | Yes | FK → sent_messages.id (SET NULL) |
-| `customer_id` | UUID | Yes | FK → customers.id (SET NULL) |
-| `lead_id` | UUID | Yes | FK → leads.id (SET NULL) |
-| `phone` | String(32) | No | |
-| `recipient_name` | String(200) | Yes | |
-| `recipient_address` | Text | Yes | |
-| `selected_option_key` | String(8) | Yes | |
-| `selected_option_label` | Text | Yes | |
-| `raw_reply_body` | Text | No | |
-| `provider_message_id` | String(100) | Yes | Unique partial index (WHERE NOT NULL) |
-| `status` | String(20) | No | CHECK: 'parsed', 'needs_review', 'opted_out', 'orphan' |
-| `received_at` | DateTime(tz) | No | |
-| `created_at` | DateTime(tz) | No | server_default: now() |
+| Table | Purpose |
+|-------|---------|
+| `campaign_responses` | Inbound SMS poll replies linked to campaigns |
+| `customer_merge_candidates` | Duplicate detection queue with confidence scoring |
+| `customer_documents` | S3-linked file metadata for customer documents |
+| `sales_entries` | Estimate-to-job pipeline tracking |
+| `sales_calendar_events` | Estimate appointment scheduling |
+| `job_confirmation_responses` | Y/R/C keyword appointment confirmation replies |
+| `reschedule_requests` | Admin queue for reschedule requests |
+| `contract_renewal_proposals` | Service agreement renewal workflow |
+| `contract_renewal_proposed_jobs` | Individual proposed jobs within a renewal |
 
 ### Column Renames (Breaking for raw SQL queries)
 
@@ -76,6 +85,21 @@ The production DB head is currently at `20260328_110000`. This deploy adds 10 se
 | `sent_messages` | `twilio_sid` | `provider_message_id` |
 | `campaign_recipients` | `status` | `delivery_status` |
 | `campaign_recipients` | `delivered_at` | `sent_at` |
+
+### Columns Added to Existing Tables
+
+| Table | New Columns |
+|-------|-------------|
+| `customers` | `merged_into_customer_id` (UUID FK) |
+| `properties` | `is_hoa` (Boolean) |
+| `leads` | `moved_to`, `moved_at`, `last_contacted_at`, `job_requested` |
+| `customer_photos` | `job_id` (UUID FK) |
+| `service_agreements` | `service_week_preferences` (JSON) |
+| `jobs` | `on_my_way_at` (DateTime), `time_tracking_metadata` (JSON) |
+| `campaigns` | `poll_options` (JSONB), `automation_rule` (JSONB) |
+| `campaign_recipients` | `channel`, `sending_started_at` |
+| `sent_messages` | `campaign_id`, `provider_conversation_id`, `provider_thread_id` |
+| `sms_consent_records` | `created_by_staff_id` |
 
 ### Running Migrations
 
@@ -87,7 +111,7 @@ railway run uv run alembic upgrade head
 
 # Verify head
 railway run uv run alembic current
-# Expected: 20260410_100100 (head)
+# Expected: 20260412_100100 (head)
 ```
 
 ### Rollback
@@ -115,8 +139,9 @@ These must be set **before deploying** or the app will fail to send SMS:
 | `CALLRAIL_ACCOUNT_ID` | `<from CallRail dashboard>` | Account identifier |
 | `CALLRAIL_COMPANY_ID` | `<from CallRail dashboard>` | Company identifier |
 | `CALLRAIL_TRACKING_NUMBER` | `+19525293750` | 10DLC registered sending number |
-| `CALLRAIL_TRACKER_ID` | `<from CallRail dashboard>` | Tracker identifier |
 | `CALLRAIL_WEBHOOK_SECRET` | `<openssl rand -hex 32>` | HMAC signing secret for inbound webhooks |
+
+> **Note:** `CALLRAIL_TRACKER_ID` appears in `.env.example` but is **not read by the code** — the app discovers trackers dynamically via the CallRail API. You do not need to set it.
 
 ### New Optional Variables
 
@@ -125,6 +150,8 @@ These must be set **before deploying** or the app will fail to send SMS:
 | `SMS_PROVIDER` | `callrail` | Provider selection: `callrail`, `twilio`, or `null` |
 | `SMS_SENDER_PREFIX` | `Grins Irrigation: ` | Prefix prepended to all outbound SMS |
 | `SMS_TEST_PHONE_ALLOWLIST` | *(unset)* | Comma-separated phone numbers allowed to receive SMS. **Leave unset in production** to allow all recipients. Set in staging to restrict sends. |
+| `SIGNWELL_API_KEY` | *(empty)* | SignWell e-signature API key. Required for email/embedded contract signing in the sales pipeline. App logs a warning if unset but does not crash. |
+| `SIGNWELL_WEBHOOK_SECRET` | *(empty)* | SignWell webhook HMAC secret. Required to verify inbound signature-completion webhooks. |
 | `REDIS_URL` | *(unset)* | Redis connection URL for rate-limit tracking, webhook dedup, and worker health. **Strongly recommended** — system degrades gracefully without it but loses dedup and rate-limit caching. |
 | `ENVIRONMENT` | `development` | Set to `production` for secure cookies, proper CORS, etc. (likely already set) |
 
@@ -136,10 +163,11 @@ railway variables set \
   CALLRAIL_ACCOUNT_ID=<id> \
   CALLRAIL_COMPANY_ID=<id> \
   CALLRAIL_TRACKING_NUMBER=+19525293750 \
-  CALLRAIL_TRACKER_ID=<tracker-id> \
   CALLRAIL_WEBHOOK_SECRET=<generated-secret> \
   SMS_PROVIDER=callrail \
-  REDIS_URL=<redis-url>
+  REDIS_URL=<redis-url> \
+  SIGNWELL_API_KEY=<signwell-key> \
+  SIGNWELL_WEBHOOK_SECRET=<signwell-secret>
 ```
 
 ### Variables to Remove (Optional Cleanup)
@@ -205,22 +233,49 @@ Expected log: `sms.webhook.inbound` with status 200.
 
 ---
 
-## 5. New API Endpoints
+## 5. SignWell Webhook Configuration (External)
+
+If using e-signatures in the sales pipeline, configure the SignWell webhook:
+
+1. Log in to [SignWell](https://www.signwell.com)
+2. Navigate to **Settings → API → Webhooks**
+3. Add webhook:
+   - **URL:** `https://grinsirrigationplatform-production.up.railway.app/api/v1/webhooks/signwell`
+   - **Events:** `document_completed`
+   - **Signing Secret:** Same value as `SIGNWELL_WEBHOOK_SECRET` env var
+4. Save
+
+The webhook processes `document_completed` events to auto-advance sales pipeline entries from `send_contract` → `closed_won`.
+
+---
+
+## 6. Security Header Changes (CSP)
+
+The `Content-Security-Policy` `frame-src` directive was updated to include `https://app.signwell.com` for embedded e-signature iframes. This is baked into the code — no deployment action needed, but be aware if you have a separate WAF or CDN CSP override.
+
+**Before:** `frame-src https://js.stripe.com https://maps.google.com`
+**After:** `frame-src https://js.stripe.com https://maps.google.com https://app.signwell.com`
+
+---
+
+## 7. New API Endpoints
 
 ### Public (No Auth)
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST | `/api/v1/webhooks/callrail/inbound` | CallRail inbound SMS webhook (HMAC-verified) |
+| POST | `/api/v1/webhooks/signwell` | SignWell document completion webhook (HMAC-verified) |
 | POST | `/api/v1/checkout/create-session` | Create Stripe checkout session (rate-limited) |
 | POST | `/api/v1/checkout/manage-subscription` | Send subscription management email (rate-limited) |
 
-### Authenticated (Manager or Admin)
+### Authenticated — Campaigns & Communications
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/v1/campaigns/worker-health` | Campaign worker health status |
 | POST | `/api/v1/campaigns/audience/preview` | Preview matched recipients |
+| POST | `/api/v1/campaigns/audience/csv` | Upload CSV audience file (Admin only) |
 | PATCH | `/api/v1/campaigns/{id}` | Update draft campaign |
 | POST | `/api/v1/campaigns/{id}/cancel` | Cancel a campaign |
 | POST | `/api/v1/campaigns/{id}/retry-failed` | Retry failed recipients |
@@ -229,11 +284,84 @@ Expected log: `sms.webhook.inbound` with status 200.
 | GET | `/api/v1/campaigns/{id}/responses` | List poll responses (paginated) |
 | GET | `/api/v1/campaigns/{id}/responses/export.csv` | Export responses as CSV |
 
-### Authenticated (Admin Only)
+### Authenticated — Sales Pipeline (NEW — CRM2)
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST | `/api/v1/campaigns/audience/csv` | Upload CSV audience file |
+| GET | `/api/v1/sales/pipeline` | List sales entries with status summary counts |
+| GET | `/api/v1/sales/pipeline/{id}` | Get sales entry detail |
+| POST | `/api/v1/sales/pipeline/{id}/advance` | Advance entry one step in pipeline |
+| PUT | `/api/v1/sales/pipeline/{id}/status` | Manual status override |
+| POST | `/api/v1/sales/pipeline/{id}/sign/email` | Trigger email signing via SignWell |
+| POST | `/api/v1/sales/pipeline/{id}/sign/embedded` | Get embedded signing URL |
+| POST | `/api/v1/sales/pipeline/{id}/convert` | Convert to job (signature gated) |
+| POST | `/api/v1/sales/pipeline/{id}/force-convert` | Force convert to job without signature |
+| DELETE | `/api/v1/sales/pipeline/{id}` | Mark entry as lost |
+| GET | `/api/v1/sales/calendar/events` | List estimate appointments |
+| POST | `/api/v1/sales/calendar/events` | Create estimate appointment |
+| PUT | `/api/v1/sales/calendar/events/{id}` | Update estimate appointment |
+| DELETE | `/api/v1/sales/calendar/events/{id}` | Delete estimate appointment |
+
+### Authenticated — Contract Renewals (NEW — CRM2)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/v1/contract-renewals` | List renewal proposals |
+| GET | `/api/v1/contract-renewals/{id}` | Get proposal detail with proposed jobs |
+| POST | `/api/v1/contract-renewals/{id}/approve-all` | Bulk approve all proposed jobs |
+| POST | `/api/v1/contract-renewals/{id}/reject-all` | Bulk reject all proposed jobs |
+| POST | `/api/v1/contract-renewals/{id}/jobs/{job_id}/approve` | Approve single proposed job |
+| POST | `/api/v1/contract-renewals/{id}/jobs/{job_id}/reject` | Reject single proposed job |
+| PUT | `/api/v1/contract-renewals/{id}/jobs/{job_id}` | Modify proposed job |
+
+### Authenticated — Reschedule Requests (NEW — CRM2)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/v1/schedule/reschedule-requests` | List reschedule request queue |
+| PUT | `/api/v1/schedule/reschedule-requests/{id}/resolve` | Resolve a reschedule request |
+
+### Authenticated — Enhanced Existing Endpoints (NEW — CRM2)
+
+**Jobs (`/api/v1/jobs/{id}/...`)**:
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/{id}/complete` | Mark job as complete |
+| POST | `/{id}/invoice` | Create invoice from job |
+| POST | `/{id}/on-my-way` | Send "On My Way" SMS + log timestamp |
+| POST | `/{id}/started` | Log job started timestamp |
+| POST | `/{id}/notes` | Add note to job |
+| POST | `/{id}/photos` | Upload photo linked to job |
+| POST | `/{id}/review-push` | Send Google review request SMS |
+
+**Leads (`/api/v1/leads/{id}/...`)**:
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/{id}/move-to-jobs` | Move lead to Jobs (auto-create customer) |
+| POST | `/{id}/move-to-sales` | Move lead to Sales pipeline |
+| PUT | `/{id}/contacted` | Mark lead as contacted |
+
+**Customers (`/api/v1/customers/...`)**:
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/duplicates` | Get duplicate review queue |
+| POST | `/{id}/merge/preview` | Preview merge result |
+| GET | `/check-duplicate` | Tier 1 duplicate check by phone/email |
+| GET/POST/PUT/DELETE | `/{id}/service-preferences[/{pref_id}]` | CRUD service preferences |
+| POST/GET | `/{id}/documents[/{doc_id}]` | Upload/list/download/delete documents |
+
+**Invoices (`/api/v1/invoices/...`)**:
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/mass-notify` | Mass notify by invoice criteria |
+
+**Onboarding:**
+- `POST /onboarding/verify-session` now includes `services_with_types` in the response
+- `POST /onboarding/complete-onboarding` now accepts `service_week_preferences`
 
 ### Authorization Changes
 
@@ -243,13 +371,16 @@ Expected log: `sms.webhook.inbound` with status 200.
 
 ---
 
-## 6. Frontend Changes (Vercel)
+## 8. Frontend Changes (Vercel)
 
 ### New Pages/Routes
 
 | Route | Component | Description |
 |-------|-----------|-------------|
 | `/portal/manage-subscription` | `SubscriptionManagementPage` | Customer self-service subscription management |
+| `/contract-renewals` | `ContractRenewalsPage` | List contract renewal proposals |
+| `/contract-renewals/:id` | `ContractRenewalsPage` | View renewal proposal detail |
+| `/sales/:id` | `SalesPage` | Sales entry detail view (new sub-route) |
 
 ### Updated Components
 
@@ -258,8 +389,12 @@ Expected log: `sms.webhook.inbound` with status 200.
 - **CampaignReview** — Pre-send review screen with segment counter and recipient preview
 - **CampaignResponsesView** — View/filter/export poll responses
 - **FailedRecipientsDetail** — View and retry failed campaign recipients
-- **LeadsList** — Added Google Sheets sync button and auto-refresh
-- **CustomerList** — Updated with new filter capabilities
+- **LeadsList** — Added Google Sheets sync button, auto-refresh, move-to-jobs/sales actions, contacted status
+- **CustomerList** — Updated with duplicate detection, document management, service preferences, merge preview
+- **Dashboard** — Removed Estimates and New Leads sections
+- **SalesPage** — Full sales pipeline list view with status columns, advance/close actions, calendar events
+- **ContractRenewalsPage** — New page for reviewing and approving/rejecting renewal proposals
+- **JobDetail** — Added "On My Way", started, complete, invoice, notes, photos, review-push actions
 
 ### Vercel Configuration
 
@@ -279,24 +414,30 @@ Verify these are set (likely already configured):
 
 ---
 
-## 7. Background Jobs / Campaign Worker
+## 9. Background Jobs / Scheduled Tasks
 
-A new background job runs **every 60 seconds** inside the FastAPI process:
+### Existing Campaign Worker (unchanged)
+
+Runs **every 60 seconds** inside the FastAPI process:
 
 | Job | Schedule | Description |
 |-----|----------|-------------|
 | `process_pending_campaign_recipients` | Every 60s | Picks up pending campaign recipients and sends SMS via CallRail |
-
-### Behavior
 
 - **Time window:** Only sends during 8 AM – 9 PM CT (hardcoded)
 - **Batch size:** Max 2 recipients per tick (stays under 140 SMS/hour rate limit)
 - **Rate-limit aware:** Reads `x-rate-limit-*` headers from CallRail responses
 - **Health endpoint:** `GET /api/v1/campaigns/worker-health` shows last tick, pending count, rate-limit state
 
+### New: Duplicate Detection Sweep (CRM2)
+
+| Job | Schedule | Description |
+|-----|----------|-------------|
+| `duplicate_detection_sweep` | Daily at 1:30 AM CT | Scans customers for duplicate phone/email matches, creates `customer_merge_candidates` records with confidence scores |
+
 ### No Separate Worker Needed
 
-The scheduler runs in-process via APScheduler in the FastAPI lifespan. No additional Procfile, Railway service, or worker dyno is required.
+Both jobs run in-process via APScheduler in the FastAPI lifespan. No additional Procfile, Railway service, or worker dyno is required.
 
 ### Monitoring
 
@@ -304,13 +445,16 @@ The scheduler runs in-process via APScheduler in the FastAPI lifespan. No additi
 # Watch campaign worker ticks
 railway logs --filter "campaign.worker"
 
+# Watch duplicate detection sweep
+railway logs --filter "duplicate_detection"
+
 # Check worker health via API
 curl -H "Cookie: ..." https://<domain>/api/v1/campaigns/worker-health
 ```
 
 ---
 
-## 8. SMS Provider Switchover
+## 10. SMS Provider Switchover
 
 ### What Changed
 
@@ -340,9 +484,35 @@ Requires `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_PHONE_NUMBER` to
 
 ---
 
-## 9. No Dependency Changes
+## 11. Data Migration Script (Manual, One-Time)
 
-- **Python:** No changes to `pyproject.toml` — no new packages to install
+### Work Requests → Sales Entries Migration
+
+**Script:** `scripts/migrate_work_requests_to_sales.py`
+
+This one-time script converts existing `google_sheet_submissions` (work requests) into `sales_entries` for the new sales pipeline. It must be run **after** Alembic migrations complete (the `sales_entries` table must exist).
+
+**What it does:**
+- Maps `processing_status` to `SalesEntryStatus`
+- Resolves `customer_id` via lead linkage, phone, or email matching
+- Extracts `property_id` from customer's primary property
+- Determines `job_type` from service request fields
+- Builds notes from service/repair information
+
+**How to run:**
+
+```bash
+# On Railway (after migrations have run)
+railway run python scripts/migrate_work_requests_to_sales.py
+```
+
+**This is optional** — only needed if you want historical work requests to appear in the sales pipeline. New leads entering via Google Sheets will flow into sales entries automatically.
+
+---
+
+## 12. No Dependency Changes
+
+- **Python:** No new packages in `pyproject.toml` dependencies (only linting config changes)
 - **Frontend:** No changes to `package.json` — no new npm packages
 
 ---
@@ -351,7 +521,20 @@ Requires `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_PHONE_NUMBER` to
 
 ### Step 1: Set Environment Variables on Railway
 
-Set all required CallRail variables and REDIS_URL **before** deploying code.
+Set all required CallRail variables, SignWell variables, and REDIS_URL **before** deploying code.
+
+```bash
+railway variables set \
+  CALLRAIL_API_KEY=<key> \
+  CALLRAIL_ACCOUNT_ID=<id> \
+  CALLRAIL_COMPANY_ID=<id> \
+  CALLRAIL_TRACKING_NUMBER=+19525293750 \
+  CALLRAIL_WEBHOOK_SECRET=<generated-secret> \
+  SMS_PROVIDER=callrail \
+  REDIS_URL=<redis-url> \
+  SIGNWELL_API_KEY=<signwell-key> \
+  SIGNWELL_WEBHOOK_SECRET=<signwell-secret>
+```
 
 ### Step 2: Provision Redis (if not already available)
 
@@ -369,13 +552,13 @@ git push origin main
 
 Check Railway logs for:
 ```
-INFO  [alembic.runtime.migration] Running upgrade ... -> 20260410_100100
+INFO  [alembic.runtime.migration] Running upgrade ... -> 20260412_100100
 ```
 
 Or verify manually:
 ```bash
 railway run uv run alembic current
-# Should show: 20260410_100100 (head)
+# Should show: 20260412_100100 (head)
 ```
 
 ### Step 5: Verify App Startup
@@ -383,6 +566,7 @@ railway run uv run alembic current
 Check logs for:
 ```
 app.sms_provider_resolved provider=callrail
+scheduler.jobs.registered [..., "duplicate_detection_sweep"]
 app.startup_completed
 ```
 
@@ -390,19 +574,40 @@ app.startup_completed
 
 Follow [callrail-webhook-setup.md](./callrail-webhook-setup.md) — point the webhook URL to the production Railway domain.
 
-### Step 7: Verify Vercel Frontend
+### Step 7: Configure SignWell Webhook (if using e-signatures)
+
+1. In SignWell dashboard → Settings → API → Webhooks
+2. **URL:** `https://grinsirrigationplatform-production.up.railway.app/api/v1/webhooks/signwell`
+3. **Events:** `document_completed`
+4. **Secret:** Same as `SIGNWELL_WEBHOOK_SECRET`
+
+### Step 8: Run Data Migration Script (Optional)
+
+If you want historical work requests in the sales pipeline:
+
+```bash
+railway run python scripts/migrate_work_requests_to_sales.py
+```
+
+### Step 9: Verify Vercel Frontend
 
 Vercel should auto-deploy from main. Verify:
 - Communications dashboard loads at `/communications`
 - Campaign creation wizard works (draft mode)
 - Subscription management page loads at `/portal/manage-subscription`
+- Contract renewals page loads at `/contract-renewals`
+- Sales pipeline page loads at `/sales`
+- Dashboard no longer shows Estimates or New Leads sections
 
-### Step 8: Post-Deploy Smoke Tests
+### Step 10: Post-Deploy Smoke Tests
 
 1. **Campaign worker running:** Hit `GET /api/v1/campaigns/worker-health` — status should be `"healthy"`
 2. **Inbound webhook working:** Send a test SMS to `+19525293750` — check logs for `sms.webhook.inbound`
 3. **Google Sheets sync:** Click "Sync Sheets" on the Leads page — verify new submissions appear
 4. **Campaign create/send flow:** Create a draft campaign, add audience, review, and send (use test phone only)
+5. **Sales pipeline:** Create a test sales entry from a lead, verify it appears in the pipeline
+6. **Contract renewals:** Verify the renewal proposals page loads and shows data (if any exist)
+7. **Duplicate detection:** Check logs after 1:30 AM for `duplicate_detection` sweep results
 
 ---
 
@@ -423,12 +628,12 @@ git push origin main
 railway run uv run alembic downgrade 20260328_110000
 ```
 
-**Warning:** This drops the `campaign_responses` table and renames columns back. Any data in the new table will be lost.
+**Warning:** This drops 8 new tables and renames columns back. All data in new tables will be lost.
 
 ### Environment Variables
 
-Remove CallRail variables only if fully reverting to Twilio:
+Remove CallRail and SignWell variables only if fully reverting:
 ```bash
 railway variables set SMS_PROVIDER=twilio
-railway variables unset CALLRAIL_API_KEY CALLRAIL_ACCOUNT_ID CALLRAIL_COMPANY_ID CALLRAIL_TRACKING_NUMBER CALLRAIL_TRACKER_ID CALLRAIL_WEBHOOK_SECRET
+railway variables unset CALLRAIL_API_KEY CALLRAIL_ACCOUNT_ID CALLRAIL_COMPANY_ID CALLRAIL_TRACKING_NUMBER CALLRAIL_TRACKER_ID CALLRAIL_WEBHOOK_SECRET SIGNWELL_API_KEY SIGNWELL_WEBHOOK_SECRET
 ```
