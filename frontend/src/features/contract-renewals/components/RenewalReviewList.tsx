@@ -97,10 +97,10 @@ export function RenewalReviewList() {
                     data-testid="renewal-row"
                   >
                     <TableCell className="font-medium">
-                      {proposal.customer_id.slice(0, 8)}…
+                      {proposal.customer_name || proposal.customer_id.slice(0, 8) + '…'}
                     </TableCell>
                     <TableCell>
-                      {proposal.service_agreement_id.slice(0, 8)}…
+                      {proposal.agreement_number || proposal.service_agreement_id.slice(0, 8) + '…'}
                     </TableCell>
                     <TableCell className="text-center">
                       {proposal.proposed_job_count}

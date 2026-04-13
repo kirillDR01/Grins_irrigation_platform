@@ -17,6 +17,8 @@ export interface RenewalProposal {
   id: string;
   service_agreement_id: string;
   customer_id: string;
+  customer_name: string | null;
+  agreement_number: string | null;
   status: ProposalStatus;
   proposed_job_count: number;
   created_at: string;

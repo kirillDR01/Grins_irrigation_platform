@@ -35,6 +35,22 @@ class _Endpoints(LoggerMixin):
 _ep = _Endpoints()
 
 
+def _enrich_proposal(
+    proposal: "ContractRenewalProposal",  # noqa: F821
+) -> RenewalProposalResponse:
+    """Build response with customer_name and agreement_number from relationships."""
+    resp = RenewalProposalResponse.model_validate(proposal)
+    if proposal.customer:
+        first = getattr(proposal.customer, "first_name", "") or ""
+        last = getattr(proposal.customer, "last_name", "") or ""
+        resp.customer_name = f"{first} {last}".strip() or None
+    if proposal.service_agreement:
+        resp.agreement_number = getattr(
+            proposal.service_agreement, "agreement_number", None
+        )
+    return resp
+
+
 @router.get(
     "",
     response_model=list[RenewalProposalResponse],
@@ -79,7 +95,7 @@ async def list_proposals(
     proposals = list(result.scalars().all())
 
     _ep.log_completed("list_proposals", count=len(proposals))
-    return [RenewalProposalResponse.model_validate(p) for p in proposals]
+    return [_enrich_proposal(p) for p in proposals]
 
 
 @router.get(
@@ -107,8 +123,7 @@ async def get_proposal(
         ) from None
 
     _ep.log_completed("get_proposal", proposal_id=str(proposal_id))
-    resp: RenewalProposalResponse = RenewalProposalResponse.model_validate(proposal)
-    return resp
+    return _enrich_proposal(proposal)
 
 
 @router.post(
@@ -137,8 +152,7 @@ async def approve_all(
     await session.commit()
 
     _ep.log_completed("approve_all", proposal_id=str(proposal_id))
-    resp: RenewalProposalResponse = RenewalProposalResponse.model_validate(proposal)
-    return resp
+    return _enrich_proposal(proposal)
 
 
 @router.post(
@@ -167,8 +181,7 @@ async def reject_all(
     await session.commit()
 
     _ep.log_completed("reject_all", proposal_id=str(proposal_id))
-    resp: RenewalProposalResponse = RenewalProposalResponse.model_validate(proposal)
-    return resp
+    return _enrich_proposal(proposal)
 
 
 @router.post(

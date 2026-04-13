@@ -44,6 +44,8 @@ class RenewalProposalResponse(BaseModel):
     id: UUID
     service_agreement_id: UUID
     customer_id: UUID
+    customer_name: Optional[str] = None
+    agreement_number: Optional[str] = None
     status: ProposalStatus
     proposed_job_count: int
     created_at: datetime

@@ -138,8 +138,11 @@ export function RenewalProposalDetail({ proposalId }: Props) {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-lg">Renewal Proposal</CardTitle>
+            <CardTitle className="text-lg">
+              Renewal Proposal{proposal.customer_name ? ` — ${proposal.customer_name}` : ''}
+            </CardTitle>
             <p className="text-sm text-slate-500 mt-1">
+              {proposal.agreement_number ? `${proposal.agreement_number} · ` : ''}
               Created {format(new Date(proposal.created_at), 'MMM d, yyyy h:mm a')}
               {' · '}{proposal.proposed_job_count} proposed jobs
             </p>
