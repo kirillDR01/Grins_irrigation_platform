@@ -29,6 +29,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { MapPin } from 'lucide-react';
+import { toast } from 'sonner';
+import { getErrorMessage } from '@/core/api/client';
 import { useCreateAppointment, useUpdateAppointment } from '../hooks/useAppointmentMutations';
 import { useJobsReadyToSchedule } from '@/features/jobs/hooks';
 import { useStaff } from '@/features/staff/hooks';
@@ -161,6 +163,9 @@ export function AppointmentForm({
       onSuccess?.();
     } catch (error) {
       console.error('Failed to save appointment:', error);
+      toast.error('Failed to save appointment', {
+        description: getErrorMessage(error),
+      });
     }
   };
 
