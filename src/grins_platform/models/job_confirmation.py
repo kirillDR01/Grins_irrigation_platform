@@ -62,7 +62,10 @@ class JobConfirmationResponse(Base):
     raw_reply_body: Mapped[str] = mapped_column(Text, nullable=False)
     provider_sid: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(
-        String(30),
+        # E2E-surfaced: "reschedule_alternatives_received" (35 chars) overflows
+        # a VARCHAR(30) column, which rolled back the customer reply silently.
+        # Widened to 50 via migration 20260414_100900.
+        String(50),
         nullable=False,
         server_default="pending",
     )
