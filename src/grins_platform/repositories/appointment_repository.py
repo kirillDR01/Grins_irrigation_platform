@@ -126,10 +126,10 @@ class AppointmentRepository(LoggerMixin):
         stmt = select(Appointment).where(Appointment.id == appointment_id)
 
         if include_relationships:
-            from grins_platform.models.job import Job as _Job  # noqa: PLC0415
+            
 
             stmt = stmt.options(
-                selectinload(Appointment.job).selectinload(_Job.customer),
+                selectinload(Appointment.job).selectinload(Job.customer),
                 selectinload(Appointment.staff),
             )
 
@@ -328,10 +328,10 @@ class AppointmentRepository(LoggerMixin):
         )
 
         if include_relationships:
-            from grins_platform.models.job import Job as _Job  # noqa: PLC0415
+            
 
             stmt = stmt.options(
-                selectinload(Appointment.job).selectinload(_Job.customer),
+                selectinload(Appointment.job).selectinload(Job.customer),
                 selectinload(Appointment.staff),
             )
 
@@ -376,10 +376,10 @@ class AppointmentRepository(LoggerMixin):
         )
 
         if include_relationships:
-            from grins_platform.models.job import Job as _Job  # noqa: PLC0415
+            
 
             stmt = stmt.options(
-                selectinload(Appointment.job).selectinload(_Job.customer),
+                selectinload(Appointment.job).selectinload(Job.customer),
                 selectinload(Appointment.staff),
             )
 
@@ -420,10 +420,10 @@ class AppointmentRepository(LoggerMixin):
         )
 
         if include_relationships:
-            from grins_platform.models.job import Job as _Job  # noqa: PLC0415
+            
 
             stmt = stmt.options(
-                selectinload(Appointment.job).selectinload(_Job.customer),
+                selectinload(Appointment.job).selectinload(Job.customer),
                 selectinload(Appointment.staff),
             )
 
