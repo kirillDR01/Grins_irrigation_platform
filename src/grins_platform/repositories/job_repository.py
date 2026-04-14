@@ -410,7 +410,7 @@ class JobRepository(LoggerMixin):
         base_query = select(Job).options(
             joinedload(Job.customer),
             joinedload(Job.job_property),
-            joinedload(Job.service_agreement),
+            selectinload(Job.service_agreement),
         )
 
         if not include_deleted:
@@ -516,7 +516,7 @@ class JobRepository(LoggerMixin):
         )
 
         result = await self.session.execute(paginated_query)
-        jobs = list(result.scalars().all())
+        jobs = list(result.unique().scalars().all())
 
         self.log_completed("list_with_filters", count=len(jobs), total=total)
         return jobs, total
