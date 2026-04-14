@@ -108,7 +108,7 @@ class JobConfirmationService(LoggerMixin):
         )
 
         # 1. Correlate thread_id → original confirmation SMS
-        original = await self._find_confirmation_message(thread_id)
+        original = await self.find_confirmation_message(thread_id)
         if original is None:
             self.log_rejected(
                 "handle_confirmation",
@@ -275,26 +275,41 @@ class JobConfirmationService(LoggerMixin):
     ) -> str:
         """Build detailed cancellation SMS with service type, date/time, and phone.
 
-        Validates: Req 15.1, 15.2, 15.3
+        Uses the canonical :func:`job_type_display` map (bughunt L-1) and the
+        portable :func:`format_sms_time_12h` formatter (bughunt M-11) so the
+        template renders identically on Linux, macOS, and Windows dev
+        environments.
+
+        Validates: Req 15.1, 15.2, 15.3; bughunt L-1, M-11.
         """
+        from grins_platform.models.enums import (  # noqa: PLC0415
+            job_type_display,
+        )
+        from grins_platform.services.sms.formatters import (  # noqa: PLC0415
+            format_sms_time_12h,
+        )
+
         service_type = getattr(job, "job_type", None) if job else None
         business_phone = os.environ.get("BUSINESS_PHONE_NUMBER", "")
 
         if appt and service_type:
-            # Format the service type for display (e.g. spring_startup → Spring Startup)
-            service_display = service_type.replace("_", " ").title()
+            service_display = job_type_display(service_type)
             appt_date = getattr(appt, "scheduled_date", None)
             appt_time = getattr(appt, "time_window_start", None)
 
-            date_str = appt_date.strftime("%B %d, %Y") if appt_date else "your scheduled date"
-            time_str = appt_time.strftime("%-I:%M %p") if appt_time else "your scheduled time"
+            date_str = (
+                appt_date.strftime("%B %d, %Y") if appt_date else "your scheduled date"
+            )
+            time_str = format_sms_time_12h(appt_time) or "your scheduled time"
 
             msg = (
                 f"Your {service_display} appointment on {date_str} at {time_str} "
                 f"has been cancelled."
             )
             if business_phone:
-                msg += f" If you'd like to reschedule, please call us at {business_phone}."
+                msg += (
+                    f" If you'd like to reschedule, please call us at {business_phone}."
+                )
             else:
                 msg += " Please contact us if you'd like to reschedule."
             return msg
@@ -325,11 +340,30 @@ class JobConfirmationService(LoggerMixin):
         reschedule_req: RescheduleRequest | None = result.scalar_one_or_none()
 
         if reschedule_req is not None:
-            # Capture customer's alternative times (Req 14.3)
-            reschedule_req.requested_alternatives = {
-                "raw_text": response.raw_reply_body,
-                "received_at": datetime.now(tz=timezone.utc).isoformat(),
-            }
+            # Capture customer's alternative times (Req 14.3). bughunt M-3:
+            # customers often split the list across multiple texts
+            # ("Tue 2pm", then "or Wed morning"). Append each reply as its
+            # own entry instead of overwriting the previous one so admins
+            # see the full history.
+            now_iso = datetime.now(tz=timezone.utc).isoformat()
+            new_entry = {"text": response.raw_reply_body, "at": now_iso}
+            existing = reschedule_req.requested_alternatives
+            entries: list[dict[str, Any]]
+            if isinstance(existing, dict) and isinstance(existing.get("entries"), list):
+                # Already appended-to list — keep growing it.
+                entries = list(existing["entries"])
+            elif isinstance(existing, dict) and existing:
+                # Legacy single-reply shape ({"raw_text": ..., "received_at": ...})
+                # — preserve it as the first entry, then append the new one.
+                legacy_text = existing.get("raw_text") or existing.get("text") or ""
+                legacy_at = existing.get("received_at") or existing.get("at") or ""
+                entries = []
+                if legacy_text:
+                    entries.append({"text": legacy_text, "at": legacy_at})
+            else:
+                entries = []
+            entries.append(new_entry)
+            reschedule_req.requested_alternatives = {"entries": entries}
             response.status = "reschedule_alternatives_received"
             response.processed_at = datetime.now(tz=timezone.utc)
             await self.db.flush()
@@ -339,6 +373,7 @@ class JobConfirmationService(LoggerMixin):
                 "appointment_id": str(response.appointment_id),
                 "reschedule_request_id": str(reschedule_req.id),
                 "alternatives_text": response.raw_reply_body,
+                "alternatives_count": len(entries),
             }
 
         response.status = "needs_review"
@@ -356,13 +391,18 @@ class JobConfirmationService(LoggerMixin):
     # Correlation helper
     # ------------------------------------------------------------------
 
-    async def _find_confirmation_message(
+    async def find_confirmation_message(
         self,
         thread_id: str,
     ) -> SentMessage | None:
         """Find the original APPOINTMENT_CONFIRMATION SMS by thread_id.
 
-        Validates: CRM Changes Update 2 Req 24.7
+        Public entry point used by :class:`SMSService` to correlate an
+        inbound reply back to the outbound confirmation message (bughunt
+        L-14: the SMS router previously reached into ``_find_confirmation_message``
+        — an encapsulation leak flagged by lint).
+
+        Validates: CRM Changes Update 2 Req 24.7; bughunt L-14.
         """
         stmt = (
             select(SentMessage)
@@ -376,3 +416,8 @@ class JobConfirmationService(LoggerMixin):
         result = await self.db.execute(stmt)
         row: SentMessage | None = result.scalar_one_or_none()
         return row
+
+    # Deprecated private alias — retained until all in-tree callers migrate
+    # to :meth:`find_confirmation_message`. Remove in a follow-up once unit
+    # tests targeting the private name are updated.
+    _find_confirmation_message = find_confirmation_message

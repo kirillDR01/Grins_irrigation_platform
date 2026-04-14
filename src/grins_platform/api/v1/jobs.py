@@ -1275,18 +1275,23 @@ async def on_my_way(
             detail=f"Job {job_id} not found",
         )
 
-    # Log timestamp
-    job.on_my_way_at = datetime.now(tz=timezone.utc)
+    # bughunt L-2: persist the on_my_way_at timestamp only after the SMS
+    # actually goes out. Rollback on send failure so a later retry doesn't
+    # look like a duplicate "already on my way" to downstream observers.
+    prev_on_my_way_at = job.on_my_way_at
+    now_ts = datetime.now(tz=timezone.utc)
 
-    # Send SMS
     cust_stmt = sa_select(Customer).where(Customer.id == job.customer_id)
     cust_result = await session.execute(cust_stmt)
     customer = cust_result.scalar_one_or_none()
+
     if customer and customer.phone:
         recipient = Recipient.from_customer(customer)
         sms_service = SMSService(session)
+        job.on_my_way_at = now_ts
+        sms_succeeded = False
         try:
-            _ = await sms_service.send_message(
+            send_result = await sms_service.send_message(
                 recipient=recipient,
                 message=(
                     "We're on our way! Your technician is heading to your location now."
@@ -1295,12 +1300,22 @@ async def on_my_way(
                 consent_type="transactional",
                 job_id=job_id,
             )
+            sms_succeeded = bool(send_result.get("success"))
         except Exception:
             _endpoints.log_failed(
                 "on_my_way_sms",
                 error=None,
                 job_id=str(job_id),
             )
+
+        if not sms_succeeded:
+            # Rollback the stale timestamp so a future successful send
+            # gets recorded, not the earlier failed attempt.
+            job.on_my_way_at = prev_on_my_way_at
+    else:
+        # No phone: still stamp the timestamp so admin's action is recorded
+        # (same behaviour as before — there was nothing to fail on).
+        job.on_my_way_at = now_ts
 
     await session.flush()
     await session.refresh(job)

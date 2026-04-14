@@ -376,8 +376,12 @@ class NotificationService(LoggerMixin):
             if appt.staff is not None:
                 staff_name = getattr(appt.staff, "name", "your technician")
 
-            window_start = appt.time_window_start.strftime("%-I:%M %p")
-            window_end = appt.time_window_end.strftime("%-I:%M %p")
+            from grins_platform.services.sms.formatters import (  # noqa: PLC0415
+                format_sms_time_12h,
+            )
+
+            window_start = format_sms_time_12h(appt.time_window_start)
+            window_end = format_sms_time_12h(appt.time_window_end)
 
             sms_body = (
                 f"Reminder: You have an appointment today with "
@@ -579,8 +583,13 @@ class NotificationService(LoggerMixin):
 
         eta_text = ""
         if new_eta is not None:
+            from grins_platform.services.sms.formatters import (  # noqa: PLC0415
+                format_sms_time_12h,
+            )
+
             eta_text = (
-                f" We now expect to finish around {new_eta.strftime('%-I:%M %p')}."
+                f" We now expect to finish around "
+                f"{format_sms_time_12h(new_eta.time())}."
             )
 
         sms_body = (

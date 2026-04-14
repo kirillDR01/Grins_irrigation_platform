@@ -133,8 +133,12 @@ export function LeadsList() {
   const handleEstimateConfirmMoveToSales = useCallback(async () => {
     if (!estimateWarningLead) return;
     try {
-      await moveToSales.mutateAsync(estimateWarningLead.id);
-      toast.success(`${estimateWarningLead.name} moved to Sales`);
+      const result = await moveToSales.mutateAsync(estimateWarningLead.id);
+      if (result.merged_into_customer) {
+        toast.success(`Merged into existing customer: ${result.merged_into_customer.name}`);
+      } else {
+        toast.success(`${estimateWarningLead.name} moved to Sales`);
+      }
     } catch {
       toast.error('Failed to move lead to Sales');
     } finally {
@@ -146,8 +150,12 @@ export function LeadsList() {
     async (e: React.MouseEvent, lead: Lead) => {
       e.stopPropagation();
       try {
-        await moveToSales.mutateAsync(lead.id);
-        toast.success(`${lead.name} moved to Sales`);
+        const result = await moveToSales.mutateAsync(lead.id);
+        if (result.merged_into_customer) {
+          toast.success(`Merged into existing customer: ${result.merged_into_customer.name}`);
+        } else {
+          toast.success(`${lead.name} moved to Sales`);
+        }
       } catch {
         toast.error('Failed to move lead to Sales');
       }

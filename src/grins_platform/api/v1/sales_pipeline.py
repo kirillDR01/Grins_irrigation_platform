@@ -117,6 +117,8 @@ async def _get_signing_document(
 
 def _entry_to_response(entry: SalesEntry) -> SalesEntryResponse:
     """Build response with denormalized customer/property fields."""
+    from grins_platform.models.enums import job_type_display  # noqa: PLC0415
+
     customer = entry.customer
     prop = entry.property
     customer_name = f"{customer.first_name} {customer.last_name}" if customer else None
@@ -129,6 +131,7 @@ def _entry_to_response(entry: SalesEntry) -> SalesEntryResponse:
     resp.customer_name = customer_name
     resp.customer_phone = customer_phone
     resp.property_address = property_address
+    resp.job_type_display = job_type_display(entry.job_type) or None
     return resp  # type: ignore[no-any-return]
 
 

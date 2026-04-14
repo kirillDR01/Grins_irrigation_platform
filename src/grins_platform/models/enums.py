@@ -256,6 +256,8 @@ class LeadSituation(str, Enum):
     UPGRADE = "upgrade"
     REPAIR = "repair"
     EXPLORING = "exploring"
+    WINTERIZATION = "winterization"
+    SEASONAL_MAINTENANCE = "seasonal_maintenance"
 
 
 VALID_LEAD_STATUS_TRANSITIONS: dict[
@@ -710,6 +712,60 @@ class MergeCandidateStatus(str, Enum):
     PENDING = "pending"
     MERGED = "merged"
     DISMISSED = "dismissed"
+
+
+# =============================================================================
+# Job type display names (bughunt L-1, L-8)
+# =============================================================================
+#
+# ``jobs.job_type`` is a free-text column — agreements, lead conversions,
+# and manual jobs all seed it with slugs like ``spring_startup`` or
+# ``fall_winterization``. Both the customer-facing confirmation SMS and the
+# Sales-pipeline list render these slugs to humans, so we need a canonical
+# display map. Uncurated slugs (rare/ad-hoc values) fall through to a
+# title-cased replacement via ``job_type_display()`` so the output never
+# reads like a database identifier.
+
+JOB_TYPE_DISPLAY: dict[str, str] = {
+    "spring_startup": "Spring Startup",
+    "fall_winterization": "Fall Winterization",
+    "fall_blowout": "Fall Blowout",
+    "mid_season_inspection": "Mid-Season Inspection",
+    "monthly_visit": "Monthly Visit",
+    "winterization": "Winterization",
+    "seasonal_maintenance": "Seasonal Maintenance",
+    "small_repair": "Small Repair",
+    "new_system": "New System Installation",
+    "new_installation": "New System Installation",
+    "upgrade": "System Upgrade",
+    "system_upgrade": "System Upgrade",
+    "repair": "Repair",
+    "consultation": "Consultation",
+    "installation": "Installation",
+    "custom_installation": "Custom Installation",
+    "diagnostic": "Diagnostic",
+    "service_call": "Service Call",
+    "estimate": "Estimate Visit",
+    "hoa_irrigation_audit": "HOA Irrigation Audit",
+}
+
+
+def job_type_display(job_type: str | None) -> str:
+    """Render a ``jobs.job_type`` slug as a customer-facing display name.
+
+    Uses :data:`JOB_TYPE_DISPLAY` for known slugs; falls back to title-cased
+    underscore-to-space replacement so ad-hoc values still read reasonably
+    ("spring_startup" → "Spring Startup", "hoa_irrigation_audit" maps
+    explicitly to "HOA Irrigation Audit" rather than "Hoa Irrigation Audit").
+    Returns an empty string for ``None`` / empty input so callers can safely
+    compose templates.
+    """
+    if not job_type:
+        return ""
+    mapped = JOB_TYPE_DISPLAY.get(job_type)
+    if mapped is not None:
+        return mapped
+    return job_type.replace("_", " ").title()
 
 
 # =============================================================================

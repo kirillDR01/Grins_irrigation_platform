@@ -48,6 +48,8 @@ const SITUATION_JOB_DESCRIPTIONS: Record<LeadSituation, string> = {
   upgrade: 'Irrigation system upgrade',
   repair: 'Irrigation system repair',
   exploring: 'Irrigation consultation',
+  winterization: 'Fall winterization',
+  seasonal_maintenance: 'Seasonal maintenance visit',
 };
 
 /**

@@ -50,13 +50,20 @@ const createLeadSchema = z.object({
     .string()
     .min(7, 'Phone must be at least 7 digits')
     .max(20)
-    .regex(/^[\d\s\-()]+$/, 'Invalid phone format'),
+    .regex(/^\+?[\d\s\-().]+$/, 'Invalid phone format'),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   address: z.string().max(500).optional().or(z.literal('')),
   city: z.string().max(100).optional().or(z.literal('')),
   state: z.string().max(2).optional().or(z.literal('')),
   zip_code: z.string().max(10).optional().or(z.literal('')),
-  situation: z.enum(['new_system', 'upgrade', 'repair', 'exploring']),
+  situation: z.enum([
+    'new_system',
+    'upgrade',
+    'repair',
+    'exploring',
+    'winterization',
+    'seasonal_maintenance',
+  ]),
   notes: z.string().max(1000).optional().or(z.literal('')),
 });
 

@@ -4,7 +4,13 @@ import type { BaseEntity, PaginationParams } from '@/core/api';
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'converted' | 'lost' | 'spam';
 
 // Lead situation enum values
-export type LeadSituation = 'new_system' | 'upgrade' | 'repair' | 'exploring';
+export type LeadSituation =
+  | 'new_system'
+  | 'upgrade'
+  | 'repair'
+  | 'exploring'
+  | 'winterization'
+  | 'seasonal_maintenance';
 
 // Lead source channels (extended)
 export type LeadSource =
@@ -60,6 +66,11 @@ export interface Lead extends BaseEntity {
 }
 
 // Lead move response (CRM2 Req 12.1, 12.2, Smoothing Req 6.1)
+export interface MergedCustomerInfo {
+  id: string;
+  name: string;
+}
+
 export interface LeadMoveResponse {
   success: boolean;
   lead_id: string;
@@ -68,6 +79,7 @@ export interface LeadMoveResponse {
   sales_entry_id: string | null;
   message: string;
   requires_estimate_warning: boolean;
+  merged_into_customer?: MergedCustomerInfo | null;
 }
 
 // Lead attachment (Req 15)
@@ -228,6 +240,8 @@ export const LEAD_SITUATION_LABELS: Record<LeadSituation, string> = {
   upgrade: 'Upgrade',
   repair: 'Repair',
   exploring: 'Exploring',
+  winterization: 'Winterization',
+  seasonal_maintenance: 'Seasonal Maintenance',
 };
 
 export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {

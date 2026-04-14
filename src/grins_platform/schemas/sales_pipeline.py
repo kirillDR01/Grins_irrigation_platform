@@ -52,6 +52,9 @@ class SalesEntryResponse(BaseModel):
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None
     property_address: Optional[str] = None
+    # bughunt L-8: curated display name so the Pipeline list shows
+    # "System Installation" instead of the raw "new_system" slug.
+    job_type_display: Optional[str] = None
 
 
 class SalesCalendarEventCreate(BaseModel):

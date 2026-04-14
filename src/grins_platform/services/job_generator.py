@@ -130,6 +130,7 @@ class JobGenerator(LoggerMixin):
 
         now = datetime.now(timezone.utc)
         year = now.year
+        current_month = now.month
 
         jobs: list[Job] = []
         for job_type, description, month_start, month_end in job_specs:
@@ -139,6 +140,7 @@ class JobGenerator(LoggerMixin):
                 month_end,
                 year,
                 week_prefs,
+                current_month=current_month,
             )
             job = Job(
                 customer_id=agreement.customer_id,
@@ -174,6 +176,8 @@ class JobGenerator(LoggerMixin):
         month_end: int,
         year: int,
         week_prefs: dict[str, Any],
+        *,
+        current_month: int | None = None,
     ) -> tuple[date, date]:
         """Resolve target start/end dates for a job.
 
@@ -182,7 +186,12 @@ class JobGenerator(LoggerMixin):
         to produce a Monday-Sunday range. Otherwise fall back to the
         calendar-month default.
 
-        Validates: Requirements 30.4, 30.5
+        When no week preference is set and the generator's base ``year``
+        would put the job in the past (onboarding in November, Spring
+        Startup scheduled in April — bughunt M-4), roll the year forward
+        so the job lands in the next season instead of silently back-dating.
+
+        Validates: Requirements 30.4, 30.5; bughunt M-4.
         """
         # Try month-qualified key first (e.g. monthly_visit_5), then plain
         candidates = [f"{job_type}_{month_start}", job_type]
@@ -195,6 +204,17 @@ class JobGenerator(LoggerMixin):
                 except ValueError:  # noqa: S110
                     pass  # invalid ISO date, fall through
 
+        # bughunt M-4: if we're already past the job's start month, the
+        # upcoming occurrence is next year's. Without this, onboarding a
+        # Professional tier in November would create a Spring Startup job
+        # dated for April of the current (past) year.
+        effective_year = year
+        if current_month is not None and month_start < current_month:
+            effective_year = year + 1
+
         # Default: full calendar-month range
-        last_day = calendar.monthrange(year, month_end)[1]
-        return date(year, month_start, 1), date(year, month_end, last_day)
+        last_day = calendar.monthrange(effective_year, month_end)[1]
+        return (
+            date(effective_year, month_start, 1),
+            date(effective_year, month_end, last_day),
+        )

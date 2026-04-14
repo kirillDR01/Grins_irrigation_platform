@@ -80,13 +80,12 @@ def format_sms_time_window(
 
 
 def format_job_type_display(job_type: str | None) -> str:
-    """Render a ``jobs.job_type`` slug as a title-cased display name.
+    """Render a ``jobs.job_type`` slug as a customer-facing display name.
 
-    Not a curated map — that's bughunt L-1 / L-8 (Sprint 7). This
-    helper is the baseline used everywhere until a canonical map
-    lands; it preserves today's behaviour (``"spring_startup"`` →
-    ``"Spring Startup"``) without introducing a new divergence.
+    Delegates to :func:`grins_platform.models.enums.job_type_display` so
+    the canonical map drives both confirmation SMS and Sales pipeline
+    rendering (bughunt L-1, L-8).
     """
-    if not job_type:
-        return ""
-    return job_type.replace("_", " ").title()
+    from grins_platform.models.enums import job_type_display  # noqa: PLC0415
+
+    return job_type_display(job_type)

@@ -787,7 +787,8 @@ class SMSService(LoggerMixin):
 
         svc = JobConfirmationService(self.session)
         # Check if thread_id correlates to an APPOINTMENT_CONFIRMATION message
-        original = await svc._find_confirmation_message(thread_id)  # noqa: SLF001
+        # (bughunt L-14: use the public name now that one exists).
+        original = await svc.find_confirmation_message(thread_id)
         if original is None:
             return None
 

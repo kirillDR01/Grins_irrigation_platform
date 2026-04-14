@@ -560,6 +560,18 @@ class LeadMetricsBySourceResponse(BaseModel):
     date_to: datetime
 
 
+class MergedCustomerInfo(BaseModel):
+    """Minimal identity for a customer that absorbed a lead on move.
+
+    Emitted on ``LeadMoveResponse.merged_into_customer`` when a move-to-sales
+    or move-to-jobs call found an existing customer by phone and reused
+    them instead of creating a new record (bughunt E-BUG-D).
+    """
+
+    id: UUID
+    name: str
+
+
 class LeadMoveResponse(BaseModel):
     """Response for lead move-to-jobs or move-to-sales.
 
@@ -573,6 +585,7 @@ class LeadMoveResponse(BaseModel):
     sales_entry_id: UUID | None = None
     message: str
     requires_estimate_warning: bool = False
+    merged_into_customer: MergedCustomerInfo | None = None
 
 
 class BulkOutreachRequest(BaseModel):

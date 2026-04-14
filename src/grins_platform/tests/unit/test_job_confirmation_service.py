@@ -395,10 +395,15 @@ class TestRescheduleFollowUp:
             result["alternatives_text"]
             == "How about Tuesday at 2pm or Wednesday at 10am?"
         )
+        # bughunt M-3: replies are appended under ``entries`` so the admin
+        # queue sees multi-text follow-ups ("Tue 2pm", then "or Wed morning")
+        # instead of only the latest body.
         assert reschedule_req.requested_alternatives is not None
-        assert reschedule_req.requested_alternatives["raw_text"] == (
-            "How about Tuesday at 2pm or Wednesday at 10am?"
-        )
+        entries = reschedule_req.requested_alternatives["entries"]
+        assert len(entries) == 1
+        assert entries[0]["text"] == "How about Tuesday at 2pm or Wednesday at 10am?"
+        assert "at" in entries[0]
+        assert result["alternatives_count"] == 1
 
 
 # ---------------------------------------------------------------------------

@@ -1108,9 +1108,15 @@ async def request_google_review(
         ) from e
     except ReviewAlreadyRequestedError as e:
         _endpoints.log_rejected("request_google_review", reason="dedup_30_day")
+        # E-BUG-F: structured detail so the UI can render
+        # "Already sent within last 30 days (sent {date})"
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=str(e),
+            detail={
+                "code": "REVIEW_ALREADY_SENT",
+                "message": str(e),
+                "last_sent_at": e.last_requested_at,
+            },
         ) from e
 
     _endpoints.log_completed(

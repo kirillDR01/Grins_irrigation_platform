@@ -53,6 +53,7 @@ from grins_platform.schemas.lead import (
     LeadSubmissionResponse,
     LeadUpdate,
     ManualLeadCreate,
+    MergedCustomerInfo,
     MigrationSummary,
     PaginatedFollowUpQueueResponse,
     PaginatedLeadResponse,
@@ -114,6 +115,16 @@ class LeadService(LoggerMixin):
             "requires_estimate",
             "consultation",
             "Consultation",
+        ),
+        LeadSituation.WINTERIZATION.value: (
+            "ready_to_schedule",
+            "fall_winterization",
+            "Fall Winterization",
+        ),
+        LeadSituation.SEASONAL_MAINTENANCE.value: (
+            "ready_to_schedule",
+            "seasonal_maintenance",
+            "Seasonal Maintenance",
         ),
     }
 
@@ -920,26 +931,36 @@ class LeadService(LoggerMixin):
 
         await self.lead_repository.delete(lead_id)
 
-    async def _ensure_customer_for_lead(self, lead: Lead) -> UUID:
+    async def _ensure_customer_for_lead(
+        self,
+        lead: Lead,
+    ) -> tuple[UUID, MergedCustomerInfo | None]:
         """Auto-generate a customer from a lead if one doesn't exist.
 
-        Returns the customer_id (existing or newly created).
-        If a customer with the same phone already exists, reuses that customer.
+        Returns ``(customer_id, merged_info)``. ``merged_info`` is non-None
+        only when this call found an existing customer by phone and linked
+        the lead to them — i.e., the lead was absorbed rather than creating
+        a brand-new customer record (bughunt E-BUG-D: callers surface this
+        so the UI can toast "Merged into existing customer: {name}" instead
+        of a neutral "moved" message).
 
-        Validates: CRM2 Req 12.1, 12.2
+        Validates: CRM2 Req 12.1, 12.2; bughunt E-BUG-D.
         """
         if lead.customer_id:
-            return lead.customer_id  # type: ignore[no-any-return]
+            return lead.customer_id, None  # type: ignore[return-value]
 
         # Check for existing customer by phone first
         existing_list = await self.customer_service.lookup_by_phone(lead.phone)
         if existing_list:
-            existing_id = existing_list[0].id
+            existing = existing_list[0]
             await self.lead_repository.update(
                 lead_id=lead.id,
-                update_data={"customer_id": existing_id},
+                update_data={"customer_id": existing.id},
             )
-            return existing_id
+            first = (getattr(existing, "first_name", "") or "").strip()
+            last = (getattr(existing, "last_name", "") or "").strip()
+            full_name = " ".join(p for p in (first, last) if p) or lead.name
+            return existing.id, MergedCustomerInfo(id=existing.id, name=full_name)
 
         first_name, last_name = self.split_name(lead.name)
         customer_last_name = last_name if last_name else first_name
@@ -960,7 +981,7 @@ class LeadService(LoggerMixin):
             update_data={"customer_id": customer.id},
         )
 
-        return customer.id
+        return customer.id, None
 
     async def move_to_jobs(
         self, lead_id: UUID, *, force: bool = False
@@ -1014,7 +1035,7 @@ class LeadService(LoggerMixin):
                 reason="admin_confirmed_move_to_jobs",
             )
 
-        customer_id = await self._ensure_customer_for_lead(lead)
+        customer_id, merged_info = await self._ensure_customer_for_lead(lead)
         description = lead.job_requested or default_description
 
         # bughunt H-5: resolve or create a Property from lead.job_address
@@ -1044,11 +1065,17 @@ class LeadService(LoggerMixin):
         )
 
         self.log_completed("move_to_jobs", lead_id=str(lead_id), job_id=str(job.id))
+        message = (
+            f"Merged into existing customer: {merged_info.name}"
+            if merged_info
+            else "Lead moved to Jobs"
+        )
         return LeadMoveResponse(
             lead_id=lead_id,
             customer_id=customer_id,
             job_id=job.id,
-            message="Lead moved to Jobs",
+            message=message,
+            merged_into_customer=merged_info,
         )
 
     async def move_to_sales(self, lead_id: UUID) -> LeadMoveResponse:
@@ -1067,7 +1094,7 @@ class LeadService(LoggerMixin):
         if lead.moved_to:
             raise LeadAlreadyConvertedError(lead_id)
 
-        customer_id = await self._ensure_customer_for_lead(lead)
+        customer_id, merged_info = await self._ensure_customer_for_lead(lead)
 
         # bughunt H-6: resolve or create a Property from lead.job_address
         # so convert_to_job can carry property_id forward into the Job.
@@ -1105,11 +1132,17 @@ class LeadService(LoggerMixin):
             lead_id=str(lead_id),
             sales_entry_id=str(sales_entry.id),
         )
+        message = (
+            f"Merged into existing customer: {merged_info.name}"
+            if merged_info
+            else "Lead moved to Sales"
+        )
         return LeadMoveResponse(
             lead_id=lead_id,
             customer_id=customer_id,
             sales_entry_id=sales_entry.id,
-            message="Lead moved to Sales",
+            message=message,
+            merged_into_customer=merged_info,
         )
 
     async def get_follow_up_queue(

@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { leadApi } from '../api/leadApi';
 import type { LeadUpdate, LeadConversionRequest, FromCallRequest, BulkOutreachRequest, CreateEstimateRequest, CreateContractRequest, ManualLeadCreateRequest } from '../types';
 import { leadKeys } from './useLeads';
+import { dashboardKeys } from '@/features/dashboard/hooks/useDashboard';
 
 // Update lead mutation (status, assignment, notes, intake_tag)
 export function useUpdateLead() {
@@ -43,6 +44,7 @@ export function useDeleteLead() {
       queryClient.removeQueries({ queryKey: leadKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
       queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() });
     },
   });
 }
@@ -72,6 +74,7 @@ export function useMoveToSales() {
       queryClient.removeQueries({ queryKey: leadKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
       queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() });
     },
   });
 }
@@ -112,6 +115,7 @@ export function useCreateManualLead() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
       queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() });
     },
   });
 }

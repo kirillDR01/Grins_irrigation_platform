@@ -418,9 +418,11 @@ class TestEnsureCustomerForLead:
 
         repo = AsyncMock()
         svc = _build_service(lead_repo=repo)
-        result = await svc._ensure_customer_for_lead(lead)
+        customer_id, merged = await svc._ensure_customer_for_lead(lead)
 
-        assert result == existing_id
+        assert customer_id == existing_id
+        # Lead already linked to a customer — no merge detected.
+        assert merged is None
 
     @pytest.mark.asyncio
     async def test_ensure_customer_without_creates_new(self) -> None:
@@ -436,9 +438,11 @@ class TestEnsureCustomerForLead:
         repo.update = AsyncMock()
 
         svc = _build_service(lead_repo=repo, customer_service=customer_service)
-        result = await svc._ensure_customer_for_lead(lead)
+        customer_id, merged = await svc._ensure_customer_for_lead(lead)
 
-        assert result == new_customer.id
+        assert customer_id == new_customer.id
+        # Brand new customer — no merge info.
+        assert merged is None
         customer_service.create_customer.assert_awaited_once()
         # Verify lead linked to new customer
         repo.update.assert_awaited_once()
