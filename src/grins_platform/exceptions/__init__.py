@@ -194,6 +194,27 @@ class JobNotFoundError(FieldOperationsError):
         super().__init__(f"Job not found: {job_id}")
 
 
+class JobTargetDateEditNotAllowedError(FieldOperationsError):
+    """Raised when an admin tries to move a job's target week but the
+    job is no longer in the 'to_be_scheduled' state.
+
+    Changing the target window on an already-scheduled / in-progress /
+    completed job can leave attached appointments out of sync, so that
+    flow is blocked at the service layer. A dedicated reschedule flow
+    would be needed to move those jobs.
+    """
+
+    def __init__(self, job_id: UUID, current_status: str) -> None:
+        """Initialize with job ID and the status that blocked the edit."""
+        self.job_id = job_id
+        self.current_status = current_status
+        super().__init__(
+            "Cannot edit target dates on a job with status"
+            f" '{current_status}'; only 'to_be_scheduled' jobs can be"
+            " rewindowed from the admin Jobs tab.",
+        )
+
+
 class InvalidStatusTransitionError(FieldOperationsError):
     """Raised when an invalid job/appointment status transition is attempted.
 

@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/select';
 import { LoadingPage, ErrorMessage, WeekPicker, PropertyTags } from '@/shared/components';
 import { useJobs } from '../hooks';
+import { JobWeekEditor } from './JobWeekEditor';
 import type { Job, JobListParams, JobStatus, JobStatusLabel } from '../types';
 import {
   formatJobType,
@@ -310,19 +311,13 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
         </span>
       ),
       cell: ({ row }) => {
-        const targetStart = row.original.target_start_date;
-        if (!targetStart) {
-          return (
-            <span className="text-sm text-slate-400 italic" data-testid={`week-of-${row.original.id}`}>
-              No week set
-            </span>
-          );
-        }
+        // Inline editor for jobs in `to_be_scheduled`; renders plain text
+        // (with the due-by color cue) for other statuses. Re-fetch the
+        // list after a save so filters / sorting stay consistent.
         const colorClass = getDueByColorClass(row.original.target_end_date);
-        const [year, month, day] = targetStart.split('T')[0].split('-').map(Number);
         return (
-          <span className={`text-sm ${colorClass}`} data-testid={`week-of-${row.original.id}`}>
-            Week of {month}/{day}/{year}
+          <span className={`text-sm ${colorClass}`}>
+            <JobWeekEditor job={row.original} onSaved={() => refetch()} />
           </span>
         );
       },

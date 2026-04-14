@@ -40,6 +40,7 @@ from grins_platform.exceptions import (
     InvalidInvoiceOperationError,
     InvalidStatusTransitionError,
     JobNotFoundError,
+    JobTargetDateEditNotAllowedError,
     PropertyCustomerMismatchError,
     PropertyNotFoundError,
     ServiceOfferingInactiveError,
@@ -728,6 +729,16 @@ async def update_job(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Job not found: {e.job_id}",
+        ) from e
+    except JobTargetDateEditNotAllowedError as e:
+        _endpoints.log_rejected(
+            "update_job",
+            reason="target_date_edit_not_allowed",
+            current_status=e.current_status,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
         ) from e
     else:
         _endpoints.log_completed("update_job", job_id=str(job_id))

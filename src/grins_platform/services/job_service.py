@@ -19,6 +19,7 @@ from grins_platform.exceptions import (
     CustomerNotFoundError,
     InvalidStatusTransitionError,
     JobNotFoundError,
+    JobTargetDateEditNotAllowedError,
     PropertyCustomerMismatchError,
     PropertyNotFoundError,
     ServiceOfferingInactiveError,
@@ -370,6 +371,23 @@ class JobService(LoggerMixin):
 
         # Build update dict
         update_data = data.model_dump(exclude_unset=True)
+
+        # Target-date edits are only allowed while the job is still
+        # waiting to be scheduled. Once an appointment is attached
+        # (status transitions to scheduled / in_progress / completed),
+        # moving the target window here would leave the appointment out
+        # of sync. A dedicated reschedule flow would need to move both.
+        editing_target_dates = (
+            "target_start_date" in update_data or "target_end_date" in update_data
+        )
+        if editing_target_dates and job.status != JobStatus.TO_BE_SCHEDULED.value:
+            self.log_rejected(
+                "update_job",
+                reason="target_date_edit_not_allowed",
+                job_id=str(job_id),
+                current_status=str(job.status),
+            )
+            raise JobTargetDateEditNotAllowedError(job_id, str(job.status))
 
         # Convert enums and decimals
         if update_data.get("category"):

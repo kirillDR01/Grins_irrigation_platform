@@ -163,6 +163,11 @@ export interface JobUpdate {
   source?: JobSource | null;
   source_details?: Record<string, unknown> | null;
   payment_collected_on_site?: boolean;
+  // Admin-editable target service window. Must be sent together as a
+  // Mon-Sun pair (target_end_date = target_start_date + 6 days). Backend
+  // rejects edits on jobs whose status is past 'to_be_scheduled'.
+  target_start_date?: string | null;
+  target_end_date?: string | null;
 }
 
 // Job status update request

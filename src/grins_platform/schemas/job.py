@@ -14,7 +14,9 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from datetime import timedelta
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from grins_platform.models.enums import (
     JobCategory,
@@ -191,6 +193,23 @@ class JobUpdate(BaseModel):
         max_length=255,
         description="Job summary",
     )
+    target_start_date: date | None = Field(
+        default=None,
+        description=(
+            "Start of the admin-editable target service window (Monday)."
+            " Used to move a job's preferred week after onboarding —"
+            " e.g. when a customer calls in to reschedule."
+            " Must be accompanied by target_end_date."
+        ),
+    )
+    target_end_date: date | None = Field(
+        default=None,
+        description=(
+            "End of the admin-editable target service window (Sunday)."
+            " Must be target_start_date + 6 days to keep the Mon-Sun"
+            " week model consistent with onboarding-time selections."
+        ),
+    )
 
     @field_validator("job_type")  # type: ignore[misc,untyped-decorator]
     @classmethod
@@ -199,6 +218,54 @@ class JobUpdate(BaseModel):
         if v is None:
             return None
         return v.strip().lower()
+
+    @model_validator(mode="after")
+    def validate_target_window(self) -> "JobUpdate":
+        """Validate the target_start_date / target_end_date pair.
+
+        Rules:
+          - Both must be provided together (or both omitted).
+          - target_start_date must be a Monday (weekday() == 0).
+          - target_end_date must equal target_start_date + 6 days
+            (Mon-Sun, matching the onboarding week model).
+          - The start date must fall within [today - 7 days,
+            today + 2 years] to catch obvious fat-finger errors while
+            still allowing a same-week move at the start of the week.
+        """
+        start = self.target_start_date
+        end = self.target_end_date
+        if start is None and end is None:
+            return self
+        if start is None or end is None:
+            msg = (
+                "target_start_date and target_end_date must be provided"
+                " together (or both omitted)."
+            )
+            raise ValueError(msg)
+        if start.weekday() != 0:
+            msg = (
+                f"target_start_date must be a Monday; got {start.isoformat()}"
+                f" (weekday={start.weekday()})."
+            )
+            raise ValueError(msg)
+        expected_end = start + timedelta(days=6)
+        if end != expected_end:
+            msg = (
+                "target_end_date must equal target_start_date + 6 days"
+                f" (expected {expected_end.isoformat()}, got {end.isoformat()})."
+            )
+            raise ValueError(msg)
+        today = date.today()
+        earliest = today - timedelta(days=7)
+        latest = today + timedelta(days=365 * 2)
+        if start < earliest or start > latest:
+            msg = (
+                "target_start_date is out of the allowed range"
+                f" [{earliest.isoformat()}, {latest.isoformat()}];"
+                f" got {start.isoformat()}."
+            )
+            raise ValueError(msg)
+        return self
 
 
 class JobStatusUpdate(BaseModel):
