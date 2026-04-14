@@ -324,6 +324,56 @@ class TestCompleteOnboardingTierCompleteness:
     @patch(
         "grins_platform.services.onboarding_service.stripe.checkout.Session.retrieve",
     )
+    async def test_applies_chosen_week_to_existing_jobs(
+        self,
+        mock_retrieve: MagicMock,
+    ) -> None:
+        """Chosen Monday rewrites job target_start_date/target_end_date.
+
+        Jobs are created at Stripe-webhook time with a full-month
+        default. When the customer submits an explicit preferred week at
+        onboarding completion, that job's target range must shrink to
+        the Mon-Sun of the chosen week in-place.
+        """
+        import datetime as _dt
+
+        mock_retrieve.return_value = SimpleNamespace(
+            subscription="sub_123",
+            customer_details=None,
+        )
+        spring_job = MagicMock()
+        spring_job.job_type = "spring_startup"
+        spring_job.target_start_date = _dt.date(2026, 4, 1)
+        spring_job.target_end_date = _dt.date(2026, 4, 30)
+        spring_job.property_id = None
+        fall_job = MagicMock()
+        fall_job.job_type = "fall_winterization"
+        fall_job.target_start_date = _dt.date(2026, 10, 1)
+        fall_job.target_end_date = _dt.date(2026, 10, 31)
+        fall_job.property_id = None
+
+        agreement = _make_agreement(tier_included=_essential_tier_included())
+        agreement.jobs = [spring_job, fall_job]
+        svc = _make_service(agreement)
+
+        await svc.complete_onboarding(
+            "cs_test_123",
+            service_week_preferences={
+                "spring_startup": "2026-04-20",  # Monday of week
+                "fall_winterization": None,       # No preference
+            },
+        )
+        # Spring job now spans Mon Apr 20 - Sun Apr 26
+        assert spring_job.target_start_date == _dt.date(2026, 4, 20)
+        assert spring_job.target_end_date == _dt.date(2026, 4, 26)
+        # Fall job kept its default full-month range (null = no preference)
+        assert fall_job.target_start_date == _dt.date(2026, 10, 1)
+        assert fall_job.target_end_date == _dt.date(2026, 10, 31)
+
+    @pytest.mark.asyncio
+    @patch(
+        "grins_platform.services.onboarding_service.stripe.checkout.Session.retrieve",
+    )
     async def test_persists_full_agreement_snapshot(
         self,
         mock_retrieve: MagicMock,

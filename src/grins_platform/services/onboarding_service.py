@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from datetime import date
 from typing import TYPE_CHECKING, Any
 
 import stripe
@@ -20,6 +21,7 @@ from grins_platform.log_config import LoggerMixin
 from grins_platform.models.customer import Customer
 from grins_platform.models.service_agreement import ServiceAgreement
 from grins_platform.services.stripe_config import StripeSettings
+from grins_platform.utils.week_alignment import align_to_week
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -74,6 +76,33 @@ class IncompleteServiceWeekPreferencesError(OnboardingError):
             "service_week_preferences incomplete: missing "
             f"{sorted(self.missing_job_types)}",
         )
+
+
+def _lookup_week_preference(
+    prefs: dict[str, Any],
+    job_type: str,
+    month_start: int | None,
+) -> str | None:
+    """Return the ISO Monday string for a job, trying month-qualified key first.
+
+    Mirrors JobGenerator._resolve_dates so job_generation-time and
+    onboarding-completion-time behavior stay consistent. For
+    ``monthly_visit``-style jobs, the key is ``{job_type}_{month}``
+    (e.g. ``monthly_visit_5``); for other service types, it's just
+    ``{job_type}``.
+
+    Returns ``None`` when the customer actively chose "No preference"
+    (value is null) or when the key is absent.
+    """
+    candidates: list[str] = []
+    if month_start is not None:
+        candidates.append(f"{job_type}_{month_start}")
+    candidates.append(job_type)
+    for key in candidates:
+        val = prefs.get(key)
+        if isinstance(val, str) and val:
+            return val
+    return None
 
 
 def expected_job_types_for_tier(tier: Any) -> set[str]:
@@ -386,9 +415,31 @@ class OnboardingService(LoggerMixin):
             update_data,
         )
 
-        # Update all linked jobs with property_id
+        # Update all linked jobs with property_id AND apply the customer's
+        # chosen week to each job's target date range.
+        #
+        # Jobs are created upstream at webhook time (before the customer
+        # has selected weeks), so their target dates default to the full
+        # calendar month. Now that the customer has answered, re-apply
+        # the selections in-place. A `null` value means "no preference"
+        # — leave the default full-month range untouched.
         for job in agreement.jobs:
             job.property_id = prop.id
+            month_start = (
+                job.target_start_date.month
+                if job.target_start_date
+                else None
+            )
+            pref_iso = _lookup_week_preference(prefs, job.job_type, month_start)
+            if pref_iso:
+                try:
+                    chosen = date.fromisoformat(pref_iso)
+                    job.target_start_date, job.target_end_date = align_to_week(
+                        chosen,
+                    )
+                except ValueError:
+                    # Malformed ISO — skip, keep default month range
+                    pass
         await self.session.flush()
 
         # Update customer preferred_service_times
