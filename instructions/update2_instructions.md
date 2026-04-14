@@ -158,10 +158,22 @@ This is the core flow of how a customer moves through the system. Every record e
               specific date, time, and staff)
                           |
                   Appointment created on calendar
-                  (Job status stays: TO BE SCHEDULED)
-                  (Appointment status: SCHEDULED / unconfirmed)
+                  (Job status: TO BE SCHEDULED -> SCHEDULED)
+                  (Appointment status: DRAFT)
+                  (Dotted border, grayed-out on calendar)
+                  (NO SMS sent yet — draft is silent)
+                          |
+             ========= DRAFT MODE =========
+             Admin can move/delete draft appointments
+             freely — no SMS is ever sent for drafts.
+             When ready, admin clicks "Send Confirmation"
+             (per-appointment, per-day, or bulk "Send All").
                           |
              ========= SMS #1: CONFIRMATION REQUEST =========
+                          |
+                  Admin clicks "Send Confirmation"
+                  (Appointment status: DRAFT -> SCHEDULED)
+                  (Dashed border, muted color on calendar)
                           |
                   [SYSTEM -> CUSTOMER]
                   "Your appointment on [date] [time] has been
@@ -197,11 +209,20 @@ This is the core flow of how a customer moves through the system. Every record e
     at [time]!"            |           |
               |           |           |
    Appointment status     |    [SYSTEM -> CUSTOMER]
-   -> CONFIRMED           |    "Your appointment has
-   (solid border,         |     been cancelled."
-    full color on         |           |
-    calendar)             |    Appointment status
+   -> CONFIRMED           |    "Your [service type] appointment
+   (solid border,         |     on [date] at [time] has been
+    full color on         |     cancelled. If you'd like to
+    calendar)             |     reschedule, please call us
+              |           |     at [business phone]."
+              |           |           |
+              |           |    Appointment status
               |           |    -> CANCELLED
+              |           |    (If was SCHEDULED/CONFIRMED,
+              |           |     cancellation SMS sent.
+              |           |     If was DRAFT, no SMS.)
+              |           |    On-site timestamps cleared.
+              |           |    If last appointment for job,
+              |           |    job reverts: SCHEDULED -> TO BE SCHEDULED.
               |           |    Admin is notified
               |           |
               |    [SYSTEM -> CUSTOMER]
@@ -209,9 +230,18 @@ This is the core flow of how a customer moves through the system. Every record e
               |     request. We'll be in touch
               |     with a new time."
               |           |
+              |    THEN a follow-up SMS:
+              |    "We'd be happy to reschedule.
+              |     Please reply with 2-3 dates
+              |     and times that work for you
+              |     and we'll get you set up."
+              |           |
               |    Reschedule request created
               |    -> appears in admin Reschedule
               |       Requests queue
+              |    -> customer's reply with
+              |       alternative times captured
+              |       in requested_alternatives
               |    -> admin reviews, picks new
               |       date/time, and reschedules
               |    -> when rescheduled, a NEW
@@ -230,24 +260,34 @@ This is the core flow of how a customer moves through the system. Every record e
               |
           (No customer reply expected)
           Logs on_my_way_at timestamp.
-          (Job still: TO BE SCHEDULED)
-          (Appointment still: CONFIRMED)
+          Job status: SCHEDULED (unchanged)
+          Appointment: CONFIRMED -> EN_ROUTE
+          (also works from SCHEDULED if unconfirmed)
               |
           "Job Started" -> Logs started_at timestamp.
               |             No SMS sent.
-              |             Job: TO BE SCHEDULED -> IN PROGRESS
-              |             (Appointment still: CONFIRMED)
+              |             Job: SCHEDULED -> IN PROGRESS
+              |             Appointment: EN_ROUTE -> IN PROGRESS
+              |             (or CONFIRMED -> IN PROGRESS if
+              |              On My Way was skipped)
               |
           During the visit:
               |  - Add notes and photos
-              |  - Collect payment on site
-              |  - Create and send invoice
+              |  - Collect payment on site (one-off jobs)
+              |  - Create and send invoice (one-off jobs)
+              |  - Service agreement jobs show "Covered by
+              |    [Agreement Name]" — no payment needed
               |
           "Job Complete" -> Job: IN PROGRESS -> COMPLETED
-              |              (payment/invoice check first —
-              |               warning if neither exists)
-              |              (Appointment still: CONFIRMED —
-              |               not auto-completed)
+              |              Appointment: IN PROGRESS -> COMPLETED
+              |              (or directly from any non-terminal
+              |               status if steps were skipped)
+              |              Payment check order:
+              |              1. Active service agreement? -> skip warning
+              |              2. Payment collected on site? -> skip warning
+              |              3. Invoice exists? -> skip warning
+              |              4. None of above? -> show warning
+              |              On-site timestamps cleared on cancel.
               |
              ========= SMS #3: GOOGLE REVIEW (Optional) =========
               |
@@ -307,7 +347,7 @@ Here's the step-by-step:
 3. **Contact them** — call or text the lead
 4. **Click "Mark Contacted"** — this changes the status to "Contacted (Awaiting Response)" and timestamps the contact
 5. **Based on the conversation**, route them:
-   - **"Move to Jobs"** — The job is confirmed and ready to schedule. The system auto-creates a customer record and a job with status "To Be Scheduled." The lead disappears from the Leads tab. **Note:** If the lead's situation maps to "requires estimate" (e.g., Exploring, New System, Upgrade), the system will automatically redirect the lead to the Sales pipeline instead of creating a job — this prevents unestimated work from entering the Jobs tab.
+   - **"Move to Jobs"** — The job is confirmed and ready to schedule. The system auto-creates a customer record and a job with status "To Be Scheduled." The lead disappears from the Leads tab. **Note:** If the lead's situation maps to "requires estimate" (e.g., Exploring, New System, Upgrade), the system will show a confirmation modal: "This job type typically requires an estimate. Move to Jobs anyway, or move to Sales for the estimate workflow?" with three options: Move to Jobs (proceed with override), Move to Sales (redirect to Sales pipeline), or Cancel.
    - **"Move to Sales"** — They need an estimate before committing. The system auto-creates a customer record and a Sales pipeline entry with status "Schedule Estimate." The lead disappears from the Leads tab.
    - **Delete** — They're not interested or it's spam.
 
@@ -336,27 +376,33 @@ One important concept: **job status and appointment status are two separate thin
 
 | Status | Meaning |
 |--------|---------|
-| **To Be Scheduled** | Job exists but hasn't started yet. This is the status from creation through scheduling and confirmation. |
+| **To Be Scheduled** | Job exists but no appointment has been placed on the calendar yet. |
+| **Scheduled** | An appointment has been created on the calendar for this job. Auto-set when appointment is created, reverts if last appointment is cancelled. |
 | **In Progress** | Technician has started work on the job (set by clicking "Job Started"). |
-| **Completed** | Work is done (triggered by clicking "Job Complete") |
-| **Cancelled** | Job was cancelled |
+| **Completed** | Work is done (triggered by clicking "Job Complete"). Both job and appointment transition to Completed together. |
+| **Cancelled** | Job was cancelled. On-site timestamps are cleared. |
 
-**Status progression:** "On My Way" does not change the job status — it only logs a timestamp and sends an SMS. "Job Started" transitions the job from "To Be Scheduled" to "In Progress." "Job Complete" transitions from "In Progress" to "Completed."
+**Status progression:** Creating an appointment transitions the job from "To Be Scheduled" to "Scheduled." "On My Way" does not change the job status — it transitions the appointment to "En Route." "Job Started" transitions the job to "In Progress" and the appointment to "In Progress." "Job Complete" transitions both job and appointment to "Completed." Cancelling the last appointment reverts the job from "Scheduled" back to "To Be Scheduled."
 
-**Appointment status** tracks the scheduling confirmation:
+**Appointment status** tracks the scheduling and field progression:
 
 | Status | Meaning |
 |--------|---------|
-| **Scheduled** | Appointment created on the calendar, SMS sent, waiting for customer response (shows as dashed border, muted) |
+| **Draft** | Appointment placed on the calendar but customer has NOT been notified yet. No SMS sent. Shows as dotted border, grayed-out on calendar. Admin can move/delete silently. |
+| **Scheduled** | Confirmation SMS has been sent, waiting for customer response (shows as dashed border, muted color). Set when admin clicks "Send Confirmation." |
 | **Confirmed** | Customer replied "Y" (shows as solid border, full color) |
-| **En Route** | Exists in the model but not currently auto-set by "On My Way" |
-| **Cancelled** | Customer replied "C" or admin cancelled |
+| **En Route** | Admin clicked "On My Way" — technician is heading to the property. Set automatically from Confirmed or Scheduled. |
+| **In Progress** | Admin clicked "Job Started" — work has begun. Set automatically from En Route (or Confirmed if On My Way was skipped). |
+| **Completed** | Admin clicked "Job Complete" — work is done. Set automatically alongside job completion. |
+| **Cancelled** | Customer replied "C" or admin cancelled. If was Draft, no SMS sent. If was Scheduled/Confirmed, cancellation SMS sent with appointment details. On-site timestamps cleared. |
 
 **Key points:**
-- Creating an appointment on the schedule does **not** change the job's status. The job stays "To Be Scheduled" until "Job Started" is clicked.
-- "Job Started" transitions the job to "In Progress." "Job Complete" transitions from "In Progress" to "Completed."
-- Completing a job does **not** auto-complete the appointment. The appointment stays in its current status (usually "Confirmed") even after the job is done.
-- The two tracks (job status and appointment status) are fully independent — no automatic sync between them.
+- Appointments now start as **Draft** (not Scheduled). No SMS is sent until the admin explicitly clicks "Send Confirmation."
+- Moving a Draft appointment on the calendar is silent — no SMS. Moving a Scheduled or Confirmed appointment sends a reschedule notification SMS and resets to Scheduled.
+- Deleting a Draft appointment is silent. Deleting a Scheduled or Confirmed appointment sends a cancellation SMS.
+- "On My Way" transitions the appointment to En Route. "Job Started" transitions both job and appointment to In Progress. "Job Complete" transitions both to Completed.
+- Job and appointment statuses now progress together through the on-site workflow. Skip scenarios are handled gracefully (e.g., clicking "Job Complete" without "Job Started" still completes both).
+- Service agreement jobs show "Covered by [Agreement Name]" and skip the payment warning on completion.
 
 ---
 
