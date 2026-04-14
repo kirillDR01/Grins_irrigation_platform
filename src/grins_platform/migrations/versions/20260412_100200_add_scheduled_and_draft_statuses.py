@@ -8,8 +8,6 @@ Requirements: 5.8, 8.1
 from collections.abc import Sequence
 from typing import Union
 
-from alembic import op
-
 revision: str = "20260412_100200"
 down_revision: Union[str, None] = "20260412_100100"
 branch_labels: Union[str, Sequence[str], None] = None
@@ -17,15 +15,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Add SCHEDULED to JobStatus enum (after to_be_scheduled)
-    op.execute(
-        "ALTER TYPE jobstatus ADD VALUE IF NOT EXISTS 'scheduled' AFTER 'to_be_scheduled'"
-    )
-
-    # Add DRAFT to AppointmentStatus enum (after pending)
-    op.execute(
-        "ALTER TYPE appointmentstatus ADD VALUE IF NOT EXISTS 'draft' AFTER 'pending'"
-    )
+    # No-op: Job.status and Appointment.status are String(50) columns,
+    # not PostgreSQL native enum types. New values ('scheduled', 'draft')
+    # are enforced by the Python-side enums in enums.py, not at the DB level.
+    pass
 
 
 def downgrade() -> None:
