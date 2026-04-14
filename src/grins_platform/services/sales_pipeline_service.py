@@ -13,6 +13,7 @@ from sqlalchemy import select
 
 from grins_platform.exceptions import (
     InvalidSalesTransitionError,
+    MissingSigningDocumentError,
     SalesEntryNotFoundError,
     SignatureRequiredError,
 )
@@ -132,6 +133,22 @@ class SalesPipelineService(LoggerMixin):
 
         if target not in VALID_SALES_TRANSITIONS.get(current, set()):
             raise InvalidSalesTransitionError(current.value, target.value)
+
+        # Gate: advancing into ``pending_approval`` requires a signing
+        # document on file. The ``/sign/email`` and ``/sign/in-person``
+        # endpoints already enforce this, but manual pipeline advance
+        # skipped the check — admins could move to awaiting-signature
+        # without anything actually sent out (bughunt M-10).
+        if (
+            target == SalesEntryStatus.PENDING_APPROVAL
+            and not entry.signwell_document_id
+        ):
+            self.log_rejected(
+                "advance_status",
+                entry_id=str(entry_id),
+                reason="missing_signing_document",
+            )
+            raise MissingSigningDocumentError(entry_id)
 
         entry.status = target.value
         entry.updated_at = datetime.now(tz=timezone.utc)

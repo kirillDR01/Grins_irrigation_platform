@@ -18,7 +18,7 @@ from collections.abc import Awaitable
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import TypeVar
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 from uuid import uuid4
 
 import pytest
@@ -49,41 +49,51 @@ def _run_async(coro: Awaitable[_T]) -> _T:
 # ---------------------------------------------------------------------------
 
 # Non-terminal job statuses that can be reached by on-site buttons
-on_site_job_statuses = st.sampled_from([
-    JobStatus.TO_BE_SCHEDULED,
-    JobStatus.SCHEDULED,
-    JobStatus.IN_PROGRESS,
-])
+on_site_job_statuses = st.sampled_from(
+    [
+        JobStatus.TO_BE_SCHEDULED,
+        JobStatus.SCHEDULED,
+        JobStatus.IN_PROGRESS,
+    ]
+)
 
 # All non-terminal job statuses
-non_terminal_job_statuses = st.sampled_from([
-    JobStatus.TO_BE_SCHEDULED,
-    JobStatus.SCHEDULED,
-    JobStatus.IN_PROGRESS,
-])
+non_terminal_job_statuses = st.sampled_from(
+    [
+        JobStatus.TO_BE_SCHEDULED,
+        JobStatus.SCHEDULED,
+        JobStatus.IN_PROGRESS,
+    ]
+)
 
 # Terminal job statuses
-terminal_job_statuses = st.sampled_from([
-    JobStatus.COMPLETED,
-    JobStatus.CANCELLED,
-])
+terminal_job_statuses = st.sampled_from(
+    [
+        JobStatus.COMPLETED,
+        JobStatus.CANCELLED,
+    ]
+)
 
 # Non-terminal appointment statuses
-non_terminal_appt_statuses = st.sampled_from([
-    AppointmentStatus.PENDING,
-    AppointmentStatus.DRAFT,
-    AppointmentStatus.SCHEDULED,
-    AppointmentStatus.CONFIRMED,
-    AppointmentStatus.EN_ROUTE,
-    AppointmentStatus.IN_PROGRESS,
-])
+non_terminal_appt_statuses = st.sampled_from(
+    [
+        AppointmentStatus.PENDING,
+        AppointmentStatus.DRAFT,
+        AppointmentStatus.SCHEDULED,
+        AppointmentStatus.CONFIRMED,
+        AppointmentStatus.EN_ROUTE,
+        AppointmentStatus.IN_PROGRESS,
+    ]
+)
 
 # Terminal appointment statuses
-terminal_appt_statuses = st.sampled_from([
-    AppointmentStatus.COMPLETED,
-    AppointmentStatus.CANCELLED,
-    AppointmentStatus.NO_SHOW,
-])
+terminal_appt_statuses = st.sampled_from(
+    [
+        AppointmentStatus.COMPLETED,
+        AppointmentStatus.CANCELLED,
+        AppointmentStatus.NO_SHOW,
+    ]
+)
 
 # All appointment statuses
 all_appt_statuses = st.sampled_from(list(AppointmentStatus))
@@ -95,16 +105,20 @@ all_job_statuses = st.sampled_from(list(JobStatus))
 on_site_actions = st.sampled_from(["on_my_way", "started", "complete"])
 
 # Appointment statuses valid for On My Way
-on_my_way_source_statuses = st.sampled_from([
-    AppointmentStatus.CONFIRMED,
-    AppointmentStatus.SCHEDULED,
-])
+on_my_way_source_statuses = st.sampled_from(
+    [
+        AppointmentStatus.CONFIRMED,
+        AppointmentStatus.SCHEDULED,
+    ]
+)
 
 # Appointment statuses valid for Started
-started_source_statuses = st.sampled_from([
-    AppointmentStatus.EN_ROUTE,
-    AppointmentStatus.CONFIRMED,
-])
+started_source_statuses = st.sampled_from(
+    [
+        AppointmentStatus.EN_ROUTE,
+        AppointmentStatus.CONFIRMED,
+    ]
+)
 
 # Active appointment count (0 = last appointment, 1+ = others exist)
 active_appointment_counts = st.integers(min_value=0, max_value=5)
@@ -115,9 +129,7 @@ active_appointment_counts = st.integers(min_value=0, max_value=5)
 # ---------------------------------------------------------------------------
 
 
-def _simulate_on_my_way(
-    job_status: str, appt_status: str
-) -> tuple[str, str]:
+def _simulate_on_my_way(job_status: str, appt_status: str) -> tuple[str, str]:
     """Simulate On My Way and return (new_job_status, new_appt_status)."""
     new_appt = appt_status
     if appt_status in (
@@ -128,9 +140,7 @@ def _simulate_on_my_way(
     return job_status, new_appt
 
 
-def _simulate_started(
-    job_status: str, appt_status: str
-) -> tuple[str, str]:
+def _simulate_started(job_status: str, appt_status: str) -> tuple[str, str]:
     """Simulate Job Started and return (new_job_status, new_appt_status)."""
     new_job = job_status
     if job_status in (
@@ -148,9 +158,7 @@ def _simulate_started(
     return new_job, new_appt
 
 
-def _simulate_complete(
-    job_status: str, appt_status: str
-) -> tuple[str, str]:
+def _simulate_complete(job_status: str, appt_status: str) -> tuple[str, str]:
     """Simulate Job Complete and return (new_job_status, new_appt_status)."""
     new_job = JobStatus.COMPLETED.value
     new_appt = appt_status
@@ -198,10 +206,12 @@ class TestProperty1JobStatusTransitionValidity:
             )
 
     @given(
-        job_status=st.sampled_from([
-            JobStatus.IN_PROGRESS,
-            JobStatus.SCHEDULED,
-        ]),
+        job_status=st.sampled_from(
+            [
+                JobStatus.IN_PROGRESS,
+                JobStatus.SCHEDULED,
+            ]
+        ),
     )
     @settings(max_examples=50, deadline=None)
     def test_complete_produces_valid_job_transition(
@@ -265,9 +275,7 @@ class TestProperty2AppointmentStatusTransitionValidity:
         appt_status: AppointmentStatus,
     ) -> None:
         """On My Way produces EN_ROUTE which is valid from CONFIRMED/SCHEDULED."""
-        _, new_appt = _simulate_on_my_way(
-            JobStatus.SCHEDULED.value, appt_status.value
-        )
+        _, new_appt = _simulate_on_my_way(JobStatus.SCHEDULED.value, appt_status.value)
         valid = VALID_APPOINTMENT_TRANSITIONS.get(appt_status.value, [])
         assert new_appt in valid, (
             f"On My Way produced invalid transition: "
@@ -281,9 +289,7 @@ class TestProperty2AppointmentStatusTransitionValidity:
         appt_status: AppointmentStatus,
     ) -> None:
         """Started produces IN_PROGRESS which is valid from EN_ROUTE/CONFIRMED."""
-        _, new_appt = _simulate_started(
-            JobStatus.SCHEDULED.value, appt_status.value
-        )
+        _, new_appt = _simulate_started(JobStatus.SCHEDULED.value, appt_status.value)
         valid = VALID_APPOINTMENT_TRANSITIONS.get(appt_status.value, [])
         assert new_appt in valid, (
             f"Started produced invalid transition: "
@@ -297,9 +303,7 @@ class TestProperty2AppointmentStatusTransitionValidity:
         appt_status: AppointmentStatus,
     ) -> None:
         """Complete produces COMPLETED which is valid from any non-terminal."""
-        _, new_appt = _simulate_complete(
-            JobStatus.IN_PROGRESS.value, appt_status.value
-        )
+        _, new_appt = _simulate_complete(JobStatus.IN_PROGRESS.value, appt_status.value)
         assert new_appt == AppointmentStatus.COMPLETED.value
         # COMPLETED must be reachable from the source status
         # (the endpoint does a direct set, not a validated transition)
@@ -313,9 +317,7 @@ class TestProperty2AppointmentStatusTransitionValidity:
         appt_status: AppointmentStatus,
     ) -> None:
         """Complete does not change already-terminal appointment status."""
-        _, new_appt = _simulate_complete(
-            JobStatus.IN_PROGRESS.value, appt_status.value
-        )
+        _, new_appt = _simulate_complete(JobStatus.IN_PROGRESS.value, appt_status.value)
         assert new_appt == appt_status.value
 
 
@@ -348,9 +350,7 @@ class TestProperty3JobAppointmentStatusConsistency:
         appt_status: AppointmentStatus,
     ) -> None:
         """Started transitions both job and appointment together."""
-        new_job, new_appt = _simulate_started(
-            job_status.value, appt_status.value
-        )
+        new_job, new_appt = _simulate_started(job_status.value, appt_status.value)
         # If job changed, appointment should also change
         if new_job != job_status.value:
             assert new_appt != appt_status.value, (
@@ -369,9 +369,7 @@ class TestProperty3JobAppointmentStatusConsistency:
         appt_status: AppointmentStatus,
     ) -> None:
         """Complete transitions both job and appointment to COMPLETED."""
-        new_job, new_appt = _simulate_complete(
-            job_status.value, appt_status.value
-        )
+        new_job, new_appt = _simulate_complete(job_status.value, appt_status.value)
         assert new_job == JobStatus.COMPLETED.value
         assert new_appt == AppointmentStatus.COMPLETED.value
 
@@ -423,7 +421,12 @@ class TestProperty4CancellationCleanupCompleteness:
         job.payment_collected_on_site = False
 
         session = AsyncMock()
-        session.execute = AsyncMock()
+        # The invoice-count query (bughunt M-2) runs through scalar_one;
+        # return 0 so no invoice is seen and the payment-flag-clear path
+        # behaves the same as before the M-2 refactor.
+        invoice_result = MagicMock()
+        invoice_result.scalar_one = MagicMock(return_value=0)
+        session.execute = AsyncMock(return_value=invoice_result)
         session.flush = AsyncMock()
 
         with patch(
@@ -434,6 +437,7 @@ class TestProperty4CancellationCleanupCompleteness:
             from grins_platform.services.appointment_service import (
                 clear_on_site_data,
             )
+
             _run_async(clear_on_site_data(session, appt, job=job))
 
         # Appointment timestamps always cleared
@@ -484,9 +488,10 @@ class TestProperty5DraftAppointmentSMSSilence:
         # By design, DRAFT appointments do not trigger SMS on creation
         # The only way to send SMS is via send_confirmation endpoint
         # which transitions DRAFT → SCHEDULED
-        assert AppointmentStatus.SCHEDULED.value in VALID_APPOINTMENT_TRANSITIONS[
-            AppointmentStatus.DRAFT.value
-        ]
+        assert (
+            AppointmentStatus.SCHEDULED.value
+            in VALID_APPOINTMENT_TRANSITIONS[AppointmentStatus.DRAFT.value]
+        )
         # DRAFT can only go to SCHEDULED or CANCELLED
         valid = VALID_APPOINTMENT_TRANSITIONS[AppointmentStatus.DRAFT.value]
         assert set(valid) == {
@@ -656,17 +661,19 @@ class TestProperty7ScheduledStatusRevert:
         if active_count == 0:
             assert new_status == JobStatus.TO_BE_SCHEDULED.value
             # Verify this is a valid transition
-            assert JobStatus.TO_BE_SCHEDULED.value in VALID_STATUS_TRANSITIONS[
-                JobStatus.SCHEDULED.value
-            ]
+            assert (
+                JobStatus.TO_BE_SCHEDULED.value
+                in VALID_STATUS_TRANSITIONS[JobStatus.SCHEDULED.value]
+            )
         else:
             assert new_status == JobStatus.SCHEDULED.value
 
     def test_revert_transition_is_valid(self) -> None:
         """SCHEDULED → TO_BE_SCHEDULED is in the valid transitions table."""
-        assert JobStatus.TO_BE_SCHEDULED.value in VALID_STATUS_TRANSITIONS[
-            JobStatus.SCHEDULED.value
-        ]
+        assert (
+            JobStatus.TO_BE_SCHEDULED.value
+            in VALID_STATUS_TRANSITIONS[JobStatus.SCHEDULED.value]
+        )
 
 
 # ===================================================================
@@ -686,13 +693,15 @@ class TestProperty8AuthGuardEnforcement:
     """
 
     @given(
-        job_type=st.sampled_from([
-            "spring_startup",
-            "winterization",
-            "repair",
-            "diagnostic",
-            "installation",
-        ]),
+        job_type=st.sampled_from(
+            [
+                "spring_startup",
+                "winterization",
+                "repair",
+                "diagnostic",
+                "installation",
+            ]
+        ),
     )
     @settings(max_examples=20, deadline=None)
     def test_unauthenticated_post_returns_401(

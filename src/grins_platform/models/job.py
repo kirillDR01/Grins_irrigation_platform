@@ -42,15 +42,21 @@ if TYPE_CHECKING:
 
 
 # Valid status transitions (Requirement 4.2-4.7, 5.2)
+# TO_BE_SCHEDULED→COMPLETED and SCHEDULED→COMPLETED cover service-agreement
+# jobs that complete without scheduling through IN_PROGRESS, and the admin
+# force-complete path (bughunt M-1 / E-BUG-G). The service layer still owns
+# payment/invoice gating and audit logging for these edges.
 VALID_STATUS_TRANSITIONS: dict[str, list[str]] = {
     JobStatus.TO_BE_SCHEDULED.value: [
         JobStatus.SCHEDULED.value,
         JobStatus.IN_PROGRESS.value,
+        JobStatus.COMPLETED.value,
         JobStatus.CANCELLED.value,
     ],
     JobStatus.SCHEDULED.value: [
         JobStatus.IN_PROGRESS.value,
         JobStatus.TO_BE_SCHEDULED.value,
+        JobStatus.COMPLETED.value,
         JobStatus.CANCELLED.value,
     ],
     JobStatus.IN_PROGRESS.value: [

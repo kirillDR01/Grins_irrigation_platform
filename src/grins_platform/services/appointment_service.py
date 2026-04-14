@@ -134,9 +134,10 @@ async def clear_on_site_data(
 
     Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5
     """
-    from sqlalchemy import delete  # noqa: PLC0415
+    from sqlalchemy import delete, func as sa_func, select  # noqa: PLC0415
 
     from grins_platform.models.enums import MessageType  # noqa: PLC0415
+    from grins_platform.models.invoice import Invoice  # noqa: PLC0415
     from grins_platform.models.sent_message import SentMessage  # noqa: PLC0415
 
     logger = get_logger(__name__)
@@ -158,9 +159,21 @@ async def clear_on_site_data(
         )
     )
 
-    # 3. Clear payment/invoice warning override flag
+    # 3. Clear payment/invoice warning override flag — but only if the job
+    #    has no sibling invoice. A job with two appointments (one paid,
+    #    one later cancelled) should keep ``payment_collected_on_site``
+    #    true so that completing the remaining appointment doesn't
+    #    mis-fire the "no payment on file" warning (bughunt M-2).
     if job is not None:
-        job.payment_collected_on_site = False
+        inv_stmt = (
+            select(sa_func.count()).select_from(Invoice).where(Invoice.job_id == job.id)
+        )
+        inv_result = await session.execute(inv_stmt)
+        # scalar_one mirrors count_active_appointments; ``select(count())``
+        # always returns exactly one row so either is safe.
+        has_invoice = (inv_result.scalar_one() or 0) > 0
+        if not has_invoice:
+            job.payment_collected_on_site = False
 
     # 4. If job provided and no other active appointments, clear job timestamps
     if job is not None:
@@ -171,14 +184,22 @@ async def clear_on_site_data(
             job.on_my_way_at = None
             job.started_at = None
             job.completed_at = None
-            # Revert job from SCHEDULED to TO_BE_SCHEDULED (Req 5.4)
+            # Revert job back to TO_BE_SCHEDULED when the last active
+            # appointment is cancelled. Previously only SCHEDULED was
+            # reverted; IN_PROGRESS jobs were stranded without warning
+            # when their last appointment was cancelled (bughunt L-12).
             from grins_platform.models.enums import JobStatus  # noqa: PLC0415
 
-            if job.status == JobStatus.SCHEDULED.value:
+            if job.status in (
+                JobStatus.SCHEDULED.value,
+                JobStatus.IN_PROGRESS.value,
+            ):
+                previous = job.status
                 job.status = JobStatus.TO_BE_SCHEDULED.value
                 logger.info(
                     "appointment.clear_on_site_data.job_reverted_to_be_scheduled",
                     job_id=str(job.id),
+                    from_status=previous,
                 )
 
     await session.flush()
@@ -514,10 +535,23 @@ class AppointmentService(LoggerMixin):
             AppointmentStatus.CANCELLED,
         )
 
-        # Clear on-site data after cancellation (Req 2.1, 2.2, 2.3)
+        # Clear on-site data after cancellation (Req 2.1, 2.2, 2.3).
+        # Failures here were previously silent — cancel still returned
+        # 204 while leaving stale timestamps or SMS dedup rows behind
+        # (bughunt L-3). Catch and log so the admin and telemetry can
+        # see that cleanup needs manual attention.
         session = self.appointment_repository.session
         job = await self.job_repository.get_by_id(appointment.job_id)
-        await clear_on_site_data(session, appointment, job=job)
+        clear_failed = False
+        try:
+            await clear_on_site_data(session, appointment, job=job)
+        except Exception as exc:  # pragma: no cover - defensive
+            clear_failed = True
+            self.log_failed(
+                "clear_on_site_data",
+                appointment_id=str(appointment_id),
+                error=exc,
+            )
 
         # Req 8.10, 8.11: Cancellation SMS based on pre-cancel state.
         # DRAFT → no SMS (customer was never notified). Admin can still opt
@@ -553,6 +587,7 @@ class AppointmentService(LoggerMixin):
             appointment_id=str(appointment_id),
             notify_customer=notify_customer,
             sms_sent=sms_sent,
+            clear_failed=clear_failed,
         )
         return updated  # type: ignore[return-value]
 
@@ -2017,9 +2052,14 @@ class AppointmentService(LoggerMixin):
 
         Validates: CRM Gap Closure Req 36.1, 36.2
         """
+        # M-7: fail loud instead of silently returning True. Previously
+        # a missing invoice_repository disabled the payment gate silently,
+        # which would let force-complete-style flows slip past Req 36 if
+        # DI ever regressed.
         if self.invoice_repository is None:
-            # If no invoice repo, can't check — allow completion
-            return True
+            raise RuntimeError(
+                "invoice_repository is required to evaluate the payment gate",
+            )
 
         invoice = await self._find_invoice_for_job(appointment.job_id)
         return invoice is not None

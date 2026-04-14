@@ -198,6 +198,10 @@ class TestHandleConfirmation:
 
         result_mock = MagicMock()
         result_mock.scalar_one_or_none.return_value = sent_msg
+        # clear_on_site_data now runs an invoice COUNT(*) query via
+        # scalar_one (bughunt M-2). Default to 0 so the payment-flag
+        # path matches old behavior.
+        result_mock.scalar_one.return_value = 0
         mock_db.execute = AsyncMock(return_value=result_mock)
         mock_db.get = AsyncMock(return_value=appt)
 
@@ -222,6 +226,7 @@ class TestHandleConfirmation:
 
         result_mock = MagicMock()
         result_mock.scalar_one_or_none.return_value = sent_msg
+        result_mock.scalar_one.return_value = 0
         mock_db.execute = AsyncMock(return_value=result_mock)
         mock_db.get = AsyncMock(return_value=appt)
 
@@ -386,7 +391,10 @@ class TestRescheduleFollowUp:
         )
 
         assert result["action"] == "reschedule_alternatives_received"
-        assert result["alternatives_text"] == "How about Tuesday at 2pm or Wednesday at 10am?"
+        assert (
+            result["alternatives_text"]
+            == "How about Tuesday at 2pm or Wednesday at 10am?"
+        )
         assert reschedule_req.requested_alternatives is not None
         assert reschedule_req.requested_alternatives["raw_text"] == (
             "How about Tuesday at 2pm or Wednesday at 10am?"
@@ -425,6 +433,7 @@ class TestCancellationSMSDetails:
 
         result_mock = MagicMock()
         result_mock.scalar_one_or_none.return_value = sent_msg
+        result_mock.scalar_one.return_value = 0
         mock_db.execute = AsyncMock(return_value=result_mock)
 
         # db.get returns appointment first, then job

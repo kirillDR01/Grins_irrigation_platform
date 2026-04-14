@@ -741,6 +741,23 @@ class SignatureRequiredError(Exception):
         )
 
 
+class MissingSigningDocumentError(Exception):
+    """Raised when a sales entry tries to advance to ``pending_approval``
+    without a SignWell document on file. Previously the ``/sign/email``
+    endpoint gated on doc presence, but manual pipeline advance did not —
+    admins could skip the actual signing step.
+
+    Validates: bughunt M-10
+    """
+
+    def __init__(self, entry_id: UUID) -> None:
+        self.entry_id = entry_id
+        super().__init__(
+            f"Sales entry {entry_id}: upload an estimate before advancing to "
+            "pending_approval.",
+        )
+
+
 # =========================================================================
 # CRM Changes Update 2 — Domain-Specific Exceptions (Task 18.1)
 # =========================================================================
@@ -848,6 +865,7 @@ __all__ = [
     "LeadNotFoundError",
     "MergeBlockerError",
     "MidSeasonTierChangeError",
+    "MissingSigningDocumentError",
     "PaymentRequiredError",
     "PropertyCustomerMismatchError",
     "PropertyNotFoundError",

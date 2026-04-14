@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import axios from 'axios';
 import {
   Navigation,
   Play,
@@ -61,6 +62,12 @@ export function OnSiteOperations({ job }: OnSiteOperationsProps) {
     }
   };
 
+  const completeErrorDescription = (err: unknown): string | null => {
+    if (!axios.isAxiosError(err)) return null;
+    const detail = err.response?.data?.detail;
+    return typeof detail === 'string' ? detail : null;
+  };
+
   const handleComplete = async () => {
     try {
       const result = await completeMutation.mutateAsync({ id: job.id });
@@ -69,8 +76,11 @@ export function OnSiteOperations({ job }: OnSiteOperationsProps) {
       } else {
         toast.success('Job marked as complete');
       }
-    } catch {
-      toast.error('Failed to complete job');
+    } catch (err) {
+      const description = completeErrorDescription(err);
+      toast.error('Could not complete job', {
+        description: description ?? 'Please try again or contact support.',
+      });
     }
   };
 
@@ -81,8 +91,11 @@ export function OnSiteOperations({ job }: OnSiteOperationsProps) {
       if (result.completed) {
         toast.success('Job completed (without payment/invoice)');
       }
-    } catch {
-      toast.error('Failed to force-complete job');
+    } catch (err) {
+      const description = completeErrorDescription(err);
+      toast.error('Could not force-complete job', {
+        description: description ?? 'Please try again or contact support.',
+      });
     }
   };
 

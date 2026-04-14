@@ -174,7 +174,8 @@ def _populate_preference_notes(job: object, resp: JobResponse) -> None:
     if not prefs:
         return
     resp.service_preference_notes = JobService._notes_from_preference(
-        prefs, resp.job_type,
+        prefs,
+        resp.job_type,
     )
 
 
@@ -188,9 +189,7 @@ def _populate_agreement_fields(job: object, resp: JobResponse) -> None:
         return
     tier = getattr(agreement, "tier", None)
     tier_name = getattr(tier, "name", None) if tier else None
-    resp.service_agreement_name = (
-        tier_name or agreement.agreement_number
-    )
+    resp.service_agreement_name = tier_name or agreement.agreement_number
     is_active = (
         agreement.status == "active"
         and (agreement.end_date is None or agreement.end_date >= date.today())
@@ -1151,21 +1150,38 @@ async def complete_job(
 
     await session.refresh(job)
 
-    # Write audit log if force-completed without payment (Req 27.5)
-    if force and not skip_payment_warning and not has_payment and not has_invoice:
+    # Write audit log when the job completes without actual payment
+    # (Req 27.5). Two cases — force-complete bypass (no payment, no
+    # invoice) and the invoice-skip path (has_invoice=True but not
+    # actually paid). Previously only the force path was audited; the
+    # invoice-skip path silently skipped the warning without trace
+    # (bughunt L-9).
+    if not skip_payment_warning and not has_payment:
         from grins_platform.services.audit_service import AuditService  # noqa: PLC0415
 
         audit = AuditService()
-        _ = await audit.log_action(
-            session,
-            action="job.complete_without_payment",
-            resource_type="job",
-            resource_id=job_id,
-            details={
-                "override": True,
-                "reason": "Admin force-completed without payment or invoice",
-            },
-        )
+        if force and not has_invoice:
+            _ = await audit.log_action(
+                session,
+                action="job.complete_without_payment",
+                resource_type="job",
+                resource_id=job_id,
+                details={
+                    "override": True,
+                    "reason": "Admin force-completed without payment or invoice",
+                },
+            )
+        elif has_invoice:
+            _ = await audit.log_action(
+                session,
+                action="job.complete_without_payment",
+                resource_type="job",
+                resource_id=job_id,
+                details={
+                    "override": False,
+                    "reason": "Completed with invoice on file but no payment collected",
+                },
+            )
 
     resp = JobResponse.model_validate(updated)
     _populate_property_fields(job, resp)

@@ -16,6 +16,7 @@ import pytest
 
 from grins_platform.exceptions import (
     InvalidSalesTransitionError,
+    MissingSigningDocumentError,
     SalesEntryNotFoundError,
     SignatureRequiredError,
 )
@@ -125,11 +126,59 @@ class TestSalesPipelineAdvanceStatus:
         entry = _make_entry(SalesEntryStatus.SCHEDULE_ESTIMATE.value)
 
         for expected in expected_order:
+            # Simulate the signing document upload happening before the
+            # advance into PENDING_APPROVAL — otherwise M-10's gate
+            # fires and aborts the pipeline.
+            if expected == SalesEntryStatus.PENDING_APPROVAL.value:
+                entry.signwell_document_id = "doc-123"
             mock_db.execute = AsyncMock(
                 return_value=Mock(scalar_one_or_none=Mock(return_value=entry)),
             )
             await pipeline_service.advance_status(mock_db, entry.id)
             assert entry.status == expected
+
+
+@pytest.mark.unit()
+class TestSalesPipelineMissingSigningDocument:
+    """Advancing into ``pending_approval`` requires a signing document.
+
+    Validates: bughunt M-10
+    """
+
+    @pytest.mark.asyncio()
+    async def test_send_estimate_without_doc_raises(
+        self,
+        pipeline_service: SalesPipelineService,
+        mock_db: AsyncMock,
+    ) -> None:
+        entry = _make_entry(
+            SalesEntryStatus.SEND_ESTIMATE.value,
+            signwell_document_id=None,
+        )
+        mock_db.execute = AsyncMock(
+            return_value=Mock(scalar_one_or_none=Mock(return_value=entry)),
+        )
+        with pytest.raises(MissingSigningDocumentError):
+            await pipeline_service.advance_status(mock_db, entry.id)
+
+        # Entry status must not advance
+        assert entry.status == SalesEntryStatus.SEND_ESTIMATE.value
+
+    @pytest.mark.asyncio()
+    async def test_send_estimate_with_doc_advances(
+        self,
+        pipeline_service: SalesPipelineService,
+        mock_db: AsyncMock,
+    ) -> None:
+        entry = _make_entry(
+            SalesEntryStatus.SEND_ESTIMATE.value,
+            signwell_document_id="doc-xyz",
+        )
+        mock_db.execute = AsyncMock(
+            return_value=Mock(scalar_one_or_none=Mock(return_value=entry)),
+        )
+        result = await pipeline_service.advance_status(mock_db, entry.id)
+        assert result.status == SalesEntryStatus.PENDING_APPROVAL.value
 
 
 @pytest.mark.unit()

@@ -18,6 +18,7 @@ from grins_platform.api.v1.auth_dependencies import CurrentActiveUser
 from grins_platform.api.v1.dependencies import get_db_session, get_job_service
 from grins_platform.exceptions import (
     InvalidSalesTransitionError,
+    MissingSigningDocumentError,
     SalesEntryNotFoundError,
     SignatureRequiredError,
 )
@@ -236,6 +237,11 @@ async def advance_sales_entry(
         raise HTTPException(
             status_code=404,
             detail="Sales entry not found",
+        ) from exc
+    except MissingSigningDocumentError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="Upload an estimate before advancing to pending approval",
         ) from exc
     except InvalidSalesTransitionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

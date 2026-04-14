@@ -2138,16 +2138,20 @@ class TestProperty39PaymentGate:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_has_payment_or_invoice_without_repo_returns_true(
+    async def test_has_payment_or_invoice_without_repo_raises(
         self,
     ) -> None:
-        """Without invoice_repository, allows completion (graceful fallback)."""
+        """Without invoice_repository, the payment gate fails loud (bughunt M-7).
+
+        Previously returned True and silently disabled the gate if DI
+        was misconfigured — Req 36 could be bypassed without detection.
+        """
         appointment = _make_appointment_mock()
 
         svc = _build_service(invoice_repo=None)
 
-        result = await svc._has_payment_or_invoice(appointment)
-        assert result is True
+        with pytest.raises(RuntimeError, match="invoice_repository"):
+            _ = await svc._has_payment_or_invoice(appointment)
 
 
 # =============================================================================

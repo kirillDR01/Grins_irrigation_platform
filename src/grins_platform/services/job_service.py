@@ -67,15 +67,22 @@ class JobService(LoggerMixin):
     DOMAIN = "job"
 
     # Valid status transitions (Req 5.2)
+    # Skip edges TO_BE_SCHEDULED→COMPLETED and SCHEDULED→COMPLETED cover
+    # service-agreement and admin force-complete flows (bughunt M-1 /
+    # E-BUG-G) — the complete endpoint owns payment/invoice gating and
+    # audit logging separately, so allowing the direct transition here
+    # is safe.
     VALID_TRANSITIONS: ClassVar[dict[JobStatus, set[JobStatus]]] = {
         JobStatus.TO_BE_SCHEDULED: {
             JobStatus.SCHEDULED,
             JobStatus.IN_PROGRESS,
+            JobStatus.COMPLETED,
             JobStatus.CANCELLED,
         },
         JobStatus.SCHEDULED: {
             JobStatus.IN_PROGRESS,
             JobStatus.TO_BE_SCHEDULED,
+            JobStatus.COMPLETED,
             JobStatus.CANCELLED,
         },
         JobStatus.IN_PROGRESS: {

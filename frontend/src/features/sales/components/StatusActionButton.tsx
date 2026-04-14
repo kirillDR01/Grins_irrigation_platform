@@ -133,6 +133,14 @@ export function StatusActionButton({ entry }: StatusActionButtonProps) {
           : 'Failed to advance';
         if (typeof msg === 'string' && msg.includes('signature')) {
           setShowForceConfirm(true);
+        } else if (
+          typeof msg === 'string'
+          && /upload an estimate|pending_approval/i.test(msg)
+        ) {
+          toast.error('Upload an estimate before advancing', {
+            description:
+              'This sales entry needs a signing document on file before it can move to pending approval.',
+          });
         } else {
           toast.error('Error', { description: typeof msg === 'string' ? msg : 'Failed to advance' });
         }

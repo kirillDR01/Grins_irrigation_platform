@@ -240,7 +240,9 @@ class TestRevertToBeScheduledOnCancel:
 
         mock_session = AsyncMock()
         # count_active_appointments returns 0 (no other active appointments)
-        mock_session.execute.return_value = MagicMock(scalar_one=MagicMock(return_value=0))
+        mock_session.execute.return_value = MagicMock(
+            scalar_one=MagicMock(return_value=0)
+        )
 
         await clear_on_site_data(mock_session, mock_appointment, job=mock_job)
 
@@ -275,7 +277,9 @@ class TestRevertToBeScheduledOnCancel:
 
         mock_session = AsyncMock()
         # count_active_appointments returns 1 (one other active appointment)
-        mock_session.execute.return_value = MagicMock(scalar_one=MagicMock(return_value=1))
+        mock_session.execute.return_value = MagicMock(
+            scalar_one=MagicMock(return_value=1)
+        )
 
         await clear_on_site_data(mock_session, mock_appointment, job=mock_job)
 
@@ -284,8 +288,11 @@ class TestRevertToBeScheduledOnCancel:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_cancel_appointment_non_scheduled_job_unchanged(self) -> None:
-        """Cancelling appointment on IN_PROGRESS job does not change status."""
+    async def test_cancel_appointment_in_progress_job_reverts_to_tbs(self) -> None:
+        """Cancelling the last active appointment on an IN_PROGRESS job
+        reverts the job to TO_BE_SCHEDULED. Previously IN_PROGRESS was
+        stranded without a visible path forward (bughunt L-12).
+        """
         from grins_platform.services.appointment_service import (
             clear_on_site_data,
         )
@@ -309,9 +316,50 @@ class TestRevertToBeScheduledOnCancel:
         mock_job.payment_collected_on_site = False
 
         mock_session = AsyncMock()
-        mock_session.execute.return_value = MagicMock(scalar_one=MagicMock(return_value=0))
+        mock_session.execute.return_value = MagicMock(
+            scalar_one=MagicMock(return_value=0)
+        )
 
         await clear_on_site_data(mock_session, mock_appointment, job=mock_job)
 
-        # Job should remain IN_PROGRESS (not reverted)
-        assert mock_job.status == JobStatus.IN_PROGRESS.value
+        # Job is reverted to TO_BE_SCHEDULED under the L-12 fix
+        assert mock_job.status == JobStatus.TO_BE_SCHEDULED.value
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_cancel_appointment_on_tbs_job_unchanged(self) -> None:
+        """Cancelling the last active appointment on a job that is
+        already TO_BE_SCHEDULED leaves the job status alone — the
+        revert target is the same.
+        """
+        from grins_platform.services.appointment_service import (
+            clear_on_site_data,
+        )
+
+        job_id = uuid4()
+        appt_id = uuid4()
+
+        mock_appointment = MagicMock()
+        mock_appointment.id = appt_id
+        mock_appointment.job_id = job_id
+        mock_appointment.en_route_at = None
+        mock_appointment.arrived_at = None
+        mock_appointment.completed_at = None
+
+        mock_job = MagicMock()
+        mock_job.id = job_id
+        mock_job.status = JobStatus.TO_BE_SCHEDULED.value
+        mock_job.on_my_way_at = None
+        mock_job.started_at = None
+        mock_job.completed_at = None
+        mock_job.payment_collected_on_site = False
+
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = MagicMock(
+            scalar_one=MagicMock(return_value=0)
+        )
+
+        await clear_on_site_data(mock_session, mock_appointment, job=mock_job)
+
+        # Job stays TO_BE_SCHEDULED (no applicable revert)
+        assert mock_job.status == JobStatus.TO_BE_SCHEDULED.value
