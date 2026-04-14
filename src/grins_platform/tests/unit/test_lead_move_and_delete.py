@@ -209,26 +209,16 @@ class TestMoveToJobs:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_move_to_jobs_requires_estimate_redirects_to_sales(self) -> None:
-        """Bug #2 fix: leads with requires_estimate category redirect to Sales."""
+    async def test_move_to_jobs_requires_estimate_returns_warning(self) -> None:
+        """Smoothing Req 6.1: leads with requires_estimate category return warning flag."""
         customer_id = uuid4()
         lead = _make_lead(
             customer_id=customer_id,
             situation=LeadSituation.EXPLORING.value,
         )
-        session = AsyncMock()
-        session.add = MagicMock()
-        session.flush = AsyncMock()
-
-        async def fake_refresh(obj):
-            obj.id = uuid4()
-
-        session.refresh = AsyncMock(side_effect=fake_refresh)
-
         repo = AsyncMock()
         repo.get_by_id = AsyncMock(return_value=lead)
         repo.update = AsyncMock()
-        repo.session = session
 
         job_service = AsyncMock()
 
@@ -237,10 +227,41 @@ class TestMoveToJobs:
 
         # Should NOT create a job
         job_service.create_job.assert_not_awaited()
-        # Should have a sales_entry_id (redirected to sales)
-        assert result.sales_entry_id is not None
+        # Should return warning flag
+        assert result.requires_estimate_warning is True
         assert result.job_id is None
-        assert "Sales" in result.message or "estimate" in result.message
+        assert result.sales_entry_id is None
+        assert "estimate" in result.message.lower()
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_move_to_jobs_requires_estimate_force_creates_job(self) -> None:
+        """Smoothing Req 6.2: force=True on requires_estimate lead creates job and logs override."""
+        customer_id = uuid4()
+        lead = _make_lead(
+            customer_id=customer_id,
+            situation=LeadSituation.EXPLORING.value,
+        )
+        repo = AsyncMock()
+        repo.get_by_id = AsyncMock(return_value=lead)
+        repo.update = AsyncMock()
+
+        job_mock = MagicMock()
+        job_mock.id = uuid4()
+        job_service = AsyncMock()
+        job_service.create_job = AsyncMock(return_value=job_mock)
+
+        svc = _build_service(lead_repo=repo, job_service=job_service)
+        result = await svc.move_to_jobs(lead.id, force=True)
+
+        # Should create a job when forced
+        job_service.create_job.assert_awaited_once()
+        assert result.job_id == job_mock.id
+        assert result.requires_estimate_warning is False
+        # Lead should be marked as moved
+        repo.update.assert_awaited_once()
+        update_data = repo.update.call_args[0][1]
+        assert update_data["moved_to"] == "jobs"
 
     @pytest.mark.asyncio
     @pytest.mark.unit
@@ -267,6 +288,25 @@ class TestMoveToJobs:
         job_service.create_job.assert_awaited_once()
         assert result.job_id == job_mock.id
         assert result.sales_entry_id is None
+        # No warning for normal situations
+        assert result.requires_estimate_warning is False
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_move_to_jobs_new_system_returns_warning(self) -> None:
+        """Smoothing Req 6.1: NEW_SYSTEM situation also returns warning."""
+        lead = _make_lead(
+            customer_id=uuid4(),
+            situation=LeadSituation.NEW_SYSTEM.value,
+        )
+        repo = AsyncMock()
+        repo.get_by_id = AsyncMock(return_value=lead)
+
+        svc = _build_service(lead_repo=repo)
+        result = await svc.move_to_jobs(lead.id)
+
+        assert result.requires_estimate_warning is True
+        assert result.job_id is None
 
 
 # =============================================================================

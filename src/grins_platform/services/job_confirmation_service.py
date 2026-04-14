@@ -221,6 +221,10 @@ class JobConfirmationService(LoggerMixin):
     ) -> dict[str, Any]:
         """CANCEL: SCHEDULED → CANCELLED + auto-reply + admin notification."""
         from grins_platform.models.appointment import Appointment  # noqa: PLC0415
+        from grins_platform.models.job import Job  # noqa: PLC0415
+        from grins_platform.services.appointment_service import (  # noqa: PLC0415
+            clear_on_site_data,
+        )
 
         appt = await self.db.get(Appointment, appointment_id)
         if appt and appt.status in (
@@ -229,6 +233,10 @@ class JobConfirmationService(LoggerMixin):
         ):
             appt.status = AppointmentStatus.CANCELLED.value
             await self.db.flush()
+
+            # Clear on-site data after cancellation (Req 2.1, 2.2, 2.3)
+            job = await self.db.get(Job, appt.job_id)
+            await clear_on_site_data(self.db, appt, job=job)
 
         response.status = "cancelled"
         response.processed_at = datetime.now(tz=timezone.utc)

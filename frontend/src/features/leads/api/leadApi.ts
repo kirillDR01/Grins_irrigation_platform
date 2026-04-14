@@ -58,9 +58,13 @@ export const leadApi = {
     await apiClient.delete(`${BASE_PATH}/${id}`);
   },
 
-  // Move lead to Jobs (CRM2 Req 12.1)
-  moveToJobs: async (id: string): Promise<LeadMoveResponse> => {
-    const response = await apiClient.post<LeadMoveResponse>(`${BASE_PATH}/${id}/move-to-jobs`);
+  // Move lead to Jobs (CRM2 Req 12.1, Smoothing Req 6.1)
+  moveToJobs: async (id: string, force = false): Promise<LeadMoveResponse> => {
+    const response = await apiClient.post<LeadMoveResponse>(
+      `${BASE_PATH}/${id}/move-to-jobs`,
+      undefined,
+      { params: { force } },
+    );
     return response.data;
   },
 

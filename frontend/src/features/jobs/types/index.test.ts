@@ -20,6 +20,7 @@ function toLocalDateStr(d: Date): string {
 
 const ALL_RAW_STATUSES: JobStatus[] = [
   'to_be_scheduled',
+  'scheduled',
   'in_progress',
   'completed',
   'cancelled',
@@ -27,6 +28,7 @@ const ALL_RAW_STATUSES: JobStatus[] = [
 
 const ALL_STATUS_LABELS: JobStatusLabel[] = [
   'To Be Scheduled',
+  'Scheduled',
   'In Progress',
   'Complete',
   'Cancelled',
@@ -53,7 +55,7 @@ describe('Job status simplification mapping (P26)', () => {
     expect(getSimplifiedStatus('cancelled')).toBe('Cancelled');
   });
 
-  it('STATUS_LABEL_MAP is total -- covers all 4 statuses', () => {
+  it('STATUS_LABEL_MAP is total -- covers all 5 statuses', () => {
     for (const status of ALL_RAW_STATUSES) {
       expect(STATUS_LABEL_MAP[status]).toBeDefined();
       expect(ALL_STATUS_LABELS).toContain(STATUS_LABEL_MAP[status]);

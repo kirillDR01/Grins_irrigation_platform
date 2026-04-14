@@ -109,10 +109,11 @@ class JobCategory(str, Enum):
 class JobStatus(str, Enum):
     """Job status enumeration for workflow management.
 
-    Validates: Requirement 4.1
+    Validates: Requirement 4.1, 5.1
     """
 
     TO_BE_SCHEDULED = "to_be_scheduled"
+    SCHEDULED = "scheduled"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
@@ -161,10 +162,11 @@ class SkillLevel(str, Enum):
 class AppointmentStatus(str, Enum):
     """Appointment status enumeration.
 
-    Validates: Admin Dashboard Requirement 1.3, CRM Gap Closure Req 79
+    Validates: Admin Dashboard Requirement 1.3, CRM Gap Closure Req 79, Req 8.1
     """
 
     PENDING = "pending"
+    DRAFT = "draft"
     SCHEDULED = "scheduled"
     CONFIRMED = "confirmed"
     EN_ROUTE = "en_route"
@@ -721,6 +723,7 @@ VALID_APPOINTMENT_STATUS_TRANSITIONS: dict[
     },
     AppointmentStatus.SCHEDULED: {
         AppointmentStatus.CONFIRMED,
+        AppointmentStatus.EN_ROUTE,
         AppointmentStatus.CANCELLED,
     },
     AppointmentStatus.CONFIRMED: {

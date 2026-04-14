@@ -12,6 +12,7 @@ interface JobStatusBadgeProps {
 
 const STATUS_DESCRIPTIONS: Record<JobStatus, string> = {
   to_be_scheduled: 'Job is awaiting scheduling',
+  scheduled: 'Job has been placed on the calendar',
   in_progress: 'Work is currently being performed',
   completed: 'Work has been completed',
   cancelled: 'Job has been cancelled',
@@ -58,8 +59,9 @@ export const JobStatusBadge = memo(function JobStatusBadge({
 
 // Export status workflow helpers
 export const JOB_STATUS_WORKFLOW: Record<JobStatus, JobStatus[]> = {
-  to_be_scheduled: ['in_progress', 'cancelled'],
-  in_progress: ['completed', 'cancelled', 'to_be_scheduled'],
+  to_be_scheduled: ['scheduled', 'in_progress', 'cancelled'],
+  scheduled: ['in_progress', 'to_be_scheduled', 'cancelled'],
+  in_progress: ['completed', 'cancelled'],
   completed: [],
   cancelled: [],
 };

@@ -65,13 +65,21 @@ class JobService(LoggerMixin):
 
     DOMAIN = "job"
 
-    # Valid status transitions
+    # Valid status transitions (Req 5.2)
     VALID_TRANSITIONS: ClassVar[dict[JobStatus, set[JobStatus]]] = {
-        JobStatus.TO_BE_SCHEDULED: {JobStatus.IN_PROGRESS, JobStatus.CANCELLED},
+        JobStatus.TO_BE_SCHEDULED: {
+            JobStatus.SCHEDULED,
+            JobStatus.IN_PROGRESS,
+            JobStatus.CANCELLED,
+        },
+        JobStatus.SCHEDULED: {
+            JobStatus.IN_PROGRESS,
+            JobStatus.TO_BE_SCHEDULED,
+            JobStatus.CANCELLED,
+        },
         JobStatus.IN_PROGRESS: {
             JobStatus.COMPLETED,
             JobStatus.CANCELLED,
-            JobStatus.TO_BE_SCHEDULED,
         },
         JobStatus.COMPLETED: set(),  # Terminal state
         JobStatus.CANCELLED: set(),  # Terminal state

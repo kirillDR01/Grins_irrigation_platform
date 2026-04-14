@@ -49,6 +49,7 @@ export function LeadsList() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [campaignModalOpen, setCampaignModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
+  const [estimateWarningLead, setEstimateWarningLead] = useState<Lead | null>(null);
 
   const urlStatus = searchParams.get('status') as LeadListParams['status'] | null;
   const urlHighlight = searchParams.get('highlight');
@@ -104,7 +105,11 @@ export function LeadsList() {
     async (e: React.MouseEvent, lead: Lead) => {
       e.stopPropagation();
       try {
-        await moveToJobs.mutateAsync(lead.id);
+        const result = await moveToJobs.mutateAsync({ id: lead.id });
+        if (result.requires_estimate_warning) {
+          setEstimateWarningLead(lead);
+          return;
+        }
         toast.success(`${lead.name} moved to Jobs`);
       } catch {
         toast.error('Failed to move lead to Jobs');
@@ -112,6 +117,30 @@ export function LeadsList() {
     },
     [moveToJobs]
   );
+
+  const handleEstimateConfirmMoveToJobs = useCallback(async () => {
+    if (!estimateWarningLead) return;
+    try {
+      await moveToJobs.mutateAsync({ id: estimateWarningLead.id, force: true });
+      toast.success(`${estimateWarningLead.name} moved to Jobs (estimate override)`);
+    } catch {
+      toast.error('Failed to move lead to Jobs');
+    } finally {
+      setEstimateWarningLead(null);
+    }
+  }, [estimateWarningLead, moveToJobs]);
+
+  const handleEstimateConfirmMoveToSales = useCallback(async () => {
+    if (!estimateWarningLead) return;
+    try {
+      await moveToSales.mutateAsync(estimateWarningLead.id);
+      toast.success(`${estimateWarningLead.name} moved to Sales`);
+    } catch {
+      toast.error('Failed to move lead to Sales');
+    } finally {
+      setEstimateWarningLead(null);
+    }
+  }, [estimateWarningLead, moveToSales]);
 
   const handleMoveToSales = useCallback(
     async (e: React.MouseEvent, lead: Lead) => {
@@ -611,6 +640,45 @@ export function LeadsList() {
               data-testid="confirm-delete-btn"
             >
               {deleteLead.isPending ? 'Deleting...' : 'Delete Permanently'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Estimate Warning Modal (Smoothing Req 6.1, 6.3) */}
+      <Dialog open={!!estimateWarningLead} onOpenChange={(open) => !open && setEstimateWarningLead(null)}>
+        <DialogContent data-testid="estimate-warning-dialog">
+          <DialogHeader>
+            <DialogTitle>Estimate Required</DialogTitle>
+            <DialogDescription>
+              This job type typically requires an estimate. Move to Jobs anyway, or move to Sales for the estimate workflow?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setEstimateWarningLead(null)}
+              data-testid="estimate-warning-cancel-btn"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+              onClick={handleEstimateConfirmMoveToSales}
+              disabled={moveToSales.isPending}
+              data-testid="estimate-warning-move-to-sales-btn"
+            >
+              Move to Sales
+            </Button>
+            <Button
+              variant="default"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={handleEstimateConfirmMoveToJobs}
+              disabled={moveToJobs.isPending}
+              data-testid="estimate-warning-move-to-jobs-btn"
+            >
+              Move to Jobs
             </Button>
           </DialogFooter>
         </DialogContent>

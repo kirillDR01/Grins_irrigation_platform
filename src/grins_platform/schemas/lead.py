@@ -563,15 +563,16 @@ class LeadMetricsBySourceResponse(BaseModel):
 class LeadMoveResponse(BaseModel):
     """Response for lead move-to-jobs or move-to-sales.
 
-    Validates: CRM2 Req 12.1, 12.2
+    Validates: CRM2 Req 12.1, 12.2, Smoothing Req 6.1, 6.2
     """
 
     success: bool = True
     lead_id: UUID
-    customer_id: UUID
+    customer_id: UUID | None = None
     job_id: UUID | None = None
     sales_entry_id: UUID | None = None
     message: str
+    requires_estimate_warning: bool = False
 
 
 class BulkOutreachRequest(BaseModel):

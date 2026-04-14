@@ -50,6 +50,16 @@ const mockJob: Job = {
   updated_at: '2025-01-20T10:00:00Z',
   customer_name: null,
   customer_tags: null,
+  property_address: null,
+  property_city: null,
+  property_type: null,
+  property_is_hoa: null,
+  property_is_subscription: null,
+  on_my_way_at: null,
+  time_tracking_metadata: null,
+  service_preference_notes: null,
+  service_agreement_name: null,
+  service_agreement_active: null,
 };
 
 // Helper to select value in Radix UI Select via hidden native select

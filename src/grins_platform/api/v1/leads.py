@@ -526,20 +526,23 @@ async def delete_lead(
     summary="Move lead to Jobs",
     description=(
         "Auto-generate customer if needed, create a Job with TO_BE_SCHEDULED, "
-        "and remove the lead from the Leads list. Admin auth required."
+        "and remove the lead from the Leads list. Admin auth required. "
+        "If the lead's situation maps to requires_estimate and force=false, "
+        "returns requires_estimate_warning=true instead of creating the job."
     ),
 )
 async def move_lead_to_jobs(
     lead_id: UUID,
     _current_user: CurrentActiveUser,
     service: Annotated[LeadService, Depends(_get_lead_service)],
+    force: bool = False,
 ) -> LeadMoveResponse:
     """Move a lead to the Jobs tab.
 
-    Validates: CRM2 Req 9.2, 12.1
+    Validates: CRM2 Req 9.2, 12.1, Smoothing Req 6.1, 6.2
     """
-    _endpoints.log_started("move_lead_to_jobs", lead_id=str(lead_id))
-    result = await service.move_to_jobs(lead_id)
+    _endpoints.log_started("move_lead_to_jobs", lead_id=str(lead_id), force=force)
+    result = await service.move_to_jobs(lead_id, force=force)
     _endpoints.log_completed("move_lead_to_jobs", lead_id=str(lead_id))
     return result
 

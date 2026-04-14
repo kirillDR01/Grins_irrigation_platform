@@ -32,6 +32,7 @@ import { LeadTimeIndicator } from './LeadTimeIndicator';
 import { JobSelector } from './JobSelector';
 import { JobPickerPopup } from './JobPickerPopup';
 import { InlineCustomerPanel } from './InlineCustomerPanel';
+import { SendAllConfirmationsButton } from './SendAllConfirmationsButton';
 import { scheduleGenerationApi } from '../api/scheduleGenerationApi';
 import { useDailySchedule, useWeeklySchedule, appointmentKeys } from '../hooks/useAppointments';
 import { useStaff } from '@/features/staff/hooks/useStaff';
@@ -39,6 +40,7 @@ import { jobApi } from '@/features/jobs/api/jobApi';
 import { customerApi } from '@/features/customers/api/customerApi';
 import { formatJobType } from '@/features/jobs/types';
 import type { ScheduleClearRequest } from '../types';
+import type { Appointment } from '../types';
 
 type ViewMode = 'calendar' | 'list';
 
@@ -56,6 +58,7 @@ export function SchedulePage() {
   const [showJobSelector, setShowJobSelector] = useState(false);
   const [showJobPicker, setShowJobPicker] = useState(false);
   const [inlinePanelAppointmentId, setInlinePanelAppointmentId] = useState<string | null>(null);
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   
   // Track the current week displayed in the calendar
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => 
@@ -162,6 +165,16 @@ export function SchedulePage() {
     }
     return counts;
   }, [weeklySchedule]);
+
+  // Count DRAFT appointments in the current view (Req 8.7)
+  const draftAppointments = useMemo(() => {
+    if (!weeklySchedule?.days) return [];
+    return weeklySchedule.days.flatMap((day) =>
+      day.appointments.filter((apt) => apt.status === 'draft')
+    );
+  }, [weeklySchedule]);
+
+  const draftCount = draftAppointments.length;
 
   // Get appointment count and affected jobs for the clear day dialog
   const appointmentCount = dailySchedule?.appointments?.length ?? 0;
@@ -279,6 +292,12 @@ export function SchedulePage() {
     setInlinePanelAppointmentId(appointmentId);
   }, []);
 
+  // Handle edit from AppointmentDetail (Req 18)
+  const handleEditAppointment = useCallback((appointment: Appointment) => {
+    setSelectedAppointmentId(null); // close detail dialog
+    setEditingAppointment(appointment); // open edit dialog
+  }, []);
+
   return (
     <div 
       data-testid="schedule-page" 
@@ -328,6 +347,9 @@ export function SchedulePage() {
               <CalendarPlus className="mr-2 h-4 w-4" />
               Add Jobs
             </Button>
+            {draftCount > 0 && (
+              <SendAllConfirmationsButton draftAppointments={draftAppointments} />
+            )}
             <Button
               onClick={() => setShowCreateDialog(true)}
               data-testid="add-appointment-btn"
@@ -415,6 +437,7 @@ export function SchedulePage() {
             <AppointmentDetail
               appointmentId={selectedAppointmentId}
               onClose={handleCloseDetail}
+              onEdit={handleEditAppointment}
             />
           )}
         </DialogContent>
@@ -432,6 +455,44 @@ export function SchedulePage() {
           isLoading={clearScheduleMutation.isPending}
         />
       )}
+
+      {/* Edit Appointment Dialog (Req 18) */}
+      <Dialog
+        open={!!editingAppointment}
+        onOpenChange={(open) => {
+          if (!open) {
+            // On cancel, re-open the detail modal
+            const apptId = editingAppointment?.id ?? null;
+            setEditingAppointment(null);
+            if (apptId) {
+              setSelectedAppointmentId(apptId);
+            }
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg" aria-describedby="edit-appointment-description">
+          <DialogHeader>
+            <DialogTitle>Edit Appointment</DialogTitle>
+            <p id="edit-appointment-description" className="text-sm text-muted-foreground">
+              Modify the appointment details below.
+            </p>
+          </DialogHeader>
+          {editingAppointment && (
+            <AppointmentForm
+              appointment={editingAppointment}
+              onSuccess={() => {
+                setEditingAppointment(null);
+                queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
+              }}
+              onCancel={() => {
+                const apptId = editingAppointment.id;
+                setEditingAppointment(null);
+                setSelectedAppointmentId(apptId);
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Restore Schedule Dialog */}
       <RestoreScheduleDialog

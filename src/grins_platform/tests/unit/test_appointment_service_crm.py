@@ -1240,6 +1240,8 @@ class TestProperty37GoogleReviewConsentAndDedup:
 
         **Validates: Requirements 34.2, 34.6**
         """
+        from unittest.mock import patch  # noqa: PLC0415
+
         apt_id = uuid4()
         job_id = uuid4()
         customer_id = uuid4()
@@ -1268,11 +1270,20 @@ class TestProperty37GoogleReviewConsentAndDedup:
         # No prior review request
         svc._get_last_review_request_date = AsyncMock(return_value=None)
 
-        result = await svc.request_google_review(apt_id)
+        mock_sms_service = AsyncMock()
+        mock_sms_service.send_message = AsyncMock(
+            return_value={"success": True, "message_id": str(uuid4())},
+        )
+        with patch(
+            "grins_platform.services.sms_service.SMSService",
+            return_value=mock_sms_service,
+        ):
+            result = await svc.request_google_review(apt_id)
 
         assert isinstance(result, ReviewRequestResult)
         assert result.sent is True
         assert result.channel == "sms"
+        mock_sms_service.send_message.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_review_request_without_consent_raises_error(
@@ -1354,6 +1365,8 @@ class TestProperty37GoogleReviewConsentAndDedup:
 
         **Validates: Requirements 34.6**
         """
+        from unittest.mock import patch  # noqa: PLC0415
+
         apt_id = uuid4()
         customer_id = uuid4()
 
@@ -1379,7 +1392,15 @@ class TestProperty37GoogleReviewConsentAndDedup:
         svc = _build_service(appt_repo=appt_repo, job_repo=job_repo)
         svc._get_last_review_request_date = AsyncMock(return_value=last_review)
 
-        result = await svc.request_google_review(apt_id)
+        mock_sms_service = AsyncMock()
+        mock_sms_service.send_message = AsyncMock(
+            return_value={"success": True, "message_id": str(uuid4())},
+        )
+        with patch(
+            "grins_platform.services.sms_service.SMSService",
+            return_value=mock_sms_service,
+        ):
+            result = await svc.request_google_review(apt_id)
         assert result.sent is True
 
     @pytest.mark.asyncio
@@ -1391,6 +1412,129 @@ class TestProperty37GoogleReviewConsentAndDedup:
         svc = _build_service(appt_repo=appt_repo)
         with pytest.raises(AppointmentNotFoundError):
             await svc.request_google_review(uuid4())
+
+    @pytest.mark.asyncio
+    async def test_review_request_with_correct_message_type_and_review_url(
+        self,
+    ) -> None:
+        """Review push calls sms_service.send_message() with
+        MessageType.GOOGLE_REVIEW_REQUEST and includes the review URL
+        in the message body.
+
+        **Validates: Requirements 1.1, 1.2**
+        """
+        from unittest.mock import patch  # noqa: PLC0415
+
+        from grins_platform.models.enums import MessageType  # noqa: PLC0415
+
+        apt_id = uuid4()
+        job_id = uuid4()
+        customer_id = uuid4()
+
+        customer = _make_customer_mock(
+            customer_id=customer_id,
+            sms_opt_in=True,
+        )
+        job = _make_job_mock(
+            job_id=job_id,
+            customer_id=customer_id,
+            customer=customer,
+        )
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            job_id=job_id,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+        appt_repo.session = AsyncMock()
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+
+        review_url = "https://g.page/review/grins"
+        svc = _build_service(
+            appt_repo=appt_repo,
+            job_repo=job_repo,
+            google_review_url=review_url,
+        )
+        svc._get_last_review_request_date = AsyncMock(return_value=None)
+
+        mock_sms_service = AsyncMock()
+        mock_sms_service.send_message = AsyncMock(
+            return_value={"success": True, "message_id": "SM123"},
+        )
+        with patch(
+            "grins_platform.services.sms_service.SMSService",
+            return_value=mock_sms_service,
+        ):
+            result = await svc.request_google_review(apt_id)
+
+        assert result.sent is True
+        assert result.channel == "sms"
+
+        # Verify send_message was called with correct message_type
+        call_kwargs = mock_sms_service.send_message.call_args
+        assert call_kwargs.kwargs["message_type"] == MessageType.GOOGLE_REVIEW_REQUEST
+
+        # Verify the review URL is included in the message body
+        sent_message = call_kwargs.kwargs["message"]
+        assert review_url in sent_message
+
+    @pytest.mark.asyncio
+    async def test_review_request_with_sms_failure_returns_sent_false(
+        self,
+    ) -> None:
+        """When sms_service.send_message() raises an exception, the method
+        returns sent=False without crashing.
+
+        **Validates: Requirements 1.4**
+        """
+        from unittest.mock import patch  # noqa: PLC0415
+
+        apt_id = uuid4()
+        job_id = uuid4()
+        customer_id = uuid4()
+
+        customer = _make_customer_mock(
+            customer_id=customer_id,
+            sms_opt_in=True,
+        )
+        job = _make_job_mock(
+            job_id=job_id,
+            customer_id=customer_id,
+            customer=customer,
+        )
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            job_id=job_id,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+        appt_repo.session = AsyncMock()
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+
+        svc = _build_service(appt_repo=appt_repo, job_repo=job_repo)
+        svc._get_last_review_request_date = AsyncMock(return_value=None)
+
+        mock_sms_service = AsyncMock()
+        mock_sms_service.send_message = AsyncMock(
+            side_effect=RuntimeError("SMS provider unavailable"),
+        )
+        with patch(
+            "grins_platform.services.sms_service.SMSService",
+            return_value=mock_sms_service,
+        ):
+            result = await svc.request_google_review(apt_id)
+
+        # Should NOT raise — returns a result with sent=False
+        assert isinstance(result, ReviewRequestResult)
+        assert result.sent is False
+        assert result.channel == "sms"
+        assert "Failed" in result.message or "fail" in result.message.lower()
 
 
 # =============================================================================

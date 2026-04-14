@@ -16,6 +16,8 @@ import {
   TrendingUp,
   Pencil,
   MapPin,
+  AlertTriangle,
+  ShieldCheck,
 } from 'lucide-react';
 import { parseLocalDate } from '@/shared/utils/dateUtils';
 import { Button } from '@/components/ui/button';
@@ -162,6 +164,24 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
         >
           {categoryConfig.label}
         </span>
+        {job.category === 'requires_estimate' && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 border border-amber-200"
+            data-testid="estimate-needed-badge"
+          >
+            <AlertTriangle className="h-3 w-3" />
+            Estimate Needed
+          </span>
+        )}
+        {job.service_agreement_id && job.service_agreement_active && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 border border-emerald-200"
+            data-testid="prepaid-badge"
+          >
+            <ShieldCheck className="h-3 w-3" />
+            Prepaid
+          </span>
+        )}
         <span
           className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${priorityConfig.bgColor} ${priorityConfig.color}`}
           data-testid="job-priority-badge"
@@ -279,6 +299,23 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
 
       <Separator />
 
+      {/* Covered by Service Agreement indicator (Smoothing Req 7.3) */}
+      {job.service_agreement_id && job.service_agreement_active && (
+        <div
+          className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg"
+          data-testid="service-agreement-indicator"
+        >
+          <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-emerald-700">
+              Covered by Service Agreement
+              {job.service_agreement_name && ` — ${job.service_agreement_name}`}
+            </p>
+            <p className="text-xs text-emerald-600">No payment or invoice needed</p>
+          </div>
+        </div>
+      )}
+
       {/* Pricing Section */}
       <div>
         <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -303,21 +340,23 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
           </p>
         </div>
 
-        {/* Payment Collection */}
-        <div className="mt-3 flex items-center space-x-2" data-testid="payment-collected-section">
-          <Checkbox
-            id="payment-collected"
-            checked={job.payment_collected_on_site}
-            onCheckedChange={handlePaymentCollectedChange}
-            disabled={updateJobMutation.isPending}
-            data-testid="payment-collected-checkbox"
-            className="data-[state=checked]:bg-teal-500 data-[state=checked]:border-teal-500"
-          />
-          <Label htmlFor="payment-collected" className="text-sm text-slate-600 flex items-center gap-1.5">
-            <CreditCard className="h-3.5 w-3.5" />
-            Payment collected on site
-          </Label>
-        </div>
+        {/* Payment Collection — hidden for active service agreement jobs (Smoothing Req 7.4) */}
+        {!(job.service_agreement_id && job.service_agreement_active) && (
+          <div className="mt-3 flex items-center space-x-2" data-testid="payment-collected-section">
+            <Checkbox
+              id="payment-collected"
+              checked={job.payment_collected_on_site}
+              onCheckedChange={handlePaymentCollectedChange}
+              disabled={updateJobMutation.isPending}
+              data-testid="payment-collected-checkbox"
+              className="data-[state=checked]:bg-teal-500 data-[state=checked]:border-teal-500"
+            />
+            <Label htmlFor="payment-collected" className="text-sm text-slate-600 flex items-center gap-1.5">
+              <CreditCard className="h-3.5 w-3.5" />
+              Payment collected on site
+            </Label>
+          </div>
+        )}
 
         {/* Linked Invoice */}
         {linkedInvoice && (
@@ -334,8 +373,8 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
           </Link>
         )}
 
-        {/* Generate Invoice Button */}
-        {!linkedInvoice && job.status === 'completed' && (
+        {/* Generate Invoice Button — hidden for active service agreement jobs (Smoothing Req 7.4) */}
+        {!linkedInvoice && job.status === 'completed' && !(job.service_agreement_id && job.service_agreement_active) && (
           <div className="mt-3" data-testid="generate-invoice-section">
             <GenerateInvoiceButton job={job} />
           </div>

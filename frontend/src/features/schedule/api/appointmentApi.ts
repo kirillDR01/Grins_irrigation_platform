@@ -226,6 +226,31 @@ export const appointmentApi = {
   },
 
   /**
+   * Send confirmation SMS for a draft appointment (Req 8.4, 8.12).
+   */
+  async sendConfirmation(id: string): Promise<{ appointment_id: string; status: string; sms_sent: boolean }> {
+    const response = await apiClient.post<{ appointment_id: string; status: string; sms_sent: boolean }>(
+      `${BASE_URL}/${id}/send-confirmation`
+    );
+    return response.data;
+  },
+
+  /**
+   * Bulk send confirmation SMS for draft appointments (Req 8.6, 8.13).
+   */
+  async bulkSendConfirmations(data: {
+    appointment_ids?: string[];
+    date_from?: string;
+    date_to?: string;
+  }): Promise<{ sent_count: number; failed_count: number; total_draft: number }> {
+    const response = await apiClient.post<{ sent_count: number; failed_count: number; total_draft: number }>(
+      `${BASE_URL}/send-confirmations`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
    * Get all staff locations (Req 41).
    */
   async getStaffLocations(): Promise<StaffLocation[]> {

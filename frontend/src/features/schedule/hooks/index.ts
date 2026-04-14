@@ -27,6 +27,8 @@ export {
   useCreateEstimateFromAppointment,
   useUploadAppointmentPhotos,
   useRequestReview,
+  useSendConfirmation,
+  useBulkSendConfirmations,
 } from './useAppointmentMutations';
 
 export {

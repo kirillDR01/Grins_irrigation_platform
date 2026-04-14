@@ -4,6 +4,7 @@ import { parseLocalDate } from '@/shared/utils/dateUtils';
 // Job status enum matching backend
 export type JobStatus =
   | 'to_be_scheduled'
+  | 'scheduled'
   | 'in_progress'
   | 'completed'
   | 'cancelled';
@@ -15,7 +16,7 @@ export type JobCategory = 'ready_to_schedule' | 'requires_estimate';
 export type JobSource = 'website' | 'google' | 'referral' | 'phone' | 'partner';
 
 // Display labels for job statuses
-export type JobStatusLabel = 'To Be Scheduled' | 'In Progress' | 'Complete' | 'Cancelled';
+export type JobStatusLabel = 'To Be Scheduled' | 'Scheduled' | 'In Progress' | 'Complete' | 'Cancelled';
 
 // Customer tag types (Req 22)
 export type CustomerTag = 'priority' | 'red_flag' | 'slow_payer' | 'new_customer';
@@ -64,6 +65,9 @@ export interface Job extends BaseEntity {
   time_tracking_metadata: Record<string, unknown> | null;
   // Service preference notes hint (CRM2 Req 7.3)
   service_preference_notes: string | null;
+  // Service agreement display (Smoothing Req 7.3, 7.5)
+  service_agreement_name: string | null;
+  service_agreement_active: boolean | null;
 }
 
 // Per-job financials (Req 57)
@@ -193,6 +197,11 @@ export const JOB_STATUS_CONFIG: Record<
     color: 'text-amber-700',
     bgColor: 'bg-amber-100',
   },
+  scheduled: {
+    label: 'Scheduled',
+    color: 'text-blue-700',
+    bgColor: 'bg-blue-100',
+  },
   in_progress: {
     label: 'In Progress',
     color: 'text-orange-700',
@@ -303,6 +312,7 @@ export function formatAmount(amount: number | null): string {
 // Status label mapping (backend status → display label)
 export const STATUS_LABEL_MAP: Record<JobStatus, JobStatusLabel> = {
   to_be_scheduled: 'To Be Scheduled',
+  scheduled: 'Scheduled',
   in_progress: 'In Progress',
   completed: 'Complete',
   cancelled: 'Cancelled',
@@ -311,6 +321,7 @@ export const STATUS_LABEL_MAP: Record<JobStatus, JobStatusLabel> = {
 // Reverse mapping: display label → backend status
 export const LABEL_STATUS_MAP: Record<JobStatusLabel, JobStatus> = {
   'To Be Scheduled': 'to_be_scheduled',
+  'Scheduled': 'scheduled',
   'In Progress': 'in_progress',
   'Complete': 'completed',
   'Cancelled': 'cancelled',

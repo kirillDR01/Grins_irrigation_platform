@@ -19,53 +19,53 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
 
 ### Phase 1: Bugs & Data Integrity (Req 1–4)
 
-- [ ] 1. Security Fix — Auth Guard on Job Creation Endpoint (Req 4)
-  - [ ] 1.1 Add `CurrentActiveUser` dependency to `POST /api/v1/jobs` endpoint
+- [x] 1. Security Fix — Auth Guard on Job Creation Endpoint (Req 4)
+  - [x] 1.1 Add `CurrentActiveUser` dependency to `POST /api/v1/jobs` endpoint
     - In `src/grins_platform/api/v1/jobs.py` (lines 515-571), add `_user: CurrentActiveUser` parameter to the `create_job` function signature
     - Verify unauthenticated requests now return HTTP 401
     - Verify authenticated requests continue to work identically
     - _Requirements: 4.1, 4.2, 4.3_
 
-  - [ ] 1.2 Write unit test for auth guard
+  - [x] 1.2 Write unit test for auth guard
     - Test: unauthenticated `POST /api/v1/jobs` returns 401
     - Test: authenticated `POST /api/v1/jobs` creates job normally
     - _Requirements: 4.1, 4.2_
 
-- [ ] 2. Bug Fix — Google Review SMS Actually Sends (Req 1)
-  - [ ] 2.1 Add `sms_service.send_message()` call to `request_google_review()`
+- [x] 2. Bug Fix — Google Review SMS Actually Sends (Req 1)
+  - [x] 2.1 Add `sms_service.send_message()` call to `request_google_review()`
     - In `src/grins_platform/services/appointment_service.py` (lines 1050-1134), after consent check and dedup validation, call `sms_service.send_message()` with `MessageType.GOOGLE_REVIEW_REQUEST`
     - Load the review URL from `GOOGLE_REVIEW_URL` environment variable with fallback to existing hardcoded URL `"https://g.page/r/grins-irrigations/review"`
     - Log the sent SMS in `sent_messages` table
     - Return `sent=True` with provider SID on success, `sent=False` with error on failure
     - _Requirements: 1.1, 1.2, 1.4, 1.5_
 
-  - [ ] 2.2 Verify existing consent and dedup guards remain intact
+  - [x] 2.2 Verify existing consent and dedup guards remain intact
     - Confirm 30-day deduplication window still blocks duplicate sends
     - Confirm `sms_opt_in` consent check still prevents sends to non-consented customers
     - _Requirements: 1.3_
 
-  - [ ] 2.3 Write unit tests for Google Review SMS
+  - [x] 2.3 Write unit tests for Google Review SMS
     - Test: click review push → `sms_service.send_message()` is called with correct message type and review URL
     - Test: 30-day dedup blocks second send within window
     - Test: SMS consent check blocks send when `sms_opt_in = False`
     - Test: SMS send failure returns `sent=False` without crashing
     - _Requirements: 1.1, 1.3, 1.4_
 
-- [ ] 3. Bug Fix — Cancellation Clears On-Site Operations Data (Req 2)
-  - [ ] 3.1 Implement `clear_on_site_data()` helper function
+- [x] 3. Bug Fix — Cancellation Clears On-Site Operations Data (Req 2)
+  - [x] 3.1 Implement `clear_on_site_data()` helper function
     - Create helper in `src/grins_platform/services/appointment_service.py` that nullifies `on_my_way_at`, `started_at`, `completed_at` on appointment record
     - Delete related "On My Way" SMS send records (`sent_messages` where `appointment_id` matches and `message_type = ON_MY_WAY`) so replacement appointments can send fresh SMS
     - Clear payment/invoice warning override flags
     - If no other active appointments exist for the parent job, also nullify the same fields on the job record
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
-  - [ ] 3.2 Wire cleanup into appointment cancellation paths
+  - [x] 3.2 Wire cleanup into appointment cancellation paths
     - Admin cancellation endpoint in `src/grins_platform/api/v1/appointments.py` — call `clear_on_site_data()` when appointment is cancelled
     - SMS "C" reply handler in `src/grins_platform/services/job_confirmation_service.py` `_handle_cancel()` (lines 217-241) — call `clear_on_site_data()` after transitioning to CANCELLED
     - Job cancellation endpoint in `src/grins_platform/api/v1/jobs.py` — clear timestamps on the job record when job is cancelled
     - _Requirements: 2.1, 2.2, 2.3_
 
-  - [ ] 3.3 Write unit tests for cancellation cleanup
+  - [x] 3.3 Write unit tests for cancellation cleanup
     - Test: cancel appointment with `on_my_way_at` set → all three timestamps are null after cancel
     - Test: cancel appointment → On My Way SMS record deleted, new appointment can send fresh On My Way
     - Test: cancel only appointment for a job → job timestamps also cleared
@@ -73,32 +73,32 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
     - Test: create new appointment after cancellation → starts with all fields null, no inherited data
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.6_
 
-- [ ] 4. On-Site Status Progression — Wire Buttons to Transitions (Req 3)
-  - [ ] 4.1 Create `get_active_appointment_for_job()` helper function
+- [x] 4. On-Site Status Progression — Wire Buttons to Transitions (Req 3)
+  - [x] 4.1 Create `get_active_appointment_for_job()` helper function
     - In `src/grins_platform/api/v1/jobs.py`, add helper that queries for the most recent non-terminal appointment for a given job (exclude COMPLETED, CANCELLED, NO_SHOW)
     - Return `None` if no active appointment exists
     - _Requirements: 3.1, 3.3, 3.4_
 
-  - [ ] 4.2 Wire "On My Way" to appointment EN_ROUTE transition
+  - [x] 4.2 Wire "On My Way" to appointment EN_ROUTE transition
     - In `POST /api/v1/jobs/{job_id}/on-my-way` (lines 1092-1152), after existing timestamp logging and SMS send, transition the active appointment from CONFIRMED or SCHEDULED to EN_ROUTE
     - _Requirements: 3.1, 3.2_
 
-  - [ ] 4.3 Wire "Job Started" to job IN_PROGRESS and appointment IN_PROGRESS transitions
+  - [x] 4.3 Wire "Job Started" to job IN_PROGRESS and appointment IN_PROGRESS transitions
     - In `POST /api/v1/jobs/{job_id}/started` (lines 1155-1186), after logging timestamp, transition job to IN_PROGRESS and appointment from EN_ROUTE (or CONFIRMED if On My Way was skipped) to IN_PROGRESS
     - **Note:** Job → IN_PROGRESS transition was already implemented in the E2E bug fixes (Bug #7, commit cf2cee9). This task only needs to add the appointment → IN_PROGRESS transition.
     - _Requirements: 3.3_
 
-  - [ ] 4.4 Wire "Job Complete" to also complete the appointment
+  - [x] 4.4 Wire "Job Complete" to also complete the appointment
     - In `POST /api/v1/jobs/{job_id}/complete` (lines 912-1036), after existing job → COMPLETED transition, also transition the active appointment to COMPLETED
     - Handle skip scenario: if On My Way / Job Started were skipped, appointment goes directly to COMPLETED from whatever state it's in
     - _Requirements: 3.4, 3.7_
 
-  - [ ] 4.5 Update `VALID_APPOINTMENT_TRANSITIONS` to allow new paths
+  - [x] 4.5 Update `VALID_APPOINTMENT_TRANSITIONS` to allow new paths
     - In `src/grins_platform/api/v1/appointments.py` (lines 29-56): add `SCHEDULED → EN_ROUTE` (for On My Way on unconfirmed appointment)
     - Verify existing paths are preserved: CONFIRMED → EN_ROUTE, EN_ROUTE → IN_PROGRESS, IN_PROGRESS → COMPLETED
     - _Requirements: 3.2, 3.5_
 
-  - [ ] 4.6 Write unit tests for on-site status progression
+  - [x] 4.6 Write unit tests for on-site status progression
     - Test full happy path: On My Way → Started → Complete — verify job and appointment statuses at each step
     - Test skip scenarios: Complete without Started, Complete without On My Way, Started without On My Way
     - Test On My Way on SCHEDULED (unconfirmed) appointment → EN_ROUTE
@@ -106,19 +106,19 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
     - Test existing behavior preserved: timestamps still logged, SMS still sent, payment warning still works
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8_
 
-- [ ] 5. Bug Fix — Appointment Edit Button Not Wired Up (Req 18)
-  - [ ] 5.1 Add edit state management to SchedulePage.tsx
+- [x] 5. Bug Fix — Appointment Edit Button Not Wired Up (Req 18)
+  - [x] 5.1 Add edit state management to SchedulePage.tsx
     - Add `editingAppointment: Appointment | null` state to `SchedulePage.tsx`
     - Add a handler function that receives the appointment from `AppointmentDetail`, closes the detail dialog, and opens the edit dialog with the appointment data
     - Pass this handler down to `AppointmentDetail` as an `onEdit` prop
     - _Requirements: 18.4_
 
-  - [ ] 5.2 Wire onClick handler to Edit button in AppointmentDetail.tsx
+  - [x] 5.2 Wire onClick handler to Edit button in AppointmentDetail.tsx
     - In `AppointmentDetail.tsx` (lines 432-440), add `onClick={() => onEdit(appointment)}` to the Edit button
     - The `onEdit` prop comes from `SchedulePage.tsx` and triggers the edit flow
     - _Requirements: 18.1_
 
-  - [ ] 5.3 Add edit dialog to SchedulePage.tsx
+  - [x] 5.3 Add edit dialog to SchedulePage.tsx
     - Render `AppointmentForm` in a dialog/modal when `editingAppointment` is set
     - Pass the appointment data to `AppointmentForm` via the `appointment` prop (it already supports edit mode with `isEditing = !!appointment`)
     - On form submit, call the existing `useUpdateAppointment()` mutation (`PUT /api/v1/appointments/{id}`)
@@ -126,14 +126,14 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
     - On cancel, clear `editingAppointment` and re-open the detail modal
     - _Requirements: 18.1, 18.2, 18.3_
 
-  - [ ] 5.4 Write unit tests for appointment edit wiring
+  - [x] 5.4 Write unit tests for appointment edit wiring
     - Test: clicking Edit button calls `onEdit` with the correct appointment data
     - Test: edit form opens pre-populated with appointment date, time, job, staff, notes
     - Test: saving edit calls `useUpdateAppointment()` mutation and refreshes calendar
     - Test: cancelling edit returns to detail modal without changes
     - _Requirements: 18.1, 18.2, 18.3_
 
-- [ ] 6. Checkpoint — Bugs & Data Integrity complete
+- [-] 6. Checkpoint — Bugs & Data Integrity complete
   - Run all unit tests, verify they pass. Ask the user if questions arise.
 
 - [ ] 6.1 E2E Visual Validation — Bugs & Data Integrity
@@ -173,92 +173,92 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
 
 ### Phase 2: Workflow & Logic Gaps (Req 5–10)
 
-- [ ] 7. Database Migration — Add SCHEDULED and DRAFT Enum Values (Req 5, 8)
-  - [ ] 7.1 Create Alembic migration `add_scheduled_and_draft_statuses`
+- [x] 7. Database Migration — Add SCHEDULED and DRAFT Enum Values (Req 5, 8)
+  - [x] 7.1 Create Alembic migration `add_scheduled_and_draft_statuses`
     - Add `SCHEDULED` to `JobStatus` PostgreSQL enum (after `to_be_scheduled`)
     - Add `DRAFT` to `AppointmentStatus` PostgreSQL enum (after `pending`)
     - _Requirements: 5.8, 8.1_
 
-  - [ ] 7.2 Update Python enums in `src/grins_platform/models/enums.py`
+  - [x] 7.2 Update Python enums in `src/grins_platform/models/enums.py`
     - Add `SCHEDULED = "scheduled"` to `JobStatus` enum between TO_BE_SCHEDULED and IN_PROGRESS
     - Add `DRAFT = "draft"` to `AppointmentStatus` enum between PENDING and SCHEDULED
     - _Requirements: 5.1, 8.1_
 
-  - [ ] 7.3 Run migration and verify
+  - [x] 7.3 Run migration and verify
     - Run `alembic upgrade head` and verify migration applies cleanly
     - Ensure all existing tests still pass with the new enum values
     - _Requirements: 5.8, 8.1_
 
-- [ ] 8. Add "Scheduled" Job Status (Req 5)
-  - [ ] 8.1 Update `VALID_STATUS_TRANSITIONS` in jobs.py
+- [x] 8. Add "Scheduled" Job Status (Req 5)
+  - [x] 8.1 Update `VALID_STATUS_TRANSITIONS` in jobs.py
     - In `src/grins_platform/api/v1/jobs.py` (lines 45-57), add:
       - `to_be_scheduled → [scheduled, in_progress, cancelled]`
       - `scheduled → [in_progress, to_be_scheduled, cancelled]` (new entry)
     - Remove `to_be_scheduled` from `in_progress` targets (use `cancelled` for that direction instead)
     - _Requirements: 5.2_
 
-  - [ ] 8.2 Auto-transition job to SCHEDULED on appointment creation
+  - [x] 8.2 Auto-transition job to SCHEDULED on appointment creation
     - In the appointment creation flow (`src/grins_platform/services/appointment_service.py`), after creating the appointment, check if the linked job is in TO_BE_SCHEDULED status and transition it to SCHEDULED
     - _Requirements: 5.3_
 
-  - [ ] 8.3 Revert job to TO_BE_SCHEDULED on last appointment cancellation
+  - [x] 8.3 Revert job to TO_BE_SCHEDULED on last appointment cancellation
     - In the cancellation cleanup logic (from task 3.2), after cancelling an appointment: if the job is in SCHEDULED status and no other active appointments exist, revert job to TO_BE_SCHEDULED
     - If other active appointments still exist, keep job as SCHEDULED
     - _Requirements: 5.4, 5.5_
 
-  - [ ] 8.4 Update Jobs tab frontend — status filter and badge
+  - [x] 8.4 Update Jobs tab frontend — status filter and badge
     - Add "Scheduled" to the status filter dropdown in `JobList.tsx`
     - Render "Scheduled" status badge with a distinct color (blue) in both the Jobs tab list and job detail view
     - _Requirements: 5.6, 5.7_
 
-  - [ ] 8.5 Write unit tests for Scheduled status
+  - [x] 8.5 Write unit tests for Scheduled status
     - Test: create appointment → job transitions from TO_BE_SCHEDULED to SCHEDULED
     - Test: cancel only appointment → job reverts to TO_BE_SCHEDULED
     - Test: cancel one of two appointments → job stays SCHEDULED
     - Test: SCHEDULED job can transition to IN_PROGRESS (Job Started) and CANCELLED
     - _Requirements: 5.2, 5.3, 5.4, 5.5_
 
-- [ ] 9. No-Estimate-Jobs Enforcement (Req 6)
-  - [ ] 9.1 Add estimate warning to "Move to Jobs" backend
+- [x] 9. No-Estimate-Jobs Enforcement (Req 6)
+  - [x] 9.1 Add estimate warning to "Move to Jobs" backend
     - In `POST /api/v1/leads/{id}/move-to-jobs`, when the lead's situation maps to `requires_estimate`, return a `requires_estimate_warning: true` flag in the response instead of silently creating the job
     - Log the override for audit purposes if the frontend confirms "Move to Jobs" anyway
     - **Note:** The E2E bug fixes (Bug #2, commit cf2cee9) currently auto-redirect requires_estimate leads to Sales without asking. This task changes that behavior to show a warning modal with three options instead of silently redirecting. The backend `move_to_jobs()` guard in `lead_service.py` will need to be updated to return a warning flag rather than calling `move_to_sales()` directly.
     - _Requirements: 6.1, 6.2_
 
-  - [ ] 9.2 Build confirmation modal in Leads tab frontend
+  - [x] 9.2 Build confirmation modal in Leads tab frontend
     - When `requires_estimate_warning` is true in the move-to-jobs response, show a confirmation modal: "This job type typically requires an estimate. Move to Jobs anyway, or move to Sales for the estimate workflow?"
     - Three buttons: "Move to Jobs" (proceed), "Move to Sales" (redirect), "Cancel"
     - _Requirements: 6.1, 6.3_
 
-  - [ ] 9.3 Add "Estimate Needed" visual badge to Jobs tab
+  - [x] 9.3 Add "Estimate Needed" visual badge to Jobs tab
     - In `JobList.tsx`, add an amber/yellow "Estimate Needed" badge on jobs where `category === "requires_estimate"`
     - Also show the badge on the job detail view header in `JobDetail.tsx`
     - Add a filter option for `REQUIRES_ESTIMATE` category in the Jobs tab filter panel
     - _Requirements: 6.5, 6.6, 6.7_
 
-  - [ ] 9.4 Write unit tests for no-estimate enforcement
+  - [x] 9.4 Write unit tests for no-estimate enforcement
     - Test: lead with `requires_estimate` situation → move-to-jobs returns warning flag
     - Test: lead with normal situation → move-to-jobs proceeds without warning
     - Test: confirmed override logs audit entry
     - _Requirements: 6.1, 6.2, 6.4_
 
-- [ ] 10. Payment Warning — Skip for Service Agreement Jobs (Req 7)
-  - [ ] 10.1 Add service agreement check to job completion logic
+- [x] 10. Payment Warning — Skip for Service Agreement Jobs (Req 7)
+  - [x] 10.1 Add service agreement check to job completion logic
     - In `POST /api/v1/jobs/{job_id}/complete` (lines 947-972), before the existing payment/invoice check, add: if `job.service_agreement_id` exists and the linked agreement is active (not expired, not cancelled), skip the warning entirely and proceed to completion
     - Updated check order: (1) active service agreement → skip, (2) payment_collected_on_site → skip, (3) any invoice exists → skip, (4) show warning
     - _Requirements: 7.1, 7.2, 7.6_
 
-  - [ ] 10.2 Add "Covered by Service Agreement" display to job detail frontend
+  - [x] 10.2 Add "Covered by Service Agreement" display to job detail frontend
     - When `job.service_agreement_id` is present and agreement is active, show "Covered by Service Agreement — [Agreement Name]" with a green indicator on the job detail / on-site view
     - Hide or disable "Create Invoice" and "Collect Payment" buttons for agreement-linked jobs
     - _Requirements: 7.3, 7.4_
 
-  - [ ] 10.3 Add "Prepaid" badge to Jobs tab and Schedule calendar
+  - [x] 10.3 Add "Prepaid" badge to Jobs tab and Schedule calendar
     - In `JobList.tsx`, add a "Prepaid" or "Agreement" green badge on service-agreement-linked jobs
     - In the Schedule tab calendar view, add a visual indicator on pre-paid appointment cards
     - _Requirements: 7.5_
 
-  - [ ] 10.4 Write unit tests for payment warning enhancement
+  - [x] 10.4 Write unit tests for payment warning enhancement
     - Test: job with active service agreement → complete without warning (force=false succeeds)
     - Test: job with expired service agreement → payment warning still shown
     - Test: job with no service agreement, no payment, no invoice → warning shown
@@ -266,40 +266,40 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
     - Test: job with no service agreement but payment collected → no warning
     - _Requirements: 7.1, 7.2, 7.6_
 
-- [ ] 11. Schedule Draft Mode — Decouple SMS from Appointment Creation (Req 8)
-  - [ ] 11.1 Update `VALID_APPOINTMENT_TRANSITIONS` for DRAFT status
+- [x] 11. Schedule Draft Mode — Decouple SMS from Appointment Creation (Req 8)
+  - [x] 11.1 Update `VALID_APPOINTMENT_TRANSITIONS` for DRAFT status
     - In `src/grins_platform/api/v1/appointments.py` (lines 29-56), add:
       - `pending → [draft, scheduled, cancelled]` (add draft as target)
       - `draft → [scheduled, cancelled]` (new entry entirely)
     - _Requirements: 8.14_
 
-  - [ ] 11.2 Change appointment creation to set DRAFT status
+  - [x] 11.2 Change appointment creation to set DRAFT status
     - In `src/grins_platform/services/appointment_service.py` `create_appointment()` (line 170), change initial status from `AppointmentStatus.SCHEDULED` to `AppointmentStatus.DRAFT`
     - Remove any SMS send that currently happens during appointment creation (if any)
     - _Requirements: 8.2_
 
-  - [ ] 11.3 Implement `POST /api/v1/appointments/{id}/send-confirmation` endpoint
+  - [x] 11.3 Implement `POST /api/v1/appointments/{id}/send-confirmation` endpoint
     - New endpoint that sends Y/R/C confirmation SMS via SMSService and transitions appointment from DRAFT to SCHEDULED
     - Reject with 422 if appointment is not in DRAFT status
     - _Requirements: 8.4, 8.12_
 
-  - [ ] 11.4 Implement `POST /api/v1/appointments/send-confirmations` bulk endpoint
+  - [x] 11.4 Implement `POST /api/v1/appointments/send-confirmations` bulk endpoint
     - Accepts a list of appointment IDs or a date range filter
     - Sends confirmation SMS for all DRAFT appointments in the set
     - Returns count of sent confirmations
     - _Requirements: 8.6, 8.13_
 
-  - [ ] 11.5 Implement post-send reschedule detection
+  - [x] 11.5 Implement post-send reschedule detection
     - When a SCHEDULED or CONFIRMED appointment's date/time is changed via the update endpoint, automatically send a reschedule notification SMS and reset status to SCHEDULED
     - When a DRAFT appointment is moved, do nothing (silent)
     - _Requirements: 8.8, 8.9_
 
-  - [ ] 11.6 Implement cancellation SMS logic based on appointment state
+  - [x] 11.6 Implement cancellation SMS logic based on appointment state
     - When a DRAFT appointment is deleted → no SMS (customer was never notified)
     - When a SCHEDULED or CONFIRMED appointment is deleted → send cancellation SMS
     - _Requirements: 8.10, 8.11_
 
-  - [ ] 11.7 Build draft mode frontend on Schedule tab
+  - [x] 11.7 Build draft mode frontend on Schedule tab
     - Add dotted border + grayed-out styling for DRAFT appointments on the calendar
     - Add "Send Confirmation" button/icon on each draft appointment card
     - Add "Send Confirmations for [Day]" button on each day column header
@@ -307,7 +307,7 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
     - Build summary modal for "Send All Confirmations": list customer names, appointment dates, Send All / Cancel buttons
     - _Requirements: 8.3, 8.4, 8.5, 8.6, 8.7_
 
-  - [ ] 11.8 Write unit tests for draft mode
+  - [x] 11.8 Write unit tests for draft mode
     - Test: creating appointment does NOT send SMS (status = DRAFT)
     - Test: send-confirmation sends SMS and transitions DRAFT → SCHEDULED
     - Test: bulk send sends SMS for all DRAFT appointments in range

@@ -104,3 +104,10 @@
   border-width: 2px;
   opacity: 0.65;
 }
+
+/* Draft appointment: dotted border, grayed-out (Req 8.3) */
+.fc .fc-event.appointment-draft {
+  border-style: dotted;
+  border-width: 2px;
+  opacity: 0.5;
+}

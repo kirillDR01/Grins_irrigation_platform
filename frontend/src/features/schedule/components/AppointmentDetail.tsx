@@ -28,6 +28,7 @@ import {
   FileText,
   Timer,
   ChevronDown,
+  Send,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAppointment } from '../hooks/useAppointments';
@@ -35,8 +36,10 @@ import {
   useConfirmAppointment,
   useCancelAppointment,
   useMarkAppointmentNoShow,
+  useSendConfirmation,
 } from '../hooks/useAppointmentMutations';
 import { appointmentStatusConfig } from '../types';
+import type { Appointment } from '../types';
 import { jobApi } from '@/features/jobs/api/jobApi';
 import { customerApi } from '@/features/customers/api/customerApi';
 import { LoadingSpinner } from '@/shared/components/LoadingSpinner';
@@ -50,17 +53,20 @@ import { ReviewRequest } from './ReviewRequest';
 interface AppointmentDetailProps {
   appointmentId: string;
   onClose?: () => void;
+  onEdit?: (appointment: Appointment) => void;
 }
 
 export function AppointmentDetail({
   appointmentId,
   onClose,
+  onEdit,
 }: AppointmentDetailProps) {
   const { data: appointment, isLoading, error } = useAppointment(appointmentId);
 
   const confirmMutation = useConfirmAppointment();
   const cancelMutation = useCancelAppointment();
   const noShowMutation = useMarkAppointmentNoShow();
+  const sendConfirmationMutation = useSendConfirmation();
 
   // Fetch job details for enrichment (Req 40)
   const { data: job } = useQuery({
@@ -105,6 +111,7 @@ export function AppointmentDetail({
 
   const statusConfig = appointmentStatusConfig[appointment.status];
   const isPending = appointment.status === 'pending';
+  const isDraft = appointment.status === 'draft';
   const isConfirmed = appointment.status === 'confirmed';
   const isEnRoute = appointment.status === 'en_route';
   const isInProgress = appointment.status === 'in_progress';
@@ -149,6 +156,9 @@ export function AppointmentDetail({
   };
   const handleNoShow = async () => {
     await noShowMutation.mutateAsync(appointmentId);
+  };
+  const handleSendConfirmation = async () => {
+    await sendConfirmationMutation.mutateAsync(appointmentId);
   };
 
   return (
@@ -417,6 +427,18 @@ export function AppointmentDetail({
       {!isTerminal && (
         <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/30">
           <div className="flex flex-col gap-2 md:flex-row md:flex-wrap">
+            {isDraft && (
+              <Button
+                onClick={handleSendConfirmation}
+                disabled={sendConfirmationMutation.isPending}
+                size="sm"
+                className="bg-teal-500 hover:bg-teal-600 text-white w-full min-h-[48px] text-sm md:w-auto md:min-h-0 md:h-8 md:text-xs"
+                data-testid="send-confirmation-btn"
+              >
+                <Send className="mr-1.5 h-3.5 w-3.5" />
+                Send Confirmation
+              </Button>
+            )}
             {isPending && (
               <Button
                 onClick={handleConfirm}
@@ -434,6 +456,7 @@ export function AppointmentDetail({
               size="sm"
               className="border-slate-200 text-slate-700 hover:bg-slate-50 w-full min-h-[48px] text-sm md:w-auto md:min-h-0 md:h-8 md:text-xs"
               data-testid="edit-btn"
+              onClick={() => onEdit?.(appointment)}
             >
               <Pencil className="mr-1.5 h-3.5 w-3.5" />
               Edit

@@ -59,14 +59,15 @@ export interface Lead extends BaseEntity {
   last_contacted_at: string | null;
 }
 
-// Lead move response (CRM2 Req 12.1, 12.2)
+// Lead move response (CRM2 Req 12.1, 12.2, Smoothing Req 6.1)
 export interface LeadMoveResponse {
   success: boolean;
   lead_id: string;
-  customer_id: string;
+  customer_id: string | null;
   job_id: string | null;
   sales_entry_id: string | null;
   message: string;
+  requires_estimate_warning: boolean;
 }
 
 // Lead attachment (Req 15)

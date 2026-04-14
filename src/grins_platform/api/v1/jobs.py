@@ -10,6 +10,7 @@ Validates: Requirement 2.1-2.12, 3.1-3.7, 4.1-4.10, 5.1-5.7, 6.1-6.9, 7.1-7.4, 1
 from __future__ import annotations
 
 import math
+import os
 from datetime import (
     date,
     datetime,
@@ -26,6 +27,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
+from grins_platform.api.v1.auth_dependencies import (
+    CurrentActiveUser,  # noqa: TC001 - Required at runtime for FastAPI DI
+)
 from grins_platform.api.v1.dependencies import (
     get_db_session,
     get_job_service,
@@ -43,6 +47,7 @@ from grins_platform.exceptions import (
 )
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import (
+    AppointmentStatus,
     JobCategory,
     JobStatus,
     PricingModel,
@@ -81,6 +86,40 @@ from grins_platform.services.photo_service import (
 )
 
 router = APIRouter()
+
+
+# =============================================================================
+# Helper: Get active (non-terminal) appointment for a job (Req 3.1, 3.3, 3.4)
+# =============================================================================
+
+
+async def get_active_appointment_for_job(
+    session: AsyncSession,
+    job_id: UUID,
+) -> "Appointment | None":
+    """Get the most recent non-terminal appointment for a job.
+
+    Queries for the latest appointment that is not COMPLETED, CANCELLED, or NO_SHOW.
+    Returns None if no active appointment exists.
+
+    Validates: Requirements 3.1, 3.3, 3.4
+    """
+    from grins_platform.models.appointment import Appointment  # noqa: PLC0415
+
+    terminal_statuses = {
+        AppointmentStatus.COMPLETED.value,
+        AppointmentStatus.CANCELLED.value,
+        AppointmentStatus.NO_SHOW.value,
+    }
+    stmt = (
+        sa_select(Appointment)
+        .where(Appointment.job_id == job_id)
+        .where(Appointment.status.not_in(terminal_statuses))
+        .order_by(Appointment.created_at.desc())
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
 
 
 class JobEndpoints(LoggerMixin):
@@ -126,6 +165,27 @@ def _populate_preference_notes(job: object, resp: JobResponse) -> None:
     resp.service_preference_notes = JobService._notes_from_preference(
         prefs, resp.job_type,
     )
+
+
+def _populate_agreement_fields(job: object, resp: JobResponse) -> None:
+    """Populate service agreement name and active status on a JobResponse.
+
+    Validates: Smoothing Req 7.3, 7.5
+    """
+    agreement = getattr(job, "service_agreement", None)
+    if agreement is None:
+        return
+    tier = getattr(agreement, "tier", None)
+    tier_name = getattr(tier, "name", None) if tier else None
+    resp.service_agreement_name = (
+        tier_name or agreement.agreement_number
+    )
+    is_active = (
+        agreement.status == "active"
+        and (agreement.end_date is None or agreement.end_date >= date.today())
+        and agreement.cancelled_at is None
+    )
+    resp.service_agreement_active = is_active
 
 
 # =============================================================================
@@ -357,6 +417,7 @@ async def list_jobs(
             resp.customer_phone = j.customer.phone
         _populate_property_fields(j, resp)
         _populate_preference_notes(j, resp)
+        _populate_agreement_fields(j, resp)
         items.append(resp)
 
     return PaginatedJobResponse(
@@ -521,6 +582,7 @@ async def get_jobs_by_status(
 )
 async def create_job(
     data: JobCreate,
+    _user: CurrentActiveUser,
     service: Annotated[JobService, Depends(get_job_service)],
 ) -> JobResponse:
     """Create a new job request.
@@ -611,6 +673,7 @@ async def get_job(
             resp.customer_phone = result.customer.phone
         _populate_property_fields(result, resp)
         _populate_preference_notes(result, resp)
+        _populate_agreement_fields(result, resp)
         return resp  # type: ignore[no-any-return]
 
 
@@ -697,6 +760,7 @@ async def update_job_status(
     job_id: UUID,
     data: JobStatusUpdate,
     service: Annotated[JobService, Depends(get_job_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> JobResponse:
     """Update job status with validation.
 
@@ -729,6 +793,13 @@ async def update_job_status(
             f"to {e.requested_status.value}",
         ) from e
     else:
+        # Clear on-site timestamps when job is cancelled (Req 2.1)
+        if data.status == JobStatus.CANCELLED:
+            result.on_my_way_at = None
+            result.started_at = None
+            result.completed_at = None
+            await session.flush()
+
         _endpoints.log_completed("update_job_status", job_id=str(job_id))
         return JobResponse.model_validate(result)  # type: ignore[no-any-return]
 
@@ -944,9 +1015,26 @@ async def complete_job(
             detail=f"Job not found: {job_id}",
         )
 
-    # Check for payment or invoice (Req 27.3, 27.4)
+    # (1) Check service agreement — skip warning if active (Req 7.1, 7.2, 7.6)
+    skip_payment_warning = False
+    if job.service_agreement_id:
+        from grins_platform.models.service_agreement import (  # noqa: PLC0415
+            ServiceAgreement,
+        )
+
+        agreement = await session.get(ServiceAgreement, job.service_agreement_id)
+        if (
+            agreement
+            and agreement.status == "active"
+            and (agreement.end_date is None or agreement.end_date >= date.today())
+            and agreement.cancelled_at is None
+        ):
+            skip_payment_warning = True
+
+    # (2) Check payment collected on site, (3) check invoice exists (Req 27.3, 27.4)
     has_payment = bool(job.payment_collected_on_site)
-    if not has_payment:
+    has_invoice = False
+    if not skip_payment_warning and not has_payment:
         inv_stmt = (
             sa_select(sa_func.count())
             .select_from(Invoice)
@@ -959,7 +1047,8 @@ async def complete_job(
     else:
         has_invoice = True
 
-    if not has_payment and not has_invoice and not force:
+    # (4) Show warning only if none of the above conditions are met
+    if not skip_payment_warning and not has_payment and not has_invoice and not force:
         _endpoints.log_completed(
             "complete_job",
             job_id=str(job_id),
@@ -1012,10 +1101,21 @@ async def complete_job(
     await session.refresh(job)
     job.time_tracking_metadata = tracking  # type: ignore[assignment]
     await session.flush()
+
+    # Also complete the active appointment (Req 3.4, 3.7)
+    appointment = await get_active_appointment_for_job(session, job_id)
+    if appointment and appointment.status not in (
+        AppointmentStatus.COMPLETED.value,
+        AppointmentStatus.CANCELLED.value,
+        AppointmentStatus.NO_SHOW.value,
+    ):
+        appointment.status = AppointmentStatus.COMPLETED.value
+        await session.flush()
+
     await session.refresh(job)
 
     # Write audit log if force-completed without payment (Req 27.5)
-    if force and not has_payment and not has_invoice:
+    if force and not skip_payment_warning and not has_payment and not has_invoice:
         from grins_platform.services.audit_service import AuditService  # noqa: PLC0415
 
         audit = AuditService()
@@ -1032,6 +1132,7 @@ async def complete_job(
 
     resp = JobResponse.model_validate(updated)
     _populate_property_fields(job, resp)
+    _populate_agreement_fields(job, resp)
     _endpoints.log_completed("complete_job", job_id=str(job_id))
     return JobCompleteResponse(completed=True, warning=None, job=resp)
 
@@ -1148,6 +1249,17 @@ async def on_my_way(
 
     await session.flush()
     await session.refresh(job)
+
+    # Transition appointment to EN_ROUTE (Req 3.1, 3.2)
+    appointment = await get_active_appointment_for_job(session, job_id)
+    if appointment and appointment.status in (
+        AppointmentStatus.CONFIRMED.value,
+        AppointmentStatus.SCHEDULED.value,
+    ):
+        appointment.status = AppointmentStatus.EN_ROUTE.value
+        await session.flush()
+
+    await session.refresh(job)
     _endpoints.log_completed("on_my_way", job_id=str(job_id))
     return JobResponse.model_validate(job)  # type: ignore[no-any-return]
 
@@ -1183,12 +1295,24 @@ async def job_started(
     job.started_at = datetime.now(tz=timezone.utc)
     await session.flush()
 
-    # Bug #7 fix: transition status to in_progress if currently to_be_scheduled
-    if job.status == JobStatus.TO_BE_SCHEDULED.value:
+    # Transition job to IN_PROGRESS if currently to_be_scheduled or scheduled
+    if job.status in (
+        JobStatus.TO_BE_SCHEDULED.value,
+        JobStatus.SCHEDULED.value,
+    ):
         await service.update_status(
             job_id,
             JobStatusUpdate(status=JobStatus.IN_PROGRESS),
         )
+
+    # Transition appointment to IN_PROGRESS (Req 3.3)
+    appointment = await get_active_appointment_for_job(session, job_id)
+    if appointment and appointment.status in (
+        AppointmentStatus.EN_ROUTE.value,
+        AppointmentStatus.CONFIRMED.value,  # Skip scenario: On My Way was skipped
+    ):
+        appointment.status = AppointmentStatus.IN_PROGRESS.value
+        await session.flush()
 
     await session.refresh(job)
     _endpoints.log_completed("job_started", job_id=str(job_id))
@@ -1377,7 +1501,10 @@ async def review_push(
             detail="Customer has no phone number for review push",
         )
 
-    review_url = "https://g.page/r/grins-irrigations/review"
+    review_url = os.environ.get(
+        "GOOGLE_REVIEW_URL",
+        "https://g.page/r/grins-irrigations/review",
+    )
     message = (
         f"Hi {customer.first_name or 'there'}! "
         "Thank you for choosing Grin's Irrigations. "

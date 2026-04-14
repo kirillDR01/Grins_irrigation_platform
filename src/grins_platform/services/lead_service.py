@@ -946,13 +946,20 @@ class LeadService(LoggerMixin):
 
         return customer.id
 
-    async def move_to_jobs(self, lead_id: UUID) -> LeadMoveResponse:
+    async def move_to_jobs(
+        self, lead_id: UUID, *, force: bool = False
+    ) -> LeadMoveResponse:
         """Move a lead to the Jobs tab.
 
         Auto-generates a customer if needed, creates a Job with TO_BE_SCHEDULED,
         and marks the lead as moved.
 
-        Validates: CRM2 Req 9.2, 12.1
+        When the lead's situation maps to requires_estimate and force=False,
+        returns a warning flag instead of creating the job. The frontend shows
+        a confirmation modal. If force=True, proceeds with job creation and
+        logs the override for audit purposes.
+
+        Validates: CRM2 Req 9.2, 12.1, Smoothing Req 6.1, 6.2
         """
         self.log_started("move_to_jobs", lead_id=str(lead_id))
 
@@ -969,24 +976,26 @@ class LeadService(LoggerMixin):
             ("requires_estimate", "consultation", "Consultation"),
         )
 
-        # Bug #2 fix: requires_estimate leads should go to Sales, not Jobs
-        if _category == "requires_estimate":
+        # Req 6.1: requires_estimate leads get a warning instead of silent redirect
+        if _category == "requires_estimate" and not force:
             self.log_started(
-                "move_to_jobs.redirect_to_sales",
+                "move_to_jobs.requires_estimate_warning",
                 lead_id=str(lead_id),
-                reason="requires_estimate",
-            )
-            result = await self.move_to_sales(lead_id)
-            self.log_completed(
-                "move_to_jobs.redirect_to_sales",
-                lead_id=str(lead_id),
-                sales_entry_id=str(result.sales_entry_id),
+                situation=situation_key,
             )
             return LeadMoveResponse(
                 lead_id=lead_id,
-                customer_id=result.customer_id,
-                sales_entry_id=result.sales_entry_id,
-                message="Lead requires estimate — redirected to Sales pipeline",
+                requires_estimate_warning=True,
+                message="This job type typically requires an estimate. Move to Jobs anyway, or move to Sales for the estimate workflow?",
+            )
+
+        # Req 6.2: If force=True on a requires_estimate lead, log the override
+        if _category == "requires_estimate" and force:
+            self.log_started(
+                "move_to_jobs.estimate_override",
+                lead_id=str(lead_id),
+                situation=situation_key,
+                reason="admin_confirmed_move_to_jobs",
             )
 
         customer_id = await self._ensure_customer_for_lead(lead)

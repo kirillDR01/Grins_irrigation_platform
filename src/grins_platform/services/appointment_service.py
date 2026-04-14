@@ -26,10 +26,11 @@ from grins_platform.exceptions import (
     StaffConflictError,
     StaffNotFoundError,
 )
-from grins_platform.log_config import LoggerMixin
+from grins_platform.log_config import LoggerMixin, get_logger
 from grins_platform.models.enums import (
     AppointmentStatus,
     InvoiceStatus,
+    JobStatus,
 )
 from grins_platform.schemas.appointment_ops import (
     LeadTimeResult,
@@ -42,8 +43,11 @@ from grins_platform.schemas.appointment_ops import (
 if TYPE_CHECKING:
     from uuid import UUID
 
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from grins_platform.models.appointment import Appointment
     from grins_platform.models.invoice import Invoice
+    from grins_platform.models.job import Job
     from grins_platform.repositories.appointment_repository import (
         AppointmentRepository,
     )
@@ -75,6 +79,7 @@ _STATUS_TRANSITIONS: dict[str, list[str]] = {
 # Statuses from which cancellation is allowed
 _CANCELLABLE_STATUSES: set[str] = {
     AppointmentStatus.PENDING.value,
+    AppointmentStatus.DRAFT.value,
     AppointmentStatus.SCHEDULED.value,
     AppointmentStatus.CONFIRMED.value,
     AppointmentStatus.EN_ROUTE.value,
@@ -89,6 +94,125 @@ _NO_SHOW_STATUSES: set[str] = {
 
 # Review dedup window in days
 _REVIEW_DEDUP_DAYS = 30
+
+# Terminal appointment statuses (not counted as "active")
+_TERMINAL_STATUSES: set[str] = {
+    AppointmentStatus.COMPLETED.value,
+    AppointmentStatus.CANCELLED.value,
+    AppointmentStatus.NO_SHOW.value,
+}
+
+
+async def count_active_appointments(
+    session: AsyncSession,
+    job_id: UUID,
+    *,
+    exclude: UUID | None = None,
+) -> int:
+    """Count non-terminal appointments for a job, optionally excluding one.
+
+    Args:
+        session: Active database session.
+        job_id: The job whose appointments to count.
+        exclude: Optional appointment ID to exclude from the count.
+
+    Returns:
+        Number of active (non-terminal) appointments.
+
+    Validates: Requirements 2.3, 2.4
+    """
+    from sqlalchemy import func as sa_func  # noqa: PLC0415
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from grins_platform.models.appointment import Appointment  # noqa: PLC0415
+
+    stmt = (
+        select(sa_func.count())
+        .select_from(Appointment)
+        .where(
+            Appointment.job_id == job_id,
+            Appointment.status.notin_(_TERMINAL_STATUSES),
+        )
+    )
+    if exclude is not None:
+        stmt = stmt.where(Appointment.id != exclude)
+    result = await session.execute(stmt)
+    return result.scalar_one()
+
+
+async def clear_on_site_data(
+    session: AsyncSession,
+    appointment: Appointment,
+    job: Job | None = None,
+) -> None:
+    """Reset on-site operation fields after cancellation.
+
+    Clears timestamps on the appointment, deletes On My Way SMS records so a
+    replacement appointment can send fresh SMS, resets the payment-collected
+    flag, and — when no other active appointments remain — clears the parent
+    job's timestamps as well.
+
+    Args:
+        session: Active database session.
+        appointment: The appointment being cancelled.
+        job: Optional parent job; when supplied the function checks whether
+             job-level timestamps should also be cleared.
+
+    Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5
+    """
+    from sqlalchemy import delete  # noqa: PLC0415
+
+    from grins_platform.models.enums import MessageType  # noqa: PLC0415
+    from grins_platform.models.sent_message import SentMessage  # noqa: PLC0415
+
+    logger = get_logger(__name__)
+    logger.info(
+        "appointment.clear_on_site_data.started",
+        appointment_id=str(appointment.id),
+    )
+
+    # 1. Clear appointment on-site timestamps
+    appointment.en_route_at = None
+    appointment.arrived_at = None
+    appointment.completed_at = None
+
+    # 2. Delete On My Way SMS records so replacement can send fresh SMS
+    await session.execute(
+        delete(SentMessage).where(
+            SentMessage.appointment_id == appointment.id,
+            SentMessage.message_type == MessageType.ON_MY_WAY.value,
+        )
+    )
+
+    # 3. Clear payment/invoice warning override flag
+    if job is not None:
+        job.payment_collected_on_site = False
+
+    # 4. If job provided and no other active appointments, clear job timestamps
+    if job is not None:
+        active_count = await count_active_appointments(
+            session, job.id, exclude=appointment.id
+        )
+        if active_count == 0:
+            job.on_my_way_at = None
+            job.started_at = None
+            job.completed_at = None
+            # Revert job from SCHEDULED to TO_BE_SCHEDULED (Req 5.4)
+            from grins_platform.models.enums import JobStatus  # noqa: PLC0415
+
+            if job.status == JobStatus.SCHEDULED.value:
+                job.status = JobStatus.TO_BE_SCHEDULED.value
+                logger.info(
+                    "appointment.clear_on_site_data.job_reverted_to_be_scheduled",
+                    job_id=str(job.id),
+                )
+
+    await session.flush()
+
+    logger.info(
+        "appointment.clear_on_site_data.completed",
+        appointment_id=str(appointment.id),
+    )
 
 
 class AppointmentService(LoggerMixin):
@@ -184,9 +308,19 @@ class AppointmentService(LoggerMixin):
             scheduled_date=data.scheduled_date,
             time_window_start=data.time_window_start,
             time_window_end=data.time_window_end,
-            status=AppointmentStatus.SCHEDULED.value,
+            status=AppointmentStatus.DRAFT.value,
             notes=data.notes,
         )
+
+        # Auto-transition job to SCHEDULED if currently TO_BE_SCHEDULED (Req 5.3)
+        if job.status == JobStatus.TO_BE_SCHEDULED.value:
+            job.status = JobStatus.SCHEDULED.value
+            session = self.appointment_repository.session
+            await session.flush()
+            self.log_completed(
+                "auto_transition_job_scheduled",
+                job_id=str(data.job_id),
+            )
 
         self.log_completed(
             "create_appointment",
@@ -295,6 +429,28 @@ class AppointmentService(LoggerMixin):
 
         updated = await self.appointment_repository.update(appointment_id, update_data)
 
+        # Req 8.8, 8.9: Post-send reschedule detection
+        # If a SCHEDULED or CONFIRMED appointment's date/time changed, send reschedule SMS
+        # and reset to SCHEDULED. DRAFT appointments are silent.
+        if is_rescheduling and appointment.status in (
+            AppointmentStatus.SCHEDULED.value,
+            AppointmentStatus.CONFIRMED.value,
+        ):
+            session = self.appointment_repository.session
+            try:
+                await self._send_reschedule_sms(session, updated)  # type: ignore[arg-type]
+            except Exception:
+                self.log_failed(
+                    "reschedule_sms",
+                    appointment_id=str(appointment_id),
+                )
+            # Reset status to SCHEDULED (unconfirmed)
+            if updated and updated.status != AppointmentStatus.SCHEDULED.value:  # type: ignore[union-attr]
+                await self.appointment_repository.update(
+                    appointment_id,
+                    {"status": AppointmentStatus.SCHEDULED.value},
+                )
+
         self.log_completed("update_appointment", appointment_id=str(appointment_id))
         return updated  # type: ignore[return-value]
 
@@ -335,6 +491,29 @@ class AppointmentService(LoggerMixin):
             appointment_id,
             AppointmentStatus.CANCELLED,
         )
+
+        # Clear on-site data after cancellation (Req 2.1, 2.2, 2.3)
+        session = self.appointment_repository.session
+        job = await self.job_repository.get_by_id(appointment.job_id)
+        await clear_on_site_data(session, appointment, job=job)
+
+        # Req 8.10, 8.11: Cancellation SMS based on appointment state
+        # DRAFT → no SMS (customer was never notified)
+        # SCHEDULED, CONFIRMED, EN_ROUTE, IN_PROGRESS → send cancellation SMS
+        pre_cancel_status = appointment.status
+        if pre_cancel_status in (
+            AppointmentStatus.SCHEDULED.value,
+            AppointmentStatus.CONFIRMED.value,
+            AppointmentStatus.EN_ROUTE.value,
+            AppointmentStatus.IN_PROGRESS.value,
+        ):
+            try:
+                await self._send_cancellation_sms(session, appointment)
+            except Exception:
+                self.log_failed(
+                    "cancellation_sms",
+                    appointment_id=str(appointment_id),
+                )
 
         self.log_completed("cancel_appointment", appointment_id=str(appointment_id))
         return updated  # type: ignore[return-value]
@@ -613,8 +792,317 @@ class AppointmentService(LoggerMixin):
             },
         )
 
+        # Req 8.8, 8.9: Post-send reschedule detection for drag-drop
+        if appointment.status in (
+            AppointmentStatus.SCHEDULED.value,
+            AppointmentStatus.CONFIRMED.value,
+        ):
+            session = self.appointment_repository.session
+            try:
+                await self._send_reschedule_sms(session, updated)  # type: ignore[arg-type]
+            except Exception:
+                self.log_failed(
+                    "reschedule_sms",
+                    appointment_id=str(appointment_id),
+                )
+            # Reset status to SCHEDULED (unconfirmed)
+            if updated and updated.status != AppointmentStatus.SCHEDULED.value:  # type: ignore[union-attr]
+                await self.appointment_repository.update(
+                    appointment_id,
+                    {"status": AppointmentStatus.SCHEDULED.value},
+                )
+
         self.log_completed("reschedule", appointment_id=str(appointment_id))
         return updated  # type: ignore[return-value]
+
+    # =========================================================================
+    # Draft Mode Methods (Req 8)
+    # =========================================================================
+
+    async def send_confirmation(self, appointment_id: UUID) -> Appointment:
+        """Send confirmation SMS and transition DRAFT → SCHEDULED.
+
+        Args:
+            appointment_id: UUID of the draft appointment
+
+        Returns:
+            Updated Appointment instance
+
+        Raises:
+            AppointmentNotFoundError: If appointment not found
+            InvalidStatusTransitionError: If appointment is not in DRAFT status
+
+        Validates: Req 8.4, 8.12
+        """
+        self.log_started("send_confirmation", appointment_id=str(appointment_id))
+
+        appointment = await self.appointment_repository.get_by_id(appointment_id)
+        if not appointment:
+            self.log_rejected("send_confirmation", reason="not_found")
+            raise AppointmentNotFoundError(appointment_id)
+
+        if appointment.status != AppointmentStatus.DRAFT.value:
+            self.log_rejected(
+                "send_confirmation",
+                reason="not_draft",
+                current_status=appointment.status,
+            )
+            raise InvalidStatusTransitionError(
+                AppointmentStatus(appointment.status),
+                AppointmentStatus.SCHEDULED,
+            )
+
+        # Send Y/R/C confirmation SMS
+        session = self.appointment_repository.session
+        await self._send_confirmation_sms(session, appointment)
+
+        # Transition DRAFT → SCHEDULED
+        updated = await self.appointment_repository.update(
+            appointment_id,
+            {"status": AppointmentStatus.SCHEDULED.value},
+        )
+
+        self.log_completed("send_confirmation", appointment_id=str(appointment_id))
+        return updated  # type: ignore[return-value]
+
+    async def bulk_send_confirmations(
+        self,
+        appointment_ids: list[UUID] | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> dict[str, int]:
+        """Send confirmation SMS for multiple DRAFT appointments.
+
+        Args:
+            appointment_ids: Specific appointment IDs to confirm
+            date_from: Start date for date range filter
+            date_to: End date for date range filter
+
+        Returns:
+            Dict with sent_count, failed_count, total_draft
+
+        Validates: Req 8.6, 8.13
+        """
+        self.log_started(
+            "bulk_send_confirmations",
+            ids_count=len(appointment_ids) if appointment_ids else 0,
+            date_from=str(date_from) if date_from else None,
+            date_to=str(date_to) if date_to else None,
+        )
+
+        session = self.appointment_repository.session
+
+        # Build query for DRAFT appointments
+        from sqlalchemy import select  # noqa: PLC0415
+
+        from grins_platform.models.appointment import Appointment as AppointmentModel  # noqa: PLC0415
+
+        stmt = select(AppointmentModel).where(
+            AppointmentModel.status == AppointmentStatus.DRAFT.value
+        )
+
+        if appointment_ids:
+            stmt = stmt.where(AppointmentModel.id.in_(appointment_ids))
+        if date_from:
+            stmt = stmt.where(AppointmentModel.scheduled_date >= date_from)
+        if date_to:
+            stmt = stmt.where(AppointmentModel.scheduled_date <= date_to)
+
+        result = await session.execute(stmt)
+        draft_appointments = list(result.scalars().all())
+        total_draft = len(draft_appointments)
+
+        sent_count = 0
+        failed_count = 0
+
+        for appt in draft_appointments:
+            try:
+                await self._send_confirmation_sms(session, appt)
+                appt.status = AppointmentStatus.SCHEDULED.value
+                sent_count += 1
+            except Exception:
+                self.log_failed(
+                    "bulk_send_confirmation_item",
+                    appointment_id=str(appt.id),
+                )
+                failed_count += 1
+
+        await session.flush()
+
+        self.log_completed(
+            "bulk_send_confirmations",
+            sent_count=sent_count,
+            failed_count=failed_count,
+            total_draft=total_draft,
+        )
+        return {
+            "sent_count": sent_count,
+            "failed_count": failed_count,
+            "total_draft": total_draft,
+        }
+
+    async def _send_confirmation_sms(
+        self,
+        session: AsyncSession,
+        appointment: Appointment,
+    ) -> None:
+        """Send Y/R/C confirmation SMS for an appointment.
+
+        Validates: Req 8.4
+        """
+        from grins_platform.models.customer import Customer  # noqa: PLC0415
+        from grins_platform.models.job import Job  # noqa: PLC0415
+        from grins_platform.schemas.ai import MessageType  # noqa: PLC0415
+        from grins_platform.services.sms.factory import (  # noqa: PLC0415
+            get_sms_provider,
+        )
+        from grins_platform.services.sms.recipient import Recipient  # noqa: PLC0415
+        from grins_platform.services.sms_service import SMSService  # noqa: PLC0415
+
+        job = await session.get(Job, appointment.job_id)
+        if job is None:
+            return
+        customer = await session.get(Customer, job.customer_id)
+        if customer is None or not customer.phone:
+            return
+
+        sms_service = SMSService(session, provider=get_sms_provider())
+        recipient = Recipient.from_customer(customer)
+
+        date_str = str(appointment.scheduled_date)
+        window_start = getattr(appointment, "time_window_start", None)
+        window_end = getattr(appointment, "time_window_end", None)
+
+        def _fmt_time_12h(t: object) -> str:
+            s = str(t)[:5]
+            h, m = int(s[:2]), int(s[3:5])
+            suffix = "AM" if h < 12 else "PM"
+            h = h % 12 or 12
+            return f"{h}:{m:02d} {suffix}"
+
+        if window_start and window_end:
+            time_part = f" between {_fmt_time_12h(window_start)} and {_fmt_time_12h(window_end)}"
+        elif window_start:
+            time_part = f" at {_fmt_time_12h(window_start)}"
+        else:
+            time_part = ""
+
+        msg = (
+            f"Your appointment on {date_str}{time_part} has been scheduled. "
+            "Reply Y to confirm, R to reschedule, or C to cancel."
+        )
+
+        await sms_service.send_message(
+            recipient=recipient,
+            message=msg,
+            message_type=MessageType.APPOINTMENT_CONFIRMATION,
+            consent_type="transactional",
+            job_id=job.id,
+            appointment_id=appointment.id,
+        )
+
+    async def _send_reschedule_sms(
+        self,
+        session: AsyncSession,
+        appointment: Appointment,
+    ) -> None:
+        """Send reschedule notification SMS for a moved appointment.
+
+        Validates: Req 8.9
+        """
+        from grins_platform.models.customer import Customer  # noqa: PLC0415
+        from grins_platform.models.job import Job  # noqa: PLC0415
+        from grins_platform.schemas.ai import MessageType  # noqa: PLC0415
+        from grins_platform.services.sms.factory import (  # noqa: PLC0415
+            get_sms_provider,
+        )
+        from grins_platform.services.sms.recipient import Recipient  # noqa: PLC0415
+        from grins_platform.services.sms_service import SMSService  # noqa: PLC0415
+
+        job = await session.get(Job, appointment.job_id)
+        if job is None:
+            return
+        customer = await session.get(Customer, job.customer_id)
+        if customer is None or not customer.phone:
+            return
+
+        sms_service = SMSService(session, provider=get_sms_provider())
+        recipient = Recipient.from_customer(customer)
+
+        date_str = str(appointment.scheduled_date)
+        window_start = getattr(appointment, "time_window_start", None)
+        window_end = getattr(appointment, "time_window_end", None)
+
+        def _fmt_time_12h(t: object) -> str:
+            s = str(t)[:5]
+            h, m = int(s[:2]), int(s[3:5])
+            suffix = "AM" if h < 12 else "PM"
+            h = h % 12 or 12
+            return f"{h}:{m:02d} {suffix}"
+
+        if window_start and window_end:
+            time_part = f" between {_fmt_time_12h(window_start)} and {_fmt_time_12h(window_end)}"
+        elif window_start:
+            time_part = f" at {_fmt_time_12h(window_start)}"
+        else:
+            time_part = ""
+
+        msg = (
+            f"Your appointment has been rescheduled to {date_str}{time_part}. "
+            "Reply Y to confirm, R to reschedule, or C to cancel."
+        )
+
+        await sms_service.send_message(
+            recipient=recipient,
+            message=msg,
+            message_type=MessageType.APPOINTMENT_CONFIRMATION,
+            consent_type="transactional",
+            job_id=job.id,
+            appointment_id=appointment.id,
+        )
+
+    async def _send_cancellation_sms(
+        self,
+        session: AsyncSession,
+        appointment: Appointment,
+    ) -> None:
+        """Send cancellation notification SMS.
+
+        Validates: Req 8.11
+        """
+        from grins_platform.models.customer import Customer  # noqa: PLC0415
+        from grins_platform.models.job import Job  # noqa: PLC0415
+        from grins_platform.schemas.ai import MessageType  # noqa: PLC0415
+        from grins_platform.services.sms.factory import (  # noqa: PLC0415
+            get_sms_provider,
+        )
+        from grins_platform.services.sms.recipient import Recipient  # noqa: PLC0415
+        from grins_platform.services.sms_service import SMSService  # noqa: PLC0415
+
+        job = await session.get(Job, appointment.job_id)
+        if job is None:
+            return
+        customer = await session.get(Customer, job.customer_id)
+        if customer is None or not customer.phone:
+            return
+
+        sms_service = SMSService(session, provider=get_sms_provider())
+        recipient = Recipient.from_customer(customer)
+
+        date_str = str(appointment.scheduled_date)
+        msg = (
+            f"Your appointment on {date_str} has been cancelled. "
+            "Please contact us if you'd like to reschedule."
+        )
+
+        await sms_service.send_message(
+            recipient=recipient,
+            message=msg,
+            message_type=MessageType.APPOINTMENT_CONFIRMATION,
+            consent_type="transactional",
+            job_id=job.id,
+            appointment_id=appointment.id,
+        )
 
     async def transition_status(
         self,
@@ -1120,18 +1608,59 @@ class AppointmentService(LoggerMixin):
                     last_review.isoformat(),
                 )
 
-        # Send the review request (logged as sent_message with type review_request)
-        self.log_completed(
-            "request_google_review",
-            appointment_id=str(appointment_id),
-            customer_id=str(customer.id),
+        # Actually send the review request SMS (Req 1.1, 1.2, 1.5)
+        import os  # noqa: PLC0415
+
+        from grins_platform.models.enums import MessageType  # noqa: PLC0415
+        from grins_platform.services.sms.recipient import Recipient  # noqa: PLC0415
+        from grins_platform.services.sms_service import SMSService  # noqa: PLC0415
+
+        review_url = os.environ.get(
+            "GOOGLE_REVIEW_URL",
+            self.google_review_url or "https://g.page/r/grins-irrigations/review",
+        )
+        message = (
+            f"Hi {customer.first_name or 'there'}! "
+            "Thank you for choosing Grin's Irrigations. "
+            "We'd love your feedback — please leave us a Google review: "
+            f"{review_url}"
         )
 
-        return ReviewRequestResult(
-            sent=True,
-            channel="sms",
-            message="Google review request sent successfully",
-        )
+        recipient = Recipient.from_customer(customer)
+        session = self.appointment_repository.session
+        sms_service = SMSService(session)
+        try:
+            send_result = await sms_service.send_message(
+                recipient=recipient,
+                message=message,
+                message_type=MessageType.GOOGLE_REVIEW_REQUEST,
+                consent_type="transactional",
+                appointment_id=appointment_id,
+            )
+            provider_sid = send_result.get("message_id", "")
+            self.log_completed(
+                "request_google_review",
+                appointment_id=str(appointment_id),
+                customer_id=str(customer.id),
+                provider_sid=provider_sid,
+            )
+            return ReviewRequestResult(
+                sent=True,
+                channel="sms",
+                message="Google review request sent successfully",
+            )
+        except Exception as exc:
+            self.log_failed(
+                "request_google_review",
+                error=exc,
+                appointment_id=str(appointment_id),
+                customer_id=str(customer.id),
+            )
+            return ReviewRequestResult(
+                sent=False,
+                channel="sms",
+                message=f"Failed to send review request: {exc}",
+            )
 
     async def calculate_lead_time(
         self,
@@ -1447,7 +1976,9 @@ class AppointmentService(LoggerMixin):
                 select(SentMessage.created_at)
                 .where(
                     SentMessage.customer_id == customer_id,
-                    SentMessage.message_type == "review_request",
+                    SentMessage.message_type.in_(
+                        ["review_request", "google_review_request"],
+                    ),
                 )
                 .order_by(SentMessage.created_at.desc())
                 .limit(1)

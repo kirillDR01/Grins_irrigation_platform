@@ -134,7 +134,12 @@ class TestOnMyWay:
         job_result.scalar_one_or_none.return_value = job
         cust_result = Mock()
         cust_result.scalar_one_or_none.return_value = customer
-        mock_session.execute = AsyncMock(side_effect=[job_result, cust_result])
+        # Third call: get_active_appointment_for_job returns None
+        appt_result = Mock()
+        appt_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(
+            side_effect=[job_result, cust_result, appt_result],
+        )
 
         with patch(
             "grins_platform.services.sms_service.SMSService.send_message",
@@ -171,7 +176,12 @@ class TestOnMyWay:
         job_result.scalar_one_or_none.return_value = job
         cust_result = Mock()
         cust_result.scalar_one_or_none.return_value = customer
-        mock_session.execute = AsyncMock(side_effect=[job_result, cust_result])
+        # Third call: get_active_appointment_for_job returns None
+        appt_result = Mock()
+        appt_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(
+            side_effect=[job_result, cust_result, appt_result],
+        )
 
         with patch(
             "grins_platform.services.sms_service.SMSService.send_message",
@@ -194,7 +204,12 @@ class TestOnMyWay:
         job_result.scalar_one_or_none.return_value = job
         cust_result = Mock()
         cust_result.scalar_one_or_none.return_value = customer
-        mock_session.execute = AsyncMock(side_effect=[job_result, cust_result])
+        # Third call: get_active_appointment_for_job returns None
+        appt_result = Mock()
+        appt_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(
+            side_effect=[job_result, cust_result, appt_result],
+        )
 
         with patch(
             "grins_platform.services.sms_service.SMSService.send_message",

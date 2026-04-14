@@ -54,7 +54,10 @@ from grins_platform.schemas.appointment import (
     AppointmentPaginatedResponse,
     AppointmentResponse,
     AppointmentUpdate,
+    BulkSendConfirmationsRequest,
+    BulkSendConfirmationsResponse,
     DailyScheduleResponse,
+    SendConfirmationResponse,
     StaffDailyScheduleResponse,
     WeeklyScheduleResponse,
 )
@@ -86,6 +89,34 @@ class AppointmentEndpoints(LoggerMixin):
 
 
 _endpoints = AppointmentEndpoints()
+
+
+def _populate_appointment_extended_fields(
+    response: AppointmentResponse,
+    appointment: object,
+) -> None:
+    """Populate extended display fields on an AppointmentResponse.
+
+    Reads job_type, customer_name, staff_name, and service_agreement_id
+    from the appointment's relationships.
+    """
+    job = getattr(appointment, "job", None)
+    if job:
+        response.job_type = job.job_type
+        response.service_agreement_id = getattr(job, "service_agreement_id", None)
+        customer = getattr(job, "customer", None)
+        if customer:
+            response.customer_name = f"{customer.first_name} {customer.last_name}"
+    staff = getattr(appointment, "staff", None)
+    if staff:
+        response.staff_name = staff.name
+
+
+def _enrich_appointment_response(appointment: object) -> AppointmentResponse:
+    """Create an AppointmentResponse with extended fields populated."""
+    response = AppointmentResponse.model_validate(appointment)
+    _populate_appointment_extended_fields(response, appointment)
+    return response
 
 
 # =============================================================================
@@ -176,15 +207,7 @@ async def list_appointments(
     items: list[AppointmentResponse] = []
     for a in appointments:
         response = AppointmentResponse.model_validate(a)
-        # Add extended fields from relationships
-        if hasattr(a, "job") and a.job:
-            response.job_type = a.job.job_type
-            if hasattr(a.job, "customer") and a.job.customer:
-                response.customer_name = (
-                    f"{a.job.customer.first_name} {a.job.customer.last_name}"
-                )
-        if hasattr(a, "staff") and a.staff:
-            response.staff_name = a.staff.name
+        _populate_appointment_extended_fields(response, a)
         items.append(response)
 
     return AppointmentPaginatedResponse(
@@ -227,7 +250,7 @@ async def get_daily_schedule(
 
     return DailyScheduleResponse(
         date=schedule_date,
-        appointments=[AppointmentResponse.model_validate(a) for a in appointments],
+        appointments=[_enrich_appointment_response(a) for a in appointments],
         total_count=total,
     )
 
@@ -282,7 +305,7 @@ async def get_staff_daily_schedule(
         staff_id=staff_id,
         staff_name="",  # Would need to fetch from staff service
         date=schedule_date,
-        appointments=[AppointmentResponse.model_validate(a) for a in appointments],
+        appointments=[_enrich_appointment_response(a) for a in appointments],
         total_scheduled_minutes=total_minutes,
     )
 
@@ -326,7 +349,7 @@ async def get_weekly_schedule(
             DailyScheduleResponse(
                 date=day_date,
                 appointments=[
-                    AppointmentResponse.model_validate(a) for a in day_appointments
+                    _enrich_appointment_response(a) for a in day_appointments
                 ],
                 total_count=len(day_appointments),
             ),
@@ -459,11 +482,56 @@ async def create_appointment(
             detail=f"Staff not found: {e.staff_id}",
         ) from e
 
-    # CRM2 Req 24.1: Send appointment confirmation SMS
-    await _send_appointment_confirmation_sms(db, result)
+    # Draft mode (Req 8.2): No SMS on creation — appointment starts as DRAFT
 
     _endpoints.log_completed("create_appointment", appointment_id=str(result.id))
     return AppointmentResponse.model_validate(result)  # type: ignore[no-any-return]
+
+
+# =============================================================================
+# POST /api/v1/appointments/send-confirmations - Bulk send (Req 8)
+# NOTE: Static routes must come BEFORE dynamic /{appointment_id} routes
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/send-confirmations",
+    response_model=BulkSendConfirmationsResponse,
+    summary="Bulk send confirmation SMS for draft appointments",
+    description=(
+        "Sends Y/R/C confirmation SMS for all DRAFT appointments matching the filter. "
+        "Accepts appointment IDs or a date range."
+    ),
+)
+async def bulk_send_confirmations(
+    data: BulkSendConfirmationsRequest,
+    _current_user: CurrentActiveUser,
+    service: Annotated[AppointmentService, Depends(get_full_appointment_service)],
+) -> BulkSendConfirmationsResponse:
+    """Bulk send confirmation SMS for draft appointments.
+
+    Validates: Req 8.6, 8.13
+    """
+    _endpoints.log_started(
+        "bulk_send_confirmations",
+        ids_count=len(data.appointment_ids) if data.appointment_ids else 0,
+    )
+
+    result = await service.bulk_send_confirmations(
+        appointment_ids=data.appointment_ids,
+        date_from=data.date_from,
+        date_to=data.date_to,
+    )
+
+    _endpoints.log_completed(
+        "bulk_send_confirmations",
+        sent_count=result["sent_count"],
+    )
+    return BulkSendConfirmationsResponse(
+        sent_count=result["sent_count"],
+        failed_count=result["failed_count"],
+        total_draft=result["total_draft"],
+    )
 
 
 # =============================================================================
@@ -589,6 +657,59 @@ async def cancel_appointment(
         ) from e
 
     _endpoints.log_completed("cancel_appointment", appointment_id=str(appointment_id))
+
+
+# =============================================================================
+# POST /api/v1/appointments/{id}/send-confirmation - Draft → Scheduled (Req 8)
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{appointment_id}/send-confirmation",
+    response_model=SendConfirmationResponse,
+    summary="Send confirmation SMS for a draft appointment",
+    description=(
+        "Sends Y/R/C confirmation SMS and transitions appointment from DRAFT to SCHEDULED. "
+        "Returns 422 if appointment is not in DRAFT status."
+    ),
+)
+async def send_confirmation(
+    appointment_id: UUID,
+    _current_user: CurrentActiveUser,
+    service: Annotated[AppointmentService, Depends(get_full_appointment_service)],
+) -> SendConfirmationResponse:
+    """Send confirmation SMS for a draft appointment.
+
+    Validates: Req 8.4, 8.12
+    """
+    _endpoints.log_started("send_confirmation", appointment_id=str(appointment_id))
+
+    try:
+        result = await service.send_confirmation(appointment_id)
+    except AppointmentNotFoundError as e:
+        _endpoints.log_rejected("send_confirmation", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Appointment not found: {e.appointment_id}",
+        ) from e
+    except InvalidStatusTransitionError as e:
+        _endpoints.log_rejected(
+            "send_confirmation",
+            reason="not_draft",
+            current=e.current_status.value,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Appointment must be in DRAFT status to send confirmation. "
+            f"Current status: {e.current_status.value}",
+        ) from e
+
+    _endpoints.log_completed("send_confirmation", appointment_id=str(appointment_id))
+    return SendConfirmationResponse(
+        appointment_id=result.id,
+        status=result.status,
+        sms_sent=True,
+    )
 
 
 # =============================================================================

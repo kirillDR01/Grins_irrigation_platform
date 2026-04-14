@@ -73,6 +73,9 @@ def mock_job() -> Mock:
     job.property_is_subscription = None
     job.time_tracking_metadata = None
     job.service_preference_notes = None
+    job.service_agreement = None
+    job.service_agreement_name = None
+    job.service_agreement_active = None
     job.created_at = datetime.now()
     job.updated_at = datetime.now()
     return job
@@ -125,10 +128,15 @@ class TestCompleteJob:
         mock_job.payment_collected_on_site = True
         mock_job.time_tracking_metadata = None
 
-        # Mock session.execute for job lookup
+        # Mock session.execute for job lookup + appointment lookup
         job_result = Mock()
         job_result.scalar_one_or_none.return_value = mock_job
-        mock_session.execute.return_value = job_result
+        # Second call: get_active_appointment_for_job returns None
+        appt_result = Mock()
+        appt_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(
+            side_effect=[job_result, appt_result],
+        )
         mock_session.flush = AsyncMock()
         mock_session.refresh = AsyncMock()
 
@@ -189,7 +197,12 @@ class TestCompleteJob:
         job_result.scalar_one_or_none.return_value = mock_job
         inv_result = Mock()
         inv_result.scalar.return_value = 0
-        mock_session.execute = AsyncMock(side_effect=[job_result, inv_result])
+        # Third call: get_active_appointment_for_job returns None
+        appt_result = Mock()
+        appt_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(
+            side_effect=[job_result, inv_result, appt_result],
+        )
         mock_session.flush = AsyncMock()
         mock_session.refresh = AsyncMock()
 

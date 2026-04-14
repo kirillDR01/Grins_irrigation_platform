@@ -252,3 +252,32 @@ export function useRequestReview() {
     },
   });
 }
+
+/**
+ * Hook to send confirmation SMS for a draft appointment (Req 8.4).
+ */
+export function useSendConfirmation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => appointmentApi.sendConfirmation(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
+    },
+  });
+}
+
+/**
+ * Hook to bulk send confirmation SMS for draft appointments (Req 8.6).
+ */
+export function useBulkSendConfirmations() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: { appointment_ids?: string[]; date_from?: string; date_to?: string }) =>
+      appointmentApi.bulkSendConfirmations(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
+    },
+  });
+}

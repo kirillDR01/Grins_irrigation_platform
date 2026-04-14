@@ -5,6 +5,7 @@
 
 export type AppointmentStatus =
   | 'pending'
+  | 'draft'
   | 'scheduled'
   | 'confirmed'
   | 'en_route'
@@ -33,6 +34,8 @@ export interface Appointment {
   job_type: string | null;
   customer_name: string | null;
   staff_name: string | null;
+  // Service agreement indicator for calendar display (Smoothing Req 7.5)
+  service_agreement_id: string | null;
 }
 
 export interface AppointmentCreate {
@@ -122,6 +125,11 @@ export const appointmentStatusConfig: Record<
     label: 'Pending',
     color: 'text-yellow-800',
     bgColor: 'bg-yellow-100',
+  },
+  draft: {
+    label: 'Draft',
+    color: 'text-slate-600',
+    bgColor: 'bg-slate-100',
   },
   scheduled: {
     label: 'Scheduled',

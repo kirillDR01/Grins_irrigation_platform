@@ -354,6 +354,16 @@ class JobResponse(BaseModel):
         default=None,
         description="Read-only notes from matching customer service preference",
     )
+    # Service agreement name for display (Smoothing Req 7.3)
+    service_agreement_name: str | None = Field(
+        default=None,
+        description="Name of the linked service agreement tier for display",
+    )
+    # Whether the linked service agreement is active (Smoothing Req 7.2)
+    service_agreement_active: bool | None = Field(
+        default=None,
+        description="Whether the linked service agreement is active (not expired/cancelled)",
+    )
 
     @field_validator("category", mode="before")  # type: ignore[misc,untyped-decorator]
     @classmethod

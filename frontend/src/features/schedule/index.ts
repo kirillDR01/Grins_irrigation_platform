@@ -53,6 +53,8 @@ export {
   useCreateEstimateFromAppointment,
   useUploadAppointmentPhotos,
   useRequestReview,
+  useSendConfirmation,
+  useBulkSendConfirmations,
   scheduleGenerationKeys,
   useScheduleCapacity,
   useScheduleStatus,
@@ -85,4 +87,7 @@ export {
   AppointmentNotes,
   ReviewRequest,
   RescheduleRequestsQueue,
+  SendConfirmationButton,
+  SendDayConfirmationsButton,
+  SendAllConfirmationsButton,
 } from './components';

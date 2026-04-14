@@ -739,12 +739,16 @@ class TestAppointmentStatusWorkflowIntegration:
     @pytest.fixture
     def mock_appointment_repo(self) -> AsyncMock:
         """Create mock appointment repository."""
-        return AsyncMock(spec=AppointmentRepository)
+        repo = AsyncMock(spec=AppointmentRepository)
+        repo.session = AsyncMock()
+        return repo
 
     @pytest.fixture
     def mock_job_repo(self) -> AsyncMock:
         """Create mock job repository."""
-        return AsyncMock(spec=JobRepository)
+        mock = AsyncMock(spec=JobRepository)
+        mock.get_by_id.return_value = None
+        return mock
 
     @pytest.fixture
     def mock_staff_repo(self) -> AsyncMock:

@@ -17,6 +17,9 @@ import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
+from grins_platform.api.v1.auth_dependencies import (
+    get_current_active_user,
+)
 from grins_platform.api.v1.dependencies import get_job_service
 from grins_platform.app import create_app
 from grins_platform.exceptions import (
@@ -89,10 +92,22 @@ def mock_job_service():
 
 
 @pytest.fixture
-def app(mock_job_service):
+def mock_admin_user():
+    """Create a mock admin user for auth."""
+    user = Mock()
+    user.id = uuid4()
+    user.email = "admin@test.com"
+    user.is_active = True
+    user.role = "admin"
+    return user
+
+
+@pytest.fixture
+def app(mock_job_service, mock_admin_user):
     """Create test application with mocked service."""
     application = create_app()
     application.dependency_overrides[get_job_service] = lambda: mock_job_service
+    application.dependency_overrides[get_current_active_user] = lambda: mock_admin_user
     return application
 
 

@@ -50,6 +50,16 @@ const mockJobs: Job[] = [
     updated_at: '2025-01-20T10:00:00Z',
     customer_name: 'John Doe',
     customer_tags: ['priority', 'new_customer'],
+    property_address: null,
+    property_city: null,
+    property_type: null,
+    property_is_hoa: null,
+    property_is_subscription: null,
+    on_my_way_at: null,
+    time_tracking_metadata: null,
+    service_preference_notes: null,
+    service_agreement_name: null,
+    service_agreement_active: null,
   },
   {
     id: '123e4567-e89b-12d3-a456-426614174002',
@@ -86,6 +96,16 @@ const mockJobs: Job[] = [
     updated_at: '2025-01-20T09:30:00Z',
     customer_name: 'Jane Smith',
     customer_tags: ['red_flag', 'slow_payer'],
+    property_address: null,
+    property_city: null,
+    property_type: null,
+    property_is_hoa: null,
+    property_is_subscription: null,
+    on_my_way_at: null,
+    time_tracking_metadata: null,
+    service_preference_notes: null,
+    service_agreement_name: null,
+    service_agreement_active: null,
   },
 ];
 
@@ -124,6 +144,16 @@ const mockSubscriptionJob: Job = {
   updated_at: '2025-01-20T10:00:00Z',
   customer_name: 'John Doe',
   customer_tags: ['priority'],
+  property_address: null,
+  property_city: null,
+  property_type: null,
+  property_is_hoa: null,
+  property_is_subscription: true,
+  on_my_way_at: null,
+  time_tracking_metadata: null,
+  service_preference_notes: null,
+  service_agreement_name: 'Professional',
+  service_agreement_active: true,
 };
 
 function createWrapper() {
@@ -462,7 +492,7 @@ describe('JobList', () => {
   });
 
   describe('Subscription extensions', () => {
-    it('displays subscription source badge for jobs with service_agreement_id', async () => {
+    it('displays prepaid badge for jobs with service_agreement_id', async () => {
       vi.mocked(jobApi.list).mockResolvedValue({
         items: [mockSubscriptionJob],
         total: 1,
@@ -474,10 +504,10 @@ describe('JobList', () => {
       render(<JobList />, { wrapper: createWrapper() });
 
       await waitFor(() => {
-        expect(screen.getByTestId(`subscription-badge-${mockSubscriptionJob.id}`)).toBeInTheDocument();
+        expect(screen.getByTestId(`prepaid-badge-${mockSubscriptionJob.id}`)).toBeInTheDocument();
       });
 
-      expect(screen.getByText('Sub')).toBeInTheDocument();
+      expect(screen.getByText('Prepaid')).toBeInTheDocument();
     });
 
     it('does not display subscription badge for standalone jobs', async () => {
@@ -495,8 +525,8 @@ describe('JobList', () => {
         expect(screen.getByTestId('job-table')).toBeInTheDocument();
       });
 
-      expect(screen.queryByTestId(`subscription-badge-${mockJobs[0].id}`)).not.toBeInTheDocument();
-      expect(screen.queryByTestId(`subscription-badge-${mockJobs[1].id}`)).not.toBeInTheDocument();
+      expect(screen.queryByTestId(`prepaid-badge-${mockJobs[0].id}`)).not.toBeInTheDocument();
+      expect(screen.queryByTestId(`prepaid-badge-${mockJobs[1].id}`)).not.toBeInTheDocument();
     });
 
     it('renders source type filter dropdown', async () => {

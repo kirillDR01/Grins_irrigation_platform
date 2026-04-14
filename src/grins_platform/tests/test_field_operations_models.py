@@ -221,8 +221,7 @@ class TestJobModel:
         transitions = job.get_valid_transitions()
         assert "completed" in transitions
         assert "cancelled" in transitions
-        assert "to_be_scheduled" in transitions
-        assert len(transitions) == 3
+        assert len(transitions) == 2
 
     def test_is_terminal_status_cancelled(self) -> None:
         """Test is_terminal_status returns True for cancelled."""
@@ -261,17 +260,25 @@ class TestValidStatusTransitions:
     def test_to_be_scheduled_transitions(self) -> None:
         """Test valid transitions from to_be_scheduled status."""
         transitions = VALID_STATUS_TRANSITIONS["to_be_scheduled"]
+        assert "scheduled" in transitions
         assert "in_progress" in transitions
         assert "cancelled" in transitions
-        assert len(transitions) == 2
+        assert len(transitions) == 3
+
+    def test_scheduled_transitions(self) -> None:
+        """Test valid transitions from scheduled status."""
+        transitions = VALID_STATUS_TRANSITIONS["scheduled"]
+        assert "in_progress" in transitions
+        assert "to_be_scheduled" in transitions
+        assert "cancelled" in transitions
+        assert len(transitions) == 3
 
     def test_in_progress_transitions(self) -> None:
         """Test valid transitions from in_progress status."""
         transitions = VALID_STATUS_TRANSITIONS["in_progress"]
         assert "completed" in transitions
         assert "cancelled" in transitions
-        assert "to_be_scheduled" in transitions
-        assert len(transitions) == 3
+        assert len(transitions) == 2
 
     def test_completed_is_terminal(self) -> None:
         """Test completed has no valid transitions."""

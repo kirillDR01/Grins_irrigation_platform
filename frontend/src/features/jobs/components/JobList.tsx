@@ -9,7 +9,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, MoreHorizontal, Search, FileText } from 'lucide-react';
+import { ArrowUpDown, MoreHorizontal, Search, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -48,7 +48,7 @@ import {
   calculateDaysWaiting,
   getDueByColorClass,
 } from '../types';
-import type { CustomerTag } from '../types';
+import type { CustomerTag, JobCategory } from '../types';
 
 interface JobListProps {
   onEdit?: (job: Job) => void;
@@ -75,7 +75,7 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
   const urlStatus = searchParams.get('status') as JobStatus | null;
   const urlHighlight = searchParams.get('highlight');
 
-  const validStatuses: JobStatus[] = ['to_be_scheduled', 'in_progress', 'completed', 'cancelled'];
+  const validStatuses: JobStatus[] = ['to_be_scheduled', 'scheduled', 'in_progress', 'completed', 'cancelled'];
 
   const [params, setParams] = useState<JobListParams>({
     page: 1,
@@ -157,12 +157,22 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
             </Link>
             {job.service_agreement_id && (
               <span
-                className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-600 border border-indigo-100"
-                data-testid={`subscription-badge-${job.id}`}
-                title="Subscription job"
+                className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200"
+                data-testid={`prepaid-badge-${job.id}`}
+                title="Covered by Service Agreement"
               >
-                <FileText className="h-3 w-3" />
-                Sub
+                <ShieldCheck className="h-3 w-3" />
+                Prepaid
+              </span>
+            )}
+            {job.category === 'requires_estimate' && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 border border-amber-200"
+                data-testid={`estimate-needed-badge-${job.id}`}
+                title="Estimate Needed"
+              >
+                <AlertTriangle className="h-3 w-3" />
+                Estimate Needed
               </span>
             )}
             <PropertyTags
@@ -500,6 +510,27 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
               <SelectItem value="all">All Sources</SelectItem>
               <SelectItem value="subscription">Subscription</SelectItem>
               <SelectItem value="standalone">Standalone</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Category Filter — Estimate Needed (Smoothing Req 6.6) */}
+          <Select
+            value={params.category ?? 'all'}
+            onValueChange={(v) =>
+              setParams((p) => ({
+                ...p,
+                category: v === 'all' ? undefined : (v as JobCategory),
+                page: 1,
+              }))
+            }
+          >
+            <SelectTrigger className="w-[180px]" data-testid="category-filter">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              <SelectItem value="requires_estimate" data-testid="filter-requires-estimate">Estimate Needed</SelectItem>
+              <SelectItem value="ready_to_schedule">Ready to Schedule</SelectItem>
             </SelectContent>
           </Select>
 

@@ -1950,6 +1950,7 @@ class TestProperty76AppointmentStatusEnum:
         status=st.sampled_from(
             [
                 "pending",
+                "draft",
                 "scheduled",
                 "confirmed",
                 "en_route",
@@ -1978,10 +1979,10 @@ class TestProperty76AppointmentStatusEnum:
         assert AppointmentStatus.NO_SHOW.value == "no_show"
 
     def test_enum_has_exactly_8_values(self) -> None:
-        """AppointmentStatus has exactly 8 members."""
+        """AppointmentStatus has exactly 9 members (including DRAFT)."""
         from grins_platform.models.enums import AppointmentStatus
 
-        assert len(AppointmentStatus) == 8
+        assert len(AppointmentStatus) == 9
 
 
 # ===================================================================

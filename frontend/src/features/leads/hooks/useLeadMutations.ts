@@ -47,14 +47,15 @@ export function useDeleteLead() {
   });
 }
 
-// Move lead to Jobs (CRM2 Req 12.1)
+// Move lead to Jobs (CRM2 Req 12.1, Smoothing Req 6.1)
 export function useMoveToJobs() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => leadApi.moveToJobs(id),
-    onSuccess: (_data, id) => {
-      queryClient.removeQueries({ queryKey: leadKeys.detail(id) });
+    mutationFn: ({ id, force = false }: { id: string; force?: boolean }) =>
+      leadApi.moveToJobs(id, force),
+    onSuccess: (_data, variables) => {
+      queryClient.removeQueries({ queryKey: leadKeys.detail(variables.id) });
       queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
       queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });
     },

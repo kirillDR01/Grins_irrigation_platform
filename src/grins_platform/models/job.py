@@ -41,16 +41,21 @@ if TYPE_CHECKING:
     from grins_platform.models.service_offering import ServiceOffering
 
 
-# Valid status transitions (Requirement 4.2-4.7)
+# Valid status transitions (Requirement 4.2-4.7, 5.2)
 VALID_STATUS_TRANSITIONS: dict[str, list[str]] = {
     JobStatus.TO_BE_SCHEDULED.value: [
+        JobStatus.SCHEDULED.value,
         JobStatus.IN_PROGRESS.value,
+        JobStatus.CANCELLED.value,
+    ],
+    JobStatus.SCHEDULED.value: [
+        JobStatus.IN_PROGRESS.value,
+        JobStatus.TO_BE_SCHEDULED.value,
         JobStatus.CANCELLED.value,
     ],
     JobStatus.IN_PROGRESS.value: [
         JobStatus.COMPLETED.value,
         JobStatus.CANCELLED.value,
-        JobStatus.TO_BE_SCHEDULED.value,
     ],
     JobStatus.COMPLETED.value: [],  # Terminal state
     JobStatus.CANCELLED.value: [],  # Terminal state

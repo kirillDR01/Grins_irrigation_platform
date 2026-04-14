@@ -22,6 +22,7 @@ from grins_platform.exceptions import (
     SignatureRequiredError,
 )
 from grins_platform.log_config import LoggerMixin, get_logger
+from grins_platform.models.customer_document import CustomerDocument
 from grins_platform.models.sales import SalesCalendarEvent, SalesEntry
 from grins_platform.schemas.sales_pipeline import (
     SalesCalendarEventCreate,
@@ -32,6 +33,7 @@ from grins_platform.schemas.sales_pipeline import (
 )
 from grins_platform.services.audit_service import AuditService
 from grins_platform.services.job_service import JobService
+from grins_platform.services.photo_service import PhotoService
 from grins_platform.services.sales_pipeline_service import SalesPipelineService
 
 router = APIRouter()
@@ -48,6 +50,27 @@ _ep = _SalesPipelineEndpoints()
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+async def _get_signing_document(
+    session: AsyncSession,
+    customer_id: UUID,
+) -> CustomerDocument | None:
+    """Find the most recent estimate/contract document for a customer.
+
+    Validates: Req 9.1, 9.2
+    """
+    stmt = (
+        select(CustomerDocument)
+        .where(
+            CustomerDocument.customer_id == customer_id,
+            CustomerDocument.document_type.in_(("estimate", "contract")),
+        )
+        .order_by(CustomerDocument.uploaded_at.desc())
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
 
 
 def _entry_to_response(entry: SalesEntry) -> SalesEntryResponse:
@@ -236,9 +259,20 @@ async def trigger_email_signing(
             detail="Customer has no email address on file",
         )
 
+    # Look up the most recent estimate/contract document — Validates: Req 9.1, 9.2, 9.4
+    signing_doc = await _get_signing_document(session, entry.customer_id)
+    if not signing_doc:
+        raise HTTPException(
+            status_code=422,
+            detail="Upload an estimate document first",
+        )
+
+    photo_service = PhotoService()
+    pdf_url = photo_service.generate_presigned_url(signing_doc.file_key)
+
     client = SignWellClient()
     doc = await client.create_document_for_email(
-        pdf_url=f"/api/v1/sales/{entry_id}/contract.pdf",
+        pdf_url=pdf_url,
         email=customer.email,
         name=f"{customer.first_name} {customer.last_name}",
     )
@@ -273,13 +307,24 @@ async def get_embedded_signing(
         f"{customer.first_name} {customer.last_name}" if customer else "Customer"
     )
 
+    # Look up the most recent estimate/contract document — Validates: Req 9.1, 9.2, 9.4
+    signing_doc = await _get_signing_document(session, entry.customer_id)
+    if not signing_doc:
+        raise HTTPException(
+            status_code=422,
+            detail="Upload an estimate document first",
+        )
+
+    photo_service = PhotoService()
+    pdf_url = photo_service.generate_presigned_url(signing_doc.file_key)
+
     client = SignWellClient()
 
     if entry.signwell_document_id:
         url = await client.get_embedded_url(entry.signwell_document_id)
     else:
         doc = await client.create_document_for_embedded(
-            pdf_url=f"/api/v1/sales/{entry_id}/contract.pdf",
+            pdf_url=pdf_url,
             signer_name=signer_name,
         )
         entry.signwell_document_id = doc.get("id")

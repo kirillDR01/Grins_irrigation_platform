@@ -190,9 +190,10 @@ class TestProperty76AppointmentStatusEnum:
     """**Validates: Requirements 79.1, 79.2, 79.3**"""
 
     def test_appointment_status_has_all_8_values(self) -> None:
-        """AppointmentStatus enum has all 8 values including no_show."""
+        """AppointmentStatus enum has all 9 values including draft and no_show."""
         expected = {
             "pending",
+            "draft",
             "scheduled",
             "confirmed",
             "en_route",
@@ -203,7 +204,7 @@ class TestProperty76AppointmentStatusEnum:
         }
         actual = {s.value for s in AppointmentStatus}
         assert actual == expected
-        assert len(AppointmentStatus) == 8
+        assert len(AppointmentStatus) == 9
 
     def test_appointment_status_accepts_pending(self) -> None:
         """AppointmentStatus('pending') succeeds."""

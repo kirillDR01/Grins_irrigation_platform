@@ -425,16 +425,20 @@ class TestAppointmentServiceCancel:
         self,
         service: AppointmentService,
         mock_appointment_repository: AsyncMock,
+        mock_job_repository: AsyncMock,
     ) -> None:
         """Test successful appointment cancellation."""
         # Arrange
         appointment_id = uuid4()
+        job_id = uuid4()
         mock_appointment = MagicMock()
         mock_appointment.id = appointment_id
+        mock_appointment.job_id = job_id
         mock_appointment.status = AppointmentStatus.SCHEDULED.value
         mock_appointment.can_transition_to.return_value = True
         mock_appointment_repository.get_by_id.return_value = mock_appointment
         mock_appointment_repository.update_status.return_value = mock_appointment
+        mock_job_repository.get_by_id.return_value = None
 
         # Act
         result = await service.cancel_appointment(appointment_id)

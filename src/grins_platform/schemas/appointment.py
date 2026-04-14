@@ -83,6 +83,8 @@ class AppointmentResponse(BaseModel):
     job_type: Optional[str] = None
     customer_name: Optional[str] = None
     staff_name: Optional[str] = None
+    # Service agreement indicator for calendar display (Smoothing Req 7.5)
+    service_agreement_id: Optional[UUID] = None
 
 
 class AppointmentListParams(BaseModel):
@@ -146,3 +148,47 @@ class AppointmentPaginatedResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+# =============================================================================
+# Draft Mode Schemas (Req 8)
+# =============================================================================
+
+
+class SendConfirmationResponse(BaseModel):
+    """Response for single send-confirmation endpoint.
+
+    Validates: Req 8.4, 8.12
+    """
+
+    appointment_id: UUID
+    status: str
+    sms_sent: bool
+
+
+class BulkSendConfirmationsRequest(BaseModel):
+    """Request for bulk send-confirmations endpoint.
+
+    Validates: Req 8.6, 8.13
+    """
+
+    appointment_ids: Optional[list[UUID]] = Field(
+        None, description="Specific appointment IDs to send confirmations for"
+    )
+    date_from: Optional[date] = Field(
+        None, description="Start date for date range filter"
+    )
+    date_to: Optional[date] = Field(
+        None, description="End date for date range filter"
+    )
+
+
+class BulkSendConfirmationsResponse(BaseModel):
+    """Response for bulk send-confirmations endpoint.
+
+    Validates: Req 8.6, 8.13
+    """
+
+    sent_count: int
+    failed_count: int = 0
+    total_draft: int
