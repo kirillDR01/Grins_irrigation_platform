@@ -1,7 +1,7 @@
 """Unit tests for ``ensure_property_for_lead`` in property_service.
 
 Validates bughunt H-5 / H-6: move_to_jobs and move_to_sales previously
-dropped the lead's ``job_address``; the helper resolves or creates a
+dropped the lead's ``address``; the helper resolves or creates a
 Property so ``property_id`` can flow through to Jobs / SalesEntry.
 """
 
@@ -76,14 +76,14 @@ class TestEnsurePropertyForLead:
     @pytest.mark.asyncio
     async def test_returns_none_when_no_address(self) -> None:
         session = AsyncMock()
-        lead = SimpleNamespace(id=uuid4(), job_address=None)
+        lead = SimpleNamespace(id=uuid4(), address=None)
         result = await ensure_property_for_lead(session, uuid4(), lead)
         assert result is None
 
     @pytest.mark.asyncio
     async def test_returns_none_when_empty_address(self) -> None:
         session = AsyncMock()
-        lead = SimpleNamespace(id=uuid4(), job_address="   ")
+        lead = SimpleNamespace(id=uuid4(), address="   ")
         result = await ensure_property_for_lead(session, uuid4(), lead)
         assert result is None
 
@@ -106,7 +106,7 @@ class TestEnsurePropertyForLead:
 
         lead = SimpleNamespace(
             id=uuid4(),
-            job_address="  1234 Main St., Minneapolis, MN 55401",
+            address="  1234 Main St., Minneapolis, MN 55401",
         )
 
         result = await ensure_property_for_lead(session, customer_id, lead)
@@ -129,7 +129,7 @@ class TestEnsurePropertyForLead:
 
         lead = SimpleNamespace(
             id=uuid4(),
-            job_address="999 Maple Ave, Edina, MN 55436",
+            address="999 Maple Ave, Edina, MN 55436",
         )
 
         result = await ensure_property_for_lead(session, customer_id, lead)

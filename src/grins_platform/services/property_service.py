@@ -468,21 +468,26 @@ async def ensure_property_for_lead(
     customer_id: _UUID,
     lead: Lead,
 ) -> _Property | None:
-    """Upsert a ``Property`` for the customer from ``lead.job_address``.
+    """Upsert a ``Property`` for the customer from ``lead.address``.
 
     Returns the matching or newly-created ``Property``. If the lead has
-    no ``job_address`` the helper returns ``None`` — callers should
-    treat that as "no property was resolvable" and continue with
+    no ``address`` the helper returns ``None`` — callers should treat
+    that as "no property was resolvable" and continue with
     ``property_id=None`` rather than hard-failing the move.
 
     Idempotency: ``(customer_id, normalized_address)`` yields the same
     row on repeated calls, even if an existing property has different
     casing or trailing punctuation. (bughunt H-5, H-6.)
+
+    E2E finding (2026-04-14): Sprint 3 originally read ``lead.job_address``,
+    but the Lead model column is ``address``. The misnamed attribute
+    caused every move-to-sales / move-to-jobs to log "no_address" and
+    leave ``property_id`` null. Corrected to ``lead.address`` here.
     """
-    job_address = getattr(lead, "job_address", None)
+    raw_address = getattr(lead, "address", None)
     # Guard against MagicMock test fixtures that auto-generate the
     # attribute — we only accept a real non-empty string.
-    if not isinstance(job_address, str) or not job_address.strip():
+    if not isinstance(raw_address, str) or not raw_address.strip():
         _helper_logger.info(
             "property.ensure.no_address",
             customer_id=str(customer_id),
@@ -490,10 +495,10 @@ async def ensure_property_for_lead(
         )
         return None
 
-    street, city, state, zip_code = _parse_address(job_address)
+    street, city, state, zip_code = _parse_address(raw_address)
     # Compare on the normalized *street* portion only — ``Property.address``
     # only stores the street line, so normalizing the full multi-part
-    # ``job_address`` would never match an existing row.
+    # address would never match an existing row.
     norm_street = _normalize_address(street)
 
     existing_stmt = _select(_Property).where(_Property.customer_id == customer_id)
@@ -508,7 +513,7 @@ async def ensure_property_for_lead(
         _helper_logger.warning(
             "property.ensure.fallback_defaults",
             customer_id=str(customer_id),
-            raw_address=job_address,
+            raw_address=raw_address,
             street=street,
         )
 
