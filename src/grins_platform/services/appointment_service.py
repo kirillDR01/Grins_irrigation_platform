@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING
 
 from grins_platform.exceptions import (
     AppointmentNotFoundError,
-    ConsentRequiredError,
     InvalidStatusTransitionError,
     JobNotFoundError,
     PaymentRequiredError,
@@ -93,8 +92,10 @@ async def count_active_appointments(
 
     Validates: Requirements 2.3, 2.4
     """
-    from sqlalchemy import func as sa_func  # noqa: PLC0415
-    from sqlalchemy import select  # noqa: PLC0415
+    from sqlalchemy import (
+        func as sa_func,
+        select,
+    )
 
     from grins_platform.models.appointment import Appointment  # noqa: PLC0415
 
@@ -935,7 +936,9 @@ class AppointmentService(LoggerMixin):
         # Build query for DRAFT appointments
         from sqlalchemy import select  # noqa: PLC0415
 
-        from grins_platform.models.appointment import Appointment as AppointmentModel  # noqa: PLC0415
+        from grins_platform.models.appointment import (
+            Appointment as AppointmentModel,
+        )
 
         stmt = select(AppointmentModel).where(
             AppointmentModel.status == AppointmentStatus.DRAFT.value
@@ -1589,8 +1592,11 @@ class AppointmentService(LoggerMixin):
 
         Raises:
             AppointmentNotFoundError: If appointment not found
-            ConsentRequiredError: If customer has no SMS consent
             ReviewAlreadyRequestedError: If review requested within 30 days
+
+        Returns ``ReviewRequestResult(sent=False)`` (not raising) when
+        consent is missing, so the endpoint returns a 2xx with a
+        structured payload rather than a 422 error.
 
         Validates: CRM Gap Closure Req 34.2, 34.5, 34.6
         """
@@ -1621,14 +1627,36 @@ class AppointmentService(LoggerMixin):
                 message="Customer not found for this appointment",
             )
 
-        # Check SMS consent (Req 34.2)
-        if not customer.sms_opt_in:
+        # Check SMS consent via the canonical consent module (Req 34.2).
+        # Previously this consulted only ``customer.sms_opt_in`` (legacy
+        # column), which diverges from the authoritative SmsConsentRecord
+        # table — so a customer who opted in via the new consent flow but
+        # whose legacy flag was still False was falsely denied. Using
+        # ``check_sms_consent`` with transactional scope aligns both.
+        # (bughunt CR-9 remainder.)
+        from grins_platform.services.sms.consent import (  # noqa: PLC0415
+            check_sms_consent,
+        )
+
+        session = self.appointment_repository.session
+        has_consent = False
+        if customer.phone:
+            has_consent = await check_sms_consent(
+                session,
+                customer.phone,
+                "transactional",
+            )
+        if not has_consent:
             self.log_rejected(
                 "request_google_review",
                 reason="no_sms_consent",
                 customer_id=str(customer.id),
             )
-            raise ConsentRequiredError(customer.id)
+            return ReviewRequestResult(
+                sent=False,
+                channel=None,
+                message="Customer has opted out of SMS. Review request not sent.",
+            )
 
         # 30-day dedup check (Req 34.6)
         last_review = await self._get_last_review_request_date(customer.id)
@@ -1667,7 +1695,6 @@ class AppointmentService(LoggerMixin):
         )
 
         recipient = Recipient.from_customer(customer)
-        session = self.appointment_repository.session
         sms_service = SMSService(session)
         try:
             send_result = await sms_service.send_message(

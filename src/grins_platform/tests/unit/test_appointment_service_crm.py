@@ -40,7 +40,6 @@ from hypothesis import (
 
 from grins_platform.exceptions import (
     AppointmentNotFoundError,
-    ConsentRequiredError,
     InvalidStatusTransitionError,
     PaymentRequiredError,
     ReviewAlreadyRequestedError,
@@ -1240,7 +1239,7 @@ class TestProperty37GoogleReviewConsentAndDedup:
 
         **Validates: Requirements 34.2, 34.6**
         """
-        from unittest.mock import patch  # noqa: PLC0415
+        from unittest.mock import patch
 
         apt_id = uuid4()
         job_id = uuid4()
@@ -1274,9 +1273,15 @@ class TestProperty37GoogleReviewConsentAndDedup:
         mock_sms_service.send_message = AsyncMock(
             return_value={"success": True, "message_id": str(uuid4())},
         )
-        with patch(
-            "grins_platform.services.sms_service.SMSService",
-            return_value=mock_sms_service,
+        with (
+            patch(
+                "grins_platform.services.sms_service.SMSService",
+                return_value=mock_sms_service,
+            ),
+            patch(
+                "grins_platform.services.sms.consent.check_sms_consent",
+                return_value=True,
+            ),
         ):
             result = await svc.request_google_review(apt_id)
 
@@ -1286,13 +1291,18 @@ class TestProperty37GoogleReviewConsentAndDedup:
         mock_sms_service.send_message.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_review_request_without_consent_raises_error(
+    async def test_review_request_without_consent_returns_sent_false(
         self,
     ) -> None:
-        """Customer without SMS consent raises ConsentRequiredError.
+        """Customer without SMS consent returns a non-raised ``ReviewRequestResult``
+        with ``sent=False`` (bughunt CR-9 remainder — previously raised
+        ``ConsentRequiredError`` which the API handler then translated to
+        HTTP 422; we now return a structured 2xx payload instead).
 
         **Validates: Requirements 34.2**
         """
+        from unittest.mock import patch
+
         apt_id = uuid4()
         customer_id = uuid4()
 
@@ -1314,9 +1324,16 @@ class TestProperty37GoogleReviewConsentAndDedup:
 
         svc = _build_service(appt_repo=appt_repo, job_repo=job_repo)
 
-        with pytest.raises(ConsentRequiredError) as exc_info:
-            await svc.request_google_review(apt_id)
-        assert exc_info.value.customer_id == customer_id
+        with patch(
+            "grins_platform.services.sms.consent.check_sms_consent",
+            return_value=False,
+        ):
+            result = await svc.request_google_review(apt_id)
+
+        assert isinstance(result, ReviewRequestResult)
+        assert result.sent is False
+        assert result.channel is None
+        assert "opted out" in result.message.lower()
 
     @given(
         days_ago=st.integers(min_value=0, max_value=29),
@@ -1332,6 +1349,8 @@ class TestProperty37GoogleReviewConsentAndDedup:
 
         **Validates: Requirements 34.6**
         """
+        from unittest.mock import patch
+
         apt_id = uuid4()
         customer_id = uuid4()
 
@@ -1356,7 +1375,13 @@ class TestProperty37GoogleReviewConsentAndDedup:
         svc = _build_service(appt_repo=appt_repo, job_repo=job_repo)
         svc._get_last_review_request_date = AsyncMock(return_value=last_review)
 
-        with pytest.raises(ReviewAlreadyRequestedError):
+        with (
+            patch(
+                "grins_platform.services.sms.consent.check_sms_consent",
+                return_value=True,
+            ),
+            pytest.raises(ReviewAlreadyRequestedError),
+        ):
             await svc.request_google_review(apt_id)
 
     @pytest.mark.asyncio
@@ -1365,7 +1390,7 @@ class TestProperty37GoogleReviewConsentAndDedup:
 
         **Validates: Requirements 34.6**
         """
-        from unittest.mock import patch  # noqa: PLC0415
+        from unittest.mock import patch
 
         apt_id = uuid4()
         customer_id = uuid4()
@@ -1396,9 +1421,15 @@ class TestProperty37GoogleReviewConsentAndDedup:
         mock_sms_service.send_message = AsyncMock(
             return_value={"success": True, "message_id": str(uuid4())},
         )
-        with patch(
-            "grins_platform.services.sms_service.SMSService",
-            return_value=mock_sms_service,
+        with (
+            patch(
+                "grins_platform.services.sms_service.SMSService",
+                return_value=mock_sms_service,
+            ),
+            patch(
+                "grins_platform.services.sms.consent.check_sms_consent",
+                return_value=True,
+            ),
         ):
             result = await svc.request_google_review(apt_id)
         assert result.sent is True
@@ -1423,9 +1454,9 @@ class TestProperty37GoogleReviewConsentAndDedup:
 
         **Validates: Requirements 1.1, 1.2**
         """
-        from unittest.mock import patch  # noqa: PLC0415
+        from unittest.mock import patch
 
-        from grins_platform.models.enums import MessageType  # noqa: PLC0415
+        from grins_platform.models.enums import MessageType
 
         apt_id = uuid4()
         job_id = uuid4()
@@ -1464,9 +1495,15 @@ class TestProperty37GoogleReviewConsentAndDedup:
         mock_sms_service.send_message = AsyncMock(
             return_value={"success": True, "message_id": "SM123"},
         )
-        with patch(
-            "grins_platform.services.sms_service.SMSService",
-            return_value=mock_sms_service,
+        with (
+            patch(
+                "grins_platform.services.sms_service.SMSService",
+                return_value=mock_sms_service,
+            ),
+            patch(
+                "grins_platform.services.sms.consent.check_sms_consent",
+                return_value=True,
+            ),
         ):
             result = await svc.request_google_review(apt_id)
 
@@ -1490,7 +1527,7 @@ class TestProperty37GoogleReviewConsentAndDedup:
 
         **Validates: Requirements 1.4**
         """
-        from unittest.mock import patch  # noqa: PLC0415
+        from unittest.mock import patch
 
         apt_id = uuid4()
         job_id = uuid4()
@@ -1524,9 +1561,15 @@ class TestProperty37GoogleReviewConsentAndDedup:
         mock_sms_service.send_message = AsyncMock(
             side_effect=RuntimeError("SMS provider unavailable"),
         )
-        with patch(
-            "grins_platform.services.sms_service.SMSService",
-            return_value=mock_sms_service,
+        with (
+            patch(
+                "grins_platform.services.sms_service.SMSService",
+                return_value=mock_sms_service,
+            ),
+            patch(
+                "grins_platform.services.sms.consent.check_sms_consent",
+                return_value=True,
+            ),
         ):
             result = await svc.request_google_review(apt_id)
 

@@ -38,7 +38,6 @@ from grins_platform.api.v1.dependencies import (
 )
 from grins_platform.exceptions import (
     AppointmentNotFoundError,
-    ConsentRequiredError,
     InvalidStatusTransitionError,
     JobNotFoundError,
     ReviewAlreadyRequestedError,
@@ -1100,12 +1099,6 @@ async def request_google_review(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Appointment not found: {e.appointment_id}",
-        ) from e
-    except ConsentRequiredError as e:
-        _endpoints.log_rejected("request_google_review", reason="no_consent")
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e),
         ) from e
     except ReviewAlreadyRequestedError as e:
         _endpoints.log_rejected("request_google_review", reason="dedup_30_day")

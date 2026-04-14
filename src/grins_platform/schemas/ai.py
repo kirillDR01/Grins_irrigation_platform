@@ -70,6 +70,7 @@ class MessageType(str, Enum):
     CUSTOM = "custom"
     GOOGLE_REVIEW_REQUEST = "google_review_request"
     ON_MY_WAY = "on_my_way"
+    AUTOMATED_NOTIFICATION = "automated_notification"
 
 
 class DeliveryStatus(str, Enum):

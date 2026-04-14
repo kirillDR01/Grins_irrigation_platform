@@ -77,6 +77,20 @@ POLL_REPLY_UNCLEAR_MSG = (
 _DEFAULT_PREFIX = "Grins Irrigation: "
 _DEFAULT_FOOTER = " Reply STOP to opt out."
 
+# Legacy ``message_type`` string → enum mapping for ``send_automated_message``
+# callers. Falls back to ``AUTOMATED_NOTIFICATION`` for unknown strings so
+# dedup and audit still function (bughunt CR-8).
+_AUTOMATED_STR_TO_MESSAGE_TYPE: dict[str, MessageType] = {
+    "lead_confirmation": MessageType.LEAD_CONFIRMATION,
+    "estimate_sent": MessageType.ESTIMATE_SENT,
+    "contract_sent": MessageType.CONTRACT_SENT,
+    "campaign": MessageType.CAMPAIGN,
+    "automated": MessageType.AUTOMATED_NOTIFICATION,
+    "automated_notification": MessageType.AUTOMATED_NOTIFICATION,
+    "appointment_reminder": MessageType.APPOINTMENT_REMINDER,
+    "review_request": MessageType.REVIEW_REQUEST,
+}
+
 
 def _mask_phone(phone: str) -> str:
     """Mask phone for logging: +1XXX***XXXX."""
@@ -228,7 +242,7 @@ class SMSService(LoggerMixin):
             dedupe_appointment_id = (
                 appointment_id
                 if message_type == MessageType.APPOINTMENT_CONFIRMATION
-                   and appointment_id is not None
+                and appointment_id is not None
                 else None
             )
             legacy_dupes = await self.message_repo.get_by_customer_and_type(
@@ -410,47 +424,79 @@ class SMSService(LoggerMixin):
         message: str,
         message_type: str = "automated",
     ) -> dict[str, Any]:
-        """Send an automated SMS with consent check and time window enforcement.
+        """Send an automated SMS via the canonical ``send_message`` path.
+
+        Backwards-compat shim preserved for callers that only have a
+        phone string and no Lead/Customer reference. Routes the send
+        through ``send_message`` so it picks up SentMessage audit rows,
+        per-type dedup, consent check, and phone-based lead-touch —
+        instead of bypassing all of them (bughunt CR-8).
 
         Args:
             phone: Phone number
             message: Message content
-            message_type: Type of message (automated or manual)
+            message_type: Legacy string type; mapped to ``MessageType``
+                with fallback to ``AUTOMATED_NOTIFICATION``.
 
         Returns:
-            Result dict with success status
+            Result dict with ``success``, ``reason`` or ``deferred`` keys.
 
-        Validates: Requirements 8.6, 9.4, 9.5
+        Validates: Requirements 8.6, 9.4, 9.5; bughunt 2026-04-14 CR-8.
         """
+        from grins_platform.services.sms.recipient import (  # noqa: PLC0415
+            Recipient,
+        )
+
         self.log_started("send_automated_message", phone=_mask_phone(phone))
 
-        # Check consent before sending (Req 8.6)
-        has_consent = await check_sms_consent(self.session, phone)
-        if not has_consent:
-            self.log_rejected(
-                "send_automated_message",
-                reason="opted_out",
-                phone=_mask_phone(phone),
-            )
-            return {"success": False, "reason": "opted_out"}
-
-        # Enforce time window for automated messages (Req 9.4, 9.5)
+        # Enforce 8AM-9PM CT time window for automated sends (Req 9.4, 9.5).
+        # Must run *before* send_message because send_message does not
+        # carry the time-window policy.
         scheduled_time = self.enforce_time_window(phone, message, message_type)
         if scheduled_time is not None:
+            self.log_completed(
+                "send_automated_message",
+                phone=_mask_phone(phone),
+                deferred=True,
+            )
             return {
                 "success": True,
                 "deferred": True,
                 "scheduled_for": scheduled_time.isoformat(),
             }
 
-        # Send immediately via provider
-        formatted_phone = self._format_phone(phone)
-        result = await self.provider.send_text(formatted_phone, message)
-        self.log_completed(
-            "send_automated_message",
-            phone=_mask_phone(phone),
+        resolved_type = _AUTOMATED_STR_TO_MESSAGE_TYPE.get(
+            message_type,
+            MessageType.AUTOMATED_NOTIFICATION,
         )
-        return {"success": True, "provider_message_id": result.provider_message_id}
+        recipient = Recipient.from_adhoc(phone=phone)
+
+        try:
+            result = await self.send_message(
+                recipient=recipient,
+                message=message,
+                message_type=resolved_type,
+                consent_type="transactional",
+                skip_formatting=True,
+            )
+        except SMSConsentDeniedError:
+            self.log_rejected(
+                "send_automated_message",
+                reason="opted_out",
+                phone=_mask_phone(phone),
+            )
+            return {"success": False, "reason": "opted_out"}
+        except SMSError as exc:
+            self.log_failed("send_automated_message", error=exc)
+            return {"success": False, "reason": str(exc)}
+
+        # Ad-hoc recipients have no lead_id, so send_message's built-in
+        # lead-touch was a no-op. Try the phone-based lookup here so
+        # Last Contacted still updates for legacy phone-only callers.
+        await self._touch_lead_last_contacted(phone=phone)
+
+        self.log_completed("send_automated_message", phone=_mask_phone(phone))
+        return result
 
     async def _send_via_provider(
         self,
@@ -556,7 +602,11 @@ class SMSService(LoggerMixin):
         body_stripped = body.strip()
         body_lower = body_stripped.lower()
 
-        # CRM2 Req 11.3: auto-update lead last_contacted_at on inbound SMS
+        # CRM2 Req 11.3: auto-update lead last_contacted_at on inbound SMS.
+        # ``from_phone`` is the masked CallRail sender (``***3312``) for
+        # provider-routed inbound, so this first-pass touch is a no-op in
+        # that case. Each correlation branch below does a second pass with
+        # the resolved real E.164 (bughunt L-7 / L-11).
         await self._touch_lead_last_contacted(phone=from_phone)
 
         # 10.1: Exact opt-out keyword match (Req 8.1, 8.2, 8.3, 8.4)
@@ -697,6 +747,10 @@ class SMSService(LoggerMixin):
                     exc_info=True,
                 )
 
+            # Update lead Last Contacted using the correlated real phone
+            # (bughunt L-7 / L-11).
+            await self._touch_lead_last_contacted(phone=row.phone)
+
             self.log_completed(
                 "handle_inbound",
                 webhook_action="poll_reply",
@@ -780,6 +834,10 @@ class SMSService(LoggerMixin):
                     phone=_mask_phone(reply_phone),
                     exc_info=True,
                 )
+
+        # Update lead Last Contacted using the correlated real phone
+        # (bughunt L-7 / L-11).
+        await self._touch_lead_last_contacted(phone=reply_phone)
 
         self.log_completed(
             "handle_inbound",
@@ -869,6 +927,10 @@ class SMSService(LoggerMixin):
 
         # Send confirmation SMS (Req 8.3)
         _ = await self.provider.send_text(formatted_phone, OPT_OUT_CONFIRMATION_MSG)
+
+        # Update lead Last Contacted using the resolved real E.164 now that
+        # correlation has run (bughunt L-7 / L-11).
+        await self._touch_lead_last_contacted(phone=formatted_phone)
 
         self.log_completed(
             "handle_inbound",
@@ -1021,14 +1083,11 @@ class SMSService(LoggerMixin):
 
         body_lower = body.strip().lower()
 
-        # Handle opt-out keywords
-        if body_lower in ["stop", "unsubscribe", "cancel"]:
-            self.log_completed("handle_webhook", webhook_action="opt_out")
-            return {
-                "action": "opt_out",
-                "phone": from_phone,
-                "message": "You have been unsubscribed from SMS messages.",
-            }
+        # Handle opt-out keywords (bughunt H-10: route through the canonical
+        # _process_exact_opt_out so an SmsConsentRecord is actually written;
+        # the previous fallback returned opt_out without persisting consent).
+        if body_lower in EXACT_OPT_OUT_KEYWORDS:
+            return await self._process_exact_opt_out(from_phone, body_lower)
 
         # Handle confirmation keywords
         if body_lower in ["yes", "confirm", "y"]:

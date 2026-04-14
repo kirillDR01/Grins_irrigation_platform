@@ -698,6 +698,7 @@ class MessageType(str, Enum):
     CAMPAIGN = "campaign"
     GOOGLE_REVIEW_REQUEST = "google_review_request"
     ON_MY_WAY = "on_my_way"
+    AUTOMATED_NOTIFICATION = "automated_notification"
 
 
 class MergeCandidateStatus(str, Enum):
