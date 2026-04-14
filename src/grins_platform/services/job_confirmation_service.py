@@ -152,6 +152,12 @@ class JobConfirmationService(LoggerMixin):
         else:
             result = await self._handle_needs_review(response)
 
+        # Expose the real E.164 phone we sent the original confirmation to.
+        # The inbound webhook's ``from_phone`` is provider-masked on CallRail
+        # (e.g. ``***3312``); routing a Y/R/C auto-reply through it produces a
+        # malformed number. Callers use this field to target the real phone.
+        result["recipient_phone"] = original.recipient_phone
+
         self.log_completed(
             "handle_confirmation",
             result_action=result.get("action"),

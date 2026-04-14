@@ -746,18 +746,23 @@ class SMSService(LoggerMixin):
             provider_sid=provider_sid,
         )
 
+        # Prefer the real E.164 phone from the original SentMessage. CallRail
+        # masks the inbound sender (``***3312``), so falling through to
+        # ``self._format_phone(from_phone)`` there would produce ``+3312``.
+        reply_phone = result.get("recipient_phone") or self._format_phone(from_phone)
+
         # Send auto-reply if present
         auto_reply = result.get("auto_reply")
         if auto_reply:
             try:
                 await self.provider.send_text(
-                    self._format_phone(from_phone),
+                    reply_phone,
                     f"{self._prefix}{auto_reply}",
                 )
             except Exception:
                 logger.warning(
                     "sms.confirmation.auto_reply_failed",
-                    phone=_mask_phone(from_phone),
+                    phone=_mask_phone(reply_phone),
                     exc_info=True,
                 )
 
@@ -766,13 +771,13 @@ class SMSService(LoggerMixin):
         if follow_up_sms:
             try:
                 await self.provider.send_text(
-                    self._format_phone(from_phone),
+                    reply_phone,
                     f"{self._prefix}{follow_up_sms}",
                 )
             except Exception:
                 logger.warning(
                     "sms.confirmation.follow_up_failed",
-                    phone=_mask_phone(from_phone),
+                    phone=_mask_phone(reply_phone),
                     exc_info=True,
                 )
 

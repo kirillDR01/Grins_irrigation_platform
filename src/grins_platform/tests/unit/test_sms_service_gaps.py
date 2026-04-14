@@ -6,10 +6,12 @@ Validates: Requirements 8.1-8.6, 9.1-9.5
 from __future__ import annotations
 
 from datetime import datetime
-from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from grins_platform.services.campaign_response_service import CorrelationResult
 from grins_platform.services.sms_service import (
     CT_TZ,
     SMSService,
@@ -319,3 +321,127 @@ class TestAutomatedMessageWiring:
 
         assert result["success"] is True
         assert result["deferred"] is True
+
+
+# --- Phase 2: masked-phone resolution on inbound routes ---
+
+
+@pytest.mark.unit
+class TestConfirmationReplyUsesRealPhone:
+    """CR-3: Y/R/C auto-replies must target the E.164 recipient_phone
+    stored on the original SentMessage, not the CallRail-masked inbound
+    ``from_phone`` (e.g. ``***3312``)."""
+
+    @pytest.mark.asyncio
+    async def test_auto_reply_sent_to_real_phone_not_mask(self) -> None:
+        service = _make_service()
+        service.provider = AsyncMock()
+        service.provider.send_text = AsyncMock(
+            return_value={"success": True, "message_id": "SM-auto"},
+        )
+
+        original = SimpleNamespace(recipient_phone="+19527373312")
+        handle_result = {
+            "action": "confirmed",
+            "appointment_id": "apt-1",
+            "auto_reply": "Your appointment has been confirmed.",
+            "recipient_phone": "+19527373312",
+        }
+
+        with (
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService._find_confirmation_message",
+                new=AsyncMock(return_value=original),
+            ),
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.handle_confirmation",
+                new=AsyncMock(return_value=handle_result),
+            ),
+        ):
+            out = await service._try_confirmation_reply(
+                from_phone="***3312",
+                body="Y",
+                provider_sid="SM-in",
+                thread_id="THR-1",
+            )
+
+        assert out is not None
+        service.provider.send_text.assert_awaited_once()
+        target_phone = service.provider.send_text.await_args.args[0]
+        assert target_phone == "+19527373312"
+        assert "3312" not in target_phone or target_phone.startswith("+1")
+
+    @pytest.mark.asyncio
+    async def test_follow_up_sms_also_sent_to_real_phone(self) -> None:
+        """Reschedule follow-up SMS must also bypass the masked sender."""
+        service = _make_service()
+        service.provider = AsyncMock()
+        service.provider.send_text = AsyncMock(
+            return_value={"success": True, "message_id": "SM-fu"},
+        )
+
+        original = SimpleNamespace(recipient_phone="+19527373312")
+        handle_result = {
+            "action": "reschedule_requested",
+            "appointment_id": "apt-1",
+            "reschedule_request_id": "rr-1",
+            "auto_reply": "We received your reschedule request.",
+            "follow_up_sms": "Please reply with 2-3 dates and times.",
+            "recipient_phone": "+19527373312",
+        }
+
+        with (
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService._find_confirmation_message",
+                new=AsyncMock(return_value=original),
+            ),
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.handle_confirmation",
+                new=AsyncMock(return_value=handle_result),
+            ),
+        ):
+            await service._try_confirmation_reply(
+                from_phone="***3312",
+                body="R",
+                provider_sid="SM-in",
+                thread_id="THR-1",
+            )
+
+        assert service.provider.send_text.await_count == 2
+        for call in service.provider.send_text.await_args_list:
+            assert call.args[0] == "+19527373312"
+
+
+@pytest.mark.unit
+class TestStopOnAppointmentThreadRecordsE164:
+    """CR-4: STOP on a thread whose SentMessage has no ``campaign_id``
+    (appointment-confirmation thread) must still resolve to the real
+    E.164 ``recipient_phone`` — not the masked ``***3312``."""
+
+    @pytest.mark.asyncio
+    async def test_stop_on_appointment_thread_stores_full_e164(self) -> None:
+        service = _make_service()
+        service.provider = AsyncMock()
+        service.provider.send_text = AsyncMock(
+            return_value={"success": True, "message_id": "SM-stop-ack"},
+        )
+
+        sent_msg = MagicMock()
+        sent_msg.recipient_phone = "+19527373312"
+        sent_msg.campaign_id = None
+        corr = CorrelationResult(campaign=None, sent_message=sent_msg)
+
+        with patch(
+            "grins_platform.services.campaign_response_service.CampaignResponseService.correlate_reply",
+            new=AsyncMock(return_value=corr),
+        ):
+            await service._process_exact_opt_out(
+                "***3312",
+                "stop",
+                thread_id="THR-9",
+            )
+
+        record = service.session.add.call_args_list[0][0][0]
+        assert record.phone_number == "+19527373312"
+        assert record.consent_given is False
+        assert record.opt_out_method == "text_stop"

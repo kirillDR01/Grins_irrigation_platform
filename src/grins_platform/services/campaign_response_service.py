@@ -148,24 +148,29 @@ class CampaignResponseService(LoggerMixin):
         result = await self.session.execute(stmt)
         sent_msg: SentMessage | None = result.scalar_one_or_none()
 
-        if sent_msg is None or sent_msg.campaign_id is None:
+        if sent_msg is None:
             self.log_completed("correlate_reply", matched=False)
             return CorrelationResult()
 
-        # Eagerly load the campaign relationship
-        campaign: Campaign | None = sent_msg.campaign  # type: ignore[assignment]
-        if campaign is None:
-            # Fallback: load campaign explicitly
-            from grins_platform.models.campaign import (  # noqa: PLC0415
-                Campaign as CampaignModel,
-            )
+        # Non-campaign threads (e.g. appointment confirmation SMS) still need
+        # the SentMessage returned so callers can resolve the real E.164
+        # recipient phone from ``sent_msg.recipient_phone`` — otherwise STOP
+        # handling and Y/R/C auto-replies key off the masked CallRail sender
+        # (``***3312``). Campaign fields stay ``None`` for those threads.
+        campaign: Campaign | None = None
+        if sent_msg.campaign_id is not None:
+            campaign = sent_msg.campaign  # type: ignore[assignment]
+            if campaign is None:
+                from grins_platform.models.campaign import (  # noqa: PLC0415
+                    Campaign as CampaignModel,
+                )
 
-            camp_result = await self.session.execute(
-                select(CampaignModel).where(
-                    CampaignModel.id == sent_msg.campaign_id,
-                ),
-            )
-            campaign = camp_result.scalar_one_or_none()
+                camp_result = await self.session.execute(
+                    select(CampaignModel).where(
+                        CampaignModel.id == sent_msg.campaign_id,
+                    ),
+                )
+                campaign = camp_result.scalar_one_or_none()
 
         self.log_completed(
             "correlate_reply",

@@ -236,8 +236,14 @@ class TestCorrelateReply:
         assert corr.sent_message is None
 
     @pytest.mark.asyncio
-    async def test_sent_message_without_campaign_id_returns_empty(self) -> None:
-        """sent_message with campaign_id=None returns empty."""
+    async def test_sent_message_without_campaign_id_returns_sent_message(
+        self,
+    ) -> None:
+        """sent_message without campaign_id (e.g. appointment-confirmation
+        thread) still returns the SentMessage so callers can resolve the real
+        E.164 ``recipient_phone`` from the outbound record. Campaign stays
+        ``None``.
+        """
         sent_msg = _make_sent_message()
         sent_msg.campaign_id = None
 
@@ -250,7 +256,7 @@ class TestCorrelateReply:
         corr = await svc.correlate_reply("thread-no-campaign")
 
         assert corr.campaign is None
-        assert corr.sent_message is None
+        assert corr.sent_message is sent_msg
 
 
 # =============================================================================
