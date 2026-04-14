@@ -53,6 +53,52 @@ class AgreementNotFoundForSessionError(OnboardingError):
         self.session_id = session_id
 
 
+class IncompleteServiceWeekPreferencesError(OnboardingError):
+    """Raised when service_week_preferences doesn't cover every tier service.
+
+    For new onboardings, the customer must make an explicit choice (a
+    specific Monday or ``null`` = "No preference") for every job_type
+    included in their tier. Missing keys surface as a 422 at the
+    endpoint layer.
+    """
+
+    def __init__(
+        self,
+        expected_job_types: set[str],
+        submitted_job_types: set[str],
+    ) -> None:
+        self.expected_job_types = expected_job_types
+        self.submitted_job_types = submitted_job_types
+        self.missing_job_types = expected_job_types - submitted_job_types
+        super().__init__(
+            "service_week_preferences incomplete: missing "
+            f"{sorted(self.missing_job_types)}",
+        )
+
+
+def expected_job_types_for_tier(tier: Any) -> set[str]:
+    """Return the set of job_type keys required in service_week_preferences.
+
+    Mirrors the frontend's mapServicesToPickerList expansion: monthly_visit
+    with frequency "5x" expands to monthly_visit_5 through monthly_visit_9.
+    Other service types are used as-is.
+
+    The set is derived from tier.included_services so future tier
+    shape changes don't require code updates here.
+    """
+    expected: set[str] = set()
+    for svc in tier.included_services or []:
+        svc_type = svc.get("service_type") if isinstance(svc, dict) else None
+        if not svc_type:
+            continue
+        if svc_type == "monthly_visit":
+            for month in range(5, 10):
+                expected.add(f"monthly_visit_{month}")
+            continue
+        expected.add(svc_type)
+    return expected
+
+
 @dataclass
 class VerifiedSessionInfo:
     """Information extracted from a verified Stripe Checkout Session."""
@@ -203,7 +249,7 @@ class OnboardingService(LoggerMixin):
         preferred_times: str = "NO_PREFERENCE",
         preferred_schedule: str = "ASAP",
         preferred_schedule_details: str | None = None,
-        service_week_preferences: dict[str, str] | None = None,
+        service_week_preferences: dict[str, str | None] | None = None,
     ) -> ServiceAgreement:
         """Complete onboarding by creating property and linking to agreement/jobs.
 
@@ -263,6 +309,21 @@ class OnboardingService(LoggerMixin):
             )
             raise AgreementNotFoundForSessionError(session_id)
 
+        # Tier-aware completeness check for service_week_preferences.
+        # The customer must have made an explicit choice (specific Monday
+        # or null = "No preference") for every job_type in their tier.
+        prefs = service_week_preferences or {}
+        expected = expected_job_types_for_tier(agreement.tier)
+        submitted = set(prefs.keys())
+        if not expected.issubset(submitted):
+            self.log_rejected(
+                "complete_onboarding",
+                reason="incomplete_service_week_preferences",
+                session_id=session_id,
+                missing=sorted(expected - submitted),
+            )
+            raise IncompleteServiceWeekPreferencesError(expected, submitted)
+
         # Determine address source
         if service_address_same_as_billing:
             customer_details = checkout_session.customer_details
@@ -303,14 +364,23 @@ class OnboardingService(LoggerMixin):
             is_primary=True,
         )
 
-        # Link property to agreement and save schedule preference
+        # Link property to agreement, save schedule preference, and
+        # snapshot onboarding-time answers for audit.
+        no_preference_flags = {k: v is None for k, v in prefs.items()}
         update_data: dict[str, Any] = {
             "property_id": prop.id,
             "preferred_schedule": preferred_schedule,
             "preferred_schedule_details": preferred_schedule_details,
+            "service_week_preferences": prefs,
+            # Onboarding snapshot (frozen at completion time)
+            "tier_slug_snapshot": agreement.tier.slug,
+            "tier_name_snapshot": agreement.tier.name,
+            "preferred_service_time": preferred_times,
+            "access_instructions": access_instructions,
+            "gate_code": gate_code,
+            "dogs_on_property": has_dogs,
+            "no_preference_flags": no_preference_flags,
         }
-        if service_week_preferences:
-            update_data["service_week_preferences"] = service_week_preferences
         agreement = await self.agreement_repo.update(
             agreement,
             update_data,

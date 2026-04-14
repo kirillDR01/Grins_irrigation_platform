@@ -210,6 +210,29 @@ class ServiceAgreement(Base):
         nullable=True,
     )
 
+    # Onboarding snapshot — frozen at /onboarding/complete for audit.
+    # Duplicates live data on properties/customers intentionally so later
+    # edits don't lose what the customer answered at onboarding time.
+    tier_slug_snapshot: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+    tier_name_snapshot: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+    preferred_service_time: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+    access_instructions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    gate_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    dogs_on_property: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    no_preference_flags: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
     # Onboarding reminder tracking (Req 10.6)
     onboarding_reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),

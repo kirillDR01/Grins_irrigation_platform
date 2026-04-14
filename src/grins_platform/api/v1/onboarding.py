@@ -7,9 +7,11 @@ import time
 from typing import Annotated
 from uuid import UUID
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from grins_platform.api.v1.dependencies import get_db_session
@@ -23,6 +25,7 @@ from grins_platform.repositories.property_repository import PropertyRepository
 from grins_platform.services.compliance_service import ComplianceService
 from grins_platform.services.onboarding_service import (
     AgreementNotFoundForSessionError,
+    IncompleteServiceWeekPreferencesError,
     OnboardingService,
     SessionNotFoundError,
 )
@@ -140,10 +143,45 @@ class CompleteOnboardingRequest(BaseModel):
         default=None,
         description="Free-text details for 'Other' schedule preference",
     )
-    service_week_preferences: dict[str, str] | None = Field(
-        default=None,
-        description="Per-service week selections as {job_type: ISO Monday date}",
+    service_week_preferences: dict[str, str | None] = Field(
+        ...,
+        description=(
+            "Per-service week selections as {job_type: ISO Monday date | null}."
+            " Every service included in the customer's tier must appear as a"
+            " key. null value means the customer explicitly chose 'No"
+            " preference' for that service."
+        ),
     )
+
+    @field_validator("service_week_preferences")
+    @classmethod
+    def validate_week_preference_values(
+        cls, v: dict[str, str | None],
+    ) -> dict[str, str | None]:
+        """Ensure non-null values are ISO date strings (YYYY-MM-DD).
+
+        Tier-level completeness (all expected job_types present) is
+        enforced in the service layer, where the tier is resolved from
+        the session's agreement.
+        """
+        for job_type, iso in v.items():
+            if iso is None:
+                continue
+            if not isinstance(iso, str):
+                msg = (
+                    f"service_week_preferences[{job_type!r}] must be null or"
+                    " a YYYY-MM-DD date string"
+                )
+                raise ValueError(msg)
+            try:
+                date.fromisoformat(iso)
+            except ValueError as exc:
+                msg = (
+                    f"service_week_preferences[{job_type!r}] is not a valid"
+                    f" ISO date: {iso!r}"
+                )
+                raise ValueError(msg) from exc
+        return v
 
     @model_validator(mode="after")
     def validate_preferred_schedule(self) -> "CompleteOnboardingRequest":
@@ -402,6 +440,24 @@ async def complete_onboarding(
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={"detail": "No agreement found for this session."},
+        )
+    except IncompleteServiceWeekPreferencesError as exc:
+        _endpoints.log_rejected(
+            "complete_onboarding",
+            reason="incomplete_service_week_preferences",
+            session_id=data.session_id,
+            missing=str(exc.missing_job_types),
+        )
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={
+                "detail": (
+                    "service_week_preferences is missing required services"
+                    " for this tier."
+                ),
+                "missing_job_types": sorted(exc.missing_job_types),
+                "expected_job_types": sorted(exc.expected_job_types),
+            },
         )
 
     await db.commit()
