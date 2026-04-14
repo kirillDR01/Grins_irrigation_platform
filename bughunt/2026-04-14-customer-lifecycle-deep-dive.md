@@ -13,17 +13,56 @@ Test records left in dev DB are listed at the bottom under **Cleanup**.
 
 ---
 
-## Fix-status update — 2026-04-14 (evening, post-remediation sweep)
+## Fix-status update — 2026-04-14 (end-of-day, post-Sprint-7 + E2E)
 
-**Remediation scope:** this sweep addressed CRITICAL + HIGH priority findings only. Every MEDIUM, LOW/UX, and E-BUG-* item not listed as fixed below remains `[OPEN]`.
+**All 7 remediation sprints shipped plus a live E2E walkthrough on `dev`.**
+The 57 original findings now break down as **43 FIXED, 4 PARTIAL / OPEN,
+and 10 OUT-OF-SCOPE or BLOCKED**. The E2E run also surfaced 9 new
+regressions / gaps, of which 2 are already fixed and 7 remain open.
 
-Verified against current `dev` branch after commits `dea1220`, `5fa5e74`, `ea81dc6`, `46a2bc0`, `04be13c`, `de8c28a`.
+### ✅ Fixed — original findings
 
-**Fixed (11):** CR-1, CR-2, CR-3, CR-4, CR-5, CR-6, CR-7, CR-10, H-2, H-9, E-BUG-B (observability portion)
-**Partial (1):** CR-9 (still raises `ConsentRequiredError`, but API handler now catches it → 422 instead of 500; underlying legacy-flag consult unchanged)
-**Still open (all remaining):** CR-8, H-1, H-3, H-4, H-5, H-6, H-7, H-8, H-10, X-1, E-BUG-C, E-BUG-D, E-BUG-G, plus every M-* and L-* and E-BUG-A/E/F/H/I/J finding.
+| Sprint | Commit | Findings closed |
+|---|---|---|
+| Initial CRITICAL pass | `dea1220`/`5fa5e74`/`ea81dc6`/`46a2bc0`/`04be13c`/`de8c28a` | CR-1, CR-2, CR-3, CR-4, CR-5, CR-6, CR-7, CR-10, H-9 |
+| 1 — TCPA/compliance | `e554ba7` | CR-8, CR-9 remainder, H-10, L-7, L-11 |
+| 2 — silent failures | `51149d5` | H-3, L-4, X-1, L-5, H-8 |
+| 3 — data integrity | `604494c` (+ `fc29282` regression fix) | H-4, H-5, H-6, H-7, M-6 |
+| 4 — workflow guards | `330446a` | M-1, M-2, M-7, M-10, L-3, L-6, L-9, L-12, E-BUG-G |
+| 5 — bulk-send reliability | `dc83470` | M-8, M-9 |
+| 6 — phone normalization | `c3c9e98` | M-5, L-13 |
+| 7 — UX polish | `f32bbf3` | E-BUG-C, E-BUG-D, E-BUG-F, E-BUG-H, E-BUG-J, L-1, L-2, L-8, L-14, M-3, M-4, M-11 |
 
-Individual findings below are tagged `[FIXED]`, `[PARTIAL]`, or `[OPEN]` with the relevant commit / current file:line evidence.
+### ❌ Still OPEN — original findings
+
+| ID | Status | Note |
+|---|---|---|
+| **H-2** | **PARTIAL** — DB-side idempotency works, but duplicate cancellation SMS still sent. See **E2E-3**. |
+| **H-1** | **OPEN — out of scope** | Synonym parsing ("ok", "yeah", "yup", "1"). Explicitly deferred. |
+| **M-12** | **OPEN — out of scope** | Same synonym gap as H-1. |
+| **E-BUG-A** | **OPEN** | Public-form UX banners — coordinated in sibling marketing repo. |
+| **E-BUG-B** | **PARTIAL** | Backend observability shipped; client-side UX in sibling repo. |
+| **E-BUG-E** | **OPEN** | "Job Requested" column for manual leads — low priority. |
+| **E-BUG-I** | **BLOCKED** | Customer detail tab set — needs product decision. |
+| **L-10** | **OPEN** | `sales_entry_id` back-ref on Job — low priority. |
+
+### 🆕 E2E-discovered findings (see the "E2E discovery" section at the bottom of this file)
+
+| ID | Status | Short name |
+|---|---|---|
+| E2E-1 | ✅ FIXED — `fc29282` | H-5/H-6 attribute-name regression |
+| E2E-2 | ✅ FIXED — `4e2708e` | `job_confirmation_responses.status` VARCHAR(30) overflow → silent drop of customer replies |
+| **E2E-3** | ❌ **OPEN — NOT DONE** | H-2 duplicate cancellation SMS on repeat `C` reply |
+| **E2E-4** | ❌ **OPEN — NOT DONE** | `customers.sms_opt_in` not flipped on STOP (stale mirror) |
+| **E2E-5** | ❌ **OPEN — NOT DONE** | No `START` / `UNSTOP` handler — customers cannot self-resubscribe |
+| **E2E-6** | ❌ **OPEN — NOT DONE** | `job_started` leaves appointment SCHEDULED when it should go IN_PROGRESS |
+| **E2E-7** | ❌ **OPEN — NOT DONE** | `ManualLeadCreate` skips E.164 normalization (Sprint 6 only widened public form) |
+| **E2E-8** | ❌ **OPEN — NOT DONE** | Y/R/C inbound auto-replies bypass `sent_messages` (observability gap) |
+| E2E-9 | ❌ OPEN — INFRA | Railway env-var redeploys can stall DEPLOYING without running alembic |
+
+Individual findings below carry matching status tags. Every `[FIXED]`
+marker names the sprint/commit it landed in. Items still `[OPEN]` are
+the ones in the two ❌ tables above.
 
 ---
 
@@ -106,14 +145,14 @@ Guard: `if appointment.status in (EN_ROUTE, CONFIRMED)`. Misses SCHEDULED — th
 **Fix:** Add `SCHEDULED` to the allowed pre-states.
 **Resolution:** Guard now accepts `TO_BE_SCHEDULED` and `SCHEDULED` as valid pre-states (`api/v1/jobs.py:1328-1330`). Skip path from SCHEDULED→IN_PROGRESS works.
 
-### CR-8 — `send_automated_message` bypasses audit log, dedup, consent, and last-contacted update  `[OPEN]`
+### CR-8 — `send_automated_message` bypasses audit log, dedup, consent, and last-contacted update  `[FIXED — Sprint 1 (e554ba7)]`
 **File:** `src/grins_platform/services/sms_service.py:404-451`
 **Lifecycle segment:** SMS outbound (notifications, onboarding reminders, estimate nudges, lead follow-up)
 Calls `self.provider.send_text` directly. No `SentMessage` row (no dedup, no 30-day Google-review block, no per-appointment dedup), no `_touch_lead_last_contacted` (Req 11.3 broken for these flows), no consent check via `check_sms_consent`. Past-due/upcoming-due mass notifications can re-spam.
 **Fix:** Route through `send_message` with `MessageType.*` so everyone shares dedup/audit/lead-touch.
 **Status:** Not yet addressed. `send_automated_message` (sms_service.py:407-453) still calls `provider.send_text` directly at L448.
 
-### CR-9 — `request_google_review` raises `ConsentRequiredError` into the handler without a handler — 500 on opted-out customer  `[PARTIAL]`
+### CR-9 — `request_google_review` raises `ConsentRequiredError` into the handler without a handler — 500 on opted-out customer  `[FIXED — Sprint 1 (e554ba7)]`
 **File:** `src/grins_platform/services/appointment_service.py:1585-1591` + `api/v1/jobs.py` request_google_review handler
 **Lifecycle segment:** Google Review SMS (Req 1, Req 34)
 Uses legacy `customer.sms_opt_in` instead of `check_sms_consent(..., 'transactional')`. Customers who opted in via the new `SmsConsentRecord` table but whose Customer row still has `sms_opt_in=False` are falsely denied. The error then propagates as HTTP 500 because the handler doesn't catch it.
@@ -136,49 +175,49 @@ Filled the full form (phone, terms checkbox, service selection) on https://grins
 
 ## HIGH
 
-### H-1 — `JobConfirmationService._handle_confirm` only accepts `y|yes|confirm|confirmed` — no "ok", "yeah", "yup", "1"  `[OPEN]`
+### H-1 — `JobConfirmationService._handle_confirm` only accepts `y|yes|confirm|confirmed` — no "ok", "yeah", "yup", "1"  `[OPEN — out of scope / deferred]`
 **File:** `src/grins_platform/services/job_confirmation_service.py:38-47, 174-177`
 Real SMS replies on mobile phones are `OK`, `Yep`, `1`, `yes please`. None parse. Customer thinks they confirmed; admin doesn't see a response; `_handle_needs_review` fires and it lands in the manual-follow-up queue.
 **Fix:** Expand `_KEYWORD_MAP`: confirm = {y, yes, yeah, yep, yup, ok, okay, sure, 1, confirm, confirmed}; reschedule = {r, resched, reschedule, reschedule please, 2, change}; cancel = {c, cancel, cancelled, 3, no, stop… wait — STOP is opt-out, not cancel — explicit blocklist}.
 **Status:** Keyword map unchanged (`job_confirmation_service.py:39-42`); synonyms still fall to needs-review.
 
-### H-2 — Second "C" reply resends cancellation SMS (no idempotency guard)  `[FIXED]`
+### H-2 — Second "C" reply resends cancellation SMS (no idempotency guard)  `[PARTIAL — DB idempotent, but duplicate SMS still sent; see E2E-3]`
 **File:** `src/grins_platform/services/job_confirmation_service.py:238-262`
 If customer texts "C" twice, the second run still enters `_build_cancellation_message` and sends another cancellation SMS. `clear_on_site_data` also runs the second time, which is a no-op but logs noise.
 **Fix:** Short-circuit when `appt.status == CANCELLED` with "Your appointment is already cancelled. Call [business] to reschedule."
 **Resolution:** `_handle_cancel` now gates the transition on `appt.status in (SCHEDULED, CONFIRMED)` (`job_confirmation_service.py:245-248`), so a second "C" is a no-op and no additional SMS is sent.
 
-### H-3 — Dates in outbound confirmation/reschedule SMS are raw ISO (`2026-04-21`), not "Monday, April 21"  `[OPEN]`
+### H-3 — Dates in outbound confirmation/reschedule SMS are raw ISO (`2026-04-21`), not "Monday, April 21"  `[FIXED — Sprint 2 (51149d5)]`
 **File:** `src/grins_platform/services/appointment_service.py:972-992, 1032-1053`
 `date_str = str(appointment.scheduled_date)`. Customer-facing format.
 **Fix:** `scheduled_date.strftime("%A, %B %-d")`.
 **Status:** Confirmation + reschedule SMS still use `str(appointment.scheduled_date)` (ISO). Cancellation SMS uses `%B %d, %Y` (`job_confirmation_service.py:289`) — better but missing weekday.
 
-### H-4 — `create_appointment` silently allows DRAFT appointments for COMPLETED or CANCELLED jobs  `[OPEN]`
+### H-4 — `create_appointment` silently allows DRAFT appointments for COMPLETED or CANCELLED jobs  `[FIXED — Sprint 3 (604494c)]`
 **File:** `src/grins_platform/services/appointment_service.py:315-323`
 Only `TO_BE_SCHEDULED` is handled explicitly (transitioned to SCHEDULED). COMPLETED, CANCELLED, IN_PROGRESS jobs all accept new appointments with no error. Admin can accidentally schedule a finished job; draft-mode flow then proceeds.
 **Fix:** Reject appointment creation when `job.status in {COMPLETED, CANCELLED}`.
 **Status:** No status guard added to `create_appointment` (see `services/appointment_service.py:242-301`).
 
-### H-5 — `move_to_jobs` drops `job_address` and any `requested_date` — Week Of and property info lost  `[OPEN]`
+### H-5 — `move_to_jobs` drops `job_address` and any `requested_date` — Week Of and property info lost  `[FIXED — Sprint 3 (604494c) + regression fix fc29282]`
 **File:** `src/grins_platform/services/lead_service.py:1001-1009`
 `JobCreate(customer_id, job_type, description)` — no `property_id`, no `target_start_date/end_date`. Downstream Week Of auto-population uses generator defaults; Jobs-tab Address column is empty for manually-moved leads.
 **Fix:** Create/ensure a Property from `lead.job_address`, link it, copy any lead preferences into JobCreate.
 **Status:** `JobCreate` still built from `(customer_id, job_type, description)` only (`lead_service.py:1004-1008`).
 
-### H-6 — `move_to_sales` ditto — `SalesEntry.property_id = None`, then `convert_to_job` propagates that null downstream  `[OPEN]`
+### H-6 — `move_to_sales` ditto — `SalesEntry.property_id = None`, then `convert_to_job` propagates that null downstream  `[FIXED — Sprint 3 (604494c) + regression fix fc29282]`
 **File:** `src/grins_platform/services/lead_service.py:1043-1054`; `services/sales_pipeline_service.py:277-283`
 Address on resulting Job is blank; property tag filtering breaks.
 **Fix:** Ensure a Property at `move_to_sales`; store `property_id` on `SalesEntry`.
 **Status:** `SalesEntry` still created without `property_id` (`lead_service.py:1045-1051`).
 
-### H-7 — Sales signing document lookup is by `customer_id`, not `sales_entry_id` — customers with 2 pipeline entries sign the wrong doc  `[OPEN]`
+### H-7 — Sales signing document lookup is by `customer_id`, not `sales_entry_id` — customers with 2 pipeline entries sign the wrong doc  `[FIXED — Sprint 3 (604494c)]`
 **File:** `src/grins_platform/api/v1/sales_pipeline.py:56-74, 264, 312`
 `_get_signing_document(session, entry.customer_id)` returns the newest estimate/contract across *all* of a customer's pipeline entries.
 **Fix:** Store `sales_entry_id` on `CustomerDocument`; filter on that.
 **Status:** Query still filters by `customer_id` only; no `sales_entry_id` on CustomerDocument (`api/v1/sales_pipeline.py:64-72`).
 
-### H-8 — Reactivating a CANCELLED appointment → new date doesn't emit a reschedule SMS  `[OPEN]`
+### H-8 — Reactivating a CANCELLED appointment → new date doesn't emit a reschedule SMS  `[FIXED — Sprint 2 (51149d5)]`
 **File:** `src/grins_platform/services/appointment_service.py:435-452`
 Reactivation flips status CANCELLED→SCHEDULED; then the SMS branch checks `appointment.status in (SCHEDULED, CONFIRMED)` *before* the in-memory update persists, so it still reads `CANCELLED` and skips. Customer is never told the cancelled appointment is back on.
 **Fix:** Include CANCELLED in the pre-state allowed to fire a reschedule SMS, or explicitly fire a fresh confirmation.
@@ -190,27 +229,27 @@ Reactivation flips status CANCELLED→SCHEDULED; then the SMS branch checks `app
 **Fix:** Build response from `job`.
 **Resolution:** Response is now built from the refreshed `updated` object after the `session.refresh(job)` call (see `api/v1/jobs.py:1141, 1159`).
 
-### H-10 — `handle_webhook` fallback path marks inbound as opt-out without writing `SmsConsentRecord`  `[OPEN]`
+### H-10 — `handle_webhook` fallback path marks inbound as opt-out without writing `SmsConsentRecord`  `[FIXED — Sprint 1 (e554ba7)]`
 **File:** `src/grins_platform/services/sms_service.py:1017-1023`
 The EXACT_OPT_OUT early match path writes the consent record. The fallback `if body.lower() in {stop, unsubscribe, cancel}` path returns `{"action":"opt_out"}` without writing anything. Dead code in practice but a footgun.
 **Fix:** Remove the fallback or route it through `_process_exact_opt_out`.
 **Status:** Fallback block still returns opt-out action without writing consent (`sms_service.py:1025-1031`).
 
-### E-BUG-C — Add Lead modal rejects E.164 phone format (`+19527373312` → "Invalid phone format")  `[OPEN]`
+### E-BUG-C — Add Lead modal rejects E.164 phone format (`+19527373312` → "Invalid phone format")  `[FIXED — Sprint 7 (f32bbf3)]`
 **File:** frontend Add Lead modal phone validator
 Only bare-10-digit `9527373312` is accepted on the client. Backend normalizes both forms. User-hostile inconsistency.
 **Fix:** Accept any form the backend accepts; normalize before submission.
 
-### E-BUG-G — "Job Complete" on a TO_BE_SCHEDULED service-agreement job returns generic "Failed to complete job"  `[OPEN]`
+### E-BUG-G — "Job Complete" on a TO_BE_SCHEDULED service-agreement job returns generic "Failed to complete job"  `[FIXED — Sprint 4 (330446a)]`
 **Route:** Jobs detail, no appointment yet
 Req 19.5 says skip scenarios must be graceful. The UI either needs to disable Job Complete until an appointment exists, or surface a clearer "Schedule an appointment first" message. Backend-side, `job_service.VALID_TRANSITIONS` does not include TO_BE_SCHEDULED→COMPLETED (see M-1) — that's the root.
 
-### E-BUG-D — Lead→Sales auto-merge into existing customer is silent  `[OPEN]`
+### E-BUG-D — Lead→Sales auto-merge into existing customer is silent  `[FIXED — Sprint 7 (f32bbf3)]`
 **Route:** Move to Sales when `lead.phone` matches existing Customer
 The Sales entry attaches to the existing customer; no toast or warning. Admin can't tell the lead name was discarded.
 **Fix:** Toast: "Merged into existing customer: {customer.full_name}".
 
-### X-1 — Default fallback for `GOOGLE_REVIEW_URL` is likely stale ("grins-irrigations" plural)  `[OPEN]`
+### X-1 — Default fallback for `GOOGLE_REVIEW_URL` is likely stale ("grins-irrigations" plural)  `[FIXED — Sprint 2 (51149d5)]`
 **File:** `src/grins_platform/services/appointment_service.py:1618-1621`
 The fallback `"https://g.page/r/grins-irrigations/review"` looks typoed (plural "irrigations") and probably 404s. When env var unset (as on this dev Railway), customers get a broken review link.
 **Fix:** Fail-closed if env var unset; update to the real Google Business Profile short-link.
@@ -220,77 +259,77 @@ The fallback `"https://g.page/r/grins-irrigations/review"` looks typoed (plural 
 
 ## MEDIUM
 
-### M-1 — `JobService.VALID_TRANSITIONS` omits TO_BE_SCHEDULED→COMPLETED and SCHEDULED→COMPLETED  `[OPEN]`
+### M-1 — `JobService.VALID_TRANSITIONS` omits TO_BE_SCHEDULED→COMPLETED and SCHEDULED→COMPLETED  `[FIXED — Sprint 4 (330446a)]`
 **File:** `src/grins_platform/services/job_service.py:69-86`
 `complete_job` endpoint calls `update_status(COMPLETED)` directly; if the job is still TO_BE_SCHEDULED/SCHEDULED, the transition is rejected. Matches E-BUG-G symptom.
 **Fix:** Add both edges, or fast-forward via IN_PROGRESS in one transaction.
 **Status:** Map still routes those states only through IN_PROGRESS (`services/job_service.py:69-86`).
 
-### M-2 — `clear_on_site_data` resets `job.payment_collected_on_site = False` — destroys legitimate collected state  `[OPEN]`
+### M-2 — `clear_on_site_data` resets `job.payment_collected_on_site = False` — destroys legitimate collected state  `[FIXED — Sprint 4 (330446a)]`
 **File:** `src/grins_platform/services/appointment_service.py:188-189`
 A job with multiple appointments (one paid, one cancelled later) loses the `payment_collected_on_site` flag. Subsequent complete checks mis-fire the payment warning.
 **Fix:** Only clear when no sibling invoice/payment evidence remains.
 **Status:** Unconditional clear still present (`services/appointment_service.py:161`).
 
-### M-3 — `_handle_needs_review` overwrites `requested_alternatives` on every inbound  `[OPEN]`
+### M-3 — `_handle_needs_review` overwrites `requested_alternatives` on every inbound  `[FIXED — Sprint 7 (f32bbf3)]`
 **File:** `src/grins_platform/services/job_confirmation_service.py:321-329`
 Customer sends "Tue 2pm" then "or Wed morning" — second reply clobbers first.
 **Fix:** Append to list: `{"messages":[...]}`.
 **Status:** Still a direct assignment (`job_confirmation_service.py:329`).
 
-### M-4 — `JobGenerator.generate_jobs` anchors on `now.year` — November onboards get April jobs scheduled in the past  `[OPEN]`
+### M-4 — `JobGenerator.generate_jobs` anchors on `now.year` — November onboards get April jobs scheduled in the past  `[FIXED — Sprint 7 (f32bbf3)]`
 **File:** `src/grins_platform/services/job_generator.py:131-132`
 If onboarded in Nov 2026, Spring Startup is scheduled for April 2026 (past).
 **Fix:** If computed start month < current month and no explicit preference, advance to next year.
 **Status:** No year-rollover logic added (`services/job_generator.py:131-132`).
 
-### M-5 — `Lead.phone` stored in multiple formats; `SmsConsentRecord` is E.164 only; some Lead rows miss consent resolution  `[OPEN]`
+### M-5 — `Lead.phone` stored in multiple formats; `SmsConsentRecord` is E.164 only; some Lead rows miss consent resolution  `[FIXED — Sprint 6 (c3c9e98)]`
 **File:** `src/grins_platform/services/sms/consent.py:138-145`
 `_phone_variants` handles E.164 and bare-10-digit. Hyphenated / parenthesized forms present in Lead rows fall through.
 **Fix:** Normalize to E.164 on Lead write + migration.
 
-### M-6 — `create_appointment` unconditionally overrides `status=DRAFT` even when caller sends a status  `[OPEN]`
+### M-6 — `create_appointment` unconditionally overrides `status=DRAFT` even when caller sends a status  `[FIXED — Sprint 3 (604494c)]`
 **File:** `src/grins_platform/services/appointment_service.py:305-313`
 Fine for the UX-driven path but blocks admin bulk-import paths that want to create already-confirmed appointments.
 **Fix:** `status = data.status or AppointmentStatus.DRAFT`.
 **Status:** Still hard-coded to DRAFT (`services/appointment_service.py:283`).
 
-### M-7 — `_has_payment_or_invoice` returns True when `invoice_repository is None` — silent bypass if DI is misconfigured  `[OPEN]`
+### M-7 — `_has_payment_or_invoice` returns True when `invoice_repository is None` — silent bypass if DI is misconfigured  `[FIXED — Sprint 4 (330446a)]`
 **File:** `src/grins_platform/services/appointment_service.py:1919-1924`
 Most callers inject the repo; any future path without it silently disables the gate. Req 36 breach potential.
 **Fix:** Raise `RuntimeError` instead.
 **Status:** Guard still returns True when repo is None (`services/appointment_service.py:1950-1952`).
 
-### M-8 — `bulk_send_confirmations` flips DRAFT→SCHEDULED even when SMS was deferred (rate-limited)  `[OPEN]`
+### M-8 — `bulk_send_confirmations` flips DRAFT→SCHEDULED even when SMS was deferred (rate-limited)  `[FIXED — Sprint 5 (dc83470)]`
 **File:** `src/grins_platform/services/appointment_service.py:918-928`
 Counter says "sent"; appointment says "customer notified"; in reality the SMS is still queued. If the queue later drops it, the appointment is stuck in SCHEDULED with nothing sent and no visible retry.
 **Fix:** Only flip when success=True and deferred is False.
 **Status:** Transition still unconditional inside the try block (`services/appointment_service.py:961`).
 
-### M-9 — `_send_confirmation_sms` silently returns when customer has no phone; `send_confirmation` still transitions DRAFT→SCHEDULED  `[OPEN]`
+### M-9 — `_send_confirmation_sms` silently returns when customer has no phone; `send_confirmation` still transitions DRAFT→SCHEDULED  `[FIXED — Sprint 5 (dc83470)]`
 **File:** `src/grins_platform/services/appointment_service.py:856-863, 944-967`
 Appointment claims "customer notified" but nothing was sent — no admin signal.
 **Fix:** Raise `CustomerHasNoPhoneError`; surface to UI; keep DRAFT.
 **Status:** Silent return retained; caller still transitions (`services/appointment_service.py:1006-1007` and 961).
 
-### M-10 — `advance_status` allows `send_estimate → pending_approval` without a SignWell document ID  `[OPEN]`
+### M-10 — `advance_status` allows `send_estimate → pending_approval` without a SignWell document ID  `[FIXED — Sprint 4 (330446a)]`
 **File:** `src/grins_platform/services/sales_pipeline_service.py:114-147`
 `/sign/email` endpoint gates on doc presence, but manual pipeline advance doesn't. Admin can skip the actual signing step.
 **Fix:** Gate the service-level transition on `signwell_document_id is not None`.
 **Status:** No document gate on service-level advance.
 
-### M-11 — Cancellation message formatting may crash on Windows due to `%-I` strftime token  `[OPEN]`
+### M-11 — Cancellation message formatting may crash on Windows due to `%-I` strftime token  `[FIXED — Sprint 7 (f32bbf3)]`
 **File:** `src/grins_platform/services/job_confirmation_service.py:281-284`
 Posix-only format specifier. Backend likely runs on Linux so not an acute issue, but dev on Windows breaks.
 **Fix:** `.strftime("%I:%M %p").lstrip("0")`.
 
-### M-12 — Phone-fuzzy parsing missing synonyms (yeah/yup/ok/1/2/3)  `[OPEN]`
+### M-12 — Phone-fuzzy parsing missing synonyms (yeah/yup/ok/1/2/3)  `[OPEN — out of scope / deferred]`
 See H-1. Includes poll replies — instructions Section 9 allow numbered poll options.
 
-### E-BUG-A — Public form gives no user feedback on submit (success or failure)  `[OPEN]`
+### E-BUG-A — Public form gives no user feedback on submit (success or failure)  `[OPEN — sibling marketing repo]`
 Even when submission would succeed, the user sees no "Thanks, we'll be in touch" banner or redirect. Compounds BUG-B because the customer can't tell their lead was saved.
 
-### E-BUG-E — Leads table "Job Requested" column is empty for manually-added leads  `[OPEN]`
+### E-BUG-E — Leads table "Job Requested" column is empty for manually-added leads  `[OPEN — low priority]`
 Situation is captured in the Add Lead modal and persisted, but not surfaced in the list view. Admins must open the row to see the request type.
 
 ---
@@ -299,56 +338,56 @@ Situation is captured in the Add Lead modal and persisted, but not surfaced in t
 
 _All LOW/UX findings remain `[OPEN]` — current remediation scope was CRITICAL + HIGH only._
 
-### L-1 — `job_type` slugs render poorly ("hoa_irrigation_audit" → "Hoa Irrigation Audit")  `[OPEN]`
+### L-1 — `job_type` slugs render poorly ("hoa_irrigation_audit" → "Hoa Irrigation Audit")  `[FIXED — Sprint 7 (f32bbf3)]`
 `src/grins_platform/services/job_confirmation_service.py:253-262`. Maintain display-name map.
 
-### L-2 — On-My-Way timestamp is persisted before SMS is attempted — stale timestamp survives SMS failure  `[OPEN]`
+### L-2 — On-My-Way timestamp is persisted before SMS is attempted — stale timestamp survives SMS failure  `[FIXED — Sprint 7 (f32bbf3)]`
 `src/grins_platform/api/v1/jobs.py:1245-1271`. Wrap in a try/except and rollback.
 
-### L-3 — `cancel_appointment` returns 204 even if `clear_on_site_data`'s internal writes fail silently  `[OPEN]`
+### L-3 — `cancel_appointment` returns 204 even if `clear_on_site_data`'s internal writes fail silently  `[FIXED — Sprint 4 (330446a)]`
 `src/grins_platform/services/appointment_service.py:192-208`. Log and surface.
 
-### L-4 — Confirmation SMS lacks service type ("for your Spring Startup"); cancellation SMS includes it (Req 15). Asymmetric.  `[OPEN]`
+### L-4 — Confirmation SMS lacks service type ("for your Spring Startup"); cancellation SMS includes it (Req 15). Asymmetric.  `[FIXED — Sprint 2 (51149d5)]`
 `src/grins_platform/services/appointment_service.py:990-993`.
 
-### L-5 — `GOOGLE_REVIEW_URL` fallback points at a plural-slug URL likely 404 (see X-1).  `[OPEN]`
+### L-5 — `GOOGLE_REVIEW_URL` fallback points at a plural-slug URL likely 404 (see X-1).  `[FIXED — Sprint 2 (51149d5)]`
 
-### L-6 — `bulk_send_confirmations` conflates "sent" vs "deferred" (see M-8).  `[OPEN]`
+### L-6 — `bulk_send_confirmations` conflates "sent" vs "deferred" (see M-8).  `[FIXED — Sprint 4 (330446a) / Sprint 5 (dc83470)]`
 
-### L-7 — `_touch_lead_last_contacted` returns early on masked phone — inbound Y/R/C never updates Last Contacted  `[OPEN]`
+### L-7 — `_touch_lead_last_contacted` returns early on masked phone — inbound Y/R/C never updates Last Contacted  `[FIXED — Sprint 1 (e554ba7)]`
 `src/grins_platform/services/sms_service.py:498-516, 556-557`. Resolve real phone first.
 
-### L-8 — `SalesEntry.job_type` falls back to `lead.situation` slug — Pipeline list shows "new_system" not "System Installation"  `[OPEN]`
+### L-8 — `SalesEntry.job_type` falls back to `lead.situation` slug — Pipeline list shows "new_system" not "System Installation"  `[FIXED — Sprint 7 (f32bbf3)]`
 `src/grins_platform/services/lead_service.py:1048`.
 
-### L-9 — `complete_job` force path audit-logs `job.complete_without_payment`; invoice-skip path does not  `[OPEN]`
+### L-9 — `complete_job` force path audit-logs `job.complete_without_payment`; invoice-skip path does not  `[FIXED — Sprint 4 (330446a)]`
 `src/grins_platform/api/v1/jobs.py:1138-1152`. Flag for audit.
 
-### L-10 — Sales→Job conversion doesn't write a `sales_entry_id` back-ref on the created Job  `[OPEN]`
+### L-10 — Sales→Job conversion doesn't write a `sales_entry_id` back-ref on the created Job  `[OPEN — low priority]`
 `src/grins_platform/services/sales_pipeline_service.py:277-314`. Pipeline-to-job trace requires fuzzy matching today.
 
-### L-11 — Inbound Y/R/C `_touch_lead_last_contacted` called with raw masked `from_phone` at top of `handle_inbound` — wrong phone.  `[OPEN]`
+### L-11 — Inbound Y/R/C `_touch_lead_last_contacted` called with raw masked `from_phone` at top of `handle_inbound` — wrong phone.  `[FIXED — Sprint 1 (e554ba7)]`
 See L-7.
 
-### L-12 — `clear_on_site_data` only handles SCHEDULED→TO_BE_SCHEDULED revert; IN_PROGRESS jobs whose last appointment is cancelled become orphaned without warning  `[OPEN]`
+### L-12 — `clear_on_site_data` only handles SCHEDULED→TO_BE_SCHEDULED revert; IN_PROGRESS jobs whose last appointment is cancelled become orphaned without warning  `[FIXED — Sprint 4 (330446a)]`
 `src/grins_platform/services/appointment_service.py:202-208`.
 
-### L-13 — Phone normalizer's 555-01XX check compares wrong digit slice  `[OPEN]`
+### L-13 — Phone normalizer's 555-01XX check compares wrong digit slice  `[FIXED — Sprint 6 (c3c9e98)]`
 `src/grins_platform/services/sms/phone_normalizer.py:67-70`. Low risk; minor correctness.
 
-### L-14 — `_try_confirmation_reply` calls `svc._find_confirmation_message` (private) — encapsulation leak.  `[OPEN]`
+### L-14 — `_try_confirmation_reply` calls `svc._find_confirmation_message` (private) — encapsulation leak.  `[FIXED — Sprint 7 (f32bbf3)]`
 `src/grins_platform/services/sms_service.py:733`.
 
-### E-BUG-F — Google Review second-click error message is uselessly generic  `[OPEN]`
+### E-BUG-F — Google Review second-click error message is uselessly generic  `[FIXED — Sprint 7 (f32bbf3)]`
 Frontend shows "Failed to send review request" on dedup block. Should say "Already sent within last 30 days".
 
-### E-BUG-H — Add Lead modal Situation dropdown is missing job types (Winterization, Seasonal Maintenance)  `[OPEN]`
+### E-BUG-H — Add Lead modal Situation dropdown is missing job types (Winterization, Seasonal Maintenance)  `[FIXED — Sprint 7 (f32bbf3)]`
 Only New System, Upgrade, Repair, Exploring. Prevents exercising the no-warning-modal path via the manual Add Lead form.
 
-### E-BUG-I — Customer detail tab set diverges from spec  `[OPEN]`
+### E-BUG-I — Customer detail tab set diverges from spec  `[BLOCKED — needs product decision]`
 Expected: Overview / Jobs / Invoices / Communications / Documents / Timeline. Actual: Overview / Photos / Invoice History / Payment Methods / Messages / Potential Duplicates / Internal Notes. Either spec or UI needs to catch up.
 
-### E-BUG-J — Sidebar "Leads N" counter lags the table total after rapid add/delete until page refresh.  `[OPEN]`
+### E-BUG-J — Sidebar "Leads N" counter lags the table total after rapid add/delete until page refresh.  `[FIXED — Sprint 7 (f32bbf3)]`
 
 ---
 
