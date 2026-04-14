@@ -160,6 +160,7 @@ class JobRepository(LoggerMixin):
                 selectinload(Job.job_property),
                 selectinload(Job.service_offering),
                 selectinload(Job.status_history),
+                selectinload(Job.service_agreement),
             )
 
         if not include_deleted:
@@ -405,10 +406,11 @@ class JobRepository(LoggerMixin):
             search=search,
         )
 
-        # Base query — eager-load customer + property for list response
+        # Base query — eager-load customer + property + agreement for list response
         base_query = select(Job).options(
             joinedload(Job.customer),
             joinedload(Job.job_property),
+            joinedload(Job.service_agreement),
         )
 
         if not include_deleted:
