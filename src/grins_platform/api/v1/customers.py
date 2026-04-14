@@ -28,6 +28,9 @@ from sqlalchemy.ext.asyncio import (
     AsyncSession,  # noqa: TC002 - Required at runtime for FastAPI DI
 )
 
+from grins_platform.api.v1.auth_dependencies import (
+    CurrentActiveUser,  # noqa: TC001 - Required at runtime for FastAPI DI
+)
 from grins_platform.api.v1.dependencies import (
     get_customer_merge_service,
     get_customer_service,
@@ -114,6 +117,7 @@ _endpoints = CustomerEndpoints()
 )
 async def create_customer(
     data: CustomerCreate,
+    _user: CurrentActiveUser,
     service: Annotated[CustomerService, Depends(get_customer_service)],
 ) -> CustomerResponse:
     """Create a new customer.
@@ -204,6 +208,7 @@ async def check_duplicate(
     description="Returns paginated merge candidates sorted by score descending.",
 )
 async def get_duplicates(
+    _user: CurrentActiveUser,
     db: Annotated[AsyncSession, Depends(get_db_session)],
     detection_service: Annotated[
         DuplicateDetectionService,
@@ -248,6 +253,7 @@ async def get_duplicates(
 async def merge_customers(
     customer_id: UUID,
     data: MergeExecuteBody,
+    _user: CurrentActiveUser,
     merge_service: Annotated[
         CustomerMergeService,
         Depends(get_customer_merge_service),
@@ -305,6 +311,7 @@ async def merge_customers(
 async def preview_merge(
     customer_id: UUID,
     data: MergeExecuteBody,
+    _user: CurrentActiveUser,
     merge_service: Annotated[
         CustomerMergeService,
         Depends(get_customer_merge_service),
@@ -352,6 +359,7 @@ async def preview_merge(
 )
 async def get_customer(
     customer_id: UUID,
+    _user: CurrentActiveUser,
     service: Annotated[CustomerService, Depends(get_customer_service)],
     include_properties: bool = Query(
         default=True,
@@ -411,6 +419,7 @@ async def get_customer(
 async def update_customer(
     customer_id: UUID,
     data: CustomerUpdate,
+    _user: CurrentActiveUser,
     service: Annotated[CustomerService, Depends(get_customer_service)],
 ) -> CustomerResponse:
     """Update customer information.
@@ -467,6 +476,7 @@ async def update_customer(
 )
 async def delete_customer(
     customer_id: UUID,
+    _user: CurrentActiveUser,
     service: Annotated[CustomerService, Depends(get_customer_service)],
 ) -> None:
     """Soft delete a customer.
@@ -506,6 +516,7 @@ async def delete_customer(
     description="List customers with filtering, sorting, and pagination support.",
 )
 async def list_customers(
+    _user: CurrentActiveUser,
     service: Annotated[CustomerService, Depends(get_customer_service)],
     page: int = Query(default=1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(
@@ -635,6 +646,7 @@ async def list_customers(
 async def update_customer_flags(
     customer_id: UUID,
     flags: CustomerFlagsUpdate,
+    _user: CurrentActiveUser,
     service: Annotated[CustomerService, Depends(get_customer_service)],
 ) -> CustomerResponse:
     """Update customer flags.
@@ -680,6 +692,7 @@ async def update_customer_flags(
 )
 async def lookup_by_phone(
     phone: str,
+    _user: CurrentActiveUser,
     service: Annotated[CustomerService, Depends(get_customer_service)],
     partial: bool = Query(
         default=False,
@@ -720,6 +733,7 @@ async def lookup_by_phone(
 )
 async def lookup_by_email(
     email: str,
+    _user: CurrentActiveUser,
     service: Annotated[CustomerService, Depends(get_customer_service)],
 ) -> list[CustomerResponse]:
     """Lookup customers by email address.

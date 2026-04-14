@@ -452,6 +452,7 @@ async def _send_appointment_confirmation_sms(
 )
 async def create_appointment(
     data: AppointmentCreate,
+    _current_user: CurrentActiveUser,
     service: Annotated[AppointmentService, Depends(get_appointment_service)],
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> AppointmentResponse:
@@ -583,6 +584,7 @@ async def get_appointment(
 async def update_appointment(
     appointment_id: UUID,
     data: AppointmentUpdate,
+    _current_user: CurrentActiveUser,
     service: Annotated[AppointmentService, Depends(get_appointment_service)],
 ) -> AppointmentResponse:
     """Update appointment information.

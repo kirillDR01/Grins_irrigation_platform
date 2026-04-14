@@ -145,13 +145,32 @@ async def submit_lead(
 
     Validates: Requirement 1, 2, 3
     """
-    _endpoints.log_started("submit_lead", source_site=data.source_site)
+    _endpoints.log_started(
+        "submit_lead",
+        source_site=data.source_site,
+        honeypot_present=bool(getattr(data, "hp_field", None)),
+    )
 
-    result = await service.submit_lead(data)
+    # Per E-BUG-B — add structured logging around the handler so the
+    # marketing-site dev can correlate silent failures from the browser.
+    # ``X-Request-ID`` (set by the FastAPI middleware) shows up on every
+    # emitted line via log_config's context binding.
+    try:
+        result = await service.submit_lead(data)
+    except Exception as exc:  # noqa: BLE001 — re-raised below, purely for observability
+        _endpoints.log_failed(
+            "submit_lead",
+            error=exc,
+            source_site=data.source_site,
+            exception_type=type(exc).__name__,
+        )
+        raise
 
     _endpoints.log_completed(
         "submit_lead",
+        source_site=data.source_site,
         lead_id=str(result.lead_id) if result.lead_id else "honeypot",
+        honeypot_triggered=result.lead_id is None,
     )
     return result
 

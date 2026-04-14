@@ -41,7 +41,11 @@ from grins_platform.exceptions import (
     StaffNotFoundError,
     ValidationError,
 )
-from grins_platform.log_config import get_logger
+from grins_platform.log_config import (
+    clear_request_id,
+    get_logger,
+    set_request_id,
+)
 from grins_platform.middleware.rate_limit import setup_rate_limiting
 from grins_platform.middleware.request_size import (
     RequestSizeLimitMiddleware,
@@ -223,6 +227,22 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestSizeLimitMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     setup_rate_limiting(app)
+
+    # X-Request-ID: attach/echo a per-request UUID on every response so
+    # external callers (e.g. the marketing-site lead form) can capture it
+    # and share with us to grep server logs. The ID is also bound to the
+    # structured log context so every log line during the request emits
+    # it. (E-BUG-B — observability hook.)
+    @app.middleware("http")  # type: ignore[untyped-decorator]
+    async def _attach_request_id(request: Request, call_next: Any) -> Any:
+        incoming = request.headers.get("x-request-id")
+        request_id = set_request_id(incoming)
+        try:
+            response = await call_next(request)
+        finally:
+            clear_request_id()
+        response.headers["X-Request-ID"] = request_id
+        return response
 
     # Register exception handlers
     _register_exception_handlers(app)

@@ -712,6 +712,7 @@ async def get_job(
 async def update_job(
     job_id: UUID,
     data: JobUpdate,
+    _user: CurrentActiveUser,
     service: Annotated[JobService, Depends(get_job_service)],
 ) -> JobResponse:
     """Update job information.
@@ -746,6 +747,7 @@ async def update_job(
 )
 async def delete_job(
     job_id: UUID,
+    _user: CurrentActiveUser,
     service: Annotated[JobService, Depends(get_job_service)],
 ) -> None:
     """Soft delete a job.
@@ -780,6 +782,7 @@ async def delete_job(
 async def update_job_status(
     job_id: UUID,
     data: JobStatusUpdate,
+    _user: CurrentActiveUser,
     service: Annotated[JobService, Depends(get_job_service)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> JobResponse:
@@ -872,6 +875,7 @@ async def get_job_history(
 )
 async def calculate_job_price(
     job_id: UUID,
+    _user: CurrentActiveUser,
     service: Annotated[JobService, Depends(get_job_service)],
 ) -> PriceCalculationResponse:
     """Calculate price for a job.
@@ -1012,6 +1016,7 @@ async def get_job_costs(
 )
 async def complete_job(
     job_id: UUID,
+    _user: CurrentActiveUser,
     session: Annotated[AsyncSession, Depends(get_db_session)],
     service: Annotated[JobService, Depends(get_job_service)],
     body: JobCompleteRequest | None = None,
@@ -1171,6 +1176,7 @@ async def complete_job(
 )
 async def create_job_invoice(
     job_id: UUID,
+    _user: CurrentActiveUser,
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> InvoiceResponse:
     """Create an invoice from a job.
@@ -1219,6 +1225,7 @@ async def create_job_invoice(
 )
 async def on_my_way(
     job_id: UUID,
+    _user: CurrentActiveUser,
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> JobResponse:
     """Send On My Way SMS and log timestamp.
@@ -1293,6 +1300,7 @@ async def on_my_way(
 )
 async def job_started(
     job_id: UUID,
+    _user: CurrentActiveUser,
     session: Annotated[AsyncSession, Depends(get_db_session)],
     service: Annotated[JobService, Depends(get_job_service)],
 ) -> JobResponse:
@@ -1349,6 +1357,7 @@ async def job_started(
 async def add_job_note(
     job_id: UUID,
     body: JobNoteCreate,
+    _user: CurrentActiveUser,
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> JobNoteResponse:
     """Add a note to a job and sync to customer record.
@@ -1407,6 +1416,7 @@ async def add_job_note(
 )
 async def upload_job_photo(
     job_id: UUID,
+    _user: CurrentActiveUser,
     session: Annotated[AsyncSession, Depends(get_db_session)],
     photo_service: Annotated[PhotoService, Depends(get_photo_service)],
     file: Annotated[UploadFile, File(description="Photo file to upload")],
@@ -1491,6 +1501,7 @@ async def upload_job_photo(
 )
 async def review_push(
     job_id: UUID,
+    _user: CurrentActiveUser,
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> JobReviewPushResponse:
     """Send a Google review request SMS.
