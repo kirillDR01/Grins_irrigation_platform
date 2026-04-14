@@ -702,12 +702,22 @@ class TestProperty8AuthGuardEnforcement:
         """Unauthenticated POST /api/v1/jobs always returns 401."""
         from fastapi.testclient import TestClient
 
+        from grins_platform.api.v1.auth_dependencies import (
+            get_current_active_user,
+            get_current_user,
+        )
         from grins_platform.api.v1.dependencies import get_job_service
         from grins_platform.app import create_app
 
         mock_job_service = AsyncMock()
         app = create_app()
         app.dependency_overrides[get_job_service] = lambda: mock_job_service
+        # The session-wide conftest autouse fixture installs a fake
+        # authenticated user on every app created via ``create_app``.
+        # This property test exercises the auth-guard layer itself, so
+        # clear those overrides to get real 401 behavior.
+        app.dependency_overrides.pop(get_current_user, None)
+        app.dependency_overrides.pop(get_current_active_user, None)
 
         client = TestClient(app)
         response = client.post(

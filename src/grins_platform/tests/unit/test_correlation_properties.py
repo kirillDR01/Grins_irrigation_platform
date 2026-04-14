@@ -131,11 +131,15 @@ class TestCorrelationProperty5:
     @given(thread_id=_thread_ids)
     @settings(max_examples=20)
     @pytest.mark.asyncio
-    async def test_sent_message_without_campaign_id_returns_empty(
+    async def test_sent_message_without_campaign_id_returns_sent_message(
         self,
         thread_id: str,
     ) -> None:
-        """When sent_message exists but has no campaign_id, returns empty."""
+        """When sent_message exists but has no campaign_id (e.g. an
+        appointment-confirmation thread), the matched SentMessage is
+        still returned so callers can resolve the real recipient phone.
+        Campaign stays ``None``.
+        """
         sent_msg = _make_sent_message(
             thread_id=thread_id,
             delivery_status="sent",
@@ -147,7 +151,7 @@ class TestCorrelationProperty5:
         result = await svc.correlate_reply(thread_id)
 
         assert result.campaign is None
-        assert result.sent_message is None
+        assert result.sent_message is sent_msg
 
     @given(
         thread_id=_thread_ids,

@@ -118,10 +118,23 @@ def app(
     mock_merge_svc: AsyncMock,
 ) -> FastAPI:
     """Create FastAPI app with mocked dependencies."""
+    from unittest.mock import MagicMock as _MagicMock  # noqa: PLC0415
+
+    from grins_platform.api.v1.auth_dependencies import (  # noqa: PLC0415
+        get_current_active_user,
+        get_current_user,
+    )
+
     test_app = FastAPI()
     test_app.include_router(router, prefix="/api/v1/customers")
 
+    fake_user = _MagicMock()
+    fake_user.id = uuid.uuid4()
+    fake_user.role = "admin"
+
     test_app.dependency_overrides[get_customer_service] = lambda: mock_service
+    test_app.dependency_overrides[get_current_user] = lambda: fake_user
+    test_app.dependency_overrides[get_current_active_user] = lambda: fake_user
 
     async def _db_override() -> AsyncMock:
         return mock_db
