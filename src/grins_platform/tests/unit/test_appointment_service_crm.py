@@ -2489,3 +2489,112 @@ class TestProperty43EnrichedAppointmentResponse:
         svc = _build_service(appt_repo=appt_repo)
         with pytest.raises(AppointmentNotFoundError):
             await svc.get_appointment(uuid4())
+
+
+# =============================================================================
+# Sprint 2 — H-8: reactivating a CANCELLED appointment emits reschedule SMS
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestReactivationSendsRescheduleSms:
+    """bughunt H-8: when an admin changes the date on a CANCELLED
+    appointment, the appointment flips back to SCHEDULED *and* the
+    customer must be told via SMS. Previously the pre-state check read
+    the in-memory ``appointment.status`` (still ``CANCELLED`` at that
+    point), so the SMS branch was skipped."""
+
+    @pytest.mark.asyncio
+    async def test_reactivation_fires_reschedule_sms(self) -> None:
+        from unittest.mock import patch
+
+        from grins_platform.schemas.appointment import (
+            AppointmentUpdate,
+        )
+
+        apt_id = uuid4()
+        cancelled = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.CANCELLED.value,
+        )
+        reactivated = _make_appointment_mock(
+            appointment_id=apt_id,
+            scheduled_date=date(2026, 4, 22),
+            time_window_start=time(11, 0),
+            time_window_end=time(13, 0),
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=cancelled)
+        appt_repo.update = AsyncMock(return_value=reactivated)
+        appt_repo.session = AsyncMock()
+
+        svc = _build_service(appt_repo=appt_repo)
+
+        sms_mock = AsyncMock()
+        with patch.object(svc, "_send_reschedule_sms", sms_mock):
+            await svc.update_appointment(
+                apt_id,
+                AppointmentUpdate(scheduled_date=date(2026, 4, 22)),
+            )
+
+        sms_mock.assert_awaited_once()
+
+
+# =============================================================================
+# Sprint 2 — X-1: GOOGLE_REVIEW_URL fail-closed when unset
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestGoogleReviewUrlFailClosed:
+    """bughunt X-1 / L-5: when neither ``GOOGLE_REVIEW_URL`` env var nor
+    the service-level ``google_review_url`` is set, the service must
+    return ``ReviewRequestResult(sent=False)`` instead of shipping a
+    stale plural-slug fallback link that 404s."""
+
+    @pytest.mark.asyncio
+    async def test_returns_not_sent_when_url_unset(self) -> None:
+        from unittest.mock import patch
+
+        apt_id = uuid4()
+        customer = _make_customer_mock(sms_opt_in=True)
+        job = _make_job_mock(customer_id=customer.id, customer=customer)
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            job_id=job.id,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+
+        # Build service with explicit empty URL override
+        svc = _build_service(
+            appt_repo=appt_repo,
+            job_repo=job_repo,
+            google_review_url="",
+        )
+        svc._get_last_review_request_date = AsyncMock(return_value=None)
+
+        # Ensure env var is not set either
+        with (
+            patch.dict("os.environ", {}, clear=False),
+            patch(
+                "grins_platform.services.sms.consent.check_sms_consent",
+                return_value=True,
+            ),
+        ):
+            # Also explicitly remove GOOGLE_REVIEW_URL if present
+            import os
+
+            os.environ.pop("GOOGLE_REVIEW_URL", None)
+
+            result = await svc.request_google_review(apt_id)
+
+        assert result.sent is False
+        assert result.channel is None
+        assert "GOOGLE_REVIEW_URL" in result.message

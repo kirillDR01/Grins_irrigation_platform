@@ -400,14 +400,22 @@ class AppointmentService(LoggerMixin):
                 )
             update_data["status"] = new_status_value
 
+        # Capture the pre-update status *before* the UPDATE runs so we
+        # can distinguish reactivation (CANCELLED → SCHEDULED via reschedule)
+        # from regular reschedules (SCHEDULED/CONFIRMED → SCHEDULED).
+        pre_update_status = appointment.status
+
         updated = await self.appointment_repository.update(appointment_id, update_data)
 
-        # Req 8.8, 8.9: Post-send reschedule detection
-        # If a SCHEDULED or CONFIRMED appointment's date/time changed, send reschedule SMS
-        # and reset to SCHEDULED. DRAFT appointments are silent.
-        if is_rescheduling and appointment.status in (
+        # Req 8.8, 8.9: Post-send reschedule detection.
+        # Fire reschedule SMS when a non-DRAFT appointment's date/time
+        # changed — including reactivation from CANCELLED (bughunt H-8),
+        # since the customer was told "cancelled" and now needs to know
+        # it's back on.
+        if is_rescheduling and pre_update_status in (
             AppointmentStatus.SCHEDULED.value,
             AppointmentStatus.CONFIRMED.value,
+            AppointmentStatus.CANCELLED.value,
         ):
             session = self.appointment_repository.session
             try:
@@ -991,13 +999,19 @@ class AppointmentService(LoggerMixin):
     ) -> None:
         """Send Y/R/C confirmation SMS for an appointment.
 
-        Validates: Req 8.4
+        Validates: Req 8.4; bughunt H-3 (weekday date format), L-4
+        (include service type).
         """
         from grins_platform.models.customer import Customer  # noqa: PLC0415
         from grins_platform.models.job import Job  # noqa: PLC0415
         from grins_platform.schemas.ai import MessageType  # noqa: PLC0415
         from grins_platform.services.sms.factory import (  # noqa: PLC0415
             get_sms_provider,
+        )
+        from grins_platform.services.sms.formatters import (  # noqa: PLC0415
+            format_job_type_display,
+            format_sms_date,
+            format_sms_time_window,
         )
         from grins_platform.services.sms.recipient import Recipient  # noqa: PLC0415
         from grins_platform.services.sms_service import SMSService  # noqa: PLC0415
@@ -1012,26 +1026,17 @@ class AppointmentService(LoggerMixin):
         sms_service = SMSService(session, provider=get_sms_provider())
         recipient = Recipient.from_customer(customer)
 
-        date_str = str(appointment.scheduled_date)
-        window_start = getattr(appointment, "time_window_start", None)
-        window_end = getattr(appointment, "time_window_end", None)
-
-        def _fmt_time_12h(t: object) -> str:
-            s = str(t)[:5]
-            h, m = int(s[:2]), int(s[3:5])
-            suffix = "AM" if h < 12 else "PM"
-            h = h % 12 or 12
-            return f"{h}:{m:02d} {suffix}"
-
-        if window_start and window_end:
-            time_part = f" between {_fmt_time_12h(window_start)} and {_fmt_time_12h(window_end)}"
-        elif window_start:
-            time_part = f" at {_fmt_time_12h(window_start)}"
-        else:
-            time_part = ""
+        date_str = format_sms_date(appointment.scheduled_date)
+        time_part = format_sms_time_window(
+            getattr(appointment, "time_window_start", None),
+            getattr(appointment, "time_window_end", None),
+        )
+        service = format_job_type_display(getattr(job, "job_type", None))
+        service_clause = f" for your {service}" if service else ""
 
         msg = (
-            f"Your appointment on {date_str}{time_part} has been scheduled. "
+            f"Your appointment on {date_str}{time_part}{service_clause} "
+            "has been scheduled. "
             "Reply Y to confirm, R to reschedule, or C to cancel."
         )
 
@@ -1051,13 +1056,19 @@ class AppointmentService(LoggerMixin):
     ) -> None:
         """Send reschedule notification SMS for a moved appointment.
 
-        Validates: Req 8.9
+        Validates: Req 8.9; bughunt H-3 (weekday date format), L-4
+        (include service type).
         """
         from grins_platform.models.customer import Customer  # noqa: PLC0415
         from grins_platform.models.job import Job  # noqa: PLC0415
         from grins_platform.schemas.ai import MessageType  # noqa: PLC0415
         from grins_platform.services.sms.factory import (  # noqa: PLC0415
             get_sms_provider,
+        )
+        from grins_platform.services.sms.formatters import (  # noqa: PLC0415
+            format_job_type_display,
+            format_sms_date,
+            format_sms_time_window,
         )
         from grins_platform.services.sms.recipient import Recipient  # noqa: PLC0415
         from grins_platform.services.sms_service import SMSService  # noqa: PLC0415
@@ -1072,26 +1083,16 @@ class AppointmentService(LoggerMixin):
         sms_service = SMSService(session, provider=get_sms_provider())
         recipient = Recipient.from_customer(customer)
 
-        date_str = str(appointment.scheduled_date)
-        window_start = getattr(appointment, "time_window_start", None)
-        window_end = getattr(appointment, "time_window_end", None)
-
-        def _fmt_time_12h(t: object) -> str:
-            s = str(t)[:5]
-            h, m = int(s[:2]), int(s[3:5])
-            suffix = "AM" if h < 12 else "PM"
-            h = h % 12 or 12
-            return f"{h}:{m:02d} {suffix}"
-
-        if window_start and window_end:
-            time_part = f" between {_fmt_time_12h(window_start)} and {_fmt_time_12h(window_end)}"
-        elif window_start:
-            time_part = f" at {_fmt_time_12h(window_start)}"
-        else:
-            time_part = ""
+        date_str = format_sms_date(appointment.scheduled_date)
+        time_part = format_sms_time_window(
+            getattr(appointment, "time_window_start", None),
+            getattr(appointment, "time_window_end", None),
+        )
+        service = format_job_type_display(getattr(job, "job_type", None))
+        subject = f"Your {service} appointment" if service else "Your appointment"
 
         msg = (
-            f"Your appointment has been rescheduled to {date_str}{time_part}. "
+            f"{subject} has been rescheduled to {date_str}{time_part}. "
             "Reply Y to confirm, R to reschedule, or C to cancel."
         )
 
@@ -1111,13 +1112,16 @@ class AppointmentService(LoggerMixin):
     ) -> None:
         """Send cancellation notification SMS.
 
-        Validates: Req 8.11
+        Validates: Req 8.11; bughunt H-3 (weekday date format).
         """
         from grins_platform.models.customer import Customer  # noqa: PLC0415
         from grins_platform.models.job import Job  # noqa: PLC0415
         from grins_platform.schemas.ai import MessageType  # noqa: PLC0415
         from grins_platform.services.sms.factory import (  # noqa: PLC0415
             get_sms_provider,
+        )
+        from grins_platform.services.sms.formatters import (  # noqa: PLC0415
+            format_sms_date,
         )
         from grins_platform.services.sms.recipient import Recipient  # noqa: PLC0415
         from grins_platform.services.sms_service import SMSService  # noqa: PLC0415
@@ -1132,7 +1136,7 @@ class AppointmentService(LoggerMixin):
         sms_service = SMSService(session, provider=get_sms_provider())
         recipient = Recipient.from_customer(customer)
 
-        date_str = str(appointment.scheduled_date)
+        date_str = format_sms_date(appointment.scheduled_date)
         msg = (
             f"Your appointment on {date_str} has been cancelled. "
             "Please contact us if you'd like to reschedule."
@@ -1683,13 +1687,28 @@ class AppointmentService(LoggerMixin):
         from grins_platform.services.sms.recipient import Recipient  # noqa: PLC0415
         from grins_platform.services.sms_service import SMSService  # noqa: PLC0415
 
-        review_url = os.environ.get(
-            "GOOGLE_REVIEW_URL",
-            self.google_review_url or "https://g.page/r/grins-irrigations/review",
-        )
+        # bughunt X-1 / L-5: fail-closed when neither the env var nor the
+        # service-level override is set, instead of shipping a stale
+        # plural-slug fallback that 404s.
+        review_url = os.environ.get("GOOGLE_REVIEW_URL") or self.google_review_url
+        if not review_url:
+            self.log_rejected(
+                "request_google_review",
+                reason="review_url_unset",
+                customer_id=str(customer.id),
+            )
+            return ReviewRequestResult(
+                sent=False,
+                channel=None,
+                message=(
+                    "GOOGLE_REVIEW_URL is not configured. "
+                    "Ask ops to set the environment variable before retrying."
+                ),
+            )
+
         message = (
             f"Hi {customer.first_name or 'there'}! "
-            "Thank you for choosing Grin's Irrigations. "
+            "Thank you for choosing Grins Irrigation. "
             "We'd love your feedback — please leave us a Google review: "
             f"{review_url}"
         )
