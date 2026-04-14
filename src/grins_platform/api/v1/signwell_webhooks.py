@@ -161,9 +161,12 @@ async def signwell_webhook(
         strip_metadata=False,
     )
 
-    # Create CustomerDocument record
+    # Create CustomerDocument record, scoped to this pipeline entry so
+    # multi-entry customers' signed contracts stay distinguishable
+    # (bughunt H-7).
     doc = CustomerDocument(
         customer_id=entry.customer_id,
+        sales_entry_id=entry.id,
         file_key=upload_result.file_key,
         file_name=upload_result.file_name,
         document_type="signed_contract",

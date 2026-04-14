@@ -95,10 +95,26 @@ class LeadService(LoggerMixin):
 
     # Mapping from LeadSituation to (job_category, job_type, job_description)
     SITUATION_JOB_MAP: ClassVar[dict[str, tuple[str, str, str]]] = {
-        LeadSituation.NEW_SYSTEM.value: ("requires_estimate", "new_system", "Installation Estimate"),
-        LeadSituation.UPGRADE.value: ("requires_estimate", "upgrade", "System Upgrade Estimate"),
-        LeadSituation.REPAIR.value: ("ready_to_schedule", "small_repair", "Repair Request"),
-        LeadSituation.EXPLORING.value: ("requires_estimate", "consultation", "Consultation"),
+        LeadSituation.NEW_SYSTEM.value: (
+            "requires_estimate",
+            "new_system",
+            "Installation Estimate",
+        ),
+        LeadSituation.UPGRADE.value: (
+            "requires_estimate",
+            "upgrade",
+            "System Upgrade Estimate",
+        ),
+        LeadSituation.REPAIR.value: (
+            "ready_to_schedule",
+            "small_repair",
+            "Repair Request",
+        ),
+        LeadSituation.EXPLORING.value: (
+            "requires_estimate",
+            "consultation",
+            "Consultation",
+        ),
     }
 
     def __init__(
@@ -1001,8 +1017,21 @@ class LeadService(LoggerMixin):
         customer_id = await self._ensure_customer_for_lead(lead)
         description = lead.job_requested or default_description
 
+        # bughunt H-5: resolve or create a Property from lead.job_address
+        # so the resulting Job's Address column isn't blank.
+        from grins_platform.services.property_service import (  # noqa: PLC0415
+            ensure_property_for_lead,
+        )
+
+        property_obj = await ensure_property_for_lead(
+            self.lead_repository.session,
+            customer_id,
+            lead,
+        )
+
         job_data = JobCreate(
             customer_id=customer_id,
+            property_id=property_obj.id if property_obj else None,
             job_type=_job_type,
             description=description,
         )
@@ -1040,11 +1069,23 @@ class LeadService(LoggerMixin):
 
         customer_id = await self._ensure_customer_for_lead(lead)
 
-        # Create SalesEntry directly via session
+        # bughunt H-6: resolve or create a Property from lead.job_address
+        # so convert_to_job can carry property_id forward into the Job.
+        from grins_platform.services.property_service import (  # noqa: PLC0415
+            ensure_property_for_lead,
+        )
+
         session = self.lead_repository.session
+        property_obj = await ensure_property_for_lead(
+            session,
+            customer_id,
+            lead,
+        )
+
         sales_entry = SalesEntryModel(
             customer_id=customer_id,
             lead_id=lead_id,
+            property_id=property_obj.id if property_obj else None,
             job_type=lead.job_requested or lead.situation,
             status="schedule_estimate",
             notes=lead.notes,

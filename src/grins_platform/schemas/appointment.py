@@ -28,6 +28,15 @@ class AppointmentCreate(BaseModel):
     time_window_start: time = Field(..., description="Start of the time window")
     time_window_end: time = Field(..., description="End of the time window")
     notes: Optional[str] = Field(None, description="Additional notes")
+    status: Optional[AppointmentStatus] = Field(
+        default=None,
+        description=(
+            "Initial appointment status. Defaults to DRAFT for the standard "
+            "UX flow; bulk-import paths (seed data, admin CSV imports) may "
+            "pass SCHEDULED or CONFIRMED to bypass the draft-mode prompt. "
+            "(bughunt M-6)"
+        ),
+    )
 
     @model_validator(mode="after")  # type: ignore[untyped-decorator]
     def validate_time_window(self) -> "AppointmentCreate":
@@ -178,9 +187,7 @@ class BulkSendConfirmationsRequest(BaseModel):
     date_from: Optional[date] = Field(
         None, description="Start date for date range filter"
     )
-    date_to: Optional[date] = Field(
-        None, description="End date for date range filter"
-    )
+    date_to: Optional[date] = Field(None, description="End date for date range filter")
 
 
 class BulkSendConfirmationsResponse(BaseModel):

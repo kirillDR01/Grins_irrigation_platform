@@ -1704,6 +1704,15 @@ async def upload_customer_document(
         description="Document type: estimate, contract, "
         "photo, diagram, reference, signed_contract",
     ),
+    sales_entry_id: UUID | None = Query(
+        default=None,
+        description=(
+            "Optional Sales pipeline entry to scope this document to. "
+            "When set, signing endpoints will return this document for the "
+            "matching entry even if the customer has multiple active entries. "
+            "(bughunt H-7)"
+        ),
+    ),
 ) -> CustomerDocumentResponse:
     """Upload a document for a customer.
 
@@ -1756,6 +1765,7 @@ async def upload_customer_document(
 
     doc = CustomerDocument(
         customer_id=customer_id,
+        sales_entry_id=sales_entry_id,
         file_key=upload_result.file_key,
         file_name=upload_result.file_name,
         document_type=doc_type.value,

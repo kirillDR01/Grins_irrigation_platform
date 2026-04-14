@@ -56,22 +56,62 @@ _ep = _SalesPipelineEndpoints()
 async def _get_signing_document(
     session: AsyncSession,
     customer_id: UUID,
+    sales_entry_id: UUID | None = None,
 ) -> CustomerDocument | None:
-    """Find the most recent estimate/contract document for a customer.
+    """Find the most recent estimate/contract document for a pipeline entry.
 
-    Validates: Req 9.1, 9.2
+    When ``sales_entry_id`` is provided, the query prioritises rows
+    scoped to that specific pipeline entry (bughunt H-7), falling back
+    to customer-scoped rows (typically ``sales_entry_id IS NULL`` — a
+    legacy upload that predates the migration) only if no entry-scoped
+    row exists. Implemented as a single SQL statement using a
+    priority ``ORDER BY`` so the endpoint still performs exactly one
+    execute round-trip.
+
+    Validates: Req 9.1, 9.2; bughunt H-7.
     """
-    stmt = (
-        select(CustomerDocument)
-        .where(
-            CustomerDocument.customer_id == customer_id,
-            CustomerDocument.document_type.in_(("estimate", "contract")),
+    from sqlalchemy import case  # noqa: PLC0415
+
+    conditions = [
+        CustomerDocument.customer_id == customer_id,
+        CustomerDocument.document_type.in_(("estimate", "contract")),
+    ]
+    if sales_entry_id is not None:
+        # Prefer entry-scoped rows (priority 0), fall back to
+        # unscoped/legacy rows (priority 1). Rows scoped to a
+        # *different* entry score priority 2 and will lose the tie
+        # unless they are the only option — protect against that by
+        # excluding them entirely.
+        conditions.append(
+            (CustomerDocument.sales_entry_id == sales_entry_id)
+            | (CustomerDocument.sales_entry_id.is_(None)),
         )
-        .order_by(CustomerDocument.uploaded_at.desc())
-        .limit(1)
-    )
+        priority = case(
+            (CustomerDocument.sales_entry_id == sales_entry_id, 0),
+            else_=1,
+        )
+        stmt = (
+            select(CustomerDocument)
+            .where(*conditions)
+            .order_by(priority, CustomerDocument.uploaded_at.desc())
+            .limit(1)
+        )
+    else:
+        stmt = (
+            select(CustomerDocument)
+            .where(*conditions)
+            .order_by(CustomerDocument.uploaded_at.desc())
+            .limit(1)
+        )
     result = await session.execute(stmt)
-    return result.scalar_one_or_none()
+    doc = result.scalar_one_or_none()
+    if sales_entry_id is not None and doc is not None and doc.sales_entry_id is None:
+        _ep.log_started(
+            "signing_document.ambiguous_scope",
+            customer_id=str(customer_id),
+            sales_entry_id=str(sales_entry_id),
+        )
+    return doc
 
 
 def _entry_to_response(entry: SalesEntry) -> SalesEntryResponse:
@@ -261,7 +301,14 @@ async def trigger_email_signing(
         )
 
     # Look up the most recent estimate/contract document — Validates: Req 9.1, 9.2, 9.4
-    signing_doc = await _get_signing_document(session, entry.customer_id)
+    # Scoped by sales_entry_id first so multi-entry customers sign the
+    # right doc (bughunt H-7); falls back to customer-scoped with a warning
+    # log when the doc predates the sales_entry_id migration.
+    signing_doc = await _get_signing_document(
+        session,
+        entry.customer_id,
+        sales_entry_id=entry.id,
+    )
     if not signing_doc:
         raise HTTPException(
             status_code=422,
@@ -309,7 +356,14 @@ async def get_embedded_signing(
     )
 
     # Look up the most recent estimate/contract document — Validates: Req 9.1, 9.2, 9.4
-    signing_doc = await _get_signing_document(session, entry.customer_id)
+    # Scoped by sales_entry_id first so multi-entry customers sign the
+    # right doc (bughunt H-7); falls back to customer-scoped with a warning
+    # log when the doc predates the sales_entry_id migration.
+    signing_doc = await _get_signing_document(
+        session,
+        entry.customer_id,
+        sales_entry_id=entry.id,
+    )
     if not signing_doc:
         raise HTTPException(
             status_code=422,

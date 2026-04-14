@@ -36,6 +36,16 @@ class CustomerDocument(Base):
         ForeignKey("customers.id", ondelete="CASCADE"),
         nullable=False,
     )
+    # Scope signing documents (estimate/contract/signed_contract) to the
+    # specific pipeline entry they were uploaded under, so customers with
+    # more than one active Sales entry sign the correct document.
+    # Nullable for legacy rows — ``_get_signing_document`` falls back to
+    # customer-scoped lookup when this is NULL. (bughunt H-7)
+    sales_entry_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("sales_entries.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     file_key: Mapped[str] = mapped_column(String(512), nullable=False)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     document_type: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -57,6 +67,7 @@ class CustomerDocument(Base):
     __table_args__ = (
         Index("ix_customer_documents_customer_id", "customer_id"),
         Index("ix_customer_documents_document_type", "document_type"),
+        Index("ix_customer_documents_sales_entry_id", "sales_entry_id"),
     )
 
     def __repr__(self) -> str:

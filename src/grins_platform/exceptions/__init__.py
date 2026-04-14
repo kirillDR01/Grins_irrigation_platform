@@ -291,6 +291,23 @@ class AppointmentNotFoundError(FieldOperationsError):
         super().__init__(f"Appointment not found: {appointment_id}")
 
 
+class AppointmentOnFinishedJobError(FieldOperationsError):
+    """Raised when trying to schedule an appointment on a COMPLETED or
+    CANCELLED job. Previously silently allowed — admins could attach a
+    new appointment to a finished job and draft-mode would proceed.
+
+    Validates: bughunt H-4
+    """
+
+    def __init__(self, job_id: UUID, job_status: str) -> None:
+        self.job_id = job_id
+        self.job_status = job_status
+        super().__init__(
+            f"Cannot schedule an appointment on a job in status "
+            f"'{job_status}' (job_id={job_id})"
+        )
+
+
 class PropertyCustomerMismatchError(FieldOperationsError):
     """Raised when a property does not belong to the specified customer.
 
@@ -798,6 +815,7 @@ __all__ = [
     "AgreementError",
     "AgreementNotFoundError",
     "AppointmentNotFoundError",
+    "AppointmentOnFinishedJobError",
     "AuthenticationError",
     "BulkOperationError",
     "ConfirmationCorrelationError",

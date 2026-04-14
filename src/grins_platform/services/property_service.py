@@ -22,6 +22,9 @@ from grins_platform.schemas.property import (
 if TYPE_CHECKING:
     from uuid import UUID
 
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from grins_platform.models.lead import Lead
     from grins_platform.repositories.property_repository import PropertyRepository
 
 
@@ -391,3 +394,138 @@ class PropertyService(LoggerMixin):
 
         result: PropertyResponse = PropertyResponse.model_validate(updated)
         return result
+
+
+# ---------------------------------------------------------------------------
+# Lead → Sales / Jobs property upsert helper (bughunt H-5, H-6)
+# ---------------------------------------------------------------------------
+
+import re as _re  # noqa: E402 - grouped helpers below top-level class
+from uuid import UUID as _UUID  # noqa: E402
+
+from sqlalchemy import select as _select  # noqa: E402
+
+from grins_platform.log_config import get_logger as _get_logger  # noqa: E402
+from grins_platform.models.property import Property as _Property  # noqa: E402
+
+_helper_logger = _get_logger(__name__)
+
+_MN_DEFAULT_STATE = "MN"
+_UNKNOWN_CITY = "Unknown"
+
+_ZIP_PATTERN = _re.compile(r"\b(\d{5}(?:-\d{4})?)\b")
+_STATE_PATTERN = _re.compile(r"\b([A-Z]{2})\b")
+
+
+def _normalize_address(raw: str) -> str:
+    """Normalize for idempotency: lowercase + collapse whitespace +
+    strip trailing punctuation. Two addresses that differ only in
+    casing, spacing, or a trailing period collide into one property."""
+    s = raw.strip().lower()
+    s = _re.sub(r"\s+", " ", s)
+    return s.rstrip(".,; ")
+
+
+def _parse_address(raw: str) -> tuple[str, str, str, str | None]:
+    """Split ``"1234 Main St, Minneapolis, MN 55401"`` into
+    ``(address, city, state, zip_code)``. Falls back to
+    ``("Unknown" city, "MN" state, None zip)`` when the string doesn't
+    match the expected comma-delimited shape.
+    """
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    zip_code: str | None = None
+    state = _MN_DEFAULT_STATE
+
+    if len(parts) >= 2:
+        tail = parts[-1]
+        zip_match = _ZIP_PATTERN.search(tail)
+        if zip_match:
+            zip_code = zip_match.group(1)
+        state_match = _STATE_PATTERN.search(tail.upper())
+        if state_match:
+            state = state_match.group(1)
+
+    if len(parts) >= 2:
+        street = parts[0]
+        city = parts[1] if parts[1] else _UNKNOWN_CITY
+    elif len(parts) == 1:
+        street = parts[0]
+        city = _UNKNOWN_CITY
+    else:
+        street = raw.strip() or "Unknown address"
+        city = _UNKNOWN_CITY
+
+    # If the "city" slot actually holds state+zip (two-segment input
+    # like "123 Main St, MN 55401"), fall back to Unknown.
+    if _STATE_PATTERN.search(city.upper()) and _ZIP_PATTERN.search(city):
+        city = _UNKNOWN_CITY
+
+    return street, city, state, zip_code
+
+
+async def ensure_property_for_lead(
+    session: AsyncSession,
+    customer_id: _UUID,
+    lead: Lead,
+) -> _Property | None:
+    """Upsert a ``Property`` for the customer from ``lead.job_address``.
+
+    Returns the matching or newly-created ``Property``. If the lead has
+    no ``job_address`` the helper returns ``None`` — callers should
+    treat that as "no property was resolvable" and continue with
+    ``property_id=None`` rather than hard-failing the move.
+
+    Idempotency: ``(customer_id, normalized_address)`` yields the same
+    row on repeated calls, even if an existing property has different
+    casing or trailing punctuation. (bughunt H-5, H-6.)
+    """
+    job_address = getattr(lead, "job_address", None)
+    # Guard against MagicMock test fixtures that auto-generate the
+    # attribute — we only accept a real non-empty string.
+    if not isinstance(job_address, str) or not job_address.strip():
+        _helper_logger.info(
+            "property.ensure.no_address",
+            customer_id=str(customer_id),
+            lead_id=str(getattr(lead, "id", None)),
+        )
+        return None
+
+    street, city, state, zip_code = _parse_address(job_address)
+    # Compare on the normalized *street* portion only — ``Property.address``
+    # only stores the street line, so normalizing the full multi-part
+    # ``job_address`` would never match an existing row.
+    norm_street = _normalize_address(street)
+
+    existing_stmt = _select(_Property).where(_Property.customer_id == customer_id)
+    existing = (await session.execute(existing_stmt)).scalars().all()
+    for prop in existing:
+        stored_norm = _normalize_address(prop.address or "")
+        if stored_norm and stored_norm == norm_street:
+            return prop
+
+    fallback_used = city == _UNKNOWN_CITY
+    if fallback_used:
+        _helper_logger.warning(
+            "property.ensure.fallback_defaults",
+            customer_id=str(customer_id),
+            raw_address=job_address,
+            street=street,
+        )
+
+    new_prop = _Property(
+        customer_id=customer_id,
+        address=street,
+        city=city,
+        state=state,
+        zip_code=zip_code,
+    )
+    session.add(new_prop)
+    await session.flush()
+    await session.refresh(new_prop)
+    _helper_logger.info(
+        "property.ensure.created",
+        customer_id=str(customer_id),
+        property_id=str(new_prop.id),
+        fallback_city=fallback_used,
+    )
+    return new_prop

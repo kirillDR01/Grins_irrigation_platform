@@ -2543,6 +2543,163 @@ class TestReactivationSendsRescheduleSms:
 
 
 # =============================================================================
+# Sprint 3 — H-4: create_appointment rejects COMPLETED / CANCELLED jobs
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestCreateAppointmentRejectsFinishedJobs:
+    """bughunt H-4: scheduling a new appointment on a job that's
+    already COMPLETED or CANCELLED used to succeed silently. The
+    ``AppointmentService.create_appointment`` method now raises
+    ``AppointmentOnFinishedJobError`` so the admin gets a clear error
+    instead of an orphan draft appointment stuck on a finished job."""
+
+    @pytest.mark.asyncio
+    async def test_rejects_completed_job(self) -> None:
+        from grins_platform.exceptions import AppointmentOnFinishedJobError
+        from grins_platform.models.enums import JobStatus
+        from grins_platform.schemas.appointment import AppointmentCreate
+
+        job = _make_job_mock()
+        job.status = JobStatus.COMPLETED.value
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+
+        svc = _build_service(job_repo=job_repo)
+
+        data = AppointmentCreate(
+            job_id=job.id,
+            staff_id=uuid4(),
+            scheduled_date=date(2026, 5, 1),
+            time_window_start=time(9, 0),
+            time_window_end=time(11, 0),
+        )
+
+        with pytest.raises(AppointmentOnFinishedJobError) as exc_info:
+            await svc.create_appointment(data)
+        assert exc_info.value.job_status == JobStatus.COMPLETED.value
+
+    @pytest.mark.asyncio
+    async def test_rejects_cancelled_job(self) -> None:
+        from grins_platform.exceptions import AppointmentOnFinishedJobError
+        from grins_platform.models.enums import JobStatus
+        from grins_platform.schemas.appointment import AppointmentCreate
+
+        job = _make_job_mock()
+        job.status = JobStatus.CANCELLED.value
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+
+        svc = _build_service(job_repo=job_repo)
+
+        data = AppointmentCreate(
+            job_id=job.id,
+            staff_id=uuid4(),
+            scheduled_date=date(2026, 5, 1),
+            time_window_start=time(9, 0),
+            time_window_end=time(11, 0),
+        )
+
+        with pytest.raises(AppointmentOnFinishedJobError):
+            await svc.create_appointment(data)
+
+
+# =============================================================================
+# Sprint 3 — M-6: create_appointment honours caller-provided status
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestCreateAppointmentStatusOverride:
+    """bughunt M-6: bulk-import paths that pre-populate an appointment
+    as already SCHEDULED (e.g. CSV onboarding) shouldn't have their
+    status reset to DRAFT by the service."""
+
+    @pytest.mark.asyncio
+    async def test_caller_status_is_honoured(self) -> None:
+        from grins_platform.models.enums import JobStatus
+        from grins_platform.schemas.appointment import AppointmentCreate
+
+        job = _make_job_mock()
+        job.status = JobStatus.TO_BE_SCHEDULED.value
+        staff = _make_staff_mock()
+
+        created_appt = _make_appointment_mock(
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+        staff_repo = AsyncMock()
+        staff_repo.get_by_id = AsyncMock(return_value=staff)
+        appt_repo = AsyncMock()
+        appt_repo.create = AsyncMock(return_value=created_appt)
+        appt_repo.session = AsyncMock()
+
+        svc = _build_service(
+            appt_repo=appt_repo,
+            job_repo=job_repo,
+            staff_repo=staff_repo,
+        )
+
+        data = AppointmentCreate(
+            job_id=job.id,
+            staff_id=staff.id,
+            scheduled_date=date(2026, 5, 1),
+            time_window_start=time(9, 0),
+            time_window_end=time(11, 0),
+            status=AppointmentStatus.SCHEDULED,
+        )
+
+        await svc.create_appointment(data)
+
+        create_kwargs = appt_repo.create.await_args.kwargs
+        assert create_kwargs["status"] == AppointmentStatus.SCHEDULED.value
+
+    @pytest.mark.asyncio
+    async def test_default_is_draft_when_status_omitted(self) -> None:
+        from grins_platform.models.enums import JobStatus
+        from grins_platform.schemas.appointment import AppointmentCreate
+
+        job = _make_job_mock()
+        job.status = JobStatus.TO_BE_SCHEDULED.value
+        staff = _make_staff_mock()
+        created_appt = _make_appointment_mock(
+            status=AppointmentStatus.DRAFT.value,
+        )
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+        staff_repo = AsyncMock()
+        staff_repo.get_by_id = AsyncMock(return_value=staff)
+        appt_repo = AsyncMock()
+        appt_repo.create = AsyncMock(return_value=created_appt)
+        appt_repo.session = AsyncMock()
+
+        svc = _build_service(
+            appt_repo=appt_repo,
+            job_repo=job_repo,
+            staff_repo=staff_repo,
+        )
+
+        data = AppointmentCreate(
+            job_id=job.id,
+            staff_id=staff.id,
+            scheduled_date=date(2026, 5, 1),
+            time_window_start=time(9, 0),
+            time_window_end=time(11, 0),
+        )
+
+        await svc.create_appointment(data)
+
+        create_kwargs = appt_repo.create.await_args.kwargs
+        assert create_kwargs["status"] == AppointmentStatus.DRAFT.value
+
+
+# =============================================================================
 # Sprint 2 — X-1: GOOGLE_REVIEW_URL fail-closed when unset
 # =============================================================================
 

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 from grins_platform.exceptions import (
     AppointmentNotFoundError,
+    AppointmentOnFinishedJobError,
     InvalidStatusTransitionError,
     JobNotFoundError,
     PaymentRequiredError,
@@ -268,11 +269,34 @@ class AppointmentService(LoggerMixin):
             self.log_rejected("create_appointment", reason="job_not_found")
             raise JobNotFoundError(data.job_id)
 
+        # bughunt H-4: reject appointments on finished or cancelled jobs.
+        # Previously silently allowed — admins could accidentally schedule
+        # a completed job and the draft-mode flow would happily proceed.
+        if job.status in (JobStatus.COMPLETED.value, JobStatus.CANCELLED.value):
+            self.log_rejected(
+                "create_appointment",
+                reason="job_finished",
+                job_status=job.status,
+            )
+            raise AppointmentOnFinishedJobError(data.job_id, job.status)
+
         # Validate staff exists
         staff = await self.staff_repository.get_by_id(data.staff_id)
         if not staff:
             self.log_rejected("create_appointment", reason="staff_not_found")
             raise StaffNotFoundError(data.staff_id)
+
+        # bughunt M-6: honour caller-provided status for bulk-import paths,
+        # defaulting to DRAFT for the ordinary UX flow. Guarded against
+        # MagicMock-style test payloads that auto-generate a ``status``
+        # attribute — we only accept real AppointmentStatus / str values.
+        requested_status = getattr(data, "status", None)
+        if isinstance(requested_status, AppointmentStatus):
+            resolved_status = requested_status.value
+        elif isinstance(requested_status, str):
+            resolved_status = requested_status
+        else:
+            resolved_status = AppointmentStatus.DRAFT.value
 
         # Create the appointment
         appointment = await self.appointment_repository.create(
@@ -281,7 +305,7 @@ class AppointmentService(LoggerMixin):
             scheduled_date=data.scheduled_date,
             time_window_start=data.time_window_start,
             time_window_end=data.time_window_end,
-            status=AppointmentStatus.DRAFT.value,
+            status=resolved_status,
             notes=data.notes,
         )
 
