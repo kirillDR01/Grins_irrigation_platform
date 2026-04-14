@@ -57,7 +57,7 @@ export const jobApi = {
   // Get jobs ready to schedule
   getReadyToSchedule: async (): Promise<PaginatedResponse<Job>> => {
     const response = await apiClient.get<PaginatedResponse<Job>>(BASE_PATH, {
-      params: { category: 'ready_to_schedule', status: 'to_be_scheduled' },
+      params: { status: 'to_be_scheduled' },
     });
     return response.data;
   },

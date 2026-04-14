@@ -58,6 +58,11 @@ function getShortAddress(job: Job): string {
   return parts.join(', ') || '';
 }
 
+/** Sort order for job categories: ready_to_schedule first */
+function categoryOrder(category: Job['category']): number {
+  return category === 'ready_to_schedule' ? 0 : 1;
+}
+
 /** Build property tag list */
 function getPropertyTags(job: Job): string[] {
   if (job.property_tags && job.property_tags.length > 0) return job.property_tags;
@@ -96,19 +101,25 @@ export function JobSelectorCombobox({
         sorted.sort((a, b) => {
           const dateA = a.target_start_date || '9999-12-31';
           const dateB = b.target_start_date || '9999-12-31';
-          return dateA.localeCompare(dateB);
+          const dateCmp = dateA.localeCompare(dateB);
+          if (dateCmp !== 0) return dateCmp;
+          return categoryOrder(a.category) - categoryOrder(b.category);
         });
         break;
       case 'customer_name':
-        sorted.sort((a, b) =>
-          (a.customer_name || '').localeCompare(b.customer_name || '')
-        );
+        sorted.sort((a, b) => {
+          const nameCmp = (a.customer_name || '').localeCompare(b.customer_name || '');
+          if (nameCmp !== 0) return nameCmp;
+          return categoryOrder(a.category) - categoryOrder(b.category);
+        });
         break;
       case 'area':
         sorted.sort((a, b) => {
           const cityA = a.property_city || '';
           const cityB = b.property_city || '';
-          return cityA.localeCompare(cityB);
+          const cityCmp = cityA.localeCompare(cityB);
+          if (cityCmp !== 0) return cityCmp;
+          return categoryOrder(a.category) - categoryOrder(b.category);
         });
         break;
     }
@@ -201,7 +212,7 @@ export function JobSelectorCombobox({
         <ScrollArea className="max-h-[300px]">
           {filteredJobs.length === 0 ? (
             <div className="p-4 text-center text-sm text-slate-500">
-              {jobs.length === 0 ? 'No jobs ready to schedule' : 'No matching jobs'}
+              {jobs.length === 0 ? 'No jobs to schedule' : 'No matching jobs'}
             </div>
           ) : (
             <div className="p-1" role="listbox" data-testid="job-combobox-list">
@@ -245,8 +256,16 @@ export function JobSelectorCombobox({
                           </p>
                         )}
 
-                        {/* Tags + Preference notes row */}
+                        {/* Tags + Needs Estimate badge + Preference notes row */}
                         <div className="flex flex-wrap items-center gap-1 mt-1">
+                          {job.category === 'requires_estimate' && (
+                            <Badge
+                              variant="warning"
+                              className="text-[10px] px-1.5 py-0 h-4 font-normal"
+                            >
+                              Needs Estimate
+                            </Badge>
+                          )}
                           {tags.map((tag) => (
                             <Badge
                               key={tag}
