@@ -116,7 +116,10 @@ class SMSService(LoggerMixin):
 
         Args:
             session: Database session.
-            provider: SMS provider (defaults to NullProvider if None).
+            provider: SMS provider. When ``None``, the env-driven factory is
+                used — ``SMS_PROVIDER=null`` keeps tests silent, while dev/prod
+                default to ``callrail``. Callers that need a silent stub should
+                pass ``NullProvider()`` explicitly.
             rate_limit_tracker: Optional rate limit tracker.
         """
         super().__init__()
@@ -125,11 +128,11 @@ class SMSService(LoggerMixin):
         if provider is not None:
             self.provider = provider
         else:
-            from grins_platform.services.sms.null_provider import (  # noqa: PLC0415
-                NullProvider,
+            from grins_platform.services.sms.factory import (  # noqa: PLC0415
+                get_sms_provider,
             )
 
-            self.provider = NullProvider()
+            self.provider = get_sms_provider()
         self.rate_limit_tracker = rate_limit_tracker
         self._prefix = os.environ.get("SMS_SENDER_PREFIX", _DEFAULT_PREFIX)
         self._footer = _DEFAULT_FOOTER

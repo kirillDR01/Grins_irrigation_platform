@@ -9,6 +9,7 @@ Validates: Requirement 9.5
 
 from __future__ import annotations
 
+import os
 import uuid
 from collections.abc import AsyncGenerator, Generator
 from datetime import datetime
@@ -17,6 +18,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+
+# Default to NullProvider in tests so SMSService(session) without an explicit
+# provider never reaches CallRail/Twilio. Tests that exercise a specific
+# provider should use ``patch.dict(os.environ, {"SMS_PROVIDER": "..."})``.
+os.environ.setdefault("SMS_PROVIDER", "null")
 
 from grins_platform.main import app
 from grins_platform.models.enums import (

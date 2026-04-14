@@ -27,6 +27,7 @@ from grins_platform.exceptions import (
     StaffNotFoundError,
 )
 from grins_platform.log_config import LoggerMixin, get_logger
+from grins_platform.models.appointment import VALID_APPOINTMENT_TRANSITIONS
 from grins_platform.models.enums import (
     AppointmentStatus,
     InvoiceStatus,
@@ -62,35 +63,6 @@ if TYPE_CHECKING:
     from grins_platform.schemas.estimate import EstimateCreate
     from grins_platform.services.estimate_service import EstimateService
 
-
-# Allowed status transitions for the strict state machine (Req 35)
-_STATUS_TRANSITIONS: dict[str, list[str]] = {
-    AppointmentStatus.CONFIRMED.value: [
-        AppointmentStatus.EN_ROUTE.value,
-    ],
-    AppointmentStatus.EN_ROUTE.value: [
-        AppointmentStatus.IN_PROGRESS.value,
-    ],
-    AppointmentStatus.IN_PROGRESS.value: [
-        AppointmentStatus.COMPLETED.value,
-    ],
-}
-
-# Statuses from which cancellation is allowed
-_CANCELLABLE_STATUSES: set[str] = {
-    AppointmentStatus.PENDING.value,
-    AppointmentStatus.DRAFT.value,
-    AppointmentStatus.SCHEDULED.value,
-    AppointmentStatus.CONFIRMED.value,
-    AppointmentStatus.EN_ROUTE.value,
-    AppointmentStatus.IN_PROGRESS.value,
-}
-
-# Statuses from which no-show is allowed
-_NO_SHOW_STATUSES: set[str] = {
-    AppointmentStatus.CONFIRMED.value,
-    AppointmentStatus.EN_ROUTE.value,
-}
 
 # Review dedup window in days
 _REVIEW_DEDUP_DAYS = 30
@@ -1895,21 +1867,12 @@ class AppointmentService(LoggerMixin):
         return None
 
     def _is_valid_transition(self, current: str, target: str) -> bool:
-        """Check if a status transition is valid per the strict state machine.
+        """Check if a status transition is valid.
 
-        Handles the main workflow chain plus cancellation and no-show.
+        Delegates to the single source of truth in
+        `grins_platform.models.appointment.VALID_APPOINTMENT_TRANSITIONS`.
         """
-        # Cancellation from applicable states
-        if target == AppointmentStatus.CANCELLED.value:
-            return current in _CANCELLABLE_STATUSES
-
-        # No-show from applicable states
-        if target == AppointmentStatus.NO_SHOW.value:
-            return current in _NO_SHOW_STATUSES
-
-        # Main workflow transitions
-        allowed = _STATUS_TRANSITIONS.get(current, [])
-        return target in allowed
+        return target in VALID_APPOINTMENT_TRANSITIONS.get(current, [])
 
     async def _has_payment_or_invoice(self, appointment: Appointment) -> bool:
         """Check if the appointment's job has a payment or invoice.

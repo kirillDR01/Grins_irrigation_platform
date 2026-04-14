@@ -1667,7 +1667,6 @@ class TestProperty38StatusTransitionStateMachine:
     @given(
         current=st.sampled_from(
             [
-                AppointmentStatus.CONFIRMED,
                 AppointmentStatus.EN_ROUTE,
                 AppointmentStatus.IN_PROGRESS,
             ]
@@ -1681,14 +1680,18 @@ class TestProperty38StatusTransitionStateMachine:
     ) -> None:
         """Skipping a step in the chain raises InvalidStatusTransitionError.
 
+        Per VALID_APPOINTMENT_TRANSITIONS, only the following skips are invalid:
+        - EN_ROUTE → COMPLETED (must pass through IN_PROGRESS)
+        - IN_PROGRESS → EN_ROUTE (backward)
+
+        CONFIRMED → IN_PROGRESS is permitted (technician skips On-My-Way push).
+
         **Validates: Requirements 35.1, 35.2, 35.3**
         """
         apt_id = uuid4()
         actor_id = uuid4()
 
-        # Determine an invalid target (skip a step)
         invalid_targets = {
-            AppointmentStatus.CONFIRMED: AppointmentStatus.IN_PROGRESS,
             AppointmentStatus.EN_ROUTE: AppointmentStatus.COMPLETED,
             AppointmentStatus.IN_PROGRESS: AppointmentStatus.EN_ROUTE,
         }
@@ -1708,6 +1711,107 @@ class TestProperty38StatusTransitionStateMachine:
             await svc.transition_status(apt_id, target, actor_id)
         assert exc_info.value.current_status == current
         assert exc_info.value.requested_status == target
+
+    @pytest.mark.asyncio
+    async def test_valid_skip_confirmed_to_in_progress_succeeds(self) -> None:
+        """confirmed → in_progress is permitted (skip EN_ROUTE / On-My-Way).
+
+        Per VALID_APPOINTMENT_TRANSITIONS, the technician can mark a job
+        in-progress without issuing an On-My-Way push first.
+
+        **Validates: Requirements 35.4, 35.5**
+        """
+        apt_id = uuid4()
+        actor_id = uuid4()
+
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.CONFIRMED.value,
+        )
+        updated = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.IN_PROGRESS.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+        appt_repo.update = AsyncMock(return_value=updated)
+
+        svc = _build_service(appt_repo=appt_repo)
+        await svc.transition_status(
+            apt_id,
+            AppointmentStatus.IN_PROGRESS,
+            actor_id,
+        )
+
+        update_data = appt_repo.update.call_args[0][1]
+        assert update_data["status"] == AppointmentStatus.IN_PROGRESS.value
+        assert "arrived_at" in update_data
+
+    @pytest.mark.asyncio
+    async def test_valid_draft_to_scheduled_succeeds(self) -> None:
+        """draft → scheduled is permitted (Send Confirmation flow).
+
+        **Validates: CR-1 regression**
+        """
+        apt_id = uuid4()
+        actor_id = uuid4()
+
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.DRAFT.value,
+        )
+        updated = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+        appt_repo.update = AsyncMock(return_value=updated)
+
+        svc = _build_service(appt_repo=appt_repo)
+        await svc.transition_status(
+            apt_id,
+            AppointmentStatus.SCHEDULED,
+            actor_id,
+        )
+
+        update_data = appt_repo.update.call_args[0][1]
+        assert update_data["status"] == AppointmentStatus.SCHEDULED.value
+
+    @pytest.mark.asyncio
+    async def test_valid_scheduled_to_en_route_succeeds(self) -> None:
+        """scheduled → en_route is permitted (skip CONFIRMED step).
+
+        **Validates: CR-1 regression**
+        """
+        apt_id = uuid4()
+        actor_id = uuid4()
+
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+        updated = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.EN_ROUTE.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+        appt_repo.update = AsyncMock(return_value=updated)
+
+        svc = _build_service(appt_repo=appt_repo)
+        await svc.transition_status(
+            apt_id,
+            AppointmentStatus.EN_ROUTE,
+            actor_id,
+        )
+
+        update_data = appt_repo.update.call_args[0][1]
+        assert update_data["status"] == AppointmentStatus.EN_ROUTE.value
+        assert "en_route_at" in update_data
 
     @pytest.mark.asyncio
     async def test_backward_transition_raises_error(self) -> None:
