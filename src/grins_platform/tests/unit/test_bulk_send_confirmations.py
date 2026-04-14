@@ -5,8 +5,12 @@ Tests the bulk_send_confirmations service method:
 - Bulk send with date range sends SMS for all DRAFT appointments in range
 - Non-DRAFT appointments in the list are skipped
 - Empty list returns 0 sent
+- Per-appointment result rows distinguish sent / deferred / skipped /
+  failed (bughunt M-8, M-9)
+- No-phone customer raises CustomerHasNoPhoneError and the bulk call
+  reports skipped, without transitioning the appointment (bughunt M-9)
 
-Validates: Requirements 8.6, 8.13
+Validates: Requirements 8.6, 8.13; bughunt M-8, M-9
 """
 
 from __future__ import annotations
@@ -17,7 +21,17 @@ from uuid import uuid4
 
 import pytest
 
+from grins_platform.exceptions import CustomerHasNoPhoneError
 from grins_platform.models.enums import AppointmentStatus
+
+
+_SENT = {"success": True, "deferred": False}
+_DEFERRED = {"success": True, "deferred": True}
+_DEDUPED = {
+    "success": False,
+    "deferred": False,
+    "reason": "Duplicate message prevented",
+}
 
 
 def _make_mock_appointment(
@@ -70,7 +84,12 @@ class TestBulkSendConfirmationsService:
             staff_repository=AsyncMock(),
         )
 
-        with patch.object(service, "_send_confirmation_sms", new_callable=AsyncMock):
+        with patch.object(
+            service,
+            "_send_confirmation_sms",
+            new_callable=AsyncMock,
+            return_value=_SENT,
+        ):
             result = await service.bulk_send_confirmations(
                 appointment_ids=[d.id for d in drafts],
             )
@@ -78,6 +97,10 @@ class TestBulkSendConfirmationsService:
         assert result["sent_count"] == 3
         assert result["failed_count"] == 0
         assert result["total_draft"] == 3
+        assert result["deferred_count"] == 0
+        assert result["skipped_count"] == 0
+        assert len(result["results"]) == 3
+        assert all(row["status"] == "sent" for row in result["results"])
         # All appointments should be transitioned to SCHEDULED
         for appt in drafts:
             assert appt.status == AppointmentStatus.SCHEDULED.value
@@ -108,7 +131,12 @@ class TestBulkSendConfirmationsService:
             staff_repository=AsyncMock(),
         )
 
-        with patch.object(service, "_send_confirmation_sms", new_callable=AsyncMock):
+        with patch.object(
+            service,
+            "_send_confirmation_sms",
+            new_callable=AsyncMock,
+            return_value=_SENT,
+        ):
             result = await service.bulk_send_confirmations(
                 date_from=date(2025, 5, 1),
                 date_to=date(2025, 5, 10),
@@ -149,7 +177,12 @@ class TestBulkSendConfirmationsService:
 
         non_draft_id = uuid4()  # SCHEDULED appointment ID — won't be in results
 
-        with patch.object(service, "_send_confirmation_sms", new_callable=AsyncMock):
+        with patch.object(
+            service,
+            "_send_confirmation_sms",
+            new_callable=AsyncMock,
+            return_value=_SENT,
+        ):
             result = await service.bulk_send_confirmations(
                 appointment_ids=[draft.id, non_draft_id],
             )
@@ -214,11 +247,14 @@ class TestBulkSendConfirmationsService:
 
         call_count = 0
 
-        async def _sms_side_effect(_session: object, appt: object) -> None:
+        async def _sms_side_effect(
+            _session: object, _appt: object
+        ) -> dict[str, object]:
             nonlocal call_count
             call_count += 1
             if call_count == 2:
                 raise RuntimeError("SMS provider error")
+            return _SENT
 
         with patch.object(
             service, "_send_confirmation_sms", side_effect=_sms_side_effect
@@ -233,3 +269,140 @@ class TestBulkSendConfirmationsService:
         # First appointment transitioned, second did not
         assert draft_ok.status == AppointmentStatus.SCHEDULED.value
         assert draft_fail.status == AppointmentStatus.DRAFT.value
+        # Per-row payload distinguishes the two outcomes
+        row_statuses = {
+            row["appointment_id"]: row["status"] for row in result["results"]
+        }
+        assert row_statuses[str(draft_ok.id)] == "sent"
+        assert row_statuses[str(draft_fail.id)] == "failed"
+
+
+class TestBulkSendConfirmationsPerRowOutcomes:
+    """Per-appointment result shape for the bulk endpoint.
+
+    Validates: bughunt M-8, M-9
+    """
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_deferred_send_does_not_transition(self) -> None:
+        """Rate-limited sends must stay DRAFT and be reported as deferred."""
+        from grins_platform.services.appointment_service import AppointmentService
+
+        draft = _make_mock_appointment()
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [draft]
+
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = mock_result
+        mock_session.flush = AsyncMock()
+
+        mock_appt_repo = AsyncMock()
+        mock_appt_repo.session = mock_session
+
+        service = AppointmentService(
+            appointment_repository=mock_appt_repo,
+            job_repository=AsyncMock(),
+            staff_repository=AsyncMock(),
+        )
+
+        with patch.object(
+            service,
+            "_send_confirmation_sms",
+            new_callable=AsyncMock,
+            return_value=_DEFERRED,
+        ):
+            result = await service.bulk_send_confirmations(
+                appointment_ids=[draft.id],
+            )
+
+        assert result["sent_count"] == 0
+        assert result["deferred_count"] == 1
+        assert draft.status == AppointmentStatus.DRAFT.value
+        assert result["results"][0]["status"] == "deferred"
+        assert result["results"][0]["reason"] == "rate_limited"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_no_phone_customer_is_skipped(self) -> None:
+        """CustomerHasNoPhoneError → skipped row, no transition (M-9)."""
+        from grins_platform.services.appointment_service import AppointmentService
+
+        draft = _make_mock_appointment()
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [draft]
+
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = mock_result
+        mock_session.flush = AsyncMock()
+
+        mock_appt_repo = AsyncMock()
+        mock_appt_repo.session = mock_session
+
+        service = AppointmentService(
+            appointment_repository=mock_appt_repo,
+            job_repository=AsyncMock(),
+            staff_repository=AsyncMock(),
+        )
+
+        customer_id = uuid4()
+
+        with patch.object(
+            service,
+            "_send_confirmation_sms",
+            new_callable=AsyncMock,
+            side_effect=CustomerHasNoPhoneError(customer_id),
+        ):
+            result = await service.bulk_send_confirmations(
+                appointment_ids=[draft.id],
+            )
+
+        assert result["sent_count"] == 0
+        assert result["skipped_count"] == 1
+        assert draft.status == AppointmentStatus.DRAFT.value
+        row = result["results"][0]
+        assert row["status"] == "skipped"
+        assert row["reason"] == "no_phone"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_dedup_block_counts_as_failed(self) -> None:
+        """send_message → {success: False, reason: 'Duplicate...'} is a failure row."""
+        from grins_platform.services.appointment_service import AppointmentService
+
+        draft = _make_mock_appointment()
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [draft]
+
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = mock_result
+        mock_session.flush = AsyncMock()
+
+        mock_appt_repo = AsyncMock()
+        mock_appt_repo.session = mock_session
+
+        service = AppointmentService(
+            appointment_repository=mock_appt_repo,
+            job_repository=AsyncMock(),
+            staff_repository=AsyncMock(),
+        )
+
+        with patch.object(
+            service,
+            "_send_confirmation_sms",
+            new_callable=AsyncMock,
+            return_value=_DEDUPED,
+        ):
+            result = await service.bulk_send_confirmations(
+                appointment_ids=[draft.id],
+            )
+
+        assert result["sent_count"] == 0
+        assert result["failed_count"] == 1
+        assert draft.status == AppointmentStatus.DRAFT.value
+        row = result["results"][0]
+        assert row["status"] == "failed"
+        assert row["reason"] == "Duplicate message prevented"

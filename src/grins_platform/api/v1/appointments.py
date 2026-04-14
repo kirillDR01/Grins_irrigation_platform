@@ -526,11 +526,17 @@ async def bulk_send_confirmations(
     _endpoints.log_completed(
         "bulk_send_confirmations",
         sent_count=result["sent_count"],
+        deferred_count=result.get("deferred_count", 0),
+        skipped_count=result.get("skipped_count", 0),
+        failed_count=result["failed_count"],
     )
     return BulkSendConfirmationsResponse(
         sent_count=result["sent_count"],
+        deferred_count=result.get("deferred_count", 0),
+        skipped_count=result.get("skipped_count", 0),
         failed_count=result["failed_count"],
         total_draft=result["total_draft"],
+        results=result.get("results", []),
     )
 
 

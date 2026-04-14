@@ -14,11 +14,12 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from grins_platform.exceptions import (
     AppointmentNotFoundError,
     AppointmentOnFinishedJobError,
+    CustomerHasNoPhoneError,
     InvalidStatusTransitionError,
     JobNotFoundError,
     PaymentRequiredError,
@@ -978,8 +979,14 @@ class AppointmentService(LoggerMixin):
         appointment_ids: list[UUID] | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
-    ) -> dict[str, int]:
+    ) -> dict[str, Any]:
         """Send confirmation SMS for multiple DRAFT appointments.
+
+        Returns per-appointment result rows so the admin UI can show
+        which rows actually went out vs. which were deferred by the
+        rate limiter, skipped for no-phone, or hit a dedup block
+        (bughunt M-8, M-9). Only rows that genuinely sent (success and
+        not deferred) transition DRAFT → SCHEDULED.
 
         Args:
             appointment_ids: Specific appointment IDs to confirm
@@ -987,9 +994,11 @@ class AppointmentService(LoggerMixin):
             date_to: End date for date range filter
 
         Returns:
-            Dict with sent_count, failed_count, total_draft
+            Dict with ``sent_count``, ``deferred_count``, ``skipped_count``,
+            ``failed_count``, ``total_draft``, and ``results`` — a list
+            of ``{appointment_id, status, reason}`` rows.
 
-        Validates: Req 8.6, 8.13
+        Validates: Req 8.6, 8.13; bughunt M-8, M-9.
         """
         self.log_started(
             "bulk_send_confirmations",
@@ -1023,43 +1032,92 @@ class AppointmentService(LoggerMixin):
         total_draft = len(draft_appointments)
 
         sent_count = 0
+        deferred_count = 0
+        skipped_count = 0
         failed_count = 0
+        results: list[dict[str, Any]] = []
 
         for appt in draft_appointments:
+            row: dict[str, Any] = {
+                "appointment_id": str(appt.id),
+                "status": "failed",
+                "reason": None,
+            }
             try:
-                await self._send_confirmation_sms(session, appt)
-                appt.status = AppointmentStatus.SCHEDULED.value
-                sent_count += 1
-            except Exception:
+                send_result = await self._send_confirmation_sms(session, appt)
+            except CustomerHasNoPhoneError as exc:
+                skipped_count += 1
+                row["status"] = "skipped"
+                row["reason"] = "no_phone"
+                self.log_rejected(
+                    "bulk_send_confirmation_item",
+                    appointment_id=str(appt.id),
+                    reason="no_phone",
+                    customer_id=str(exc.customer_id),
+                )
+            except Exception as exc:
+                failed_count += 1
+                row["reason"] = repr(exc)
                 self.log_failed(
                     "bulk_send_confirmation_item",
                     appointment_id=str(appt.id),
+                    error=exc,
                 )
-                failed_count += 1
+            else:
+                # No job/customer row → treat as skipped; the send path
+                # returned None without raising.
+                if send_result is None:
+                    skipped_count += 1
+                    row["status"] = "skipped"
+                    row["reason"] = "missing_job_or_customer"
+                elif send_result.get("success") and not send_result.get("deferred"):
+                    appt.status = AppointmentStatus.SCHEDULED.value
+                    sent_count += 1
+                    row["status"] = "sent"
+                elif send_result.get("deferred"):
+                    deferred_count += 1
+                    row["status"] = "deferred"
+                    row["reason"] = "rate_limited"
+                else:
+                    failed_count += 1
+                    row["reason"] = send_result.get("reason")
+            results.append(row)
 
         await session.flush()
 
         self.log_completed(
             "bulk_send_confirmations",
             sent_count=sent_count,
+            deferred_count=deferred_count,
+            skipped_count=skipped_count,
             failed_count=failed_count,
             total_draft=total_draft,
         )
         return {
             "sent_count": sent_count,
+            "deferred_count": deferred_count,
+            "skipped_count": skipped_count,
             "failed_count": failed_count,
             "total_draft": total_draft,
+            "results": results,
         }
 
     async def _send_confirmation_sms(
         self,
         session: AsyncSession,
         appointment: Appointment,
-    ) -> None:
+    ) -> dict[str, Any] | None:
         """Send Y/R/C confirmation SMS for an appointment.
 
+        Returns the underlying ``SMSService.send_message`` result dict so
+        callers can distinguish sent / deferred / dedup-skipped outcomes
+        (bughunt M-8). Returns ``None`` when the job or customer record
+        is missing — that's a data-integrity issue rather than a send
+        failure. Raises ``CustomerHasNoPhoneError`` when the customer
+        exists but has no phone (bughunt M-9).
+
         Validates: Req 8.4; bughunt H-3 (weekday date format), L-4
-        (include service type).
+        (include service type), M-8, M-9.
         """
         from grins_platform.models.customer import Customer  # noqa: PLC0415
         from grins_platform.models.job import Job  # noqa: PLC0415
@@ -1077,10 +1135,15 @@ class AppointmentService(LoggerMixin):
 
         job = await session.get(Job, appointment.job_id)
         if job is None:
-            return
+            return None
         customer = await session.get(Customer, job.customer_id)
-        if customer is None or not customer.phone:
-            return
+        if customer is None:
+            return None
+        # M-9: raise instead of silently returning when the customer has
+        # no phone on file, so the caller can report "skipped (no phone)"
+        # to the admin instead of claiming a send succeeded.
+        if not customer.phone:
+            raise CustomerHasNoPhoneError(customer.id)
 
         sms_service = SMSService(session, provider=get_sms_provider())
         recipient = Recipient.from_customer(customer)
@@ -1099,7 +1162,7 @@ class AppointmentService(LoggerMixin):
             "Reply Y to confirm, R to reschedule, or C to cancel."
         )
 
-        await sms_service.send_message(
+        return await sms_service.send_message(
             recipient=recipient,
             message=msg,
             message_type=MessageType.APPOINTMENT_CONFIRMATION,

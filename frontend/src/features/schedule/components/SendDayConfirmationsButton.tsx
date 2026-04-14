@@ -32,7 +32,20 @@ export function SendDayConfirmationsButton({
         date_from: date,
         date_to: date,
       });
-      toast.success(`Sent ${result.sent_count} confirmation${result.sent_count !== 1 ? 's' : ''} for ${date}`);
+      const exceptionCount =
+        (result.deferred_count ?? 0) +
+        (result.skipped_count ?? 0) +
+        (result.failed_count ?? 0);
+      const summaryParts: string[] = [`sent ${result.sent_count}`];
+      if (result.deferred_count) summaryParts.push(`deferred ${result.deferred_count}`);
+      if (result.skipped_count) summaryParts.push(`skipped ${result.skipped_count}`);
+      if (result.failed_count) summaryParts.push(`failed ${result.failed_count}`);
+      const summary = `${summaryParts.join(' · ')} for ${date}`;
+      if (exceptionCount > 0) {
+        toast.warning('Bulk send finished with exceptions', { description: summary });
+      } else {
+        toast.success(summary);
+      }
     } catch {
       toast.error('Failed to send confirmations');
     }

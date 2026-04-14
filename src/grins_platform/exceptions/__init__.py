@@ -308,6 +308,22 @@ class AppointmentOnFinishedJobError(FieldOperationsError):
         )
 
 
+class CustomerHasNoPhoneError(FieldOperationsError):
+    """Raised when a customer-facing SMS path runs but the customer row
+    has no phone number on file. Previously the send path returned
+    silently and the caller still transitioned the appointment to
+    ``SCHEDULED`` as if the SMS had gone out.
+
+    Validates: bughunt M-9
+    """
+
+    def __init__(self, customer_id: UUID) -> None:
+        self.customer_id = customer_id
+        super().__init__(
+            f"Customer {customer_id} has no phone number; cannot send SMS."
+        )
+
+
 class PropertyCustomerMismatchError(FieldOperationsError):
     """Raised when a property does not belong to the specified customer.
 
@@ -839,6 +855,7 @@ __all__ = [
     "ConsentRequiredError",
     "ConsentValidationError",
     "CustomerError",
+    "CustomerHasNoPhoneError",
     "CustomerNotFoundError",
     "DocumentUploadError",
     "DuplicateCustomerError",

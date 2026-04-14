@@ -27,6 +27,27 @@ import type {
 
 const BASE_URL = '/appointments';
 
+export type BulkSendConfirmationRowStatus =
+  | 'sent'
+  | 'deferred'
+  | 'skipped'
+  | 'failed';
+
+export interface BulkSendConfirmationItemResult {
+  appointment_id: string;
+  status: BulkSendConfirmationRowStatus;
+  reason: string | null;
+}
+
+export interface BulkSendConfirmationsResult {
+  sent_count: number;
+  deferred_count: number;
+  skipped_count: number;
+  failed_count: number;
+  total_draft: number;
+  results: BulkSendConfirmationItemResult[];
+}
+
 export const appointmentApi = {
   /**
    * List appointments with optional filters and pagination.
@@ -240,13 +261,16 @@ export const appointmentApi = {
 
   /**
    * Bulk send confirmation SMS for draft appointments (Req 8.6, 8.13).
+   *
+   * Per-appointment results distinguish sent / deferred (rate-limited)
+   * / skipped (no phone, missing customer) / failed (bughunt M-8, M-9).
    */
   async bulkSendConfirmations(data: {
     appointment_ids?: string[];
     date_from?: string;
     date_to?: string;
-  }): Promise<{ sent_count: number; failed_count: number; total_draft: number }> {
-    const response = await apiClient.post<{ sent_count: number; failed_count: number; total_draft: number }>(
+  }): Promise<BulkSendConfirmationsResult> {
+    const response = await apiClient.post<BulkSendConfirmationsResult>(
       `${BASE_URL}/send-confirmations`,
       data
     );

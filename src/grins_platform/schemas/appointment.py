@@ -8,7 +8,7 @@ Validates: Admin Dashboard Requirements 1.1-1.5
 """
 
 from datetime import date, datetime, time
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -190,12 +190,29 @@ class BulkSendConfirmationsRequest(BaseModel):
     date_to: Optional[date] = Field(None, description="End date for date range filter")
 
 
+class BulkSendConfirmationItemResult(BaseModel):
+    """Per-appointment outcome row for bulk send-confirmations.
+
+    Validates: Req 8.6, 8.13; bughunt M-8, M-9
+    """
+
+    appointment_id: UUID
+    # ``sent`` = delivery handed to provider; ``deferred`` = rate-limited
+    # and scheduled; ``skipped`` = no phone / missing customer / consent;
+    # ``failed`` = unexpected error.
+    status: Literal["sent", "deferred", "skipped", "failed"]
+    reason: Optional[str] = None
+
+
 class BulkSendConfirmationsResponse(BaseModel):
     """Response for bulk send-confirmations endpoint.
 
-    Validates: Req 8.6, 8.13
+    Validates: Req 8.6, 8.13; bughunt M-8, M-9
     """
 
     sent_count: int
+    deferred_count: int = 0
+    skipped_count: int = 0
     failed_count: int = 0
     total_draft: int
+    results: list[BulkSendConfirmationItemResult] = Field(default_factory=list)

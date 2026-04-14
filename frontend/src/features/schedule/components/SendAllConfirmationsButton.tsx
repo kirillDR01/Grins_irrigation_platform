@@ -36,7 +36,23 @@ export function SendAllConfirmationsButton({
     const ids = draftAppointments.map((apt) => apt.id);
     try {
       const result = await bulkSendMutation.mutateAsync({ appointment_ids: ids });
-      toast.success(`Sent ${result.sent_count} confirmation${result.sent_count !== 1 ? 's' : ''}`);
+      const parts: string[] = [
+        `sent ${result.sent_count}`,
+      ];
+      if (result.deferred_count) parts.push(`deferred ${result.deferred_count}`);
+      if (result.skipped_count) parts.push(`skipped ${result.skipped_count}`);
+      if (result.failed_count) parts.push(`failed ${result.failed_count}`);
+      const summary = parts.join(' · ');
+      const anyProblem =
+        (result.deferred_count ?? 0) +
+          (result.skipped_count ?? 0) +
+          (result.failed_count ?? 0) >
+        0;
+      if (anyProblem) {
+        toast.warning('Bulk send finished with exceptions', { description: summary });
+      } else {
+        toast.success(summary);
+      }
       setShowModal(false);
     } catch {
       toast.error('Failed to send confirmations');
