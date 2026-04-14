@@ -116,16 +116,19 @@ This is the core flow of how a customer moves through the system. Every record e
               v                       v           v
     +-------------------+    +-----------------+  Delete
     | Move to Jobs Tab  |    | Move to Sales   |  lead
-    +--------+----------+    +--------+--------+
-             |                        |
-             |              ======= SALES PIPELINE =======
-             |                        |
-             |               Status: "Schedule Estimate"
-             |               Schedule estimate visit on
-             |               the Estimate Calendar
-             |                        |
-             |               Status: "Estimate Scheduled"
-             |               Go to the property, assess the job
+    |                   |    +--------+--------+
+    | NOTE: If lead's   |            |
+    | situation maps to |   ======= SALES PIPELINE =======
+    | "requires_estimate"            |
+    | a warning modal   |   Status: "Schedule Estimate"
+    | appears with 3    |   Click action button -> opens
+    | options:          |   calendar event form pre-filled
+    |  - Move to Jobs   |   with customer/property details.
+    |    (proceed)      |   Saving the event auto-advances
+    |  - Move to Sales  |   the entry to "Estimate Scheduled."
+    |    (redirect)     |            |
+    |  - Cancel         |   Status: "Estimate Scheduled"
+    +--------+----------+   Go to the property, assess the job
              |                        |
              |               Status: "Send Estimate"
              |               Create estimate OUTSIDE the CRM
@@ -136,6 +139,10 @@ This is the core flow of how a customer moves through the system. Every record e
              |               Send for signature:
              |                 - Email (remote signing via SignWell)
              |                 - On-Site (embedded signing iframe)
+             |               NOTE: Signing buttons are DISABLED
+             |               until a document is uploaded.
+             |               Uses the real uploaded document
+             |               (S3 presigned URL), not a placeholder.
              |                        |
              |               Status: "Pending Approval"
              |               Waiting for customer to sign
@@ -151,6 +158,12 @@ This is the core flow of how a customer moves through the system. Every record e
     |   (Approved work, ready to schedule)      |
     |   Job status: TO BE SCHEDULED             |
     |   Week Of: target week assigned           |
+    |   "Estimate Needed" badge on jobs that    |
+    |   bypassed the estimate workflow           |
+    |   "Prepaid" badge on service agreement    |
+    |   jobs (no payment collection needed)     |
+    |   "Schedule" button on each job row       |
+    |   opens appointment form pre-filled       |
     +---------------------+---------------------+
                           |
              ========= SCHEDULING =========
@@ -273,10 +286,19 @@ This is the core flow of how a customer moves through the system. Every record e
               |
           During the visit:
               |  - Add notes and photos
-              |  - Collect payment on site (one-off jobs)
-              |  - Create and send invoice (one-off jobs)
               |  - Service agreement jobs show "Covered by
-              |    [Agreement Name]" — no payment needed
+              |    [Agreement Name]" — no payment needed,
+              |    payment buttons hidden
+              |  - One-off jobs show payment options:
+              |    * "Pay with Card (Tap to Pay)" — Stripe
+              |      Terminal NFC payment via phone
+              |    * "Record Other Payment" — Cash, Check,
+              |      Venmo, Zelle (manual recording)
+              |    * "Create Invoice" — send invoice later
+              |  - Jobs with invoice sent show invoice details
+              |    with status badge + "Collect Payment"
+              |  - Jobs with payment collected show
+              |    "Payment collected — $X via [method]"
               |
           "Job Complete" -> Job: IN PROGRESS -> COMPLETED
               |              Appointment: IN PROGRESS -> COMPLETED
@@ -527,7 +549,9 @@ To schedule an estimate visit:
 3. Select the sales entry from the dropdown, fill in the date, time, and notes
 4. Save — the appointment appears on the sales calendar
 
-**Note:** The Estimate Calendar and the pipeline status are currently managed separately. After scheduling an estimate visit on the calendar, you also need to advance the sales entry's status to "Estimate Scheduled" via the action button on the pipeline list. These are two separate steps.
+**Automatic status sync:** When you create a calendar event for a sales entry that is at "Schedule Estimate" status, the system **automatically advances** the entry to "Estimate Scheduled." You no longer need to manually advance the status — saving the calendar event handles it. If the entry is already at "Estimate Scheduled" or later, no status change occurs (no double-advance).
+
+**Alternative:** You can also schedule an estimate directly from the pipeline list by clicking the "Schedule Estimate" action button on a sales entry. This opens a calendar event creation form pre-filled with the customer's name and property address. Saving the event creates the calendar appointment and auto-advances the status in one step.
 
 ---
 
@@ -628,25 +652,52 @@ The Schedule tab is where you take jobs from the Jobs tab and assign them to **s
 
 ### Adding Jobs to the Schedule
 
+There are two ways to add jobs to the schedule:
+
+**From the Schedule tab:**
 1. Click to add jobs manually. A **Job Picker Popup** appears.
 2. The popup looks exactly like the Jobs tab — same columns, same filters, same search. Filter by "Week Of" to find jobs targeting the upcoming week.
 3. **Single job**: Select a job and assign it a date, time, and staff member.
 4. **Bulk assignment**: Select **multiple jobs** at once, then assign all of them to a specific date and staff member with a global time allocation per job. After the bulk assignment, you can adjust the time for each job individually.
 
-When you assign a job, the system creates an **appointment** on the calendar and immediately sends an SMS confirmation to the customer. The job itself stays in "To Be Scheduled" status — it won't change to "In Progress" until the day of the job when you click "Job Started."
+**From the Jobs tab:**
+- Each job in TO_BE_SCHEDULED or SCHEDULED status has a **"Schedule" button** on its row. Clicking it navigates directly to the Schedule tab with the appointment creation form pre-filled with that job's customer, job type, and address.
 
-### Confirmed vs. Unconfirmed Appointments
+When creating an appointment, the **job selector** is a searchable combobox that shows each job as "Customer Name — Job Type (Week of M/D)" with the customer's address, property tags (Residential, HOA, Subscription), and service preference notes. You can search by customer name, job type, or address, and sort by Week Of date, customer name, or area.
 
-Once an appointment is on the schedule, it has a visual distinction:
+When you assign a job, the system creates an **appointment** on the calendar in **DRAFT** status. No SMS is sent yet — the appointment appears with a dotted border and grayed-out styling. You send confirmations when you're ready (see Draft Mode below).
 
-| Appearance | Meaning |
-|------------|---------|
-| **Dashed border, muted background** | Unconfirmed — the customer hasn't confirmed yet |
-| **Solid border, full color** | Confirmed — the customer replied "Y" to the confirmation SMS |
+### Draft Mode and Appointment Visual States
+
+Appointments on the calendar have three visual states:
+
+| Appearance | Status | Meaning |
+|------------|--------|---------|
+| **Dotted border, grayed-out** | Draft | On the calendar but customer has NOT been notified. No SMS sent. Can be moved/deleted silently. |
+| **Dashed border, muted background** | Scheduled (Unconfirmed) | Confirmation SMS sent, waiting for customer reply. |
+| **Solid border, full color** | Confirmed | Customer replied "Y" to the confirmation SMS. |
+
+Service agreement jobs also show a **"PREPAID"** badge on their calendar card and a green left-border accent.
+
+### Sending Confirmations
+
+Draft appointments don't send any SMS until you explicitly trigger it. There are three ways to send confirmations:
+
+1. **Per-appointment**: Click the "Send Confirmation" button on an individual draft appointment card.
+2. **Per-day**: Click "Send Confirmations for [Day]" on a day column header to send for all drafts on that day.
+3. **Bulk**: Click "Send All Confirmations" at the top of the Schedule tab. A summary modal shows the count, customer names, and dates. Click "Send All" to confirm.
+
+When a confirmation is sent, the appointment transitions from DRAFT to SCHEDULED and the visual changes from dotted/grayed to dashed/muted.
+
+### Appointment Editing
+
+Click on any appointment to open the **Appointment Details** modal. From there, click **"Edit"** to modify the appointment's date, time, staff, or notes. The edit form opens pre-populated with the current data. Saving refreshes the calendar view.
+
+If you edit a SCHEDULED or CONFIRMED appointment's date or time, the system automatically sends a **reschedule notification SMS** to the customer and resets the status to SCHEDULED. Editing a DRAFT appointment is silent — no SMS.
 
 ### Appointment Confirmation Flow (Y/R/C)
 
-When an appointment is created on the schedule, the system **automatically sends an SMS** to the customer:
+When you send a confirmation (via the "Send Confirmation" button, per-day, or bulk), the system sends an SMS to the customer:
 
 > "Your appointment on [date] [time] has been scheduled. Reply Y to confirm, R to reschedule, or C to cancel."
 
@@ -678,43 +729,59 @@ When you're out in the field performing a job, the job detail view gives you eve
 
 The job detail view has three status buttons that track the lifecycle of a field visit. These buttons are used in order during the visit:
 
-| Button | What It Does | Job Status Change |
-|--------|-------------|-------------------|
-| **On My Way** | Sends an SMS to the customer: "We're on our way!" Logs the `on_my_way_at` timestamp. | No change (still To Be Scheduled) |
-| **Job Started** | Logs the `started_at` timestamp. | **To Be Scheduled -> In Progress** |
-| **Job Complete** | Marks the job as complete (with a payment check — see below). Logs the `completed_at` timestamp. | **In Progress -> Completed** |
+| Button | What It Does | Job Status Change | Appointment Status Change |
+|--------|-------------|-------------------|--------------------------|
+| **On My Way** | Sends an SMS to the customer: "We're on our way!" Logs the `on_my_way_at` timestamp. | No change | CONFIRMED → EN_ROUTE (or SCHEDULED → EN_ROUTE) |
+| **Job Started** | Logs the `started_at` timestamp. | **SCHEDULED → In Progress** | EN_ROUTE → IN_PROGRESS (or CONFIRMED → IN_PROGRESS if On My Way skipped) |
+| **Job Complete** | Marks the job as complete (with a payment check — see below). Logs the `completed_at` timestamp. | **In Progress → Completed** | IN_PROGRESS → COMPLETED (or any non-terminal → COMPLETED if steps skipped) |
 
-**Important:** "On My Way" does **not** change the job's status — it only logs a timestamp and sends an SMS. "Job Started" transitions the job from "To Be Scheduled" to "In Progress." "Job Complete" transitions from "In Progress" to "Completed."
+**Important:** "On My Way" does **not** change the job's status — it only transitions the appointment to EN_ROUTE, logs a timestamp, and sends an SMS. "Job Started" transitions both the job to "In Progress" and the appointment to "In Progress." "Job Complete" transitions both to "Completed." Steps can be skipped — clicking "Job Complete" without "Job Started" still completes both.
 
 **Time tracking:** The system automatically calculates the time elapsed between these three timestamps — travel time (On My Way to Started), work time (Started to Complete), and total time. This metadata is stored per job type and staff member for future scheduling optimization.
 
 ### Payment Warning on Completion
 
-When you click **"Job Complete"**:
+When you click **"Job Complete"**, the system checks in this order:
 
-- If payment has been collected **or** an invoice has been sent: the job completes normally.
-- If **no payment and no invoice**: a warning modal appears: **"No Payment or Invoice on File"** with two options:
-  - **Cancel** — go back, collect payment or create an invoice first
-  - **Complete Anyway** — completes the job without payment (this override is logged for audit purposes)
+1. **Active service agreement?** → Skip warning entirely (job is pre-paid)
+2. **Payment collected on site?** → Skip warning
+3. **Invoice exists?** → Skip warning (regardless of invoice status)
+4. **None of the above?** → Warning modal appears: **"No Payment or Invoice on File"** with two options:
+   - **Cancel** — go back, collect payment or create an invoice first
+   - **Complete Anyway** — completes the job without payment (this override is logged for audit purposes)
 
 ### Other On-Site Actions
 
 | Action | What It Does |
 |--------|-------------|
-| **Create Invoice** | Generates an invoice pre-filled with customer and job data. The invoice appears in the Invoices tab. |
+| **Create Invoice** | Generates an invoice pre-filled with customer and job data. The invoice appears in the Invoices tab. Hidden for service agreement jobs. |
 | **Add Notes** | Add text notes to the job. Notes sync to the customer record and are linked to this specific job for context. |
-| **Add Photos** | Upload photos from the job site. Photos sync to the customer record and are linked to this job. |
-| **Google Review Push** | Sends an SMS to the customer with a link to leave a Google review. |
-| **Collect Payment** | Record a payment on site. Updates the appointment record, the customer record, and marks the linked invoice as paid. |
+| **Add Photos** | Upload photos from the job site. On mobile, tapping "Add Photo" opens the camera directly. Photos sync to the customer record and are linked to this job. |
+| **Google Review Push** | Sends an SMS to the customer with a link to leave a Google review. Uses the configurable `GOOGLE_REVIEW_URL` environment variable. |
+| **Collect Payment** | Two options: **"Pay with Card (Tap to Pay)"** uses Stripe Terminal NFC for contactless card payments via your phone. **"Record Other Payment"** lets you manually record cash, check, Venmo, or Zelle payments. After a successful tap-to-pay, the system offers to send an SMS or email receipt. |
+
+### Payment Path Differentiation
+
+The job detail view shows different payment sections depending on the job's payment situation:
+
+| Situation | What You See |
+|-----------|-------------|
+| **Service agreement job** | "Covered by [Agreement Name] — no payment needed" with green checkmark. Create Invoice and Collect Payment buttons are hidden. |
+| **One-off job, no invoice** | Both "Create Invoice" and "Collect Payment" buttons are visible. |
+| **One-off job, invoice sent** | "Invoice #[number] — Sent on [date], $[amount]" with status badge. "Collect Payment" still available (customer may want to pay on-site). |
+| **One-off job, paid on-site** | "Payment collected — $[amount] via [method]" with green checkmark. No payment buttons shown. |
+
+On the Schedule tab calendar, service agreement jobs show a **"PREPAID"** badge so you can see at a glance which appointments need payment collection during the day's route.
 
 ### After Job Completion
 
 When a job is marked as complete:
 - The job status changes to **Completed**
+- The appointment status also changes to **Completed** (both transition together)
 - It **archives out of the active schedule view** (no longer clutters the daily calendar)
 - It **remains visible in the Jobs tab** under the "Completed" status filter
 - The customer's record is updated with the completion data
-- The **appointment is NOT automatically completed** — it stays in its current status (usually "Confirmed"). The appointment status is tracked independently from the job status.
+- Time tracking metadata is calculated (travel time, work time, total time)
 
 ---
 
@@ -927,16 +994,20 @@ The CRM uses SMS (currently via CallRail) for several automated and manual commu
 
 | Trigger | Message Sent |
 |---------|-------------|
-| **Appointment created** | Confirmation request: "Reply Y to confirm, R to reschedule, C to cancel" |
+| **"Send Confirmation" clicked** | Confirmation request: "Reply Y to confirm, R to reschedule, C to cancel" (transitions DRAFT → SCHEDULED) |
 | **"On My Way" button clicked** | "We're on our way! Your technician is heading to your location now." |
 | **Customer confirms (Y)** | Auto-reply confirming the appointment |
+| **Customer reschedules (R)** | Acknowledgment reply + follow-up: "We'd be happy to reschedule. Please reply with 2-3 dates and times that work for you and we'll get you set up." |
+| **Customer cancels (C)** | Detailed cancellation: "Your [service type] appointment on [date] at [time] has been cancelled. If you'd like to reschedule, please call us at [business phone]." |
+| **Appointment rescheduled** | Reschedule notification sent to customer (only for SCHEDULED/CONFIRMED appointments, not DRAFT) |
+| **Appointment deleted** | Cancellation SMS sent (only for SCHEDULED/CONFIRMED appointments, not DRAFT) |
 | **Mass invoice notification** | Template-based reminder with invoice details and amount |
 
 ### Manual SMS Triggers
 
 | Action | Where |
 |--------|-------|
-| **Google Review Push** | Job detail view — sends a review link via SMS |
+| **Google Review Push** | Job detail view — sends a review link via SMS using the configurable `GOOGLE_REVIEW_URL`. Respects 30-day dedup and SMS consent. |
 
 ### How Reply Correlation Works
 
@@ -985,9 +1056,11 @@ When the system sends an appointment confirmation SMS, it tracks the message wit
 4. Select multiple jobs for bulk assignment
 5. Choose the date, staff member, and time allocation
 6. Fine-tune individual job times after bulk assignment
-7. Confirmation SMS messages are sent **automatically** to each customer
-8. Watch the calendar for confirmations — appointments switch from dashed (unconfirmed) to solid (confirmed) as customers reply "Y"
-9. Check the **Reschedule Requests** queue for any "R" replies that need attention
+7. All appointments are created as **DRAFT** — no SMS sent yet
+8. Review the week's schedule, move appointments around as needed (silent — no SMS for drafts)
+9. When satisfied, click **"Send All Confirmations"** to send SMS to all customers at once (or send per-day or per-appointment)
+10. Watch the calendar for confirmations — appointments switch from dashed (unconfirmed) to solid (confirmed) as customers reply "Y"
+11. Check the **Reschedule Requests** queue for any "R" replies that need attention
 
 ### "A customer wants to reschedule"
 
@@ -1004,8 +1077,11 @@ When the system sends an appointment confirmation SMS, it tracks the message wit
 3. Arrive at site, click **"Job Started"** — logs your arrival time, transitions job status to "In Progress" (no SMS sent)
 4. Perform the work
 5. Add **notes** and **photos** from the job during the visit
-6. **Collect payment** on site if possible (Cash, Check, Venmo, Zelle, or Stripe — updates the invoice to Paid)
-7. Or **create an invoice** to send later if they're not paying on the spot
+6. **Collect payment** on site if possible:
+   - **Service agreement jobs**: No payment needed — shows "Covered by [Agreement Name]"
+   - **One-off jobs**: Use "Pay with Card (Tap to Pay)" for contactless card payment via Stripe Terminal, or "Record Other Payment" for Cash, Check, Venmo, Zelle
+   - After tap-to-pay, option to send SMS or email receipt
+7. Or **create an invoice** to send later if they're not paying on the spot (hidden for service agreement jobs)
 8. Click **"Job Complete"** — system checks for payment/invoice first:
    - If payment was collected or invoice was sent: job completes (status → Completed)
    - If neither: warning modal appears — you can "Complete Anyway" or go back
@@ -1032,4 +1108,4 @@ When the system sends an appointment confirmation SMS, it tracks the message wit
 
 ---
 
-*Last updated: April 13, 2026 — E2E Bug Fixes (Job Started status progression, Move to Jobs guard, SMS dedupe scoping)*
+*Last updated: April 14, 2026 — Smoothing Out After Update 2 (Draft mode, Scheduled status, on-site status wiring, cancellation cleanup, payment UI differentiation, Stripe Tap-to-Pay, estimate calendar sync, signing wiring, no-estimate enforcement, reschedule follow-up SMS, mobile-friendly on-site view)*
