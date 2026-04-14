@@ -12,11 +12,15 @@ import { useGetEmbeddedSigningUrl } from '../hooks/useSalesPipeline';
 interface SignWellEmbeddedSignerProps {
   entryId: string;
   onComplete?: () => void;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 export function SignWellEmbeddedSigner({
   entryId,
   onComplete,
+  disabled,
+  disabledReason,
 }: SignWellEmbeddedSignerProps) {
   const [open, setOpen] = useState(false);
   const [signingUrl, setSigningUrl] = useState<string | null>(null);
@@ -51,15 +55,17 @@ export function SignWellEmbeddedSigner({
 
   return (
     <>
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={handleOpen}
-        disabled={getUrl.isPending}
-        data-testid="embedded-sign-btn"
-      >
-        {getUrl.isPending ? 'Loading…' : 'Sign On-Site'}
-      </Button>
+      <span title={disabled ? disabledReason : undefined}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleOpen}
+          disabled={getUrl.isPending || disabled}
+          data-testid="embedded-sign-btn"
+        >
+          {getUrl.isPending ? 'Loading…' : 'Sign On-Site'}
+        </Button>
+      </span>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-3xl h-[80vh] p-0">
           <DialogHeader className="p-4 pb-0">

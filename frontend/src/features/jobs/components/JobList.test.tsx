@@ -565,6 +565,104 @@ describe('JobList', () => {
   });
 
   /**
+   * Schedule quick-action button tests.
+   * Validates: Requirements 11.7
+   */
+  describe('Schedule quick-action button (Req 11.7)', () => {
+    it('shows Schedule button for TO_BE_SCHEDULED jobs', async () => {
+      vi.mocked(jobApi.list).mockResolvedValue({
+        items: [mockJobs[0]], // status: to_be_scheduled
+        total: 1,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<JobList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('job-table')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId(`schedule-job-btn-${mockJobs[0].id}`)).toBeInTheDocument();
+    });
+
+    it('shows Schedule button for SCHEDULED jobs', async () => {
+      const scheduledJob: Job = { ...mockJobs[0], status: 'scheduled' };
+      vi.mocked(jobApi.list).mockResolvedValue({
+        items: [scheduledJob],
+        total: 1,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<JobList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('job-table')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId(`schedule-job-btn-${scheduledJob.id}`)).toBeInTheDocument();
+    });
+
+    it('does NOT show Schedule button for IN_PROGRESS jobs', async () => {
+      vi.mocked(jobApi.list).mockResolvedValue({
+        items: [mockJobs[1]], // status: in_progress
+        total: 1,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<JobList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('job-table')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId(`schedule-job-btn-${mockJobs[1].id}`)).not.toBeInTheDocument();
+    });
+
+    it('does NOT show Schedule button for COMPLETED jobs', async () => {
+      const completedJob: Job = { ...mockJobs[0], status: 'completed' };
+      vi.mocked(jobApi.list).mockResolvedValue({
+        items: [completedJob],
+        total: 1,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<JobList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('job-table')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId(`schedule-job-btn-${completedJob.id}`)).not.toBeInTheDocument();
+    });
+
+    it('Schedule button displays correct text', async () => {
+      vi.mocked(jobApi.list).mockResolvedValue({
+        items: [mockJobs[0]], // status: to_be_scheduled
+        total: 1,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<JobList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId(`schedule-job-btn-${mockJobs[0].id}`)).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId(`schedule-job-btn-${mockJobs[0].id}`)).toHaveTextContent('Schedule');
+    });
+  });
+
+  /**
    * URL parameter parsing and filter application tests.
    * Validates: Requirements 3.7
    */

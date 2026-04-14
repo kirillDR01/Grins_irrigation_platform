@@ -8,7 +8,6 @@ import {
   User,
   Users,
   FileText,
-  CreditCard,
   ChevronRight,
   MessageSquare,
   Sparkles,
@@ -18,12 +17,11 @@ import {
   MapPin,
   AlertTriangle,
   ShieldCheck,
+  Phone,
 } from 'lucide-react';
 import { parseLocalDate } from '@/shared/utils/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingPage, ErrorMessage, PropertyTags } from '@/shared/components';
@@ -39,7 +37,7 @@ import {
   getJobPriorityConfig,
   JOB_SOURCE_CONFIG,
 } from '../types';
-import { GenerateInvoiceButton, InvoiceStatusBadge, useInvoicesByJob } from '@/features/invoices';
+import { PaymentSection } from './PaymentSection';
 
 interface JobDetailProps {
   jobId?: string;
@@ -56,28 +54,12 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
   const updateJobMutation = useUpdateJob();
   const { data: financials, isLoading: financialsLoading } = useJobFinancials(id);
 
-  // Get invoices for this job
-  const { data: invoices } = useInvoicesByJob(id);
-  const linkedInvoice = invoices?.[0];
-
   // Notes editing state (Req 20)
   const [notesValue, setNotesValue] = useState<string | null>(null);
   const [notesSaving, setNotesSaving] = useState(false);
 
   // Initialize notes from job data
   const currentNotes = notesValue !== null ? notesValue : (job?.notes ?? '');
-
-  const handlePaymentCollectedChange = async (checked: boolean) => {
-    if (!job) return;
-    try {
-      await updateJobMutation.mutateAsync({
-        id: job.id,
-        data: { payment_collected_on_site: checked },
-      });
-    } catch (err) {
-      console.error('Failed to update payment collected status:', err);
-    }
-  };
 
   const handleSaveNotes = async () => {
     if (!job) return;
@@ -119,7 +101,13 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
   const priorityConfig = getJobPriorityConfig(job.priority_level);
 
   return (
-    <div data-testid="job-detail" className="space-y-5">
+    <div data-testid="job-detail" className="flex flex-col space-y-5">
+      {/* On-Site Operations — positioned first on mobile via order (Req 12.1, 12.6) */}
+      <div className="order-first md:order-none md:hidden">
+        <OnSiteOperations job={job} />
+        <Separator className="mt-3" />
+      </div>
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -270,6 +258,18 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
         </Link>
       )}
 
+      {/* Customer Phone — tap-to-call (Req 12.4) */}
+      {job.customer_phone && (
+        <a
+          href={`tel:${job.customer_phone}`}
+          className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
+          data-testid="customer-phone-link"
+        >
+          <Phone className="h-4 w-4 text-teal-500 shrink-0" />
+          <span className="text-sm font-medium text-slate-700">{job.customer_phone}</span>
+        </a>
+      )}
+
       <Separator />
 
       {/* Notes Section (Req 20) */}
@@ -282,7 +282,7 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
           value={currentNotes}
           onChange={(e) => setNotesValue(e.target.value)}
           placeholder="Add notes about this job..."
-          className="min-h-[100px] bg-slate-50 border-slate-200 text-sm"
+          className="min-h-[100px] bg-slate-50 border-slate-200 text-base md:text-sm"
           data-testid="job-notes-textarea"
         />
         <Button
@@ -299,22 +299,8 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
 
       <Separator />
 
-      {/* Covered by Service Agreement indicator (Smoothing Req 7.3) */}
-      {job.service_agreement_id && job.service_agreement_active && (
-        <div
-          className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg"
-          data-testid="service-agreement-indicator"
-        >
-          <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-emerald-700">
-              Covered by Service Agreement
-              {job.service_agreement_name && ` — ${job.service_agreement_name}`}
-            </p>
-            <p className="text-xs text-emerald-600">No payment or invoice needed</p>
-          </div>
-        </div>
-      )}
+      {/* Consolidated Payment Section (Req 17.1-17.4, 17.6) */}
+      <PaymentSection job={job} />
 
       {/* Pricing Section */}
       <div>
@@ -339,46 +325,6 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
             {job.source ? JOB_SOURCE_CONFIG[job.source]?.label || job.source : 'Not specified'}
           </p>
         </div>
-
-        {/* Payment Collection — hidden for active service agreement jobs (Smoothing Req 7.4) */}
-        {!(job.service_agreement_id && job.service_agreement_active) && (
-          <div className="mt-3 flex items-center space-x-2" data-testid="payment-collected-section">
-            <Checkbox
-              id="payment-collected"
-              checked={job.payment_collected_on_site}
-              onCheckedChange={handlePaymentCollectedChange}
-              disabled={updateJobMutation.isPending}
-              data-testid="payment-collected-checkbox"
-              className="data-[state=checked]:bg-teal-500 data-[state=checked]:border-teal-500"
-            />
-            <Label htmlFor="payment-collected" className="text-sm text-slate-600 flex items-center gap-1.5">
-              <CreditCard className="h-3.5 w-3.5" />
-              Payment collected on site
-            </Label>
-          </div>
-        )}
-
-        {/* Linked Invoice */}
-        {linkedInvoice && (
-          <Link
-            to={`/invoices/${linkedInvoice.id}`}
-            className="mt-3 flex items-center justify-between p-2.5 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-            data-testid="linked-invoice-link"
-          >
-            <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-700">{linkedInvoice.invoice_number}</span>
-            </div>
-            <InvoiceStatusBadge status={linkedInvoice.status} />
-          </Link>
-        )}
-
-        {/* Generate Invoice Button — hidden for active service agreement jobs (Smoothing Req 7.4) */}
-        {!linkedInvoice && job.status === 'completed' && !(job.service_agreement_id && job.service_agreement_active) && (
-          <div className="mt-3" data-testid="generate-invoice-section">
-            <GenerateInvoiceButton job={job} />
-          </div>
-        )}
       </div>
 
       <Separator />
@@ -474,8 +420,10 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
 
       <Separator />
 
-      {/* On-Site Operations (Req 26, 27) */}
-      <OnSiteOperations job={job} />
+      {/* On-Site Operations — desktop only (mobile version is at top) (Req 12.1, 12.7) */}
+      <div className="hidden md:block">
+        <OnSiteOperations job={job} />
+      </div>
 
       <Separator />
       <Card className="bg-slate-50 border-slate-100">

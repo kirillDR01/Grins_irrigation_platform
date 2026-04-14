@@ -134,7 +134,7 @@ _endpoints = JobEndpoints()
 def _populate_property_fields(job: object, resp: JobResponse) -> None:
     """Populate property address and tag fields on a JobResponse.
 
-    Validates: Requirement 19.1-19.4
+    Validates: Requirement 19.1-19.4, Smoothing Req 11.3, 11.4
     """
     prop = getattr(job, "job_property", None)
     if prop is None:
@@ -143,12 +143,22 @@ def _populate_property_fields(job: object, resp: JobResponse) -> None:
     if prop.zip_code:
         parts.append(prop.zip_code)
     resp.property_address = ", ".join(parts)
+    resp.customer_address = resp.property_address  # convenience alias (Req 11.3)
     resp.property_city = prop.city
     resp.property_type = prop.property_type
     resp.property_is_hoa = prop.is_hoa
     # Subscription = job has a service agreement
     sa_id = getattr(job, "service_agreement_id", None)
     resp.property_is_subscription = sa_id is not None
+    # Computed property tags for badge display (Req 11.4)
+    tags: list[str] = []
+    if prop.property_type:
+        tags.append(prop.property_type.capitalize())
+    if prop.is_hoa:
+        tags.append("HOA")
+    if sa_id is not None:
+        tags.append("Subscription")
+    resp.property_tags = tags if tags else None
 
 
 def _populate_preference_notes(job: object, resp: JobResponse) -> None:
@@ -463,8 +473,19 @@ async def get_ready_to_schedule(
 
     _endpoints.log_completed("get_ready_to_schedule", count=len(jobs), total=total)
 
+    items: list[JobResponse] = []
+    for j in jobs:
+        resp = JobResponse.model_validate(j)
+        if hasattr(j, "customer") and j.customer is not None:
+            resp.customer_name = f"{j.customer.first_name} {j.customer.last_name}"
+            resp.customer_phone = j.customer.phone
+        _populate_property_fields(j, resp)
+        _populate_preference_notes(j, resp)
+        _populate_agreement_fields(j, resp)
+        items.append(resp)
+
     return PaginatedJobResponse(
-        items=[JobResponse.model_validate(j) for j in jobs],
+        items=items,
         total=total,
         page=page,
         page_size=page_size,

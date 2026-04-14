@@ -23,6 +23,7 @@ from grins_platform.exceptions import (
 )
 from grins_platform.log_config import LoggerMixin, get_logger
 from grins_platform.models.customer_document import CustomerDocument
+from grins_platform.models.enums import SalesEntryStatus
 from grins_platform.models.sales import SalesCalendarEvent, SalesEntry
 from grins_platform.schemas.sales_pipeline import (
     SalesCalendarEventCreate,
@@ -489,6 +490,25 @@ async def create_calendar_event(
         notes=body.notes,
     )
     session.add(event)
+
+    # Auto-advance sales entry from schedule_estimate → estimate_scheduled
+    # Validates: Req 10.1, 10.4
+    result = await session.execute(
+        select(SalesEntry).where(SalesEntry.id == body.sales_entry_id),
+    )
+    sales_entry = result.scalar_one_or_none()
+    if (
+        sales_entry is not None
+        and sales_entry.status == SalesEntryStatus.SCHEDULE_ESTIMATE.value
+    ):
+        sales_entry.status = SalesEntryStatus.ESTIMATE_SCHEDULED.value
+        logger.info(
+            "sales.calendar_event.auto_advance",
+            sales_entry_id=str(body.sales_entry_id),
+            from_status=SalesEntryStatus.SCHEDULE_ESTIMATE.value,
+            to_status=SalesEntryStatus.ESTIMATE_SCHEDULED.value,
+        )
+
     await session.commit()
     await session.refresh(event)
     _ep.log_completed("create_calendar_event", event_id=str(event.id))

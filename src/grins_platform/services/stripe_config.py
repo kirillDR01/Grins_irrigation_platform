@@ -18,6 +18,7 @@ class StripeSettings(BaseSettings):
     stripe_publishable_key: str = ""
     stripe_customer_portal_url: str = ""
     stripe_tax_enabled: bool = True
+    stripe_terminal_location_id: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",

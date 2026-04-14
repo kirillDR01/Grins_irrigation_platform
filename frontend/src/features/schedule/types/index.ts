@@ -451,7 +451,7 @@ export interface RescheduleRequestDetail {
   resolved_at: string | null;
 }
 
-export type PaymentMethod = 'credit_card' | 'cash' | 'check' | 'venmo' | 'zelle' | 'send_invoice';
+export type PaymentMethod = 'credit_card' | 'cash' | 'check' | 'venmo' | 'zelle' | 'send_invoice' | 'stripe_terminal';
 
 export interface CollectPaymentRequest {
   payment_method: PaymentMethod;

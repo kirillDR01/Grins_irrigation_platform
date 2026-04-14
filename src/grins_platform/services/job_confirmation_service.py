@@ -11,6 +11,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
+import os
+
 from sqlalchemy import select
 
 from grins_platform.log_config import LoggerMixin, get_logger
@@ -207,11 +209,18 @@ class JobConfirmationService(LoggerMixin):
         response.processed_at = datetime.now(tz=timezone.utc)
         await self.db.flush()
 
+        # Follow-up SMS asking for alternative times (Req 14.1, 14.2)
+        follow_up_text = (
+            "We'd be happy to reschedule. Please reply with 2-3 dates "
+            "and times that work for you and we'll get you set up."
+        )
+
         return {
             "action": "reschedule_requested",
             "appointment_id": str(appointment_id),
             "reschedule_request_id": str(reschedule.id),
             "auto_reply": _AUTO_REPLIES[ConfirmationKeyword.RESCHEDULE],
+            "follow_up_sms": follow_up_text,
         }
 
     async def _handle_cancel(
@@ -219,7 +228,7 @@ class JobConfirmationService(LoggerMixin):
         response: JobConfirmationResponse,
         appointment_id: UUID,
     ) -> dict[str, Any]:
-        """CANCEL: SCHEDULED → CANCELLED + auto-reply + admin notification."""
+        """CANCEL: SCHEDULED → CANCELLED + detailed auto-reply + admin notification."""
         from grins_platform.models.appointment import Appointment  # noqa: PLC0415
         from grins_platform.models.job import Job  # noqa: PLC0415
         from grins_platform.services.appointment_service import (  # noqa: PLC0415
@@ -237,6 +246,11 @@ class JobConfirmationService(LoggerMixin):
             # Clear on-site data after cancellation (Req 2.1, 2.2, 2.3)
             job = await self.db.get(Job, appt.job_id)
             await clear_on_site_data(self.db, appt, job=job)
+        else:
+            job = await self.db.get(Job, response.job_id) if response.job_id else None
+
+        # Build detailed cancellation SMS (Req 15.1, 15.2, 15.3)
+        auto_reply = self._build_cancellation_message(appt, job)
 
         response.status = "cancelled"
         response.processed_at = datetime.now(tz=timezone.utc)
@@ -245,14 +259,82 @@ class JobConfirmationService(LoggerMixin):
         return {
             "action": "cancelled",
             "appointment_id": str(appointment_id),
-            "auto_reply": _AUTO_REPLIES[ConfirmationKeyword.CANCEL],
+            "auto_reply": auto_reply,
         }
+
+    @staticmethod
+    def _build_cancellation_message(
+        appt: Any | None,
+        job: Any | None,
+    ) -> str:
+        """Build detailed cancellation SMS with service type, date/time, and phone.
+
+        Validates: Req 15.1, 15.2, 15.3
+        """
+        service_type = getattr(job, "job_type", None) if job else None
+        business_phone = os.environ.get("BUSINESS_PHONE_NUMBER", "")
+
+        if appt and service_type:
+            # Format the service type for display (e.g. spring_startup → Spring Startup)
+            service_display = service_type.replace("_", " ").title()
+            appt_date = getattr(appt, "scheduled_date", None)
+            appt_time = getattr(appt, "time_window_start", None)
+
+            date_str = appt_date.strftime("%B %d, %Y") if appt_date else "your scheduled date"
+            time_str = appt_time.strftime("%-I:%M %p") if appt_time else "your scheduled time"
+
+            msg = (
+                f"Your {service_display} appointment on {date_str} at {time_str} "
+                f"has been cancelled."
+            )
+            if business_phone:
+                msg += f" If you'd like to reschedule, please call us at {business_phone}."
+            else:
+                msg += " Please contact us if you'd like to reschedule."
+            return msg
+
+        # Fallback to generic message
+        return _AUTO_REPLIES[ConfirmationKeyword.CANCEL]
 
     async def _handle_needs_review(
         self,
         response: JobConfirmationResponse,
     ) -> dict[str, Any]:
-        """Unknown keyword: log with status needs_review."""
+        """Unknown keyword: check for open reschedule request, else log with status needs_review.
+
+        If an open reschedule request exists for this appointment, capture the
+        reply as requested_alternatives (Req 14.3, 14.4).
+        """
+        # Check for open reschedule request to capture alternative times
+        stmt = (
+            select(RescheduleRequest)
+            .where(
+                RescheduleRequest.appointment_id == response.appointment_id,
+                RescheduleRequest.status == "open",
+            )
+            .order_by(RescheduleRequest.created_at.desc())
+            .limit(1)
+        )
+        result = await self.db.execute(stmt)
+        reschedule_req: RescheduleRequest | None = result.scalar_one_or_none()
+
+        if reschedule_req is not None:
+            # Capture customer's alternative times (Req 14.3)
+            reschedule_req.requested_alternatives = {
+                "raw_text": response.raw_reply_body,
+                "received_at": datetime.now(tz=timezone.utc).isoformat(),
+            }
+            response.status = "reschedule_alternatives_received"
+            response.processed_at = datetime.now(tz=timezone.utc)
+            await self.db.flush()
+
+            return {
+                "action": "reschedule_alternatives_received",
+                "appointment_id": str(response.appointment_id),
+                "reschedule_request_id": str(reschedule_req.id),
+                "alternatives_text": response.raw_reply_body,
+            }
+
         response.status = "needs_review"
         response.processed_at = datetime.now(tz=timezone.utc)
         await self.db.flush()

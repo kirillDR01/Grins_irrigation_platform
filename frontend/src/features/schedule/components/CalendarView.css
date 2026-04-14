@@ -111,3 +111,8 @@
   border-width: 2px;
   opacity: 0.5;
 }
+
+/* Prepaid appointment: subtle green left-border accent (Req 17.5) */
+.fc .fc-event.appointment-prepaid {
+  border-left: 3px solid #10b981 !important;
+}

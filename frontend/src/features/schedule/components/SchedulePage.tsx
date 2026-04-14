@@ -4,8 +4,9 @@
  * Includes clear day feature and recently cleared section.
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { format, startOfWeek, isSameDay } from 'date-fns';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { PageHeader } from '@/shared/components/PageHeader';
@@ -60,10 +61,27 @@ export function SchedulePage() {
   const [inlinePanelAppointmentId, setInlinePanelAppointmentId] = useState<string | null>(null);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   
+  // Pre-fill job from query param (Req 11.7 — "Schedule" button on Jobs tab)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [preSelectedJobId, setPreSelectedJobId] = useState<string | null>(null);
+
   // Track the current week displayed in the calendar
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => 
     startOfWeek(new Date(), { weekStartsOn: 0 })
   );
+
+  // Auto-open create dialog when navigated from Jobs tab with scheduleJobId (Req 11.7)
+  useEffect(() => {
+    const jobId = searchParams.get('scheduleJobId');
+    if (jobId) {
+      setPreSelectedJobId(jobId);
+      setShowCreateDialog(true);
+      // Clean up the URL param so it doesn't re-trigger
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('scheduleJobId');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const queryClient = useQueryClient();
 
@@ -241,6 +259,7 @@ export function SchedulePage() {
   const handleCreateSuccess = () => {
     setShowCreateDialog(false);
     setCreateDialogDate(null);
+    setPreSelectedJobId(null);
   };
 
   const handleCloseDetail = () => {
@@ -412,10 +431,12 @@ export function SchedulePage() {
           </DialogHeader>
           <AppointmentForm
             initialDate={createDialogDate ?? undefined}
+            initialJobId={preSelectedJobId ?? undefined}
             onSuccess={handleCreateSuccess}
             onCancel={() => {
               setShowCreateDialog(false);
               setCreateDialogDate(null);
+              setPreSelectedJobId(null);
             }}
           />
         </DialogContent>

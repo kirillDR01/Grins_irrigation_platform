@@ -1,11 +1,19 @@
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, Mail, Phone } from 'lucide-react';
+import { ArrowLeft, ChevronDown, FileText, Mail, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { LoadingPage, ErrorMessage } from '@/shared/components';
 import {
   useSalesEntry,
+  useSalesDocuments,
   useTriggerEmailSigning,
 } from '../hooks/useSalesPipeline';
 import { SALES_STATUS_CONFIG, TERMINAL_STATUSES } from '../types/pipeline';
@@ -13,6 +21,7 @@ import { StatusActionButton } from './StatusActionButton';
 import { DocumentsSection } from './DocumentsSection';
 import { SignWellEmbeddedSigner } from './SignWellEmbeddedSigner';
 import { formatDistanceToNow } from 'date-fns';
+import type { SalesDocument } from '../api/salesPipelineApi';
 
 interface SalesDetailProps {
   entryId: string;
@@ -22,6 +31,22 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
   const navigate = useNavigate();
   const { data: entry, isLoading, error, refetch } = useSalesEntry(entryId);
   const emailSign = useTriggerEmailSigning();
+
+  // Fetch documents to determine signing button state — Validates: Req 9.3, 9.5
+  const { data: documents } = useSalesDocuments(entry?.customer_id ?? '');
+  const signingDocs = useMemo<SalesDocument[]>(
+    () =>
+      (documents ?? []).filter(
+        (d) => d.document_type === 'estimate' || d.document_type === 'contract',
+      ),
+    [documents],
+  );
+  const hasSigningDoc = signingDocs.length > 0;
+  const hasMultipleSigningDocs = signingDocs.length > 1;
+
+  // Track which document is selected when multiple exist
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+  const selectedDoc = signingDocs.find((d) => d.id === selectedDocId) ?? signingDocs[0] ?? null;
 
   if (isLoading) return <LoadingPage message="Loading sales entry…" />;
   if (error || !entry)
@@ -121,23 +146,58 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
               <StatusActionButton entry={entry} />
 
-              {/* Email signing */}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleEmailSign}
-                disabled={emailSign.isPending || !hasEmail}
-                title={!hasEmail ? 'Customer has no email on file' : undefined}
-                data-testid="email-sign-btn"
-              >
-                <Mail className="mr-1 h-3.5 w-3.5" />
-                {emailSign.isPending ? 'Sending…' : 'Email for Signature'}
-              </Button>
+              {/* Document selector when multiple signing docs exist — Validates: Req 9.5 */}
+              {hasMultipleSigningDocs && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      data-testid="signing-doc-selector"
+                    >
+                      <FileText className="mr-1 h-3.5 w-3.5" />
+                      {selectedDoc?.file_name ?? 'Select document'}
+                      <ChevronDown className="ml-1 h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    {signingDocs.map((doc) => (
+                      <DropdownMenuItem
+                        key={doc.id}
+                        onClick={() => setSelectedDocId(doc.id)}
+                        data-testid={`signing-doc-option-${doc.id}`}
+                      >
+                        <FileText className="mr-2 h-3.5 w-3.5 text-slate-400" />
+                        <span className="truncate">{doc.file_name}</span>
+                        <span className="ml-2 text-xs text-slate-400">{doc.document_type}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
 
-              {/* Embedded on-site signing */}
+              {/* Email signing — Validates: Req 9.3 */}
+              <span
+                title={!hasSigningDoc ? 'Upload an estimate document first' : undefined}
+              >
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleEmailSign}
+                  disabled={emailSign.isPending || !hasEmail || !hasSigningDoc}
+                  data-testid="email-sign-btn"
+                >
+                  <Mail className="mr-1 h-3.5 w-3.5" />
+                  {emailSign.isPending ? 'Sending…' : 'Email for Signature'}
+                </Button>
+              </span>
+
+              {/* Embedded on-site signing — Validates: Req 9.3 */}
               <SignWellEmbeddedSigner
                 entryId={entryId}
                 onComplete={() => refetch()}
+                disabled={!hasSigningDoc}
+                disabledReason={!hasSigningDoc ? 'Upload an estimate document first' : undefined}
               />
             </div>
           )}

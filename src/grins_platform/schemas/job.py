@@ -364,6 +364,16 @@ class JobResponse(BaseModel):
         default=None,
         description="Whether the linked service agreement is active (not expired/cancelled)",
     )
+    # Convenience alias for property_address (Smoothing Req 11.3)
+    customer_address: str | None = Field(
+        default=None,
+        description="Customer property address for job selector display",
+    )
+    # Computed property tags list for job selector badges (Smoothing Req 11.4)
+    property_tags: list[str] | None = Field(
+        default=None,
+        description="Property tags (e.g. Residential, HOA, Subscription) for badge display",
+    )
 
     @field_validator("category", mode="before")  # type: ignore[misc,untyped-decorator]
     @classmethod

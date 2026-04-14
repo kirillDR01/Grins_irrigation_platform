@@ -61,6 +61,7 @@ from grins_platform.api.v1.sms import (
     router as sms_router,
 )
 from grins_platform.api.v1.staff import router as staff_router
+from grins_platform.api.v1.stripe_terminal import router as stripe_terminal_router
 from grins_platform.api.v1.staff_availability import router as staff_availability_router
 from grins_platform.api.v1.staff_reassignment import router as reassignment_router
 from grins_platform.api.v1.templates import router as templates_router
@@ -391,6 +392,12 @@ api_router.include_router(
     notifications_router,
     prefix="/notifications",
     tags=["notifications"],
+)
+
+# Include Stripe Terminal endpoints (Req 16)
+api_router.include_router(
+    stripe_terminal_router,
+    tags=["stripe-terminal"],
 )
 
 __all__ = ["api_router"]

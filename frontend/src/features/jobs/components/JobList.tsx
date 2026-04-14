@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useDebounce } from '@/shared/hooks/useDebounce';
 import {
   flexRender,
@@ -9,7 +9,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, MoreHorizontal, Search, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { ArrowUpDown, MoreHorizontal, Search, AlertTriangle, ShieldCheck, CalendarPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -64,6 +64,7 @@ function getStatusFilterValue(label: string): JobStatus | undefined {
 }
 
 export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobListProps) {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -377,8 +378,22 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
       ),
       cell: ({ row }) => {
         const job = row.original;
+        const isSchedulable = job.status === 'to_be_scheduled' || job.status === 'scheduled';
         return (
-          <DropdownMenu>
+          <div className="flex items-center gap-1">
+            {isSchedulable && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2.5 text-xs border-teal-200 text-teal-600 hover:bg-teal-50 hover:text-teal-700"
+                data-testid={`schedule-job-btn-${job.id}`}
+                onClick={() => navigate(`/schedule?scheduleJobId=${job.id}`)}
+              >
+                <CalendarPlus className="mr-1 h-3.5 w-3.5" />
+                Schedule
+              </Button>
+            )}
+            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
@@ -425,6 +440,7 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         );
       },
     },

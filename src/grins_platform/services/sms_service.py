@@ -758,6 +758,21 @@ class SMSService(LoggerMixin):
                     exc_info=True,
                 )
 
+        # Send follow-up SMS if present (Req 14.1 — reschedule follow-up)
+        follow_up_sms = result.get("follow_up_sms")
+        if follow_up_sms:
+            try:
+                await self.provider.send_text(
+                    self._format_phone(from_phone),
+                    f"{self._prefix}{follow_up_sms}",
+                )
+            except Exception:
+                logger.warning(
+                    "sms.confirmation.follow_up_failed",
+                    phone=_mask_phone(from_phone),
+                    exc_info=True,
+                )
+
         self.log_completed(
             "handle_inbound",
             webhook_action="confirmation_reply",

@@ -80,6 +80,11 @@ def mock_job():
     job.property_is_subscription = None
     job.time_tracking_metadata = None
     job.service_preference_notes = None
+    job.service_agreement_name = None
+    job.service_agreement_active = None
+    job.service_agreement = None
+    job.customer_address = None
+    job.property_tags = None
     job.created_at = datetime.now()
     job.updated_at = datetime.now()
     return job
@@ -438,6 +443,56 @@ class TestGetReadyToSchedule:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["total"] == 1
+
+    def test_get_ready_to_schedule_returns_customer_data_for_job_selector(
+        self, client, mock_job, mock_job_service,
+    ):
+        """Test ready-to-schedule includes customer_name, customer_address,
+        property_tags, and service_preference_notes for the job selector.
+
+        Validates: Requirements 11.1, 11.3, 11.4, 11.5
+        """
+        # Set up customer on the mock job
+        customer = Mock()
+        customer.first_name = "John"
+        customer.last_name = "Smith"
+        customer.phone = "5551234567"
+        customer.preferred_service_times = [
+            {"service_type": "spring_startup", "notes": "AM only"},
+        ]
+        mock_job.customer = customer
+
+        # Set up property on the mock job
+        prop = Mock()
+        prop.address = "123 Main St"
+        prop.city = "Denver"
+        prop.state = "CO"
+        prop.zip_code = "80202"
+        prop.property_type = "residential"
+        prop.is_hoa = True
+        mock_job.job_property = prop
+        mock_job.service_agreement_id = uuid4()  # subscription
+        mock_job.service_agreement = None  # no eager-loaded agreement object
+
+        mock_job_service.get_ready_to_schedule.return_value = ([mock_job], 1)
+
+        response = client.get("/api/v1/jobs/ready-to-schedule")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        item = data["items"][0]
+
+        # Req 11.1: customer_name present
+        assert item["customer_name"] == "John Smith"
+        # Req 11.3: customer_address present (alias for property_address)
+        assert item["customer_address"] == "123 Main St, Denver, CO, 80202"
+        assert item["property_address"] == "123 Main St, Denver, CO, 80202"
+        # Req 11.4: property_tags present
+        assert "Residential" in item["property_tags"]
+        assert "HOA" in item["property_tags"]
+        assert "Subscription" in item["property_tags"]
+        # Req 11.5: service_preference_notes present
+        assert item["service_preference_notes"] is not None
 
 
 class TestGetNeedsEstimate:

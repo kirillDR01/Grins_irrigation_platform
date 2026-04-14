@@ -34,6 +34,7 @@ import { useJobsReadyToSchedule } from '@/features/jobs/hooks';
 import { useStaff } from '@/features/staff/hooks';
 import { jobApi } from '@/features/jobs/api/jobApi';
 import { customerApi } from '@/features/customers/api/customerApi';
+import { JobSelectorCombobox } from './JobSelectorCombobox';
 import type { Appointment, AppointmentCreate, AppointmentUpdate } from '../types';
 
 // Form validation schema
@@ -177,34 +178,22 @@ export function AppointmentForm({
         className="p-6 space-y-6"
         data-testid="appointment-form"
       >
-        {/* Job Selection */}
+        {/* Job Selection — Searchable Combobox (Req 11.1-11.6) */}
         <FormField
           control={form.control}
           name="job_id"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Job</FormLabel>
-              <Select
-                onValueChange={field.onChange}
-                defaultValue={field.value}
-                disabled={isEditing || isLoadingData}
-              >
-                <FormControl>
-                  <SelectTrigger data-testid="job-select">
-                    <SelectValue placeholder={jobsLoading ? "Loading jobs..." : "Select a job"} />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {jobs.length === 0 && !jobsLoading && (
-                    <SelectItem value="no-jobs" disabled>No jobs ready to schedule</SelectItem>
-                  )}
-                  {jobs.map((job) => (
-                    <SelectItem key={job.id} value={job.id}>
-                      {job.customer_name ? `${job.customer_name} — ` : ''}{job.job_type} - {job.description?.slice(0, 40) || 'No description'}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FormControl>
+                <JobSelectorCombobox
+                  jobs={jobs}
+                  value={field.value}
+                  onChange={field.onChange}
+                  disabled={isEditing || isLoadingData}
+                  isLoading={jobsLoading}
+                />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}

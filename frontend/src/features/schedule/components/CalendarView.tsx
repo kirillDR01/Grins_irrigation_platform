@@ -151,7 +151,9 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
           : 'appointment-unconfirmed';
       const classNames = isOnSelectedDate
         ? ['selected-day-event', confirmationClass]
-        : [confirmationClass];
+        : isPrepaid
+          ? [confirmationClass, 'appointment-prepaid']
+          : [confirmationClass];
 
       return {
         id: appointment.id,
@@ -189,13 +191,24 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
   }, [weeklySchedule]);
 
   // Custom event content renderer to show send confirmation button on draft events (Req 8.4)
+  // Also shows prepaid badge on service-agreement-linked appointments (Req 17.5)
   const renderEventContent = useCallback(
     (eventInfo: { event: { id: string; title: string; extendedProps: Record<string, unknown> }; timeText: string }) => {
       const isDraft = eventInfo.event.extendedProps.status === 'draft';
+      const isPrepaid = eventInfo.event.extendedProps.isPrepaid === true;
       return (
         <div className="flex items-center gap-1 w-full overflow-hidden">
           <div className="flex-1 truncate">
             <span className="text-[10px] text-slate-500">{eventInfo.timeText}</span>
+            {isPrepaid && (
+              <span
+                className="ml-1 inline-flex items-center rounded px-1 py-0.5 text-[9px] font-bold leading-none bg-emerald-100 text-emerald-700 border border-emerald-300"
+                data-testid={`prepaid-indicator-${eventInfo.event.id}`}
+                title="Covered by service agreement — no payment needed"
+              >
+                PREPAID
+              </span>
+            )}
             <span className="ml-1 truncate">{eventInfo.event.title}</span>
           </div>
           {isDraft && (

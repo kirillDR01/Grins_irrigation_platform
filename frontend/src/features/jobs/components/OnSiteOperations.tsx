@@ -127,37 +127,37 @@ export function OnSiteOperations({ job }: OnSiteOperationsProps) {
           On-Site Operations
         </p>
 
-        {/* Status progression buttons */}
+        {/* Status progression buttons — mobile: stacked vertically at top (Req 12.1, 12.2) */}
         {!isTerminal && (
-          <div className="flex flex-wrap gap-2 mb-3" data-testid="on-site-status-buttons">
+          <div
+            className="flex flex-col gap-3 mb-3 order-first md:flex-row md:flex-wrap md:gap-2 md:order-none"
+            data-testid="on-site-status-buttons"
+          >
             <Button
-              size="sm"
-              className="bg-blue-500 hover:bg-blue-600 text-white"
+              className="w-full min-h-[48px] text-base bg-blue-500 hover:bg-blue-600 text-white md:w-auto md:min-h-0 md:text-sm"
               onClick={handleOnMyWay}
               disabled={anyPending || !!job.on_my_way_at}
               data-testid="on-my-way-btn"
             >
-              <Navigation className="mr-1.5 h-3.5 w-3.5" />
+              <Navigation className="mr-1.5 h-4 w-4 md:h-3.5 md:w-3.5" />
               {job.on_my_way_at ? 'On My Way ✓' : 'On My Way'}
             </Button>
             <Button
-              size="sm"
-              className="bg-orange-500 hover:bg-orange-600 text-white"
+              className="w-full min-h-[48px] text-base bg-orange-500 hover:bg-orange-600 text-white md:w-auto md:min-h-0 md:text-sm"
               onClick={handleJobStarted}
               disabled={anyPending || !!job.started_at}
               data-testid="job-started-btn"
             >
-              <Play className="mr-1.5 h-3.5 w-3.5" />
+              <Play className="mr-1.5 h-4 w-4 md:h-3.5 md:w-3.5" />
               {job.started_at ? 'Job Started ✓' : 'Job Started'}
             </Button>
             <Button
-              size="sm"
-              className="bg-emerald-500 hover:bg-emerald-600 text-white"
+              className="w-full min-h-[48px] text-base bg-emerald-500 hover:bg-emerald-600 text-white md:w-auto md:min-h-0 md:text-sm"
               onClick={handleComplete}
               disabled={anyPending}
               data-testid="job-complete-btn"
             >
-              <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+              <CheckCircle2 className="mr-1.5 h-4 w-4 md:h-3.5 md:w-3.5" />
               Job Complete
             </Button>
           </div>
@@ -182,6 +182,7 @@ export function OnSiteOperations({ job }: OnSiteOperationsProps) {
                 type="file"
                 className="hidden"
                 accept="image/*"
+                capture="environment"
                 onChange={handlePhotoUpload}
                 data-testid="job-photo-input"
               />
@@ -200,12 +201,12 @@ export function OnSiteOperations({ job }: OnSiteOperationsProps) {
         </div>
       </div>
 
-      {/* Payment Warning Modal (Req 27.4) */}
+      {/* Payment Warning Modal — mobile-friendly sizing (Req 12.5) */}
       <Dialog open={showPaymentWarning} onOpenChange={setShowPaymentWarning}>
-        <DialogContent data-testid="payment-warning-modal">
+        <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-md" data-testid="payment-warning-modal">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
               No Payment or Invoice on File
             </DialogTitle>
             <DialogDescription>
@@ -213,16 +214,17 @@ export function OnSiteOperations({ job }: OnSiteOperationsProps) {
               you want to mark it as complete?
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-2 mt-4">
+          <div className="flex flex-col-reverse gap-2 mt-4 sm:flex-row sm:justify-end">
             <Button
               variant="outline"
+              className="w-full sm:w-auto"
               onClick={() => setShowPaymentWarning(false)}
               data-testid="payment-warning-cancel-btn"
             >
               Cancel
             </Button>
             <Button
-              className="bg-amber-500 hover:bg-amber-600 text-white"
+              className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white"
               onClick={handleForceComplete}
               disabled={completeMutation.isPending}
               data-testid="complete-anyway-btn"

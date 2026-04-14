@@ -54,6 +54,7 @@ export interface Job extends BaseEntity {
   closed_at: string | null;  // Historical, no longer written
   // Nested customer summary (Req 22)
   customer_name: string | null;
+  customer_phone: string | null;
   customer_tags: CustomerTag[] | null;
   // Property summary (Req 19)
   property_address: string | null;
@@ -68,6 +69,10 @@ export interface Job extends BaseEntity {
   // Service agreement display (Smoothing Req 7.3, 7.5)
   service_agreement_name: string | null;
   service_agreement_active: boolean | null;
+  // Customer address alias for job selector (Smoothing Req 11.3)
+  customer_address: string | null;
+  // Property tags for badge display (Smoothing Req 11.4)
+  property_tags: string[] | null;
 }
 
 // Per-job financials (Req 57)

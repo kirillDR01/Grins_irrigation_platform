@@ -15,6 +15,8 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
 
 **E2E validation:** Uses Vercel Agent Browser (agent-browser CLI) after each domain checkpoint. All screenshots saved to `e2e-screenshots/smoothing-out-after-update2/{domain}/`. E2E validation is iterative — if issues are found, fix and re-validate until clean.
 
+**E2E prerequisite:** Before running any E2E test, all code changes must be committed and pushed to the `dev` branch, then wait 5 minutes for Railway to fully deploy the new build before starting the E2E validation. This ensures tests run against the deployed environment, not stale code.
+
 ## Tasks
 
 ### Phase 1: Bugs & Data Integrity (Req 1–4)
@@ -137,6 +139,7 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
   - Run all unit tests, verify they pass. Ask the user if questions arise.
 
 - [ ] 6.1 E2E Visual Validation — Bugs & Data Integrity
+  - **Prerequisite:** Ensure all changes are committed and pushed to `dev`. Wait 5 minutes for Railway deployment to complete before proceeding.
   - Start backend + frontend dev servers
   - **Auth guard test (Req 4):**
     - Use agent-browser to open a private/incognito window (no auth cookie)
@@ -318,36 +321,36 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
     - Test: send-confirmation on non-DRAFT appointment returns 422
     - _Requirements: 8.2, 8.4, 8.6, 8.8, 8.9, 8.10, 8.11, 8.12_
 
-- [ ] 12. Sales Pipeline — Wire Signing to Uploaded Documents (Req 9)
-  - [ ] 12.1 Replace hardcoded PDF URL with real document lookup
+- [x] 12. Sales Pipeline — Wire Signing to Uploaded Documents (Req 9)
+  - [x] 12.1 Replace hardcoded PDF URL with real document lookup
     - In `src/grins_platform/api/v1/sales_pipeline.py` (lines 241 and 282), replace hardcoded `f"/api/v1/sales/{entry_id}/contract.pdf"` with a query to `customer_documents` for the most recent document with `document_type` in ('estimate', 'contract')
     - Generate S3 presigned URL for the found document and pass to SignWell
     - Return 422 "Upload an estimate document first" if no qualifying document exists
     - _Requirements: 9.1, 9.2, 9.4_
 
-  - [ ] 12.2 Update signing button state in frontend
+  - [x] 12.2 Update signing button state in frontend
     - Disable "Send Estimate for Signature (Email)" and "Sign On-Site" buttons with tooltip "Upload an estimate document first" when no estimate/contract document exists for the entry
     - If multiple qualifying documents exist, show a dropdown to select which one to sign
     - _Requirements: 9.3, 9.5_
 
-  - [ ] 12.3 Write unit tests for signing document wiring
+  - [x] 12.3 Write unit tests for signing document wiring
     - Test: signing with uploaded document → presigned URL passed to SignWell, not placeholder
     - Test: signing without uploaded document → 422 error
     - Test: multiple documents → most recent one selected by default
     - _Requirements: 9.1, 9.2, 9.3_
 
-- [ ] 13. Sales Pipeline — Connect Estimate Calendar to Pipeline Status (Req 10)
-  - [ ] 13.1 Auto-advance sales entry on calendar event creation
+- [x] 13. Sales Pipeline — Connect Estimate Calendar to Pipeline Status (Req 10)
+  - [x] 13.1 Auto-advance sales entry on calendar event creation
     - In the sales calendar event creation endpoint, after creating the event, check if the linked `sales_entry` is at `schedule_estimate` status. If so, auto-advance to `estimate_scheduled`.
     - Do NOT advance if already at `estimate_scheduled` or later (prevent double-advance)
     - _Requirements: 10.1, 10.4_
 
-  - [ ] 13.2 Change "Schedule Estimate" action button to open calendar form
+  - [x] 13.2 Change "Schedule Estimate" action button to open calendar form
     - In `StatusActionButton.tsx`, when current status is `schedule_estimate`, instead of calling `advance()` directly, open the calendar event creation dialog pre-filled with the sales entry's customer and property details
     - On successful event save, the backend handles the status advance
     - _Requirements: 10.2, 10.3_
 
-  - [ ] 13.3 Write unit tests for estimate calendar sync
+  - [x] 13.3 Write unit tests for estimate calendar sync
     - Test: create calendar event for `schedule_estimate` entry → status auto-advances to `estimate_scheduled`
     - Test: create calendar event for `estimate_scheduled` entry → no status change
     - Test: action button opens calendar form instead of just advancing
@@ -357,6 +360,7 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
   - Run all unit tests, verify they pass. Ask the user if questions arise.
 
 - [ ] 14.1 E2E Visual Validation — Workflow & Logic Gaps
+  - **Prerequisite:** Ensure all changes are committed and pushed to `dev`. Wait 5 minutes for Railway deployment to complete before proceeding.
   - **Scheduled job status test (Req 5):**
     - Navigate to /jobs — verify "Scheduled" appears in the status filter dropdown
     - Navigate to /schedule, create an appointment for a TO_BE_SCHEDULED job → navigate back to /jobs, verify the job now shows "Scheduled" status with blue badge
@@ -402,39 +406,39 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
 
 ### Phase 3: UX Improvements (Req 11–15)
 
-- [ ] 15. Schedule Tab — Improve Job Selector (Req 11)
-  - [ ] 15.1 Verify backend returns customer data for job selector
+- [x] 15. Schedule Tab — Improve Job Selector (Req 11)
+  - [x] 15.1 Verify backend returns customer data for job selector
     - Check that the jobs list endpoint used by the appointment creation form returns `customer_name`, `customer_address`, `property_tags`, and `service_preference_notes` alongside job data
     - If any fields are missing, extend the serializer/response to include them
     - **Note:** `customer_name` is already included in the dropdown display (Bug #3 fix, commit cf2cee9). This task extends it with address, tags, and preference notes.
     - _Requirements: 11.1, 11.3, 11.4, 11.5_
 
-  - [ ] 15.2 Replace job selector dropdown with searchable combobox
+  - [x] 15.2 Replace job selector dropdown with searchable combobox
     - In `AppointmentForm.tsx`, replace the plain `<select>` dropdown with a searchable combobox component
     - Format each option as: "Customer Name — Job Type (Week of M/D)"
     - Include customer address as secondary text, property tags as small badges, service preference notes as a hint line
     - Default sort by Week Of date (soonest first), with options to sort by customer name or area
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6_
 
-  - [ ] 15.3 Add "Schedule" quick-action button to Jobs tab
+  - [x] 15.3 Add "Schedule" quick-action button to Jobs tab
     - In `JobList.tsx`, add a "Schedule" button on each job row that is in TO_BE_SCHEDULED or SCHEDULED status
     - Clicking it opens the appointment creation form pre-filled with the job's customer, job type, and address
     - _Requirements: 11.7_
 
-  - [ ] 15.4 Write unit tests for job selector
+  - [x] 15.4 Write unit tests for job selector
     - Test: job selector options include customer name as primary text
     - Test: search/filter narrows results by customer name, job type, and address
     - Test: quick-schedule from Jobs tab opens pre-filled appointment form
     - _Requirements: 11.1, 11.2, 11.7_
 
-- [ ] 16. Mobile-Friendly On-Site Job View (Req 12)
-  - [ ] 16.1 Add responsive CSS to OnSiteOperations.tsx
+- [x] 16. Mobile-Friendly On-Site Job View (Req 12)
+  - [x] 16.1 Add responsive CSS to OnSiteOperations.tsx
     - Add media queries for mobile viewport (< 768px): stack status buttons vertically, full-width, minimum 48px height
     - Position status buttons at top of page above job details on mobile (use CSS `order: -1`)
     - Ensure adequate spacing between buttons to prevent accidental taps
     - _Requirements: 12.1, 12.2_
 
-  - [ ] 16.2 Add mobile-friendly enhancements to JobDetail.tsx
+  - [x] 16.2 Add mobile-friendly enhancements to JobDetail.tsx
     - Add `capture="environment"` to photo upload file input for camera access on mobile
     - Render customer phone number as a `tel:` link for tap-to-call
     - Ensure payment warning modal is properly sized and dismissable on mobile viewports
@@ -442,58 +446,58 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
     - Use `font-size: 16px` on inputs to prevent iOS auto-zoom
     - _Requirements: 12.3, 12.4, 12.5, 12.6, 12.7_
 
-- [ ] 17. Onboarding — Consolidate Week Selection (Req 13)
-  - [ ] 17.1 Wire WeekPickerStep to tier-correct service lists
+- [x] 17. Onboarding — Consolidate Week Selection (Req 13)
+  - [x] 17.1 Wire WeekPickerStep to tier-correct service lists
     - Ensure `WeekPickerStep.tsx` (in `frontend/src/features/portal/components/`) receives the correct service list from `services_with_types` based on the customer's selected tier
     - Essential = 2 pickers (Spring Startup, Fall Winterization), Professional = 3, Premium = 7
     - Verify each picker is restricted to valid month ranges via existing `SERVICE_MONTH_RANGES`
     - _Requirements: 13.2, 13.3, 13.4_
 
-  - [ ] 17.2 Add "No preference" option and remove duplicate preference UI
+  - [x] 17.2 Add "No preference" option and remove duplicate preference UI
     - Add a "No preference" / "Assign for me" option per week picker that leaves `service_week_preferences` as null for that service
     - Remove or demote the general `preferred_schedule` (ASAP / 1-2 Weeks / 3-4 Weeks) selector if it exists in the onboarding flow
     - Verify only one week picker component is used (no duplicate `ServiceWeekPreferences.tsx` in platform frontend)
     - _Requirements: 13.1, 13.5, 13.6_
 
-  - [ ] 17.3 Write unit tests for tier mapping
+  - [x] 17.3 Write unit tests for tier mapping
     - Test: Essential tier shows exactly 2 pickers (spring startup, fall winterization)
     - Test: Professional tier shows exactly 3 pickers (+ mid-season)
     - Test: Premium tier shows exactly 7 pickers (+ monthly visits May-Sep)
     - Test: no service appears twice, no extra pickers for lower tiers
     - _Requirements: 13.2, 13.7_
 
-- [ ] 18. Reschedule Follow-Up SMS (Req 14)
-  - [ ] 18.1 Add follow-up SMS to `_handle_reschedule()` in JobConfirmationService
+- [x] 18. Reschedule Follow-Up SMS (Req 14)
+  - [x] 18.1 Add follow-up SMS to `_handle_reschedule()` in JobConfirmationService
     - In `src/grins_platform/services/job_confirmation_service.py` `_handle_reschedule()` (lines 187-215), after creating the reschedule request and sending the initial acknowledgment, send a second follow-up SMS: "We'd be happy to reschedule. Please reply with 2-3 dates and times that work for you and we'll get you set up."
     - _Requirements: 14.1, 14.2_
 
-  - [ ] 18.2 Capture customer reply in `requested_alternatives` field
+  - [x] 18.2 Capture customer reply in `requested_alternatives` field
     - When the customer replies to the follow-up SMS with alternative times, capture the raw reply text in the `requested_alternatives` JSONB field on the reschedule request record
     - Display the customer's suggestions in the Reschedule Requests admin queue
     - _Requirements: 14.3, 14.4_
 
-  - [ ] 18.3 Write unit tests for reschedule follow-up
+  - [x] 18.3 Write unit tests for reschedule follow-up
     - Test: "R" reply → acknowledgment sent + follow-up SMS sent (two SMS total)
     - Test: customer follow-up reply → captured in `requested_alternatives` field
     - _Requirements: 14.1, 14.3_
 
-- [ ] 19. Cancellation Confirmation SMS — Include Details (Req 15)
-  - [ ] 19.1 Update cancellation auto-reply in `_handle_cancel()`
+- [x] 19. Cancellation Confirmation SMS — Include Details (Req 15)
+  - [x] 19.1 Update cancellation auto-reply in `_handle_cancel()`
     - In `src/grins_platform/services/job_confirmation_service.py` `_handle_cancel()` (lines 217-241), replace the generic "Your appointment has been cancelled. Please contact us if you'd like to reschedule." with detailed message including service type, original date/time, and business phone from `BUSINESS_PHONE_NUMBER` env var
     - Format: "Your [service type] appointment on [date] at [time] has been cancelled. If you'd like to reschedule, please call us at [business phone]."
     - _Requirements: 15.1, 15.2, 15.3_
 
-  - [ ] 19.2 Write unit test for cancellation SMS details
+  - [x] 19.2 Write unit test for cancellation SMS details
     - Test: "C" reply → cancellation SMS includes service type, date, time, and business phone
     - _Requirements: 15.1, 15.2_
 
-- [ ] 20. Table Horizontal Scroll Fix (Req 20)
-  - [ ] 20.1 Fix shared table container overflow
+- [x] 20. Table Horizontal Scroll Fix (Req 20)
+  - [x] 20.1 Fix shared table container overflow
     - In `frontend/src/components/ui/table.tsx`, change the table container wrapper class from `overflow-hidden` to `overflow-x-auto`
     - Verify rounded corners, shadow, and border styling are preserved after the change
     - _Requirements: 20.1, 20.4_
 
-  - [ ] 20.2 Verify fix across all table views
+  - [x] 20.2 Verify fix across all table views
     - Test on the Leads tab (12 columns) — verify horizontal scroll works and action buttons on the far right are reachable
     - Test on the Jobs tab — verify scroll appears only when needed
     - Test on the Invoices tab — verify same behavior
@@ -504,6 +508,7 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
   - Run all unit tests, verify they pass. Ask the user if questions arise.
 
 - [ ] 21.1 E2E Visual Validation — UX Improvements
+  - **Prerequisite:** Ensure all changes are committed and pushed to `dev`. Wait 5 minutes for Railway deployment to complete before proceeding.
   - **Job selector test (Req 11):**
     - Navigate to /schedule, click to create a new appointment
     - Verify the job selector is a searchable combobox (not a plain dropdown)
@@ -551,54 +556,54 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
 
 ### Phase 4: Payment Feature (Req 16–17)
 
-- [ ] 22. Stripe Tap-to-Pay Integration (Req 16)
-  - [ ] 22.1 Create StripeTerminalService backend
+- [x] 22. Stripe Tap-to-Pay Integration (Req 16)
+  - [x] 22.1 Create StripeTerminalService backend
     - Create `src/grins_platform/services/stripe_terminal.py`
     - `create_connection_token() -> str` — Stripe Terminal connection token for frontend SDK
     - `create_payment_intent(amount_cents, currency, description) -> PaymentIntent` — create PaymentIntent with `card_present` payment method type
     - _Requirements: 16.6, 16.7_
 
-  - [ ] 22.2 Create Stripe Terminal API endpoints
+  - [x] 22.2 Create Stripe Terminal API endpoints
     - `POST /api/v1/stripe/terminal/connection-token` — returns connection token (requires auth)
     - `POST /api/v1/stripe/terminal/create-payment-intent` — creates PaymentIntent with amount, currency, and capture_method
     - Both endpoints require `CurrentActiveUser`
     - _Requirements: 16.2, 16.6, 16.7_
 
-  - [ ] 22.3 Integrate Stripe Terminal SDK in PaymentCollector.tsx
+  - [x] 22.3 Integrate Stripe Terminal SDK in PaymentCollector.tsx
     - Add Stripe Terminal JavaScript SDK to the frontend
     - Split "Collect Payment" into two paths: "Pay with Card (Tap to Pay)" and "Record Other Payment"
     - "Pay with Card" flow: create PaymentIntent → discover reader (tap_to_pay method) → collect payment → confirm → record on invoice as PAID with `payment_method: stripe_terminal`
     - "Record Other Payment" retains existing manual form for cash, check, venmo, zelle
     - _Requirements: 16.1, 16.3, 16.4, 16.5_
 
-  - [ ] 22.4 Add Stripe Terminal configuration
+  - [x] 22.4 Add Stripe Terminal configuration
     - Read `STRIPE_TERMINAL_LOCATION_ID` from environment variable
     - Configure terminal location for reader discovery
     - _Requirements: 16.8_
 
-  - [ ] 22.5 Add receipt offering after successful payment
+  - [x] 22.5 Add receipt offering after successful payment
     - After a successful tap-to-pay charge, show option to send SMS or email receipt
     - _Requirements: 16.9_
 
-  - [ ] 22.6 Write unit tests for Stripe Terminal
+  - [x] 22.6 Write unit tests for Stripe Terminal
     - Test: connection token endpoint returns valid token
     - Test: PaymentIntent creation with correct amount and payment_method_types
     - Test: successful payment recorded on invoice as PAID with stripe_terminal method
     - _Requirements: 16.2, 16.4, 16.6, 16.7_
 
-- [ ] 23. Payment UI Differentiation (Req 17)
-  - [ ] 23.1 Implement conditional payment section on job detail view
+- [x] 23. Payment UI Differentiation (Req 17)
+  - [x] 23.1 Implement conditional payment section on job detail view
     - Service agreement job: show "Covered by [Agreement Name] — no payment needed" with green checkmark, hide invoice/payment buttons
     - One-off job, no invoice: show both "Create Invoice" and "Collect Payment" buttons
     - One-off job, invoice sent: show "Invoice #[number] — Sent on [date], $[amount]" with status badge, keep "Collect Payment" available
     - One-off job, paid on-site: show "Payment collected — $[amount] via [method]" with green checkmark
     - _Requirements: 17.1, 17.2, 17.3, 17.4_
 
-  - [ ] 23.2 Add pre-paid indicator to Schedule tab calendar view
+  - [x] 23.2 Add pre-paid indicator to Schedule tab calendar view
     - On the Schedule tab calendar, add a visual indicator (badge or icon) on pre-paid appointment cards so the admin can see which appointments need payment collection during the day's route
     - _Requirements: 17.5_
 
-  - [ ] 23.3 Write unit tests for payment UI differentiation
+  - [x] 23.3 Write unit tests for payment UI differentiation
     - Test: job with active agreement → "Covered" display, no payment buttons
     - Test: job with no agreement, no invoice → both buttons shown
     - Test: job with invoice sent → invoice details shown with badge
@@ -609,6 +614,7 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
   - Run all unit tests, verify they pass. Ask the user if questions arise.
 
 - [ ] 24.1 E2E Visual Validation — Payment Feature
+  - **Prerequisite:** Ensure all changes are committed and pushed to `dev`. Wait 5 minutes for Railway deployment to complete before proceeding.
   - **Stripe Tap-to-Pay test (Req 16):**
     - Navigate to a job's on-site view that has an invoice
     - Verify the "Collect Payment" section now shows two options: "Pay with Card (Tap to Pay)" and "Record Other Payment"
@@ -632,25 +638,25 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
 
 ### Phase 5: Cross-Cutting, Property Tests, and Final Validation (Req 18–19)
 
-- [ ] 25. Combined Status Flow Validation (Req 19)
-  - [ ] 25.1 Write integration test for complete job + appointment lifecycle
+- [x] 25. Combined Status Flow Validation (Req 19)
+  - [x] 25.1 Write integration test for complete job + appointment lifecycle
     - Test the full combined flow: create appointment (DRAFT) → send confirmation (SCHEDULED) → customer confirms (CONFIRMED) → On My Way (EN_ROUTE) → Job Started (IN_PROGRESS) → Job Complete (COMPLETED)
     - Verify both job and appointment statuses at every step
     - Verify transitions happen atomically in the same database transaction
     - _Requirements: 18.1, 18.2, 18.3_
 
-  - [ ] 25.2 Write integration test for cancellation revert scenarios
+  - [x] 25.2 Write integration test for cancellation revert scenarios
     - Test: cancel the only appointment → job reverts to TO_BE_SCHEDULED, verify no other active appointments
     - Test: cancel one of two appointments → job stays SCHEDULED
     - _Requirements: 18.4_
 
-  - [ ] 25.3 Write integration test for skip scenarios
+  - [x] 25.3 Write integration test for skip scenarios
     - Test: Job Complete clicked directly (skipped On My Way and Job Started) → both job and appointment go to COMPLETED
     - Test: Job Started clicked (skipped On My Way) → job goes to IN_PROGRESS, appointment goes to IN_PROGRESS from CONFIRMED
     - _Requirements: 18.5_
 
-- [ ] 26. Property-Based Tests
-  - [ ] 26.1 Write PBT file `test_pbt_smoothing_out.py` with all 8 correctness properties
+- [x] 26. Property-Based Tests
+  - [x] 26.1 Write PBT file `test_pbt_smoothing_out.py` with all 8 correctness properties
     - **Property 1: Job Status Transition Validity** — on-site button transitions always produce a valid next status per VALID_STATUS_TRANSITIONS
     - **Property 2: Appointment Status Transition Validity** — all transitions produce valid next status per VALID_APPOINTMENT_TRANSITIONS
     - **Property 3: Job-Appointment Status Consistency** — both transition in same transaction; if job transitions, appointment also transitions
@@ -661,8 +667,8 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
     - **Property 8: Auth Guard Enforcement** — unauthenticated POST /api/v1/jobs returns 401
     - _Requirements: 18.1, 18.2, 18.3, 18.4, 18.5, and cross-cutting properties from Req 1-8_
 
-- [ ] 27. Out-of-Scope Verification (Req 21)
-  - [ ] 27.1 Verify excluded items are not implemented
+- [x] 27. Out-of-Scope Verification (Req 21)
+  - [x] 27.1 Verify excluded items are not implemented
     - Confirm no email provider integration code added (placeholder remains)
     - Confirm no SignWell API key provisioning steps in code
     - Confirm no S3 configuration steps in code
@@ -676,6 +682,7 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
 
 - [ ] 29. Final Comprehensive E2E Visual Validation
   - [ ] 29.1 Run E2E Testing Playbook as regression baseline
+    - **Prerequisite:** Ensure all changes are committed and pushed to `dev`. Wait 5 minutes for Railway deployment to complete before proceeding.
     - Execute the full `e2e-screenshots/E2E-TESTING-PLAYBOOK.md` playbook (all 16 phases) to verify the existing customer lifecycle still works after all smoothing-out changes
     - **CRITICAL:** Use phone 952-737-3312 for ALL test leads
     - Phases that must pass without regression:
@@ -693,6 +700,7 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
     - Save screenshots to `e2e-screenshots/smoothing-out-after-update2/playbook-regression/`
 
   - [ ] 29.2 Full regression E2E pass across all NEW features
+    - **Prerequisite:** Ensure all changes are committed and pushed to `dev`. Wait 5 minutes for Railway deployment to complete before proceeding.
     - Use agent-browser to perform a complete walkthrough of every feature implemented in this spec
     - **Full lifecycle walkthrough (with new smoothing-out features):**
       - Create a new lead → verify "Move to Jobs" shows estimate warning for appropriate lead types
