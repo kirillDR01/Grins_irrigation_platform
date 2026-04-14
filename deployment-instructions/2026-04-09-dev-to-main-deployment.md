@@ -3,13 +3,13 @@
 **Date:** April 9, 2026 (updated April 13, 2026)
 **Source branch:** `dev`
 **Target branch:** `main`
-**Commits:** 44 commits (f308749..7b882a3)
+**Commits:** 56 commits (f308749..93886b8)
 
 ---
 
 ## Summary
 
-This deployment brings seven major feature areas from dev to production:
+This deployment brings seven major feature areas plus critical bug fixes from dev to production:
 
 1. **CallRail SMS Integration** — New SMS provider replacing Twilio, with provider abstraction layer
 2. **Scheduling Poll & Response Collection** — Send date-range polls via SMS, collect and export responses
@@ -18,11 +18,57 @@ This deployment brings seven major feature areas from dev to production:
 5. **CRM Changes Update 2** — Sales pipeline, contract renewals, customer merge detection, document management, property type tagging, job confirmation flow
 6. **SignWell E-Signature Integration** — Email and embedded document signing for sales pipeline contracts
 7. **Dashboard & Onboarding Enhancements** — Removed Estimates/New Leads sections, added services_with_types to onboarding verify-session
+8. **E2E Bug Fixes (post-April 9)** — 7 E2E bug hunt fixes, SITUATION_JOB_MAP job_type correction, SMS 12-hour AM/PM time formatting
+
+---
+
+## Pre-Flight Requirements (MUST complete before merging)
+
+These items will cause the app to **crash or be insecure** if not done before the merge deploys to production. Do not merge until all four are confirmed.
+
+### 1. Provision Redis and set `REDIS_URL`
+
+Redis is required for webhook deduplication, rate-limit caching, and campaign worker health. Without it, duplicate inbound SMS webhooks can create duplicate `campaign_response` rows and the worker health endpoint returns `"status": "unknown"`.
+
+```bash
+# Option A: Add Railway Redis plugin (auto-injects REDIS_URL)
+# Option B: External provider (Upstash, etc.)
+railway variables set REDIS_URL=redis://user:pass@host:port/db
+```
+
+### 2. Set `JWT_SECRET_KEY`
+
+The app uses a default dev key (`dev-secret-key-change-in-production`) that is **rejected at startup** when `ENVIRONMENT=production`. Must be a cryptographically strong value, minimum 32 characters.
+
+```bash
+# Generate a strong key
+openssl rand -base64 48
+
+# Set it on Railway
+railway variables set JWT_SECRET_KEY=<generated-key>
+```
+
+### 3. Set `ENVIRONMENT=production`
+
+Controls secure cookies, JWT validation strictness, HSTS headers, and CORS enforcement. Currently set to `development` on Railway.
+
+```bash
+railway variables set ENVIRONMENT=production
+```
+
+### 4. Update `CORS_ORIGINS` for production
+
+Currently contains only dev/preview origins. Must include the production frontend domain or the browser will block all API requests.
+
+```bash
+railway variables set CORS_ORIGINS="https://your-production-domain.com,https://grins-irrigation-*-kirilldr01s-projects.vercel.app"
+```
 
 ---
 
 ## Pre-Deployment Checklist
 
+- [ ] **Pre-flight complete:** Redis provisioned, JWT_SECRET_KEY set, ENVIRONMENT=production, CORS_ORIGINS updated
 - [ ] Back up the production database
 - [ ] Verify CallRail account credentials are ready (API key, account ID, company ID)
 - [ ] Generate CallRail webhook secret: `openssl rand -hex 32`
@@ -514,6 +560,81 @@ railway run python scripts/migrate_work_requests_to_sales.py
 
 - **Python:** No new packages in `pyproject.toml` dependencies (only linting config changes)
 - **Frontend:** No changes to `package.json` — no new npm packages
+
+---
+
+## 13. Post-April 9 Bug Fixes (commits 7b882a3..93886b8)
+
+These 7 additional commits landed on dev after the original 44-commit cutoff. They contain critical bug fixes found during E2E testing and do **not** introduce new migrations, environment variables, or dependencies.
+
+### E2E Bug Hunt Fixes (cf2cee9)
+
+| Bug | Fix | Files Changed |
+|-----|-----|---------------|
+| Bug #2 | Leads with `requires_estimate` category now redirect from Jobs → Sales pipeline automatically when `move_to_jobs` is called | `services/lead_service.py` |
+| Bug #4 | Appointment confirmation SMS deduplication is now scoped per `appointment_id` — sending confirmations for two different appointments for the same customer no longer blocks the second send | `services/sms_service.py`, `repositories/sent_message_repository.py` |
+| Bug #5 | Dedupe-blocked SMS sends now return proper JSON (`{success: false, reason: ...}`) instead of crashing with a 500 error | `api/v1/sms.py`, `schemas/sms.py` |
+| Bug #7 | `POST /jobs/{id}/started` now transitions job status from `to_be_scheduled` → `in_progress` | `api/v1/jobs.py` |
+| Frontend | StatusActionButton improvements, AppointmentForm time field fix, JobList column additions | `StatusActionButton.tsx`, `AppointmentForm.tsx`, `JobList.tsx` |
+
+### SITUATION_JOB_MAP Fix (2d9a236)
+
+The lead-to-job mapping was using the job *category* (e.g., `requires_estimate`) as the `job_type` field. Now correctly maps to actual job types: `new_system`, `upgrade`, `small_repair`, `consultation`.
+
+### SMS Time Formatting (5dd51f0)
+
+Appointment confirmation SMS messages now display times in 12-hour AM/PM format (e.g., "between 9:00 AM and 11:00 AM") instead of raw 24-hour time strings.
+
+### API Schema Change (Non-Breaking)
+
+`SMSSendResponse.message_id` changed from required `UUID` to optional `UUID | None`. A new `reason` field was added. Both changes are additive — existing consumers that check `success: true` before reading `message_id` are unaffected.
+
+---
+
+## 14. Railway Environment Audit (as of April 13, 2026)
+
+Current Railway dev environment variable status for production readiness:
+
+| Variable | Status | Notes |
+|----------|--------|-------|
+| CALLRAIL_API_KEY | **Set** | |
+| CALLRAIL_ACCOUNT_ID | **Set** | |
+| CALLRAIL_COMPANY_ID | **Set** | |
+| CALLRAIL_TRACKING_NUMBER | **Set** | +19525293750 |
+| CALLRAIL_WEBHOOK_SECRET | **Set** | |
+| SMS_PROVIDER | **Set** | callrail |
+| SMS_TEST_PHONE_ALLOWLIST | **Set** | +19527373312 — **remove or update for production** |
+| STRIPE_SECRET_KEY | **Set** | Test mode (sk_test_*) — **switch to live key for production** |
+| STRIPE_WEBHOOK_SECRET | **Set** | Test mode — **switch to live key for production** |
+| STRIPE_CUSTOMER_PORTAL_URL | **Set** | Test mode — **switch to live URL for production** |
+| DATABASE_URL | **Set** | |
+| GOOGLE_SHEETS_* | **Set** | All 3 vars configured |
+| GOOGLE_SERVICE_ACCOUNT_KEY_JSON | **Set** | |
+| CORS_ORIGINS | **Set** | Dev origins — **update for production domain** |
+| REDIS_URL | **NOT SET** | Must provision Redis before deploy (webhook dedup, rate-limit caching, worker health) |
+| SIGNWELL_API_KEY | **NOT SET** | Required for Sales pipeline e-signature flow |
+| SIGNWELL_WEBHOOK_SECRET | **NOT SET** | Required for signature completion webhooks |
+| JWT_SECRET_KEY | **NOT SET** | Using default "dev-secret-key..." — **must set a strong 32+ char secret for production** |
+| OPENAI_API_KEY | **NOT SET** | Required for AI scheduling/categorization features |
+| GOOGLE_MAPS_API_KEY | **NOT SET** | Required for route optimization (falls back to haversine without it) |
+| AWS_ACCESS_KEY_ID | **NOT SET** | Required for S3 file storage (photos, documents, invoice PDFs) |
+| AWS_SECRET_ACCESS_KEY | **NOT SET** | Required for S3 file storage |
+| S3_BUCKET_NAME | **NOT SET** | Defaults to `grins-platform-files` if unset |
+| EMAIL_API_KEY | **NOT SET** | Email sending is currently a placeholder — not blocking |
+| ENVIRONMENT | **Set** | `development` — **change to `production` for main** |
+
+### Action Required Before Production Deploy
+
+1. **Provision Redis** on Railway (or external provider) and set `REDIS_URL`
+2. **Set JWT_SECRET_KEY** to a cryptographically strong value (min 32 chars)
+3. **Set SIGNWELL_API_KEY + SIGNWELL_WEBHOOK_SECRET** if enabling e-signatures
+4. **Set OPENAI_API_KEY** if AI features are needed
+5. **Set GOOGLE_MAPS_API_KEY** if route optimization is needed
+6. **Set AWS credentials + S3_BUCKET_NAME** if file uploads are needed
+7. **Update CORS_ORIGINS** to include the production frontend domain
+8. **Update ENVIRONMENT** to `production`
+9. **Remove or expand SMS_TEST_PHONE_ALLOWLIST** for production (leave unset to allow all recipients)
+10. **Switch Stripe keys** from test to live mode (see [productiongolive.md](./productiongolive.md))
 
 ---
 
