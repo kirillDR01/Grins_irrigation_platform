@@ -64,10 +64,17 @@ def normalize_to_e164(phone: str) -> str:
         msg = f"Invalid area code {area_code}: {phone!r}"
         raise PhoneNormalizationError(msg)
 
-    # Reject 555-01xx test numbers
-    if digits[3:6] == "555" and digits[6:8] == "01":
-        msg = f"Test number rejected: {phone!r}"
-        raise PhoneNormalizationError(msg)
+    # Reject FCC 555-0100..555-0199 test numbers. The previous check
+    # ``digits[3:6] == "555" and digits[6:8] == "01"`` picked up the
+    # same range (any 4-digit subscriber beginning with "01" within a
+    # 555 exchange is necessarily 0100..0199) but the intent was opaque
+    # enough that bughunt L-13 flagged it. Rewrite using the explicit
+    # 4-digit range so the reject rule matches the FCC spec verbatim.
+    if digits[3:6] == "555":
+        subscriber = digits[6:10]
+        if subscriber.startswith("01") and "0100" <= subscriber <= "0199":
+            msg = f"Test number rejected: {phone!r}"
+            raise PhoneNormalizationError(msg)
 
     return f"+1{digits}"
 

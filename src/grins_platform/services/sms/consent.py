@@ -67,18 +67,46 @@ async def check_sms_consent(
     return await _has_marketing_opt_in(session, e164)
 
 
-def _phone_variants(e164: str) -> list[str]:
+def _phone_variants(phone: str) -> list[str]:
     """Return the set of phone-string forms we accept for DB lookups.
 
-    Historical Customer/Lead rows store phones as bare 10-digit strings
-    (e.g. ``6127385301``), while newer rows and ``SmsConsentRecord`` are
-    stored in E.164 (``+16127385301``). Until the data is normalized we
-    must compare against both forms so opt-in status isn't silently lost.
+    Historical Customer/Lead rows store phones in assorted shapes:
+    bare 10-digit ``6127385301``, E.164 ``+16127385301``, hyphenated
+    ``612-738-5301``, dotted ``612.738.5301``, parenthesized
+    ``(612) 738-5301``, and country-code-prefixed ``1-612-738-5301`` /
+    ``16127385301``. ``SmsConsentRecord`` is always E.164. Until the
+    backfill catches every row (bughunt M-5), consent lookups must
+    compare against every plausible form so opt-in/opt-out isn't
+    silently lost.
+
+    Accepts any input that ``phone_normalizer`` can normalize; raw
+    E.164 is still a valid input and the function is idempotent on it.
     """
-    variants = [e164]
-    if e164.startswith("+1") and len(e164) == 12:
-        variants.append(e164[2:])  # "6127385301"
-    return variants
+    # Import inline to avoid a hard cycle between consent.py and the
+    # phone_normalizer module during module init.
+    from grins_platform.services.sms.phone_normalizer import (  # noqa: PLC0415
+        PhoneNormalizationError,
+        normalize_to_e164,
+    )
+
+    try:
+        e164 = normalize_to_e164(phone)
+    except PhoneNormalizationError:
+        # Fall back to the original behaviour when the input is too
+        # exotic to normalize — at least the raw form matches itself.
+        return [phone]
+
+    bare = e164[2:]  # 10-digit subscriber number, e.g. "6127385301"
+    area, prefix, line = bare[:3], bare[3:6], bare[6:]
+    return [
+        e164,  # +16127385301
+        bare,  # 6127385301
+        f"1{bare}",  # 16127385301
+        f"{area}-{prefix}-{line}",  # 612-738-5301
+        f"{area}.{prefix}.{line}",  # 612.738.5301
+        f"({area}) {prefix}-{line}",  # (612) 738-5301
+        f"1-{area}-{prefix}-{line}",  # 1-612-738-5301
+    ]
 
 
 async def _has_hard_stop(session: AsyncSession, e164: str) -> bool:
