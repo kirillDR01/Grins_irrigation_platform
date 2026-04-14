@@ -317,8 +317,12 @@ class TestCompleteOnboardingTierCompleteness:
                 "fall_winterization": None,
             },
         )
-        # Should have reached agreement_repo.update without raising
-        # (snapshot assertion covered in next test).
+        # Should have reached agreement_repo.update without raising.
+        # The chosen Monday for spring_startup also propagates to the
+        # agreement's stored service_week_preferences (verified in the
+        # job-date propagation test below); access_instructions /
+        # gate_code / has_dogs / preferred_times go to property and
+        # customer rows, not the agreement.
 
     @pytest.mark.asyncio
     @patch(
@@ -374,11 +378,18 @@ class TestCompleteOnboardingTierCompleteness:
     @patch(
         "grins_platform.services.onboarding_service.stripe.checkout.Session.retrieve",
     )
-    async def test_persists_full_agreement_snapshot(
+    async def test_persists_only_week_prefs_on_agreement(
         self,
         mock_retrieve: MagicMock,
     ) -> None:
-        """Every snapshot field is included in the agreement update."""
+        """Agreement update carries service_week_preferences only.
+
+        Live values for gate_code, has_dogs, access_instructions, and
+        preferred_service_time live on properties / customers and are
+        not duplicated on the agreement. The snapshot columns added in
+        20260414_100200 were dropped in 20260414_100400 to keep the
+        schema clean.
+        """
         mock_retrieve.return_value = SimpleNamespace(
             subscription="sub_123",
             customer_details=None,
@@ -402,19 +413,27 @@ class TestCompleteOnboardingTierCompleteness:
             },
         )
 
-        # agreement_repo.update was called with the full snapshot payload
         update_payload = agreement_repo.update.call_args[0][1]
-        assert update_payload["tier_slug_snapshot"] == "essential-commercial"
-        assert update_payload["tier_name_snapshot"] == "Essential"
-        assert update_payload["preferred_service_time"] == "MORNING"
-        assert update_payload["access_instructions"] == "Side gate"
-        assert update_payload["gate_code"] == "1234"
-        assert update_payload["dogs_on_property"] is True
-        assert update_payload["no_preference_flags"] == {
-            "spring_startup": False,
-            "fall_winterization": True,
-        }
+        # Customer's raw week selections are stored on the agreement
         assert update_payload["service_week_preferences"] == {
             "spring_startup": "2026-04-06",
             "fall_winterization": None,
         }
+        # property_id + scheduling preference round out the agreement update
+        assert "property_id" in update_payload
+        assert update_payload["preferred_schedule"] == "ASAP"
+        # Snapshot fields removed in migration 20260414_100400 must not be
+        # present in the agreement update payload anymore
+        for dropped in (
+            "tier_slug_snapshot",
+            "tier_name_snapshot",
+            "preferred_service_time",
+            "access_instructions",
+            "gate_code",
+            "dogs_on_property",
+            "no_preference_flags",
+        ):
+            assert dropped not in update_payload, (
+                f"Agreement update should not write {dropped!r} — "
+                "it duplicates data on properties/customers/tier."
+            )

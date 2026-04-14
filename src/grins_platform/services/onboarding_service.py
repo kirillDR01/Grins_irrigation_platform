@@ -393,22 +393,17 @@ class OnboardingService(LoggerMixin):
             is_primary=True,
         )
 
-        # Link property to agreement, save schedule preference, and
-        # snapshot onboarding-time answers for audit.
-        no_preference_flags = {k: v is None for k, v in prefs.items()}
+        # Link property to agreement and persist the customer's raw
+        # week-preference answers (the chosen weeks are also propagated
+        # to each Job's target dates below). Live values for gate code,
+        # dogs flag, access instructions, and preferred service time
+        # are stored on the property and customer rows themselves and
+        # are not duplicated on the agreement.
         update_data: dict[str, Any] = {
             "property_id": prop.id,
             "preferred_schedule": preferred_schedule,
             "preferred_schedule_details": preferred_schedule_details,
             "service_week_preferences": prefs,
-            # Onboarding snapshot (frozen at completion time)
-            "tier_slug_snapshot": agreement.tier.slug,
-            "tier_name_snapshot": agreement.tier.name,
-            "preferred_service_time": preferred_times,
-            "access_instructions": access_instructions,
-            "gate_code": gate_code,
-            "dogs_on_property": has_dogs,
-            "no_preference_flags": no_preference_flags,
         }
         agreement = await self.agreement_repo.update(
             agreement,
