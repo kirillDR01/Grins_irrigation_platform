@@ -54,6 +54,8 @@ class MessageType(str, Enum):
     """Types of SMS messages."""
 
     APPOINTMENT_CONFIRMATION = "appointment_confirmation"
+    APPOINTMENT_RESCHEDULE = "appointment_reschedule"
+    APPOINTMENT_CANCELLATION = "appointment_cancellation"
     APPOINTMENT_REMINDER = "appointment_reminder"
     ON_THE_WAY = "on_the_way"
     ARRIVAL = "arrival"

@@ -57,14 +57,21 @@ export function useUpdateAppointment() {
 }
 
 /**
- * Hook to cancel an appointment.
+ * Hook to cancel an appointment. Accepts ``{ id, notifyCustomer }`` so the
+ * admin can opt out of the cancellation SMS via the confirmation dialog.
  */
 export function useCancelAppointment() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => appointmentApi.cancel(id),
-    onSuccess: (_, id) => {
+    mutationFn: ({
+      id,
+      notifyCustomer = true,
+    }: {
+      id: string;
+      notifyCustomer?: boolean;
+    }) => appointmentApi.cancel(id, notifyCustomer),
+    onSuccess: (_, { id }) => {
       // Invalidate the specific appointment and all lists
       queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });

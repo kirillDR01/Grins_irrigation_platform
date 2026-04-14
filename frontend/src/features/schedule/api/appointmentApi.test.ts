@@ -100,12 +100,24 @@ describe('appointmentApi', () => {
   });
 
   describe('cancel', () => {
-    it('cancels appointment', async () => {
+    it('cancels appointment with notify_customer=true by default', async () => {
       vi.mocked(apiClient.delete).mockResolvedValue({});
 
       await appointmentApi.cancel('appt-123');
 
-      expect(apiClient.delete).toHaveBeenCalledWith('/appointments/appt-123');
+      expect(apiClient.delete).toHaveBeenCalledWith(
+        '/appointments/appt-123?notify_customer=true',
+      );
+    });
+
+    it('forwards notify_customer=false to suppress SMS', async () => {
+      vi.mocked(apiClient.delete).mockResolvedValue({});
+
+      await appointmentApi.cancel('appt-456', false);
+
+      expect(apiClient.delete).toHaveBeenCalledWith(
+        '/appointments/appt-456?notify_customer=false',
+      );
     });
   });
 

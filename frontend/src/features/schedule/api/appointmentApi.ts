@@ -66,10 +66,13 @@ export const appointmentApi = {
   },
 
   /**
-   * Cancel an appointment (soft delete).
+   * Cancel an appointment (soft delete). Pass ``notifyCustomer=false`` to
+   * opt out of the cancellation SMS.
    */
-  async cancel(id: string): Promise<void> {
-    await apiClient.delete(`${BASE_URL}/${id}`);
+  async cancel(id: string, notifyCustomer: boolean = true): Promise<void> {
+    await apiClient.delete(
+      `${BASE_URL}/${id}?notify_customer=${notifyCustomer}`,
+    );
   },
 
   /**

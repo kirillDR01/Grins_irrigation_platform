@@ -206,7 +206,7 @@ describe('useCancelAppointment', () => {
     vi.clearAllMocks();
   });
 
-  it('should cancel appointment successfully', async () => {
+  it('should cancel appointment successfully with notify_customer=true', async () => {
     vi.mocked(appointmentApi.cancel).mockResolvedValue(undefined);
 
     const { result } = renderHook(() => useCancelAppointment(), {
@@ -214,14 +214,32 @@ describe('useCancelAppointment', () => {
     });
 
     act(() => {
-      result.current.mutate('apt-1');
+      result.current.mutate({ id: 'apt-1', notifyCustomer: true });
     });
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(appointmentApi.cancel).toHaveBeenCalledWith('apt-1');
+    expect(appointmentApi.cancel).toHaveBeenCalledWith('apt-1', true);
+  });
+
+  it('should forward notify_customer=false to the API', async () => {
+    vi.mocked(appointmentApi.cancel).mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useCancelAppointment(), {
+      wrapper: createWrapper(),
+    });
+
+    act(() => {
+      result.current.mutate({ id: 'apt-2', notifyCustomer: false });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(appointmentApi.cancel).toHaveBeenCalledWith('apt-2', false);
   });
 
   it('should handle cancel error', async () => {
@@ -233,7 +251,7 @@ describe('useCancelAppointment', () => {
     });
 
     act(() => {
-      result.current.mutate('apt-1');
+      result.current.mutate({ id: 'apt-1', notifyCustomer: true });
     });
 
     await waitFor(() => {

@@ -5,6 +5,7 @@
  * and "Get Directions" button.
  */
 
+import { useState } from 'react';
 import { format } from 'date-fns';
 import { parseLocalDate } from '@/shared/utils/dateUtils';
 import { Link } from 'react-router-dom';
@@ -49,6 +50,7 @@ import { InvoiceCreator } from './InvoiceCreator';
 import { EstimateCreator } from './EstimateCreator';
 import { AppointmentNotes } from './AppointmentNotes';
 import { ReviewRequest } from './ReviewRequest';
+import { CancelAppointmentDialog } from './CancelAppointmentDialog';
 
 interface AppointmentDetailProps {
   appointmentId: string;
@@ -67,6 +69,7 @@ export function AppointmentDetail({
   const cancelMutation = useCancelAppointment();
   const noShowMutation = useMarkAppointmentNoShow();
   const sendConfirmationMutation = useSendConfirmation();
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
 
   // Fetch job details for enrichment (Req 40)
   const { data: job } = useQuery({
@@ -150,8 +153,15 @@ export function AppointmentDetail({
   const handleConfirm = async () => {
     await confirmMutation.mutateAsync(appointmentId);
   };
-  const handleCancel = async () => {
-    await cancelMutation.mutateAsync(appointmentId);
+  const openCancelDialog = () => {
+    setCancelDialogOpen(true);
+  };
+  const handleCancelConfirmed = async (notifyCustomer: boolean) => {
+    await cancelMutation.mutateAsync({
+      id: appointmentId,
+      notifyCustomer,
+    });
+    setCancelDialogOpen(false);
     onClose?.();
   };
   const handleNoShow = async () => {
@@ -160,6 +170,15 @@ export function AppointmentDetail({
   const handleSendConfirmation = async () => {
     await sendConfirmationMutation.mutateAsync(appointmentId);
   };
+
+  // Draft appointments have never been sent to the customer; cancelling them
+  // never sends an SMS. SCHEDULED/CONFIRMED/EN_ROUTE/IN_PROGRESS do.
+  const willNotifyByDefault = [
+    'scheduled',
+    'confirmed',
+    'en_route',
+    'in_progress',
+  ].includes(appointment.status);
 
   return (
     <div data-testid="appointment-detail" className="bg-white">
@@ -477,7 +496,7 @@ export function AppointmentDetail({
             {!isInProgress && !isEnRoute && (
               <Button
                 variant="outline"
-                onClick={handleCancel}
+                onClick={openCancelDialog}
                 disabled={cancelMutation.isPending}
                 size="sm"
                 className="border-red-200 text-red-600 hover:bg-red-50 w-full min-h-[48px] text-sm md:w-auto md:min-h-0 md:h-8 md:text-xs"
@@ -498,6 +517,21 @@ export function AppointmentDetail({
           <span>ID: {appointment.id.slice(0, 8)}...</span>
         </div>
       </div>
+
+      <CancelAppointmentDialog
+        open={cancelDialogOpen}
+        onOpenChange={setCancelDialogOpen}
+        customerName={
+          customer ? `${customer.first_name} ${customer.last_name}` : null
+        }
+        customerPhone={customer?.phone ?? null}
+        scheduledDate={appointment.scheduled_date}
+        timeWindowStart={appointment.time_window_start}
+        timeWindowEnd={appointment.time_window_end}
+        willNotifyByDefault={willNotifyByDefault}
+        onConfirm={handleCancelConfirmed}
+        isLoading={cancelMutation.isPending}
+      />
     </div>
   );
 }

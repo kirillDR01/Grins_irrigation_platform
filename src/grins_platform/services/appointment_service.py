@@ -426,11 +426,21 @@ class AppointmentService(LoggerMixin):
         self.log_completed("update_appointment", appointment_id=str(appointment_id))
         return updated  # type: ignore[return-value]
 
-    async def cancel_appointment(self, appointment_id: UUID) -> Appointment:
+    async def cancel_appointment(
+        self,
+        appointment_id: UUID,
+        *,
+        notify_customer: bool = True,
+        actor_id: UUID | None = None,
+    ) -> Appointment:
         """Cancel an appointment.
 
         Args:
-            appointment_id: UUID of the appointment to cancel
+            appointment_id: UUID of the appointment to cancel.
+            notify_customer: If True (default), send the cancellation SMS for
+                customer-visible states (SCHEDULED/CONFIRMED/EN_ROUTE/IN_PROGRESS).
+                If False, skip the SMS — the admin opted out via the UI.
+            actor_id: Staff/admin performing the cancellation (for audit log).
 
         Returns:
             Updated Appointment instance
@@ -439,7 +449,7 @@ class AppointmentService(LoggerMixin):
             AppointmentNotFoundError: If appointment not found
             InvalidStatusTransitionError: If appointment cannot be cancelled
 
-        Validates: Admin Dashboard Requirement 1.2
+        Validates: Admin Dashboard Requirement 1.2, CR-2 (Req 8.10, 8.11, 15)
         """
         self.log_started("cancel_appointment", appointment_id=str(appointment_id))
 
@@ -459,6 +469,13 @@ class AppointmentService(LoggerMixin):
                 AppointmentStatus.CANCELLED,
             )
 
+        # Capture the original status BEFORE the update. SQLAlchemy's identity
+        # map refreshes the in-memory ``appointment`` when we UPDATE ... RETURNING,
+        # so reading ``appointment.status`` after that point would always be
+        # ``cancelled`` — which is how the original SMS-gating branch became
+        # dead code (CR-2). Snapshot here.
+        pre_cancel_status = appointment.status
+
         updated = await self.appointment_repository.update_status(
             appointment_id,
             AppointmentStatus.CANCELLED,
@@ -469,26 +486,77 @@ class AppointmentService(LoggerMixin):
         job = await self.job_repository.get_by_id(appointment.job_id)
         await clear_on_site_data(session, appointment, job=job)
 
-        # Req 8.10, 8.11: Cancellation SMS based on appointment state
-        # DRAFT → no SMS (customer was never notified)
-        # SCHEDULED, CONFIRMED, EN_ROUTE, IN_PROGRESS → send cancellation SMS
-        pre_cancel_status = appointment.status
-        if pre_cancel_status in (
+        # Req 8.10, 8.11: Cancellation SMS based on pre-cancel state.
+        # DRAFT → no SMS (customer was never notified). Admin can still opt
+        # out via ``notify_customer=False`` (dialog "Cancel without text").
+        sms_sent = False
+        customer_visible = pre_cancel_status in (
             AppointmentStatus.SCHEDULED.value,
             AppointmentStatus.CONFIRMED.value,
             AppointmentStatus.EN_ROUTE.value,
             AppointmentStatus.IN_PROGRESS.value,
-        ):
+        )
+        if notify_customer and customer_visible:
             try:
                 await self._send_cancellation_sms(session, appointment)
+                sms_sent = True
             except Exception:
                 self.log_failed(
                     "cancellation_sms",
                     appointment_id=str(appointment_id),
                 )
 
-        self.log_completed("cancel_appointment", appointment_id=str(appointment_id))
+        await self._record_cancellation_audit(
+            session,
+            appointment_id=appointment_id,
+            pre_cancel_status=pre_cancel_status,
+            notify_customer=notify_customer,
+            sms_sent=sms_sent,
+            actor_id=actor_id,
+        )
+
+        self.log_completed(
+            "cancel_appointment",
+            appointment_id=str(appointment_id),
+            notify_customer=notify_customer,
+            sms_sent=sms_sent,
+        )
         return updated  # type: ignore[return-value]
+
+    async def _record_cancellation_audit(
+        self,
+        session: AsyncSession,
+        *,
+        appointment_id: UUID,
+        pre_cancel_status: str,
+        notify_customer: bool,
+        sms_sent: bool,
+        actor_id: UUID | None,
+    ) -> None:
+        """Write an AuditLog row recording the admin's cancel choice."""
+        from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+            AuditLogRepository,
+        )
+
+        try:
+            repo = AuditLogRepository(session)
+            await repo.create(
+                action="appointment.cancel",
+                resource_type="appointment",
+                resource_id=appointment_id,
+                actor_id=actor_id,
+                details={
+                    "pre_cancel_status": pre_cancel_status,
+                    "notify_customer": notify_customer,
+                    "sms_sent": sms_sent,
+                },
+            )
+        except Exception:
+            # Audit write failure must never block the cancellation itself.
+            self.log_failed(
+                "cancellation_audit",
+                appointment_id=str(appointment_id),
+            )
 
     async def list_appointments(
         self,
@@ -1027,7 +1095,7 @@ class AppointmentService(LoggerMixin):
         await sms_service.send_message(
             recipient=recipient,
             message=msg,
-            message_type=MessageType.APPOINTMENT_CONFIRMATION,
+            message_type=MessageType.APPOINTMENT_RESCHEDULE,
             consent_type="transactional",
             job_id=job.id,
             appointment_id=appointment.id,
@@ -1070,7 +1138,7 @@ class AppointmentService(LoggerMixin):
         await sms_service.send_message(
             recipient=recipient,
             message=msg,
-            message_type=MessageType.APPOINTMENT_CONFIRMATION,
+            message_type=MessageType.APPOINTMENT_CANCELLATION,
             consent_type="transactional",
             job_id=job.id,
             appointment_id=appointment.id,

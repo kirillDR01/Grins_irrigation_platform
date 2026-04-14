@@ -625,20 +625,34 @@ async def update_appointment(
     "/{appointment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Cancel appointment",
-    description="Cancel an appointment. Record is preserved but marked cancelled.",
+    description=(
+        "Cancel an appointment. Record is preserved but marked cancelled. "
+        "Pass ``notify_customer=false`` to suppress the cancellation SMS "
+        "(admin opt-out)."
+    ),
 )
 async def cancel_appointment(
     appointment_id: UUID,
+    current_user: CurrentActiveUser,
     service: Annotated[AppointmentService, Depends(get_appointment_service)],
+    notify_customer: bool = True,
 ) -> None:
     """Cancel an appointment.
 
-    Validates: Admin Dashboard Requirement 1.2
+    Validates: Admin Dashboard Requirement 1.2, CR-2 (notify_customer opt-out)
     """
-    _endpoints.log_started("cancel_appointment", appointment_id=str(appointment_id))
+    _endpoints.log_started(
+        "cancel_appointment",
+        appointment_id=str(appointment_id),
+        notify_customer=notify_customer,
+    )
 
     try:
-        await service.cancel_appointment(appointment_id)
+        await service.cancel_appointment(
+            appointment_id,
+            notify_customer=notify_customer,
+            actor_id=current_user.id,
+        )
     except AppointmentNotFoundError as e:
         _endpoints.log_rejected("cancel_appointment", reason="not_found")
         raise HTTPException(
