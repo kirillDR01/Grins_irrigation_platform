@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { leadApi } from '../api/leadApi';
-import type { LeadUpdate, LeadConversionRequest, FromCallRequest, BulkOutreachRequest, CreateEstimateRequest, CreateContractRequest } from '../types';
+import type { LeadUpdate, LeadConversionRequest, FromCallRequest, BulkOutreachRequest, CreateEstimateRequest, CreateContractRequest, ManualLeadCreateRequest } from '../types';
 import { leadKeys } from './useLeads';
+import { dashboardKeys } from '@/features/dashboard/hooks/useDashboard';
 
 // Update lead mutation (status, assignment, notes, intake_tag)
 export function useUpdateLead() {
@@ -43,6 +44,51 @@ export function useDeleteLead() {
       queryClient.removeQueries({ queryKey: leadKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
       queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() });
+    },
+  });
+}
+
+// Move lead to Jobs (CRM2 Req 12.1, Smoothing Req 6.1)
+export function useMoveToJobs() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, force = false }: { id: string; force?: boolean }) =>
+      leadApi.moveToJobs(id, force),
+    onSuccess: (_data, variables) => {
+      queryClient.removeQueries({ queryKey: leadKeys.detail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });
+    },
+  });
+}
+
+// Move lead to Sales (CRM2 Req 12.2)
+export function useMoveToSales() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => leadApi.moveToSales(id),
+    onSuccess: (_data, id) => {
+      queryClient.removeQueries({ queryKey: leadKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() });
+    },
+  });
+}
+
+// Mark lead as contacted (CRM2 Req 11.1)
+export function useMarkContacted() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => leadApi.markContacted(id),
+    onSuccess: (updatedLead) => {
+      queryClient.setQueryData(leadKeys.detail(updatedLead.id), updatedLead);
+      queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });
     },
   });
 }
@@ -56,6 +102,20 @@ export function useCreateFromCall() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
       queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });
+    },
+  });
+}
+
+// Create lead manually (admin-only)
+export function useCreateManualLead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: ManualLeadCreateRequest) => leadApi.createManual(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() });
     },
   });
 }

@@ -6,7 +6,9 @@ export {
   useCustomerInvoices,
   useCustomerPaymentMethods,
   useCustomerDuplicates,
+  useDuplicateReviewQueue,
   useCustomerSentMessages,
+  useServicePreferences,
   customerKeys,
 } from './useCustomers';
 export {
@@ -19,4 +21,9 @@ export {
   useDeleteCustomerPhoto,
   useChargeCustomer,
   useMergeCustomers,
+  useAddServicePreference,
+  useUpdateServicePreference,
+  useDeleteServicePreference,
 } from './useCustomerMutations';
+export { useCheckDuplicate } from './useCheckDuplicate';
+export { usePreviewMerge } from './usePreviewMerge';

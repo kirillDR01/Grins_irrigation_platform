@@ -344,10 +344,10 @@ class TestRegisterScheduledJobs:
     """Tests for register_scheduled_jobs."""
 
     def test_registers_all_four_jobs(self):
-        """All five scheduled jobs are registered."""
+        """All seven scheduled jobs are registered."""
         mock_scheduler = MagicMock()
         register_scheduled_jobs(mock_scheduler)
-        assert mock_scheduler.add_job.call_count == 5
+        assert mock_scheduler.add_job.call_count == 7
 
         job_ids = [call.kwargs["id"] for call in mock_scheduler.add_job.call_args_list]
         assert "escalate_failed_payments" in job_ids
@@ -355,6 +355,8 @@ class TestRegisterScheduledJobs:
         assert "send_annual_notices" in job_ids
         assert "cleanup_orphaned_consent_records" in job_ids
         assert "remind_incomplete_onboarding" in job_ids
+        assert "process_pending_campaign_recipients" in job_ids
+        assert "duplicate_detection_sweep" in job_ids
 
     def test_escalate_runs_daily(self):
         """escalate_failed_payments is a daily cron job."""

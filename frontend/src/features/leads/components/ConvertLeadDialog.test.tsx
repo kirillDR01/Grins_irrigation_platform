@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
+import { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
 import { ConvertLeadDialog } from './ConvertLeadDialog';
 import { leadApi } from '../api/leadApi';
 import type { Lead } from '../types';
@@ -325,5 +326,125 @@ describe('ConvertLeadDialog', () => {
     await user.clear(firstNameInput);
 
     expect(screen.getByTestId('convert-submit-btn')).toBeDisabled();
+  });
+
+  // ---- Error handling ----
+
+  it('shows specific toast for already-converted lead error', async () => {
+    const user = userEvent.setup();
+    const { toast } = await import('sonner');
+
+    // Simulate an AxiosError with the LEAD_ALREADY_CONVERTED error code
+    const axiosError = new AxiosError(
+      'Request failed with status code 400',
+      'ERR_BAD_REQUEST',
+      undefined,
+      undefined,
+      {
+        status: 400,
+        data: {
+          success: false,
+          error: {
+            code: 'LEAD_ALREADY_CONVERTED',
+            message: 'Lead already converted: lead-001',
+            lead_id: 'lead-001',
+          },
+        },
+        headers: {},
+        statusText: 'Bad Request',
+        config: {} as InternalAxiosRequestConfig,
+      } as AxiosResponse
+    );
+
+    vi.mocked(leadApi.convert).mockRejectedValue(axiosError);
+
+    render(
+      <ConvertLeadDialog
+        lead={twoWordNameLead}
+        open={true}
+        onOpenChange={vi.fn()}
+      />,
+      { wrapper: createWrapper() }
+    );
+
+    await user.click(screen.getByTestId('convert-submit-btn'));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Lead Already Converted', {
+        description: 'This lead has already been converted to a customer.',
+      });
+    });
+  });
+
+  it('shows generic error toast for non-already-converted errors', async () => {
+    const user = userEvent.setup();
+    const { toast } = await import('sonner');
+
+    vi.mocked(leadApi.convert).mockRejectedValue(new Error('Network error'));
+
+    render(
+      <ConvertLeadDialog
+        lead={twoWordNameLead}
+        open={true}
+        onOpenChange={vi.fn()}
+      />,
+      { wrapper: createWrapper() }
+    );
+
+    await user.click(screen.getByTestId('convert-submit-btn'));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Conversion Failed', {
+        description: 'Network error',
+      });
+    });
+  });
+
+  // ---- List invalidation ----
+
+  it('invalidates leads list query on successful conversion', async () => {
+    const user = userEvent.setup();
+    vi.mocked(leadApi.convert).mockResolvedValue({
+      success: true,
+      lead_id: 'lead-001',
+      customer_id: 'cust-new-001',
+      job_id: 'job-new-001',
+      message: 'Lead successfully converted to customer.',
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    function Wrapper({ children }: { children: React.ReactNode }) {
+      return (
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter>{children}</MemoryRouter>
+        </QueryClientProvider>
+      );
+    }
+
+    render(
+      <ConvertLeadDialog
+        lead={twoWordNameLead}
+        open={true}
+        onOpenChange={vi.fn()}
+      />,
+      { wrapper: Wrapper }
+    );
+
+    await user.click(screen.getByTestId('convert-submit-btn'));
+
+    await waitFor(() => {
+      // Verify that leads list query was invalidated (removes converted lead from list)
+      const listInvalidation = invalidateSpy.mock.calls.find(
+        (call) => JSON.stringify(call[0]?.queryKey).includes('"leads","list"')
+      );
+      expect(listInvalidation).toBeDefined();
+    });
   });
 });

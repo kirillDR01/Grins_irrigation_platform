@@ -19,7 +19,10 @@ class TestCompleteOnboardingRequestPreferredSchedule:
 
     def test_defaults_to_asap(self) -> None:
         """preferred_schedule defaults to ASAP when not provided."""
-        req = CompleteOnboardingRequest(session_id="cs_test_123")
+        req = CompleteOnboardingRequest(
+            session_id="cs_test_123",
+            service_week_preferences={},
+        )
         assert req.preferred_schedule == "ASAP"
         assert req.preferred_schedule_details is None
 
@@ -31,6 +34,7 @@ class TestCompleteOnboardingRequestPreferredSchedule:
         ):
             CompleteOnboardingRequest(
                 session_id="cs_test_123",
+                service_week_preferences={},
                 preferred_schedule="OTHER",
             )
 
@@ -42,6 +46,7 @@ class TestCompleteOnboardingRequestPreferredSchedule:
         ):
             CompleteOnboardingRequest(
                 session_id="cs_test_123",
+                service_week_preferences={},
                 preferred_schedule="OTHER",
                 preferred_schedule_details="   ",
             )
@@ -57,6 +62,7 @@ class TestCompleteOnboardingRequestPreferredSchedule:
         """All non-OTHER enum values are accepted without details."""
         req = CompleteOnboardingRequest(
             session_id="cs_test_123",
+            service_week_preferences={},
             preferred_schedule=value,
         )
         assert req.preferred_schedule == value
@@ -65,6 +71,7 @@ class TestCompleteOnboardingRequestPreferredSchedule:
         """OTHER with valid details is accepted."""
         req = CompleteOnboardingRequest(
             session_id="cs_test_123",
+            service_week_preferences={},
             preferred_schedule="OTHER",
             preferred_schedule_details="Week of April 14th",
         )
@@ -79,5 +86,6 @@ class TestCompleteOnboardingRequestPreferredSchedule:
         ):
             CompleteOnboardingRequest(
                 session_id="cs_test_123",
+                service_week_preferences={},
                 preferred_schedule="NEXT_MONTH",
             )

@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import (
     JSON,
     UUID as PGUUID,
@@ -159,6 +159,13 @@ class Customer(Base):
     )
     email_opt_in_source: Mapped[Optional[str]] = mapped_column(
         String(50),
+        nullable=True,
+    )
+
+    # Duplicate Merge Tracking (CRM2 Req 6.5)
+    merged_into_customer_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("customers.id"),
         nullable=True,
     )
 

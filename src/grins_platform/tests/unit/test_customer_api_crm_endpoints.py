@@ -18,8 +18,10 @@ from fastapi.testclient import TestClient
 
 from grins_platform.api.v1.customers import router
 from grins_platform.api.v1.dependencies import (
+    get_customer_merge_service,
     get_customer_service,
     get_db_session,
+    get_duplicate_detection_service,
     get_photo_service,
 )
 from grins_platform.exceptions import (
@@ -30,11 +32,13 @@ from grins_platform.models.enums import CustomerStatus, LeadSource
 from grins_platform.schemas.customer import (
     ChargeResponse,
     CustomerResponse,
-    DuplicateCustomerMatch,
-    DuplicateGroup,
     PaymentMethodResponse,
 )
+from grins_platform.services.customer_merge_service import CustomerMergeService
 from grins_platform.services.customer_service import CustomerService
+from grins_platform.services.duplicate_detection_service import (
+    DuplicateDetectionService,
+)
 from grins_platform.services.photo_service import PhotoService
 
 # =============================================================================
@@ -94,22 +98,53 @@ def mock_photo_svc() -> MagicMock:
 
 
 @pytest.fixture
+def mock_duplicate_detection_svc() -> AsyncMock:
+    """Create a mock DuplicateDetectionService."""
+    return AsyncMock(spec=DuplicateDetectionService)
+
+
+@pytest.fixture
+def mock_merge_svc() -> AsyncMock:
+    """Create a mock CustomerMergeService."""
+    return AsyncMock(spec=CustomerMergeService)
+
+
+@pytest.fixture
 def app(
     mock_service: AsyncMock,
     mock_db: AsyncMock,
     mock_photo_svc: MagicMock,
+    mock_duplicate_detection_svc: AsyncMock,
+    mock_merge_svc: AsyncMock,
 ) -> FastAPI:
     """Create FastAPI app with mocked dependencies."""
+    from unittest.mock import MagicMock as _MagicMock  # noqa: PLC0415
+
+    from grins_platform.api.v1.auth_dependencies import (  # noqa: PLC0415
+        get_current_active_user,
+        get_current_user,
+    )
+
     test_app = FastAPI()
     test_app.include_router(router, prefix="/api/v1/customers")
 
+    fake_user = _MagicMock()
+    fake_user.id = uuid.uuid4()
+    fake_user.role = "admin"
+
     test_app.dependency_overrides[get_customer_service] = lambda: mock_service
+    test_app.dependency_overrides[get_current_user] = lambda: fake_user
+    test_app.dependency_overrides[get_current_active_user] = lambda: fake_user
 
     async def _db_override() -> AsyncMock:
         return mock_db
 
     test_app.dependency_overrides[get_db_session] = _db_override
     test_app.dependency_overrides[get_photo_service] = lambda: mock_photo_svc
+    test_app.dependency_overrides[get_duplicate_detection_service] = (
+        lambda: mock_duplicate_detection_svc
+    )
+    test_app.dependency_overrides[get_customer_merge_service] = lambda: mock_merge_svc
 
     return test_app
 
@@ -127,59 +162,53 @@ def client(app: FastAPI) -> TestClient:
 
 @pytest.mark.unit
 class TestGetDuplicates:
-    """Tests for GET /api/v1/customers/duplicates."""
+    """Tests for GET /api/v1/customers/duplicates (paginated review queue)."""
 
-    def test_get_duplicates_returns_groups(
+    def test_get_duplicates_returns_paginated(
         self,
         client: TestClient,
-        mock_service: AsyncMock,
+        mock_duplicate_detection_svc: AsyncMock,
     ) -> None:
-        """Duplicate detection returns groups of matching customers."""
+        """Duplicate review queue returns paginated candidates."""
         cid1, cid2 = uuid.uuid4(), uuid.uuid4()
-        mock_service.find_duplicates.return_value = [
-            DuplicateGroup(
-                customers=[
-                    DuplicateCustomerMatch(
-                        id=cid1,
-                        first_name="John",
-                        last_name="Doe",
-                        phone="6125551234",
-                        email=None,
-                        match_type="phone",
-                        similarity_score=None,
-                    ),
-                    DuplicateCustomerMatch(
-                        id=cid2,
-                        first_name="Jon",
-                        last_name="Doe",
-                        phone="6125551234",
-                        email=None,
-                        match_type="phone",
-                        similarity_score=None,
-                    ),
-                ],
-            ),
-        ]
+        candidate = MagicMock()
+        candidate.id = uuid.uuid4()
+        candidate.customer_a_id = cid1
+        candidate.customer_b_id = cid2
+        candidate.score = 85
+        candidate.match_signals = {"phone": True}
+        candidate.status = "pending"
+        candidate.created_at = datetime(2026, 1, 1)
+        candidate.resolved_at = None
+        candidate.resolution = None
+
+        mock_duplicate_detection_svc.get_review_queue.return_value = (
+            [candidate],
+            1,
+        )
 
         resp = client.get("/api/v1/customers/duplicates")
 
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data) == 1
-        assert len(data[0]["customers"]) == 2
+        assert data["total"] == 1
+        assert len(data["items"]) == 1
+        assert data["items"][0]["score"] == 85
 
     def test_get_duplicates_with_no_duplicates_returns_empty(
         self,
         client: TestClient,
-        mock_service: AsyncMock,
+        mock_duplicate_detection_svc: AsyncMock,
     ) -> None:
-        """No duplicates returns empty list."""
-        mock_service.find_duplicates.return_value = []
+        """No duplicates returns empty paginated response."""
+        mock_duplicate_detection_svc.get_review_queue.return_value = ([], 0)
 
         resp = client.get("/api/v1/customers/duplicates")
 
         assert resp.status_code == 200
-        assert resp.json() == []
+        data = resp.json()
+        assert data["total"] == 0
+        assert data["items"] == []
 
 
 # =============================================================================
@@ -189,43 +218,44 @@ class TestGetDuplicates:
 
 @pytest.mark.unit
 class TestMergeCustomers:
-    """Tests for POST /api/v1/customers/merge."""
+    """Tests for POST /api/v1/customers/{id}/merge."""
 
-    def test_merge_customers_returns_primary(
+    def test_merge_customers_returns_204(
         self,
         client: TestClient,
-        mock_service: AsyncMock,
+        mock_merge_svc: AsyncMock,
     ) -> None:
-        """Successful merge returns the primary customer."""
+        """Successful merge returns 204 No Content."""
         primary_id = uuid.uuid4()
         dup_id = uuid.uuid4()
-        mock_service.merge_customers.return_value = _sample_customer(primary_id)
+        mock_merge_svc.execute_merge.return_value = None
 
         resp = client.post(
-            "/api/v1/customers/merge",
+            f"/api/v1/customers/{primary_id}/merge",
             json={
-                "primary_customer_id": str(primary_id),
-                "duplicate_customer_ids": [str(dup_id)],
+                "duplicate_id": str(dup_id),
+                "field_selections": [],
             },
         )
 
-        assert resp.status_code == 200
-        assert resp.json()["id"] == str(primary_id)
+        assert resp.status_code == 204
 
     def test_merge_with_not_found_returns_404(
         self,
         client: TestClient,
-        mock_service: AsyncMock,
+        mock_merge_svc: AsyncMock,
     ) -> None:
         """Merge with non-existent customer returns 404."""
         primary_id = uuid.uuid4()
-        mock_service.merge_customers.side_effect = CustomerNotFoundError(primary_id)
+        mock_merge_svc.execute_merge.side_effect = CustomerNotFoundError(
+            primary_id,
+        )
 
         resp = client.post(
-            "/api/v1/customers/merge",
+            f"/api/v1/customers/{primary_id}/merge",
             json={
-                "primary_customer_id": str(primary_id),
-                "duplicate_customer_ids": [str(uuid.uuid4())],
+                "duplicate_id": str(uuid.uuid4()),
+                "field_selections": [],
             },
         )
 
@@ -234,18 +264,19 @@ class TestMergeCustomers:
     def test_merge_with_conflict_returns_409(
         self,
         client: TestClient,
-        mock_service: AsyncMock,
+        mock_merge_svc: AsyncMock,
     ) -> None:
         """Merge conflict returns 409."""
-        mock_service.merge_customers.side_effect = MergeConflictError(
-            "Primary in duplicates",
+        primary_id = uuid.uuid4()
+        mock_merge_svc.execute_merge.side_effect = MergeConflictError(
+            "Both have active Stripe subscriptions",
         )
 
         resp = client.post(
-            "/api/v1/customers/merge",
+            f"/api/v1/customers/{primary_id}/merge",
             json={
-                "primary_customer_id": str(uuid.uuid4()),
-                "duplicate_customer_ids": [str(uuid.uuid4())],
+                "duplicate_id": str(uuid.uuid4()),
+                "field_selections": [],
             },
         )
 

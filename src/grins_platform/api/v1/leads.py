@@ -16,6 +16,7 @@ from uuid import UUID
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     Form,
@@ -53,10 +54,12 @@ from grins_platform.schemas.lead import (
     LeadConversionResponse,
     LeadListParams,
     LeadMetricsBySourceResponse,
+    LeadMoveResponse,
     LeadResponse,
     LeadSubmission,
     LeadSubmissionResponse,
     LeadUpdate,
+    ManualLeadCreate,
     PaginatedFollowUpQueueResponse,
     PaginatedLeadResponse,
 )
@@ -137,19 +140,39 @@ async def _get_lead_service(
 )
 async def submit_lead(
     data: LeadSubmission,
+    background_tasks: BackgroundTasks,
     service: Annotated[LeadService, Depends(_get_lead_service)],
 ) -> LeadSubmissionResponse:
     """Submit a lead from the public website form.
 
     Validates: Requirement 1, 2, 3
     """
-    _endpoints.log_started("submit_lead", source_site=data.source_site)
+    _endpoints.log_started(
+        "submit_lead",
+        source_site=data.source_site,
+        honeypot_present=bool(getattr(data, "hp_field", None)),
+    )
 
-    result = await service.submit_lead(data)
+    # Per E-BUG-B — add structured logging around the handler so the
+    # marketing-site dev can correlate silent failures from the browser.
+    # ``X-Request-ID`` (set by the FastAPI middleware) shows up on every
+    # emitted line via log_config's context binding.
+    try:
+        result = await service.submit_lead(data, background_tasks=background_tasks)
+    except Exception as exc:  # noqa: BLE001 — re-raised below, purely for observability
+        _endpoints.log_failed(
+            "submit_lead",
+            error=exc,
+            source_site=data.source_site,
+            exception_type=type(exc).__name__,
+        )
+        raise
 
     _endpoints.log_completed(
         "submit_lead",
+        source_site=data.source_site,
         lead_id=str(result.lead_id) if result.lead_id else "honeypot",
+        honeypot_triggered=result.lead_id is None,
     )
     return result
 
@@ -180,6 +203,35 @@ async def create_from_call(
     result = await service.create_from_call(data)
 
     _endpoints.log_completed("create_from_call", lead_id=str(result.id))
+    return result
+
+
+# =============================================================================
+# POST /api/v1/leads/manual — Admin auth required
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/manual",
+    response_model=LeadResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create lead manually",
+    description="Admin-only endpoint for creating leads manually via CRM interface.",
+)
+async def create_manual_lead(
+    data: ManualLeadCreate,
+    _current_user: CurrentActiveUser,
+    service: Annotated[LeadService, Depends(_get_lead_service)],
+) -> LeadResponse:
+    """Create a lead manually from the CRM interface.
+
+    Validates: Requirement 7.1-7.5
+    """
+    _endpoints.log_started("create_manual_lead")
+
+    result = await service.create_manual_lead(data)
+
+    _endpoints.log_completed("create_manual_lead", lead_id=str(result.id))
     return result
 
 
@@ -482,6 +534,97 @@ async def delete_lead(
     await service.delete_lead(lead_id)
 
     _endpoints.log_completed("delete_lead", lead_id=str(lead_id))
+
+
+# =============================================================================
+# POST /api/v1/leads/{lead_id}/move-to-jobs — Admin auth required
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{lead_id}/move-to-jobs",
+    response_model=LeadMoveResponse,
+    summary="Move lead to Jobs",
+    description=(
+        "Auto-generate customer if needed, create a Job with TO_BE_SCHEDULED, "
+        "and remove the lead from the Leads list. Admin auth required. "
+        "If the lead's situation maps to requires_estimate and force=false, "
+        "returns requires_estimate_warning=true instead of creating the job."
+    ),
+)
+async def move_lead_to_jobs(
+    lead_id: UUID,
+    _current_user: CurrentActiveUser,
+    service: Annotated[LeadService, Depends(_get_lead_service)],
+    force: bool = False,
+) -> LeadMoveResponse:
+    """Move a lead to the Jobs tab.
+
+    Validates: CRM2 Req 9.2, 12.1, Smoothing Req 6.1, 6.2
+    """
+    _endpoints.log_started("move_lead_to_jobs", lead_id=str(lead_id), force=force)
+    result = await service.move_to_jobs(lead_id, force=force)
+    _endpoints.log_completed("move_lead_to_jobs", lead_id=str(lead_id))
+    return result
+
+
+# =============================================================================
+# POST /api/v1/leads/{lead_id}/move-to-sales — Admin auth required
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{lead_id}/move-to-sales",
+    response_model=LeadMoveResponse,
+    summary="Move lead to Sales",
+    description=(
+        "Auto-generate customer if needed, create a SalesEntry with "
+        "schedule_estimate status, and remove the lead from the Leads list. "
+        "Admin auth required."
+    ),
+)
+async def move_lead_to_sales(
+    lead_id: UUID,
+    _current_user: CurrentActiveUser,
+    service: Annotated[LeadService, Depends(_get_lead_service)],
+) -> LeadMoveResponse:
+    """Move a lead to the Sales tab.
+
+    Validates: CRM2 Req 9.2, 12.2
+    """
+    _endpoints.log_started("move_lead_to_sales", lead_id=str(lead_id))
+    result = await service.move_to_sales(lead_id)
+    _endpoints.log_completed("move_lead_to_sales", lead_id=str(lead_id))
+    return result
+
+
+# =============================================================================
+# PUT /api/v1/leads/{lead_id}/contacted — Admin auth required
+# =============================================================================
+
+
+@router.put(  # type: ignore[untyped-decorator]
+    "/{lead_id}/contacted",
+    response_model=LeadResponse,
+    summary="Mark lead as contacted",
+    description=(
+        "Set lead status to Contacted (Awaiting Response) and update "
+        "last_contacted_at timestamp. Admin auth required."
+    ),
+)
+async def mark_lead_contacted(
+    lead_id: UUID,
+    _current_user: CurrentActiveUser,
+    service: Annotated[LeadService, Depends(_get_lead_service)],
+) -> LeadResponse:
+    """Mark a lead as contacted.
+
+    Validates: CRM2 Req 11.1, 11.2
+    """
+    _endpoints.log_started("mark_lead_contacted", lead_id=str(lead_id))
+    result = await service.mark_contacted(lead_id)
+    _endpoints.log_completed("mark_lead_contacted", lead_id=str(lead_id))
+    return result
 
 
 # =============================================================================

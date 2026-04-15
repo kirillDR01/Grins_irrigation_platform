@@ -12,6 +12,7 @@ import type { JobStatus } from '../types';
 describe('JobStatusBadge', () => {
   const allStatuses: JobStatus[] = [
     'to_be_scheduled',
+    'scheduled',
     'in_progress',
     'completed',
     'cancelled',
@@ -82,12 +83,17 @@ describe('JobStatusBadge', () => {
 describe('getNextStatuses', () => {
   it('returns correct next statuses for to_be_scheduled', () => {
     const nextStatuses = getNextStatuses('to_be_scheduled');
-    expect(nextStatuses).toEqual(['in_progress', 'cancelled']);
+    expect(nextStatuses).toEqual(['scheduled', 'in_progress', 'cancelled']);
+  });
+
+  it('returns correct next statuses for scheduled', () => {
+    const nextStatuses = getNextStatuses('scheduled');
+    expect(nextStatuses).toEqual(['in_progress', 'to_be_scheduled', 'cancelled']);
   });
 
   it('returns correct next statuses for in_progress', () => {
     const nextStatuses = getNextStatuses('in_progress');
-    expect(nextStatuses).toEqual(['completed', 'cancelled', 'to_be_scheduled']);
+    expect(nextStatuses).toEqual(['completed', 'cancelled']);
   });
 
   it('returns empty array for completed', () => {
@@ -106,12 +112,28 @@ describe('canTransitionTo', () => {
     expect(canTransitionTo('to_be_scheduled', 'in_progress')).toBe(true);
   });
 
+  it('allows transition from to_be_scheduled to scheduled', () => {
+    expect(canTransitionTo('to_be_scheduled', 'scheduled')).toBe(true);
+  });
+
   it('allows transition from to_be_scheduled to cancelled', () => {
     expect(canTransitionTo('to_be_scheduled', 'cancelled')).toBe(true);
   });
 
   it('does not allow transition from to_be_scheduled to completed', () => {
     expect(canTransitionTo('to_be_scheduled', 'completed')).toBe(false);
+  });
+
+  it('allows transition from scheduled to in_progress', () => {
+    expect(canTransitionTo('scheduled', 'in_progress')).toBe(true);
+  });
+
+  it('allows transition from scheduled to to_be_scheduled', () => {
+    expect(canTransitionTo('scheduled', 'to_be_scheduled')).toBe(true);
+  });
+
+  it('allows transition from scheduled to cancelled', () => {
+    expect(canTransitionTo('scheduled', 'cancelled')).toBe(true);
   });
 
   it('allows transition from in_progress to completed', () => {
@@ -122,8 +144,8 @@ describe('canTransitionTo', () => {
     expect(canTransitionTo('in_progress', 'cancelled')).toBe(true);
   });
 
-  it('allows transition from in_progress to to_be_scheduled', () => {
-    expect(canTransitionTo('in_progress', 'to_be_scheduled')).toBe(true);
+  it('does not allow transition from in_progress to to_be_scheduled', () => {
+    expect(canTransitionTo('in_progress', 'to_be_scheduled')).toBe(false);
   });
 
   it('does not allow any transition from completed', () => {
@@ -143,6 +165,7 @@ describe('JOB_STATUS_WORKFLOW', () => {
   it('defines workflow for all statuses', () => {
     const allStatuses: JobStatus[] = [
       'to_be_scheduled',
+      'scheduled',
       'in_progress',
       'completed',
       'cancelled',
@@ -156,8 +179,9 @@ describe('JOB_STATUS_WORKFLOW', () => {
 
   it('has correct workflow structure', () => {
     expect(JOB_STATUS_WORKFLOW).toEqual({
-      to_be_scheduled: ['in_progress', 'cancelled'],
-      in_progress: ['completed', 'cancelled', 'to_be_scheduled'],
+      to_be_scheduled: ['scheduled', 'in_progress', 'cancelled'],
+      scheduled: ['in_progress', 'to_be_scheduled', 'cancelled'],
+      in_progress: ['completed', 'cancelled'],
       completed: [],
       cancelled: [],
     });

@@ -63,6 +63,11 @@ const EstimateDetailPage = lazy(() =>
     default: m.EstimateDetailPage,
   }))
 );
+const ContractRenewalsPage = lazy(() =>
+  import('@/pages/ContractRenewals').then((m) => ({
+    default: m.ContractRenewalsPage,
+  }))
+);
 
 // Portal pages (public, no auth, no layout)
 const EstimateReviewPage = lazy(() =>
@@ -78,6 +83,11 @@ const ContractSigningPage = lazy(() =>
 const InvoicePortalPage = lazy(() =>
   import('@/pages/portal/InvoicePortal').then((m) => ({
     default: m.InvoicePortalPage,
+  }))
+);
+const SubscriptionManagementPage = lazy(() =>
+  import('@/pages/portal/SubscriptionManagement').then((m) => ({
+    default: m.SubscriptionManagementPage,
   }))
 );
 
@@ -132,6 +142,10 @@ export const router = createBrowserRouter([
       {
         path: 'invoices/:token',
         element: <InvoicePortalPage />,
+      },
+      {
+        path: 'manage-subscription',
+        element: <SubscriptionManagementPage />,
       },
     ],
   },
@@ -217,6 +231,10 @@ export const router = createBrowserRouter([
         element: <SalesPage />,
       },
       {
+        path: 'sales/:id',
+        element: <SalesPage />,
+      },
+      {
         path: 'accounting',
         element: <AccountingPage />,
       },
@@ -231,6 +249,14 @@ export const router = createBrowserRouter([
       {
         path: 'estimates/:id',
         element: <EstimateDetailPage />,
+      },
+      {
+        path: 'contract-renewals',
+        element: <ContractRenewalsPage />,
+      },
+      {
+        path: 'contract-renewals/:id',
+        element: <ContractRenewalsPage />,
       },
       {
         path: 'settings',

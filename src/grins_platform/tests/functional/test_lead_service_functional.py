@@ -74,6 +74,10 @@ def _make_lead(**overrides: Any) -> MagicMock:
     lead.customer_type = overrides.get("customer_type")
     lead.property_type = overrides.get("property_type")
     lead.updated_at = datetime.now(tz=timezone.utc)
+    lead.moved_to = overrides.get("moved_to")
+    lead.moved_at = overrides.get("moved_at")
+    lead.last_contacted_at = overrides.get("last_contacted_at")
+    lead.job_requested = overrides.get("job_requested")
     return lead
 
 
@@ -193,6 +197,29 @@ class TestLeadCreationSourceAndTag:
         call_kwargs = repo.create.call_args[1]
         assert call_kwargs["lead_source"] == LeadSourceExtended.REFERRAL.value
         assert call_kwargs["intake_tag"] == IntakeTag.FOLLOW_UP.value
+
+    async def test_website_submission_persists_terms_accepted(self) -> None:
+        """terms_accepted=True on submission is forwarded to repo.create."""
+        svc, repo, _, _ = _build_service()
+        created = _make_lead(terms_accepted=True)
+        repo.get_by_phone_and_active_status.return_value = None
+        repo.get_recent_by_phone_or_email.return_value = None
+        repo.create.return_value = created
+
+        data = LeadSubmission(
+            name="Terms User",
+            phone="(612) 555-7777",
+            zip_code="55424",
+            situation=LeadSituation.NEW_SYSTEM,
+            source_site="residential",
+            address="123 Main St, Denver, CO 80209",
+            terms_accepted=True,
+        )
+        result = await svc.submit_lead(data)
+
+        assert result.success is True
+        call_kwargs = repo.create.call_args[1]
+        assert call_kwargs["terms_accepted"] is True
 
 
 # =============================================================================

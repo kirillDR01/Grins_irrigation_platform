@@ -148,7 +148,7 @@ class TestAddProperty:
     def test_add_property_missing_required_fields_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
         sample_customer_id: uuid.UUID,
     ) -> None:
         """Test missing required fields returns 422."""
@@ -165,7 +165,7 @@ class TestAddProperty:
     def test_add_property_invalid_zone_count_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
         sample_customer_id: uuid.UUID,
     ) -> None:
         """Test invalid zone count returns 422."""
@@ -324,7 +324,7 @@ class TestGetProperty:
     def test_get_property_invalid_uuid_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test invalid UUID format returns 422."""
         response = client.get("/api/v1/properties/not-a-uuid")
@@ -433,7 +433,7 @@ class TestUpdateProperty:
     def test_update_property_invalid_zone_count_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
         sample_property_response: PropertyResponse,
     ) -> None:
         """Test invalid zone count update returns 422."""

@@ -194,6 +194,27 @@ class JobNotFoundError(FieldOperationsError):
         super().__init__(f"Job not found: {job_id}")
 
 
+class JobTargetDateEditNotAllowedError(FieldOperationsError):
+    """Raised when an admin tries to move a job's target week but the
+    job is no longer in the 'to_be_scheduled' state.
+
+    Changing the target window on an already-scheduled / in-progress /
+    completed job can leave attached appointments out of sync, so that
+    flow is blocked at the service layer. A dedicated reschedule flow
+    would be needed to move those jobs.
+    """
+
+    def __init__(self, job_id: UUID, current_status: str) -> None:
+        """Initialize with job ID and the status that blocked the edit."""
+        self.job_id = job_id
+        self.current_status = current_status
+        super().__init__(
+            "Cannot edit target dates on a job with status"
+            f" '{current_status}'; only 'to_be_scheduled' jobs can be"
+            " rewindowed from the admin Jobs tab.",
+        )
+
+
 class InvalidStatusTransitionError(FieldOperationsError):
     """Raised when an invalid job/appointment status transition is attempted.
 
@@ -268,6 +289,39 @@ class AppointmentNotFoundError(FieldOperationsError):
         """
         self.appointment_id = appointment_id
         super().__init__(f"Appointment not found: {appointment_id}")
+
+
+class AppointmentOnFinishedJobError(FieldOperationsError):
+    """Raised when trying to schedule an appointment on a COMPLETED or
+    CANCELLED job. Previously silently allowed — admins could attach a
+    new appointment to a finished job and draft-mode would proceed.
+
+    Validates: bughunt H-4
+    """
+
+    def __init__(self, job_id: UUID, job_status: str) -> None:
+        self.job_id = job_id
+        self.job_status = job_status
+        super().__init__(
+            f"Cannot schedule an appointment on a job in status "
+            f"'{job_status}' (job_id={job_id})"
+        )
+
+
+class CustomerHasNoPhoneError(FieldOperationsError):
+    """Raised when a customer-facing SMS path runs but the customer row
+    has no phone number on file. Previously the send path returned
+    silently and the caller still transitioned the appointment to
+    ``SCHEDULED`` as if the SMS had gone out.
+
+    Validates: bughunt M-9
+    """
+
+    def __init__(self, customer_id: UUID) -> None:
+        self.customer_id = customer_id
+        super().__init__(
+            f"Customer {customer_id} has no phone number; cannot send SMS."
+        )
 
 
 class PropertyCustomerMismatchError(FieldOperationsError):
@@ -656,17 +710,154 @@ class ConsentRequiredError(Exception):
         )
 
 
+# =========================================================================
+# Sales Pipeline Errors (CRM Changes Update 2 Req 14, 16)
+# =========================================================================
+
+
+class SalesEntryNotFoundError(Exception):
+    """Raised when a sales entry is not found.
+
+    Validates: CRM Changes Update 2 Req 14.1
+    """
+
+    def __init__(self, entry_id: UUID) -> None:
+        """Initialize with entry ID."""
+        self.entry_id = entry_id
+        super().__init__(f"Sales entry not found: {entry_id}")
+
+
+class InvalidSalesTransitionError(Exception):
+    """Raised when a sales pipeline status transition is invalid.
+
+    Validates: CRM Changes Update 2 Req 14.3, 33.1
+    """
+
+    def __init__(self, current_status: str, target_status: str) -> None:
+        """Initialize with current and target statuses."""
+        self.current_status = current_status
+        self.target_status = target_status
+        super().__init__(
+            f"Cannot transition from {current_status} to {target_status}",
+        )
+
+
+class SignatureRequiredError(Exception):
+    """Raised when convert-to-job is blocked by missing signature.
+
+    Validates: CRM Changes Update 2 Req 16.1
+    """
+
+    def __init__(self, entry_id: UUID) -> None:
+        """Initialize with entry ID."""
+        self.entry_id = entry_id
+        super().__init__(
+            f"Sales entry {entry_id}: waiting for customer signature. "
+            "Use force=True to override.",
+        )
+
+
+class MissingSigningDocumentError(Exception):
+    """Raised when a sales entry tries to advance to ``pending_approval``
+    without a SignWell document on file. Previously the ``/sign/email``
+    endpoint gated on doc presence, but manual pipeline advance did not —
+    admins could skip the actual signing step.
+
+    Validates: bughunt M-10
+    """
+
+    def __init__(self, entry_id: UUID) -> None:
+        self.entry_id = entry_id
+        super().__init__(
+            f"Sales entry {entry_id}: upload an estimate before advancing to "
+            "pending_approval.",
+        )
+
+
+# =========================================================================
+# CRM Changes Update 2 — Domain-Specific Exceptions (Task 18.1)
+# =========================================================================
+
+
+class MergeBlockerError(CustomerError):
+    """Raised when a customer merge is blocked by a business rule.
+
+    Validates: CRM Changes Update 2 Req 6.7
+    """
+
+    def __init__(self, message: str) -> None:
+        """Initialize with blocker description.
+
+        Args:
+            message: Description of the merge blocker
+        """
+        super().__init__(message)
+
+
+class ConfirmationCorrelationError(Exception):
+    """Raised when an inbound SMS cannot be correlated to a confirmation.
+
+    Validates: CRM Changes Update 2 Req 24.2
+    """
+
+    def __init__(self, thread_id: str) -> None:
+        """Initialize with thread ID.
+
+        Args:
+            thread_id: The thread_id that could not be correlated
+        """
+        self.thread_id = thread_id
+        super().__init__(
+            f"No appointment confirmation found for thread: {thread_id}",
+        )
+
+
+class RenewalProposalNotFoundError(Exception):
+    """Raised when a contract renewal proposal is not found.
+
+    Validates: CRM Changes Update 2 Req 31.5
+    """
+
+    def __init__(self, proposal_id: UUID) -> None:
+        """Initialize with proposal ID.
+
+        Args:
+            proposal_id: UUID of the proposal that was not found
+        """
+        self.proposal_id = proposal_id
+        super().__init__(f"Renewal proposal not found: {proposal_id}")
+
+
+class DocumentUploadError(Exception):
+    """Raised when a document upload fails validation or processing.
+
+    Validates: CRM Changes Update 2 Req 17.2
+    """
+
+    def __init__(self, message: str) -> None:
+        """Initialize with error message.
+
+        Args:
+            message: Description of the upload failure
+        """
+        super().__init__(message)
+
+
 __all__ = [
     "AccountLockedError",
     "AgreementError",
     "AgreementNotFoundError",
     "AppointmentNotFoundError",
+    "AppointmentOnFinishedJobError",
     "AuthenticationError",
     "BulkOperationError",
+    "ConfirmationCorrelationError",
     "ConsentRequiredError",
     "ConsentValidationError",
     "CustomerError",
+    "CustomerHasNoPhoneError",
     "CustomerNotFoundError",
+    "DocumentUploadError",
     "DuplicateCustomerError",
     "DuplicateLeadError",
     "EstimateAlreadyApprovedError",
@@ -681,6 +872,7 @@ __all__ = [
     "InvalidInvoiceOperationError",
     "InvalidLeadStatusTransitionError",
     "InvalidPromotionCodeError",
+    "InvalidSalesTransitionError",
     "InvalidStatusTransitionError",
     "InvalidTokenError",
     "InvoiceNotFoundError",
@@ -688,14 +880,19 @@ __all__ = [
     "LeadAlreadyConvertedError",
     "LeadError",
     "LeadNotFoundError",
+    "MergeBlockerError",
     "MidSeasonTierChangeError",
+    "MissingSigningDocumentError",
     "PaymentRequiredError",
     "PropertyCustomerMismatchError",
     "PropertyNotFoundError",
+    "RenewalProposalNotFoundError",
     "ReviewAlreadyRequestedError",
+    "SalesEntryNotFoundError",
     "ScheduleClearAuditNotFoundError",
     "ServiceOfferingInactiveError",
     "ServiceOfferingNotFoundError",
+    "SignatureRequiredError",
     "StaffAvailabilityNotFoundError",
     "StaffConflictError",
     "StaffNotFoundError",

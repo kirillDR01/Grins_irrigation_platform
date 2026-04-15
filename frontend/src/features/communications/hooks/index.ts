@@ -47,3 +47,13 @@ export function useSentMessages(params?: SentMessageListParams) {
     queryFn: () => communicationsApi.getSentMessages(params),
   });
 }
+
+// Campaign hooks (CallRail SMS Integration)
+export { campaignKeys, useCampaigns, useCampaign, useCampaignStats, useCampaignRecipients } from './useCampaigns';
+export { useCreateCampaign, useUpdateCampaign, useDeleteCampaign } from './useCreateCampaign';
+export { useSendCampaign, useCancelCampaign, useRetryFailed } from './useSendCampaign';
+export { useAudiencePreview } from './useAudiencePreview';
+export { useAudienceCsv } from './useAudienceCsv';
+export { useCampaignProgress, useWorkerHealth } from './useCampaignProgress';
+export { campaignResponseKeys, useCampaignResponseSummary, useCampaignResponses } from './useCampaignResponses';
+export type { CampaignResponseListParams } from './useCampaignResponses';

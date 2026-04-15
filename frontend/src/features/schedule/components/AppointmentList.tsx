@@ -57,6 +57,8 @@ const getStatusBadgeClasses = (status: AppointmentStatus): string => {
     case 'confirmed':
     case 'pending':
       return 'bg-violet-100 text-violet-700';
+    case 'draft':
+      return 'bg-slate-100 text-slate-500';
     case 'in_progress':
       return 'bg-orange-100 text-orange-700';
     case 'cancelled':
@@ -72,6 +74,8 @@ const getStatusLabel = (status: AppointmentStatus): string => {
   switch (status) {
     case 'pending':
       return 'Pending';
+    case 'draft':
+      return 'Draft';
     case 'confirmed':
       return 'Scheduled';
     case 'in_progress':

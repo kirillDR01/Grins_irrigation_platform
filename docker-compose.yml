@@ -20,6 +20,8 @@ services:
       # Persistent output and logs
       - app_output:/app/output
       - app_logs:/app/logs
+    env_file:
+      - .env
     environment:
       - PYTHONPATH=/app/src
       - ENVIRONMENT=development

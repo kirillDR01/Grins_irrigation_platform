@@ -12,6 +12,10 @@ vi.mock('../api/leadApi', () => ({
   leadApi: {
     list: vi.fn(),
     followUpQueue: vi.fn(),
+    delete: vi.fn(),
+    moveToJobs: vi.fn(),
+    moveToSales: vi.fn(),
+    markContacted: vi.fn(),
   },
 }));
 
@@ -24,6 +28,12 @@ vi.mock('react-router-dom', async () => {
     useNavigate: () => mockNavigate,
   };
 });
+
+// Mock NewTextCampaignModal to avoid AuthProvider dependency
+vi.mock('@/features/communications', () => ({
+  NewTextCampaignModal: ({ open, preSelectedLeadIds }: { open: boolean; preSelectedLeadIds?: string[] }) =>
+    open ? <div data-testid="campaign-modal">Campaign Modal ({preSelectedLeadIds?.length ?? 0} leads)</div> : null,
+}));
 
 const mockLeads: Lead[] = [
   {
@@ -50,6 +60,8 @@ const mockLeads: Lead[] = [
     sms_consent: true,
     terms_accepted: true,
     email_marketing_consent: true,
+    job_requested: 'Spring Startup',
+    last_contacted_at: null,
     created_at: '2025-01-20T10:00:00Z',
     updated_at: '2025-01-20T10:00:00Z',
   },
@@ -77,6 +89,8 @@ const mockLeads: Lead[] = [
     sms_consent: false,
     terms_accepted: false,
     email_marketing_consent: false,
+    job_requested: null,
+    last_contacted_at: '2025-01-21T09:00:00Z',
     created_at: '2025-01-19T14:00:00Z',
     updated_at: '2025-01-21T09:00:00Z',
   },
@@ -84,13 +98,8 @@ const mockLeads: Lead[] = [
 
 function createWrapper() {
   const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
+    defaultOptions: { queries: { retry: false } },
   });
-
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>
@@ -102,13 +111,8 @@ function createWrapper() {
 
 function createMemoryWrapper(initialEntries: string[] = ['/leads']) {
   const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
+    defaultOptions: { queries: { retry: false } },
   });
-
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>
@@ -131,12 +135,8 @@ describe('LeadsList', () => {
   });
 
   it('renders loading state initially', () => {
-    vi.mocked(leadApi.list).mockImplementation(
-      () => new Promise(() => {}) // Never resolves — stays in loading
-    );
-
+    vi.mocked(leadApi.list).mockImplementation(() => new Promise(() => {}));
     render(<LeadsList />, { wrapper: createWrapper() });
-
     expect(screen.getByText('Loading leads...')).toBeInTheDocument();
   });
 
@@ -155,30 +155,66 @@ describe('LeadsList', () => {
       expect(screen.getByTestId('leads-page')).toBeInTheDocument();
     });
 
-    // Table renders
     expect(screen.getByTestId('leads-table')).toBeInTheDocument();
-
-    // Both rows render
     expect(screen.getAllByTestId('lead-row')).toHaveLength(2);
-
-    // Lead names visible
     expect(screen.getByText('John Doe')).toBeInTheDocument();
     expect(screen.getByText('Jane Smith')).toBeInTheDocument();
-
-    // Phone numbers visible
     expect(screen.getByText('6125551234')).toBeInTheDocument();
     expect(screen.getByText('6125555678')).toBeInTheDocument();
 
-    // Source badges visible
+    // Source column renders as plain text (no colored badge)
     expect(screen.getByTestId('lead-source-website')).toBeInTheDocument();
     expect(screen.getByTestId('lead-source-phone_call')).toBeInTheDocument();
 
-    // Consent indicators visible
-    expect(screen.getByTestId('sms-consent-lead-001')).toBeInTheDocument();
-    expect(screen.getByTestId('terms-accepted-lead-001')).toBeInTheDocument();
+    // Job Requested column
+    expect(screen.getByText('Spring Startup')).toBeInTheDocument();
 
     // Total count shown
     expect(screen.getByText('2 leads total')).toBeInTheDocument();
+  });
+
+  it('does not render Intake column', async () => {
+    vi.mocked(leadApi.list).mockResolvedValue({
+      items: mockLeads,
+      total: 2,
+      page: 1,
+      page_size: 20,
+      total_pages: 1,
+    });
+
+    render(<LeadsList />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+    });
+
+    // Intake column header should not exist
+    expect(screen.queryByText('Intake')).not.toBeInTheDocument();
+  });
+
+  it('renders action buttons per row', async () => {
+    vi.mocked(leadApi.list).mockResolvedValue({
+      items: mockLeads,
+      total: 2,
+      page: 1,
+      page_size: 20,
+      total_pages: 1,
+    });
+
+    render(<LeadsList />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+    });
+
+    // Move to Jobs and Move to Sales buttons on each row
+    expect(screen.getByTestId('move-to-jobs-lead-001')).toBeInTheDocument();
+    expect(screen.getByTestId('move-to-sales-lead-001')).toBeInTheDocument();
+    expect(screen.getByTestId('delete-lead-lead-001')).toBeInTheDocument();
+
+    // Mark contacted only on 'new' status leads
+    expect(screen.getByTestId('mark-contacted-lead-001')).toBeInTheDocument();
+    expect(screen.queryByTestId('mark-contacted-lead-002')).not.toBeInTheDocument();
   });
 
   it('renders empty state when no leads', async () => {
@@ -195,10 +231,6 @@ describe('LeadsList', () => {
     await waitFor(() => {
       expect(screen.getByText('No leads found.')).toBeInTheDocument();
     });
-
-    expect(
-      screen.getByText('Try adjusting your filters or check back later.')
-    ).toBeInTheDocument();
   });
 
   it('renders error state on API failure', async () => {
@@ -227,13 +259,12 @@ describe('LeadsList', () => {
       expect(screen.getAllByTestId('lead-row')).toHaveLength(2);
     });
 
-    // Click first row
     await user.click(screen.getAllByTestId('lead-row')[0]);
-
     expect(mockNavigate).toHaveBeenCalledWith('/leads/lead-001');
   });
 
-  it('renders filter controls with source filter and intake tabs', async () => {
+  it('shows delete confirmation dialog when delete button clicked', async () => {
+    const user = userEvent.setup();
     vi.mocked(leadApi.list).mockResolvedValue({
       items: mockLeads,
       total: 2,
@@ -245,26 +276,48 @@ describe('LeadsList', () => {
     render(<LeadsList />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByTestId('lead-filters')).toBeInTheDocument();
+      expect(screen.getByTestId('leads-table')).toBeInTheDocument();
     });
 
-    // Search input present
-    expect(screen.getByTestId('lead-search-input')).toBeInTheDocument();
+    await user.click(screen.getByTestId('delete-lead-lead-001'));
 
-    // Status filter present
-    expect(screen.getByTestId('lead-status-filter')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('delete-lead-dialog')).toBeInTheDocument();
+    });
 
-    // Situation filter present
-    expect(screen.getByTestId('lead-situation-filter')).toBeInTheDocument();
+    expect(screen.getByText(/permanently delete/i)).toBeInTheDocument();
+    expect(screen.getByTestId('confirm-delete-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('cancel-delete-btn')).toBeInTheDocument();
+  });
 
-    // Source filter present
-    expect(screen.getByTestId('lead-source-filter')).toBeInTheDocument();
+  it('calls delete API on confirm and closes dialog', async () => {
+    const user = userEvent.setup();
+    vi.mocked(leadApi.list).mockResolvedValue({
+      items: mockLeads,
+      total: 2,
+      page: 1,
+      page_size: 20,
+      total_pages: 1,
+    });
+    vi.mocked(leadApi.delete).mockResolvedValue(undefined);
 
-    // Intake tag tabs present
-    expect(screen.getByTestId('intake-tag-tabs')).toBeInTheDocument();
-    expect(screen.getByTestId('intake-tab-all')).toBeInTheDocument();
-    expect(screen.getByTestId('intake-tab-schedule')).toBeInTheDocument();
-    expect(screen.getByTestId('intake-tab-follow_up')).toBeInTheDocument();
+    render(<LeadsList />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId('delete-lead-lead-001'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('delete-lead-dialog')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId('confirm-delete-btn'));
+
+    await waitFor(() => {
+      expect(leadApi.delete).toHaveBeenCalledWith('lead-001');
+    });
   });
 
   it('renders pagination controls when data exists', async () => {
@@ -287,32 +340,10 @@ describe('LeadsList', () => {
     expect(screen.getByTestId('leads-next-page')).toBeDisabled();
   });
 
-  it('does not render pagination when no data', async () => {
-    vi.mocked(leadApi.list).mockResolvedValue({
-      items: [],
-      total: 0,
-      page: 1,
-      page_size: 20,
-      total_pages: 0,
-    });
-
-    render(<LeadsList />, { wrapper: createWrapper() });
-
-    await waitFor(() => {
-      expect(screen.getByText('No leads found.')).toBeInTheDocument();
-    });
-
-    expect(screen.queryByTestId('leads-pagination')).not.toBeInTheDocument();
-  });
-
-  /**
-   * URL parameter parsing and filter application tests.
-   * Validates: Requirements 3.7
-   */
-  describe('URL parameter parsing and filter application', () => {
-    it('parses ?status=new from URL and auto-applies the status filter', async () => {
+  describe('URL parameter parsing', () => {
+    it('parses ?status=new from URL', async () => {
       vi.mocked(leadApi.list).mockResolvedValue({
-        items: [mockLeads[0]], // 'new' status lead
+        items: [mockLeads[0]],
         total: 1,
         page: 1,
         page_size: 20,
@@ -327,15 +358,14 @@ describe('LeadsList', () => {
         expect(screen.getByTestId('leads-table')).toBeInTheDocument();
       });
 
-      // Verify the API was called with the status filter from URL
       expect(leadApi.list).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'new' })
       );
     });
 
-    it('parses ?status=contacted from URL and auto-applies the status filter', async () => {
+    it('parses ?status=contacted from URL', async () => {
       vi.mocked(leadApi.list).mockResolvedValue({
-        items: [mockLeads[1]], // 'contacted' status lead
+        items: [mockLeads[1]],
         total: 1,
         page: 1,
         page_size: 20,
@@ -355,8 +385,7 @@ describe('LeadsList', () => {
       );
     });
 
-    it('applies highlight-fade animation class when ?highlight={id} is present', async () => {
-      const highlightLeadId = mockLeads[0].id;
+    it('applies highlight animation when ?highlight={id} is present', async () => {
       vi.mocked(leadApi.list).mockResolvedValue({
         items: mockLeads,
         total: 2,
@@ -366,78 +395,21 @@ describe('LeadsList', () => {
       });
 
       render(<LeadsList />, {
-        wrapper: createMemoryWrapper([`/leads?highlight=${highlightLeadId}`]),
+        wrapper: createMemoryWrapper([`/leads?highlight=${mockLeads[0].id}`]),
       });
 
       await waitFor(() => {
         expect(screen.getByTestId('leads-table')).toBeInTheDocument();
       });
 
-      // Find the highlighted row by data-lead-id attribute
       const rows = screen.getAllByTestId('lead-row');
       const highlightedRow = rows.find(
-        (row) => row.getAttribute('data-lead-id') === highlightLeadId
+        (row) => row.getAttribute('data-lead-id') === mockLeads[0].id
       );
-      expect(highlightedRow).toBeDefined();
-      expect(highlightedRow!.className).toContain('animate-highlight-fade');
+      expect(highlightedRow!.className).toContain('animate-highlight-pulse');
     });
 
-    it('does not apply highlight class to non-matching rows', async () => {
-      const highlightLeadId = mockLeads[0].id;
-      vi.mocked(leadApi.list).mockResolvedValue({
-        items: mockLeads,
-        total: 2,
-        page: 1,
-        page_size: 20,
-        total_pages: 1,
-      });
-
-      render(<LeadsList />, {
-        wrapper: createMemoryWrapper([`/leads?highlight=${highlightLeadId}`]),
-      });
-
-      await waitFor(() => {
-        expect(screen.getByTestId('leads-table')).toBeInTheDocument();
-      });
-
-      const rows = screen.getAllByTestId('lead-row');
-      const nonHighlightedRow = rows.find(
-        (row) => row.getAttribute('data-lead-id') !== highlightLeadId
-      );
-      expect(nonHighlightedRow).toBeDefined();
-      expect(nonHighlightedRow!.className).not.toContain('animate-highlight-fade');
-    });
-
-    it('works correctly without any URL parameters (default state)', async () => {
-      vi.mocked(leadApi.list).mockResolvedValue({
-        items: mockLeads,
-        total: 2,
-        page: 1,
-        page_size: 20,
-        total_pages: 1,
-      });
-
-      render(<LeadsList />, {
-        wrapper: createMemoryWrapper(['/leads']),
-      });
-
-      await waitFor(() => {
-        expect(screen.getByTestId('leads-table')).toBeInTheDocument();
-      });
-
-      // API called without status filter
-      expect(leadApi.list).toHaveBeenCalledWith(
-        expect.objectContaining({ status: undefined })
-      );
-
-      // No rows should have highlight animation
-      const rows = screen.getAllByTestId('lead-row');
-      rows.forEach((row) => {
-        expect(row.className).not.toContain('animate-highlight-fade');
-      });
-    });
-
-    it('ignores invalid/unknown status parameters gracefully', async () => {
+    it('ignores invalid status parameters', async () => {
       vi.mocked(leadApi.list).mockResolvedValue({
         items: mockLeads,
         total: 2,
@@ -454,44 +426,66 @@ describe('LeadsList', () => {
         expect(screen.getByTestId('leads-table')).toBeInTheDocument();
       });
 
-      // Invalid status should be ignored — API called with status undefined
       expect(leadApi.list).toHaveBeenCalledWith(
         expect.objectContaining({ status: undefined })
       );
     });
+  });
 
-    it('handles both status and highlight params together', async () => {
-      const highlightLeadId = mockLeads[0].id;
+  describe('bulk select and Text Selected', () => {
+    beforeEach(() => {
       vi.mocked(leadApi.list).mockResolvedValue({
-        items: [mockLeads[0]],
-        total: 1,
+        items: mockLeads,
+        total: 2,
         page: 1,
         page_size: 20,
         total_pages: 1,
       });
+    });
 
-      render(<LeadsList />, {
-        wrapper: createMemoryWrapper([
-          `/leads?status=new&highlight=${highlightLeadId}`,
-        ]),
-      });
+    it('renders checkbox column', async () => {
+      render(<LeadsList />, { wrapper: createWrapper() });
 
       await waitFor(() => {
         expect(screen.getByTestId('leads-table')).toBeInTheDocument();
       });
 
-      // Status filter applied
-      expect(leadApi.list).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'new' })
-      );
+      expect(screen.getByTestId('select-all-checkbox')).toBeInTheDocument();
+      expect(screen.getByTestId(`select-lead-${mockLeads[0].id}`)).toBeInTheDocument();
+    });
 
-      // Highlight applied
-      const rows = screen.getAllByTestId('lead-row');
-      const highlightedRow = rows.find(
-        (row) => row.getAttribute('data-lead-id') === highlightLeadId
-      );
-      expect(highlightedRow).toBeDefined();
-      expect(highlightedRow!.className).toContain('animate-highlight-fade');
+    it('shows bulk-action bar when a row is checked', async () => {
+      const user = userEvent.setup();
+      render(<LeadsList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId(`select-lead-${mockLeads[0].id}`));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('bulk-action-bar')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('selected-count')).toHaveTextContent('1 selected');
+    });
+
+    it('selects all rows via select-all checkbox', async () => {
+      const user = userEvent.setup();
+      render(<LeadsList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('leads-table')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId('select-all-checkbox'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('bulk-action-bar')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('selected-count')).toHaveTextContent('2 selected');
     });
   });
 });

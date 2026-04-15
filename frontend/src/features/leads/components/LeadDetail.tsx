@@ -7,7 +7,7 @@
  * attachment panel (Req 15), and estimate/contract creation (Req 17).
  */
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -30,6 +30,7 @@ import {
   FileCheck,
   Calculator,
   ScrollText,
+  AlertTriangle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -38,6 +39,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -82,6 +91,7 @@ export function LeadDetail() {
   const [showConvertDialog, setShowConvertDialog] = useState(false);
   const [showEstimateCreator, setShowEstimateCreator] = useState(false);
   const [showContractCreator, setShowContractCreator] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   // Editable address fields
   const [editingAddress, setEditingAddress] = useState(false);
@@ -193,17 +203,31 @@ export function LeadDetail() {
     }
   };
 
-  const handleDelete = async () => {
+  const executeDelete = useCallback(async () => {
     if (!lead) return;
-    if (!window.confirm(`Are you sure you want to delete this lead (${lead.name})?`)) return;
     try {
       await deleteMutation.mutateAsync(lead.id);
-      toast.success('Lead Deleted');
+      toast.success('Lead Deleted', {
+        description: `${lead.name} has been removed.`,
+      });
       navigate('/leads');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to delete lead';
-      toast.error('Delete Failed', { description: message });
+      toast.error('Delete Failed', {
+        description: message,
+        action: {
+          label: 'Retry',
+          onClick: () => executeDelete(),
+        },
+      });
+    } finally {
+      setShowDeleteDialog(false);
     }
+  }, [lead, deleteMutation, navigate]);
+
+  const handleDelete = () => {
+    if (!lead) return;
+    setShowDeleteDialog(true);
   };
 
   if (isLoading) return <LoadingPage message="Loading lead..." />;
@@ -505,6 +529,18 @@ export function LeadDetail() {
                     </p>
                   </div>
                 </div>
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${lead.terms_accepted ? 'bg-green-100' : 'bg-gray-100'}`}>
+                    <FileCheck className={`h-5 w-5 ${lead.terms_accepted ? 'text-green-600' : 'text-gray-400'}`} />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Terms &amp; Conditions</p>
+                    <p className={`text-sm font-medium ${lead.terms_accepted ? 'text-green-700' : 'text-gray-500'}`}
+                       data-testid={`terms-accepted-${lead.id}`}>
+                      {lead.terms_accepted ? 'Accepted' : 'Not accepted'}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -689,6 +725,44 @@ export function LeadDetail() {
       )}
       <EstimateCreator leadId={lead.id} open={showEstimateCreator} onOpenChange={setShowEstimateCreator} />
       <ContractCreator leadId={lead.id} leadName={lead.name} open={showContractCreator} onOpenChange={setShowContractCreator} />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent data-testid="delete-confirmation-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Delete Lead
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <span className="font-semibold text-slate-700">{lead.name}</span>? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteDialog(false)}
+              disabled={deleteMutation.isPending}
+              data-testid="cancel-delete-btn"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={executeDelete}
+              disabled={deleteMutation.isPending}
+              data-testid="confirm-delete-btn"
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Delete Lead
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

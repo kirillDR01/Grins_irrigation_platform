@@ -193,7 +193,7 @@ class TestStatusTransitionValidity:
     def test_all_statuses_present_in_transition_map(
         self,
         current: LeadStatus,
-        target: LeadStatus,  # noqa: ARG002
+        target: LeadStatus,
     ) -> None:
         """Every LeadStatus has an entry in the transition map.
 
@@ -281,7 +281,7 @@ class TestDuplicateDetectionCorrectness:
     @pytest.mark.asyncio
     async def test_terminal_status_creates_new_lead(
         self,
-        existing_status: LeadStatus,  # noqa: ARG002
+        existing_status: LeadStatus,
     ) -> None:
         """PBT: Property 3 — Terminal/lost status allows new lead creation.
 

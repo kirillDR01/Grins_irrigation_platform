@@ -371,7 +371,7 @@ class TestCustomerWithMultipleProperties:
         self,
         client: TestClient,
         mock_customer_repository: AsyncMock,
-        mock_property_repository: AsyncMock,  # noqa: ARG002
+        mock_property_repository: AsyncMock,
     ) -> None:
         """Test customer can have multiple properties.
 

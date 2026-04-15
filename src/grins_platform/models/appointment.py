@@ -28,11 +28,17 @@ if TYPE_CHECKING:
 # Valid status transitions for appointments
 VALID_APPOINTMENT_TRANSITIONS: dict[str, list[str]] = {
     AppointmentStatus.PENDING.value: [
+        AppointmentStatus.DRAFT.value,
+        AppointmentStatus.SCHEDULED.value,
+        AppointmentStatus.CANCELLED.value,
+    ],
+    AppointmentStatus.DRAFT.value: [
         AppointmentStatus.SCHEDULED.value,
         AppointmentStatus.CANCELLED.value,
     ],
     AppointmentStatus.SCHEDULED.value: [
         AppointmentStatus.CONFIRMED.value,
+        AppointmentStatus.EN_ROUTE.value,
         AppointmentStatus.CANCELLED.value,
     ],
     AppointmentStatus.CONFIRMED.value: [

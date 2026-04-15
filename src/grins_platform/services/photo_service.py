@@ -32,7 +32,8 @@ class _S3Paginator(Protocol):
     """Minimal paginator interface."""
 
     def paginate(
-        self, **kwargs: str,
+        self,
+        **kwargs: str,
     ) -> Iterable[dict[str, object]]: ...
 
 
@@ -42,7 +43,8 @@ class S3ClientProtocol(Protocol):
     def put_object(self, **kwargs: Any) -> dict[str, Any]: ...
 
     def delete_object(
-        self, **kwargs: Any,
+        self,
+        **kwargs: Any,
     ) -> dict[str, Any]: ...
 
     def generate_presigned_url(
@@ -53,7 +55,8 @@ class S3ClientProtocol(Protocol):
     ) -> str: ...
 
     def get_paginator(
-        self, operation: str,
+        self,
+        operation: str,
     ) -> _S3Paginator: ...
 
 
@@ -66,6 +69,7 @@ class UploadContext(str, Enum):
     """Supported upload contexts with distinct validation rules."""
 
     CUSTOMER_PHOTO = "customer_photo"
+    CUSTOMER_DOCUMENT = "customer_document"
     LEAD_ATTACHMENT = "lead_attachment"
     MEDIA_LIBRARY = "media_library"
     RECEIPT = "receipt"
@@ -94,6 +98,22 @@ _RULES: dict[UploadContext, _ContextRules] = {
         allowed_mimes=_IMAGE_MIMES,
         max_bytes=10 * 1024 * 1024,
         s3_prefix="customer-photos",
+    ),
+    UploadContext.CUSTOMER_DOCUMENT: _ContextRules(
+        allowed_mimes=frozenset(
+            {
+                "image/jpeg",
+                "image/png",
+                "application/pdf",
+                "application/vnd.openxmlformats-officedocument"
+                ".wordprocessingml.document",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "application/msword",
+                "application/vnd.ms-excel",
+            },
+        ),
+        max_bytes=25 * 1024 * 1024,
+        s3_prefix="customer-documents",
     ),
     UploadContext.LEAD_ATTACHMENT: _ContextRules(
         allowed_mimes=frozenset(
@@ -173,13 +193,15 @@ class PhotoService(LoggerMixin):
         bucket: str | None = None,
     ) -> None:
         super().__init__()
-        self._bucket: str = bucket or os.getenv(
-            "S3_BUCKET_NAME",
-            "grins-platform-files",
-        ) or "grins-platform-files"
-        self._client: S3ClientProtocol = (
-            s3_client or _build_default_client()
+        self._bucket: str = (
+            bucket
+            or os.getenv(
+                "S3_BUCKET_NAME",
+                "grins-platform-files",
+            )
+            or "grins-platform-files"
         )
+        self._client: S3ClientProtocol = s3_client or _build_default_client()
 
     # ------------------------------------------------------------------
     # Public API
@@ -208,9 +230,7 @@ class PhotoService(LoggerMixin):
                 size=len(data),
                 max_bytes=rules.max_bytes,
             )
-            msg = (
-                f"File exceeds maximum size of {max_mb:.0f} MB"
-            )
+            msg = f"File exceeds maximum size of {max_mb:.0f} MB"
             raise ValueError(msg)
 
         # Magic-byte detection
@@ -224,10 +244,7 @@ class PhotoService(LoggerMixin):
                 detected_mime=detected_mime,
                 context=context.value,
             )
-            msg = (
-                f"File type '{detected_mime}' is not allowed"
-                f" for {context.value}"
-            )
+            msg = f"File type '{detected_mime}' is not allowed for {context.value}"
             raise ValueError(msg)
 
         return detected_mime
@@ -252,7 +269,9 @@ class PhotoService(LoggerMixin):
         except Exception:
             # If stripping fails, return original rather than block
             self.log_failed(
-                "strip_exif", error=None, mime=mime,
+                "strip_exif",
+                error=None,
+                mime=mime,
             )
             return data
 
@@ -287,7 +306,9 @@ class PhotoService(LoggerMixin):
 
         # 1. Validate
         detected_mime = self.validate_file(
-            data, file_name, context,
+            data,
+            file_name,
+            context,
         )
 
         # 2. Strip EXIF if applicable
@@ -357,11 +378,9 @@ class PhotoService(LoggerMixin):
         paginator = self._client.get_paginator(
             "list_objects_v2",
         )
-        pages: Iterable[dict[str, object]] = (
-            paginator.paginate(
-                Bucket=self._bucket,
-                Prefix=prefix,
-            )
+        pages: Iterable[dict[str, object]] = paginator.paginate(
+            Bucket=self._bucket,
+            Prefix=prefix,
         )
         for page in pages:
             contents = page.get("Contents", [])
@@ -421,8 +440,7 @@ _MIME_TO_EXT: dict[str, str] = {
     "image/heic": ".heic",
     "image/heif": ".heif",
     "application/pdf": ".pdf",
-    "application/vnd.openxmlformats-officedocument"
-    ".wordprocessingml.document": ".docx",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
     "video/mp4": ".mp4",
     "video/quicktime": ".mov",
 }

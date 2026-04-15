@@ -56,8 +56,21 @@ class SentMessage(Base):
         nullable=False,
         server_default="pending",
     )
-    twilio_sid: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    provider_message_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    campaign_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("campaigns.id", name="fk_sent_messages_campaign_id"),
+        nullable=True,
+    )
+    provider_conversation_id: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+    provider_thread_id: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
     scheduled_for: Mapped[datetime | None] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=True,
@@ -101,6 +114,10 @@ class SentMessage(Base):
         back_populates="sent_messages",
         lazy="selectin",
     )
+    campaign: Mapped["Campaign | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "Campaign",
+        lazy="selectin",
+    )
 
     __table_args__ = (
         CheckConstraint(
@@ -125,6 +142,8 @@ class SentMessage(Base):
         Index("idx_sent_messages_message_type", "message_type"),
         Index("idx_sent_messages_delivery_status", "delivery_status"),
         Index("idx_sent_messages_scheduled_for", "scheduled_for"),
+        Index("ix_sent_messages_campaign_id", "campaign_id"),
+        Index("ix_sent_messages_provider_thread_id", "provider_thread_id"),
     )
 
     def __repr__(self) -> str:

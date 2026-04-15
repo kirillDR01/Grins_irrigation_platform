@@ -124,6 +124,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, []);
 
+  // Listen for interceptor-driven token refreshes to sync state and reschedule timer
+  useEffect(() => {
+    const handleTokenRefreshed = (e: Event) => {
+      const { access_token, expires_in } = (e as CustomEvent).detail;
+      if (access_token) {
+        setAccessToken(access_token);
+        scheduleTokenRefresh(expires_in);
+      }
+    };
+    window.addEventListener('token-refreshed', handleTokenRefreshed);
+    return () => {
+      window.removeEventListener('token-refreshed', handleTokenRefreshed);
+    };
+  }, [scheduleTokenRefresh]);
+
   // Try to restore session on mount
   useEffect(() => {
     const restoreSession = async () => {

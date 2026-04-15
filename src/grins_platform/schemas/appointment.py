@@ -8,7 +8,7 @@ Validates: Admin Dashboard Requirements 1.1-1.5
 """
 
 from datetime import date, datetime, time
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -28,6 +28,15 @@ class AppointmentCreate(BaseModel):
     time_window_start: time = Field(..., description="Start of the time window")
     time_window_end: time = Field(..., description="End of the time window")
     notes: Optional[str] = Field(None, description="Additional notes")
+    status: Optional[AppointmentStatus] = Field(
+        default=None,
+        description=(
+            "Initial appointment status. Defaults to DRAFT for the standard "
+            "UX flow; bulk-import paths (seed data, admin CSV imports) may "
+            "pass SCHEDULED or CONFIRMED to bypass the draft-mode prompt. "
+            "(bughunt M-6)"
+        ),
+    )
 
     @model_validator(mode="after")  # type: ignore[untyped-decorator]
     def validate_time_window(self) -> "AppointmentCreate":
@@ -83,6 +92,8 @@ class AppointmentResponse(BaseModel):
     job_type: Optional[str] = None
     customer_name: Optional[str] = None
     staff_name: Optional[str] = None
+    # Service agreement indicator for calendar display (Smoothing Req 7.5)
+    service_agreement_id: Optional[UUID] = None
 
 
 class AppointmentListParams(BaseModel):
@@ -146,3 +157,62 @@ class AppointmentPaginatedResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+# =============================================================================
+# Draft Mode Schemas (Req 8)
+# =============================================================================
+
+
+class SendConfirmationResponse(BaseModel):
+    """Response for single send-confirmation endpoint.
+
+    Validates: Req 8.4, 8.12
+    """
+
+    appointment_id: UUID
+    status: str
+    sms_sent: bool
+
+
+class BulkSendConfirmationsRequest(BaseModel):
+    """Request for bulk send-confirmations endpoint.
+
+    Validates: Req 8.6, 8.13
+    """
+
+    appointment_ids: Optional[list[UUID]] = Field(
+        None, description="Specific appointment IDs to send confirmations for"
+    )
+    date_from: Optional[date] = Field(
+        None, description="Start date for date range filter"
+    )
+    date_to: Optional[date] = Field(None, description="End date for date range filter")
+
+
+class BulkSendConfirmationItemResult(BaseModel):
+    """Per-appointment outcome row for bulk send-confirmations.
+
+    Validates: Req 8.6, 8.13; bughunt M-8, M-9
+    """
+
+    appointment_id: UUID
+    # ``sent`` = delivery handed to provider; ``deferred`` = rate-limited
+    # and scheduled; ``skipped`` = no phone / missing customer / consent;
+    # ``failed`` = unexpected error.
+    status: Literal["sent", "deferred", "skipped", "failed"]
+    reason: Optional[str] = None
+
+
+class BulkSendConfirmationsResponse(BaseModel):
+    """Response for bulk send-confirmations endpoint.
+
+    Validates: Req 8.6, 8.13; bughunt M-8, M-9
+    """
+
+    sent_count: int
+    deferred_count: int = 0
+    skipped_count: int = 0
+    failed_count: int = 0
+    total_draft: int
+    results: list[BulkSendConfirmationItemResult] = Field(default_factory=list)

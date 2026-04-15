@@ -40,7 +40,6 @@ from hypothesis import (
 
 from grins_platform.exceptions import (
     AppointmentNotFoundError,
-    ConsentRequiredError,
     InvalidStatusTransitionError,
     PaymentRequiredError,
     ReviewAlreadyRequestedError,
@@ -353,7 +352,10 @@ class TestProperty28ConflictDetectionOnReschedule:
 
         svc = _build_service(appt_repo=appt_repo)
         result = await svc.reschedule(
-            apt_id, date(2025, 8, 1), time(9, 0), time(10, 0),
+            apt_id,
+            date(2025, 8, 1),
+            time(9, 0),
+            time(10, 0),
         )
         assert result is not None
 
@@ -366,7 +368,10 @@ class TestProperty28ConflictDetectionOnReschedule:
         svc = _build_service(appt_repo=appt_repo)
         with pytest.raises(AppointmentNotFoundError):
             await svc.reschedule(
-                uuid4(), date(2025, 8, 1), time(9, 0), time(10, 0),
+                uuid4(),
+                date(2025, 8, 1),
+                time(9, 0),
+                time(10, 0),
             )
 
     @pytest.mark.asyncio
@@ -392,7 +397,10 @@ class TestProperty28ConflictDetectionOnReschedule:
         svc = _build_service(appt_repo=appt_repo)
         # Reschedule to same time — should not conflict with itself
         result = await svc.reschedule(
-            apt_id, date(2025, 8, 1), time(9, 0), time(10, 0),
+            apt_id,
+            date(2025, 8, 1),
+            time(9, 0),
+            time(10, 0),
         )
         assert result is not None
 
@@ -530,7 +538,7 @@ class TestProperty30JobFilterReturnsMatching:
     @pytest.mark.asyncio
     async def test_list_appointments_with_status_filter_returns_matching(
         self,
-        job_type: str,  # noqa: ARG002
+        job_type: str,
     ) -> None:
         """Filtering appointments by status returns only matching ones.
 
@@ -1231,6 +1239,8 @@ class TestProperty37GoogleReviewConsentAndDedup:
 
         **Validates: Requirements 34.2, 34.6**
         """
+        from unittest.mock import patch
+
         apt_id = uuid4()
         job_id = uuid4()
         customer_id = uuid4()
@@ -1259,20 +1269,40 @@ class TestProperty37GoogleReviewConsentAndDedup:
         # No prior review request
         svc._get_last_review_request_date = AsyncMock(return_value=None)
 
-        result = await svc.request_google_review(apt_id)
+        mock_sms_service = AsyncMock()
+        mock_sms_service.send_message = AsyncMock(
+            return_value={"success": True, "message_id": str(uuid4())},
+        )
+        with (
+            patch(
+                "grins_platform.services.sms_service.SMSService",
+                return_value=mock_sms_service,
+            ),
+            patch(
+                "grins_platform.services.sms.consent.check_sms_consent",
+                return_value=True,
+            ),
+        ):
+            result = await svc.request_google_review(apt_id)
 
         assert isinstance(result, ReviewRequestResult)
         assert result.sent is True
         assert result.channel == "sms"
+        mock_sms_service.send_message.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_review_request_without_consent_raises_error(
+    async def test_review_request_without_consent_returns_sent_false(
         self,
     ) -> None:
-        """Customer without SMS consent raises ConsentRequiredError.
+        """Customer without SMS consent returns a non-raised ``ReviewRequestResult``
+        with ``sent=False`` (bughunt CR-9 remainder — previously raised
+        ``ConsentRequiredError`` which the API handler then translated to
+        HTTP 422; we now return a structured 2xx payload instead).
 
         **Validates: Requirements 34.2**
         """
+        from unittest.mock import patch
+
         apt_id = uuid4()
         customer_id = uuid4()
 
@@ -1294,9 +1324,16 @@ class TestProperty37GoogleReviewConsentAndDedup:
 
         svc = _build_service(appt_repo=appt_repo, job_repo=job_repo)
 
-        with pytest.raises(ConsentRequiredError) as exc_info:
-            await svc.request_google_review(apt_id)
-        assert exc_info.value.customer_id == customer_id
+        with patch(
+            "grins_platform.services.sms.consent.check_sms_consent",
+            return_value=False,
+        ):
+            result = await svc.request_google_review(apt_id)
+
+        assert isinstance(result, ReviewRequestResult)
+        assert result.sent is False
+        assert result.channel is None
+        assert "opted out" in result.message.lower()
 
     @given(
         days_ago=st.integers(min_value=0, max_value=29),
@@ -1312,6 +1349,8 @@ class TestProperty37GoogleReviewConsentAndDedup:
 
         **Validates: Requirements 34.6**
         """
+        from unittest.mock import patch
+
         apt_id = uuid4()
         customer_id = uuid4()
 
@@ -1336,7 +1375,13 @@ class TestProperty37GoogleReviewConsentAndDedup:
         svc = _build_service(appt_repo=appt_repo, job_repo=job_repo)
         svc._get_last_review_request_date = AsyncMock(return_value=last_review)
 
-        with pytest.raises(ReviewAlreadyRequestedError):
+        with (
+            patch(
+                "grins_platform.services.sms.consent.check_sms_consent",
+                return_value=True,
+            ),
+            pytest.raises(ReviewAlreadyRequestedError),
+        ):
             await svc.request_google_review(apt_id)
 
     @pytest.mark.asyncio
@@ -1345,6 +1390,8 @@ class TestProperty37GoogleReviewConsentAndDedup:
 
         **Validates: Requirements 34.6**
         """
+        from unittest.mock import patch
+
         apt_id = uuid4()
         customer_id = uuid4()
 
@@ -1370,7 +1417,21 @@ class TestProperty37GoogleReviewConsentAndDedup:
         svc = _build_service(appt_repo=appt_repo, job_repo=job_repo)
         svc._get_last_review_request_date = AsyncMock(return_value=last_review)
 
-        result = await svc.request_google_review(apt_id)
+        mock_sms_service = AsyncMock()
+        mock_sms_service.send_message = AsyncMock(
+            return_value={"success": True, "message_id": str(uuid4())},
+        )
+        with (
+            patch(
+                "grins_platform.services.sms_service.SMSService",
+                return_value=mock_sms_service,
+            ),
+            patch(
+                "grins_platform.services.sms.consent.check_sms_consent",
+                return_value=True,
+            ),
+        ):
+            result = await svc.request_google_review(apt_id)
         assert result.sent is True
 
     @pytest.mark.asyncio
@@ -1382,6 +1443,141 @@ class TestProperty37GoogleReviewConsentAndDedup:
         svc = _build_service(appt_repo=appt_repo)
         with pytest.raises(AppointmentNotFoundError):
             await svc.request_google_review(uuid4())
+
+    @pytest.mark.asyncio
+    async def test_review_request_with_correct_message_type_and_review_url(
+        self,
+    ) -> None:
+        """Review push calls sms_service.send_message() with
+        MessageType.GOOGLE_REVIEW_REQUEST and includes the review URL
+        in the message body.
+
+        **Validates: Requirements 1.1, 1.2**
+        """
+        from unittest.mock import patch
+
+        from grins_platform.models.enums import MessageType
+
+        apt_id = uuid4()
+        job_id = uuid4()
+        customer_id = uuid4()
+
+        customer = _make_customer_mock(
+            customer_id=customer_id,
+            sms_opt_in=True,
+        )
+        job = _make_job_mock(
+            job_id=job_id,
+            customer_id=customer_id,
+            customer=customer,
+        )
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            job_id=job_id,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+        appt_repo.session = AsyncMock()
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+
+        review_url = "https://g.page/review/grins"
+        svc = _build_service(
+            appt_repo=appt_repo,
+            job_repo=job_repo,
+            google_review_url=review_url,
+        )
+        svc._get_last_review_request_date = AsyncMock(return_value=None)
+
+        mock_sms_service = AsyncMock()
+        mock_sms_service.send_message = AsyncMock(
+            return_value={"success": True, "message_id": "SM123"},
+        )
+        with (
+            patch(
+                "grins_platform.services.sms_service.SMSService",
+                return_value=mock_sms_service,
+            ),
+            patch(
+                "grins_platform.services.sms.consent.check_sms_consent",
+                return_value=True,
+            ),
+        ):
+            result = await svc.request_google_review(apt_id)
+
+        assert result.sent is True
+        assert result.channel == "sms"
+
+        # Verify send_message was called with correct message_type
+        call_kwargs = mock_sms_service.send_message.call_args
+        assert call_kwargs.kwargs["message_type"] == MessageType.GOOGLE_REVIEW_REQUEST
+
+        # Verify the review URL is included in the message body
+        sent_message = call_kwargs.kwargs["message"]
+        assert review_url in sent_message
+
+    @pytest.mark.asyncio
+    async def test_review_request_with_sms_failure_returns_sent_false(
+        self,
+    ) -> None:
+        """When sms_service.send_message() raises an exception, the method
+        returns sent=False without crashing.
+
+        **Validates: Requirements 1.4**
+        """
+        from unittest.mock import patch
+
+        apt_id = uuid4()
+        job_id = uuid4()
+        customer_id = uuid4()
+
+        customer = _make_customer_mock(
+            customer_id=customer_id,
+            sms_opt_in=True,
+        )
+        job = _make_job_mock(
+            job_id=job_id,
+            customer_id=customer_id,
+            customer=customer,
+        )
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            job_id=job_id,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+        appt_repo.session = AsyncMock()
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+
+        svc = _build_service(appt_repo=appt_repo, job_repo=job_repo)
+        svc._get_last_review_request_date = AsyncMock(return_value=None)
+
+        mock_sms_service = AsyncMock()
+        mock_sms_service.send_message = AsyncMock(
+            side_effect=RuntimeError("SMS provider unavailable"),
+        )
+        with (
+            patch(
+                "grins_platform.services.sms_service.SMSService",
+                return_value=mock_sms_service,
+            ),
+            patch(
+                "grins_platform.services.sms.consent.check_sms_consent",
+                return_value=True,
+            ),
+        ):
+            result = await svc.request_google_review(apt_id)
+
+        # Should NOT raise — returns a result with sent=False
+        assert isinstance(result, ReviewRequestResult)
+        assert result.sent is False
+        assert result.channel == "sms"
+        assert "Failed" in result.message or "fail" in result.message.lower()
 
 
 # =============================================================================
@@ -1426,7 +1622,9 @@ class TestProperty38StatusTransitionStateMachine:
 
         svc = _build_service(appt_repo=appt_repo)
         await svc.transition_status(
-            apt_id, AppointmentStatus.EN_ROUTE, actor_id,
+            apt_id,
+            AppointmentStatus.EN_ROUTE,
+            actor_id,
         )
 
         # Verify en_route_at timestamp was set
@@ -1458,7 +1656,9 @@ class TestProperty38StatusTransitionStateMachine:
 
         svc = _build_service(appt_repo=appt_repo)
         await svc.transition_status(
-            apt_id, AppointmentStatus.IN_PROGRESS, actor_id,
+            apt_id,
+            AppointmentStatus.IN_PROGRESS,
+            actor_id,
         )
 
         update_data = appt_repo.update.call_args[0][1]
@@ -1498,7 +1698,9 @@ class TestProperty38StatusTransitionStateMachine:
         svc._has_payment_or_invoice = AsyncMock(return_value=True)
 
         await svc.transition_status(
-            apt_id, AppointmentStatus.COMPLETED, actor_id,
+            apt_id,
+            AppointmentStatus.COMPLETED,
+            actor_id,
         )
 
         update_data = appt_repo.update.call_args[0][1]
@@ -1506,11 +1708,12 @@ class TestProperty38StatusTransitionStateMachine:
         assert "completed_at" in update_data
 
     @given(
-        current=st.sampled_from([
-            AppointmentStatus.CONFIRMED,
-            AppointmentStatus.EN_ROUTE,
-            AppointmentStatus.IN_PROGRESS,
-        ]),
+        current=st.sampled_from(
+            [
+                AppointmentStatus.EN_ROUTE,
+                AppointmentStatus.IN_PROGRESS,
+            ]
+        ),
     )
     @settings(max_examples=20)
     @pytest.mark.asyncio
@@ -1520,14 +1723,18 @@ class TestProperty38StatusTransitionStateMachine:
     ) -> None:
         """Skipping a step in the chain raises InvalidStatusTransitionError.
 
+        Per VALID_APPOINTMENT_TRANSITIONS, only the following skips are invalid:
+        - EN_ROUTE → COMPLETED (must pass through IN_PROGRESS)
+        - IN_PROGRESS → EN_ROUTE (backward)
+
+        CONFIRMED → IN_PROGRESS is permitted (technician skips On-My-Way push).
+
         **Validates: Requirements 35.1, 35.2, 35.3**
         """
         apt_id = uuid4()
         actor_id = uuid4()
 
-        # Determine an invalid target (skip a step)
         invalid_targets = {
-            AppointmentStatus.CONFIRMED: AppointmentStatus.IN_PROGRESS,
             AppointmentStatus.EN_ROUTE: AppointmentStatus.COMPLETED,
             AppointmentStatus.IN_PROGRESS: AppointmentStatus.EN_ROUTE,
         }
@@ -1547,6 +1754,107 @@ class TestProperty38StatusTransitionStateMachine:
             await svc.transition_status(apt_id, target, actor_id)
         assert exc_info.value.current_status == current
         assert exc_info.value.requested_status == target
+
+    @pytest.mark.asyncio
+    async def test_valid_skip_confirmed_to_in_progress_succeeds(self) -> None:
+        """confirmed → in_progress is permitted (skip EN_ROUTE / On-My-Way).
+
+        Per VALID_APPOINTMENT_TRANSITIONS, the technician can mark a job
+        in-progress without issuing an On-My-Way push first.
+
+        **Validates: Requirements 35.4, 35.5**
+        """
+        apt_id = uuid4()
+        actor_id = uuid4()
+
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.CONFIRMED.value,
+        )
+        updated = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.IN_PROGRESS.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+        appt_repo.update = AsyncMock(return_value=updated)
+
+        svc = _build_service(appt_repo=appt_repo)
+        await svc.transition_status(
+            apt_id,
+            AppointmentStatus.IN_PROGRESS,
+            actor_id,
+        )
+
+        update_data = appt_repo.update.call_args[0][1]
+        assert update_data["status"] == AppointmentStatus.IN_PROGRESS.value
+        assert "arrived_at" in update_data
+
+    @pytest.mark.asyncio
+    async def test_valid_draft_to_scheduled_succeeds(self) -> None:
+        """draft → scheduled is permitted (Send Confirmation flow).
+
+        **Validates: CR-1 regression**
+        """
+        apt_id = uuid4()
+        actor_id = uuid4()
+
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.DRAFT.value,
+        )
+        updated = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+        appt_repo.update = AsyncMock(return_value=updated)
+
+        svc = _build_service(appt_repo=appt_repo)
+        await svc.transition_status(
+            apt_id,
+            AppointmentStatus.SCHEDULED,
+            actor_id,
+        )
+
+        update_data = appt_repo.update.call_args[0][1]
+        assert update_data["status"] == AppointmentStatus.SCHEDULED.value
+
+    @pytest.mark.asyncio
+    async def test_valid_scheduled_to_en_route_succeeds(self) -> None:
+        """scheduled → en_route is permitted (skip CONFIRMED step).
+
+        **Validates: CR-1 regression**
+        """
+        apt_id = uuid4()
+        actor_id = uuid4()
+
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+        updated = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.EN_ROUTE.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+        appt_repo.update = AsyncMock(return_value=updated)
+
+        svc = _build_service(appt_repo=appt_repo)
+        await svc.transition_status(
+            apt_id,
+            AppointmentStatus.EN_ROUTE,
+            actor_id,
+        )
+
+        update_data = appt_repo.update.call_args[0][1]
+        assert update_data["status"] == AppointmentStatus.EN_ROUTE.value
+        assert "en_route_at" in update_data
 
     @pytest.mark.asyncio
     async def test_backward_transition_raises_error(self) -> None:
@@ -1569,7 +1877,9 @@ class TestProperty38StatusTransitionStateMachine:
 
         with pytest.raises(InvalidStatusTransitionError):
             await svc.transition_status(
-                apt_id, AppointmentStatus.CONFIRMED, actor_id,
+                apt_id,
+                AppointmentStatus.CONFIRMED,
+                actor_id,
             )
 
     @pytest.mark.asyncio
@@ -1606,7 +1916,9 @@ class TestProperty38StatusTransitionStateMachine:
 
             svc = _build_service(appt_repo=appt_repo)
             result = await svc.transition_status(
-                apt_id, AppointmentStatus.CANCELLED, actor_id,
+                apt_id,
+                AppointmentStatus.CANCELLED,
+                actor_id,
             )
             assert result is not None
 
@@ -1625,7 +1937,9 @@ class TestProperty38StatusTransitionStateMachine:
         svc = _build_service(appt_repo=appt_repo)
         with pytest.raises(InvalidStatusTransitionError):
             await svc.transition_status(
-                apt_id, AppointmentStatus.CANCELLED, uuid4(),
+                apt_id,
+                AppointmentStatus.CANCELLED,
+                uuid4(),
             )
 
     @pytest.mark.asyncio
@@ -1650,7 +1964,9 @@ class TestProperty38StatusTransitionStateMachine:
 
         svc = _build_service(appt_repo=appt_repo)
         result = await svc.transition_status(
-            apt_id, AppointmentStatus.NO_SHOW, uuid4(),
+            apt_id,
+            AppointmentStatus.NO_SHOW,
+            uuid4(),
         )
         assert result is not None
 
@@ -1663,7 +1979,9 @@ class TestProperty38StatusTransitionStateMachine:
         svc = _build_service(appt_repo=appt_repo)
         with pytest.raises(AppointmentNotFoundError):
             await svc.transition_status(
-                uuid4(), AppointmentStatus.EN_ROUTE, uuid4(),
+                uuid4(),
+                AppointmentStatus.EN_ROUTE,
+                uuid4(),
             )
 
 
@@ -1708,7 +2026,9 @@ class TestProperty39PaymentGate:
 
         with pytest.raises(PaymentRequiredError) as exc_info:
             await svc.transition_status(
-                apt_id, AppointmentStatus.COMPLETED, actor_id,
+                apt_id,
+                AppointmentStatus.COMPLETED,
+                actor_id,
             )
         assert exc_info.value.appointment_id == apt_id
 
@@ -1740,7 +2060,9 @@ class TestProperty39PaymentGate:
         svc._has_payment_or_invoice = AsyncMock(return_value=True)
 
         result = await svc.transition_status(
-            apt_id, AppointmentStatus.COMPLETED, actor_id,
+            apt_id,
+            AppointmentStatus.COMPLETED,
+            actor_id,
         )
         assert result is not None
 
@@ -1816,16 +2138,20 @@ class TestProperty39PaymentGate:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_has_payment_or_invoice_without_repo_returns_true(
+    async def test_has_payment_or_invoice_without_repo_raises(
         self,
     ) -> None:
-        """Without invoice_repository, allows completion (graceful fallback)."""
+        """Without invoice_repository, the payment gate fails loud (bughunt M-7).
+
+        Previously returned True and silently disabled the gate if DI
+        was misconfigured — Req 36 could be bypassed without detection.
+        """
         appointment = _make_appointment_mock()
 
         svc = _build_service(invoice_repo=None)
 
-        result = await svc._has_payment_or_invoice(appointment)
-        assert result is True
+        with pytest.raises(RuntimeError, match="invoice_repository"):
+            _ = await svc._has_payment_or_invoice(appointment)
 
 
 # =============================================================================
@@ -2167,3 +2493,269 @@ class TestProperty43EnrichedAppointmentResponse:
         svc = _build_service(appt_repo=appt_repo)
         with pytest.raises(AppointmentNotFoundError):
             await svc.get_appointment(uuid4())
+
+
+# =============================================================================
+# Sprint 2 — H-8: reactivating a CANCELLED appointment emits reschedule SMS
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestReactivationSendsRescheduleSms:
+    """bughunt H-8: when an admin changes the date on a CANCELLED
+    appointment, the appointment flips back to SCHEDULED *and* the
+    customer must be told via SMS. Previously the pre-state check read
+    the in-memory ``appointment.status`` (still ``CANCELLED`` at that
+    point), so the SMS branch was skipped."""
+
+    @pytest.mark.asyncio
+    async def test_reactivation_fires_reschedule_sms(self) -> None:
+        from unittest.mock import patch
+
+        from grins_platform.schemas.appointment import (
+            AppointmentUpdate,
+        )
+
+        apt_id = uuid4()
+        cancelled = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.CANCELLED.value,
+        )
+        reactivated = _make_appointment_mock(
+            appointment_id=apt_id,
+            scheduled_date=date(2026, 4, 22),
+            time_window_start=time(11, 0),
+            time_window_end=time(13, 0),
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=cancelled)
+        appt_repo.update = AsyncMock(return_value=reactivated)
+        appt_repo.session = AsyncMock()
+
+        svc = _build_service(appt_repo=appt_repo)
+
+        sms_mock = AsyncMock()
+        with patch.object(svc, "_send_reschedule_sms", sms_mock):
+            await svc.update_appointment(
+                apt_id,
+                AppointmentUpdate(scheduled_date=date(2026, 4, 22)),
+            )
+
+        sms_mock.assert_awaited_once()
+
+
+# =============================================================================
+# Sprint 3 — H-4: create_appointment rejects COMPLETED / CANCELLED jobs
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestCreateAppointmentRejectsFinishedJobs:
+    """bughunt H-4: scheduling a new appointment on a job that's
+    already COMPLETED or CANCELLED used to succeed silently. The
+    ``AppointmentService.create_appointment`` method now raises
+    ``AppointmentOnFinishedJobError`` so the admin gets a clear error
+    instead of an orphan draft appointment stuck on a finished job."""
+
+    @pytest.mark.asyncio
+    async def test_rejects_completed_job(self) -> None:
+        from grins_platform.exceptions import AppointmentOnFinishedJobError
+        from grins_platform.models.enums import JobStatus
+        from grins_platform.schemas.appointment import AppointmentCreate
+
+        job = _make_job_mock()
+        job.status = JobStatus.COMPLETED.value
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+
+        svc = _build_service(job_repo=job_repo)
+
+        data = AppointmentCreate(
+            job_id=job.id,
+            staff_id=uuid4(),
+            scheduled_date=date(2026, 5, 1),
+            time_window_start=time(9, 0),
+            time_window_end=time(11, 0),
+        )
+
+        with pytest.raises(AppointmentOnFinishedJobError) as exc_info:
+            await svc.create_appointment(data)
+        assert exc_info.value.job_status == JobStatus.COMPLETED.value
+
+    @pytest.mark.asyncio
+    async def test_rejects_cancelled_job(self) -> None:
+        from grins_platform.exceptions import AppointmentOnFinishedJobError
+        from grins_platform.models.enums import JobStatus
+        from grins_platform.schemas.appointment import AppointmentCreate
+
+        job = _make_job_mock()
+        job.status = JobStatus.CANCELLED.value
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+
+        svc = _build_service(job_repo=job_repo)
+
+        data = AppointmentCreate(
+            job_id=job.id,
+            staff_id=uuid4(),
+            scheduled_date=date(2026, 5, 1),
+            time_window_start=time(9, 0),
+            time_window_end=time(11, 0),
+        )
+
+        with pytest.raises(AppointmentOnFinishedJobError):
+            await svc.create_appointment(data)
+
+
+# =============================================================================
+# Sprint 3 — M-6: create_appointment honours caller-provided status
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestCreateAppointmentStatusOverride:
+    """bughunt M-6: bulk-import paths that pre-populate an appointment
+    as already SCHEDULED (e.g. CSV onboarding) shouldn't have their
+    status reset to DRAFT by the service."""
+
+    @pytest.mark.asyncio
+    async def test_caller_status_is_honoured(self) -> None:
+        from grins_platform.models.enums import JobStatus
+        from grins_platform.schemas.appointment import AppointmentCreate
+
+        job = _make_job_mock()
+        job.status = JobStatus.TO_BE_SCHEDULED.value
+        staff = _make_staff_mock()
+
+        created_appt = _make_appointment_mock(
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+        staff_repo = AsyncMock()
+        staff_repo.get_by_id = AsyncMock(return_value=staff)
+        appt_repo = AsyncMock()
+        appt_repo.create = AsyncMock(return_value=created_appt)
+        appt_repo.session = AsyncMock()
+
+        svc = _build_service(
+            appt_repo=appt_repo,
+            job_repo=job_repo,
+            staff_repo=staff_repo,
+        )
+
+        data = AppointmentCreate(
+            job_id=job.id,
+            staff_id=staff.id,
+            scheduled_date=date(2026, 5, 1),
+            time_window_start=time(9, 0),
+            time_window_end=time(11, 0),
+            status=AppointmentStatus.SCHEDULED,
+        )
+
+        await svc.create_appointment(data)
+
+        create_kwargs = appt_repo.create.await_args.kwargs
+        assert create_kwargs["status"] == AppointmentStatus.SCHEDULED.value
+
+    @pytest.mark.asyncio
+    async def test_default_is_draft_when_status_omitted(self) -> None:
+        from grins_platform.models.enums import JobStatus
+        from grins_platform.schemas.appointment import AppointmentCreate
+
+        job = _make_job_mock()
+        job.status = JobStatus.TO_BE_SCHEDULED.value
+        staff = _make_staff_mock()
+        created_appt = _make_appointment_mock(
+            status=AppointmentStatus.DRAFT.value,
+        )
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+        staff_repo = AsyncMock()
+        staff_repo.get_by_id = AsyncMock(return_value=staff)
+        appt_repo = AsyncMock()
+        appt_repo.create = AsyncMock(return_value=created_appt)
+        appt_repo.session = AsyncMock()
+
+        svc = _build_service(
+            appt_repo=appt_repo,
+            job_repo=job_repo,
+            staff_repo=staff_repo,
+        )
+
+        data = AppointmentCreate(
+            job_id=job.id,
+            staff_id=staff.id,
+            scheduled_date=date(2026, 5, 1),
+            time_window_start=time(9, 0),
+            time_window_end=time(11, 0),
+        )
+
+        await svc.create_appointment(data)
+
+        create_kwargs = appt_repo.create.await_args.kwargs
+        assert create_kwargs["status"] == AppointmentStatus.DRAFT.value
+
+
+# =============================================================================
+# Sprint 2 — X-1: GOOGLE_REVIEW_URL fail-closed when unset
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestGoogleReviewUrlFailClosed:
+    """bughunt X-1 / L-5: when neither ``GOOGLE_REVIEW_URL`` env var nor
+    the service-level ``google_review_url`` is set, the service must
+    return ``ReviewRequestResult(sent=False)`` instead of shipping a
+    stale plural-slug fallback link that 404s."""
+
+    @pytest.mark.asyncio
+    async def test_returns_not_sent_when_url_unset(self) -> None:
+        from unittest.mock import patch
+
+        apt_id = uuid4()
+        customer = _make_customer_mock(sms_opt_in=True)
+        job = _make_job_mock(customer_id=customer.id, customer=customer)
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            job_id=job.id,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+
+        # Build service with explicit empty URL override
+        svc = _build_service(
+            appt_repo=appt_repo,
+            job_repo=job_repo,
+            google_review_url="",
+        )
+        svc._get_last_review_request_date = AsyncMock(return_value=None)
+
+        # Ensure env var is not set either
+        with (
+            patch.dict("os.environ", {}, clear=False),
+            patch(
+                "grins_platform.services.sms.consent.check_sms_consent",
+                return_value=True,
+            ),
+        ):
+            # Also explicitly remove GOOGLE_REVIEW_URL if present
+            import os
+
+            os.environ.pop("GOOGLE_REVIEW_URL", None)
+
+            result = await svc.request_google_review(apt_id)
+
+        assert result.sent is False
+        assert result.channel is None
+        assert "GOOGLE_REVIEW_URL" in result.message

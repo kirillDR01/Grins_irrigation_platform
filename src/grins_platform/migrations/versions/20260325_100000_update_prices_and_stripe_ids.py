@@ -20,14 +20,62 @@ depends_on: Union[str, Sequence[str], None] = None
 
 # (slug, new_annual_price, new_stripe_price_id, old_annual_price, old_stripe_price_id)
 TIER_UPDATES = [
-    ("essential-residential", "175.00", "price_1TF2nBQDNzCTp6j5u43DTExH", "179.00", "price_1T8VAUQDNzCTp6j5KkRRR2j4"),
-    ("professional-residential", "260.00", "price_1TF2nCQDNzCTp6j5sIB9OSH4", "259.00", "price_1T8VBBQDNzCTp6j5RDWwuY9S"),
-    ("premium-residential", "725.00", "price_1TF2nCQDNzCTp6j5SC24GCKa", "709.00", "price_1T8VBZQDNzCTp6j5xmutCMnv"),
-    ("winterization-only-residential", "85.00", "price_1TF2nDQDNzCTp6j5KmY0goPa", "89.00", "price_1T9xqeQDNzCTp6j5MNW1NtBn"),
-    ("essential-commercial", "235.00", "price_1TF2nEQDNzCTp6j53W5uUqfi", "229.00", "price_1T9xk7QDNzCTp6j5u3ARHZK8"),
-    ("professional-commercial", "390.00", "price_1TF2nFQDNzCTp6j5rhmqYTlJ", "379.00", "price_1T8VDzQDNzCTp6j5GQckAY7A"),
-    ("premium-commercial", "880.00", "price_1TF2nGQDNzCTp6j5zWieKL0w", "859.00", "price_1T9xk7QDNzCTp6j5Qop1Et78"),
-    ("winterization-only-commercial", "105.00", "price_1TF2nGQDNzCTp6j5Cieln9IO", "109.00", "price_1T9xqfQDNzCTp6j5puTQTgYz"),
+    (
+        "essential-residential",
+        "175.00",
+        "price_1TF2nBQDNzCTp6j5u43DTExH",
+        "179.00",
+        "price_1T8VAUQDNzCTp6j5KkRRR2j4",
+    ),
+    (
+        "professional-residential",
+        "260.00",
+        "price_1TF2nCQDNzCTp6j5sIB9OSH4",
+        "259.00",
+        "price_1T8VBBQDNzCTp6j5RDWwuY9S",
+    ),
+    (
+        "premium-residential",
+        "725.00",
+        "price_1TF2nCQDNzCTp6j5SC24GCKa",
+        "709.00",
+        "price_1T8VBZQDNzCTp6j5xmutCMnv",
+    ),
+    (
+        "winterization-only-residential",
+        "85.00",
+        "price_1TF2nDQDNzCTp6j5KmY0goPa",
+        "89.00",
+        "price_1T9xqeQDNzCTp6j5MNW1NtBn",
+    ),
+    (
+        "essential-commercial",
+        "235.00",
+        "price_1TF2nEQDNzCTp6j53W5uUqfi",
+        "229.00",
+        "price_1T9xk7QDNzCTp6j5u3ARHZK8",
+    ),
+    (
+        "professional-commercial",
+        "390.00",
+        "price_1TF2nFQDNzCTp6j5rhmqYTlJ",
+        "379.00",
+        "price_1T8VDzQDNzCTp6j5GQckAY7A",
+    ),
+    (
+        "premium-commercial",
+        "880.00",
+        "price_1TF2nGQDNzCTp6j5zWieKL0w",
+        "859.00",
+        "price_1T9xk7QDNzCTp6j5Qop1Et78",
+    ),
+    (
+        "winterization-only-commercial",
+        "105.00",
+        "price_1TF2nGQDNzCTp6j5Cieln9IO",
+        "109.00",
+        "price_1T9xqfQDNzCTp6j5puTQTgYz",
+    ),
 ]
 
 

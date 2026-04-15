@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, ClassVar, cast
 from uuid import UUID
 
 from grins_platform.log_config import LoggerMixin
@@ -24,6 +24,7 @@ from grins_platform.schemas.invoice import (
     InvoiceUpdate,
     LienDeadlineInvoice,
     LienDeadlineResponse,
+    MassNotifyResponse,
     PaginatedInvoiceResponse,
     PaymentRecord,
 )
@@ -134,7 +135,7 @@ class InvoiceService(LoggerMixin):
         # Convert line items to dict format for storage
         line_items_data: list[dict[str, object]] | None = None
         if data.line_items:
-            line_items_data = [item.model_dump() for item in data.line_items]
+            line_items_data = [item.model_dump(mode="json") for item in data.line_items]
 
         # Create invoice
         invoice = await self.invoice_repository.create(
@@ -351,7 +352,8 @@ class InvoiceService(LoggerMixin):
             resp = InvoiceResponse.model_validate(inv)
             # Populate customer_name from eager-loaded relationship
             if hasattr(inv, "customer") and inv.customer is not None:
-                resp.customer_name = f"{inv.customer.first_name} {inv.customer.last_name}"
+                cust = inv.customer
+                resp.customer_name = f"{cust.first_name} {cust.last_name}"
             items.append(cast("InvoiceResponse", resp))
 
         return PaginatedInvoiceResponse(
@@ -784,3 +786,144 @@ class InvoiceService(LoggerMixin):
             invoice_id=str(result.id),
         )
         return result
+
+    # =========================================================================
+    # Mass Notification (Requirement 29.3, 29.4)
+    # =========================================================================
+
+    _DEFAULT_TEMPLATES: ClassVar[dict[str, str]] = {
+        "past_due": (
+            "Hi {first_name}, your invoice {invoice_number} for ${amount} "
+            "is past due. Please submit payment at your earliest convenience."
+        ),
+        "due_soon": (
+            "Hi {first_name}, a friendly reminder that invoice "
+            "{invoice_number} for ${amount} is due on {due_date}."
+        ),
+        "lien_eligible": (
+            "Hi {first_name}, invoice {invoice_number} for ${amount} is "
+            "significantly past due. Please contact us immediately to "
+            "arrange payment and avoid further action."
+        ),
+    }
+
+    async def mass_notify(
+        self,
+        notification_type: str,
+        *,
+        due_soon_days: int = 7,
+        lien_days_past_due: int = 60,
+        lien_min_amount: float = 500.0,
+        template: str | None = None,
+    ) -> MassNotifyResponse:
+        """Send mass notifications to customers based on invoice criteria.
+
+        Args:
+            notification_type: One of past_due, due_soon, lien_eligible.
+            due_soon_days: Days window for due-soon targeting.
+            lien_days_past_due: Min days past due for lien eligibility.
+            lien_min_amount: Min amount for lien eligibility.
+            template: Custom message template (uses default if None).
+
+        Returns:
+            MassNotifyResponse with counts.
+
+        Validates: Requirements 29.3, 29.4
+        """
+        self.log_started(
+            "mass_notify",
+            notification_type=notification_type,
+        )
+
+        # Discover target invoices
+        invoices: list[Invoice]
+        if notification_type == "past_due":
+            invoices = await self.invoice_repository.find_past_due()
+        elif notification_type == "due_soon":
+            invoices = await self.invoice_repository.find_due_soon(due_soon_days)
+        elif notification_type == "lien_eligible":
+            invoices = await self.invoice_repository.find_lien_eligible(
+                days_past_due=lien_days_past_due,
+                min_amount=Decimal(str(lien_min_amount)),
+            )
+        else:
+            invoices = []
+
+        targeted = len(invoices)
+        sent = 0
+        failed = 0
+        skipped = 0
+
+        msg_template = template or self._DEFAULT_TEMPLATES.get(
+            notification_type,
+            self._DEFAULT_TEMPLATES["past_due"],
+        )
+
+        for inv in invoices:
+            try:
+                customer = inv.customer  # type: ignore[union-attr]
+                if customer is None or not getattr(customer, "phone", None):
+                    skipped += 1
+                    continue
+
+                # Render template with invoice/customer fields
+                body = msg_template.format(
+                    first_name=customer.first_name,
+                    last_name=customer.last_name,
+                    invoice_number=inv.invoice_number,
+                    amount=f"{inv.total_amount:.2f}",
+                    due_date=inv.due_date.isoformat() if inv.due_date else "",
+                )
+
+                # Import SMS dependencies lazily to avoid circular imports
+                from grins_platform.schemas.ai import (  # noqa: PLC0415
+                    MessageType,
+                )
+                from grins_platform.services.sms.recipient import (  # noqa: PLC0415
+                    Recipient,
+                )
+                from grins_platform.services.sms_service import (  # noqa: PLC0415
+                    SMSService,
+                )
+
+                sms_service = SMSService(
+                    self.invoice_repository.session,
+                )
+                recipient = Recipient.from_customer(customer)
+                await sms_service.send_message(
+                    recipient=recipient,
+                    message=body,
+                    message_type=MessageType.PAYMENT_REMINDER,
+                    consent_type="transactional",
+                )
+
+                # Update reminder count
+                await self.invoice_repository.update(
+                    inv.id,
+                    reminder_count=inv.reminder_count + 1,
+                    last_reminder_sent=datetime.now(timezone.utc),
+                )
+                sent += 1
+            except Exception:
+                self.logger.warning(
+                    "invoice.mass_notify.single_failure",
+                    invoice_id=str(inv.id),
+                    notification_type=notification_type,
+                )
+                failed += 1
+
+        self.log_completed(
+            "mass_notify",
+            notification_type=notification_type,
+            targeted=targeted,
+            sent=sent,
+            failed=failed,
+            skipped=skipped,
+        )
+        return MassNotifyResponse(
+            notification_type=notification_type,
+            targeted=targeted,
+            sent=sent,
+            failed=failed,
+            skipped=skipped,
+        )

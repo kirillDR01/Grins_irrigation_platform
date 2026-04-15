@@ -56,6 +56,10 @@ class Campaign(Base):
         JSONB,
         nullable=True,
     )
+    poll_options: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
     created_by: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("staff.id", ondelete="SET NULL"),
@@ -78,7 +82,7 @@ class Campaign(Base):
         "CampaignRecipient",
         back_populates="campaign",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        lazy="noload",
     )
 
     __table_args__ = (
@@ -128,6 +132,10 @@ class CampaignRecipient(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    sending_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -140,10 +148,19 @@ class CampaignRecipient(Base):
         "Campaign",
         back_populates="recipients",
     )
+    customer: Mapped["Customer | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "Customer",
+        lazy="noload",
+    )
+    lead: Mapped["Lead | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "Lead",
+        lazy="noload",
+    )
 
     __table_args__ = (
         Index("idx_campaign_recipients_campaign_id", "campaign_id"),
         Index("idx_campaign_recipients_delivery_status", "delivery_status"),
+        Index("ix_campaign_recipients_sending_started_at", "sending_started_at"),
     )
 
     def __repr__(self) -> str:

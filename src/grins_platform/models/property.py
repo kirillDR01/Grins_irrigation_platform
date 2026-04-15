@@ -108,6 +108,7 @@ class Property(Base):
 
     # Access Information (Requirement 2.7, 2.9, 2.10)
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_hoa: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     access_instructions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     gate_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     has_dogs: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

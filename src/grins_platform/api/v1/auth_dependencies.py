@@ -10,9 +10,11 @@ Validates: Requirements 17.1-17.12, 20.1-20.6
 from collections.abc import Callable
 from functools import wraps
 from typing import Annotated, Any
+from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from grins_platform.api.v1.dependencies import get_db_session
@@ -246,6 +248,54 @@ def require_roles(*allowed_roles: UserRole) -> Callable[..., Any]:
     return decorator
 
 
+async def require_campaign_send_authority(
+    campaign_id: UUID,
+    current_user: Annotated[Staff, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> Staff:
+    """Enforce campaign send permission based on recipient count.
+
+    Managers can send campaigns with <50 recipients.
+    Campaigns with >=50 recipients require admin.
+
+    Args:
+        campaign_id: Campaign UUID from path
+        current_user: Current active user
+        session: Database session
+
+    Returns:
+        Staff member authorized to send
+
+    Raises:
+        HTTPException: 403 if user lacks authority for the recipient count
+        HTTPException: 404 if campaign not found
+
+    Validates: Requirement 31
+    """
+    from grins_platform.models.campaign import CampaignRecipient  # noqa: PLC0415
+
+    user_role = _get_user_role(current_user)
+    if user_role == UserRole.ADMIN:
+        return current_user
+
+    count_query = select(func.count(CampaignRecipient.id)).where(
+        CampaignRecipient.campaign_id == campaign_id,
+    )
+    result = await session.execute(count_query)
+    recipient_count = result.scalar() or 0
+
+    if user_role == UserRole.MANAGER and recipient_count < 50:
+        return current_user
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=(
+            f"Campaigns with {recipient_count} recipients require admin approval. "
+            "Managers can only send campaigns with fewer than 50 recipients."
+        ),
+    )
+
+
 # Type aliases for cleaner dependency injection
 CurrentUser = Annotated[Staff, Depends(get_current_user)]
 CurrentActiveUser = Annotated[Staff, Depends(get_current_active_user)]
@@ -262,6 +312,7 @@ __all__ = [
     "get_current_active_user",
     "get_current_user",
     "require_admin",
+    "require_campaign_send_authority",
     "require_manager_or_admin",
     "require_roles",
 ]

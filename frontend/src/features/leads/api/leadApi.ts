@@ -5,6 +5,7 @@ import type {
   LeadUpdate,
   LeadConversionRequest,
   LeadConversionResponse,
+  LeadMoveResponse,
   PaginatedLeadResponse,
   PaginatedFollowUpResponse,
   FromCallRequest,
@@ -17,6 +18,7 @@ import type {
   ContractTemplate,
   CreateEstimateRequest,
   CreateContractRequest,
+  ManualLeadCreateRequest,
 } from '../types';
 
 const BASE_PATH = '/leads';
@@ -56,6 +58,28 @@ export const leadApi = {
     await apiClient.delete(`${BASE_PATH}/${id}`);
   },
 
+  // Move lead to Jobs (CRM2 Req 12.1, Smoothing Req 6.1)
+  moveToJobs: async (id: string, force = false): Promise<LeadMoveResponse> => {
+    const response = await apiClient.post<LeadMoveResponse>(
+      `${BASE_PATH}/${id}/move-to-jobs`,
+      undefined,
+      { params: { force } },
+    );
+    return response.data;
+  },
+
+  // Move lead to Sales (CRM2 Req 12.2)
+  moveToSales: async (id: string): Promise<LeadMoveResponse> => {
+    const response = await apiClient.post<LeadMoveResponse>(`${BASE_PATH}/${id}/move-to-sales`);
+    return response.data;
+  },
+
+  // Mark lead as contacted (CRM2 Req 11.1)
+  markContacted: async (id: string): Promise<Lead> => {
+    const response = await apiClient.put<Lead>(`${BASE_PATH}/${id}/contacted`);
+    return response.data;
+  },
+
   // Follow-up queue
   followUpQueue: async (): Promise<PaginatedFollowUpResponse> => {
     const response = await apiClient.get<PaginatedFollowUpResponse>(
@@ -67,6 +91,12 @@ export const leadApi = {
   // Create lead from phone call (admin-only)
   createFromCall: async (data: FromCallRequest): Promise<Lead> => {
     const response = await apiClient.post<Lead>(`${BASE_PATH}/from-call`, data);
+    return response.data;
+  },
+
+  // Create lead manually (admin-only)
+  createManual: async (data: ManualLeadCreateRequest): Promise<Lead> => {
+    const response = await apiClient.post<Lead>(`${BASE_PATH}/manual`, data);
     return response.data;
   },
 

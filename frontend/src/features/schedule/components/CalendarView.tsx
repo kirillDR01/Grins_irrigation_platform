@@ -19,6 +19,8 @@ import { useStaff } from '@/features/staff/hooks/useStaff';
 import { appointmentStatusConfig } from '../types';
 import type { Appointment, AppointmentStatus } from '../types';
 import { LoadingSpinner } from '@/shared/components/LoadingSpinner';
+import { SendConfirmationButton } from './SendConfirmationButton';
+import { SendDayConfirmationsButton } from './SendDayConfirmationsButton';
 import './CalendarView.css';
 
 interface CalendarViewProps {
@@ -49,6 +51,7 @@ export function formatCalendarEventLabel(
 
 const statusColors: Record<AppointmentStatus, { bg: string; border: string }> = {
   pending: { bg: '#fef3c7', border: '#f59e0b' },
+  draft: { bg: '#f1f5f9', border: '#94a3b8' },
   scheduled: { bg: '#f3e8ff', border: '#a855f7' },
   confirmed: { bg: '#dbeafe', border: '#3b82f6' },
   in_progress: { bg: '#ffedd5', border: '#f97316' },
@@ -125,6 +128,10 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
       // Event label: "{Staff Name} - {Job Type}" (Req 28)
       const displayTitle = formatCalendarEventLabel(staffName, appointment.job_type);
 
+      // Prepaid indicator for service-agreement-linked jobs (Smoothing Req 7.5)
+      const isPrepaid = !!appointment.service_agreement_id;
+      const prepaidPrefix = isPrepaid ? '💎 ' : '';
+
       // Parse time strings and combine with date
       const startDateTime = new Date(
         `${appointment.scheduled_date}T${appointment.time_window_start}`
@@ -133,15 +140,30 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
         `${appointment.scheduled_date}T${appointment.time_window_end}`
       );
 
+      // Confirmed statuses get solid border; unconfirmed get dashed/muted (Req 22)
+      // Draft appointments get dotted border + grayed-out (Req 8.3)
+      const isDraft = appointment.status === 'draft';
+      const isConfirmed = ['confirmed', 'en_route', 'in_progress', 'completed'].includes(appointment.status);
+      const confirmationClass = isDraft
+        ? 'appointment-draft'
+        : isConfirmed
+          ? 'appointment-confirmed'
+          : 'appointment-unconfirmed';
+      const classNames = isOnSelectedDate
+        ? ['selected-day-event', confirmationClass]
+        : isPrepaid
+          ? [confirmationClass, 'appointment-prepaid']
+          : [confirmationClass];
+
       return {
         id: appointment.id,
-        title: isOnSelectedDate ? `⚠️ ${displayTitle}` : displayTitle,
+        title: isOnSelectedDate ? `⚠️ ${displayTitle}` : `${prepaidPrefix}${displayTitle}`,
         start: startDateTime,
         end: endDateTime,
         backgroundColor: colors.bg,
         borderColor: colors.border,
         textColor: '#1f2937',
-        classNames: isOnSelectedDate ? ['selected-day-event'] : [],
+        classNames,
         extendedProps: {
           appointment,
           status: appointment.status,
@@ -149,10 +171,78 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
           staffName,
           jobId: appointment.job_id,
           isOnSelectedDate,
+          isPrepaid,
         },
       };
     });
   }, [weeklySchedule, staffIdToName, selectedDate]);
+
+  // Build draft appointments per day for day header buttons (Req 8.5)
+  const draftsByDay = useMemo(() => {
+    if (!weeklySchedule?.days) return {};
+    const map: Record<string, { count: number; ids: string[] }> = {};
+    weeklySchedule.days.forEach((day) => {
+      const drafts = day.appointments.filter((apt) => apt.status === 'draft');
+      if (drafts.length > 0) {
+        map[day.date] = { count: drafts.length, ids: drafts.map((d) => d.id) };
+      }
+    });
+    return map;
+  }, [weeklySchedule]);
+
+  // Custom event content renderer to show send confirmation button on draft events (Req 8.4)
+  // Also shows prepaid badge on service-agreement-linked appointments (Req 17.5)
+  const renderEventContent = useCallback(
+    (eventInfo: { event: { id: string; title: string; extendedProps: Record<string, unknown> }; timeText: string }) => {
+      const isDraft = eventInfo.event.extendedProps.status === 'draft';
+      const isPrepaid = eventInfo.event.extendedProps.isPrepaid === true;
+      return (
+        <div className="flex items-center gap-1 w-full overflow-hidden">
+          <div className="flex-1 truncate">
+            <span className="text-[10px] text-slate-500">{eventInfo.timeText}</span>
+            {isPrepaid && (
+              <span
+                className="ml-1 inline-flex items-center rounded px-1 py-0.5 text-[9px] font-bold leading-none bg-emerald-100 text-emerald-700 border border-emerald-300"
+                data-testid={`prepaid-indicator-${eventInfo.event.id}`}
+                title="Covered by service agreement — no payment needed"
+              >
+                PREPAID
+              </span>
+            )}
+            <span className="ml-1 truncate">{eventInfo.event.title}</span>
+          </div>
+          {isDraft && (
+            <SendConfirmationButton
+              appointmentId={eventInfo.event.id}
+              compact
+            />
+          )}
+        </div>
+      );
+    },
+    []
+  );
+
+  // Custom day header content to show send day confirmations button (Req 8.5)
+  const renderDayHeaderContent = useCallback(
+    (headerInfo: { date: Date; text: string }) => {
+      const dateStr = format(headerInfo.date, 'yyyy-MM-dd');
+      const dayDrafts = draftsByDay[dateStr];
+      return (
+        <div className="flex items-center gap-1.5 justify-center">
+          <span>{headerInfo.text}</span>
+          {dayDrafts && (
+            <SendDayConfirmationsButton
+              date={dateStr}
+              draftCount={dayDrafts.count}
+              draftAppointmentIds={dayDrafts.ids}
+            />
+          )}
+        </div>
+      );
+    },
+    [draftsByDay]
+  );
 
   const handleDateClick = useCallback(
     (arg: DateClickArg) => {
@@ -257,6 +347,8 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
         allDaySlot={false}
         height="auto"
         eventDisplay="block"
+        eventContent={renderEventContent}
+        dayHeaderContent={renderDayHeaderContent}
         eventTimeFormat={{
           hour: 'numeric',
           minute: '2-digit',

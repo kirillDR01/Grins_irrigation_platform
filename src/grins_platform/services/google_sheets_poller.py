@@ -25,6 +25,10 @@ from grins_platform.repositories.google_sheet_submission_repository import (
     GoogleSheetSubmissionRepository,
 )
 from grins_platform.schemas.google_sheet_submission import SyncStatusResponse
+from grins_platform.services.google_sheets_service import (
+    build_column_map,
+    compute_row_hash,
+)
 
 if TYPE_CHECKING:
     from grins_platform.database import DatabaseManager
@@ -96,6 +100,10 @@ class GoogleSheetsPoller:
         self._sa_email: str = ""
         self._sa_private_key: str = ""
 
+        # Detected sheet headers and column mapping (populated on first poll)
+        self._detected_headers: list[str] = []
+        self._column_map: dict[str, int] = {}
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -128,11 +136,13 @@ class GoogleSheetsPoller:
 
     @property
     def sync_status(self) -> SyncStatusResponse:
-        """Return current poller status."""
+        """Return current poller status including detected headers."""
         return SyncStatusResponse(
             last_sync=self._last_sync,
             is_running=self._running,
             last_error=self._last_error,
+            detected_headers=self._detected_headers,
+            column_map=self._column_map,
         )
 
     # ------------------------------------------------------------------
@@ -253,30 +263,69 @@ class GoogleSheetsPoller:
         # Detect header row dynamically
         start_idx = detect_header_row(rows)
 
-        # Get max stored row to find new rows
-        max_row = 0
+        # Build header-based column map for resilient field extraction.
+        # This makes the integration adapt automatically when the Google
+        # Form questions are reordered, added, or removed.
+        col_map: dict[str, int] | None = None
+        if start_idx > 0:
+            header_row = rows[start_idx - 1]
+            col_map = build_column_map(header_row)
+            self._detected_headers = header_row
+            self._column_map = col_map
+            logger.info(
+                "poller.headers_detected",
+                header_count=len(header_row),
+                mapped_fields=sorted(col_map.keys()),
+                unmapped_count=len(header_row) - len(col_map),
+            )
+            # Warn if critical fields are missing from the mapping
+            critical = {"name", "phone", "email"}
+            missing = critical - set(col_map.keys())
+            if missing:
+                logger.warning(
+                    "poller.critical_fields_unmapped",
+                    missing_fields=sorted(missing),
+                    headers=[h[:60] for h in header_row],
+                )
+
+        # Compute content hashes for all data rows
+        data_rows = rows[start_idx:]
+        row_hashes: list[tuple[int, list[str], str]] = []
+        for i, row_data in enumerate(data_rows, start=start_idx + 1):
+            row_number = i + 1
+            content_hash = compute_row_hash(row_data)
+            row_hashes.append((row_number, row_data, content_hash))
+
+        # Batch lookup: which hashes already exist in DB?
+        all_hashes = [h for _, _, h in row_hashes]
+        existing_hashes: set[str] = set()
         async for session in self._db_manager.get_session():
             sub_repo = GoogleSheetSubmissionRepository(session)
-            max_row = await sub_repo.get_max_row_number()
+            existing_hashes = await sub_repo.get_existing_hashes(all_hashes)
             break
 
-        new_count = 0
-        for i, row_data in enumerate(
-            rows[start_idx:],
-            start=start_idx + 1,
-        ):
-            # 1-based row number (historically offset by +1; kept for
-            # backward-compatibility with existing database row numbers).
-            row_number = i + 1
-            if row_number <= max_row:
-                continue
+        # Filter to only new rows
+        new_rows = [
+            (rn, rd, ch) for rn, rd, ch in row_hashes if ch not in existing_hashes
+        ]
 
+        logger.info(
+            "poller.dedup_summary",
+            total_data_rows=len(data_rows),
+            already_imported=len(data_rows) - len(new_rows),
+            new_rows_to_process=len(new_rows),
+        )
+
+        new_count = 0
+        for row_number, row_data, content_hash in new_rows:
             try:
                 async for session in self._db_manager.get_session():
                     _ = await self._service.process_row(
                         row_data,
                         row_number,
                         session,
+                        col_map=col_map,
+                        content_hash=content_hash,
                     )
                     await session.commit()
                     new_count += 1
@@ -285,6 +334,7 @@ class GoogleSheetsPoller:
                 logger.debug(
                     "poller.row_duplicate_skipped",
                     row_number=row_number,
+                    content_hash=content_hash,
                 )
             except Exception as e:
                 logger.exception(
@@ -305,14 +355,18 @@ class GoogleSheetsPoller:
         self,
         token: str,
     ) -> list[list[str]]:
-        """Fetch all rows from the configured sheet range."""
+        """Fetch all rows from the configured sheet range.
+
+        Fetches all columns (no column limit) so the header-based mapping
+        can discover fields regardless of how many columns the form has.
+        """
         # Quote sheet name with single quotes for A1 notation — required when
         # the name contains spaces, parentheses, or other special characters.
         quoted_name = f"'{self._sheet_name}'"
         url = (
             f"https://sheets.googleapis.com/v4/spreadsheets/"
             f"{self._spreadsheet_id}/values/"
-            f"{quoted_name}!A:T"
+            f"{quoted_name}"
         )
         try:
             async with httpx.AsyncClient(timeout=30.0) as c:

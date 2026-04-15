@@ -64,6 +64,10 @@ def _make_lead(
     lead.converted_at = None
     lead.email_marketing_consent = False
     lead.updated_at = created_at
+    lead.moved_to = None
+    lead.moved_at = None
+    lead.last_contacted_at = None
+    lead.job_requested = None
     return lead
 
 

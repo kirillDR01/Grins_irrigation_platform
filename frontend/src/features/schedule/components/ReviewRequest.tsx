@@ -5,6 +5,7 @@
 
 import { Star, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { useRequestReview } from '../hooks/useAppointmentMutations';
 import type { AppointmentStatus } from '../types';
@@ -12,6 +13,16 @@ import type { AppointmentStatus } from '../types';
 interface ReviewRequestProps {
   appointmentId: string;
   status: AppointmentStatus;
+}
+
+function formatSentDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 export function ReviewRequest({ appointmentId, status }: ReviewRequestProps) {
@@ -31,7 +42,20 @@ export function ReviewRequest({ appointmentId, status }: ReviewRequestProps) {
           description: 'Google review request sent to the customer.',
         });
       }
-    } catch {
+    } catch (error: unknown) {
+      // E-BUG-F: when backend returns 409 REVIEW_ALREADY_SENT, show the
+      // last-sent date instead of a generic failure.
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        const detail = (error.response.data as { detail?: unknown })?.detail;
+        if (detail && typeof detail === 'object' && (detail as { code?: string }).code === 'REVIEW_ALREADY_SENT') {
+          const lastSent = (detail as { last_sent_at?: string }).last_sent_at;
+          const dateText = lastSent ? ` (sent ${formatSentDate(lastSent)})` : '';
+          toast.info('Already Requested', {
+            description: `Already sent within last 30 days${dateText}`,
+          });
+          return;
+        }
+      }
       toast.error('Error', { description: 'Failed to send review request.' });
     }
   };

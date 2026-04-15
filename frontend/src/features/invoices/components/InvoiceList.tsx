@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useMemo, useCallback } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   flexRender,
   getCoreRowModel,
@@ -8,7 +8,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, MoreHorizontal, Search, Filter } from 'lucide-react';
+import { ArrowUpDown, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -25,38 +25,98 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { LoadingPage, ErrorMessage } from '@/shared/components';
+import { LoadingPage, ErrorMessage, FilterPanel } from '@/shared/components';
+import type { FilterAxis } from '@/shared/components';
 import { InvoiceStatusBadge } from './InvoiceStatusBadge';
 import { BulkNotify } from './BulkNotify';
+import { MassNotifyPanel } from './MassNotifyPanel';
 import { useInvoices } from '../hooks';
-import type { Invoice, InvoiceListParams, InvoiceStatus } from '../types';
+import type { Invoice, InvoiceListParams, InvoiceStatus, PaymentMethod } from '../types';
 
-const STATUS_OPTIONS: { value: InvoiceStatus | 'all'; label: string }[] = [
-  { value: 'all', label: 'All Statuses' },
-  { value: 'draft', label: 'Draft' },
-  { value: 'sent', label: 'Sent' },
-  { value: 'viewed', label: 'Viewed' },
-  { value: 'paid', label: 'Paid' },
-  { value: 'partial', label: 'Partial' },
-  { value: 'overdue', label: 'Overdue' },
-  { value: 'lien_warning', label: 'Lien Warning' },
-  { value: 'lien_filed', label: 'Lien Filed' },
-  { value: 'cancelled', label: 'Cancelled' },
+/* ------------------------------------------------------------------ */
+/*  Filter axes definition (9 axes per Req 28.1)                       */
+/* ------------------------------------------------------------------ */
+
+const INVOICE_FILTER_AXES: FilterAxis[] = [
+  {
+    key: 'date',
+    label: 'Date Range',
+    type: 'date-range',
+    fromKey: 'date_from',
+    toKey: 'date_to',
+  },
+  {
+    key: 'status',
+    label: 'Status',
+    type: 'select',
+    options: [
+      { value: 'draft', label: 'Draft' },
+      { value: 'sent', label: 'Sent' },
+      { value: 'viewed', label: 'Viewed' },
+      { value: 'paid', label: 'Paid' },
+      { value: 'partial', label: 'Partial' },
+      { value: 'overdue', label: 'Overdue' },
+      { value: 'lien_warning', label: 'Lien Warning' },
+      { value: 'lien_filed', label: 'Lien Filed' },
+      { value: 'cancelled', label: 'Cancelled' },
+    ],
+  },
+  {
+    key: 'customer_search',
+    label: 'Customer',
+    type: 'text',
+    placeholder: 'Customer name...',
+  },
+  {
+    key: 'job_id',
+    label: 'Job',
+    type: 'text',
+    placeholder: 'Job ID...',
+  },
+  {
+    key: 'amount',
+    label: 'Amount',
+    type: 'number-range',
+    minKey: 'amount_min',
+    maxKey: 'amount_max',
+  },
+  {
+    key: 'payment_types',
+    label: 'Payment Type',
+    type: 'multi-select',
+    options: [
+      { value: 'cash', label: 'Cash' },
+      { value: 'check', label: 'Check' },
+      { value: 'venmo', label: 'Venmo' },
+      { value: 'zelle', label: 'Zelle' },
+      { value: 'stripe', label: 'Stripe' },
+    ],
+  },
+  {
+    key: 'days_until_due',
+    label: 'Days Until Due',
+    type: 'number-range',
+    minKey: 'days_until_due_min',
+    maxKey: 'days_until_due_max',
+  },
+  {
+    key: 'days_past_due',
+    label: 'Days Past Due',
+    type: 'number-range',
+    minKey: 'days_past_due_min',
+    maxKey: 'days_past_due_max',
+  },
+  {
+    key: 'invoice_number',
+    label: 'Invoice Number',
+    type: 'text',
+    placeholder: 'Exact invoice number...',
+  },
 ];
 
-interface InvoiceListProps {
-  onView?: (invoice: Invoice) => void;
-  onEdit?: (invoice: Invoice) => void;
-  onDelete?: (invoice: Invoice) => void;
-}
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -65,63 +125,108 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+function daysDiff(dateStr: string): number {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr);
+  target.setHours(0, 0, 0, 0);
+  return Math.round((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function isOverdue(dueDate: string, status: InvoiceStatus): boolean {
-  if (status === 'paid' || status === 'cancelled') return false;
-  return new Date(dueDate) < new Date();
+function getDaysUntilDue(invoice: Invoice): number | null {
+  if (invoice.status === 'paid' || invoice.status === 'cancelled') return null;
+  const diff = daysDiff(invoice.due_date);
+  return diff >= 0 ? diff : null;
+}
+
+function getDaysPastDue(invoice: Invoice): number | null {
+  if (invoice.status === 'paid' || invoice.status === 'cancelled') return null;
+  const diff = daysDiff(invoice.due_date);
+  return diff < 0 ? Math.abs(diff) : null;
+}
+
+const PAYMENT_LABELS: Record<PaymentMethod, string> = {
+  cash: 'Cash',
+  check: 'Check',
+  venmo: 'Venmo',
+  zelle: 'Zelle',
+  stripe: 'Stripe',
+};
+
+/* ------------------------------------------------------------------ */
+/*  Component                                                          */
+/* ------------------------------------------------------------------ */
+
+interface InvoiceListProps {
+  onView?: (invoice: Invoice) => void;
+  onEdit?: (invoice: Invoice) => void;
+  onDelete?: (invoice: Invoice) => void;
 }
 
 export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [params, setParams] = useState<InvoiceListParams>({
-    page: 1,
-    page_size: 20,
-  });
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [dateFrom, setDateFrom] = useState<string>('');
-  const [dateTo, setDateTo] = useState<string>('');
+  const [searchParams] = useSearchParams();
 
-  const { data, isLoading, error, refetch } = useInvoices({
-    ...params,
-    status: statusFilter !== 'all' ? (statusFilter as InvoiceStatus) : undefined,
-    date_from: dateFrom || undefined,
-    date_to: dateTo || undefined,
-  });
+  // Build params from URL search params (FilterPanel persists to URL)
+  const params: InvoiceListParams = useMemo(() => {
+    const p: InvoiceListParams = {
+      page: Number(searchParams.get('page')) || 1,
+      page_size: 20,
+    };
+    const status = searchParams.get('status');
+    if (status) p.status = status as InvoiceStatus;
+    const dateFrom = searchParams.get('date_from');
+    if (dateFrom) p.date_from = dateFrom;
+    const dateTo = searchParams.get('date_to');
+    if (dateTo) p.date_to = dateTo;
+    const amountMin = searchParams.get('amount_min');
+    if (amountMin) p.amount_min = Number(amountMin);
+    const amountMax = searchParams.get('amount_max');
+    if (amountMax) p.amount_max = Number(amountMax);
+    const paymentTypes = searchParams.get('payment_types');
+    if (paymentTypes) p.payment_types = paymentTypes;
+    const daysUntilDueMin = searchParams.get('days_until_due_min');
+    if (daysUntilDueMin) p.days_until_due_min = Number(daysUntilDueMin);
+    const daysUntilDueMax = searchParams.get('days_until_due_max');
+    if (daysUntilDueMax) p.days_until_due_max = Number(daysUntilDueMax);
+    const daysPastDueMin = searchParams.get('days_past_due_min');
+    if (daysPastDueMin) p.days_past_due_min = Number(daysPastDueMin);
+    const daysPastDueMax = searchParams.get('days_past_due_max');
+    if (daysPastDueMax) p.days_past_due_max = Number(daysPastDueMax);
+    const invoiceNumber = searchParams.get('invoice_number');
+    if (invoiceNumber) p.invoice_number = invoiceNumber;
+    const customerId = searchParams.get('customer_search');
+    if (customerId) p.customer_search = customerId;
+    const jobId = searchParams.get('job_id');
+    if (jobId) p.job_id = jobId;
+    return p;
+  }, [searchParams]);
 
-  const invoiceItems = data?.items ?? [];
+  const { data, isLoading, error, refetch } = useInvoices(params);
+
+  const invoiceItems = useMemo(() => data?.items ?? [], [data?.items]);
   const allSelected = invoiceItems.length > 0 && invoiceItems.every((inv) => selectedIds.has(inv.id));
   const someSelected = invoiceItems.some((inv) => selectedIds.has(inv.id));
 
-  const toggleAll = () => {
+  const toggleAll = useCallback(() => {
     if (allSelected) {
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(invoiceItems.map((inv) => inv.id)));
     }
-  };
+  }, [allSelected, invoiceItems]);
 
-  const toggleOne = (id: string) => {
+  const toggleOne = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
-  };
+  }, []);
 
-  const columns: ColumnDef<Invoice>[] = [
+  const columns: ColumnDef<Invoice>[] = useMemo(() => [
     {
       id: 'select',
       header: () => (
@@ -154,25 +259,20 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
           <ArrowUpDown className="ml-2 h-3 w-3" />
         </Button>
       ),
-      cell: ({ row }) => {
-        const invoice = row.original;
-        return (
-          <Link
-            to={`/invoices/${invoice.id}`}
-            className="font-medium text-slate-700 hover:text-teal-600 transition-colors"
-            data-testid={`invoice-number-${invoice.id}`}
-          >
-            {invoice.invoice_number}
-          </Link>
-        );
-      },
+      cell: ({ row }) => (
+        <Link
+          to={`/invoices/${row.original.id}`}
+          className="font-medium text-slate-700 hover:text-teal-600 transition-colors"
+          data-testid={`invoice-number-${row.original.id}`}
+        >
+          {row.original.invoice_number}
+        </Link>
+      ),
     },
     {
       accessorKey: 'customer_name',
       header: () => (
-        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
-          Customer
-        </span>
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">Customer</span>
       ),
       cell: ({ row }) => (
         <Link
@@ -184,6 +284,21 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
       ),
     },
     {
+      id: 'job',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">Job</span>
+      ),
+      cell: ({ row }) => (
+        <Link
+          to={`/jobs/${row.original.job_id}`}
+          className="text-sm text-slate-600 hover:text-teal-600 transition-colors"
+          data-testid={`invoice-job-link-${row.original.id}`}
+        >
+          {row.original.job_id.slice(0, 8)}…
+        </Link>
+      ),
+    },
+    {
       accessorKey: 'total_amount',
       header: ({ column }) => (
         <Button
@@ -191,7 +306,7 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
           onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
           className="text-slate-500 text-xs uppercase tracking-wider font-medium hover:bg-transparent hover:text-slate-700"
         >
-          Amount
+          Cost
           <ArrowUpDown className="ml-2 h-3 w-3" />
         </Button>
       ),
@@ -204,45 +319,55 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
     {
       accessorKey: 'status',
       header: () => (
-        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
-          Status
-        </span>
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">Status</span>
       ),
       cell: ({ row }) => (
-        <InvoiceStatusBadge 
-          status={row.original.status} 
-          data-testid="invoice-status-badge"
-        />
+        <InvoiceStatusBadge status={row.original.status} data-testid="invoice-status-badge" />
       ),
     },
     {
-      accessorKey: 'due_date',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="text-slate-500 text-xs uppercase tracking-wider font-medium hover:bg-transparent hover:text-slate-700"
-        >
-          Due Date
-          <ArrowUpDown className="ml-2 h-3 w-3" />
-        </Button>
+      id: 'days_until_due',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">Days Until Due</span>
       ),
       cell: ({ row }) => {
-        const invoice = row.original;
-        const overdue = isOverdue(invoice.due_date, invoice.status);
+        const days = getDaysUntilDue(row.original);
+        if (days === null) return <span className="text-sm text-slate-400">—</span>;
         return (
-          <span className={`text-sm ${overdue ? 'text-red-500 font-medium' : 'text-slate-500'}`}>
-            {formatDate(invoice.due_date)}
+          <span className={`text-sm ${days <= 7 ? 'text-yellow-600 font-medium' : 'text-slate-600'}`}>
+            {days}
           </span>
         );
       },
     },
     {
+      id: 'days_past_due',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">Days Past Due</span>
+      ),
+      cell: ({ row }) => {
+        const days = getDaysPastDue(row.original);
+        if (days === null) return <span className="text-sm text-slate-400">—</span>;
+        return (
+          <span className="text-sm text-red-600 font-medium">{days}</span>
+        );
+      },
+    },
+    {
+      id: 'payment_type',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">Payment Type</span>
+      ),
+      cell: ({ row }) => {
+        const method = row.original.payment_method;
+        if (!method) return <span className="text-sm text-slate-400">—</span>;
+        return <span className="text-sm text-slate-600">{PAYMENT_LABELS[method] ?? method}</span>;
+      },
+    },
+    {
       id: 'actions',
       header: () => (
-        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
-          Actions
-        </span>
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">Actions</span>
       ),
       cell: ({ row }) => {
         const invoice = row.original;
@@ -262,9 +387,7 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
                 <Link to={`/invoices/${invoice.id}`}>View Details</Link>
               </DropdownMenuItem>
               {onView && (
-                <DropdownMenuItem onClick={() => onView(invoice)}>
-                  Quick View
-                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onView(invoice)}>Quick View</DropdownMenuItem>
               )}
               {onEdit && invoice.status === 'draft' && (
                 <DropdownMenuItem onClick={() => onEdit(invoice)}>Edit</DropdownMenuItem>
@@ -282,7 +405,7 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
         );
       },
     },
-  ];
+  ], [allSelected, someSelected, selectedIds, toggleAll, toggleOne, onView, onEdit, onDelete]);
 
   const table = useReactTable({
     data: invoiceItems,
@@ -290,99 +413,27 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     onSortingChange: setSorting,
-    state: {
-      sorting,
-    },
+    state: { sorting },
   });
 
-  if (isLoading) {
-    return <LoadingPage message="Loading invoices..." />;
-  }
-
-  if (error) {
-    return <ErrorMessage error={error} onRetry={() => refetch()} />;
-  }
+  if (isLoading) return <LoadingPage message="Loading invoices..." />;
+  if (error) return <ErrorMessage error={error} onRetry={() => refetch()} />;
 
   return (
     <div data-testid="invoice-list">
-      {/* Table Container with Design System Styling */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        {/* Table Toolbar */}
-        <div className="p-4 border-b border-slate-100 flex flex-wrap gap-4" data-testid="invoice-filters">
-          {/* Search Input */}
-          <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              placeholder="Search invoices..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-slate-50 border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-              data-testid="invoice-search"
-            />
+        {/* Filter Panel + Actions Toolbar */}
+        <div className="p-4 border-b border-slate-100 space-y-3" data-testid="invoice-filters">
+          <div className="flex flex-wrap items-center gap-2">
+            <FilterPanel axes={INVOICE_FILTER_AXES} persistToUrl />
+            <div className="ml-auto flex gap-2">
+              <MassNotifyPanel />
+              <BulkNotify
+                selectedInvoiceIds={Array.from(selectedIds)}
+                onComplete={() => setSelectedIds(new Set())}
+              />
+            </div>
           </div>
-
-          {/* Status Filter */}
-          <Select
-            value={statusFilter}
-            onValueChange={(value) => {
-              setStatusFilter(value);
-              setParams((p) => ({ ...p, page: 1 }));
-            }}
-          >
-            <SelectTrigger 
-              className="w-48 bg-white border-slate-200 rounded-lg text-sm"
-              data-testid="invoice-filter-status"
-            >
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent data-testid="status-filter-options">
-              {STATUS_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Date Range Filters */}
-          <div className="flex items-center gap-2">
-            <Input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => {
-                setDateFrom(e.target.value);
-                setParams((p) => ({ ...p, page: 1 }));
-              }}
-              className="w-40 bg-white border-slate-200 rounded-lg text-sm"
-              data-testid="invoice-filter-date-from"
-            />
-            <span className="text-slate-400 text-sm">to</span>
-            <Input
-              type="date"
-              value={dateTo}
-              onChange={(e) => {
-                setDateTo(e.target.value);
-                setParams((p) => ({ ...p, page: 1 }));
-              }}
-              className="w-40 bg-white border-slate-200 rounded-lg text-sm"
-              data-testid="invoice-filter-date-to"
-            />
-          </div>
-
-          {/* Filter Button */}
-          <Button 
-            variant="outline" 
-            className="bg-white hover:bg-slate-50 border-slate-200 text-slate-700 rounded-lg"
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            Filter
-          </Button>
-
-          {/* Bulk Notify */}
-          <BulkNotify
-            selectedInvoiceIds={Array.from(selectedIds)}
-            onComplete={() => setSelectedIds(new Set())}
-          />
         </div>
 
         {/* Table */}
@@ -404,8 +455,8 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
             <TableBody className="divide-y divide-slate-50">
               {table.getRowModel().rows?.length ? (
                 table.getRowModel().rows.map((row) => (
-                  <TableRow 
-                    key={row.id} 
+                  <TableRow
+                    key={row.id}
                     data-testid="invoice-row"
                     className="hover:bg-slate-50/80 transition-colors"
                   >
@@ -429,20 +480,24 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
 
         {/* Pagination */}
         {data && data.total_pages > 1 && (
-          <div 
+          <div
             className="p-4 border-t border-slate-100 flex items-center justify-between"
             data-testid="pagination"
           >
             <div className="text-sm text-slate-500">
               Showing {(params.page! - 1) * params.page_size! + 1} to{' '}
-              {Math.min(params.page! * params.page_size!, data.total)} of {data.total}{' '}
-              invoices
+              {Math.min(params.page! * params.page_size!, data.total)} of {data.total} invoices
             </div>
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setParams((p) => ({ ...p, page: p.page! - 1 }))}
+                onClick={() => {
+                  const sp = new URLSearchParams(searchParams);
+                  sp.set('page', String((params.page ?? 1) - 1));
+                  window.history.pushState({}, '', `?${sp.toString()}`);
+                  window.dispatchEvent(new PopStateEvent('popstate'));
+                }}
                 disabled={params.page === 1}
                 className="bg-white hover:bg-slate-50 border-slate-200 text-slate-700 rounded-lg disabled:opacity-50"
                 data-testid="pagination-prev"
@@ -452,7 +507,12 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setParams((p) => ({ ...p, page: p.page! + 1 }))}
+                onClick={() => {
+                  const sp = new URLSearchParams(searchParams);
+                  sp.set('page', String((params.page ?? 1) + 1));
+                  window.history.pushState({}, '', `?${sp.toString()}`);
+                  window.dispatchEvent(new PopStateEvent('popstate'));
+                }}
                 disabled={params.page === data.total_pages}
                 className="bg-white hover:bg-slate-50 border-slate-200 text-slate-700 rounded-lg disabled:opacity-50"
                 data-testid="pagination-next"

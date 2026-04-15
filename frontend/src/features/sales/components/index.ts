@@ -1,7 +1,13 @@
 export { SalesDashboard } from './SalesDashboard';
+export { SalesPipeline } from './SalesPipeline';
+export { SalesCalendar } from './SalesCalendar';
+export { StatusActionButton } from './StatusActionButton';
 export { EstimateBuilder } from './EstimateBuilder';
 export { MediaLibrary } from './MediaLibrary';
 export { DiagramBuilder } from './DiagramBuilder';
 export { FollowUpQueue } from './FollowUpQueue';
 export { EstimateDetail } from './EstimateDetail';
 export { EstimateList } from './EstimateList';
+export { SalesDetail } from './SalesDetail';
+export { DocumentsSection } from './DocumentsSection';
+export { SignWellEmbeddedSigner } from './SignWellEmbeddedSigner';

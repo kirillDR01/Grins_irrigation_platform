@@ -15,7 +15,10 @@ export const customerKeys = {
     [...customerKeys.all, id, 'invoices', params] as const,
   paymentMethods: (id: string) => [...customerKeys.all, id, 'payment-methods'] as const,
   duplicates: (id: string) => [...customerKeys.all, id, 'duplicates'] as const,
+  duplicateReviewQueue: (skip: number, limit: number) =>
+    [...customerKeys.all, 'duplicate-review-queue', skip, limit] as const,
   sentMessages: (id: string) => [...customerKeys.all, id, 'sent-messages'] as const,
+  servicePreferences: (id: string) => [...customerKeys.all, id, 'service-preferences'] as const,
 };
 
 // List customers with pagination and filters
@@ -53,7 +56,7 @@ export function useCustomerPhotos(customerId: string) {
   });
 }
 
-// Customer invoices (Req 10)
+// Customer invoices (Req 10, Req 29.5 — real-time refresh)
 export function useCustomerInvoices(
   customerId: string,
   params?: { page?: number; page_size?: number }
@@ -62,6 +65,7 @@ export function useCustomerInvoices(
     queryKey: customerKeys.invoices(customerId, params),
     queryFn: () => customerApi.listInvoices(customerId, params),
     enabled: !!customerId,
+    refetchInterval: 30_000, // Poll every 30s for real-time invoice state changes
   });
 }
 
@@ -83,11 +87,28 @@ export function useCustomerDuplicates(customerId: string) {
   });
 }
 
+// Paginated duplicate review queue (CRM Changes Update 2 Req 5, 6)
+export function useDuplicateReviewQueue(skip = 0, limit = 20) {
+  return useQuery({
+    queryKey: customerKeys.duplicateReviewQueue(skip, limit),
+    queryFn: () => customerApi.getDuplicateReviewQueue(skip, limit),
+  });
+}
+
 // Customer sent messages (Req 82)
 export function useCustomerSentMessages(customerId: string) {
   return useQuery({
     queryKey: customerKeys.sentMessages(customerId),
     queryFn: () => customerApi.listSentMessages(customerId),
+    enabled: !!customerId,
+  });
+}
+
+// Customer service preferences (CRM2 Req 7)
+export function useServicePreferences(customerId: string) {
+  return useQuery({
+    queryKey: customerKeys.servicePreferences(customerId),
+    queryFn: () => customerApi.listServicePreferences(customerId),
     enabled: !!customerId,
   });
 }

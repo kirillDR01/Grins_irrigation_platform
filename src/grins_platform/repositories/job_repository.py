@@ -16,9 +16,15 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import joinedload, selectinload
 
 from grins_platform.log_config import LoggerMixin
-from grins_platform.models.enums import JobCategory, JobStatus  # noqa: TC001
+from grins_platform.models.enums import (  # noqa: TC001
+    JobCategory,
+    JobStatus,
+    PropertyType,
+)
 from grins_platform.models.job import Job
 from grins_platform.models.job_status_history import JobStatusHistory
+from grins_platform.models.property import Property
+from grins_platform.models.service_agreement import ServiceAgreement
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -67,6 +73,8 @@ class JobRepository(LoggerMixin):
         quoted_amount: float | None = None,
         source: str | None = None,
         source_details: dict[str, Any] | None = None,
+        target_start_date: date | None = None,
+        target_end_date: date | None = None,
     ) -> Job:
         """Create a new job record.
 
@@ -112,6 +120,8 @@ class JobRepository(LoggerMixin):
             quoted_amount=quoted_amount,
             source=source,
             source_details=source_details,
+            target_start_date=target_start_date,
+            target_end_date=target_end_date,
             requested_at=datetime.now(),
         )
 
@@ -150,6 +160,7 @@ class JobRepository(LoggerMixin):
                 selectinload(Job.job_property),
                 selectinload(Job.service_offering),
                 selectinload(Job.status_history),
+                selectinload(Job.service_agreement),
             )
 
         if not include_deleted:
@@ -353,6 +364,9 @@ class JobRepository(LoggerMixin):
         date_to: datetime | None = None,
         search: str | None = None,
         has_service_agreement: bool | None = None,
+        property_type: PropertyType | None = None,
+        is_hoa: bool | None = None,
+        is_subscription_property: bool | None = None,
         target_date_from: date | None = None,
         target_date_to: date | None = None,
         sort_by: str = "created_at",
@@ -392,8 +406,12 @@ class JobRepository(LoggerMixin):
             search=search,
         )
 
-        # Base query — eager-load customer for customer_name in list response
-        base_query = select(Job).options(joinedload(Job.customer))
+        # Base query — eager-load customer + property + agreement for list response
+        base_query = select(Job).options(
+            joinedload(Job.customer),
+            joinedload(Job.job_property),
+            selectinload(Job.service_agreement),
+        )
 
         if not include_deleted:
             base_query = base_query.where(Job.is_deleted == False)  # noqa: E712
@@ -439,6 +457,42 @@ class JobRepository(LoggerMixin):
         elif has_service_agreement is False:
             base_query = base_query.where(Job.service_agreement_id.is_(None))
 
+        # Filter by property type (Req 8.5)
+        if property_type is not None:
+            base_query = base_query.where(
+                Job.property_id.in_(
+                    select(Property.id).where(
+                        Property.property_type == property_type.value,
+                    ),
+                ),
+            )
+
+        # Filter by HOA flag (Req 8.5)
+        if is_hoa is not None:
+            base_query = base_query.where(
+                Job.property_id.in_(
+                    select(Property.id).where(Property.is_hoa == is_hoa),
+                ),
+            )
+
+        # Filter by subscription property (Req 8.5)
+        if is_subscription_property is not None:
+            sub = (
+                select(Property.id)
+                .join(
+                    ServiceAgreement,
+                    ServiceAgreement.property_id == Property.id,
+                )
+                .where(ServiceAgreement.status == "active")
+                .distinct()
+            )
+            if is_subscription_property:
+                base_query = base_query.where(Job.property_id.in_(sub))
+            else:
+                base_query = base_query.where(
+                    (Job.property_id.is_(None)) | (Job.property_id.notin_(sub)),
+                )
+
         # Apply target date range filters
         if target_date_from is not None:
             base_query = base_query.where(Job.target_start_date >= target_date_from)
@@ -462,7 +516,7 @@ class JobRepository(LoggerMixin):
         )
 
         result = await self.session.execute(paginated_query)
-        jobs = list(result.scalars().all())
+        jobs = list(result.unique().scalars().all())
 
         self.log_completed("list_with_filters", count=len(jobs), total=total)
         return jobs, total

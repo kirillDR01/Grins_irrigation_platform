@@ -5,6 +5,7 @@
 
 export type AppointmentStatus =
   | 'pending'
+  | 'draft'
   | 'scheduled'
   | 'confirmed'
   | 'en_route'
@@ -33,6 +34,8 @@ export interface Appointment {
   job_type: string | null;
   customer_name: string | null;
   staff_name: string | null;
+  // Service agreement indicator for calendar display (Smoothing Req 7.5)
+  service_agreement_id: string | null;
 }
 
 export interface AppointmentCreate {
@@ -122,6 +125,11 @@ export const appointmentStatusConfig: Record<
     label: 'Pending',
     color: 'text-yellow-800',
     bgColor: 'bg-yellow-100',
+  },
+  draft: {
+    label: 'Draft',
+    color: 'text-slate-600',
+    bgColor: 'bg-slate-100',
   },
   scheduled: {
     label: 'Scheduled',
@@ -424,7 +432,26 @@ export interface ScheduleRestoreResponse {
 // Staff Workflow Types (Req 30-36)
 // =============================================================================
 
-export type PaymentMethod = 'credit_card' | 'cash' | 'check' | 'venmo' | 'zelle' | 'send_invoice';
+// =============================================================================
+// Reschedule Request Types (Req 25)
+// =============================================================================
+
+export interface RescheduleRequestDetail {
+  id: string;
+  job_id: string;
+  appointment_id: string;
+  customer_id: string;
+  customer_name: string;
+  original_appointment_date: string | null;
+  original_appointment_staff: string | null;
+  requested_alternatives: Record<string, unknown> | null;
+  raw_alternatives_text: string | null;
+  status: string;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+export type PaymentMethod = 'credit_card' | 'cash' | 'check' | 'venmo' | 'zelle' | 'send_invoice' | 'stripe_terminal';
 
 export interface CollectPaymentRequest {
   payment_method: PaymentMethod;

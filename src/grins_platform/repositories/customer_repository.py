@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.customer import Customer
 from grins_platform.models.property import Property
+from grins_platform.models.service_agreement import ServiceAgreement
 from grins_platform.schemas.customer import CustomerListParams, ServiceHistorySummary
 
 if TYPE_CHECKING:
@@ -349,6 +350,9 @@ class CustomerRepository(LoggerMixin):
                 Customer.is_slow_payer == params.is_slow_payer,
             )
 
+        if params.sms_opt_in is not None:
+            base_query = base_query.where(Customer.sms_opt_in == params.sms_opt_in)
+
         # Search by name or email (case-insensitive)
         if params.search:
             search_term = f"%{params.search}%"
@@ -369,6 +373,42 @@ class CustomerRepository(LoggerMixin):
                     .distinct(),
                 ),
             )
+
+        # Filter by property type (Req 8.5)
+        if params.property_type is not None:
+            base_query = base_query.where(
+                Customer.id.in_(
+                    select(Property.customer_id)
+                    .where(Property.property_type == params.property_type.value)
+                    .distinct(),
+                ),
+            )
+
+        # Filter by HOA flag (Req 8.5)
+        if params.is_hoa is not None:
+            base_query = base_query.where(
+                Customer.id.in_(
+                    select(Property.customer_id)
+                    .where(Property.is_hoa == params.is_hoa)
+                    .distinct(),
+                ),
+            )
+
+        # Filter by subscription property (Req 8.5)
+        if params.is_subscription_property is not None:
+            sub = (
+                select(Property.customer_id)
+                .join(
+                    ServiceAgreement,
+                    ServiceAgreement.property_id == Property.id,
+                )
+                .where(ServiceAgreement.status == "active")
+                .distinct()
+            )
+            if params.is_subscription_property:
+                base_query = base_query.where(Customer.id.in_(sub))
+            else:
+                base_query = base_query.where(Customer.id.notin_(sub))
 
         # Get total count
         count_query = select(func.count()).select_from(base_query.subquery())

@@ -4,7 +4,13 @@ import type { BaseEntity, PaginationParams } from '@/core/api';
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'converted' | 'lost' | 'spam';
 
 // Lead situation enum values
-export type LeadSituation = 'new_system' | 'upgrade' | 'repair' | 'exploring';
+export type LeadSituation =
+  | 'new_system'
+  | 'upgrade'
+  | 'repair'
+  | 'exploring'
+  | 'winterization'
+  | 'seasonal_maintenance';
 
 // Lead source channels (extended)
 export type LeadSource =
@@ -55,6 +61,25 @@ export interface Lead extends BaseEntity {
   sms_consent: boolean;
   terms_accepted: boolean;
   email_marketing_consent: boolean;
+  job_requested: string | null;
+  last_contacted_at: string | null;
+}
+
+// Lead move response (CRM2 Req 12.1, 12.2, Smoothing Req 6.1)
+export interface MergedCustomerInfo {
+  id: string;
+  name: string;
+}
+
+export interface LeadMoveResponse {
+  success: boolean;
+  lead_id: string;
+  customer_id: string | null;
+  job_id: string | null;
+  sales_entry_id: string | null;
+  message: string;
+  requires_estimate_warning: boolean;
+  merged_into_customer?: MergedCustomerInfo | null;
 }
 
 // Lead attachment (Req 15)
@@ -144,6 +169,7 @@ export interface LeadListParams extends PaginationParams {
   lead_source?: string;
   intake_tag?: string;
   action_tag?: ActionTag;
+  sms_consent?: boolean;
 }
 
 // Paginated lead response
@@ -202,7 +228,7 @@ export interface PaginatedFollowUpResponse {
 // Status display helpers
 export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
   new: 'New',
-  contacted: 'Contacted',
+  contacted: 'Contacted (Awaiting Response)',
   qualified: 'Qualified',
   converted: 'Converted',
   lost: 'Lost',
@@ -214,6 +240,8 @@ export const LEAD_SITUATION_LABELS: Record<LeadSituation, string> = {
   upgrade: 'Upgrade',
   repair: 'Repair',
   exploring: 'Exploring',
+  winterization: 'Winterization',
+  seasonal_maintenance: 'Seasonal Maintenance',
 };
 
 export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
@@ -277,6 +305,19 @@ export interface FromCallRequest {
   lead_source?: LeadSource;
   source_detail?: string | null;
   intake_tag?: IntakeTag | null;
+}
+
+// Manual lead creation request
+export interface ManualLeadCreateRequest {
+  name: string;
+  phone: string;
+  email?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip_code?: string | null;
+  situation?: LeadSituation;
+  notes?: string | null;
 }
 
 // Lead metrics by source

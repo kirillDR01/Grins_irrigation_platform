@@ -278,7 +278,7 @@ class LeadUpdate(BaseModel):
 class LeadResponse(BaseModel):
     """Full lead response for admin endpoints.
 
-    Validates: Requirement 5.8
+    Validates: Requirement 5.8, CRM2 Req 9.2, 10.3, 11.2
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -310,6 +310,11 @@ class LeadResponse(BaseModel):
     converted_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    # CRM2 fields (Req 9.2, 10.3, 11.2)
+    moved_to: str | None = None
+    moved_at: datetime | None = None
+    last_contacted_at: datetime | None = None
+    job_requested: str | None = None
 
     @field_validator("status", mode="before")  # type: ignore[misc,untyped-decorator]
     @classmethod
@@ -555,6 +560,34 @@ class LeadMetricsBySourceResponse(BaseModel):
     date_to: datetime
 
 
+class MergedCustomerInfo(BaseModel):
+    """Minimal identity for a customer that absorbed a lead on move.
+
+    Emitted on ``LeadMoveResponse.merged_into_customer`` when a move-to-sales
+    or move-to-jobs call found an existing customer by phone and reused
+    them instead of creating a new record (bughunt E-BUG-D).
+    """
+
+    id: UUID
+    name: str
+
+
+class LeadMoveResponse(BaseModel):
+    """Response for lead move-to-jobs or move-to-sales.
+
+    Validates: CRM2 Req 12.1, 12.2, Smoothing Req 6.1, 6.2
+    """
+
+    success: bool = True
+    lead_id: UUID
+    customer_id: UUID | None = None
+    job_id: UUID | None = None
+    sales_entry_id: UUID | None = None
+    message: str
+    requires_estimate_warning: bool = False
+    merged_into_customer: MergedCustomerInfo | None = None
+
+
 class BulkOutreachRequest(BaseModel):
     """Request body for bulk lead outreach.
 
@@ -589,6 +622,94 @@ class BulkOutreachSummary(BaseModel):
     skipped_count: int = 0
     failed_count: int = 0
     total: int = 0
+
+
+class ManualLeadCreate(BaseModel):
+    """Schema for manual lead creation via CRM interface.
+
+    Requires name and phone; all other fields are optional.
+
+    Validates: Requirement 7.2, 7.3
+    """
+
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Full name (required)",
+    )
+    phone: str = Field(
+        ...,
+        min_length=7,
+        max_length=20,
+        description="Phone number (required)",
+    )
+    email: EmailStr | None = Field(
+        default=None,
+        description="Optional email address",
+    )
+    address: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Street address",
+    )
+    city: str | None = Field(
+        default=None,
+        max_length=100,
+        description="City",
+    )
+    state: str | None = Field(
+        default=None,
+        max_length=2,
+        description="State abbreviation",
+    )
+    zip_code: str | None = Field(
+        default=None,
+        max_length=10,
+        description="Zip code",
+    )
+    situation: LeadSituation = Field(
+        default=LeadSituation.EXPLORING,
+        description="Lead situation (defaults to exploring)",
+    )
+    notes: str | None = Field(
+        default=None,
+        max_length=1000,
+        description="Optional notes",
+    )
+
+    @field_validator("phone")  # type: ignore[misc,untyped-decorator]
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        """Normalize phone to 10 digits."""
+        return normalize_phone(v)
+
+    @field_validator("zip_code")  # type: ignore[misc,untyped-decorator]
+    @classmethod
+    def validate_zip_code(cls, v: str | None) -> str | None:
+        """Validate 5-digit zip code."""
+        if v is None:
+            return None
+        digits = "".join(filter(str.isdigit, v))
+        if len(digits) != 5:
+            msg = "Zip code must be exactly 5 digits"
+            raise ValueError(msg)
+        return digits
+
+    @field_validator("name")  # type: ignore[misc,untyped-decorator]
+    @classmethod
+    def sanitize_name(cls, v: str) -> str:
+        """Strip HTML tags."""
+        return strip_html_tags(v)
+
+    @field_validator("notes")  # type: ignore[misc,untyped-decorator]
+    @classmethod
+    def sanitize_notes(cls, v: str | None) -> str | None:
+        """Strip HTML tags from notes."""
+        if v is None:
+            return None
+        sanitized = strip_html_tags(v)
+        return sanitized if sanitized else None
 
 
 class MigrationSummary(BaseModel):

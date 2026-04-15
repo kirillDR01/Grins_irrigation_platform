@@ -97,7 +97,6 @@ def _make_customer(**overrides: Any) -> MagicMock:
     return c
 
 
-
 def _build_appointment_service(
     *,
     appt_repo: AsyncMock | None = None,
@@ -367,7 +366,6 @@ class TestPaymentCollectionWorkflow:
 
         with pytest.raises(AppointmentNotFoundError):
             await svc.collect_payment(uuid4(), payment)
-
 
 
 # =============================================================================
@@ -658,7 +656,6 @@ class TestAppointmentPhotoWorkflow:
                 appointment_id=uuid4(),
                 notes="Some notes",
             )
-
 
 
 # =============================================================================

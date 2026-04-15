@@ -17,6 +17,7 @@ from grins_platform.database import Base
 if TYPE_CHECKING:
     from grins_platform.models.appointment import Appointment
     from grins_platform.models.customer import Customer
+    from grins_platform.models.job import Job
     from grins_platform.models.staff import Staff
 
 
@@ -53,6 +54,11 @@ class CustomerPhoto(Base):
         ForeignKey("appointments.id", ondelete="SET NULL"),
         nullable=True,
     )
+    job_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("jobs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -64,6 +70,10 @@ class CustomerPhoto(Base):
     uploaded_by_staff: Mapped["Staff | None"] = relationship("Staff", lazy="selectin")
     appointment: Mapped["Appointment | None"] = relationship(
         "Appointment",
+        lazy="selectin",
+    )
+    job: Mapped["Job | None"] = relationship(
+        "Job",
         lazy="selectin",
     )
 

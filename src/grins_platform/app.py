@@ -21,22 +21,31 @@ from pydantic import ValidationError as PydanticValidationError
 from grins_platform.api.v1.router import api_router
 from grins_platform.database import get_database_manager
 from grins_platform.exceptions import (
+    ConfirmationCorrelationError,
     CustomerNotFoundError,
+    DocumentUploadError,
     DuplicateCustomerError,
     DuplicateLeadError,
     InvalidLeadStatusTransitionError,
+    InvalidSalesTransitionError,
     InvalidStatusTransitionError,
     JobNotFoundError,
     LeadAlreadyConvertedError,
     LeadNotFoundError,
+    MergeBlockerError,
     PropertyCustomerMismatchError,
     PropertyNotFoundError,
+    RenewalProposalNotFoundError,
     ServiceOfferingInactiveError,
     ServiceOfferingNotFoundError,
     StaffNotFoundError,
     ValidationError,
 )
-from grins_platform.log_config import get_logger
+from grins_platform.log_config import (
+    clear_request_id,
+    get_logger,
+    set_request_id,
+)
 from grins_platform.middleware.rate_limit import setup_rate_limiting
 from grins_platform.middleware.request_size import (
     RequestSizeLimitMiddleware,
@@ -48,8 +57,15 @@ from grins_platform.scheduler import get_scheduler
 from grins_platform.services.auth_service import validate_jwt_config
 from grins_platform.services.background_jobs import register_scheduled_jobs
 from grins_platform.services.google_sheets_config import GoogleSheetsSettings
+from grins_platform.services.signwell.client import (
+    SignWellDocumentNotFoundError,
+    SignWellError,
+    SignWellWebhookVerificationError,
+)
 from grins_platform.services.google_sheets_poller import GoogleSheetsPoller
 from grins_platform.services.google_sheets_service import GoogleSheetsService
+from grins_platform.services.sms.audit import log_provider_switched
+from grins_platform.services.sms.factory import get_sms_provider
 from grins_platform.services.stripe_config import StripeSettings
 
 logger = get_logger(__name__)
@@ -112,6 +128,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("app.scheduler_started")
     except Exception as e:
         logger.warning("app.scheduler_startup_failed", error=str(e))
+
+    # Log SMS provider selection at boot (Requirement 41)
+    try:
+        provider = get_sms_provider()
+        provider_name = provider.provider_name
+        logger.info("app.sms_provider_resolved", provider=provider_name)
+        async for session in db_manager.get_session():
+            await log_provider_switched(session, provider_name=provider_name)
+    except Exception as e:
+        logger.warning("app.sms_provider_audit_failed", error=str(e))
 
     logger.info("app.startup_completed")
 
@@ -201,6 +227,22 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestSizeLimitMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     setup_rate_limiting(app)
+
+    # X-Request-ID: attach/echo a per-request UUID on every response so
+    # external callers (e.g. the marketing-site lead form) can capture it
+    # and share with us to grep server logs. The ID is also bound to the
+    # structured log context so every log line during the request emits
+    # it. (E-BUG-B — observability hook.)
+    @app.middleware("http")  # type: ignore[untyped-decorator]
+    async def _attach_request_id(request: Request, call_next: Any) -> Any:
+        incoming = request.headers.get("x-request-id")
+        request_id = set_request_id(incoming)
+        try:
+            response = await call_next(request)
+        finally:
+            clear_request_id()
+        response.headers["X-Request-ID"] = request_id
+        return response
 
     # Register exception handlers
     _register_exception_handlers(app)
@@ -587,6 +629,207 @@ def _register_exception_handlers(app: FastAPI) -> None:
             content={
                 "detail": exc.detail,
                 "message": exc.message,
+            },
+        )
+
+    # =========================================================================
+    # CRM Changes Update 2 — Domain-Specific Exception Handlers (Task 18.1)
+    # =========================================================================
+
+    @app.exception_handler(MergeBlockerError)  # type: ignore[untyped-decorator]
+    async def merge_blocker_handler(
+        request: Request,
+        exc: MergeBlockerError,
+    ) -> JSONResponse:
+        """Handle MergeBlockerError — HTTP 409 Conflict.
+
+        Validates: CRM Changes Update 2 Req 6.7
+        """
+        logger.warning(
+            "api.exception.merge_blocker",
+            message=str(exc),
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "success": False,
+                "error": {
+                    "code": "MERGE_BLOCKER",
+                    "message": str(exc),
+                },
+            },
+        )
+
+    @app.exception_handler(InvalidSalesTransitionError)  # type: ignore[untyped-decorator]
+    async def invalid_sales_transition_handler(
+        request: Request,
+        exc: InvalidSalesTransitionError,
+    ) -> JSONResponse:
+        """Handle InvalidSalesTransitionError — HTTP 422 Unprocessable Entity.
+
+        Validates: CRM Changes Update 2 Req 14.3
+        """
+        logger.warning(
+            "api.exception.invalid_sales_transition",
+            current_status=exc.current_status,
+            target_status=exc.target_status,
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={
+                "success": False,
+                "error": {
+                    "code": "INVALID_SALES_TRANSITION",
+                    "message": str(exc),
+                    "current_status": exc.current_status,
+                    "target_status": exc.target_status,
+                },
+            },
+        )
+
+    @app.exception_handler(SignWellDocumentNotFoundError)  # type: ignore[untyped-decorator]
+    async def signwell_document_not_found_handler(
+        request: Request,
+        exc: SignWellDocumentNotFoundError,
+    ) -> JSONResponse:
+        """Handle SignWellDocumentNotFoundError — HTTP 404 Not Found.
+
+        Validates: CRM Changes Update 2 Req 18.5
+        """
+        logger.warning(
+            "api.exception.signwell_document_not_found",
+            message=str(exc),
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "success": False,
+                "error": {
+                    "code": "SIGNWELL_DOCUMENT_NOT_FOUND",
+                    "message": str(exc),
+                },
+            },
+        )
+
+    @app.exception_handler(SignWellWebhookVerificationError)  # type: ignore[untyped-decorator]
+    async def signwell_webhook_verification_handler(
+        request: Request,
+        exc: SignWellWebhookVerificationError,
+    ) -> JSONResponse:
+        """Handle SignWellWebhookVerificationError — HTTP 401 Unauthorized.
+
+        Validates: CRM Changes Update 2 Req 18.5
+        """
+        logger.warning(
+            "api.exception.signwell_webhook_verification_failed",
+            message=str(exc),
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={
+                "success": False,
+                "error": {
+                    "code": "SIGNWELL_WEBHOOK_VERIFICATION_FAILED",
+                    "message": "Webhook signature verification failed",
+                },
+            },
+        )
+
+    @app.exception_handler(SignWellError)  # type: ignore[untyped-decorator]
+    async def signwell_error_handler(
+        request: Request,
+        exc: SignWellError,
+    ) -> JSONResponse:
+        """Handle SignWellError — HTTP 502 Bad Gateway.
+
+        Validates: CRM Changes Update 2 Req 18.5
+        """
+        logger.error(
+            "api.exception.signwell_error",
+            message=str(exc),
+            status_code=exc.status_code,
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={
+                "success": False,
+                "error": {
+                    "code": "SIGNWELL_ERROR",
+                    "message": "E-signature service error",
+                },
+            },
+        )
+
+    @app.exception_handler(ConfirmationCorrelationError)  # type: ignore[untyped-decorator]
+    async def confirmation_correlation_handler(
+        request: Request,
+        exc: ConfirmationCorrelationError,
+    ) -> JSONResponse:
+        """Handle ConfirmationCorrelationError — HTTP 404 Not Found."""
+        logger.warning(
+            "api.exception.confirmation_correlation_failed",
+            thread_id=exc.thread_id,
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "success": False,
+                "error": {
+                    "code": "CONFIRMATION_CORRELATION_ERROR",
+                    "message": str(exc),
+                    "thread_id": exc.thread_id,
+                },
+            },
+        )
+
+    @app.exception_handler(RenewalProposalNotFoundError)  # type: ignore[untyped-decorator]
+    async def renewal_proposal_not_found_handler(
+        request: Request,
+        exc: RenewalProposalNotFoundError,
+    ) -> JSONResponse:
+        """Handle RenewalProposalNotFoundError — HTTP 404 Not Found."""
+        logger.warning(
+            "api.exception.renewal_proposal_not_found",
+            proposal_id=str(exc.proposal_id),
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "success": False,
+                "error": {
+                    "code": "RENEWAL_PROPOSAL_NOT_FOUND",
+                    "message": str(exc),
+                    "proposal_id": str(exc.proposal_id),
+                },
+            },
+        )
+
+    @app.exception_handler(DocumentUploadError)  # type: ignore[untyped-decorator]
+    async def document_upload_error_handler(
+        request: Request,
+        exc: DocumentUploadError,
+    ) -> JSONResponse:
+        """Handle DocumentUploadError — HTTP 400 Bad Request."""
+        logger.warning(
+            "api.exception.document_upload_error",
+            message=str(exc),
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "success": False,
+                "error": {
+                    "code": "DOCUMENT_UPLOAD_ERROR",
+                    "message": str(exc),
+                },
             },
         )
 

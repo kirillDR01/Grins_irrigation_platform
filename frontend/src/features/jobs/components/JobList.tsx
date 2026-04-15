@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useDebounce } from '@/shared/hooks/useDebounce';
 import {
   flexRender,
   getCoreRowModel,
@@ -8,9 +9,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, MoreHorizontal, Search, FileText, CalendarIcon } from 'lucide-react';
-import { format } from 'date-fns';
-import { parseLocalDate } from '@/shared/utils/dateUtils';
+import { ArrowUpDown, MoreHorizontal, Search, AlertTriangle, ShieldCheck, CalendarPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -35,14 +34,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { LoadingPage, ErrorMessage } from '@/shared/components';
+import { LoadingPage, ErrorMessage, WeekPicker, PropertyTags } from '@/shared/components';
 import { useJobs } from '../hooks';
+import { JobWeekEditor } from './JobWeekEditor';
 import type { Job, JobListParams, JobStatus, JobStatusLabel } from '../types';
 import {
   formatJobType,
@@ -55,7 +49,7 @@ import {
   calculateDaysWaiting,
   getDueByColorClass,
 } from '../types';
-import type { CustomerTag } from '../types';
+import type { CustomerTag, JobCategory } from '../types';
 
 interface JobListProps {
   onEdit?: (job: Job) => void;
@@ -71,9 +65,11 @@ function getStatusFilterValue(label: string): JobStatus | undefined {
 }
 
 export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobListProps) {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 300);
   const [highlightedJobId, setHighlightedJobId] = useState<string | null>(null);
   const [simplifiedFilter, setSimplifiedFilter] = useState<string>('all');
 
@@ -81,7 +77,7 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
   const urlStatus = searchParams.get('status') as JobStatus | null;
   const urlHighlight = searchParams.get('highlight');
 
-  const validStatuses: JobStatus[] = ['to_be_scheduled', 'in_progress', 'completed', 'cancelled'];
+  const validStatuses: JobStatus[] = ['to_be_scheduled', 'scheduled', 'in_progress', 'completed', 'cancelled'];
 
   const [params, setParams] = useState<JobListParams>({
     page: 1,
@@ -98,19 +94,25 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Apply highlight from URL on mount
+  // Apply highlight from URL on mount (param stays in URL for refresh persistence)
   useEffect(() => {
     if (urlHighlight) {
       setHighlightedJobId(urlHighlight);
       const timer = setTimeout(() => {
         setHighlightedJobId(null);
       }, 3000);
-      const newParams = new URLSearchParams(searchParams);
-      newParams.delete('highlight');
-      setSearchParams(newParams, { replace: true });
       return () => clearTimeout(timer);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Wire debounced search to API params (Bug #1 fix)
+  useEffect(() => {
+    setParams((p) => ({
+      ...p,
+      search: debouncedSearch || undefined,
+      page: 1,
+    }));
+  }, [debouncedSearch]);
 
   // Handle simplified status filter change (Req 21)
   const handleStatusChange = useCallback(
@@ -157,14 +159,29 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
             </Link>
             {job.service_agreement_id && (
               <span
-                className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-600 border border-indigo-100"
-                data-testid={`subscription-badge-${job.id}`}
-                title="Subscription job"
+                className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200"
+                data-testid={`prepaid-badge-${job.id}`}
+                title="Covered by Service Agreement"
               >
-                <FileText className="h-3 w-3" />
-                Sub
+                <ShieldCheck className="h-3 w-3" />
+                Prepaid
               </span>
             )}
+            {job.category === 'requires_estimate' && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 border border-amber-200"
+                data-testid={`estimate-needed-badge-${job.id}`}
+                title="Estimate Needed"
+              >
+                <AlertTriangle className="h-3 w-3" />
+                Estimate Needed
+              </span>
+            )}
+            <PropertyTags
+              propertyType={job.property_type}
+              isHoa={job.property_is_hoa ?? false}
+              isSubscription={job.property_is_subscription ?? false}
+            />
           </div>
         );
       },
@@ -290,22 +307,17 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
       id: 'due_by',
       header: () => (
         <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
-          Due By
+          Week Of
         </span>
       ),
       cell: ({ row }) => {
-        const targetEnd = row.original.target_end_date;
-        if (!targetEnd) {
-          return (
-            <span className="text-sm text-slate-400 italic" data-testid={`due-by-${row.original.id}`}>
-              No deadline
-            </span>
-          );
-        }
-        const colorClass = getDueByColorClass(targetEnd);
+        // Inline editor for jobs in `to_be_scheduled`; renders plain text
+        // (with the due-by color cue) for other statuses. Re-fetch the
+        // list after a save so filters / sorting stay consistent.
+        const colorClass = getDueByColorClass(row.original.target_end_date);
         return (
-          <span className={`text-sm ${colorClass}`} data-testid={`due-by-${row.original.id}`}>
-            {format(parseLocalDate(targetEnd), 'MMM d, yyyy')}
+          <span className={`text-sm ${colorClass}`}>
+            <JobWeekEditor job={row.original} onSaved={() => refetch()} />
           </span>
         );
       },
@@ -361,8 +373,22 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
       ),
       cell: ({ row }) => {
         const job = row.original;
+        const isSchedulable = job.status === 'to_be_scheduled' || job.status === 'scheduled';
         return (
-          <DropdownMenu>
+          <div className="flex items-center gap-1">
+            {isSchedulable && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2.5 text-xs border-teal-200 text-teal-600 hover:bg-teal-50 hover:text-teal-700"
+                data-testid={`schedule-job-btn-${job.id}`}
+                onClick={() => navigate(`/schedule?scheduleJobId=${job.id}`)}
+              >
+                <CalendarPlus className="mr-1 h-3.5 w-3.5" />
+                Schedule
+              </Button>
+            )}
+            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
@@ -409,6 +435,7 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         );
       },
     },
@@ -497,90 +524,78 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
             </SelectContent>
           </Select>
 
-          {/* Target Date Range Filter */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-[200px] justify-start text-left font-normal"
-                data-testid="target-date-filter"
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {params.target_date_from || params.target_date_to ? (
-                  <span className="text-sm">
-                    {params.target_date_from
-                      ? format(parseLocalDate(params.target_date_from), 'MMM d')
-                      : '...'}
-                    {' – '}
-                    {params.target_date_to
-                      ? format(parseLocalDate(params.target_date_to), 'MMM d')
-                      : '...'}
-                  </span>
-                ) : (
-                  <span className="text-sm text-muted-foreground">Target dates</span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-4" align="start">
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs font-medium text-slate-500">From</label>
-                  <Calendar
-                    mode="single"
-                    selected={
-                      params.target_date_from
-                        ? parseLocalDate(params.target_date_from)
-                        : undefined
-                    }
-                    onSelect={(date) =>
-                      setParams((p) => ({
-                        ...p,
-                        target_date_from: date ? format(date, 'yyyy-MM-dd') : undefined,
-                        page: 1,
-                      }))
-                    }
-                    data-testid="target-date-from-calendar"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-slate-500">To</label>
-                  <Calendar
-                    mode="single"
-                    selected={
-                      params.target_date_to
-                        ? parseLocalDate(params.target_date_to)
-                        : undefined
-                    }
-                    onSelect={(date) =>
-                      setParams((p) => ({
-                        ...p,
-                        target_date_to: date ? format(date, 'yyyy-MM-dd') : undefined,
-                        page: 1,
-                      }))
-                    }
-                    data-testid="target-date-to-calendar"
-                  />
-                </div>
-                {(params.target_date_from || params.target_date_to) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full"
-                    onClick={() =>
-                      setParams((p) => ({
-                        ...p,
-                        target_date_from: undefined,
-                        target_date_to: undefined,
-                        page: 1,
-                      }))
-                    }
-                  >
-                    Clear dates
-                  </Button>
-                )}
-              </div>
-            </PopoverContent>
-          </Popover>
+          {/* Category Filter — Estimate Needed (Smoothing Req 6.6) */}
+          <Select
+            value={params.category ?? 'all'}
+            onValueChange={(v) =>
+              setParams((p) => ({
+                ...p,
+                category: v === 'all' ? undefined : (v as JobCategory),
+                page: 1,
+              }))
+            }
+          >
+            <SelectTrigger className="w-[180px]" data-testid="category-filter">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              <SelectItem value="requires_estimate" data-testid="filter-requires-estimate">Estimate Needed</SelectItem>
+              <SelectItem value="ready_to_schedule">Ready to Schedule</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Property Type Filter (Req 8.5) */}
+          <Select
+            value={params.property_type ?? 'all'}
+            onValueChange={(v) => setParams((p) => ({ ...p, page: 1, property_type: v === 'all' ? undefined : (v as 'residential' | 'commercial') }))}
+          >
+            <SelectTrigger className="w-[150px]" data-testid="property-type-filter">
+              <SelectValue placeholder="Property Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="residential">Residential</SelectItem>
+              <SelectItem value="commercial">Commercial</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* HOA Filter (Req 8.5) */}
+          <Select
+            value={params.is_hoa === undefined ? 'all' : params.is_hoa ? 'yes' : 'no'}
+            onValueChange={(v) => setParams((p) => ({ ...p, page: 1, is_hoa: v === 'all' ? undefined : v === 'yes' }))}
+          >
+            <SelectTrigger className="w-[120px]" data-testid="hoa-filter">
+              <SelectValue placeholder="HOA" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="yes">HOA</SelectItem>
+              <SelectItem value="no">Non-HOA</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Week Of Filter (CRM2 Req 20) */}
+          <WeekPicker
+            value={params.target_date_from ?? null}
+            onChange={(mondayIso) =>
+              setParams((p) => ({
+                ...p,
+                target_date_from: mondayIso ?? undefined,
+                target_date_to: mondayIso
+                  ? (() => {
+                      const [y, m, d] = mondayIso.split('-').map(Number);
+                      const sun = new Date(y, m - 1, d + 6);
+                      return `${sun.getFullYear()}-${String(sun.getMonth() + 1).padStart(2, '0')}-${String(sun.getDate()).padStart(2, '0')}`;
+                    })()
+                  : undefined,
+                page: 1,
+              }))
+            }
+            placeholder="Filter by week"
+            className="w-[200px]"
+            data-testid="target-week-filter"
+          />
         </div>
 
         {/* Table */}
@@ -606,7 +621,7 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
                   data-testid="job-row"
                   data-job-id={row.original.id}
                   className={`hover:bg-slate-50/80 transition-colors ${
-                    highlightedJobId === row.original.id ? 'animate-highlight-fade' : ''
+                    highlightedJobId === row.original.id ? 'animate-highlight-pulse' : ''
                   }`}
                 >
                   {row.getVisibleCells().map((cell) => (

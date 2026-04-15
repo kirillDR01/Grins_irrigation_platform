@@ -10,6 +10,13 @@ export const portalKeys = {
   invoice: (token: string) => [...portalKeys.all, 'invoice', token] as const,
 };
 
+// Subscription management hook
+export function useManageSubscription() {
+  return useMutation({
+    mutationFn: (email: string) => portalApi.manageSubscription(email),
+  });
+}
+
 // Estimate hooks
 export function usePortalEstimate(token: string) {
   return useQuery({

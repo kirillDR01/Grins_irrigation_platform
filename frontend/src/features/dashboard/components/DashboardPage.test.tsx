@@ -257,7 +257,7 @@ describe('DashboardPage', () => {
     expect(todayScheduleCard).toHaveTextContent('Completed');
   });
 
-  it('displays job status grid with 6 categories', () => {
+  it('displays job status grid with 5 categories', () => {
     mockUseDashboardMetrics.mockReturnValue({
       data: {
         total_customers: 150,
@@ -289,7 +289,7 @@ describe('DashboardPage', () => {
 
     expect(screen.getByTestId('job-status-grid')).toBeInTheDocument();
     expect(screen.getByTestId('job-status-new-requests')).toBeInTheDocument();
-    expect(screen.getByTestId('job-status-estimates')).toBeInTheDocument();
+    expect(screen.queryByTestId('job-status-estimates')).not.toBeInTheDocument();
     expect(screen.getByTestId('job-status-pending-approval')).toBeInTheDocument();
     expect(screen.getByTestId('job-status-to-be-scheduled')).toBeInTheDocument();
     expect(screen.getByTestId('job-status-in-progress')).toBeInTheDocument();

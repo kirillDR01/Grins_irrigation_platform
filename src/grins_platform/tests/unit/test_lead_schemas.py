@@ -1086,7 +1086,7 @@ class TestAddressSanitization:
         assert sub.address == "456 Oak Ave, Minneapolis, MN 55401"
 
     def test_from_call_submission_address_with_attributes_stripped(self) -> None:
-        """Test that tags with attributes are stripped from FromCallSubmission address."""
+        """Tags with attributes stripped from address."""
         sub = FromCallSubmission(
             name="Test User",
             phone="6125550123",

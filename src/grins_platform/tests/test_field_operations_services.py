@@ -906,7 +906,9 @@ class TestJobService:
         job_id = uuid4()
         mock_job = MagicMock()
         mock_job.id = job_id
-        mock_job.status = JobStatus.TO_BE_SCHEDULED.value  # Can't go directly to completed
+        mock_job.status = (
+            JobStatus.TO_BE_SCHEDULED.value
+        )  # Can't go directly to completed
         mock_job_repository.get_by_id.return_value = mock_job
 
         data = JobStatusUpdate(status=JobStatus.COMPLETED)

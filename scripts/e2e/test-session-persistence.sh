@@ -27,7 +27,7 @@ HEADED_FLAG=""
 WAIT_AFTER_LOGIN_MS="${E2E_SESSION_WAIT_MS:-5000}"
 
 # Admin credentials (from env or defaults for dev)
-ADMIN_EMAIL="${E2E_ADMIN_EMAIL:-admin@grins.com}"
+ADMIN_EMAIL="${E2E_ADMIN_EMAIL:-admin}"
 ADMIN_PASSWORD="${E2E_ADMIN_PASSWORD:-admin123}"
 
 # Parse arguments
@@ -66,8 +66,8 @@ echo "Step 2: Logging in as admin..."
 agent-browser snapshot -i > /dev/null 2>&1
 
 # Fill email field — try data-testid first, fall back to input selectors
-if agent-browser is visible "[data-testid='email-input']" 2>/dev/null; then
-  agent-browser fill "[data-testid='email-input']" "$ADMIN_EMAIL"
+if agent-browser is visible "[data-testid='username-input']" 2>/dev/null; then
+  agent-browser fill "[data-testid='username-input']" "$ADMIN_EMAIL"
 elif agent-browser is visible "[name='email']" 2>/dev/null; then
   agent-browser fill "[name='email']" "$ADMIN_EMAIL"
 elif agent-browser is visible "input[type='email']" 2>/dev/null; then

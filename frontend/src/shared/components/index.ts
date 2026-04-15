@@ -4,3 +4,8 @@ export { StatusBadge } from './StatusBadge';
 export { LoadingSpinner, LoadingPage } from './LoadingSpinner';
 export { ErrorBoundary, ErrorMessage } from './ErrorBoundary';
 export { GlobalSearch } from './GlobalSearch';
+export { HighlightRow } from './HighlightRow';
+export { PropertyTags } from './PropertyTags';
+export { WeekPicker } from './WeekPicker';
+export { FilterPanel } from './FilterPanel';
+export type { FilterAxis, FilterAxisType, FilterOption, FilterState, FilterPanelProps } from './FilterPanel';

@@ -109,10 +109,11 @@ class JobCategory(str, Enum):
 class JobStatus(str, Enum):
     """Job status enumeration for workflow management.
 
-    Validates: Requirement 4.1
+    Validates: Requirement 4.1, 5.1
     """
 
     TO_BE_SCHEDULED = "to_be_scheduled"
+    SCHEDULED = "scheduled"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
@@ -161,10 +162,11 @@ class SkillLevel(str, Enum):
 class AppointmentStatus(str, Enum):
     """Appointment status enumeration.
 
-    Validates: Admin Dashboard Requirement 1.3, CRM Gap Closure Req 79
+    Validates: Admin Dashboard Requirement 1.3, CRM Gap Closure Req 79, Req 8.1
     """
 
     PENDING = "pending"
+    DRAFT = "draft"
     SCHEDULED = "scheduled"
     CONFIRMED = "confirmed"
     EN_ROUTE = "en_route"
@@ -254,6 +256,8 @@ class LeadSituation(str, Enum):
     UPGRADE = "upgrade"
     REPAIR = "repair"
     EXPLORING = "exploring"
+    WINTERIZATION = "winterization"
+    SEASONAL_MAINTENANCE = "seasonal_maintenance"
 
 
 VALID_LEAD_STATUS_TRANSITIONS: dict[
@@ -565,6 +569,206 @@ class FollowUpStatus(str, Enum):
 
 
 # =============================================================================
+# CRM Changes Update 2 Enums
+# =============================================================================
+
+
+class SalesEntryStatus(str, Enum):
+    """Sales pipeline entry status.
+
+    Validates: CRM Changes Update 2 Req 14.3
+    """
+
+    SCHEDULE_ESTIMATE = "schedule_estimate"
+    ESTIMATE_SCHEDULED = "estimate_scheduled"
+    SEND_ESTIMATE = "send_estimate"
+    PENDING_APPROVAL = "pending_approval"
+    SEND_CONTRACT = "send_contract"
+    CLOSED_WON = "closed_won"
+    CLOSED_LOST = "closed_lost"
+
+
+# Ordered pipeline for auto-advance (non-terminal only)
+SALES_PIPELINE_ORDER: list[SalesEntryStatus] = [
+    SalesEntryStatus.SCHEDULE_ESTIMATE,
+    SalesEntryStatus.ESTIMATE_SCHEDULED,
+    SalesEntryStatus.SEND_ESTIMATE,
+    SalesEntryStatus.PENDING_APPROVAL,
+    SalesEntryStatus.SEND_CONTRACT,
+    SalesEntryStatus.CLOSED_WON,
+]
+
+SALES_TERMINAL_STATUSES: set[SalesEntryStatus] = {
+    SalesEntryStatus.CLOSED_WON,
+    SalesEntryStatus.CLOSED_LOST,
+}
+
+VALID_SALES_TRANSITIONS: dict[SalesEntryStatus, set[SalesEntryStatus]] = {
+    SalesEntryStatus.SCHEDULE_ESTIMATE: {
+        SalesEntryStatus.ESTIMATE_SCHEDULED,
+        SalesEntryStatus.CLOSED_LOST,
+    },
+    SalesEntryStatus.ESTIMATE_SCHEDULED: {
+        SalesEntryStatus.SEND_ESTIMATE,
+        SalesEntryStatus.CLOSED_LOST,
+    },
+    SalesEntryStatus.SEND_ESTIMATE: {
+        SalesEntryStatus.PENDING_APPROVAL,
+        SalesEntryStatus.CLOSED_LOST,
+    },
+    SalesEntryStatus.PENDING_APPROVAL: {
+        SalesEntryStatus.SEND_CONTRACT,
+        SalesEntryStatus.CLOSED_LOST,
+    },
+    SalesEntryStatus.SEND_CONTRACT: {
+        SalesEntryStatus.CLOSED_WON,
+        SalesEntryStatus.CLOSED_LOST,
+    },
+    SalesEntryStatus.CLOSED_WON: set(),
+    SalesEntryStatus.CLOSED_LOST: set(),
+}
+
+
+class ConfirmationKeyword(str, Enum):
+    """Y/R/C confirmation reply keywords.
+
+    Validates: CRM Changes Update 2 Req 24.1
+    """
+
+    CONFIRM = "confirm"
+    RESCHEDULE = "reschedule"
+    CANCEL = "cancel"
+
+
+class DocumentType(str, Enum):
+    """Customer document type classification.
+
+    Validates: CRM Changes Update 2 Req 17.3
+    """
+
+    ESTIMATE = "estimate"
+    CONTRACT = "contract"
+    PHOTO = "photo"
+    DIAGRAM = "diagram"
+    REFERENCE = "reference"
+    SIGNED_CONTRACT = "signed_contract"
+
+
+class ProposalStatus(str, Enum):
+    """Contract renewal proposal status.
+
+    Validates: CRM Changes Update 2 Req 31.1
+    """
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    PARTIALLY_APPROVED = "partially_approved"
+    REJECTED = "rejected"
+
+
+class ProposedJobStatus(str, Enum):
+    """Contract renewal proposed job status.
+
+    Validates: CRM Changes Update 2 Req 31.1
+    """
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class MessageType(str, Enum):
+    """SMS message type classification.
+
+    Validates: CRM Changes Update 2 Req 14.3, 24.1
+    """
+
+    APPOINTMENT_CONFIRMATION = "appointment_confirmation"
+    APPOINTMENT_RESCHEDULE = "appointment_reschedule"
+    APPOINTMENT_CANCELLATION = "appointment_cancellation"
+    APPOINTMENT_REMINDER = "appointment_reminder"
+    ON_THE_WAY = "on_the_way"
+    ARRIVAL = "arrival"
+    COMPLETION = "completion"
+    INVOICE = "invoice"
+    PAYMENT_REMINDER = "payment_reminder"
+    CUSTOM = "custom"
+    LEAD_CONFIRMATION = "lead_confirmation"
+    ESTIMATE_SENT = "estimate_sent"
+    CONTRACT_SENT = "contract_sent"
+    REVIEW_REQUEST = "review_request"
+    CAMPAIGN = "campaign"
+    GOOGLE_REVIEW_REQUEST = "google_review_request"
+    ON_MY_WAY = "on_my_way"
+    AUTOMATED_NOTIFICATION = "automated_notification"
+
+
+class MergeCandidateStatus(str, Enum):
+    """Customer merge candidate review status.
+
+    Validates: CRM Changes Update 2 Req 5.6
+    """
+
+    PENDING = "pending"
+    MERGED = "merged"
+    DISMISSED = "dismissed"
+
+
+# =============================================================================
+# Job type display names (bughunt L-1, L-8)
+# =============================================================================
+#
+# ``jobs.job_type`` is a free-text column — agreements, lead conversions,
+# and manual jobs all seed it with slugs like ``spring_startup`` or
+# ``fall_winterization``. Both the customer-facing confirmation SMS and the
+# Sales-pipeline list render these slugs to humans, so we need a canonical
+# display map. Uncurated slugs (rare/ad-hoc values) fall through to a
+# title-cased replacement via ``job_type_display()`` so the output never
+# reads like a database identifier.
+
+JOB_TYPE_DISPLAY: dict[str, str] = {
+    "spring_startup": "Spring Startup",
+    "fall_winterization": "Fall Winterization",
+    "fall_blowout": "Fall Blowout",
+    "mid_season_inspection": "Mid-Season Inspection",
+    "monthly_visit": "Monthly Visit",
+    "winterization": "Winterization",
+    "seasonal_maintenance": "Seasonal Maintenance",
+    "small_repair": "Small Repair",
+    "new_system": "New System Installation",
+    "new_installation": "New System Installation",
+    "upgrade": "System Upgrade",
+    "system_upgrade": "System Upgrade",
+    "repair": "Repair",
+    "consultation": "Consultation",
+    "installation": "Installation",
+    "custom_installation": "Custom Installation",
+    "diagnostic": "Diagnostic",
+    "service_call": "Service Call",
+    "estimate": "Estimate Visit",
+    "hoa_irrigation_audit": "HOA Irrigation Audit",
+}
+
+
+def job_type_display(job_type: str | None) -> str:
+    """Render a ``jobs.job_type`` slug as a customer-facing display name.
+
+    Uses :data:`JOB_TYPE_DISPLAY` for known slugs; falls back to title-cased
+    underscore-to-space replacement so ad-hoc values still read reasonably
+    ("spring_startup" → "Spring Startup", "hoa_irrigation_audit" maps
+    explicitly to "HOA Irrigation Audit" rather than "Hoa Irrigation Audit").
+    Returns an empty string for ``None`` / empty input so callers can safely
+    compose templates.
+    """
+    if not job_type:
+        return ""
+    mapped = JOB_TYPE_DISPLAY.get(job_type)
+    if mapped is not None:
+        return mapped
+    return job_type.replace("_", " ").title()
+
+
+# =============================================================================
 # Valid Appointment Status Transitions
 # =============================================================================
 
@@ -578,6 +782,7 @@ VALID_APPOINTMENT_STATUS_TRANSITIONS: dict[
     },
     AppointmentStatus.SCHEDULED: {
         AppointmentStatus.CONFIRMED,
+        AppointmentStatus.EN_ROUTE,
         AppointmentStatus.CANCELLED,
     },
     AppointmentStatus.CONFIRMED: {

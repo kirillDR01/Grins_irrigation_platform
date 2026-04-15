@@ -15,12 +15,12 @@ import {
   FileText,
   Bell,
   Funnel,
-  ClipboardList,
   ScrollText,
   TrendingUp,
   DollarSign,
   Megaphone,
   MessageSquare,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -64,12 +64,6 @@ const navItems: NavItem[] = [
     testId: 'nav-leads',
   },
   {
-    label: 'Work Requests',
-    href: '/work-requests',
-    icon: <ClipboardList className="h-5 w-5" />,
-    testId: 'nav-work-requests',
-  },
-  {
     label: 'Jobs',
     href: '/jobs',
     icon: <Briefcase className="h-5 w-5" />,
@@ -104,6 +98,12 @@ const navItems: NavItem[] = [
     href: '/agreements',
     icon: <ScrollText className="h-5 w-5" />,
     testId: 'nav-agreements',
+  },
+  {
+    label: 'Renewals',
+    href: '/contract-renewals',
+    icon: <RefreshCw className="h-5 w-5" />,
+    testId: 'nav-renewals',
   },
   {
     label: 'Sales',

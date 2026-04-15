@@ -1,218 +1,143 @@
-# Requirements Document — E2E Battle Test Bug Fixes
+# Requirements Document — E2E Bug Hunt Fixes
 
 ## Introduction
 
-This spec addresses 12 bugs discovered during the 2026-03-26 E2E battle test of the customer-facing frontend (`frontend-git-dev-kirilldr01s-projects.vercel.app`) and backend (`grins-dev-dev.up.railway.app`). The bugs span two repos: `Grins_irrigation` (customer frontend) and `Grins_irrigation_platform` (backend + admin dashboard). Fixes are prioritized by severity (HIGH → MEDIUM → LOW) and grouped by blast radius to minimize cross-repo coordination.
+This spec addresses 7 bugs discovered during the 2026-04-13 E2E bug hunt of the CRM admin platform. The bugs span the full admin workflow: job search (Bug #1), lead conversion (Bug #2), appointment scheduling (Bug #3), SMS reliability (Bugs #4, #5), sales pipeline feedback (Bug #6), and on-site job completion (Bug #7). Bug #7 is the highest severity — it completely blocks the field workflow since no job can be marked as completed.
 
-**Source:** `bughunt/2026-03-26-e2e-battle-test.md`
+**Source:** `e2e-screenshots/bug-hunt/` (7 bug report files)
 
 ## Glossary
 
-- **PricingSection**: React component in `Grins_irrigation` that renders the surcharge text on service package cards
-- **SurchargeCalculator**: Backend Python class and frontend TypeScript utility that compute zone, lake pump, and RPZ surcharges
-- **SubscriptionConfirmModal**: React component rendering the pre-checkout consent modal with phone, zones, add-ons, and disclosures
-- **LeadForm**: React component rendering the "Get Your Free Quote" lead capture form on the homepage and modal
-- **OnboardingPage**: React component rendering the post-checkout property details form
+- **JobList**: React component in `frontend/src/features/jobs/components/JobList.tsx` that renders the Jobs tab with search, filters, and pagination
+- **LeadService.move_to_jobs()**: Method in `src/grins_platform/services/lead_service.py` that converts a lead to a job
+- **SITUATION_JOB_MAP**: Class variable mapping lead situations to `(job_category, description)` tuples
+- **AppointmentForm**: React component in `frontend/src/features/schedule/components/AppointmentForm.tsx` with the job dropdown
+- **SMSService.send_message()**: Method in `src/grins_platform/services/sms_service.py` that sends SMS with dedupe logic
+- **send_sms**: FastAPI endpoint in `src/grins_platform/api/v1/sms.py` that wraps `SMSService.send_message()`
+- **StatusActionButton**: React component in `frontend/src/features/sales/components/StatusActionButton.tsx` handling pipeline actions including Convert to Job
+- **job_started**: FastAPI endpoint in `src/grins_platform/api/v1/jobs.py` that logs the started_at timestamp
+- **complete_job**: FastAPI endpoint that transitions job status to completed via `JobService.update_status()`
+- **VALID_TRANSITIONS**: Class variable in `JobService` defining allowed status transitions
 
 ## Requirements
 
-### Requirement 1: Fix Surcharge Display Text on Package Cards (BUG-001, HIGH)
+### Requirement 1: Wire Jobs Tab Search to API (Bug #1)
 
-**User Story:** As a customer browsing service packages, I want the surcharge prices shown on the package cards to match what I'll actually be charged at checkout, so that I'm not misled about pricing.
+**User Story:** As an admin searching for jobs, I want the Jobs tab search to actually filter results, so I can find specific jobs by customer name, job type, or description.
 
 #### Acceptance Criteria
 
-1. THE PricingSection component SHALL display zone surcharge rates matching the SurchargeCalculator: $8.00/zone (residential), $11.00/zone (commercial) for all tier types
-2. THE PricingSection component SHALL display lake pump surcharge matching the SurchargeCalculator: $125 (residential), $150 (commercial) for all tier types
-3. THE PricingSection component SHALL display RPZ/backflow surcharge matching the SurchargeCalculator: $110 (standard tiers), $55 (winterization-only tiers)
-4. THE PricingSection component SHALL use "RPZ/backflow removal" label for winterization-only tiers and "RPZ/backflow connection" for standard tiers (already correct)
-5. THE surcharge values in PricingSection SHALL be derived from a single source of truth (either imported constants or the `calculateSurcharge` utility) rather than hardcoded strings
-6. THE backend test comments in `test_checkout_onboarding_service.py` SHALL be updated to reflect the correct surcharge amounts ($125 for lake pump, $110 for RPZ)
+1. WHEN a user types a search query into the Jobs tab search input THEN the system SHALL include the `search` parameter in the API request params passed to `useJobs()`, filtering the job list
+2. THE search SHALL be debounced (~300ms) to avoid excessive API calls
+3. WHEN the search query changes, the page SHALL reset to page 1
+4. WHEN the search input is cleared, the full unfiltered job list SHALL be displayed
 
 #### Verification
 
-- agent-browser: Open each of the 8 package modals, compare card text to modal calculation — all must match
-- Unit test: Property test that PricingSection surcharge text matches `calculateSurcharge` output for all tier/type combinations
+- E2E: Type "E2E Confirm" in Jobs search → results filter to matching jobs
+- Unit test: `JobList` includes `search` param when search input has value
 
 ---
 
-### Requirement 2: Validate Zone Count ≥ 1 (BUG-002, HIGH)
+### Requirement 2: Guard Move-to-Jobs for requires_estimate Leads (Bug #2)
 
-**User Story:** As a system, I want to reject subscriptions with zero irrigation zones, so that nonsensical orders don't enter the pipeline.
+**User Story:** As a system, I want to prevent leads that require an estimate from being placed directly in the Jobs tab, so that only approved/scheduled jobs appear there.
 
 #### Acceptance Criteria
 
-1. THE SubscriptionConfirmModal SHALL enforce `zone_count >= 1` by disabling the Confirm button when zones < 1
-2. THE SubscriptionConfirmModal SHALL prevent typing values below 1 into the zone input (clamp on change, not just on blur)
-3. THE backend `POST /api/v1/onboarding/pre-checkout-consent` endpoint SHALL reject requests with `zone_count < 1` and return HTTP 422 with a clear error message
-4. THE backend `checkout_service.create_checkout_session` SHALL validate `zone_count >= 1` before creating a Stripe Checkout Session
+1. WHEN a lead with a situation that maps to `requires_estimate` (e.g., "Exploring", "New System", "Upgrade") is moved to Jobs THEN the system SHALL redirect the lead to the Sales pipeline instead via `move_to_sales()`
+2. WHEN a lead with an unmapped situation value is moved to Jobs THEN the system SHALL treat it as requiring an estimate and redirect to Sales
+3. WHEN a lead with situation "Repair" (maps to `ready_to_schedule`) is moved to Jobs THEN the system SHALL CONTINUE TO create a job in the Jobs tab as before
 
 #### Verification
 
-- agent-browser: Set zones to 0 or negative → Confirm button stays disabled, no Stripe redirect
-- Backend test: `POST /pre-checkout-consent` with `zone_count=0` returns 422
+- Unit test: `move_to_jobs()` with "Exploring" lead → redirects to sales; with "Repair" lead → creates job
+- Functional test: Create lead with "Exploring" situation, move to jobs → verify sales entry created
 
 ---
 
-### Requirement 3: Render Terms Checkbox in Lead Form (BUG-005, HIGH)
+### Requirement 3: Show Customer Name in Job Selector Dropdown (Bug #3)
 
-**User Story:** As a customer submitting a lead form, I want to explicitly accept the Terms of Service before my information is submitted, so that the business has documented consent.
+**User Story:** As an admin scheduling an appointment, I want to see the customer name in the job dropdown, so I can identify which customer each job belongs to.
 
 #### Acceptance Criteria
 
-1. THE LeadForm component SHALL render the `TermsCheckbox` component (already imported but unused) before the submit button
-2. THE LeadForm SHALL require `termsAccepted === true` before enabling the submit button
-3. THE TermsCheckbox label SHALL link to the `/terms-of-service` page
-4. THE `buildLeadPayload` function SHALL include `terms_accepted: true` in the API payload when the checkbox is checked
-5. THE consent metadata capture (`captureConsentMetadata`) SHALL run when `termsAccepted` is true, regardless of `smsConsent` state
+1. WHEN a user opens the "New Appointment" form job dropdown THEN each job SHALL display as `{customer_name} — {job_type} - {description}` instead of just `{job_type} - {description}`
+2. THE `customer_name` field SHALL be available on job objects returned by `useJobsReadyToSchedule()`
 
 #### Verification
 
-- agent-browser: Submit button disabled until terms checked; success after checking
-- Unit test: `buildLeadPayload` includes `terms_accepted: true` when checkbox checked
+- E2E: Open appointment form → job dropdown shows customer names
+- Unit test: AppointmentForm renders customer name in job dropdown options
 
 ---
 
-### Requirement 4: Fix Mobile Sticky Bar Overlap on Modal (BUG-003, MEDIUM)
+### Requirement 4: Scope SMS Dedupe Per Appointment (Bug #4)
 
-**User Story:** As a mobile user, I want to see and tap the Confirm/Cancel buttons in the checkout modal, so that I can complete my subscription.
+**User Story:** As a system, I want each appointment to receive its own confirmation SMS, even if the same customer has multiple appointments in one day.
 
 #### Acceptance Criteria
 
-1. WHEN the SubscriptionConfirmModal is open on mobile viewports (< 768px), the sticky bottom bar ("Call Now" / "Get Free Quote") SHALL be hidden
-2. THE modal Confirm and Cancel buttons SHALL be fully visible and tappable on a 375×812 viewport without manual scrolling
-3. WHEN the modal is closed, the sticky bottom bar SHALL reappear
+1. WHEN a second appointment is created for the same customer within 24 hours THEN the system SHALL scope the legacy dedupe check to include `appointment_id`, allowing each distinct appointment to receive its own confirmation SMS
+2. THE campaign-scoped dedupe (campaign_id + recipient) SHALL CONTINUE TO work as before
+3. THE non-appointment SMS dedupe (customer_id + message_type for `custom`, `on_the_way`, etc.) SHALL CONTINUE TO work as before
 
 #### Verification
 
-- agent-browser: Set viewport 375×812, open modal → Confirm/Cancel buttons visible, no overlap with sticky bar
+- Unit test: Two `appointment_confirmation` sends for different appointment_ids to same customer → both succeed
+- Functional test: Create two appointments for same customer, verify both get confirmation SMS
 
 ---
 
-### Requirement 5: Add Error Handling to API JSON Parsing (BUG-006, MEDIUM)
+### Requirement 5: Fix SMS Send Endpoint 500 on Dedupe Block (Bug #5)
 
-**User Story:** As a customer, I want graceful error messages when the API returns unexpected responses, so that the app doesn't crash.
+**User Story:** As an admin, I want the SMS send endpoint to return a proper error response when a message is blocked by dedupe, instead of crashing with a 500.
 
 #### Acceptance Criteria
 
-1. ALL `.json()` calls in `checkoutApi.ts`, `onboardingApi.ts`, and `chatbotApi.ts` SHALL be wrapped in try/catch
-2. WHEN JSON parsing fails, the function SHALL return a typed error result (e.g., `{ ok: false, error: 'server' }`) rather than throwing
-3. THE chatbot `sendAiChat` function SHALL return a fallback message ("Sorry, I'm having trouble right now.") when JSON parsing fails or `data.response` is undefined
+1. WHEN `POST /api/v1/sms/send` is called and the SMS service returns a dedupe-blocked result (`success: False`) THEN the endpoint SHALL return a proper JSON response with `success: false` instead of crashing with a 500 Internal Server Error
+2. THE successful SMS sends SHALL CONTINUE TO return 200 with `message_id` and `status` as before
+3. THE consent-denied SMS SHALL CONTINUE TO return 403 as before
 
 #### Verification
 
-- Unit test: Mock `fetch` returning non-JSON body → functions return error result, no unhandled exceptions
+- Unit test: Mock `send_message()` returning dedupe-blocked result → endpoint returns proper JSON, no 500
+- Integration test: Trigger dedupe block via API → verify proper response
 
 ---
 
-### Requirement 6: Add Email Validation to Lead Form (BUG-007, MEDIUM)
+### Requirement 6: Show Force-Convert Dialog on Signature Error (Bug #6)
 
-**User Story:** As a customer, I want to see an error if I enter an invalid email, so that I can fix it before submitting.
+**User Story:** As an admin clicking "Convert to Job" on a sales entry, I want to see the force-convert dialog when the backend says a signature is required, instead of nothing happening.
 
 #### Acceptance Criteria
 
-1. THE LeadForm `validate()` function SHALL check email format using a standard regex when the email field is non-empty
-2. WHEN email validation fails, THE form SHALL display an inline error message "Please enter a valid email address"
-3. THE error SHALL appear as a `role="alert"` element below the email input, consistent with existing phone/zip validation styling
+1. WHEN a user clicks "Convert to Job" and the backend returns a 422 SignatureRequiredError THEN the frontend SHALL correctly extract the error detail and display the force-convert confirmation dialog
+2. THE error extraction SHALL use `axios.isAxiosError()` for robust handling of the Axios error structure
+3. THE sales pipeline stage advancement (non-convert actions) SHALL CONTINUE TO work with toasts as before
+4. THE "Mark Lost" confirmation dialog SHALL CONTINUE TO work as before
 
 #### Verification
 
-- agent-browser: Enter "not-an-email" → inline error appears, submit button disabled
-- Unit test: `validate({ email: 'bad' })` returns error for email field
+- Unit test: Simulate 422 error with "signature" in detail → force-convert dialog appears
+- E2E: Click "Convert to Job" on "Send Contract" entry → force-convert dialog shown
 
 ---
 
-### Requirement 7: Validate Onboarding Service Address (BUG-008, MEDIUM)
+### Requirement 7: Make Job Started Transition Status to in_progress (Bug #7, HIGH)
 
-**User Story:** As a system, I want to ensure customers provide a complete service address when it differs from billing, so that the field crew has the correct location.
-
-#### Acceptance Criteria
-
-1. WHEN the "Service address same as billing address" checkbox is unchecked, THE OnboardingPage SHALL validate that street, city, state, and zip are non-empty before allowing submission
-2. WHEN any required service address field is empty, THE OnboardingPage SHALL display inline validation errors on the empty fields
-3. THE Complete Onboarding button SHALL be disabled until all required service address fields are filled (or the checkbox is re-checked)
-
-#### Verification
-
-- agent-browser: Uncheck same-as-billing → leave fields empty → Complete Onboarding disabled → fill fields → enabled
-- Unit test: `onSubmit` with empty service address fields does not call API
-
----
-
-### Requirement 8: Use Environment Variable for Customer Portal URL (BUG-011, MEDIUM)
-
-**User Story:** As a developer, I want the Customer Portal URL to be environment-aware, so that dev and production use the correct Stripe portal.
+**User Story:** As a field crew member, I want clicking "Job Started" to actually change the job status to in_progress, so that I can subsequently mark the job as completed.
 
 #### Acceptance Criteria
 
-1. THE frontend `config.ts` SHALL read `customerPortalUrl` from `import.meta.env.VITE_STRIPE_CUSTOMER_PORTAL_URL` instead of a hardcoded production URL
-2. IF the environment variable is not set, THE frontend SHALL fall back to the onboarding page's `stripe_customer_portal_url` from the API (already dynamic) and hide the footer Customer Portal link
-3. THE `VITE_STRIPE_CUSTOMER_PORTAL_URL` SHALL be added to Vercel Preview (dev branch) pointing to the test Stripe portal, and Production pointing to the live Stripe portal
+1. WHEN the "Job Started" button is clicked on a job with status `to_be_scheduled` THEN the system SHALL transition the job status to `in_progress` in addition to logging the `started_at` timestamp
+2. WHEN "Job Complete" is clicked after "Job Started" has set the status to `in_progress` THEN the system SHALL successfully transition the job from `in_progress` to `completed`
+3. WHEN "Job Started" is clicked on a job already at `in_progress` THEN the system SHALL handle it gracefully (idempotent)
+4. THE "On My Way" button SHALL CONTINUE TO send SMS and log `on_my_way_at` timestamp as before
+5. Job cancellation from `to_be_scheduled` or `in_progress` SHALL CONTINUE TO work as before
+6. `completed` and `cancelled` SHALL CONTINUE TO be terminal states
 
 #### Verification
 
-- agent-browser: Footer "Customer Portal" link href contains `test_` on dev frontend
-- Verify Vercel env vars set for both environments
-
----
-
-### Requirement 9: Add Missing Vercel Environment Variables (BUG-004, LOW)
-
-**User Story:** As a developer, I want all environment variables properly set for both dev and production, so that all features work.
-
-#### Acceptance Criteria
-
-1. THE Vercel frontend project SHALL have `VITE_GOOGLE_MAPS_API_KEY` set for Preview and Production environments
-2. THE Vercel frontend project SHALL have `VITE_GA4_MEASUREMENT_ID` and `VITE_GTM_CONTAINER_ID` set for Production environment (optional for Preview)
-3. THE Vercel frontend project SHALL have `VITE_STRIPE_CUSTOMER_PORTAL_URL` set per Requirement 8
-
-#### Verification
-
-- `vercel env ls` shows all variables set
-- agent-browser: Service Area page loads Google Maps on dev
-
----
-
-### Requirement 10: Externalize CSP Domains (BUG-009, LOW)
-
-**User Story:** As a developer, I want the Content Security Policy to work across environments without hardcoded URLs.
-
-#### Acceptance Criteria
-
-1. THE `connect-src` directive in `index.html` SHALL include `import.meta.env.VITE_API_URL` domain dynamically (via build-time injection or a meta tag)
-2. IF dynamic injection is too complex, THE CSP SHALL use a wildcard pattern `https://*.up.railway.app` to cover both dev and production Railway domains
-
-#### Verification
-
-- No CSP violations in browser console when making API calls on dev
-
----
-
-### Requirement 11: Add Loading Spinner to Route Suspense (BUG-010, LOW)
-
-**User Story:** As a customer navigating between pages, I want a loading indicator instead of a blank screen while pages load.
-
-#### Acceptance Criteria
-
-1. THE `router.tsx` Suspense fallback SHALL render a centered spinner or skeleton component instead of an empty div
-2. THE spinner SHALL be visually consistent with the site's design (use existing brand colors)
-
-#### Verification
-
-- Visual: Navigate between lazy-loaded routes — spinner appears briefly during chunk download
-
----
-
-### Requirement 12: Create Accessibility Page or Remove Footer Link (BUG-012, LOW)
-
-**User Story:** As a customer, I want the Accessibility link in the footer to work, so that I can learn about the site's accessibility features.
-
-#### Acceptance Criteria
-
-1. EITHER the frontend SHALL add an `/accessibility` route with a basic accessibility statement page
-2. OR the footer SHALL remove the Accessibility link until the page is ready
-3. IF a page is created, it SHALL include at minimum: WCAG 2.1 AA compliance commitment, contact information for accessibility issues, and a last-updated date
-
-#### Verification
-
-- agent-browser: Click "Accessibility" in footer → page renders (not 404)
+- Unit test: Job at `to_be_scheduled` → `job_started` → status is `in_progress` → `complete_job` → status is `completed`
+- E2E: On My Way → Job Started → Job Complete → all succeed without errors

@@ -18,19 +18,38 @@ export interface Communication {
   created_at: string;
 }
 
-// Delivery status for outbound messages
-export type DeliveryStatus = 'pending' | 'sent' | 'delivered' | 'failed';
+// Delivery status for outbound messages.
+//
+// Mirrors the backend ``sent_messages.delivery_status`` CHECK constraint
+// (``pending``, ``scheduled``, ``sent``, ``delivered``, ``failed``,
+// ``cancelled``). ``delivered`` is kept for legacy rows but the current
+// CallRail provider has no delivery-status callbacks, so ``sent`` is the
+// terminal state for new sends.
+export type DeliveryStatus =
+  | 'pending'
+  | 'scheduled'
+  | 'sent'
+  | 'delivered'
+  | 'failed'
+  | 'cancelled';
 
 // Sent message (outbound notification)
+//
+// NOTE: the backend may omit content/sent_at/recipient_name entirely for
+// pending or failed rows (content is populated on insert but sent_at
+// only lands after the provider confirms, and recipient_name is derived
+// from an optional Customer/Lead FK). Treat all of these as nullable in
+// the UI so the table doesn't crash on partial data.
 export interface SentMessage {
   id: string;
-  recipient_name: string;
+  recipient_name: string | null;
   recipient_phone: string | null;
   message_type: string;
-  content: string;
+  content: string | null;
   delivery_status: DeliveryStatus;
   error_message: string | null;
-  sent_at: string;
+  sent_at: string | null;
+  created_at: string;
 }
 
 // Sent messages filter params
@@ -46,3 +65,30 @@ export interface SentMessageListParams extends PaginationParams {
 export interface UnaddressedCountResponse {
   count: number;
 }
+
+// Campaign types (CallRail SMS Integration)
+export type {
+  CampaignType,
+  CampaignStatus,
+  RecipientDeliveryStatus,
+  CustomerAudienceFilter,
+  LeadAudienceFilter,
+  AdHocAudienceFilter,
+  TargetAudience,
+  Campaign,
+  CampaignCreate,
+  CampaignRecipient,
+  CampaignSendAccepted,
+  CampaignCancelResult,
+  CampaignStats,
+  AudiencePreviewRecipient,
+  AudiencePreview,
+  CsvRejectedRow,
+  CsvUploadResult,
+  RateLimitInfo,
+  WorkerHealth,
+  PollOption,
+  CampaignResponseRow,
+  CampaignResponseBucket,
+  CampaignResponseSummary,
+} from './campaign';

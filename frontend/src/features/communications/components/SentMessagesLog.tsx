@@ -28,11 +28,18 @@ const STATUS_BADGE_CLASSES: Record<DeliveryStatus, string> = {
   delivered: 'bg-emerald-100 text-emerald-700',
   sent: 'bg-blue-100 text-blue-700',
   pending: 'bg-amber-100 text-amber-700',
+  scheduled: 'bg-indigo-100 text-indigo-700',
   failed: 'bg-red-100 text-red-700',
+  cancelled: 'bg-slate-100 text-slate-600',
 };
 
+// Radix Select does not allow empty-string values for SelectItem or the
+// Select's `value` prop, so we use a sentinel for the "All" option and
+// translate to/from `undefined` in the filter state.
+const ALL_FILTER_VALUE = '__all__';
+
 const MESSAGE_TYPES = [
-  { value: '', label: 'All Types' },
+  { value: ALL_FILTER_VALUE, label: 'All Types' },
   { value: 'appointment_reminder', label: 'Appointment Reminder' },
   { value: 'invoice_reminder', label: 'Invoice Reminder' },
   { value: 'estimate_sent', label: 'Estimate Sent' },
@@ -44,16 +51,26 @@ const MESSAGE_TYPES = [
 ];
 
 const DELIVERY_STATUSES = [
-  { value: '', label: 'All Statuses' },
-  { value: 'delivered', label: 'Delivered' },
+  { value: ALL_FILTER_VALUE, label: 'All Statuses' },
   { value: 'sent', label: 'Sent' },
+  { value: 'scheduled', label: 'Scheduled' },
   { value: 'pending', label: 'Pending' },
   { value: 'failed', label: 'Failed' },
+  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'delivered', label: 'Delivered' },
 ];
 
-function truncateContent(content: string, maxLength = 80): string {
+function truncateContent(content: string | null | undefined, maxLength = 80): string {
+  if (!content) return '—';
   if (content.length <= maxLength) return content;
   return content.slice(0, maxLength) + '…';
+}
+
+function formatSentAt(sentAt: string | null | undefined): string {
+  if (!sentAt) return '—';
+  const d = new Date(sentAt);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString();
 }
 
 export function SentMessagesLog() {
@@ -68,7 +85,8 @@ export function SentMessagesLog() {
   const updateFilter = (key: keyof SentMessageListParams, value: string) => {
     setParams((prev) => ({
       ...prev,
-      [key]: value || undefined,
+      // Treat the "all" sentinel and empty string as "no filter".
+      [key]: value && value !== ALL_FILTER_VALUE ? value : undefined,
       page: 1,
     }));
   };
@@ -112,7 +130,7 @@ export function SentMessagesLog() {
               Message Type
             </label>
             <Select
-              value={params.message_type ?? ''}
+              value={params.message_type ?? ALL_FILTER_VALUE}
               onValueChange={(v) => updateFilter('message_type', v)}
             >
               <SelectTrigger
@@ -136,7 +154,7 @@ export function SentMessagesLog() {
               Delivery Status
             </label>
             <Select
-              value={params.delivery_status ?? ''}
+              value={params.delivery_status ?? ALL_FILTER_VALUE}
               onValueChange={(v) => updateFilter('delivery_status', v)}
             >
               <SelectTrigger
@@ -230,14 +248,14 @@ export function SentMessagesLog() {
                     className="hover:bg-slate-50"
                   >
                     <TableCell className="font-medium">
-                      {msg.recipient_name}
+                      {msg.recipient_name ?? '—'}
                     </TableCell>
                     <TableCell className="text-sm text-slate-500">
                       {msg.recipient_phone ?? '—'}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-xs">
-                        {msg.message_type.replace(/_/g, ' ')}
+                        {(msg.message_type ?? 'unknown').replace(/_/g, ' ')}
                       </Badge>
                     </TableCell>
                     <TableCell className="max-w-xs">
@@ -258,11 +276,11 @@ export function SentMessagesLog() {
                             : undefined
                         }
                       >
-                        {msg.delivery_status}
+                        {msg.delivery_status.charAt(0).toUpperCase() + msg.delivery_status.slice(1)}
                       </span>
                     </TableCell>
                     <TableCell className="text-sm text-slate-500 whitespace-nowrap">
-                      {new Date(msg.sent_at).toLocaleString()}
+                      {formatSentAt(msg.sent_at ?? msg.created_at)}
                     </TableCell>
                   </TableRow>
                 ))}

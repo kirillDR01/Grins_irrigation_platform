@@ -138,7 +138,7 @@ class TestCancellationJobPreservationProperty:
         to_be_scheduled: int,
         in_progress: int,
     ) -> None:
-        """In a mix of TO_BE_SCHEDULED + IN_PROGRESS, only TO_BE_SCHEDULED become CANCELLED."""
+        """Mixed statuses: only TO_BE_SCHEDULED become CANCELLED."""
         jobs_to_be_scheduled = [
             _make_job(JobStatus.TO_BE_SCHEDULED.value) for _ in range(to_be_scheduled)
         ]

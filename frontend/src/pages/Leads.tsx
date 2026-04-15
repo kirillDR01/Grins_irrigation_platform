@@ -13,7 +13,7 @@ export function LeadsPage() {
 
   // Otherwise show the list view
   return (
-    <div data-testid="leads-page">
+    <div data-testid="leads-page-wrapper">
       <PageHeader
         title="Leads"
         description="Manage incoming leads from the website"

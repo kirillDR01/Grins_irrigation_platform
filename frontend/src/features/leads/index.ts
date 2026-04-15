@@ -6,6 +6,7 @@ export { IntakeTagBadge } from './components/IntakeTagBadge';
 export { LeadTagBadges } from './components/LeadTagBadges';
 export { FollowUpQueue } from './components/FollowUpQueue';
 export { ConvertLeadDialog } from './components/ConvertLeadDialog';
+export { CreateLeadDialog } from './components/CreateLeadDialog';
 export { LeadFilters } from './components/LeadFilters';
 export { LeadsList } from './components/LeadsList';
 export { LeadDetail } from './components/LeadDetail';
@@ -27,7 +28,11 @@ export {
   useUpdateLead,
   useConvertLead,
   useDeleteLead,
+  useMoveToJobs,
+  useMoveToSales,
+  useMarkContacted,
   useCreateFromCall,
+  useCreateManualLead,
   useBulkOutreach,
   useUploadAttachment,
   useDeleteAttachment,
@@ -47,6 +52,7 @@ export type {
   LeadUpdate,
   LeadConversionRequest,
   LeadConversionResponse,
+  LeadMoveResponse,
   PaginatedLeadResponse,
   FollowUpLead,
   PaginatedFollowUpResponse,
@@ -63,6 +69,7 @@ export type {
   BulkOutreachResponse,
   CreateEstimateRequest,
   CreateContractRequest,
+  ManualLeadCreateRequest,
 } from './types';
 export {
   LEAD_STATUS_LABELS,

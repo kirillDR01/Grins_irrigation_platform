@@ -359,11 +359,11 @@ class TestExecutePollCycle:
     def _setup_db(
         self,
         poller: GoogleSheetsPoller,
-        max_row: int,
+        existing_hashes: set[str] | None = None,
     ) -> AsyncMock:
         mock_session = AsyncMock()
         mock_sub_repo = AsyncMock()
-        mock_sub_repo.get_max_row_number.return_value = max_row
+        mock_sub_repo.get_existing_hashes.return_value = existing_hashes or set()
 
         async def fake_get_session():
             yield mock_session
@@ -390,7 +390,7 @@ class TestExecutePollCycle:
         poller._fetch_sheet_data = AsyncMock(  # type: ignore[assignment]
             return_value=[["Timestamp", "c2"], ["data1", "d2"]],
         )
-        mock_sub_repo = self._setup_db(poller, max_row=0)
+        mock_sub_repo = self._setup_db(poller)
         poller._service.process_row.return_value = MagicMock()  # type: ignore[attr-defined]
 
         with patch(_SUB_REPO, return_value=mock_sub_repo):
@@ -400,7 +400,7 @@ class TestExecutePollCycle:
         poller._service.process_row.assert_called_once()  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
-    async def test_skips_already_processed_rows(self) -> None:
+    async def test_skips_already_imported_rows_by_hash(self) -> None:
         poller = _make_poller()
         poller._ensure_token = AsyncMock(return_value="tok")  # type: ignore[assignment]
         poller._fetch_sheet_data = AsyncMock(  # type: ignore[assignment]
@@ -411,13 +411,17 @@ class TestExecutePollCycle:
                 ["new"],
             ],
         )
-        mock_sub_repo = self._setup_db(poller, max_row=4)
+        # Pre-compute hashes for the rows we want to appear as "already imported"
+        from grins_platform.services.google_sheets_service import compute_row_hash
+
+        existing = {compute_row_hash(["old1"]), compute_row_hash(["old2"])}
+        mock_sub_repo = self._setup_db(poller, existing_hashes=existing)
         poller._service.process_row.return_value = MagicMock()  # type: ignore[attr-defined]
 
         with patch(_SUB_REPO, return_value=mock_sub_repo):
             count = await poller._execute_poll_cycle()
 
-        # row_numbers: 3, 4, 5. max_row=4 → only row 5 processed
+        # Only the "new" row should be processed
         assert count == 1
 
     @pytest.mark.asyncio
@@ -427,7 +431,7 @@ class TestExecutePollCycle:
         poller._fetch_sheet_data = AsyncMock(  # type: ignore[assignment]
             return_value=[["Timestamp"], ["bad"], ["good"]],
         )
-        mock_sub_repo = self._setup_db(poller, max_row=0)
+        mock_sub_repo = self._setup_db(poller)
         poller._service.process_row.side_effect = [  # type: ignore[attr-defined]
             RuntimeError("bad"),
             MagicMock(),

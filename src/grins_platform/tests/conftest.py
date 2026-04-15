@@ -9,6 +9,7 @@ Validates: Requirement 9.5
 
 from __future__ import annotations
 
+import os
 import uuid
 from collections.abc import AsyncGenerator, Generator
 from datetime import datetime
@@ -17,6 +18,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+
+# Default to NullProvider in tests so SMSService(session) without an explicit
+# provider never reaches CallRail/Twilio. Tests that exercise a specific
+# provider should use ``patch.dict(os.environ, {"SMS_PROVIDER": "..."})``.
+os.environ.setdefault("SMS_PROVIDER", "null")
 
 from grins_platform.main import app
 from grins_platform.models.enums import (
@@ -38,6 +44,78 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "unit: Unit tests (Tier 1)")
     config.addinivalue_line("markers", "functional: Functional tests (Tier 2)")
     config.addinivalue_line("markers", "integration: Integration tests (Tier 3)")
+
+
+# =============================================================================
+# Default auth override for tests that build their own FastAPI app
+# =============================================================================
+#
+# CR-5 added ``CurrentActiveUser`` dependencies to many endpoints. Existing
+# unit tests that construct a test app via ``create_app()`` and hit those
+# endpoints now fail with 401 unless they override the auth dependencies.
+#
+# Rather than touch every test file, this module-level autouse fixture
+# installs a default override on every FastAPI app produced by
+# ``create_app`` in the current test session. Tests that exercise auth
+# explicitly (e.g. ``test_auth_guards.py``) use ``grins_platform.main.app``
+# directly, which is NOT touched here.
+
+
+def _install_auth_overrides(application: object) -> object:
+    """Override ``get_current_active_user`` / ``get_current_user`` deps.
+
+    Installs a fake Staff-like MagicMock so dependent endpoints pass
+    authentication in unit tests. Idempotent — safe to call multiple times
+    on the same app.
+    """
+    from unittest.mock import MagicMock  # noqa: PLC0415
+
+    from grins_platform.api.v1.auth_dependencies import (  # noqa: PLC0415
+        get_current_active_user,
+        get_current_user,
+    )
+
+    fake_user = MagicMock()
+    fake_user.id = uuid.uuid4()
+    fake_user.username = "test-admin"
+    fake_user.email = "test-admin@example.com"
+    fake_user.role = "admin"
+    fake_user.is_active = True
+
+    application.dependency_overrides[get_current_user] = lambda: fake_user  # type: ignore[attr-defined]
+    application.dependency_overrides[get_current_active_user] = (  # type: ignore[attr-defined]
+        lambda: fake_user
+    )
+    return application
+
+
+@pytest.fixture(autouse=True)
+def _patch_create_app_auth(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Wrap ``grins_platform.app.create_app`` so every returned app has
+    auth overridden. Monkeypatches the attribute on the ``app`` module
+    and on test modules that may have already imported the symbol.
+    """
+    import importlib  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+
+    app_module = importlib.import_module("grins_platform.app")
+    original = app_module.create_app
+
+    def _wrapped() -> object:
+        return _install_auth_overrides(original())
+
+    # Patch the canonical location first.
+    monkeypatch.setattr(app_module, "create_app", _wrapped)
+
+    # Then patch every already-imported test module that did
+    # ``from grins_platform.app import create_app``. Those modules hold
+    # a direct reference to the original function; without this loop
+    # they keep calling the un-wrapped version.
+    for module in list(sys.modules.values()):
+        if module is None or module is app_module:
+            continue
+        if getattr(module, "create_app", None) is original:
+            monkeypatch.setattr(module, "create_app", _wrapped)
 
 
 # =============================================================================
@@ -393,6 +471,10 @@ def sample_submission_model(sample_sheet_row: list[str]) -> MagicMock:
     sub.property_type = sample_sheet_row[15]
     sub.referral_source = sample_sheet_row[16]
     sub.landscape_hardscape = sample_sheet_row[17]
+    sub.content_hash = None
+    sub.zip_code = None
+    sub.work_requested = None
+    sub.agreed_to_terms = None
     sub.processing_status = "imported"
     sub.processing_error = None
     sub.lead_id = None

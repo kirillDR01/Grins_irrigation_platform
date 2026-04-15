@@ -10,6 +10,7 @@ Validates: Requirement 2.1-2.12, 3.1-3.7, 4.1-4.10, 5.1-5.7, 6.1-6.9, 7.1-7.4
 
 from __future__ import annotations
 
+import contextlib
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING, ClassVar
@@ -18,6 +19,7 @@ from grins_platform.exceptions import (
     CustomerNotFoundError,
     InvalidStatusTransitionError,
     JobNotFoundError,
+    JobTargetDateEditNotAllowedError,
     PropertyCustomerMismatchError,
     PropertyNotFoundError,
     ServiceOfferingInactiveError,
@@ -29,7 +31,9 @@ from grins_platform.models.enums import (
     JobSource,
     JobStatus,
     PricingModel,
+    PropertyType,
 )
+from grins_platform.utils.week_alignment import align_to_week
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -62,10 +66,29 @@ class JobService(LoggerMixin):
 
     DOMAIN = "job"
 
-    # Valid status transitions
+    # Valid status transitions (Req 5.2)
+    # Skip edges TO_BE_SCHEDULED→COMPLETED and SCHEDULED→COMPLETED cover
+    # service-agreement and admin force-complete flows (bughunt M-1 /
+    # E-BUG-G) — the complete endpoint owns payment/invoice gating and
+    # audit logging separately, so allowing the direct transition here
+    # is safe.
     VALID_TRANSITIONS: ClassVar[dict[JobStatus, set[JobStatus]]] = {
-        JobStatus.TO_BE_SCHEDULED: {JobStatus.IN_PROGRESS, JobStatus.CANCELLED},
-        JobStatus.IN_PROGRESS: {JobStatus.COMPLETED, JobStatus.CANCELLED, JobStatus.TO_BE_SCHEDULED},
+        JobStatus.TO_BE_SCHEDULED: {
+            JobStatus.SCHEDULED,
+            JobStatus.IN_PROGRESS,
+            JobStatus.COMPLETED,
+            JobStatus.CANCELLED,
+        },
+        JobStatus.SCHEDULED: {
+            JobStatus.IN_PROGRESS,
+            JobStatus.TO_BE_SCHEDULED,
+            JobStatus.COMPLETED,
+            JobStatus.CANCELLED,
+        },
+        JobStatus.IN_PROGRESS: {
+            JobStatus.COMPLETED,
+            JobStatus.CANCELLED,
+        },
         JobStatus.COMPLETED: set(),  # Terminal state
         JobStatus.CANCELLED: set(),  # Terminal state
     }
@@ -142,6 +165,61 @@ class JobService(LoggerMixin):
         }
         return timestamp_map.get(status)
 
+    @staticmethod
+    def _week_from_preference(
+        prefs: dict[str, object] | list[dict[str, object]] | None,
+        job_type: str,
+    ) -> tuple[date | None, date | None]:
+        """Extract aligned week range from customer service preferences.
+
+        Scans the preference list for a matching service_type and returns
+        the aligned Monday-Sunday range from preferred_week or preferred_date.
+
+        Returns (None, None) when no match is found.
+
+        Validates: CRM2 Req 7.2 (auto-populate Week_Of from preferred_week)
+        """
+        if not prefs:
+            return None, None
+        normalized: list[object] = list(prefs) if isinstance(prefs, list) else [prefs]
+        for pref in normalized:
+            if not isinstance(pref, dict):
+                continue
+            svc = pref.get("service_type", "")
+            if svc and str(svc).lower() == job_type.lower():
+                # Try preferred_week first (CRM2 Req 7.2), then preferred_date
+                for key in ("preferred_week", "preferred_date"):
+                    raw_val = pref.get(key)
+                    if raw_val:
+                        parsed = None
+                        with contextlib.suppress(ValueError, TypeError):
+                            parsed = date.fromisoformat(str(raw_val))
+                        if parsed is not None:
+                            return align_to_week(parsed)
+        return None, None
+
+    @staticmethod
+    def _notes_from_preference(
+        prefs: dict[str, object] | list[dict[str, object]] | None,
+        job_type: str,
+    ) -> str | None:
+        """Extract notes from a matching customer service preference.
+
+        Validates: CRM2 Req 7.3 (display preference notes on job detail)
+        """
+        if not prefs:
+            return None
+        normalized: list[object] = list(prefs) if isinstance(prefs, list) else [prefs]
+        for pref in normalized:
+            if not isinstance(pref, dict):
+                continue
+            svc = pref.get("service_type", "")
+            if svc and str(svc).lower() == job_type.lower():
+                notes = pref.get("notes")
+                if notes:
+                    return str(notes)
+        return None
+
     async def create_job(self, data: JobCreate) -> Job:
         """Create a new job request with auto-categorization.
 
@@ -198,6 +276,15 @@ class JobService(LoggerMixin):
         # Auto-categorize the job
         category = self._determine_category(data)
 
+        # Auto-populate Week_Of from customer service preference (CRM2 Req 20.5)
+        target_start: date | None = None
+        target_end: date | None = None
+        if customer.preferred_service_times:
+            target_start, target_end = self._week_from_preference(
+                customer.preferred_service_times,
+                data.job_type,
+            )
+
         # Create the job
         job = await self.job_repository.create(
             customer_id=data.customer_id,
@@ -216,6 +303,8 @@ class JobService(LoggerMixin):
             quoted_amount=float(data.quoted_amount) if data.quoted_amount else None,
             source=data.source.value if data.source else None,
             source_details=data.source_details,
+            target_start_date=target_start,
+            target_end_date=target_end,
         )
 
         # Record initial status in history
@@ -289,6 +378,23 @@ class JobService(LoggerMixin):
 
         # Build update dict
         update_data = data.model_dump(exclude_unset=True)
+
+        # Target-date edits are only allowed while the job is still
+        # waiting to be scheduled. Once an appointment is attached
+        # (status transitions to scheduled / in_progress / completed),
+        # moving the target window here would leave the appointment out
+        # of sync. A dedicated reschedule flow would need to move both.
+        editing_target_dates = (
+            "target_start_date" in update_data or "target_end_date" in update_data
+        )
+        if editing_target_dates and job.status != JobStatus.TO_BE_SCHEDULED.value:
+            self.log_rejected(
+                "update_job",
+                reason="target_date_edit_not_allowed",
+                job_id=str(job_id),
+                current_status=str(job.status),
+            )
+            raise JobTargetDateEditNotAllowedError(job_id, str(job.status))
 
         # Convert enums and decimals
         if update_data.get("category"):
@@ -439,6 +545,9 @@ class JobService(LoggerMixin):
         date_to: datetime | None = None,
         search: str | None = None,
         has_service_agreement: bool | None = None,
+        property_type: PropertyType | None = None,
+        is_hoa: bool | None = None,
+        is_subscription_property: bool | None = None,
         target_date_from: date | None = None,
         target_date_to: date | None = None,
         sort_by: str = "created_at",
@@ -459,6 +568,9 @@ class JobService(LoggerMixin):
             date_to: Filter by created_at <= date_to
             search: Search by job type or description
             has_service_agreement: Filter by subscription source
+            property_type: Filter by property type
+            is_hoa: Filter by HOA property flag
+            is_subscription_property: Filter by subscription property
             target_date_from: Filter by target_start_date >= date
             target_date_to: Filter by target_start_date <= date
             sort_by: Field to sort by
@@ -467,7 +579,7 @@ class JobService(LoggerMixin):
         Returns:
             Tuple of (list of jobs, total count)
 
-        Validates: Requirement 6.1-6.9
+        Validates: Requirement 6.1-6.9, 8.5
         """
         self.log_started("list_jobs", page=page, page_size=page_size, search=search)
 
@@ -484,6 +596,9 @@ class JobService(LoggerMixin):
             date_to=date_to,
             search=search,
             has_service_agreement=has_service_agreement,
+            property_type=property_type,
+            is_hoa=is_hoa,
+            is_subscription_property=is_subscription_property,
             target_date_from=target_date_from,
             target_date_to=target_date_to,
             sort_by=sort_by,

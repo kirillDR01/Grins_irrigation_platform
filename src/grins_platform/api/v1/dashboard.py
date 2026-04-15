@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, Query
 from grins_platform.api.v1.dependencies import get_dashboard_service
 from grins_platform.log_config import LoggerMixin
 from grins_platform.schemas.dashboard import (
+    DashboardAlertsResponse,
     DashboardMetrics,
     JobsByStatusResponse,
     PaymentStatusOverview,
@@ -228,5 +229,36 @@ async def get_today_schedule(
         total=result.total_appointments,
         completed=result.completed_appointments,
         upcoming=result.upcoming_appointments,
+    )
+    return result
+
+
+# =============================================================================
+# GET /api/v1/dashboard/alerts - Get Dashboard Alerts
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/alerts",
+    response_model=DashboardAlertsResponse,
+    summary="Get dashboard alerts with navigation targets",
+    description="Get active alerts with target_url for direct navigation. "
+    "Single-record alerts link to detail pages; multi-record alerts "
+    "link to filtered list views with ?highlight=<id>.",
+)
+async def get_dashboard_alerts(
+    service: Annotated[DashboardService, Depends(get_dashboard_service)],
+) -> DashboardAlertsResponse:
+    """Get dashboard alerts with navigation target URLs.
+
+    Validates: CRM Changes Update 2 Req 3.1, 3.2, 3.4
+    """
+    _endpoints.log_started("get_dashboard_alerts")
+
+    result = await service.get_alerts()
+
+    _endpoints.log_completed(
+        "get_dashboard_alerts",
+        total_alerts=result.total,
     )
     return result

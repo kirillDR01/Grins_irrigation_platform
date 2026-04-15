@@ -177,4 +177,81 @@ describe('ProtectedRoute', () => {
 
     expect(screen.getByTestId('protected-content')).toBeInTheDocument();
   });
+
+  describe('session restoration (Requirement 4)', () => {
+    it('shows loading indicator instead of login page during session restoration', () => {
+      // Simulates the state during page refresh when AuthProvider is restoring session
+      mockUseAuth.mockReturnValue({
+        user: null,
+        isAuthenticated: false,
+        isLoading: true,
+        login: vi.fn(),
+        logout: vi.fn(),
+        refreshToken: vi.fn(),
+      });
+
+      renderWithRouter(
+        <ProtectedRoute>
+          <div data-testid="protected-content">Protected Content</div>
+        </ProtectedRoute>
+      );
+
+      // Should show loading indicator, NOT redirect to login
+      expect(screen.getByTestId('loading-page')).toBeInTheDocument();
+      expect(screen.getByText(/checking authentication/i)).toBeInTheDocument();
+      expect(screen.queryByTestId('login-page')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('protected-content')).not.toBeInTheDocument();
+    });
+
+    it('shows protected content after successful session restoration', () => {
+      // Simulates state after AuthProvider successfully restored session
+      mockUseAuth.mockReturnValue({
+        user: {
+          id: '1',
+          username: 'restored-user',
+          name: 'Restored User',
+          email: 'restored@example.com',
+          role: 'admin',
+          is_active: true,
+        },
+        isAuthenticated: true,
+        isLoading: false,
+        login: vi.fn(),
+        logout: vi.fn(),
+        refreshToken: vi.fn(),
+      });
+
+      renderWithRouter(
+        <ProtectedRoute>
+          <div data-testid="protected-content">Protected Content</div>
+        </ProtectedRoute>
+      );
+
+      expect(screen.getByTestId('protected-content')).toBeInTheDocument();
+      expect(screen.queryByTestId('loading-page')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('login-page')).not.toBeInTheDocument();
+    });
+
+    it('redirects to login after failed session restoration', () => {
+      // Simulates state after AuthProvider failed to restore session (expired/invalid refresh token)
+      mockUseAuth.mockReturnValue({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        login: vi.fn(),
+        logout: vi.fn(),
+        refreshToken: vi.fn(),
+      });
+
+      renderWithRouter(
+        <ProtectedRoute>
+          <div data-testid="protected-content">Protected Content</div>
+        </ProtectedRoute>
+      );
+
+      expect(screen.getByTestId('login-page')).toBeInTheDocument();
+      expect(screen.queryByTestId('loading-page')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('protected-content')).not.toBeInTheDocument();
+    });
+  });
 });

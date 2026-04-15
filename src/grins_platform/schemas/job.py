@@ -14,7 +14,9 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from datetime import timedelta
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from grins_platform.models.enums import (
     JobCategory,
@@ -191,6 +193,23 @@ class JobUpdate(BaseModel):
         max_length=255,
         description="Job summary",
     )
+    target_start_date: date | None = Field(
+        default=None,
+        description=(
+            "Start of the admin-editable target service window (Monday)."
+            " Used to move a job's preferred week after onboarding —"
+            " e.g. when a customer calls in to reschedule."
+            " Must be accompanied by target_end_date."
+        ),
+    )
+    target_end_date: date | None = Field(
+        default=None,
+        description=(
+            "End of the admin-editable target service window (Sunday)."
+            " Must be target_start_date + 6 days to keep the Mon-Sun"
+            " week model consistent with onboarding-time selections."
+        ),
+    )
 
     @field_validator("job_type")  # type: ignore[misc,untyped-decorator]
     @classmethod
@@ -199,6 +218,54 @@ class JobUpdate(BaseModel):
         if v is None:
             return None
         return v.strip().lower()
+
+    @model_validator(mode="after")
+    def validate_target_window(self) -> "JobUpdate":
+        """Validate the target_start_date / target_end_date pair.
+
+        Rules:
+          - Both must be provided together (or both omitted).
+          - target_start_date must be a Monday (weekday() == 0).
+          - target_end_date must equal target_start_date + 6 days
+            (Mon-Sun, matching the onboarding week model).
+          - The start date must fall within [today - 7 days,
+            today + 2 years] to catch obvious fat-finger errors while
+            still allowing a same-week move at the start of the week.
+        """
+        start = self.target_start_date
+        end = self.target_end_date
+        if start is None and end is None:
+            return self
+        if start is None or end is None:
+            msg = (
+                "target_start_date and target_end_date must be provided"
+                " together (or both omitted)."
+            )
+            raise ValueError(msg)
+        if start.weekday() != 0:
+            msg = (
+                f"target_start_date must be a Monday; got {start.isoformat()}"
+                f" (weekday={start.weekday()})."
+            )
+            raise ValueError(msg)
+        expected_end = start + timedelta(days=6)
+        if end != expected_end:
+            msg = (
+                "target_end_date must equal target_start_date + 6 days"
+                f" (expected {expected_end.isoformat()}, got {end.isoformat()})."
+            )
+            raise ValueError(msg)
+        today = date.today()
+        earliest = today - timedelta(days=7)
+        latest = today + timedelta(days=365 * 2)
+        if start < earliest or start > latest:
+            msg = (
+                "target_start_date is out of the allowed range"
+                f" [{earliest.isoformat()}, {latest.isoformat()}];"
+                f" got {start.isoformat()}."
+            )
+            raise ValueError(msg)
+        return self
 
 
 class JobStatusUpdate(BaseModel):
@@ -295,6 +362,10 @@ class JobResponse(BaseModel):
         default=None,
         description="When the job was scheduled",
     )
+    on_my_way_at: datetime | None = Field(
+        default=None,
+        description="When On My Way was triggered",
+    )
     started_at: datetime | None = Field(
         default=None,
         description="When work started",
@@ -319,6 +390,56 @@ class JobResponse(BaseModel):
     customer_phone: str | None = Field(
         default=None,
         description="Customer phone for quick contact",
+    )
+    # Property summary for list/detail views (Req 19.1-19.4)
+    property_address: str | None = Field(
+        default=None,
+        description="Full property address (street, city, state, ZIP)",
+    )
+    property_city: str | None = Field(
+        default=None,
+        description="Property city",
+    )
+    property_type: str | None = Field(
+        default=None,
+        description="Property type (residential/commercial)",
+    )
+    property_is_hoa: bool | None = Field(
+        default=None,
+        description="Whether property is HOA",
+    )
+    property_is_subscription: bool | None = Field(
+        default=None,
+        description="Whether property has active service agreement",
+    )
+    time_tracking_metadata: dict[str, Any] | None = Field(
+        default=None,
+        description="Time tracking metadata (on_my_way→started→complete durations)",
+    )
+    # Service preference notes hint (CRM2 Req 7.3)
+    service_preference_notes: str | None = Field(
+        default=None,
+        description="Read-only notes from matching customer service preference",
+    )
+    # Service agreement name for display (Smoothing Req 7.3)
+    service_agreement_name: str | None = Field(
+        default=None,
+        description="Name of the linked service agreement tier for display",
+    )
+    # Whether the linked service agreement is active (Smoothing Req 7.2)
+    service_agreement_active: bool | None = Field(
+        default=None,
+        description="Whether the linked service agreement is active (not expired/cancelled)",
+    )
+    # Convenience alias for property_address (Smoothing Req 11.3)
+    customer_address: str | None = Field(
+        default=None,
+        description="Customer property address for job selector display",
+    )
+    # Computed property tags list for job selector badges (Smoothing Req 11.4)
+    property_tags: list[str] | None = Field(
+        default=None,
+        description="Property tags (e.g. Residential, HOA, Subscription) for badge display",
     )
 
     @field_validator("category", mode="before")  # type: ignore[misc,untyped-decorator]
@@ -540,4 +661,62 @@ class PaginatedJobResponse(BaseModel):
         ...,
         ge=0,
         description="Total number of pages",
+    )
+
+
+# =============================================================================
+# On-Site Operation Schemas (Req 26, 27)
+# =============================================================================
+
+
+class JobNoteCreate(BaseModel):
+    """Schema for adding a note to a job."""
+
+    note: str = Field(..., min_length=1, max_length=5000, description="Note text")
+
+
+class JobNoteResponse(BaseModel):
+    """Response after adding a note."""
+
+    job_id: UUID
+    note: str
+    synced_to_customer: bool
+
+
+class JobReviewPushResponse(BaseModel):
+    """Response after sending a Google review push."""
+
+    job_id: UUID
+    sms_sent: bool
+    message_id: UUID | None = None
+
+
+class JobCompleteRequest(BaseModel):
+    """Request body for completing a job.
+
+    Validates: Requirement 27.3, 27.4, 27.5
+    """
+
+    force: bool = Field(
+        default=False,
+        description="Force complete even without payment/invoice",
+    )
+
+
+class JobCompleteResponse(BaseModel):
+    """Response for job completion attempt.
+
+    Validates: Requirement 27.3, 27.4
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    completed: bool = Field(description="Whether the job was completed")
+    warning: str | None = Field(
+        default=None,
+        description="Warning message if payment/invoice missing",
+    )
+    job: JobResponse | None = Field(
+        default=None,
+        description="Updated job if completed",
     )

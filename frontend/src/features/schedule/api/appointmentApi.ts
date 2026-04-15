@@ -27,6 +27,27 @@ import type {
 
 const BASE_URL = '/appointments';
 
+export type BulkSendConfirmationRowStatus =
+  | 'sent'
+  | 'deferred'
+  | 'skipped'
+  | 'failed';
+
+export interface BulkSendConfirmationItemResult {
+  appointment_id: string;
+  status: BulkSendConfirmationRowStatus;
+  reason: string | null;
+}
+
+export interface BulkSendConfirmationsResult {
+  sent_count: number;
+  deferred_count: number;
+  skipped_count: number;
+  failed_count: number;
+  total_draft: number;
+  results: BulkSendConfirmationItemResult[];
+}
+
 export const appointmentApi = {
   /**
    * List appointments with optional filters and pagination.
@@ -66,10 +87,13 @@ export const appointmentApi = {
   },
 
   /**
-   * Cancel an appointment (soft delete).
+   * Cancel an appointment (soft delete). Pass ``notifyCustomer=false`` to
+   * opt out of the cancellation SMS.
    */
-  async cancel(id: string): Promise<void> {
-    await apiClient.delete(`${BASE_URL}/${id}`);
+  async cancel(id: string, notifyCustomer: boolean = true): Promise<void> {
+    await apiClient.delete(
+      `${BASE_URL}/${id}?notify_customer=${notifyCustomer}`,
+    );
   },
 
   /**
@@ -221,6 +245,34 @@ export const appointmentApi = {
   async requestReview(id: string): Promise<RequestReviewResponse> {
     const response = await apiClient.post<RequestReviewResponse>(
       `${BASE_URL}/${id}/request-review`
+    );
+    return response.data;
+  },
+
+  /**
+   * Send confirmation SMS for a draft appointment (Req 8.4, 8.12).
+   */
+  async sendConfirmation(id: string): Promise<{ appointment_id: string; status: string; sms_sent: boolean }> {
+    const response = await apiClient.post<{ appointment_id: string; status: string; sms_sent: boolean }>(
+      `${BASE_URL}/${id}/send-confirmation`
+    );
+    return response.data;
+  },
+
+  /**
+   * Bulk send confirmation SMS for draft appointments (Req 8.6, 8.13).
+   *
+   * Per-appointment results distinguish sent / deferred (rate-limited)
+   * / skipped (no phone, missing customer) / failed (bughunt M-8, M-9).
+   */
+  async bulkSendConfirmations(data: {
+    appointment_ids?: string[];
+    date_from?: string;
+    date_to?: string;
+  }): Promise<BulkSendConfirmationsResult> {
+    const response = await apiClient.post<BulkSendConfirmationsResult>(
+      `${BASE_URL}/send-confirmations`,
+      data
     );
     return response.data;
   },

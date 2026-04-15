@@ -41,6 +41,9 @@ from grins_platform.schemas.customer import CustomerCreate, normalize_phone
 from grins_platform.services.agreement_service import AgreementService
 from grins_platform.services.ai.security import validate_twilio_signature
 from grins_platform.services.compliance_service import ComplianceService
+from grins_platform.services.contract_renewal_service import (
+    ContractRenewalReviewService,
+)
 from grins_platform.services.customer_service import CustomerService
 from grins_platform.services.email_service import EmailService
 from grins_platform.services.job_generator import JobGenerator
@@ -556,9 +559,17 @@ class StripeWebhookHandler(LoggerMixin):
                 {"end_date": new_end, "renewal_date": new_renewal},
             )
 
-            # Generate next season's jobs
+            # Generate next season's jobs or renewal proposal (Req 31.1)
             await self.session.refresh(agreement)
-            _ = await job_gen.generate_jobs(agreement)
+            if agreement.auto_renew:
+                renewal_svc = ContractRenewalReviewService(self.session)
+                _ = await renewal_svc.generate_proposal(agreement.id)
+                self.log_completed(
+                    "webhook_renewal_proposal_created",
+                    agreement_id=str(agreement.id),
+                )
+            else:
+                _ = await job_gen.generate_jobs(agreement)
 
         # Update payment fields (Req 10.3)
         _ = await agreement_repo.update(

@@ -222,8 +222,13 @@ class TestGetPortalEstimate:
 
         data = resp.json()
         forbidden_keys = {
-            "id", "customer_id", "lead_id", "job_id",
-            "template_id", "staff_id", "created_by",
+            "id",
+            "customer_id",
+            "lead_id",
+            "job_id",
+            "template_id",
+            "staff_id",
+            "created_by",
         }
         assert not forbidden_keys.intersection(data.keys())
 
@@ -466,7 +471,7 @@ class TestSignPortalContract:
     def test_sign_without_signature_data_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - needed for app fixture
+        mock_service: AsyncMock,
     ) -> None:
         """Missing signature_data returns validation error."""
         token = uuid4()

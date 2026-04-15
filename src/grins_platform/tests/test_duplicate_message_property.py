@@ -6,7 +6,7 @@ Validates: Requirement 7.7
 """
 
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
@@ -17,7 +17,17 @@ from hypothesis import (
 )
 
 from grins_platform.schemas.ai import MessageType
+from grins_platform.services.sms.recipient import Recipient
 from grins_platform.services.sms_service import SMSService
+
+
+def _make_recipient() -> tuple[Recipient, str]:
+    cid = uuid4()
+    phone = "+16125551234"
+    return (
+        Recipient(phone=phone, source_type="customer", customer_id=cid),
+        phone,
+    )
 
 
 @pytest.mark.asyncio
@@ -34,40 +44,29 @@ class TestDuplicateMessageProperty:
         message_type: MessageType,
         message: str,
     ) -> None:
-        """Property: Duplicate messages within 24 hours are prevented.
-
-        Given a customer and message type, if a message was sent within
-        the last 24 hours, attempting to send the same type again should
-        be prevented.
-        """
+        """Property: Duplicate messages within 24 hours are prevented."""
         mock_session = AsyncMock()
         service = SMSService(mock_session)
+        recipient, _ = _make_recipient()
 
-        customer_id = uuid4()
-        phone = "6125551234"
+        mock_recent = AsyncMock()
+        mock_recent.id = uuid4()
+        mock_recent.created_at = datetime.now() - timedelta(hours=12)
 
-        # Mock a recent message of the same type
-        mock_recent_message = AsyncMock()
-        mock_recent_message.id = uuid4()
-        mock_recent_message.customer_id = customer_id
-        mock_recent_message.message_type = message_type.value
-        mock_recent_message.created_at = datetime.now() - timedelta(hours=12)
-
-        # Mock repository to return the recent message
         service.message_repo.get_by_customer_and_type = AsyncMock(
-            return_value=[mock_recent_message],
+            return_value=[mock_recent],
         )
 
-        # Attempt to send duplicate should be prevented
-        result = await service.send_message(
-            customer_id=customer_id,
-            phone=phone,
-            message=message,
-            message_type=message_type,
-            sms_opt_in=True,
-        )
+        with patch(
+            "grins_platform.services.sms_service.check_sms_consent",
+            return_value=True,
+        ):
+            result = await service.send_message(
+                recipient=recipient,
+                message=message,
+                message_type=message_type,
+            )
 
-        # Should indicate duplicate was prevented
         assert result["success"] is False
         assert "duplicate" in result.get("reason", "").lower()
 
@@ -81,43 +80,24 @@ class TestDuplicateMessageProperty:
         message_type: MessageType,
         message: str,
     ) -> None:
-        """Property: Messages after 24 hours are allowed.
-
-        Given a customer and message type, if the last message was sent
-        more than 24 hours ago, a new message should be allowed.
-        """
+        """Property: Messages after 24 hours are allowed."""
         mock_session = AsyncMock()
         service = SMSService(mock_session)
+        recipient, _ = _make_recipient()
 
-        customer_id = uuid4()
-        phone = "6125551234"
-
-        # Mock an old message (>24 hours ago)
-        mock_old_message = AsyncMock()
-        mock_old_message.id = uuid4()
-        mock_old_message.customer_id = customer_id
-        mock_old_message.message_type = message_type.value
-        mock_old_message.created_at = datetime.now() - timedelta(hours=25)
-
-        # Mock repository to return empty (old message filtered out)
         service.message_repo.get_by_customer_and_type = AsyncMock(
-            return_value=[],  # No recent messages
+            return_value=[],
         )
 
-        # Mock successful send
-        mock_new_message = AsyncMock()
-        mock_new_message.id = uuid4()
-        service.message_repo.create = AsyncMock(return_value=mock_new_message)
-        service.message_repo.update = AsyncMock(return_value=mock_new_message)
-
-        # Should allow sending
-        result = await service.send_message(
-            customer_id=customer_id,
-            phone=phone,
-            message=message,
-            message_type=message_type,
-            sms_opt_in=True,
-        )
+        with patch(
+            "grins_platform.services.sms_service.check_sms_consent",
+            return_value=True,
+        ):
+            result = await service.send_message(
+                recipient=recipient,
+                message=message,
+                message_type=message_type,
+            )
 
         assert result["success"] is True
         assert "message_id" in result
@@ -132,47 +112,27 @@ class TestDuplicateMessageProperty:
         message_type1: MessageType,
         message_type2: MessageType,
     ) -> None:
-        """Property: Different message types are allowed even if recent.
-
-        Given a customer, if a message of type A was sent recently,
-        a message of type B should still be allowed.
-        """
-        # Skip if same type
+        """Property: Different message types are allowed even if recent."""
         if message_type1 == message_type2:
             return
 
         mock_session = AsyncMock()
         service = SMSService(mock_session)
+        recipient, _ = _make_recipient()
 
-        customer_id = uuid4()
-        phone = "6125551234"
-
-        # Mock a recent message of type1
-        mock_recent_message = AsyncMock()
-        mock_recent_message.id = uuid4()
-        mock_recent_message.customer_id = customer_id
-        mock_recent_message.message_type = message_type1.value
-        mock_recent_message.created_at = datetime.now() - timedelta(hours=1)
-
-        # Mock repository to return empty for type2 (different type)
         service.message_repo.get_by_customer_and_type = AsyncMock(
-            return_value=[],  # No recent messages of type2
+            return_value=[],
         )
 
-        # Mock successful send
-        mock_new_message = AsyncMock()
-        mock_new_message.id = uuid4()
-        service.message_repo.create = AsyncMock(return_value=mock_new_message)
-        service.message_repo.update = AsyncMock(return_value=mock_new_message)
-
-        # Should allow sending type2
-        result = await service.send_message(
-            customer_id=customer_id,
-            phone=phone,
-            message="Test message",
-            message_type=message_type2,
-            sms_opt_in=True,
-        )
+        with patch(
+            "grins_platform.services.sms_service.check_sms_consent",
+            return_value=True,
+        ):
+            result = await service.send_message(
+                recipient=recipient,
+                message="Test message",
+                message_type=message_type2,
+            )
 
         assert result["success"] is True
         assert "message_id" in result
@@ -181,33 +141,65 @@ class TestDuplicateMessageProperty:
         """Test that duplicate check uses 24-hour timeframe."""
         mock_session = AsyncMock()
         service = SMSService(mock_session)
+        recipient, _ = _make_recipient()
 
-        customer_id = uuid4()
-        message_type = MessageType.APPOINTMENT_CONFIRMATION
-
-        # Mock repository calls
         service.message_repo.get_by_customer_and_type = AsyncMock(
             return_value=[],
         )
 
-        # Mock successful message creation and update
-        mock_message = AsyncMock()
-        mock_message.id = uuid4()
-        service.message_repo.create = AsyncMock(return_value=mock_message)
-        service.message_repo.update = AsyncMock(return_value=mock_message)
+        with patch(
+            "grins_platform.services.sms_service.check_sms_consent",
+            return_value=True,
+        ):
+            await service.send_message(
+                recipient=recipient,
+                message="Test",
+                message_type=MessageType.APPOINTMENT_CONFIRMATION,
+            )
 
-        # Attempt to send
-        await service.send_message(
-            customer_id=customer_id,
-            phone="6125551234",
-            message="Test",
-            message_type=message_type,
-            sms_opt_in=True,
-        )
-
-        # Verify repository was called with 24-hour timeframe
         service.message_repo.get_by_customer_and_type.assert_called_once_with(
-            customer_id=customer_id,
-            message_type=message_type,
+            customer_id=recipient.customer_id,
+            message_type=MessageType.APPOINTMENT_CONFIRMATION,
             hours_back=24,
+            appointment_id=None,
         )
+
+    async def test_appointment_confirmation_dedupe_scoped_per_appointment(
+        self,
+    ) -> None:
+        """Bug #4 fix: different appointment_ids for same customer both succeed."""
+        mock_session = AsyncMock()
+        service = SMSService(mock_session)
+        recipient, _ = _make_recipient()
+        appt_1 = uuid4()
+        appt_2 = uuid4()
+
+        # No prior messages for either appointment
+        service.message_repo.get_by_customer_and_type = AsyncMock(
+            return_value=[],
+        )
+
+        with patch(
+            "grins_platform.services.sms_service.check_sms_consent",
+            return_value=True,
+        ):
+            result1 = await service.send_message(
+                recipient=recipient,
+                message="Appt 1 confirmed",
+                message_type=MessageType.APPOINTMENT_CONFIRMATION,
+                appointment_id=appt_1,
+            )
+            result2 = await service.send_message(
+                recipient=recipient,
+                message="Appt 2 confirmed",
+                message_type=MessageType.APPOINTMENT_CONFIRMATION,
+                appointment_id=appt_2,
+            )
+
+        assert result1["success"] is True
+        assert result2["success"] is True
+
+        # Verify dedupe was scoped per appointment_id
+        calls = service.message_repo.get_by_customer_and_type.call_args_list
+        assert calls[0].kwargs.get("appointment_id") == appt_1 or calls[0][1].get("appointment_id") == appt_1
+        assert calls[1].kwargs.get("appointment_id") == appt_2 or calls[1][1].get("appointment_id") == appt_2

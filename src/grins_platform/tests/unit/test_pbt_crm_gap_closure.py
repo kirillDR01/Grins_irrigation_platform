@@ -8,7 +8,6 @@ This file covers the REMAINING uncovered properties:
   60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 76, 77,
   78, 79, 80, 81, 82, 83, 84
 """
-# ruff: noqa: PLC0415, ARG001, ARG002
 
 from __future__ import annotations
 
@@ -1951,6 +1950,7 @@ class TestProperty76AppointmentStatusEnum:
         status=st.sampled_from(
             [
                 "pending",
+                "draft",
                 "scheduled",
                 "confirmed",
                 "en_route",
@@ -1979,10 +1979,10 @@ class TestProperty76AppointmentStatusEnum:
         assert AppointmentStatus.NO_SHOW.value == "no_show"
 
     def test_enum_has_exactly_8_values(self) -> None:
-        """AppointmentStatus has exactly 8 members."""
+        """AppointmentStatus has exactly 9 members (including DRAFT)."""
         from grins_platform.models.enums import AppointmentStatus
 
-        assert len(AppointmentStatus) == 8
+        assert len(AppointmentStatus) == 9
 
 
 # ===================================================================

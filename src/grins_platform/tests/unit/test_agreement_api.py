@@ -98,6 +98,9 @@ def _make_agreement(
     agr.last_annual_notice_sent = None
     agr.last_renewal_notice_sent = None
     agr.notes = None
+    agr.preferred_schedule = None
+    agr.preferred_schedule_details = None
+    agr.service_week_preferences = None
     agr.jobs = []
     agr.status_logs = []
     customer = MagicMock()

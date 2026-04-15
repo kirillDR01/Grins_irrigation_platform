@@ -3,7 +3,7 @@
  * Displays metrics, schedule overview, and quick actions.
  */
 
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/shared/components/PageHeader';
@@ -16,7 +16,6 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
-  Funnel,
 } from 'lucide-react';
 import { useAuth } from '@/features/auth';
 import { useDashboardMetrics, useTodaySchedule } from '../hooks';
@@ -26,14 +25,12 @@ import { InvoiceMetricsWidget } from './InvoiceMetricsWidget';
 import { RecentActivity } from './RecentActivity';
 import { TechnicianAvailability } from './TechnicianAvailability';
 import { SubscriptionDashboardWidgets } from './SubscriptionDashboardWidgets';
-import { LeadDashboardWidgets } from './LeadDashboardWidgets';
 import { JobStatusGrid } from './JobStatusGrid';
 import { AIQueryChat } from '@/features/ai/components/AIQueryChat';
 import { MorningBriefing } from '@/features/ai/components/MorningBriefing';
 import { OverdueInvoicesWidget, LienDeadlinesWidget } from '@/features/invoices';
 
 export function DashboardPage() {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics();
   const { data: todaySchedule, isLoading: scheduleLoading } = useTodaySchedule();
@@ -75,9 +72,6 @@ export function DashboardPage() {
           {/* Subscription Widgets */}
           <SubscriptionDashboardWidgets />
 
-          {/* Lead Widgets */}
-          <LeadDashboardWidgets />
-
           {/* Metrics Cards */}
           <div
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8"
@@ -103,56 +97,7 @@ export function DashboardPage() {
             />
           </div>
 
-          {/* New Leads Card */}
-          {(() => {
-            const uncontacted = metrics?.uncontacted_leads ?? 0;
-            const colorClass =
-              uncontacted === 0
-                ? 'border-green-200 bg-green-50'
-                : uncontacted <= 5
-                  ? 'border-amber-200 bg-amber-50'
-                  : 'border-red-200 bg-red-50';
-            const iconColorClass =
-              uncontacted === 0
-                ? 'text-green-600 bg-green-100'
-                : uncontacted <= 5
-                  ? 'text-amber-600 bg-amber-100'
-                  : 'text-red-600 bg-red-100';
-            const textColorClass =
-              uncontacted === 0
-                ? 'text-green-700'
-                : uncontacted <= 5
-                  ? 'text-amber-700'
-                  : 'text-red-700';
-            return (
-              <Card
-                data-testid="leads-metric"
-                className={`cursor-pointer transition-all hover:shadow-md ${colorClass}`}
-                onClick={() => navigate('/leads?status=new')}
-              >
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-2">
-                      <p className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-                        New Leads
-                      </p>
-                      <div className="text-3xl font-bold text-slate-800">
-                        {metrics?.new_leads_today ?? 0}
-                      </div>
-                      <p className={`text-xs font-medium ${textColorClass}`}>
-                        {uncontacted} uncontacted
-                      </p>
-                    </div>
-                    <div className={`p-3 rounded-xl ${iconColorClass}`}>
-                      <Funnel className="h-5 w-5" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })()}
-
-          {/* Job Status Grid — 6 categories */}
+          {/* Job Status Grid */}
           <JobStatusGrid />
 
           {/* Today's Schedule Summary */}

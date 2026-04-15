@@ -252,7 +252,8 @@ class TestAgreementToSchedulerPriorityOrdering:
         sorted_descending = sorted(schedule_jobs, key=lambda j: -j.priority)
         sorted_priorities = [j.priority for j in sorted_descending]
         assert sorted_priorities == sorted(
-            [j.priority for j in schedule_jobs], reverse=True,
+            [j.priority for j in schedule_jobs],
+            reverse=True,
         )
 
 
@@ -309,17 +310,10 @@ class TestMixedTierSchedulingOrder:
         """Premium (priority=2) jobs are assigned before lower-priority jobs."""
         # 3 jobs at each priority level
         jobs: list[ScheduleJob] = [
-            _make_schedule_job(priority=0, city="Eden Prairie")
-            for _ in range(3)
+            _make_schedule_job(priority=0, city="Eden Prairie") for _ in range(3)
         ]
-        jobs.extend(
-            _make_schedule_job(priority=1, city="Minnetonka")
-            for _ in range(3)
-        )
-        jobs.extend(
-            _make_schedule_job(priority=2, city="Plymouth")
-            for _ in range(3)
-        )
+        jobs.extend(_make_schedule_job(priority=1, city="Minnetonka") for _ in range(3))
+        jobs.extend(_make_schedule_job(priority=2, city="Plymouth") for _ in range(3))
 
         solver = ScheduleSolverService()
         solution = solver.solve(schedule_date, jobs, staff_team)
@@ -330,12 +324,8 @@ class TestMixedTierSchedulingOrder:
             all_assigned.extend(assignment.jobs)
 
         # Find the positions of each priority group
-        premium_positions = [
-            i for i, j in enumerate(all_assigned) if j.priority == 2
-        ]
-        essential_positions = [
-            i for i, j in enumerate(all_assigned) if j.priority == 0
-        ]
+        premium_positions = [i for i, j in enumerate(all_assigned) if j.priority == 2]
+        essential_positions = [i for i, j in enumerate(all_assigned) if j.priority == 0]
 
         # If both groups have assigned jobs, verify Premium appears earlier
         if premium_positions and essential_positions:
@@ -466,6 +456,7 @@ class TestEndToEndPriorityBadgeConsistency:
                 object.__setattr__(job, "id", uuid4())
                 data = job.to_dict()
                 assert data["priority_level"] == expected_priority
-                assert PRIORITY_BADGE_MAP[data["priority_level"]] == PRIORITY_BADGE_MAP[
-                    expected_priority
-                ]
+                assert (
+                    PRIORITY_BADGE_MAP[data["priority_level"]]
+                    == PRIORITY_BADGE_MAP[expected_priority]
+                )

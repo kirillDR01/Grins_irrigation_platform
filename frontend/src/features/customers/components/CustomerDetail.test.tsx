@@ -13,6 +13,7 @@ vi.mock('../hooks/useCustomers', () => ({
   useCustomerPaymentMethods: vi.fn(),
   useCustomerDuplicates: vi.fn(),
   useCustomerSentMessages: vi.fn(),
+  useServicePreferences: vi.fn(),
   customerKeys: {
     all: ['customers'],
     lists: () => ['customers', 'list'],
@@ -24,6 +25,7 @@ vi.mock('../hooks/useCustomers', () => ({
     paymentMethods: (id: string) => ['customers', id, 'payment-methods'],
     duplicates: (id: string) => ['customers', id, 'duplicates'],
     sentMessages: (id: string) => ['customers', id, 'sent-messages'],
+    servicePreferences: (id: string) => ['customers', id, 'service-preferences'],
   },
 }));
 
@@ -35,6 +37,9 @@ vi.mock('../hooks/useCustomerMutations', () => ({
   useDeleteCustomerPhoto: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
   useChargeCustomer: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
   useMergeCustomers: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useAddServicePreference: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useUpdateServicePreference: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useDeleteServicePreference: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
 }));
 
 vi.mock('@/features/ai/components', () => ({
@@ -127,6 +132,12 @@ function setupMocks() {
     isLoading: false,
     error: null,
   } as unknown as ReturnType<typeof customerHooks.useCustomerSentMessages>);
+
+  vi.mocked(customerHooks.useServicePreferences).mockReturnValue({
+    data: [],
+    isLoading: false,
+    error: null,
+  } as unknown as ReturnType<typeof customerHooks.useServicePreferences>);
 }
 
 describe('CustomerDetail', () => {
@@ -162,14 +173,14 @@ describe('CustomerDetail', () => {
     expect(screen.getByText('VIP customer, prefers morning calls')).toBeInTheDocument();
   });
 
-  it('shows service time preference on Overview tab', async () => {
+  it('shows service preferences section on Overview tab', async () => {
     render(<CustomerDetail />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByTestId('service-time-display')).toBeInTheDocument();
+      expect(screen.getByTestId('service-preferences-section')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Morning')).toBeInTheDocument();
+    expect(screen.getByTestId('add-preference-btn')).toBeInTheDocument();
   });
 
   it('switches to Photos tab', async () => {
@@ -257,26 +268,6 @@ describe('CustomerDetail', () => {
     expect(screen.getByTestId('internal-notes-textarea')).toBeInTheDocument();
   });
 
-  it('opens service time editor when Edit is clicked', async () => {
-    const user = userEvent.setup();
-    render(<CustomerDetail />, { wrapper: createWrapper() });
-
-    await waitFor(() => {
-      expect(screen.getByTestId('edit-service-time-btn')).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByTestId('edit-service-time-btn'));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('service-time-editor')).toBeInTheDocument();
-    });
-
-    expect(screen.getByTestId('service-time-morning')).toBeInTheDocument();
-    expect(screen.getByTestId('service-time-afternoon')).toBeInTheDocument();
-    expect(screen.getByTestId('service-time-evening')).toBeInTheDocument();
-    expect(screen.getByTestId('service-time-no_preference')).toBeInTheDocument();
-  });
-
   it('renders loading state', () => {
     vi.mocked(customerHooks.useCustomer).mockReturnValue({
       data: undefined,
@@ -296,7 +287,7 @@ describe('CustomerDetail', () => {
       isLoading: false,
       error: new Error('Failed to fetch'),
       refetch: vi.fn(),
-    } as unknown as ReturnType<typeof customerHooks.useCustomer>);
+    } as unknown as ReturnType<typeof customerHooks.useCustomerSentMessages>);
 
     render(<CustomerDetail />, { wrapper: createWrapper() });
 

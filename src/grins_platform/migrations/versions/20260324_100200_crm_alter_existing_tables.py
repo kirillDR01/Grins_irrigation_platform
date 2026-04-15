@@ -55,7 +55,8 @@ def upgrade() -> None:
         sa.Column("en_route_at", sa.TIMESTAMP(timezone=True), nullable=True),
     )
     op.add_column(
-        "appointments", sa.Column("materials_needed", sa.Text(), nullable=True),
+        "appointments",
+        sa.Column("materials_needed", sa.Text(), nullable=True),
     )
     op.add_column(
         "appointments",
@@ -75,34 +76,46 @@ def upgrade() -> None:
     op.add_column(
         "invoices",
         sa.Column(
-            "pre_due_reminder_sent_at", sa.TIMESTAMP(timezone=True), nullable=True,
+            "pre_due_reminder_sent_at",
+            sa.TIMESTAMP(timezone=True),
+            nullable=True,
         ),
     )
     op.add_column(
         "invoices",
         sa.Column(
-            "last_past_due_reminder_at", sa.TIMESTAMP(timezone=True), nullable=True,
+            "last_past_due_reminder_at",
+            sa.TIMESTAMP(timezone=True),
+            nullable=True,
         ),
     )
     op.add_column("invoices", sa.Column("document_url", sa.String(500), nullable=True))
     op.add_column(
-        "invoices", sa.Column("invoice_token", sa.UUID(), nullable=True, unique=True),
+        "invoices",
+        sa.Column("invoice_token", sa.UUID(), nullable=True, unique=True),
     )
     op.add_column(
         "invoices",
         sa.Column(
-            "invoice_token_expires_at", sa.TIMESTAMP(timezone=True), nullable=True,
+            "invoice_token_expires_at",
+            sa.TIMESTAMP(timezone=True),
+            nullable=True,
         ),
     )
 
     # ── sent_messages: make customer_id nullable, add lead_id ───────
     # 1. Drop the existing FK constraint on customer_id
     op.drop_constraint(
-        "fk_sent_messages_customer_id", "sent_messages", type_="foreignkey",
+        "fk_sent_messages_customer_id",
+        "sent_messages",
+        type_="foreignkey",
     )
     # 2. Alter customer_id to nullable
     op.alter_column(
-        "sent_messages", "customer_id", existing_type=sa.UUID(), nullable=True,
+        "sent_messages",
+        "customer_id",
+        existing_type=sa.UUID(),
+        nullable=True,
     )
     # 3. Re-add FK constraint
     op.create_foreign_key(
@@ -200,10 +213,15 @@ def downgrade() -> None:
     op.drop_constraint("fk_sent_messages_lead_id", "sent_messages", type_="foreignkey")
     op.drop_column("sent_messages", "lead_id")
     op.drop_constraint(
-        "fk_sent_messages_customer_id", "sent_messages", type_="foreignkey",
+        "fk_sent_messages_customer_id",
+        "sent_messages",
+        type_="foreignkey",
     )
     op.alter_column(
-        "sent_messages", "customer_id", existing_type=sa.UUID(), nullable=False,
+        "sent_messages",
+        "customer_id",
+        existing_type=sa.UUID(),
+        nullable=False,
     )
     op.create_foreign_key(
         "fk_sent_messages_customer_id",

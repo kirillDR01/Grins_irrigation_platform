@@ -86,6 +86,9 @@ def _make_agreement_mock(
     subscription_id: str = "sub_123",
     customer_id: UUID | None = None,
     jobs: list[Any] | None = None,
+    tier_included_services: list[dict[str, Any]] | None = None,
+    tier_slug: str = "essential-residential",
+    tier_name: str = "Essential",
 ) -> MagicMock:
     agr = MagicMock()
     agr.id = uuid4()
@@ -95,6 +98,13 @@ def _make_agreement_mock(
     agr.customer = MagicMock()
     agr.customer.preferred_service_times = None
     agr.property = None
+    # Tier is consulted in complete_onboarding to derive the expected
+    # service_week_preferences keys. Default to empty so that tests which
+    # don't pass any preferences satisfy completeness vacuously.
+    agr.tier = MagicMock()
+    agr.tier.slug = tier_slug
+    agr.tier.name = tier_name
+    agr.tier.included_services = tier_included_services or []
     return agr
 
 
@@ -801,7 +811,8 @@ class TestCheckoutSessionSurcharges:
         rpz_item = items[1]
         assert rpz_item["price_data"]["unit_amount"] == 11000
         assert (
-            rpz_item["price_data"]["product_data"]["name"] == "RPZ/backflow connection"
+            rpz_item["price_data"]["product_data"]["name"]
+            == "RPZ/backflow connection & removal"
         )
 
     @pytest.mark.asyncio

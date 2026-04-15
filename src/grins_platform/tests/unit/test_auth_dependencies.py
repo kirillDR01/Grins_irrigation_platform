@@ -292,7 +292,7 @@ class TestRequireRolesDecorator:
 
         @require_roles(UserRole.ADMIN)
         async def protected_endpoint(
-            current_user: Staff,  # noqa: ARG001
+            current_user: Staff,
         ) -> dict[str, str]:
             return {"message": "success"}
 
@@ -308,7 +308,7 @@ class TestRequireRolesDecorator:
 
         @require_roles(UserRole.ADMIN, UserRole.MANAGER)
         async def protected_endpoint(
-            current_user: Staff,  # noqa: ARG001
+            current_user: Staff,
         ) -> dict[str, str]:
             return {"message": "success"}
 
@@ -324,7 +324,7 @@ class TestRequireRolesDecorator:
 
         @require_roles(UserRole.ADMIN)
         async def protected_endpoint(
-            current_user: Staff,  # noqa: ARG001
+            current_user: Staff,
         ) -> dict[str, str]:
             return {"message": "success"}
 
@@ -340,7 +340,7 @@ class TestRequireRolesDecorator:
 
         @require_roles(UserRole.ADMIN)
         async def protected_endpoint(
-            current_user: Staff | None = None,  # noqa: ARG001
+            current_user: Staff | None = None,
         ) -> dict[str, str]:
             return {"message": "success"}
 
@@ -356,7 +356,7 @@ class TestRequireRolesDecorator:
 
         @require_roles(UserRole.ADMIN)
         async def my_endpoint(
-            current_user: Staff,  # noqa: ARG001
+            current_user: Staff,
         ) -> dict[str, str]:
             """My endpoint docstring."""
             return {"message": "success"}

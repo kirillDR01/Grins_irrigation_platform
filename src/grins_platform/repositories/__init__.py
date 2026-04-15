@@ -14,6 +14,9 @@ from grins_platform.repositories.ai_usage_repository import AIUsageRepository
 from grins_platform.repositories.appointment_repository import AppointmentRepository
 from grins_platform.repositories.audit_log_repository import AuditLogRepository
 from grins_platform.repositories.campaign_repository import CampaignRepository
+from grins_platform.repositories.campaign_response_repository import (
+    CampaignResponseRepository,
+)
 from grins_platform.repositories.communication_repository import (
     CommunicationRepository,
 )
@@ -50,6 +53,7 @@ __all__ = [
     "AppointmentRepository",
     "AuditLogRepository",
     "CampaignRepository",
+    "CampaignResponseRepository",
     "CommunicationRepository",
     "ConsentLanguageVersionRepository",
     "CustomerRepository",

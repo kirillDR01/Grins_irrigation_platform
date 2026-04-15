@@ -8,10 +8,11 @@ Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Date,
     DateTime,
@@ -196,9 +197,23 @@ class ServiceAgreement(Base):
     # Notes
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Service week preferences for onboarding (CRM2 Req 30.1).
+    # Records the customer's onboarding-time answer for each tier-included
+    # service: ISO Monday string for a chosen week, or null for an
+    # actively-selected "No preference". Source of truth for what the
+    # customer asked for; the chosen weeks also propagate to each Job's
+    # target_start_date / target_end_date for scheduling.
+    service_week_preferences: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
     # Preferred service timeline (per-purchase urgency)
     preferred_schedule: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
-    preferred_schedule_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    preferred_schedule_details: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
 
     # Onboarding reminder tracking (Req 10.6)
     onboarding_reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(

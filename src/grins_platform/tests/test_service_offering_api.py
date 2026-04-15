@@ -170,7 +170,7 @@ class TestCreateService:
     def test_create_service_invalid_category_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test invalid category returns 422."""
         response = client.post(
@@ -187,7 +187,7 @@ class TestCreateService:
     def test_create_service_invalid_pricing_model_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test invalid pricing model returns 422."""
         response = client.post(
@@ -204,7 +204,7 @@ class TestCreateService:
     def test_create_service_missing_required_fields_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test missing required fields returns 422."""
         response = client.post(
@@ -220,7 +220,7 @@ class TestCreateService:
     def test_create_service_negative_price_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test negative price returns 422."""
         response = client.post(
@@ -238,7 +238,7 @@ class TestCreateService:
     def test_create_service_negative_duration_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test negative duration returns 422."""
         response = client.post(
@@ -256,7 +256,7 @@ class TestCreateService:
     def test_create_service_zero_staffing_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test zero staffing required returns 422."""
         response = client.post(
@@ -316,7 +316,7 @@ class TestGetService:
     def test_get_service_invalid_uuid_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test invalid UUID format returns 422."""
         response = client.get("/api/v1/services/not-a-uuid")
@@ -588,7 +588,7 @@ class TestListServices:
     def test_list_services_invalid_page_size_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test invalid page_size returns 422."""
         response = client.get(
@@ -621,7 +621,7 @@ class TestListServices:
     def test_list_services_invalid_sort_order_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test invalid sort_order returns 422."""
         response = client.get(
@@ -673,7 +673,7 @@ class TestGetServicesByCategory:
     def test_get_services_by_category_invalid_returns_422(
         self,
         client: TestClient,
-        mock_service: AsyncMock,  # noqa: ARG002 - Required for fixture injection
+        mock_service: AsyncMock,
     ) -> None:
         """Test invalid category returns 422."""
         response = client.get("/api/v1/services/category/invalid_category")

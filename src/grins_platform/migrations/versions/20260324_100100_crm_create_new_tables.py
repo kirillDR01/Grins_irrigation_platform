@@ -134,7 +134,9 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "idx_customer_photos_customer_id", "customer_photos", ["customer_id"],
+        "idx_customer_photos_customer_id",
+        "customer_photos",
+        ["customer_id"],
     )
 
     # ── lead_attachments ────────────────────────────────────────────
@@ -157,7 +159,10 @@ def upgrade() -> None:
         sa.Column("file_size", sa.Integer(), nullable=False),
         sa.Column("content_type", sa.String(100), nullable=False),
         sa.Column(
-            "attachment_type", sa.String(20), nullable=False, server_default="other",
+            "attachment_type",
+            sa.String(20),
+            nullable=False,
+            server_default="other",
         ),
         sa.Column(
             "created_at",
@@ -266,7 +271,10 @@ def upgrade() -> None:
         sa.Column("subtotal", sa.Numeric(10, 2), nullable=False, server_default="0"),
         sa.Column("tax_amount", sa.Numeric(10, 2), nullable=False, server_default="0"),
         sa.Column(
-            "discount_amount", sa.Numeric(10, 2), nullable=False, server_default="0",
+            "discount_amount",
+            sa.Numeric(10, 2),
+            nullable=False,
+            server_default="0",
         ),
         sa.Column("total", sa.Numeric(10, 2), nullable=False, server_default="0"),
         sa.Column("promotion_code", sa.String(50), nullable=True),
@@ -276,7 +284,10 @@ def upgrade() -> None:
         sa.Column("customer_token", sa.UUID(), nullable=True, unique=True),
         sa.Column("token_expires_at", sa.TIMESTAMP(timezone=True), nullable=True),
         sa.Column(
-            "token_readonly", sa.Boolean(), nullable=False, server_default="false",
+            "token_readonly",
+            sa.Boolean(),
+            nullable=False,
+            server_default="false",
         ),
         # Approval tracking
         sa.Column("approved_at", sa.TIMESTAMP(timezone=True), nullable=True),
@@ -341,7 +352,9 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "idx_estimate_follow_ups_estimate_id", "estimate_follow_ups", ["estimate_id"],
+        "idx_estimate_follow_ups_estimate_id",
+        "estimate_follow_ups",
+        ["estimate_id"],
     )
     op.create_index("idx_estimate_follow_ups_status", "estimate_follow_ups", ["status"])
 
@@ -471,7 +484,10 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column(
-            "delivery_status", sa.String(20), nullable=False, server_default="pending",
+            "delivery_status",
+            sa.String(20),
+            nullable=False,
+            server_default="pending",
         ),
         sa.Column("delivered_at", sa.TIMESTAMP(timezone=True), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
@@ -483,7 +499,9 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "idx_campaign_recipients_campaign_id", "campaign_recipients", ["campaign_id"],
+        "idx_campaign_recipients_campaign_id",
+        "campaign_recipients",
+        ["campaign_id"],
     )
 
     # ── marketing_budgets ───────────────────────────────────────────
@@ -500,7 +518,10 @@ def upgrade() -> None:
         sa.Column("period_start", sa.Date(), nullable=False),
         sa.Column("period_end", sa.Date(), nullable=False),
         sa.Column(
-            "actual_spend", sa.Numeric(10, 2), nullable=False, server_default="0",
+            "actual_spend",
+            sa.Numeric(10, 2),
+            nullable=False,
+            server_default="0",
         ),
         sa.Column(
             "created_at",

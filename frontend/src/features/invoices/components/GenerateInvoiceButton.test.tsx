@@ -65,6 +65,16 @@ const createMockJob = (overrides: Partial<Job> = {}): Job => ({
   customer_name: null,
   customer_tags: null,
   service_agreement_id: null,
+  property_address: null,
+  property_city: null,
+  property_type: null,
+  property_is_hoa: null,
+  property_is_subscription: null,
+  on_my_way_at: null,
+  time_tracking_metadata: null,
+  service_preference_notes: null,
+  service_agreement_name: null,
+  service_agreement_active: null,
   ...overrides,
 });
 

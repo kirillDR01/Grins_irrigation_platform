@@ -190,9 +190,10 @@ class TestProperty76AppointmentStatusEnum:
     """**Validates: Requirements 79.1, 79.2, 79.3**"""
 
     def test_appointment_status_has_all_8_values(self) -> None:
-        """AppointmentStatus enum has all 8 values including no_show."""
+        """AppointmentStatus enum has all 9 values including draft and no_show."""
         expected = {
             "pending",
+            "draft",
             "scheduled",
             "confirmed",
             "en_route",
@@ -203,7 +204,7 @@ class TestProperty76AppointmentStatusEnum:
         }
         actual = {s.value for s in AppointmentStatus}
         assert actual == expected
-        assert len(AppointmentStatus) == 8
+        assert len(AppointmentStatus) == 9
 
     def test_appointment_status_accepts_pending(self) -> None:
         """AppointmentStatus('pending') succeeds."""
@@ -261,13 +262,15 @@ class TestProperty44StaffLocationRoundTrip:
         """get_location retrieves stored location correctly."""
         staff_id = uuid4()
         redis = _make_async_redis()
-        stored_data = json.dumps({
-            "staff_id": str(staff_id),
-            "latitude": 30.2672,
-            "longitude": -97.7431,
-            "timestamp": "2025-01-15T12:00:00+00:00",
-            "appointment_id": None,
-        })
+        stored_data = json.dumps(
+            {
+                "staff_id": str(staff_id),
+                "latitude": 30.2672,
+                "longitude": -97.7431,
+                "timestamp": "2025-01-15T12:00:00+00:00",
+                "appointment_id": None,
+            }
+        )
         redis.get = AsyncMock(return_value=stored_data)
         svc = StaffLocationService(redis_client=redis)
 
@@ -591,7 +594,7 @@ class TestProperty70AuditLogCreation:
         mock_repo.create.assert_awaited_once_with(
             action="customer.merge",
             resource_type="customer",
-            resource_id=str(resource_id),
+            resource_id=resource_id,
             actor_id=actor_id,
             actor_role="admin",
             details={"merged_ids": ["a", "b"]},
@@ -736,8 +739,7 @@ class TestProperty81PortalInvoiceAccess:
         token = uuid4()
         invoice = _mock_invoice(
             invoice_token=token,
-            invoice_token_expires_at=datetime.now(tz=timezone.utc)
-            + timedelta(days=30),
+            invoice_token_expires_at=datetime.now(tz=timezone.utc) + timedelta(days=30),
             total_amount=Decimal("500.00"),
             paid_amount=Decimal("100.00"),
         )
@@ -772,8 +774,7 @@ class TestProperty81PortalInvoiceAccess:
         token = uuid4()
         invoice = _mock_invoice(
             invoice_token=token,
-            invoice_token_expires_at=datetime.now(tz=timezone.utc)
-            - timedelta(days=1),
+            invoice_token_expires_at=datetime.now(tz=timezone.utc) - timedelta(days=1),
         )
         db = _make_db_returning(invoice)
 

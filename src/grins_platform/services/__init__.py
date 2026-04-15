@@ -7,6 +7,7 @@ and coordinate between the API layer and repository layer.
 
 from grins_platform.services.appointment_service import AppointmentService
 from grins_platform.services.auth_service import AuthService
+from grins_platform.services.campaign_response_service import CampaignResponseService
 from grins_platform.services.customer_service import CustomerService
 from grins_platform.services.dashboard_service import DashboardService
 from grins_platform.services.google_sheets_service import GoogleSheetsService
@@ -27,6 +28,7 @@ from grins_platform.services.staff_service import StaffService
 __all__ = [
     "AppointmentService",
     "AuthService",
+    "CampaignResponseService",
     "CustomerService",
     "DashboardService",
     "GoogleSheetsService",

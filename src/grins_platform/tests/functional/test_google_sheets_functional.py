@@ -46,6 +46,9 @@ def _make_submission(
     sub.phone = "6125559876"
     sub.email = "jane@example.com"
     sub.client_type = "new"
+    sub.zip_code = None
+    sub.work_requested = None
+    sub.agreed_to_terms = None
     for attr in (
         "timestamp",
         "spring_startup",
@@ -143,7 +146,9 @@ class TestPollingCycleWorkflow:
             patch(_HTTPX_CLIENT, return_value=mock_client),
             patch(_POLLER_SUB_REPO) as sub_repo_cls,
         ):
-            sub_repo_cls.return_value.get_max_row_number = AsyncMock(return_value=0)
+            sub_repo_cls.return_value.get_existing_hashes = AsyncMock(
+                return_value=set(),
+            )
             count = await poller._execute_poll_cycle()
 
         assert count == 1
@@ -151,14 +156,16 @@ class TestPollingCycleWorkflow:
         mock_session.commit.assert_awaited_once()
         assert poller._last_error is None
 
-    async def test_poll_cycle_skips_already_imported_rows(
+    async def test_poll_cycle_skips_already_imported_rows_by_hash(
         self,
         sample_sheet_row: list[str],
     ) -> None:
-        """Rows at or below max_row_number are skipped.
+        """Rows whose content hash already exists in the DB are skipped.
 
         Validates: Req 1.4
         """
+        from grins_platform.services.google_sheets_service import compute_row_hash
+
         service = AsyncMock(spec=GoogleSheetsService)
         poller = _make_poller(service=service)
         poller._access_token = "valid-token"
@@ -182,12 +189,16 @@ class TestPollingCycleWorkflow:
 
         poller._db_manager.get_session = _fake_get_session
 
+        # Pretend this row's hash already exists in DB
+        existing_hash = compute_row_hash(sample_sheet_row)
+
         with (
             patch(_HTTPX_CLIENT, return_value=mock_client),
             patch(_POLLER_SUB_REPO) as sub_repo_cls,
         ):
-            # max_row=5 means rows 1-5 already imported; row 2 is skipped
-            sub_repo_cls.return_value.get_max_row_number = AsyncMock(return_value=5)
+            sub_repo_cls.return_value.get_existing_hashes = AsyncMock(
+                return_value={existing_hash},
+            )
             count = await poller._execute_poll_cycle()
 
         assert count == 0
@@ -362,7 +373,9 @@ class TestErrorIsolation:
             patch(_HTTPX_CLIENT, return_value=mock_client),
             patch(_POLLER_SUB_REPO) as sub_repo_cls,
         ):
-            sub_repo_cls.return_value.get_max_row_number = AsyncMock(return_value=0)
+            sub_repo_cls.return_value.get_existing_hashes = AsyncMock(
+                return_value=set(),
+            )
             count = await poller._execute_poll_cycle()
 
         # Only the second row succeeded
@@ -380,8 +393,8 @@ class TestErrorIsolation:
 class TestUniqueConstraintEnforcement:
     """Test unique constraint prevents duplicate row imports."""
 
-    async def test_integrity_error_on_duplicate_row_is_handled(self) -> None:
-        """Duplicate sheet_row_number triggers IntegrityError → skipped.
+    async def test_integrity_error_on_duplicate_hash_is_handled(self) -> None:
+        """Duplicate content_hash triggers IntegrityError → skipped.
 
         Validates: Req 2.2
         """
@@ -418,7 +431,9 @@ class TestUniqueConstraintEnforcement:
             patch(_HTTPX_CLIENT, return_value=mock_client),
             patch(_POLLER_SUB_REPO) as sub_repo_cls,
         ):
-            sub_repo_cls.return_value.get_max_row_number = AsyncMock(return_value=0)
+            sub_repo_cls.return_value.get_existing_hashes = AsyncMock(
+                return_value=set(),
+            )
             # Should not raise — IntegrityError is caught and skipped
             count = await poller._execute_poll_cycle()
 

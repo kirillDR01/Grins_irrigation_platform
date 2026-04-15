@@ -4,6 +4,7 @@ import { parseLocalDate } from '@/shared/utils/dateUtils';
 // Job status enum matching backend
 export type JobStatus =
   | 'to_be_scheduled'
+  | 'scheduled'
   | 'in_progress'
   | 'completed'
   | 'cancelled';
@@ -15,7 +16,7 @@ export type JobCategory = 'ready_to_schedule' | 'requires_estimate';
 export type JobSource = 'website' | 'google' | 'referral' | 'phone' | 'partner';
 
 // Display labels for job statuses
-export type JobStatusLabel = 'To Be Scheduled' | 'In Progress' | 'Complete' | 'Cancelled';
+export type JobStatusLabel = 'To Be Scheduled' | 'Scheduled' | 'In Progress' | 'Complete' | 'Cancelled';
 
 // Customer tag types (Req 22)
 export type CustomerTag = 'priority' | 'red_flag' | 'slow_payer' | 'new_customer';
@@ -53,7 +54,25 @@ export interface Job extends BaseEntity {
   closed_at: string | null;  // Historical, no longer written
   // Nested customer summary (Req 22)
   customer_name: string | null;
+  customer_phone: string | null;
   customer_tags: CustomerTag[] | null;
+  // Property summary (Req 19)
+  property_address: string | null;
+  property_city: string | null;
+  property_type: 'residential' | 'commercial' | null;
+  property_is_hoa: boolean | null;
+  property_is_subscription: boolean | null;
+  on_my_way_at: string | null;
+  time_tracking_metadata: Record<string, unknown> | null;
+  // Service preference notes hint (CRM2 Req 7.3)
+  service_preference_notes: string | null;
+  // Service agreement display (Smoothing Req 7.3, 7.5)
+  service_agreement_name: string | null;
+  service_agreement_active: boolean | null;
+  // Customer address alias for job selector (Smoothing Req 11.3)
+  customer_address: string | null;
+  // Property tags for badge display (Smoothing Req 11.4)
+  property_tags: string[] | null;
 }
 
 // Per-job financials (Req 57)
@@ -87,6 +106,43 @@ export interface JobCreate {
   source_details?: Record<string, unknown> | null;
 }
 
+// Job complete response (Req 27.3-27.5)
+export interface JobCompleteResponse {
+  completed: boolean;
+  warning: string | null;
+  job: Job | null;
+}
+
+// On-site operation types (Req 26, 27)
+export interface JobNoteCreate {
+  note: string;
+}
+
+export interface JobNoteResponse {
+  job_id: string;
+  note: string;
+  synced_to_customer: boolean;
+}
+
+export interface JobReviewPushResponse {
+  job_id: string;
+  sms_sent: boolean;
+  message_id: string | null;
+}
+
+export interface JobPhoto {
+  id: string;
+  customer_id: string;
+  file_key: string;
+  file_name: string;
+  file_size: number;
+  content_type: string;
+  caption: string | null;
+  uploaded_by: string | null;
+  download_url: string;
+  created_at: string;
+}
+
 // Update job request
 export interface JobUpdate {
   property_id?: string | null;
@@ -107,6 +163,11 @@ export interface JobUpdate {
   source?: JobSource | null;
   source_details?: Record<string, unknown> | null;
   payment_collected_on_site?: boolean;
+  // Admin-editable target service window. Must be sent together as a
+  // Mon-Sun pair (target_end_date = target_start_date + 6 days). Backend
+  // rejects edits on jobs whose status is past 'to_be_scheduled'.
+  target_start_date?: string | null;
+  target_end_date?: string | null;
 }
 
 // Job status update request
@@ -127,6 +188,9 @@ export interface JobListParams extends PaginationParams {
   date_to?: string;
   search?: string;
   has_service_agreement?: boolean;
+  property_type?: 'residential' | 'commercial';
+  is_hoa?: boolean;
+  is_subscription_property?: boolean;
   target_date_from?: string;
   target_date_to?: string;
   sort_by?: string;
@@ -142,6 +206,11 @@ export const JOB_STATUS_CONFIG: Record<
     label: 'To Be Scheduled',
     color: 'text-amber-700',
     bgColor: 'bg-amber-100',
+  },
+  scheduled: {
+    label: 'Scheduled',
+    color: 'text-blue-700',
+    bgColor: 'bg-blue-100',
   },
   in_progress: {
     label: 'In Progress',
@@ -253,6 +322,7 @@ export function formatAmount(amount: number | null): string {
 // Status label mapping (backend status → display label)
 export const STATUS_LABEL_MAP: Record<JobStatus, JobStatusLabel> = {
   to_be_scheduled: 'To Be Scheduled',
+  scheduled: 'Scheduled',
   in_progress: 'In Progress',
   completed: 'Complete',
   cancelled: 'Cancelled',
@@ -261,6 +331,7 @@ export const STATUS_LABEL_MAP: Record<JobStatus, JobStatusLabel> = {
 // Reverse mapping: display label → backend status
 export const LABEL_STATUS_MAP: Record<JobStatusLabel, JobStatus> = {
   'To Be Scheduled': 'to_be_scheduled',
+  'Scheduled': 'scheduled',
   'In Progress': 'in_progress',
   'Complete': 'completed',
   'Cancelled': 'cancelled',

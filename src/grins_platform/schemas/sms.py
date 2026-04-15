@@ -31,9 +31,10 @@ class SMSSendResponse(BaseModel):
     """Response from sending an SMS."""
 
     success: bool
-    message_id: UUID
-    twilio_sid: str | None = None
+    message_id: UUID | None = None
+    provider_message_id: str | None = None
     status: str
+    reason: str | None = None
 
 
 class SMSWebhookPayload(BaseModel):
@@ -80,9 +81,14 @@ class CommunicationsQueueResponse(BaseModel):
 
 
 class BulkRecipient(BaseModel):
-    """Recipient for bulk SMS."""
+    """Recipient for bulk SMS.
 
-    customer_id: UUID
+    Supports customer, lead, or ad-hoc recipients per Recipient unification.
+    At least one of customer_id or lead_id should be provided for tracked sends.
+    """
+
+    customer_id: UUID | None = None
+    lead_id: UUID | None = None
     phone: str
     sms_opt_in: bool = False
 
@@ -102,3 +108,12 @@ class BulkSendResponse(BaseModel):
     success_count: int
     failure_count: int
     results: list[dict[str, Any]]
+
+
+class BulkSendAcceptedResponse(BaseModel):
+    """Response from async bulk SMS enqueue (HTTP 202)."""
+
+    campaign_id: UUID
+    total_recipients: int
+    status: str = "pending"
+    message: str = "Recipients enqueued for background delivery"

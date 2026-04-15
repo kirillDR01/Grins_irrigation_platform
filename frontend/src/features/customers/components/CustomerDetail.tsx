@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  ArrowLeft, Phone, Mail, Edit, Trash2, Plus, MapPin, Dog, Clock,
+  ArrowLeft, Phone, Mail, Edit, Trash2, Plus, MapPin, Dog,
   Image, FileText, CreditCard, MessageSquare, Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,8 +19,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { StatusBadge, LoadingPage, ErrorMessage, PageHeader } from '@/shared/components';
-import { useCustomer, useDeleteCustomer, useUpdateCustomer } from '../hooks';
-import { getCustomerFlags, getCustomerFullName } from '../types';
+import { useCustomer, useDeleteCustomer, useUpdateCustomer } from '../hooks';import { getCustomerFlags, getCustomerFullName } from '../types';
 import { toast } from 'sonner';
 import { AICommunicationDrafts } from '@/features/ai/components';
 import { useAICommunication } from '@/features/ai/hooks/useAICommunication';
@@ -29,13 +28,7 @@ import { InvoiceHistory } from './InvoiceHistory';
 import { PaymentMethods } from './PaymentMethods';
 import { CustomerMessages } from './CustomerMessages';
 import { DuplicateReview } from './DuplicateReview';
-
-const SERVICE_TIME_OPTIONS = [
-  { value: 'MORNING', label: 'Morning' },
-  { value: 'AFTERNOON', label: 'Afternoon' },
-  { value: 'EVENING', label: 'Evening' },
-  { value: 'NO_PREFERENCE', label: 'No Preference' },
-] as const;
+import { ServicePreferencesSection } from './ServicePreferencesSection';
 
 interface CustomerDetailProps {
   onEdit?: () => void;
@@ -52,9 +45,6 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
   // Internal notes state
   const [notesValue, setNotesValue] = useState<string | null>(null);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
-
-  // Service time preference state
-  const [isEditingServiceTime, setIsEditingServiceTime] = useState(false);
 
   // Add Property dialog state
   const [showAddPropertyDialog, setShowAddPropertyDialog] = useState(false);
@@ -91,23 +81,6 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
     }
   }, [customer, notesValue, updateMutation]);
 
-  const handleServiceTimeChange = useCallback(
-    async (preference: string) => {
-      if (!customer) return;
-      try {
-        await updateMutation.mutateAsync({
-          id: customer.id,
-          data: { preferred_service_times: { preference } },
-        });
-        setIsEditingServiceTime(false);
-        toast.success('Service preference updated');
-      } catch {
-        toast.error('Failed to update service preference');
-      }
-    },
-    [customer, updateMutation]
-  );
-
   const handleAddProperty = () => {
     if (!propertyAddress.trim()) {
       toast.error('Please enter a street address');
@@ -137,7 +110,6 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
   }
 
   const flags = getCustomerFlags(customer);
-  const currentPreference = customer.preferred_service_times?.preference || 'NO_PREFERENCE';
 
   return (
     <div data-testid="customer-detail" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -273,20 +245,16 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
             )}
             <Separator className="bg-slate-100" />
             <div>
-              <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Service Preferences</p>
+              <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Property Notes</p>
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-slate-500" />
-                  <span className="text-sm text-slate-600">
-                    Preferred Time:{' '}
-                    {SERVICE_TIME_OPTIONS.find((o) => o.value === currentPreference)?.label || 'No Preference'}
-                  </span>
-                </div>
                 {customer.properties?.some((p) => p.has_dogs) && (
                   <div className="flex items-center gap-2">
                     <Dog className="h-4 w-4 text-amber-500" />
                     <span className="text-sm text-amber-700 font-medium">Dogs on Property</span>
                   </div>
+                )}
+                {!customer.properties?.some((p) => p.has_dogs) && (
+                  <span className="text-sm text-slate-400 italic">No special notes</span>
                 )}
               </div>
             </div>
@@ -388,64 +356,8 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
                 </CardContent>
               </Card>
 
-              {/* Preferred Service Times (Req 11) */}
-              <Card>
-                <CardHeader className="border-b border-slate-100">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-bold text-slate-800">Service Preferences</CardTitle>
-                    {!isEditingServiceTime && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setIsEditingServiceTime(true)}
-                        data-testid="edit-service-time-btn"
-                      >
-                        <Edit className="h-3.5 w-3.5 mr-1" />
-                        Edit
-                      </Button>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent className="p-4">
-                  {isEditingServiceTime ? (
-                    <div className="space-y-3" data-testid="service-time-editor">
-                      <p className="text-sm text-slate-600 mb-2">Select preferred service time:</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {SERVICE_TIME_OPTIONS.map((option) => (
-                          <Button
-                            key={option.value}
-                            variant={currentPreference === option.value ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => handleServiceTimeChange(option.value)}
-                            disabled={updateMutation.isPending}
-                            data-testid={`service-time-${option.value.toLowerCase()}`}
-                          >
-                            {option.label}
-                          </Button>
-                        ))}
-                      </div>
-                      <div className="flex justify-end">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setIsEditingServiceTime(false)}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div data-testid="service-time-display">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-teal-500" />
-                        <span className="text-sm font-medium text-slate-700">
-                          {SERVICE_TIME_OPTIONS.find((o) => o.value === currentPreference)?.label || 'No Preference'}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              {/* Service Preferences (CRM2 Req 7) */}
+              <ServicePreferencesSection customerId={customer.id} />
 
               {/* Properties Section */}
               <Card className="lg:col-span-2" data-testid="properties-section">

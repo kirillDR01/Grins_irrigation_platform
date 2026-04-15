@@ -24,10 +24,17 @@ from grins_platform.models.appointment import Appointment
 from grins_platform.models.audit_log import AuditLog
 from grins_platform.models.business_setting import BusinessSetting
 from grins_platform.models.campaign import Campaign, CampaignRecipient
+from grins_platform.models.campaign_response import CampaignResponse
 from grins_platform.models.communication import Communication
 from grins_platform.models.consent_language_version import ConsentLanguageVersion
+from grins_platform.models.contract_renewal import (
+    ContractRenewalProposal,
+    ContractRenewalProposedJob,
+)
 from grins_platform.models.contract_template import ContractTemplate
 from grins_platform.models.customer import Customer
+from grins_platform.models.customer_document import CustomerDocument
+from grins_platform.models.customer_merge_candidate import CustomerMergeCandidate
 from grins_platform.models.customer_photo import CustomerPhoto
 from grins_platform.models.disclosure_record import DisclosureRecord
 from grins_platform.models.email_suppression_list import EmailSuppressionList
@@ -43,8 +50,10 @@ from grins_platform.models.enums import (
     CampaignType,
     CommunicationChannel,
     CommunicationDirection,
+    ConfirmationKeyword,
     CustomerStatus,
     DisclosureType,
+    DocumentType,
     EmailType,
     EstimateStatus,
     ExpenseCategory,
@@ -59,11 +68,16 @@ from grins_platform.models.enums import (
     LeadSourceExtended,
     LeadStatus,
     MediaType,
+    MergeCandidateStatus,
+    MessageType,
     NotificationType,
     PackageType,
     PaymentMethod,
     PricingModel,
     PropertyType,
+    ProposalStatus,
+    ProposedJobStatus,
+    SalesEntryStatus,
     ServiceCategory,
     SkillLevel,
     StaffRole,
@@ -77,12 +91,17 @@ from grins_platform.models.expense import Expense
 from grins_platform.models.google_sheet_submission import GoogleSheetSubmission
 from grins_platform.models.invoice import Invoice
 from grins_platform.models.job import Job
+from grins_platform.models.job_confirmation import (
+    JobConfirmationResponse,
+    RescheduleRequest,
+)
 from grins_platform.models.job_status_history import JobStatusHistory
 from grins_platform.models.lead import Lead
 from grins_platform.models.lead_attachment import LeadAttachment
 from grins_platform.models.marketing_budget import MarketingBudget
 from grins_platform.models.media_library import MediaLibraryItem
 from grins_platform.models.property import Property
+from grins_platform.models.sales import SalesCalendarEvent, SalesEntry
 from grins_platform.models.schedule_clear_audit import ScheduleClearAudit
 from grins_platform.models.sent_message import SentMessage
 from grins_platform.models.service_agreement import ServiceAgreement
@@ -115,19 +134,27 @@ __all__ = [
     "BusinessSetting",
     "Campaign",
     "CampaignRecipient",
+    "CampaignResponse",
     "CampaignStatus",
     "CampaignType",
     "Communication",
     "CommunicationChannel",
     "CommunicationDirection",
+    # CRM Changes Update 2
+    "ConfirmationKeyword",
     "ConsentLanguageVersion",
+    "ContractRenewalProposal",
+    "ContractRenewalProposedJob",
     "ContractTemplate",
     # Phase 1: Customer Management
     "Customer",
+    "CustomerDocument",
+    "CustomerMergeCandidate",
     "CustomerPhoto",
     "CustomerStatus",
     "DisclosureRecord",
     "DisclosureType",
+    "DocumentType",
     "EmailSuppressionList",
     "EmailType",
     "Estimate",
@@ -146,6 +173,7 @@ __all__ = [
     # Phase 2: Field Operations
     "Job",
     "JobCategory",
+    "JobConfirmationResponse",
     "JobSource",
     "JobStatus",
     "JobStatusHistory",
@@ -159,12 +187,21 @@ __all__ = [
     "MarketingBudget",
     "MediaLibraryItem",
     "MediaType",
+    "MergeCandidateStatus",
+    "MessageType",
     "NotificationType",
     "PackageType",
     "PaymentMethod",
     "PricingModel",
     "Property",
     "PropertyType",
+    "ProposalStatus",
+    "ProposedJobStatus",
+    "RescheduleRequest",
+    # Sales Pipeline
+    "SalesCalendarEvent",
+    "SalesEntry",
+    "SalesEntryStatus",
     # Phase 8: Schedule Workflow
     "ScheduleClearAudit",
     # Phase 6: AI Assistant

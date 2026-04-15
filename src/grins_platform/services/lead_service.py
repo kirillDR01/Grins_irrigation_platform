@@ -24,7 +24,7 @@ from grins_platform.exceptions import (
     LeadNotFoundError,
     StaffNotFoundError,
 )
-from grins_platform.log_config import LoggerMixin
+from grins_platform.log_config import LoggerMixin, get_logger
 from grins_platform.models.enums import (
     VALID_LEAD_STATUS_TRANSITIONS,
     ActionTag,
@@ -34,6 +34,7 @@ from grins_platform.models.enums import (
     LeadSourceExtended,
     LeadStatus,
 )
+from grins_platform.models.sales import SalesEntry as SalesEntryModel
 from grins_platform.models.sms_consent_record import SmsConsentRecord
 from grins_platform.schemas.customer import CustomerCreate
 from grins_platform.schemas.job import JobCreate
@@ -45,11 +46,14 @@ from grins_platform.schemas.lead import (
     LeadConversionResponse,
     LeadListParams,
     LeadMetricsBySourceResponse,
+    LeadMoveResponse,
     LeadResponse,
     LeadSourceCount,
     LeadSubmission,
     LeadSubmissionResponse,
     LeadUpdate,
+    ManualLeadCreate,
+    MergedCustomerInfo,
     MigrationSummary,
     PaginatedFollowUpQueueResponse,
     PaginatedLeadResponse,
@@ -58,6 +62,8 @@ from grins_platform.utils.zip_lookup import extract_zip_from_address, lookup_zip
 
 if TYPE_CHECKING:
     from uuid import UUID
+
+    from fastapi import BackgroundTasks
 
     from grins_platform.models.google_sheet_submission import (
         GoogleSheetSubmission,
@@ -70,6 +76,119 @@ if TYPE_CHECKING:
     from grins_platform.services.email_service import EmailService
     from grins_platform.services.job_service import JobService
     from grins_platform.services.sms_service import SMSService
+
+
+async def send_lead_confirmations_post_commit(lead_id: UUID) -> None:
+    """Send SMS + email confirmations after the intake transaction commits.
+
+    Runs as a FastAPI BackgroundTask with a fresh database session so any
+    SQLAlchemy error raised inside the notification path cannot roll back
+    the lead that was just persisted in the request transaction. Errors
+    are logged at ERROR severity for production visibility.
+
+    Validates: Requirements 46.7, 55.1-55.3 (async confirmation delivery);
+    BUG-001 fix (2026-04-14 lead-form silent-rollback when sms_consent=true).
+    """
+    from grins_platform.database import get_database_manager  # noqa: PLC0415
+    from grins_platform.repositories.lead_repository import (  # noqa: PLC0415
+        LeadRepository,
+    )
+    from grins_platform.services.email_service import (  # noqa: PLC0415
+        EmailService,
+    )
+    from grins_platform.services.sms_service import SMSService  # noqa: PLC0415
+
+    log = get_logger(__name__)
+    db_manager = get_database_manager()
+
+    async with db_manager.session_factory() as session:
+        try:
+            repo = LeadRepository(session=session)
+            lead = await repo.get_by_id(lead_id)
+            if lead is None:
+                log.error(
+                    "lead.post_commit_confirmations.lead_not_found",
+                    lead_id=str(lead_id),
+                )
+                return
+
+            sms_service = SMSService(session=session)
+            email_service = EmailService()
+
+            if lead.sms_consent and lead.phone:
+                try:
+                    confirmation_msg = (
+                        "Thanks for reaching out to Grins Irrigation! "
+                        "We received your request and will be in touch soon."
+                    )
+                    result = await sms_service.send_automated_message(
+                        phone=lead.phone,
+                        message=confirmation_msg,
+                        message_type="lead_confirmation",
+                    )
+                    if result.get("success"):
+                        if result.get("deferred"):
+                            log.info(
+                                "lead.confirmation.sms_deferred",
+                                lead_id=str(lead.id),
+                                scheduled_for=result.get("scheduled_for"),
+                            )
+                        else:
+                            log.info(
+                                "lead.confirmation.sms_sent",
+                                lead_id=str(lead.id),
+                            )
+                    else:
+                        log.info(
+                            "lead.confirmation.sms_skipped",
+                            lead_id=str(lead.id),
+                            reason=result.get("reason", "unknown"),
+                        )
+                except Exception as exc:  # noqa: BLE001
+                    log.error(
+                        "lead.confirmation.sms_failed",
+                        lead_id=str(lead.id),
+                        error=str(exc),
+                        exc_info=True,
+                    )
+                    await session.rollback()
+
+            if lead.email:
+                try:
+                    email_service.send_lead_confirmation(lead)
+                    log.info(
+                        "lead.email_confirmation.sent",
+                        lead_id=str(lead.id),
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    log.error(
+                        "lead.email_confirmation.failed",
+                        lead_id=str(lead.id),
+                        error=str(exc),
+                        exc_info=True,
+                    )
+
+            try:
+                await session.commit()
+            except Exception as exc:  # noqa: BLE001
+                log.error(
+                    "lead.post_commit_confirmations.commit_failed",
+                    lead_id=str(lead_id),
+                    error=str(exc),
+                    exc_info=True,
+                )
+                await session.rollback()
+        except Exception as exc:  # noqa: BLE001
+            log.error(
+                "lead.post_commit_confirmations.unhandled",
+                lead_id=str(lead_id),
+                error=str(exc),
+                exc_info=True,
+            )
+            try:
+                await session.rollback()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 class LeadService(LoggerMixin):
@@ -90,12 +209,38 @@ class LeadService(LoggerMixin):
 
     DOMAIN = "lead"
 
-    # Mapping from LeadSituation to (job_category, job_description)
-    SITUATION_JOB_MAP: ClassVar[dict[str, tuple[str, str]]] = {
-        LeadSituation.NEW_SYSTEM.value: ("requires_estimate", "Installation Estimate"),
-        LeadSituation.UPGRADE.value: ("requires_estimate", "System Upgrade Estimate"),
-        LeadSituation.REPAIR.value: ("ready_to_schedule", "Repair Request"),
-        LeadSituation.EXPLORING.value: ("requires_estimate", "Consultation"),
+    # Mapping from LeadSituation to (job_category, job_type, job_description)
+    SITUATION_JOB_MAP: ClassVar[dict[str, tuple[str, str, str]]] = {
+        LeadSituation.NEW_SYSTEM.value: (
+            "requires_estimate",
+            "new_system",
+            "Installation Estimate",
+        ),
+        LeadSituation.UPGRADE.value: (
+            "requires_estimate",
+            "upgrade",
+            "System Upgrade Estimate",
+        ),
+        LeadSituation.REPAIR.value: (
+            "ready_to_schedule",
+            "small_repair",
+            "Repair Request",
+        ),
+        LeadSituation.EXPLORING.value: (
+            "requires_estimate",
+            "consultation",
+            "Consultation",
+        ),
+        LeadSituation.WINTERIZATION.value: (
+            "ready_to_schedule",
+            "fall_winterization",
+            "Fall Winterization",
+        ),
+        LeadSituation.SEASONAL_MAINTENANCE.value: (
+            "ready_to_schedule",
+            "seasonal_maintenance",
+            "Seasonal Maintenance",
+        ),
     }
 
     def __init__(
@@ -252,7 +397,11 @@ class LeadService(LoggerMixin):
                 error=str(e),
             )
 
-    async def submit_lead(self, data: LeadSubmission) -> LeadSubmissionResponse:
+    async def submit_lead(
+        self,
+        data: LeadSubmission,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> LeadSubmissionResponse:
         """Process a public form submission.
 
         Steps:
@@ -264,10 +413,19 @@ class LeadService(LoggerMixin):
         6. If no duplicate: create new lead with status "new"
         7. Create SmsConsentRecord for the lead
         8. Log lead.submitted event (lead_id + source_site only, no PII)
-        9. Send confirmations
+        9. Schedule SMS + email confirmations as post-commit background task
+
+        The SMS/email confirmations are scheduled to run *after* the
+        request transaction commits, in a fresh session, so any failure
+        in the notification path cannot roll back the lead insert
+        (BUG-001, 2026-04-14).
 
         Args:
             data: LeadSubmission schema with form data
+            background_tasks: Optional FastAPI BackgroundTasks for
+                scheduling post-commit confirmations. When None (e.g.
+                direct service calls from non-HTTP callers), no
+                confirmation is sent.
 
         Returns:
             LeadSubmissionResponse with success status and lead_id
@@ -338,6 +496,9 @@ class LeadService(LoggerMixin):
             if data.situation.value != existing_lead.situation:
                 update_data["situation"] = data.situation.value
 
+            if data.terms_accepted and not existing_lead.terms_accepted:
+                update_data["terms_accepted"] = True
+
             await self.lead_repository.update(existing_lead.id, update_data)
 
             self.logger.info(
@@ -381,6 +542,7 @@ class LeadService(LoggerMixin):
             source_detail=source_detail,
             intake_tag=intake_tag,
             sms_consent=data.sms_consent,
+            terms_accepted=data.terms_accepted,
             email_marketing_consent=data.email_marketing_consent,
             page_url=data.page_url,
             city=city,
@@ -401,9 +563,21 @@ class LeadService(LoggerMixin):
             source_site=data.source_site,
         )
 
-        # Step 8: Send confirmations (Req 54, 55)
-        await self._send_sms_confirmation(lead)
-        self._send_email_confirmation(lead)
+        # Step 8: Schedule SMS + email confirmations to run *after* the
+        # request transaction commits, in a fresh session. Failures in
+        # the notification path cannot roll back the lead insert
+        # (BUG-001 fix, 2026-04-14).
+        if background_tasks is not None:
+            background_tasks.add_task(
+                send_lead_confirmations_post_commit,
+                lead.id,
+            )
+        else:
+            self.logger.info(
+                "lead.confirmations.not_scheduled",
+                lead_id=str(lead.id),
+                reason="no_background_task_scheduler",
+            )
 
         return LeadSubmissionResponse(
             success=True,
@@ -551,6 +725,57 @@ class LeadService(LoggerMixin):
         self._send_email_confirmation(lead)
 
         self.log_completed("create_from_call", lead_id=str(lead.id))
+        response: LeadResponse = LeadResponse.model_validate(lead)
+        return response
+
+    async def create_manual_lead(self, data: ManualLeadCreate) -> LeadResponse:
+        """Create a lead manually from the CRM interface.
+
+        Args:
+            data: ManualLeadCreate schema with lead data
+
+        Returns:
+            LeadResponse with created lead data
+
+        Validates: Requirements 7.1-7.5
+        """
+        self.log_started("create_manual_lead")
+
+        # Extract zip from address if not provided
+        zip_code = data.zip_code
+        if not zip_code and data.address:
+            zip_code = extract_zip_from_address(data.address)
+
+        # Auto-populate city/state from zip if not provided
+        city = data.city
+        state = data.state
+        if zip_code and not city and not state:
+            city, state = lookup_zip(zip_code)
+
+        lead = await self.lead_repository.create(
+            name=data.name,
+            phone=data.phone,
+            email=data.email,
+            zip_code=zip_code,
+            situation=data.situation.value,
+            notes=data.notes,
+            source_site="admin",
+            status=LeadStatus.NEW.value,
+            lead_source="manual",
+            source_detail="Manual CRM entry",
+            intake_tag=None,
+            city=city,
+            state=state,
+            address=data.address,
+            action_tags=[ActionTag.NEEDS_CONTACT.value],
+        )
+
+        self.logger.info(
+            "lead.manual_created",
+            lead_id=str(lead.id),
+        )
+
+        self.log_completed("create_manual_lead", lead_id=str(lead.id))
         response: LeadResponse = LeadResponse.model_validate(lead)
         return response
 
@@ -782,16 +1007,20 @@ class LeadService(LoggerMixin):
         if data.create_job:
             # Map situation to job type and description
             situation_key = lead.situation
-            _category, default_description = self.SITUATION_JOB_MAP.get(
+            _category, _job_type, default_description = self.SITUATION_JOB_MAP.get(
                 situation_key,
-                ("requires_estimate", "Consultation"),
+                ("requires_estimate", "consultation", "Consultation"),
             )
 
-            description = data.job_description or default_description
+            description = (
+                data.job_description
+                if data.job_description is not None
+                else default_description
+            )
 
             job_data = JobCreate(
                 customer_id=customer.id,
-                job_type=_category,
+                job_type=_job_type,
                 description=description,
             )
             job = await self.job_service.create_job(job_data)
@@ -834,13 +1063,227 @@ class LeadService(LoggerMixin):
         Raises:
             LeadNotFoundError: If lead not found
 
-        Validates: Requirement 5.9
+        Validates: Requirement 5.9, CRM2 Req 9.1
         """
         lead = await self.lead_repository.get_by_id(lead_id)
         if not lead:
             raise LeadNotFoundError(lead_id)
 
         await self.lead_repository.delete(lead_id)
+
+    async def _ensure_customer_for_lead(
+        self,
+        lead: Lead,
+    ) -> tuple[UUID, MergedCustomerInfo | None]:
+        """Auto-generate a customer from a lead if one doesn't exist.
+
+        Returns ``(customer_id, merged_info)``. ``merged_info`` is non-None
+        only when this call found an existing customer by phone and linked
+        the lead to them — i.e., the lead was absorbed rather than creating
+        a brand-new customer record (bughunt E-BUG-D: callers surface this
+        so the UI can toast "Merged into existing customer: {name}" instead
+        of a neutral "moved" message).
+
+        Validates: CRM2 Req 12.1, 12.2; bughunt E-BUG-D.
+        """
+        if lead.customer_id:
+            return lead.customer_id, None  # type: ignore[return-value]
+
+        # Check for existing customer by phone first
+        existing_list = await self.customer_service.lookup_by_phone(lead.phone)
+        if existing_list:
+            existing = existing_list[0]
+            await self.lead_repository.update(
+                lead_id=lead.id,
+                update_data={"customer_id": existing.id},
+            )
+            first = (getattr(existing, "first_name", "") or "").strip()
+            last = (getattr(existing, "last_name", "") or "").strip()
+            full_name = " ".join(p for p in (first, last) if p) or lead.name
+            return existing.id, MergedCustomerInfo(id=existing.id, name=full_name)
+
+        first_name, last_name = self.split_name(lead.name)
+        customer_last_name = last_name if last_name else first_name
+
+        customer_data = CustomerCreate(
+            first_name=first_name,
+            last_name=customer_last_name,
+            phone=lead.phone,
+            email=lead.email,
+            lead_source=LeadSource.WEBSITE,
+            sms_opt_in=lead.sms_consent,
+        )
+        customer = await self.customer_service.create_customer(customer_data)
+
+        # Link lead to customer
+        await self.lead_repository.update(
+            lead_id=lead.id,
+            update_data={"customer_id": customer.id},
+        )
+
+        return customer.id, None
+
+    async def move_to_jobs(
+        self, lead_id: UUID, *, force: bool = False
+    ) -> LeadMoveResponse:
+        """Move a lead to the Jobs tab.
+
+        Auto-generates a customer if needed, creates a Job with TO_BE_SCHEDULED,
+        and marks the lead as moved.
+
+        When the lead's situation maps to requires_estimate and force=False,
+        returns a warning flag instead of creating the job. The frontend shows
+        a confirmation modal. If force=True, proceeds with job creation and
+        logs the override for audit purposes.
+
+        Validates: CRM2 Req 9.2, 12.1, Smoothing Req 6.1, 6.2
+        """
+        self.log_started("move_to_jobs", lead_id=str(lead_id))
+
+        lead = await self.lead_repository.get_by_id(lead_id)
+        if not lead:
+            raise LeadNotFoundError(lead_id)
+        if lead.moved_to:
+            raise LeadAlreadyConvertedError(lead_id)
+
+        # Map situation to job type
+        situation_key = lead.situation
+        _category, _job_type, default_description = self.SITUATION_JOB_MAP.get(
+            situation_key,
+            ("requires_estimate", "consultation", "Consultation"),
+        )
+
+        # Req 6.1: requires_estimate leads get a warning instead of silent redirect
+        if _category == "requires_estimate" and not force:
+            self.log_started(
+                "move_to_jobs.requires_estimate_warning",
+                lead_id=str(lead_id),
+                situation=situation_key,
+            )
+            return LeadMoveResponse(
+                lead_id=lead_id,
+                requires_estimate_warning=True,
+                message="This job type typically requires an estimate. Move to Jobs anyway, or move to Sales for the estimate workflow?",
+            )
+
+        # Req 6.2: If force=True on a requires_estimate lead, log the override
+        if _category == "requires_estimate" and force:
+            self.log_started(
+                "move_to_jobs.estimate_override",
+                lead_id=str(lead_id),
+                situation=situation_key,
+                reason="admin_confirmed_move_to_jobs",
+            )
+
+        customer_id, merged_info = await self._ensure_customer_for_lead(lead)
+        description = lead.job_requested or default_description
+
+        # bughunt H-5: resolve or create a Property from lead.job_address
+        # so the resulting Job's Address column isn't blank.
+        from grins_platform.services.property_service import (  # noqa: PLC0415
+            ensure_property_for_lead,
+        )
+
+        property_obj = await ensure_property_for_lead(
+            self.lead_repository.session,
+            customer_id,
+            lead,
+        )
+
+        job_data = JobCreate(
+            customer_id=customer_id,
+            property_id=property_obj.id if property_obj else None,
+            job_type=_job_type,
+            description=description,
+        )
+        job = await self.job_service.create_job(job_data)
+
+        now = datetime.now(tz=timezone.utc)
+        await self.lead_repository.update(
+            lead_id,
+            {"moved_to": "jobs", "moved_at": now},
+        )
+
+        self.log_completed("move_to_jobs", lead_id=str(lead_id), job_id=str(job.id))
+        message = (
+            f"Merged into existing customer: {merged_info.name}"
+            if merged_info
+            else "Lead moved to Jobs"
+        )
+        return LeadMoveResponse(
+            lead_id=lead_id,
+            customer_id=customer_id,
+            job_id=job.id,
+            message=message,
+            merged_into_customer=merged_info,
+        )
+
+    async def move_to_sales(self, lead_id: UUID) -> LeadMoveResponse:
+        """Move a lead to the Sales tab.
+
+        Auto-generates a customer if needed, creates a SalesEntry with
+        schedule_estimate status, and marks the lead as moved.
+
+        Validates: CRM2 Req 9.2, 12.2
+        """
+        self.log_started("move_to_sales", lead_id=str(lead_id))
+
+        lead = await self.lead_repository.get_by_id(lead_id)
+        if not lead:
+            raise LeadNotFoundError(lead_id)
+        if lead.moved_to:
+            raise LeadAlreadyConvertedError(lead_id)
+
+        customer_id, merged_info = await self._ensure_customer_for_lead(lead)
+
+        # bughunt H-6: resolve or create a Property from lead.job_address
+        # so convert_to_job can carry property_id forward into the Job.
+        from grins_platform.services.property_service import (  # noqa: PLC0415
+            ensure_property_for_lead,
+        )
+
+        session = self.lead_repository.session
+        property_obj = await ensure_property_for_lead(
+            session,
+            customer_id,
+            lead,
+        )
+
+        sales_entry = SalesEntryModel(
+            customer_id=customer_id,
+            lead_id=lead_id,
+            property_id=property_obj.id if property_obj else None,
+            job_type=lead.job_requested or lead.situation,
+            status="schedule_estimate",
+            notes=lead.notes,
+        )
+        session.add(sales_entry)
+        await session.flush()
+        await session.refresh(sales_entry)
+
+        now = datetime.now(tz=timezone.utc)
+        await self.lead_repository.update(
+            lead_id,
+            {"moved_to": "sales", "moved_at": now},
+        )
+
+        self.log_completed(
+            "move_to_sales",
+            lead_id=str(lead_id),
+            sales_entry_id=str(sales_entry.id),
+        )
+        message = (
+            f"Merged into existing customer: {merged_info.name}"
+            if merged_info
+            else "Lead moved to Sales"
+        )
+        return LeadMoveResponse(
+            lead_id=lead_id,
+            customer_id=customer_id,
+            sales_entry_id=sales_entry.id,
+            message=message,
+            merged_into_customer=merged_info,
+        )
 
     async def get_follow_up_queue(
         self,
@@ -1008,18 +1451,11 @@ class LeadService(LoggerMixin):
         return LeadResponse.model_validate(updated_lead)
 
     async def mark_contacted(self, lead_id: UUID) -> LeadResponse:
-        """Mark a lead as contacted: remove NEEDS_CONTACT, set contacted_at.
+        """Mark a lead as Contacted (Awaiting Response).
 
-        Args:
-            lead_id: UUID of the lead.
+        Also removes NEEDS_CONTACT tag and sets last_contacted_at.
 
-        Returns:
-            LeadResponse with updated lead data.
-
-        Raises:
-            LeadNotFoundError: If lead not found.
-
-        Validates: Requirements 13.3
+        Validates: CRM2 Req 11.1, 11.2, Requirements 13.3
         """
         self.log_started("mark_contacted", lead_id=str(lead_id))
 
@@ -1036,14 +1472,10 @@ class LeadService(LoggerMixin):
             lead_id,
             {
                 "action_tags": current_tags,
-                "contacted_at": now,
+                "status": LeadStatus.CONTACTED.value,
+                "contacted_at": now if lead.contacted_at is None else lead.contacted_at,
+                "last_contacted_at": now,
             },
-        )
-
-        self.logger.info(
-            "lead.contacted",
-            lead_id=str(lead_id),
-            contacted_at=now.isoformat(),
         )
 
         self.log_completed("mark_contacted", lead_id=str(lead_id))

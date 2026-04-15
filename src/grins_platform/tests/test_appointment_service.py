@@ -425,16 +425,20 @@ class TestAppointmentServiceCancel:
         self,
         service: AppointmentService,
         mock_appointment_repository: AsyncMock,
+        mock_job_repository: AsyncMock,
     ) -> None:
         """Test successful appointment cancellation."""
         # Arrange
         appointment_id = uuid4()
+        job_id = uuid4()
         mock_appointment = MagicMock()
         mock_appointment.id = appointment_id
+        mock_appointment.job_id = job_id
         mock_appointment.status = AppointmentStatus.SCHEDULED.value
         mock_appointment.can_transition_to.return_value = True
         mock_appointment_repository.get_by_id.return_value = mock_appointment
         mock_appointment_repository.update_status.return_value = mock_appointment
+        mock_job_repository.get_by_id.return_value = None
 
         # Act
         result = await service.cancel_appointment(appointment_id)
@@ -1198,12 +1202,14 @@ class TestCheckoutWebhookFullFlow:
     # -----------------------------------------------------------------
     @pytest.mark.asyncio
     async def test_new_customer_professional_residential_full_flow(
-        self, webhook_deps,
+        self,
+        webhook_deps,
     ) -> None:
         """Simulate a brand-new customer purchasing Professional Residential.
 
         Verifies the complete chain:
-        1. Customer looked up by email → not found → looked up by phone → not found → created
+        1. Customer looked up by email → not found →
+           looked up by phone → not found → created
         2. Tier resolved by slug + package_type
         3. Agreement created (PENDING) then activated (ACTIVE)
         4. Surcharges calculated and applied
@@ -1217,11 +1223,15 @@ class TestCheckoutWebhookFullFlow:
         mock_customer = _make_mock_customer()
         mock_tier = _make_mock_tier()
         mock_agreement = _make_mock_agreement(
-            customer_id=mock_customer.id, tier_id=mock_tier.id,
+            customer_id=mock_customer.id,
+            tier_id=mock_tier.id,
         )
         mock_session = _make_mock_session()
         self._configure_happy_path(
-            webhook_deps, mock_customer, mock_tier, mock_agreement,
+            webhook_deps,
+            mock_customer,
+            mock_tier,
+            mock_agreement,
         )
 
         # ---- Execute ----
@@ -1248,7 +1258,8 @@ class TestCheckoutWebhookFullFlow:
         # ---- 2. Tier resolution ----
         tier_repo = webhook_deps["AgreementTierRepository"].return_value
         tier_repo.get_by_slug_and_type.assert_called_once_with(
-            "professional-residential", "residential",
+            "professional-residential",
+            "residential",
         )
 
         # ---- 3. Agreement creation and activation ----
@@ -1321,10 +1332,14 @@ class TestCheckoutWebhookFullFlow:
         # ---- 10. Emails sent ----
         email = webhook_deps["EmailService"].return_value
         email.send_confirmation_email.assert_called_once_with(
-            mock_customer, mock_agreement, mock_tier,
+            mock_customer,
+            mock_agreement,
+            mock_tier,
         )
         email.send_welcome_email.assert_called_once_with(
-            mock_customer, mock_agreement, mock_tier,
+            mock_customer,
+            mock_agreement,
+            mock_tier,
         )
 
         # ---- 11. Session flushed at least twice ----
@@ -1335,7 +1350,8 @@ class TestCheckoutWebhookFullFlow:
     # -----------------------------------------------------------------
     @pytest.mark.asyncio
     async def test_existing_customer_found_by_email_skips_creation(
-        self, webhook_deps,
+        self,
+        webhook_deps,
     ) -> None:
         """When a customer with the same email already exists, skip creation.
 
@@ -1347,11 +1363,15 @@ class TestCheckoutWebhookFullFlow:
         mock_customer = _make_mock_customer()
         mock_tier = _make_mock_tier()
         mock_agreement = _make_mock_agreement(
-            customer_id=mock_customer.id, tier_id=mock_tier.id,
+            customer_id=mock_customer.id,
+            tier_id=mock_tier.id,
         )
         mock_session = _make_mock_session()
         self._configure_happy_path(
-            webhook_deps, mock_customer, mock_tier, mock_agreement,
+            webhook_deps,
+            mock_customer,
+            mock_tier,
+            mock_agreement,
         )
 
         # Override: customer IS found by email
@@ -1385,7 +1405,8 @@ class TestCheckoutWebhookFullFlow:
     # -----------------------------------------------------------------
     @pytest.mark.asyncio
     async def test_surcharges_applied_with_lake_pump_and_extra_zones(
-        self, webhook_deps,
+        self,
+        webhook_deps,
     ) -> None:
         """Verify surcharge calculator receives correct flags when lake pump
         and 12 zones are specified in checkout metadata."""
@@ -1399,11 +1420,15 @@ class TestCheckoutWebhookFullFlow:
         mock_customer = _make_mock_customer()
         mock_tier = _make_mock_tier()
         mock_agreement = _make_mock_agreement(
-            customer_id=mock_customer.id, tier_id=mock_tier.id,
+            customer_id=mock_customer.id,
+            tier_id=mock_tier.id,
         )
         mock_session = _make_mock_session()
         self._configure_happy_path(
-            webhook_deps, mock_customer, mock_tier, mock_agreement,
+            webhook_deps,
+            mock_customer,
+            mock_tier,
+            mock_agreement,
         )
 
         # Surcharge returns higher total
@@ -1427,9 +1452,9 @@ class TestCheckoutWebhookFullFlow:
         )
 
         # Verify agreement updated with surcharge data
-        update_data = webhook_deps[
-            "AgreementRepository"
-        ].return_value.update.call_args[0][1]
+        update_data = webhook_deps["AgreementRepository"].return_value.update.call_args[
+            0
+        ][1]
         assert update_data["zone_count"] == 12
         assert update_data["has_lake_pump"] is True
         assert update_data["has_rpz_backflow"] is True
@@ -1458,17 +1483,23 @@ class TestJobGeneratorByTier:
 
     @pytest.mark.asyncio
     async def test_professional_generates_three_jobs(self) -> None:
-        """Professional tier: spring_startup, mid_season_inspection, fall_winterization."""
+        """Professional tier: startup, inspection, winterization."""
         JobGenerator = _import_job_generator()
         session = AsyncMock()
         gen = JobGenerator(session)
-        agreement = self._make_agreement_for_tier("Professional", "professional-residential")
+        agreement = self._make_agreement_for_tier(
+            "Professional", "professional-residential"
+        )
 
         jobs = await gen.generate_jobs(agreement)
 
         assert len(jobs) == 3
         types = [j.job_type for j in jobs]
-        assert types == ["spring_startup", "mid_season_inspection", "fall_winterization"]
+        assert types == [
+            "spring_startup",
+            "mid_season_inspection",
+            "fall_winterization",
+        ]
         for job in jobs:
             assert job.status == JobStatus.TO_BE_SCHEDULED.value
             assert job.category == JobCategory.READY_TO_SCHEDULE.value
@@ -1522,7 +1553,9 @@ class TestJobGeneratorByTier:
         JobGenerator = _import_job_generator()
         session = AsyncMock()
         gen = JobGenerator(session)
-        agreement = self._make_agreement_for_tier("Professional", "professional-residential")
+        agreement = self._make_agreement_for_tier(
+            "Professional", "professional-residential"
+        )
 
         jobs = await gen.generate_jobs(agreement)
 

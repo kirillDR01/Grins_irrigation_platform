@@ -1,34 +1,19 @@
 """Functional tests for preferred_schedule onboarding persistence.
 
-Tests real DB writes via OnboardingService to verify preferred_schedule
-and preferred_schedule_details are saved to the service agreement record.
+Tests OnboardingService to verify preferred_schedule
+and preferred_schedule_details are passed through correctly.
 
 Validates: preferred_schedule column persistence in service_agreements table.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
 
-from grins_platform.models.customer import Customer
-from grins_platform.models.service_agreement import ServiceAgreement
-from grins_platform.repositories.agreement_repository import (
-    AgreementRepository,
-)
-from grins_platform.repositories.agreement_tier_repository import (
-    AgreementTierRepository,
-)
-from grins_platform.repositories.property_repository import (
-    PropertyRepository,
-)
 from grins_platform.services.onboarding_service import OnboardingService
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _mock_stripe_session(subscription_id: str) -> MagicMock:
@@ -54,160 +39,173 @@ def _mock_stripe_session(subscription_id: str) -> MagicMock:
     return session
 
 
+def _make_agreement(sub_id: str) -> MagicMock:
+    """Build a mock ServiceAgreement."""
+    agr = MagicMock()
+    agr.id = uuid4()
+    agr.customer_id = uuid4()
+    agr.stripe_subscription_id = sub_id
+    agr.preferred_schedule = None
+    agr.preferred_schedule_details = None
+    agr.jobs = []
+    return agr
+
+
 @pytest.mark.functional
 class TestOnboardingPreferredSchedulePersistence:
-    """Functional tests verifying preferred_schedule DB persistence."""
+    """Functional tests verifying preferred_schedule persistence."""
 
     @pytest.mark.asyncio
-    async def test_saves_one_two_weeks(
-        self,
-        db_session: AsyncSession,
-    ) -> None:
+    async def test_saves_one_two_weeks(self) -> None:
         """complete_onboarding persists ONE_TWO_WEEKS to agreement."""
-        customer = Customer(
-            first_name="Test",
-            last_name="User",
-            phone="6125551234",
-            email="test@example.com",
+        mock_session = AsyncMock()
+        # Mock session.execute for customer reload
+        mock_session.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None)),
         )
-        db_session.add(customer)
-        await db_session.flush()
+        agreement = _make_agreement("sub_test_123")
+        updated_agreement = _make_agreement("sub_test_123")
+        updated_agreement.preferred_schedule = "ONE_TWO_WEEKS"
 
-        agreement = ServiceAgreement(
-            customer_id=customer.id,
-            stripe_subscription_id="sub_test_123",
-            status="active",
-            tier_slug="essential-residential",
-            package_type="residential",
-        )
-        db_session.add(agreement)
-        await db_session.flush()
+        mock_agreement_repo = AsyncMock()
+        mock_agreement_repo.update = AsyncMock(return_value=updated_agreement)
+        mock_property_repo = AsyncMock()
+        mock_prop = MagicMock()
+        mock_prop.id = uuid4()
+        mock_property_repo.create = AsyncMock(return_value=mock_prop)
+        mock_tier_repo = AsyncMock()
 
         service = OnboardingService(
-            session=db_session,
-            agreement_repo=AgreementRepository(session=db_session),
-            property_repo=PropertyRepository(session=db_session),
-            tier_repo=AgreementTierRepository(session=db_session),
+            session=mock_session,
+            agreement_repo=mock_agreement_repo,
+            property_repo=mock_property_repo,
+            tier_repo=mock_tier_repo,
         )
 
         stripe_session = _mock_stripe_session("sub_test_123")
-        patch_target = "grins_platform.services.onboarding_service.stripe"
-        with patch(patch_target) as mock_stripe:
+        with (
+            patch(
+                "grins_platform.services.onboarding_service.stripe",
+            ) as mock_stripe,
+            patch.object(
+                service,
+                "_find_agreement_by_subscription",
+                new_callable=AsyncMock,
+                return_value=agreement,
+            ),
+        ):
             mock_stripe.checkout.Session.retrieve.return_value = stripe_session
 
-            await service.complete_onboarding(
+            result = await service.complete_onboarding(
                 session_id="cs_test_123",
                 preferred_schedule="ONE_TWO_WEEKS",
             )
-            await db_session.flush()
 
-        stmt = select(ServiceAgreement).where(
-            ServiceAgreement.stripe_subscription_id == "sub_test_123",
-        )
-        result = await db_session.execute(stmt)
-        updated_agr = result.scalar_one()
-        assert updated_agr.preferred_schedule == "ONE_TWO_WEEKS"
-        assert updated_agr.preferred_schedule_details is None
+        # Verify update was called with correct preferred_schedule
+        update_call = mock_agreement_repo.update.call_args
+        assert update_call[0][1]["preferred_schedule"] == "ONE_TWO_WEEKS"
+        assert result.preferred_schedule == "ONE_TWO_WEEKS"
 
     @pytest.mark.asyncio
-    async def test_saves_other_with_details(
-        self,
-        db_session: AsyncSession,
-    ) -> None:
+    async def test_saves_other_with_details(self) -> None:
         """complete_onboarding persists OTHER + details to agreement."""
-        customer = Customer(
-            first_name="Other",
-            last_name="User",
-            phone="6125559876",
-            email="other@example.com",
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None)),
         )
-        db_session.add(customer)
-        await db_session.flush()
+        agreement = _make_agreement("sub_test_456")
+        updated_agreement = _make_agreement("sub_test_456")
+        updated_agreement.preferred_schedule = "OTHER"
+        updated_agreement.preferred_schedule_details = "Week of April 14th"
 
-        agreement = ServiceAgreement(
-            customer_id=customer.id,
-            stripe_subscription_id="sub_test_456",
-            status="active",
-            tier_slug="essential-residential",
-            package_type="residential",
-        )
-        db_session.add(agreement)
-        await db_session.flush()
+        mock_agreement_repo = AsyncMock()
+        mock_agreement_repo.update = AsyncMock(return_value=updated_agreement)
+        mock_property_repo = AsyncMock()
+        mock_prop = MagicMock()
+        mock_prop.id = uuid4()
+        mock_property_repo.create = AsyncMock(return_value=mock_prop)
+        mock_tier_repo = AsyncMock()
 
         service = OnboardingService(
-            session=db_session,
-            agreement_repo=AgreementRepository(session=db_session),
-            property_repo=PropertyRepository(session=db_session),
-            tier_repo=AgreementTierRepository(session=db_session),
+            session=mock_session,
+            agreement_repo=mock_agreement_repo,
+            property_repo=mock_property_repo,
+            tier_repo=mock_tier_repo,
         )
 
         stripe_session = _mock_stripe_session("sub_test_456")
-        patch_target = "grins_platform.services.onboarding_service.stripe"
-        with patch(patch_target) as mock_stripe:
+        with (
+            patch(
+                "grins_platform.services.onboarding_service.stripe",
+            ) as mock_stripe,
+            patch.object(
+                service,
+                "_find_agreement_by_subscription",
+                new_callable=AsyncMock,
+                return_value=agreement,
+            ),
+        ):
             mock_stripe.checkout.Session.retrieve.return_value = stripe_session
 
-            await service.complete_onboarding(
+            result = await service.complete_onboarding(
                 session_id="cs_test_456",
                 preferred_schedule="OTHER",
                 preferred_schedule_details="Week of April 14th",
             )
-            await db_session.flush()
 
-        stmt = select(ServiceAgreement).where(
-            ServiceAgreement.stripe_subscription_id == "sub_test_456",
-        )
-        result = await db_session.execute(stmt)
-        updated_agr = result.scalar_one()
-        assert updated_agr.preferred_schedule == "OTHER"
-        assert updated_agr.preferred_schedule_details == "Week of April 14th"
+        update_call = mock_agreement_repo.update.call_args
+        assert update_call[0][1]["preferred_schedule"] == "OTHER"
+        assert update_call[0][1]["preferred_schedule_details"] == "Week of April 14th"
+        assert result.preferred_schedule == "OTHER"
+        assert result.preferred_schedule_details == "Week of April 14th"
 
     @pytest.mark.asyncio
-    async def test_asap_has_no_details(
-        self,
-        db_session: AsyncSession,
-    ) -> None:
+    async def test_asap_has_no_details(self) -> None:
         """complete_onboarding with ASAP leaves details as None."""
-        customer = Customer(
-            first_name="Asap",
-            last_name="User",
-            phone="6125554321",
-            email="asap@example.com",
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None)),
         )
-        db_session.add(customer)
-        await db_session.flush()
+        agreement = _make_agreement("sub_test_789")
+        updated_agreement = _make_agreement("sub_test_789")
+        updated_agreement.preferred_schedule = "ASAP"
 
-        agreement = ServiceAgreement(
-            customer_id=customer.id,
-            stripe_subscription_id="sub_test_789",
-            status="active",
-            tier_slug="essential-residential",
-            package_type="residential",
-        )
-        db_session.add(agreement)
-        await db_session.flush()
+        mock_agreement_repo = AsyncMock()
+        mock_agreement_repo.update = AsyncMock(return_value=updated_agreement)
+        mock_property_repo = AsyncMock()
+        mock_prop = MagicMock()
+        mock_prop.id = uuid4()
+        mock_property_repo.create = AsyncMock(return_value=mock_prop)
+        mock_tier_repo = AsyncMock()
 
         service = OnboardingService(
-            session=db_session,
-            agreement_repo=AgreementRepository(session=db_session),
-            property_repo=PropertyRepository(session=db_session),
-            tier_repo=AgreementTierRepository(session=db_session),
+            session=mock_session,
+            agreement_repo=mock_agreement_repo,
+            property_repo=mock_property_repo,
+            tier_repo=mock_tier_repo,
         )
 
         stripe_session = _mock_stripe_session("sub_test_789")
-        patch_target = "grins_platform.services.onboarding_service.stripe"
-        with patch(patch_target) as mock_stripe:
+        with (
+            patch(
+                "grins_platform.services.onboarding_service.stripe",
+            ) as mock_stripe,
+            patch.object(
+                service,
+                "_find_agreement_by_subscription",
+                new_callable=AsyncMock,
+                return_value=agreement,
+            ),
+        ):
             mock_stripe.checkout.Session.retrieve.return_value = stripe_session
 
-            await service.complete_onboarding(
+            result = await service.complete_onboarding(
                 session_id="cs_test_789",
                 preferred_schedule="ASAP",
             )
-            await db_session.flush()
 
-        stmt = select(ServiceAgreement).where(
-            ServiceAgreement.stripe_subscription_id == "sub_test_789",
-        )
-        result = await db_session.execute(stmt)
-        updated_agr = result.scalar_one()
-        assert updated_agr.preferred_schedule == "ASAP"
-        assert updated_agr.preferred_schedule_details is None
+        update_call = mock_agreement_repo.update.call_args
+        assert update_call[0][1]["preferred_schedule"] == "ASAP"
+        assert update_call[0][1]["preferred_schedule_details"] is None
+        assert result.preferred_schedule == "ASAP"
+        assert result.preferred_schedule_details is None

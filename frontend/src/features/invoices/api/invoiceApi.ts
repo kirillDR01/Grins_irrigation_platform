@@ -9,6 +9,8 @@ import type {
   PaymentRecord,
   BulkNotifyRequest,
   BulkNotifyResponse,
+  MassNotifyRequest,
+  MassNotifyResponse,
   PdfUrlResponse,
 } from '../types';
 
@@ -111,6 +113,15 @@ export const invoiceApi = {
   bulkNotify: async (data: BulkNotifyRequest): Promise<BulkNotifyResponse> => {
     const response = await apiClient.post<BulkNotifyResponse>(
       `${BASE_PATH}/bulk-notify`,
+      data,
+    );
+    return response.data;
+  },
+
+  // Mass notify customers (Req 29.3, 29.4)
+  massNotify: async (data: MassNotifyRequest): Promise<MassNotifyResponse> => {
+    const response = await apiClient.post<MassNotifyResponse>(
+      `${BASE_PATH}/mass-notify`,
       data,
     );
     return response.data;

@@ -14,6 +14,8 @@ const leadSituationColors: Record<LeadSituation, string> = {
   upgrade: 'bg-teal-50 text-teal-700',
   repair: 'bg-orange-50 text-orange-700',
   exploring: 'bg-slate-100 text-slate-700',
+  winterization: 'bg-sky-50 text-sky-700',
+  seasonal_maintenance: 'bg-emerald-50 text-emerald-700',
 };
 
 export const LeadSituationBadge = memo(function LeadSituationBadge({

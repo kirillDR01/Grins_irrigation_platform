@@ -100,8 +100,8 @@ class OnboardingReminderJob(LoggerMixin):
         phone = agreement.customer.phone
         agreement_id = str(agreement.id)
 
-        # Gate on consent (Req 10.5)
-        has_consent = await sms_service.check_sms_consent(phone)
+        # Gate on consent (Req 10.5) — delegates to consent module via SMSService
+        has_consent: bool = await sms_service.check_sms_consent(phone)
         if not has_consent:
             logger.info(
                 "onboarding.reminder.skipped_no_consent",

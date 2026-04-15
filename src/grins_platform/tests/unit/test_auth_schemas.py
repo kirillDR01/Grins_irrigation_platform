@@ -259,13 +259,13 @@ class TestLoginResponse:
         data = LoginResponse(
             access_token="jwt.token.here",
             token_type="bearer",
-            expires_in=900,
+            expires_in=3600,
             user=user,
             csrf_token="csrf-token-value",
         )
         assert data.access_token == "jwt.token.here"
         assert data.token_type == "bearer"
-        assert data.expires_in == 900
+        assert data.expires_in == 3600
         assert data.user.username == "admin"
         assert data.csrf_token == "csrf-token-value"
 
@@ -281,7 +281,7 @@ class TestLoginResponse:
         )
         data = LoginResponse(
             access_token="token",
-            expires_in=900,
+            expires_in=3600,
             user=user,
             csrf_token="csrf",
         )
@@ -297,24 +297,24 @@ class TestTokenResponse:
         data = TokenResponse(
             access_token="new.jwt.token",
             token_type="bearer",
-            expires_in=900,
+            expires_in=3600,
         )
         assert data.access_token == "new.jwt.token"
         assert data.token_type == "bearer"
-        assert data.expires_in == 900
+        assert data.expires_in == 3600
 
     def test_token_response_default_token_type(self) -> None:
         """Test token response uses default token type."""
         data = TokenResponse(
             access_token="token",
-            expires_in=900,
+            expires_in=3600,
         )
         assert data.token_type == "bearer"
 
     def test_missing_access_token_rejected(self) -> None:
         """Test missing access token is rejected."""
         with pytest.raises(ValidationError) as exc_info:
-            TokenResponse(expires_in=900)  # type: ignore[call-arg]
+            TokenResponse(expires_in=3600)  # type: ignore[call-arg]
         errors = exc_info.value.errors()
         assert any(e["loc"] == ("access_token",) for e in errors)
 

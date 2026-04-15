@@ -302,7 +302,8 @@ class TestProperty56PerJobFinancials:
         # profit_margin = (1300 / 2200) * 100 = 59.09
         expected_margin = float(
             (Decimal("1300.00") / Decimal("2200.00") * 100).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP,
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP,
             ),
         )
         assert result.profit_margin == expected_margin
@@ -520,7 +521,8 @@ class TestProperty59TaxEstimation:
         assert result.taxable_income == Decimal("35000.00")
         assert result.effective_tax_rate == 0.30
         expected_tax = (Decimal("35000.00") * Decimal("0.30")).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP,
+            Decimal("0.01"),
+            rounding=ROUND_HALF_UP,
         )
         assert result.estimated_tax_due == expected_tax
 
@@ -565,11 +567,13 @@ class TestProperty59TaxEstimation:
 
         # Current: (40000 - 10000) * 0.25 = 7500
         current_tax = (Decimal("30000.00") * Decimal("0.25")).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP,
+            Decimal("0.01"),
+            rounding=ROUND_HALF_UP,
         )
         # Projected: (50000 - 15000) * 0.25 = 8750
         projected_tax = (Decimal("35000.00") * Decimal("0.25")).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP,
+            Decimal("0.01"),
+            rounding=ROUND_HALF_UP,
         )
 
         assert result.current_estimated_tax == current_tax

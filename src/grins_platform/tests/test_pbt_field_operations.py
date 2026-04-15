@@ -60,7 +60,7 @@ class TestJobCreationDefaults:
         ),
     )
     @settings(max_examples=50)
-    def test_default_status_is_to_be_scheduled(self, job_type: str) -> None:  # noqa: ARG002
+    def test_default_status_is_to_be_scheduled(self, job_type: str) -> None:
         """
         Feature: field-operations, Property 1: Job Creation Defaults
         For any job type, the default status should be 'to_be_scheduled'.
@@ -138,6 +138,7 @@ class TestEnumValidation:
         """
         assert status.value in [
             "to_be_scheduled",
+            "scheduled",
             "in_progress",
             "completed",
             "cancelled",
@@ -312,16 +313,29 @@ class TestStatusTransitions:
 
     **Property 4: Status Transition Validity**
     *For any* job status transition attempt:
-    - From "to_be_scheduled": only "in_progress" or "cancelled" are valid
-    - From "in_progress": only "completed", "cancelled", or "to_be_scheduled" are valid
+    - From "to_be_scheduled": only "scheduled", "in_progress", or "cancelled" are valid
+    - From "scheduled": only "in_progress", "to_be_scheduled", or "cancelled" are valid
+    - From "in_progress": only "completed" or "cancelled" are valid
     - From "completed" or "cancelled": no transitions are valid (terminal states)
 
-    **Validates: Requirements 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.10**
+    **Validates: Requirements 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.10, 5.2**
     """
 
     VALID_TRANSITIONS: ClassVar[dict[JobStatus, set[JobStatus]]] = {
-        JobStatus.TO_BE_SCHEDULED: {JobStatus.IN_PROGRESS, JobStatus.CANCELLED},
-        JobStatus.IN_PROGRESS: {JobStatus.COMPLETED, JobStatus.CANCELLED, JobStatus.TO_BE_SCHEDULED},
+        JobStatus.TO_BE_SCHEDULED: {
+            JobStatus.SCHEDULED,
+            JobStatus.IN_PROGRESS,
+            JobStatus.CANCELLED,
+        },
+        JobStatus.SCHEDULED: {
+            JobStatus.IN_PROGRESS,
+            JobStatus.TO_BE_SCHEDULED,
+            JobStatus.CANCELLED,
+        },
+        JobStatus.IN_PROGRESS: {
+            JobStatus.COMPLETED,
+            JobStatus.CANCELLED,
+        },
         JobStatus.COMPLETED: set(),  # Terminal state
         JobStatus.CANCELLED: set(),  # Terminal state
     }
@@ -341,7 +355,7 @@ class TestStatusTransitions:
         Feature: field-operations, Property 4: Status Transition Validity
         For any job status transition attempt, only valid transitions are allowed.
         """
-        from grins_platform.services.job_service import (  # noqa: PLC0415
+        from grins_platform.services.job_service import (
             JobService,
         )
 

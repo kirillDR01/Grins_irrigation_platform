@@ -21,6 +21,7 @@ export function useLeads(params?: LeadListParams) {
   return useQuery({
     queryKey: leadKeys.list(params),
     queryFn: () => leadApi.list(params),
+    refetchInterval: 30_000,
   });
 }
 

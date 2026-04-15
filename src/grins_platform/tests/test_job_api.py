@@ -17,6 +17,9 @@ import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
+from grins_platform.api.v1.auth_dependencies import (
+    get_current_active_user,
+)
 from grins_platform.api.v1.dependencies import get_job_service
 from grins_platform.app import create_app
 from grins_platform.exceptions import (
@@ -60,6 +63,7 @@ def mock_job():
     job.requested_at = datetime.now()
     job.approved_at = None
     job.scheduled_at = None
+    job.on_my_way_at = None
     job.started_at = None
     job.completed_at = None
     job.closed_at = None
@@ -68,6 +72,19 @@ def mock_job():
     job.customer_name = None
     job.customer_phone = None
     job.customer = None
+    job.job_property = None
+    job.property_address = None
+    job.property_city = None
+    job.property_type = None
+    job.property_is_hoa = None
+    job.property_is_subscription = None
+    job.time_tracking_metadata = None
+    job.service_preference_notes = None
+    job.service_agreement_name = None
+    job.service_agreement_active = None
+    job.service_agreement = None
+    job.customer_address = None
+    job.property_tags = None
     job.created_at = datetime.now()
     job.updated_at = datetime.now()
     return job
@@ -80,10 +97,22 @@ def mock_job_service():
 
 
 @pytest.fixture
-def app(mock_job_service):
+def mock_admin_user():
+    """Create a mock admin user for auth."""
+    user = Mock()
+    user.id = uuid4()
+    user.email = "admin@test.com"
+    user.is_active = True
+    user.role = "admin"
+    return user
+
+
+@pytest.fixture
+def app(mock_job_service, mock_admin_user):
     """Create test application with mocked service."""
     application = create_app()
     application.dependency_overrides[get_job_service] = lambda: mock_job_service
+    application.dependency_overrides[get_current_active_user] = lambda: mock_admin_user
     return application
 
 
@@ -414,6 +443,56 @@ class TestGetReadyToSchedule:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["total"] == 1
+
+    def test_get_ready_to_schedule_returns_customer_data_for_job_selector(
+        self, client, mock_job, mock_job_service,
+    ):
+        """Test ready-to-schedule includes customer_name, customer_address,
+        property_tags, and service_preference_notes for the job selector.
+
+        Validates: Requirements 11.1, 11.3, 11.4, 11.5
+        """
+        # Set up customer on the mock job
+        customer = Mock()
+        customer.first_name = "John"
+        customer.last_name = "Smith"
+        customer.phone = "5551234567"
+        customer.preferred_service_times = [
+            {"service_type": "spring_startup", "notes": "AM only"},
+        ]
+        mock_job.customer = customer
+
+        # Set up property on the mock job
+        prop = Mock()
+        prop.address = "123 Main St"
+        prop.city = "Denver"
+        prop.state = "CO"
+        prop.zip_code = "80202"
+        prop.property_type = "residential"
+        prop.is_hoa = True
+        mock_job.job_property = prop
+        mock_job.service_agreement_id = uuid4()  # subscription
+        mock_job.service_agreement = None  # no eager-loaded agreement object
+
+        mock_job_service.get_ready_to_schedule.return_value = ([mock_job], 1)
+
+        response = client.get("/api/v1/jobs/ready-to-schedule")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        item = data["items"][0]
+
+        # Req 11.1: customer_name present
+        assert item["customer_name"] == "John Smith"
+        # Req 11.3: customer_address present (alias for property_address)
+        assert item["customer_address"] == "123 Main St, Denver, CO, 80202"
+        assert item["property_address"] == "123 Main St, Denver, CO, 80202"
+        # Req 11.4: property_tags present
+        assert "Residential" in item["property_tags"]
+        assert "HOA" in item["property_tags"]
+        assert "Subscription" in item["property_tags"]
+        # Req 11.5: service_preference_notes present
+        assert item["service_preference_notes"] is not None
 
 
 class TestGetNeedsEstimate:

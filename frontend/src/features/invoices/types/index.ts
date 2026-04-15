@@ -27,28 +27,28 @@ export interface InvoiceStatusConfig {
 export const INVOICE_STATUS_CONFIG: Record<InvoiceStatus, InvoiceStatusConfig> = {
   draft: {
     label: 'Draft',
-    bgColor: 'bg-slate-100',
-    color: 'text-slate-500',
+    bgColor: 'bg-yellow-100',
+    color: 'text-yellow-700',
   },
   sent: {
     label: 'Sent',
-    bgColor: 'bg-blue-100',
-    color: 'text-blue-700',
+    bgColor: 'bg-yellow-100',
+    color: 'text-yellow-700',
   },
   viewed: {
     label: 'Viewed',
-    bgColor: 'bg-blue-100',
-    color: 'text-blue-700',
+    bgColor: 'bg-yellow-100',
+    color: 'text-yellow-700',
   },
   paid: {
     label: 'Paid',
-    bgColor: 'bg-emerald-100',
-    color: 'text-emerald-700',
+    bgColor: 'bg-green-100',
+    color: 'text-green-700',
   },
   partial: {
     label: 'Partial',
-    bgColor: 'bg-violet-100',
-    color: 'text-violet-700',
+    bgColor: 'bg-yellow-100',
+    color: 'text-yellow-700',
   },
   overdue: {
     label: 'Overdue',
@@ -57,8 +57,8 @@ export const INVOICE_STATUS_CONFIG: Record<InvoiceStatus, InvoiceStatusConfig> =
   },
   lien_warning: {
     label: 'Lien Warning',
-    bgColor: 'bg-amber-100',
-    color: 'text-amber-700',
+    bgColor: 'bg-red-100',
+    color: 'text-red-700',
   },
   lien_filed: {
     label: 'Lien Filed',
@@ -117,13 +117,23 @@ export interface InvoiceDetail extends Invoice {
   customer_email: string | null;
 }
 
-// Invoice list params
+// Invoice list params — 9-axis composable AND filtering
 export interface InvoiceListParams extends PaginationParams {
   status?: InvoiceStatus;
   customer_id?: string;
+  customer_search?: string;
   job_id?: string;
   date_from?: string;
   date_to?: string;
+  date_type?: 'created' | 'due' | 'paid';
+  amount_min?: number;
+  amount_max?: number;
+  payment_types?: string;
+  days_until_due_min?: number;
+  days_until_due_max?: number;
+  days_past_due_min?: number;
+  days_past_due_max?: number;
+  invoice_number?: string;
   lien_eligible?: boolean;
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
@@ -175,6 +185,31 @@ export interface BulkNotifyResponse {
   skipped: number;
   failed: number;
   total: number;
+}
+
+// Mass notify types (Req 29.3, 29.4)
+export type MassNotificationType = 'past_due' | 'due_soon' | 'lien_eligible';
+
+export const MASS_NOTIFICATION_CONFIG: Record<MassNotificationType, { label: string; description: string }> = {
+  past_due: { label: 'Past Due', description: 'Notify all customers with past-due invoices' },
+  due_soon: { label: 'Due Soon', description: 'Notify customers with invoices due within a configurable window' },
+  lien_eligible: { label: 'Lien Eligible', description: 'Notify customers meeting lien criteria (60+ days past due, $500+)' },
+};
+
+export interface MassNotifyRequest {
+  notification_type: MassNotificationType;
+  due_soon_days?: number;
+  lien_days_past_due?: number;
+  lien_min_amount?: number;
+  template?: string;
+}
+
+export interface MassNotifyResponse {
+  notification_type: string;
+  targeted: number;
+  sent: number;
+  failed: number;
+  skipped: number;
 }
 
 // PDF generation types (Req 80)

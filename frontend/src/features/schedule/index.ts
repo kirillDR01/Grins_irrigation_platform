@@ -53,11 +53,16 @@ export {
   useCreateEstimateFromAppointment,
   useUploadAppointmentPhotos,
   useRequestReview,
+  useSendConfirmation,
+  useBulkSendConfirmations,
   scheduleGenerationKeys,
   useScheduleCapacity,
   useScheduleStatus,
   useGenerateSchedule,
   usePreviewSchedule,
+  rescheduleKeys,
+  useRescheduleRequests,
+  useResolveRescheduleRequest,
 } from './hooks';
 
 // Components
@@ -73,6 +78,7 @@ export {
   JobsReadyToSchedulePreview,
   LeadTimeIndicator,
   JobSelector,
+  JobPickerPopup,
   InlineCustomerPanel,
   StaffWorkflowButtons,
   PaymentCollector,
@@ -80,4 +86,8 @@ export {
   EstimateCreator,
   AppointmentNotes,
   ReviewRequest,
+  RescheduleRequestsQueue,
+  SendConfirmationButton,
+  SendDayConfirmationsButton,
+  SendAllConfirmationsButton,
 } from './components';

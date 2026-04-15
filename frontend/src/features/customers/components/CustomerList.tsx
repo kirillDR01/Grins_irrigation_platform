@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   flexRender,
@@ -7,16 +7,30 @@ import {
   getSortedRowModel,
   type ColumnDef,
   type SortingState,
+  type RowSelectionState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, MoreHorizontal, Phone, Search, Filter, Download } from 'lucide-react';
+import { ArrowUpDown, MoreHorizontal, Phone, Filter, Download, MessageSquare, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { CustomerSearch } from './CustomerSearch';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -26,6 +40,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { StatusBadge, LoadingPage, ErrorMessage } from '@/shared/components';
+import { NewTextCampaignModal } from '@/features/communications';
 import { useCustomers } from '../hooks';
 import type { Customer, CustomerListParams } from '../types';
 import { getCustomerFlags, getCustomerFullName } from '../types';
@@ -38,17 +53,57 @@ interface CustomerListProps {
 export function CustomerList({ onEdit, onDelete }: CustomerListProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [campaignModalOpen, setCampaignModalOpen] = useState(false);
   const [params, setParams] = useState<CustomerListParams>({
     page: 1,
     page_size: 20,
   });
+
+  // Reset pagination to page 1 when debounced search query changes
+  useEffect(() => {
+    setParams((prev) => ({ ...prev, page: 1 }));
+  }, [searchQuery]);
+
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
 
   const { data, isLoading, error, refetch } = useCustomers({
     ...params,
     search: searchQuery || undefined,
   });
 
+  const selectedCustomerIds = Object.keys(rowSelection)
+    .map((idx) => (data?.items ?? [])[Number(idx)]?.id)
+    .filter(Boolean) as string[];
+
+  const selectedCount = selectedCustomerIds.length;
+
   const columns: ColumnDef<Customer>[] = [
+    {
+      id: 'select',
+      header: ({ table }) => (
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && 'indeterminate')
+          }
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
+          data-testid="select-all-customers"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label={`Select ${getCustomerFullName(row.original)}`}
+          data-testid={`select-customer-${row.original.id}`}
+        />
+      ),
+      enableSorting: false,
+    },
     {
       accessorKey: 'name',
       header: ({ column }) => (
@@ -183,8 +238,10 @@ export function CustomerList({ onEdit, onDelete }: CustomerListProps) {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     onSortingChange: setSorting,
+    onRowSelectionChange: setRowSelection,
     state: {
       sorting,
+      rowSelection,
     },
   });
 
@@ -202,23 +259,86 @@ export function CustomerList({ onEdit, onDelete }: CustomerListProps) {
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         {/* Table Toolbar */}
         <div className="p-4 border-b border-slate-100 flex gap-4 items-center">
-          {/* Search Input */}
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              type="text"
-              placeholder="Search customers..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-slate-50 border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-              data-testid="customer-search"
-            />
+          {/* Debounced Search Input */}
+          <div className="flex-1 max-w-sm">
+            <CustomerSearch onSearch={handleSearch} />
           </div>
           {/* Filter Button */}
-          <Button variant="outline" size="sm" className="gap-2">
-            <Filter className="h-4 w-4" />
-            Filter
-          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2" data-testid="filter-btn">
+                <Filter className="h-4 w-4" />
+                Filter
+                {(params.property_type || params.is_hoa !== undefined || params.is_subscription_property !== undefined) && (
+                  <span className="ml-1 rounded-full bg-teal-100 text-teal-700 px-1.5 text-xs">
+                    {[params.property_type, params.is_hoa !== undefined ? 'hoa' : null, params.is_subscription_property !== undefined ? 'sub' : null].filter(Boolean).length}
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-4 space-y-3" align="start">
+              <div className="text-sm font-medium text-slate-700">Property Filters</div>
+              <div className="space-y-2">
+                <label className="text-xs text-slate-500">Property Type</label>
+                <Select
+                  value={params.property_type ?? 'all'}
+                  onValueChange={(v) => setParams((p) => ({ ...p, page: 1, property_type: v === 'all' ? undefined : (v as 'residential' | 'commercial') }))}
+                >
+                  <SelectTrigger className="h-8 text-sm" data-testid="filter-property-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="residential">Residential</SelectItem>
+                    <SelectItem value="commercial">Commercial</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs text-slate-500">HOA</label>
+                <Select
+                  value={params.is_hoa === undefined ? 'all' : params.is_hoa ? 'yes' : 'no'}
+                  onValueChange={(v) => setParams((p) => ({ ...p, page: 1, is_hoa: v === 'all' ? undefined : v === 'yes' }))}
+                >
+                  <SelectTrigger className="h-8 text-sm" data-testid="filter-is-hoa">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="yes">HOA Only</SelectItem>
+                    <SelectItem value="no">Non-HOA Only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs text-slate-500">Subscription</label>
+                <Select
+                  value={params.is_subscription_property === undefined ? 'all' : params.is_subscription_property ? 'yes' : 'no'}
+                  onValueChange={(v) => setParams((p) => ({ ...p, page: 1, is_subscription_property: v === 'all' ? undefined : v === 'yes' }))}
+                >
+                  <SelectTrigger className="h-8 text-sm" data-testid="filter-subscription">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="yes">Subscription Only</SelectItem>
+                    <SelectItem value="no">Non-Subscription Only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {(params.property_type || params.is_hoa !== undefined || params.is_subscription_property !== undefined) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-xs"
+                  onClick={() => setParams((p) => ({ ...p, page: 1, property_type: undefined, is_hoa: undefined, is_subscription_property: undefined }))}
+                  data-testid="clear-property-filters"
+                >
+                  Clear property filters
+                </Button>
+              )}
+            </PopoverContent>
+          </Popover>
           {/* Export Button */}
           <Button variant="outline" size="sm" className="gap-2">
             <Download className="h-4 w-4" />
@@ -300,6 +420,47 @@ export function CustomerList({ onEdit, onDelete }: CustomerListProps) {
           </div>
         )}
       </div>
+
+      {/* Sticky Bulk Action Bar */}
+      {selectedCount > 0 && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-lg"
+          data-testid="bulk-action-bar"
+        >
+          <span className="text-sm font-medium" data-testid="selected-count">
+            {selectedCount} selected
+          </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="gap-2"
+            onClick={() => setCampaignModalOpen(true)}
+            data-testid="text-selected-customers-btn"
+          >
+            <MessageSquare className="h-4 w-4" />
+            Text Selected
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-white hover:text-white hover:bg-slate-700"
+            onClick={() => setRowSelection({})}
+            data-testid="clear-selection-btn"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
+      {/* Campaign Modal */}
+      <NewTextCampaignModal
+        open={campaignModalOpen}
+        onOpenChange={(open) => {
+          setCampaignModalOpen(open);
+          if (!open) setRowSelection({});
+        }}
+        preSelectedCustomerIds={selectedCustomerIds}
+      />
     </div>
   );
 }

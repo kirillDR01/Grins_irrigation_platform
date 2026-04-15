@@ -103,6 +103,10 @@ def _make_lead_mock(
     lead.action_tags = action_tags
     lead.customer_type = None
     lead.property_type = None
+    lead.moved_to = None
+    lead.moved_at = None
+    lead.last_contacted_at = None
+    lead.job_requested = None
     return lead
 
 
@@ -124,7 +128,6 @@ def _build_lead_service(
         sms_service=sms_service,
         email_service=email_service,
     )
-
 
 
 # =============================================================================
@@ -207,7 +210,6 @@ class TestProperty14LeadAddressRoundTrip:
 
         svc = _build_lead_service(lead_repo=repo)
 
-
         data = LeadSubmission(
             name="John Doe",
             phone="6125550123",
@@ -240,7 +242,6 @@ class TestProperty14LeadAddressRoundTrip:
 
         svc = _build_lead_service(lead_repo=repo)
 
-
         data = LeadSubmission(
             name="Jane Smith",
             phone="6125550456",
@@ -267,10 +268,20 @@ class TestProperty15ZipCodeAutoPopulate:
     """
 
     @given(
-        zip_code=st.sampled_from([
-            "80202", "80301", "80501", "80521", "80901",
-            "80110", "80401", "80020", "80104", "80134",
-        ]),
+        zip_code=st.sampled_from(
+            [
+                "80202",
+                "80301",
+                "80501",
+                "80521",
+                "80901",
+                "80110",
+                "80401",
+                "80020",
+                "80104",
+                "80134",
+            ]
+        ),
     )
     @settings(max_examples=30)
     @pytest.mark.asyncio
@@ -301,7 +312,6 @@ class TestProperty15ZipCodeAutoPopulate:
 
         svc = _build_lead_service(lead_repo=repo)
 
-
         data = LeadSubmission(
             name="Test User",
             phone="6125550999",
@@ -331,7 +341,6 @@ class TestProperty15ZipCodeAutoPopulate:
         repo.create = AsyncMock(return_value=created_lead)
 
         svc = _build_lead_service(lead_repo=repo)
-
 
         data = LeadSubmission(
             name="Test User",
@@ -365,7 +374,6 @@ class TestProperty15ZipCodeAutoPopulate:
 
         svc = _build_lead_service(lead_repo=repo)
 
-
         data = LeadSubmission(
             name="Test User",
             phone="6125550777",
@@ -380,7 +388,6 @@ class TestProperty15ZipCodeAutoPopulate:
         create_kwargs = repo.create.call_args[1]
         assert create_kwargs["city"] == "Custom City"
         assert create_kwargs["state"] == "MN"
-
 
 
 # =============================================================================
@@ -663,7 +670,6 @@ class TestProperty16ActionTagStateMachine:
         assert len(new_tags) == 1
 
 
-
 # =============================================================================
 # Property 17: Lead tag filtering returns only matching leads
 # Validates: Requirements 13.8
@@ -706,7 +712,6 @@ class TestProperty17TagFiltering:
 
         svc = _build_lead_service(lead_repo=repo)
 
-
         params = LeadListParams(action_tag=filter_tag.value)
         result = await svc.list_leads(params)
 
@@ -720,14 +725,15 @@ class TestProperty17TagFiltering:
     @pytest.mark.asyncio
     async def test_list_leads_with_no_tag_filter_returns_all(self) -> None:
         """Without tag filter, all leads are returned."""
-        leads = [_make_lead_mock(action_tags=[ActionTag.NEEDS_CONTACT.value])
-                 for _ in range(3)]
+        leads = [
+            _make_lead_mock(action_tags=[ActionTag.NEEDS_CONTACT.value])
+            for _ in range(3)
+        ]
 
         repo = AsyncMock()
         repo.list_with_filters = AsyncMock(return_value=(leads, 3))
 
         svc = _build_lead_service(lead_repo=repo)
-
 
         params = LeadListParams()
         result = await svc.list_leads(params)
@@ -901,7 +907,6 @@ class TestProperty18BulkOutreach:
         assert result.sent_count == 0
 
 
-
 # =============================================================================
 # Property 19: Lead attachment lifecycle round-trip
 # Validates: Requirements 15.1, 15.2, 15.3, 15.4
@@ -946,7 +951,7 @@ class TestProperty19LeadAttachmentLifecycle:
         content_type_map = {
             "pdf": "application/pdf",
             "docx": "application/vnd.openxmlformats-officedocument"
-                    ".wordprocessingml.document",
+            ".wordprocessingml.document",
             "jpg": "image/jpeg",
             "png": "image/png",
         }
@@ -981,8 +986,7 @@ class TestProperty19LeadAttachmentLifecycle:
         """Non-allowed content types should be rejected."""
         allowed = {
             "application/pdf",
-            "application/vnd.openxmlformats-officedocument"
-            ".wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "image/jpeg",
             "image/png",
         }
@@ -1037,16 +1041,8 @@ class TestProperty23ReverseFlowEstimateCreatesLead:
 
         # Mock customer service
         customer_detail = MagicMock()
-        first = (
-            customer_name.split()[0]
-            if " " in customer_name
-            else customer_name
-        )
-        last = (
-            customer_name.split()[-1]
-            if " " in customer_name
-            else ""
-        )
+        first = customer_name.split()[0] if " " in customer_name else customer_name
+        last = customer_name.split()[-1] if " " in customer_name else ""
         customer_detail.first_name = first
         customer_detail.last_name = last
         customer_detail.phone = "6125551234"
@@ -1167,7 +1163,6 @@ class TestProperty23ReverseFlowEstimateCreatesLead:
         # Should not have duplicate ESTIMATE_PENDING tags
         assert result.action_tags is not None
         assert result.action_tags.count(ActionTag.ESTIMATE_PENDING.value) == 1
-
 
 
 # =============================================================================
@@ -1409,7 +1404,6 @@ class TestProperty24WorkRequestMigration:
         assert create_kwargs["situation"] == LeadSituation.NEW_SYSTEM.value
 
 
-
 # =============================================================================
 # Property 49: SMS lead confirmation is consent and time-window gated
 # Validates: Requirements 46.1, 46.2
@@ -1532,10 +1526,22 @@ class TestProperty49SMSLeadConfirmation:
         sms_service.send_automated_message.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_submit_lead_with_consent_triggers_sms_confirmation(
+    async def test_submit_lead_with_consent_schedules_post_commit_sms(
         self,
     ) -> None:
-        """Full submit_lead flow with sms_consent=True triggers SMS confirmation."""
+        """submit_lead with sms_consent=True schedules SMS as a post-commit task.
+
+        Post BUG-001 fix (2026-04-14): SMS confirmation is deferred to
+        a FastAPI BackgroundTask running in a fresh session so it cannot
+        roll back the lead-intake transaction. The service must NOT call
+        ``sms_service.send_automated_message`` inline.
+        """
+        from unittest.mock import MagicMock  # noqa: PLC0415
+
+        from grins_platform.services.lead_service import (  # noqa: PLC0415
+            send_lead_confirmations_post_commit,
+        )
+
         created_lead = _make_lead_mock(
             sms_consent=True,
             phone="6125551234",
@@ -1554,7 +1560,6 @@ class TestProperty49SMSLeadConfirmation:
 
         svc = _build_lead_service(lead_repo=repo, sms_service=sms_service)
 
-
         data = LeadSubmission(
             name="Test User",
             phone="6125551234",
@@ -1563,10 +1568,15 @@ class TestProperty49SMSLeadConfirmation:
             sms_consent=True,
             address="123 Main St, Denver, CO 80209",
         )
-        result = await svc.submit_lead(data)
+        background_tasks = MagicMock()
+        result = await svc.submit_lead(data, background_tasks=background_tasks)
 
         assert result.success is True
-        sms_service.send_automated_message.assert_awaited_once()
+        sms_service.send_automated_message.assert_not_awaited()
+        background_tasks.add_task.assert_called_once()
+        scheduled_fn, *scheduled_args = background_tasks.add_task.call_args.args
+        assert scheduled_fn is send_lead_confirmations_post_commit
+        assert scheduled_args[0] == created_lead.id
 
     @pytest.mark.asyncio
     async def test_submit_lead_without_consent_does_not_trigger_sms(
@@ -1588,7 +1598,6 @@ class TestProperty49SMSLeadConfirmation:
         sms_service.send_automated_message = AsyncMock()
 
         svc = _build_lead_service(lead_repo=repo, sms_service=sms_service)
-
 
         data = LeadSubmission(
             name="Test User",

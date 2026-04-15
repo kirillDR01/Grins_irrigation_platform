@@ -328,10 +328,10 @@ class TestSMSSchemas:
         response = SMSSendResponse(
             success=True,
             message_id=uuid4(),
-            twilio_sid="SM123456",
+            provider_message_id="SM123456",
             status="sent",
         )
-        assert response.twilio_sid == "SM123456"
+        assert response.provider_message_id == "SM123456"
 
     def test_sms_webhook_payload_valid(self) -> None:
         """Test valid SMS webhook payload."""

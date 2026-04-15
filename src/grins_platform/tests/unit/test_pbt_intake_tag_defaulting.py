@@ -59,6 +59,10 @@ def _make_mock_lead(**overrides: object) -> MagicMock:
     lead.action_tags = overrides.get("action_tags")
     lead.customer_type = overrides.get("customer_type")
     lead.property_type = overrides.get("property_type")
+    lead.moved_to = None
+    lead.moved_at = None
+    lead.last_contacted_at = None
+    lead.job_requested = None
     return lead
 
 

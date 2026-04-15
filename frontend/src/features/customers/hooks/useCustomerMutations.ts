@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { customerApi } from '../api/customerApi';
-import type { CustomerCreate, CustomerUpdate, ChargeRequest, MergeRequest } from '../types';
+import type { CustomerCreate, CustomerUpdate, ChargeRequest, MergeRequest, ServicePreferenceCreate } from '../types';
 import { customerKeys } from './useCustomers';
 
 // Create customer mutation
@@ -115,14 +115,53 @@ export function useChargeCustomer(customerId: string) {
   });
 }
 
-// Merge duplicate customers mutation (Req 7)
-export function useMergeCustomers() {
+// Merge duplicate customers mutation (CRM Changes Update 2 Req 6)
+export function useMergeCustomers(primaryId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: MergeRequest) => customerApi.mergeCustomers(data),
+    mutationFn: (data: MergeRequest) => customerApi.mergeCustomers(primaryId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: customerKeys.all });
+    },
+  });
+}
+
+// Add service preference mutation (CRM2 Req 7)
+export function useAddServicePreference(customerId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: ServicePreferenceCreate) =>
+      customerApi.addServicePreference(customerId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.servicePreferences(customerId) });
+    },
+  });
+}
+
+// Update service preference mutation (CRM2 Req 7)
+export function useUpdateServicePreference(customerId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ preferenceId, data }: { preferenceId: string; data: ServicePreferenceCreate }) =>
+      customerApi.updateServicePreference(customerId, preferenceId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.servicePreferences(customerId) });
+    },
+  });
+}
+
+// Delete service preference mutation (CRM2 Req 7)
+export function useDeleteServicePreference(customerId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (preferenceId: string) =>
+      customerApi.deleteServicePreference(customerId, preferenceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.servicePreferences(customerId) });
     },
   });
 }

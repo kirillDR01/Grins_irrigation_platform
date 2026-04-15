@@ -164,7 +164,7 @@ export function JobForm({ job, customerId, onSuccess, onCancel }: JobFormProps) 
             render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-sm font-medium text-slate-700">Job Type *</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger data-testid="job-type-select">
                       <SelectValue placeholder="Select job type" />

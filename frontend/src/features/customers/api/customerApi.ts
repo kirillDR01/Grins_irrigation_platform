@@ -11,7 +11,11 @@ import type {
   ChargeRequest,
   DuplicateGroup,
   MergeRequest,
+  MergePreview,
+  PaginatedMergeCandidates,
   SentMessage,
+  ServicePreference,
+  ServicePreferenceCreate,
 } from '../types';
 
 const BASE_PATH = '/customers';
@@ -123,20 +127,67 @@ export const customerApi = {
     return response.data;
   },
 
-  // --- Duplicates (Req 7) ---
+  // --- Duplicates (CRM Changes Update 2 Req 5, 6) ---
   getDuplicates: async (id: string): Promise<DuplicateGroup | null> => {
     const response = await apiClient.get<DuplicateGroup | null>(`${BASE_PATH}/${id}/duplicates`);
     return response.data;
   },
 
-  mergeCustomers: async (data: MergeRequest): Promise<Customer> => {
-    const response = await apiClient.post<Customer>(`${BASE_PATH}/merge`, data);
+  getDuplicateReviewQueue: async (skip = 0, limit = 20): Promise<PaginatedMergeCandidates> => {
+    const response = await apiClient.get<PaginatedMergeCandidates>(`${BASE_PATH}/duplicates`, {
+      params: { skip, limit },
+    });
+    return response.data;
+  },
+
+  mergeCustomers: async (primaryId: string, data: MergeRequest): Promise<void> => {
+    await apiClient.post(`${BASE_PATH}/${primaryId}/merge`, data);
+  },
+
+  previewMerge: async (primaryId: string, data: MergeRequest): Promise<MergePreview> => {
+    const response = await apiClient.post<MergePreview>(`${BASE_PATH}/${primaryId}/merge/preview`, data);
     return response.data;
   },
 
   // --- Sent Messages (Req 82) ---
   listSentMessages: async (id: string): Promise<SentMessage[]> => {
     const response = await apiClient.get<SentMessage[]>(`${BASE_PATH}/${id}/sent-messages`);
+    return response.data;
+  },
+
+  // --- Tier 1 Duplicate Check (Req 6.13) ---
+  checkDuplicate: async (params: { phone?: string; email?: string; exclude_id?: string }): Promise<Customer[]> => {
+    const response = await apiClient.get<Customer[]>(`${BASE_PATH}/check-duplicate`, { params });
+    return response.data;
+  },
+
+  // --- Service Preferences (CRM2 Req 7) ---
+  listServicePreferences: async (id: string): Promise<ServicePreference[]> => {
+    const response = await apiClient.get<ServicePreference[]>(`${BASE_PATH}/${id}/service-preferences`);
+    return response.data;
+  },
+
+  addServicePreference: async (id: string, data: ServicePreferenceCreate): Promise<ServicePreference[]> => {
+    const response = await apiClient.post<ServicePreference[]>(`${BASE_PATH}/${id}/service-preferences`, data);
+    return response.data;
+  },
+
+  updateServicePreference: async (
+    customerId: string,
+    preferenceId: string,
+    data: ServicePreferenceCreate
+  ): Promise<ServicePreference[]> => {
+    const response = await apiClient.put<ServicePreference[]>(
+      `${BASE_PATH}/${customerId}/service-preferences/${preferenceId}`,
+      data
+    );
+    return response.data;
+  },
+
+  deleteServicePreference: async (customerId: string, preferenceId: string): Promise<ServicePreference[]> => {
+    const response = await apiClient.delete<ServicePreference[]>(
+      `${BASE_PATH}/${customerId}/service-preferences/${preferenceId}`
+    );
     return response.data;
   },
 };

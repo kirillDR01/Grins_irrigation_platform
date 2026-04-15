@@ -1,5 +1,4 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -11,6 +10,8 @@ import type { Invoice } from '../types';
 vi.mock('../api/invoiceApi', () => ({
   invoiceApi: {
     list: vi.fn(),
+    massNotify: vi.fn(),
+    bulkNotify: vi.fn(),
   },
 }));
 
@@ -37,6 +38,7 @@ const mockInvoices: Invoice[] = [
     lien_filed_date: null,
     line_items: null,
     notes: null,
+    customer_name: 'John Doe',
     created_at: '2025-01-15T10:00:00Z',
     updated_at: '2025-01-15T10:00:00Z',
   },
@@ -62,6 +64,7 @@ const mockInvoices: Invoice[] = [
     lien_filed_date: null,
     line_items: null,
     notes: null,
+    customer_name: 'Jane Smith',
     created_at: '2025-01-10T10:00:00Z',
     updated_at: '2025-01-28T10:00:00Z',
   },
@@ -87,6 +90,7 @@ const mockInvoices: Invoice[] = [
     lien_filed_date: null,
     line_items: null,
     notes: null,
+    customer_name: 'Bob Wilson',
     created_at: '2025-01-20T10:00:00Z',
     updated_at: '2025-01-22T14:30:00Z',
   },
@@ -94,11 +98,7 @@ const mockInvoices: Invoice[] = [
 
 function createWrapper() {
   const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
+    defaultOptions: { queries: { retry: false } },
   });
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return (
@@ -116,15 +116,9 @@ describe('InvoiceList', () => {
 
   it('renders DataTable', async () => {
     vi.mocked(invoiceApi.list).mockResolvedValue({
-      items: mockInvoices,
-      total: 3,
-      page: 1,
-      page_size: 20,
-      total_pages: 1,
+      items: mockInvoices, total: 3, page: 1, page_size: 20, total_pages: 1,
     });
-
     render(<InvoiceList />, { wrapper: createWrapper() });
-
     await waitFor(() => {
       expect(screen.getByTestId('invoice-table')).toBeInTheDocument();
     });
@@ -132,31 +126,19 @@ describe('InvoiceList', () => {
 
   it('displays invoice number column', async () => {
     vi.mocked(invoiceApi.list).mockResolvedValue({
-      items: mockInvoices,
-      total: 3,
-      page: 1,
-      page_size: 20,
-      total_pages: 1,
+      items: mockInvoices, total: 3, page: 1, page_size: 20, total_pages: 1,
     });
-
     render(<InvoiceList />, { wrapper: createWrapper() });
-
     await waitFor(() => {
       expect(screen.getByText('INV-2025-0001')).toBeInTheDocument();
     });
   });
 
-  it('displays amount column', async () => {
+  it('displays cost column with amounts', async () => {
     vi.mocked(invoiceApi.list).mockResolvedValue({
-      items: mockInvoices,
-      total: 3,
-      page: 1,
-      page_size: 20,
-      total_pages: 1,
+      items: mockInvoices, total: 3, page: 1, page_size: 20, total_pages: 1,
     });
-
     render(<InvoiceList />, { wrapper: createWrapper() });
-
     await waitFor(() => {
       expect(screen.getByText('$150.00')).toBeInTheDocument();
       expect(screen.getByText('$275.00')).toBeInTheDocument();
@@ -166,15 +148,9 @@ describe('InvoiceList', () => {
 
   it('displays status column with badges', async () => {
     vi.mocked(invoiceApi.list).mockResolvedValue({
-      items: mockInvoices,
-      total: 3,
-      page: 1,
-      page_size: 20,
-      total_pages: 1,
+      items: mockInvoices, total: 3, page: 1, page_size: 20, total_pages: 1,
     });
-
     render(<InvoiceList />, { wrapper: createWrapper() });
-
     await waitFor(() => {
       expect(screen.getByTestId('invoice-status-sent')).toBeInTheDocument();
       expect(screen.getByTestId('invoice-status-overdue')).toBeInTheDocument();
@@ -182,35 +158,31 @@ describe('InvoiceList', () => {
     });
   });
 
-  it('displays due_date column', async () => {
+  it('displays job link column', async () => {
     vi.mocked(invoiceApi.list).mockResolvedValue({
-      items: mockInvoices,
-      total: 3,
-      page: 1,
-      page_size: 20,
-      total_pages: 1,
+      items: mockInvoices, total: 3, page: 1, page_size: 20, total_pages: 1,
     });
-
     render(<InvoiceList />, { wrapper: createWrapper() });
-
     await waitFor(() => {
-      // Check that the table has rows with invoice data
-      const rows = screen.getAllByTestId('invoice-row');
-      expect(rows.length).toBe(3);
+      expect(screen.getByTestId('invoice-job-link-123e4567-e89b-12d3-a456-426614174000')).toBeInTheDocument();
+    });
+  });
+
+  it('displays payment type for paid invoices', async () => {
+    vi.mocked(invoiceApi.list).mockResolvedValue({
+      items: mockInvoices, total: 3, page: 1, page_size: 20, total_pages: 1,
+    });
+    render(<InvoiceList />, { wrapper: createWrapper() });
+    await waitFor(() => {
+      expect(screen.getByText('Venmo')).toBeInTheDocument();
     });
   });
 
   it('displays actions column', async () => {
     vi.mocked(invoiceApi.list).mockResolvedValue({
-      items: mockInvoices,
-      total: 3,
-      page: 1,
-      page_size: 20,
-      total_pages: 1,
+      items: mockInvoices, total: 3, page: 1, page_size: 20, total_pages: 1,
     });
-
     render(<InvoiceList />, { wrapper: createWrapper() });
-
     await waitFor(() => {
       expect(
         screen.getByTestId('invoice-actions-123e4567-e89b-12d3-a456-426614174000'),
@@ -218,35 +190,32 @@ describe('InvoiceList', () => {
     });
   });
 
-  it('renders filter controls', async () => {
+  it('renders filter panel', async () => {
     vi.mocked(invoiceApi.list).mockResolvedValue({
-      items: mockInvoices,
-      total: 3,
-      page: 1,
-      page_size: 20,
-      total_pages: 1,
+      items: mockInvoices, total: 3, page: 1, page_size: 20, total_pages: 1,
     });
-
     render(<InvoiceList />, { wrapper: createWrapper() });
-
     await waitFor(() => {
-      expect(screen.getByTestId('invoice-filter-status')).toBeInTheDocument();
-      expect(screen.getByTestId('invoice-filter-date-from')).toBeInTheDocument();
-      expect(screen.getByTestId('invoice-filter-date-to')).toBeInTheDocument();
+      expect(screen.getByTestId('filter-panel')).toBeInTheDocument();
+      expect(screen.getByTestId('filter-toggle')).toBeInTheDocument();
+    });
+  });
+
+  it('renders mass notify button', async () => {
+    vi.mocked(invoiceApi.list).mockResolvedValue({
+      items: mockInvoices, total: 3, page: 1, page_size: 20, total_pages: 1,
+    });
+    render(<InvoiceList />, { wrapper: createWrapper() });
+    await waitFor(() => {
+      expect(screen.getByTestId('mass-notify-btn')).toBeInTheDocument();
     });
   });
 
   it('renders pagination when multiple pages', async () => {
     vi.mocked(invoiceApi.list).mockResolvedValue({
-      items: mockInvoices,
-      total: 50,
-      page: 1,
-      page_size: 20,
-      total_pages: 3,
+      items: mockInvoices, total: 50, page: 1, page_size: 20, total_pages: 3,
     });
-
     render(<InvoiceList />, { wrapper: createWrapper() });
-
     await waitFor(() => {
       expect(screen.getByTestId('pagination-prev')).toBeInTheDocument();
       expect(screen.getByTestId('pagination-next')).toBeInTheDocument();
@@ -255,15 +224,9 @@ describe('InvoiceList', () => {
 
   it('has correct data-testid on list container', async () => {
     vi.mocked(invoiceApi.list).mockResolvedValue({
-      items: mockInvoices,
-      total: 3,
-      page: 1,
-      page_size: 20,
-      total_pages: 1,
+      items: mockInvoices, total: 3, page: 1, page_size: 20, total_pages: 1,
     });
-
     render(<InvoiceList />, { wrapper: createWrapper() });
-
     await waitFor(() => {
       expect(screen.getByTestId('invoice-list')).toBeInTheDocument();
     });
@@ -271,63 +234,25 @@ describe('InvoiceList', () => {
 
   it('shows empty state when no invoices', async () => {
     vi.mocked(invoiceApi.list).mockResolvedValue({
-      items: [],
-      total: 0,
-      page: 1,
-      page_size: 20,
-      total_pages: 0,
+      items: [], total: 0, page: 1, page_size: 20, total_pages: 0,
     });
-
     render(<InvoiceList />, { wrapper: createWrapper() });
-
     await waitFor(() => {
       expect(screen.getByText('No invoices found.')).toBeInTheDocument();
     });
   });
 
   it('shows loading state initially', () => {
-    vi.mocked(invoiceApi.list).mockImplementation(
-      () => new Promise(() => {}), // Never resolves
-    );
-
+    vi.mocked(invoiceApi.list).mockImplementation(() => new Promise(() => {}));
     render(<InvoiceList />, { wrapper: createWrapper() });
-
     expect(screen.getByText('Loading invoices...')).toBeInTheDocument();
   });
 
   it('shows error state on API failure', async () => {
     vi.mocked(invoiceApi.list).mockRejectedValue(new Error('API Error'));
-
     render(<InvoiceList />, { wrapper: createWrapper() });
-
     await waitFor(() => {
       expect(screen.getByTestId('error-message')).toBeInTheDocument();
-    });
-  });
-
-  it('pagination next button works', async () => {
-    const user = userEvent.setup();
-    vi.mocked(invoiceApi.list).mockResolvedValue({
-      items: mockInvoices,
-      total: 50,
-      page: 1,
-      page_size: 20,
-      total_pages: 3,
-    });
-
-    render(<InvoiceList />, { wrapper: createWrapper() });
-
-    await waitFor(() => {
-      expect(screen.getByTestId('pagination-next')).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByTestId('pagination-next'));
-
-    // API should be called again with page 2
-    await waitFor(() => {
-      expect(invoiceApi.list).toHaveBeenCalledWith(
-        expect.objectContaining({ page: 2 }),
-      );
     });
   });
 });

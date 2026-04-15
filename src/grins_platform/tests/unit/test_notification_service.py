@@ -621,7 +621,6 @@ class TestProperty42ConsentGatedNotifications:
         assert result.sms_sent is False
         assert result.email_sent is True
 
-
     # ------------------------------------------------------------------ #
     # P42 — Lead confirmation SMS: consent + time-window gated
     # ------------------------------------------------------------------ #
@@ -910,8 +909,7 @@ class TestProperty55InvoiceReminderScheduling:
         customer = _make_customer_mock()
         invoice = _make_invoice_mock(
             due_date=date.today() - timedelta(days=10),
-            last_past_due_reminder_at=datetime.now(tz=CT_TZ)
-            - timedelta(days=3),
+            last_past_due_reminder_at=datetime.now(tz=CT_TZ) - timedelta(days=3),
             customer=customer,
         )
 

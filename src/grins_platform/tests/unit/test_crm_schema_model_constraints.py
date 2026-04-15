@@ -233,9 +233,7 @@ class TestSentMessageConstraints:
         """
 
         constraints = SentMessage.__table__.constraints
-        check_names = [
-            c.name for c in constraints if hasattr(c, "sqltext") and c.name
-        ]
+        check_names = [c.name for c in constraints if hasattr(c, "sqltext") and c.name]
         assert "ck_sent_messages_recipient" in check_names
 
     def test_sent_message_model_with_recipient_check_text_returns_correct(
@@ -291,13 +289,15 @@ class TestSentMessageConstraints:
 
     @given(
         lead_id=st.uuids(),
-        message_type=st.sampled_from([
-            "lead_confirmation",
-            "estimate_sent",
-            "contract_sent",
-            "review_request",
-            "campaign",
-        ]),
+        message_type=st.sampled_from(
+            [
+                "lead_confirmation",
+                "estimate_sent",
+                "contract_sent",
+                "review_request",
+                "campaign",
+            ]
+        ),
     )
     @settings(max_examples=100)
     def test_sent_message_with_lead_only_recipient_returns_valid_model_attrs(
@@ -558,14 +558,20 @@ class TestCampaignSchemaValidation:
                 body="Hello",
             )
 
-    def test_campaign_create_with_empty_body_returns_error(self) -> None:
-        """Empty body is rejected (min_length=1)."""
-        with pytest.raises(ValidationError):
-            CampaignCreate(
-                name="Spring Campaign",
-                campaign_type=CampaignType.EMAIL,
-                body="",
-            )
+    def test_campaign_create_allows_empty_body_at_draft_time(self) -> None:
+        """Empty body is intentionally allowed at draft-create time.
+
+        The 3-step wizard persists the draft after Step 1 (audience) before
+        the user composes the message in Step 2, so an empty body must pass
+        schema validation on create. ``enqueue_campaign_send`` enforces a
+        non-empty body before an actual send via ``EmptyCampaignBodyError``.
+        """
+        payload = CampaignCreate(
+            name="Spring Campaign",
+            campaign_type=CampaignType.EMAIL,
+            body="",
+        )
+        assert payload.body == ""
 
     def test_campaign_create_with_oversized_body_returns_error(self) -> None:
         """Body exceeding max_length=10000 is rejected."""

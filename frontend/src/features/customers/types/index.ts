@@ -11,6 +11,7 @@ export interface Property extends BaseEntity {
   system_type: string;
   property_type: string;
   is_primary: boolean;
+  is_hoa: boolean;
   access_instructions: string | null;
   gate_code: string | null;
   has_dogs: boolean;
@@ -62,12 +63,12 @@ export interface CustomerInvoice extends BaseEntity {
   days_past_due: number | null;
 }
 
-// Invoice status color mapping
+// Invoice status color mapping — green (Complete), yellow (Pending), red (Past Due) per Req 29.2
 export const invoiceStatusColors: Record<InvoiceStatus, string> = {
-  draft: 'bg-slate-100 text-slate-700',
-  sent: 'bg-blue-100 text-blue-700',
-  viewed: 'bg-violet-100 text-violet-700',
-  paid: 'bg-emerald-100 text-emerald-700',
+  draft: 'bg-yellow-100 text-yellow-700',
+  sent: 'bg-yellow-100 text-yellow-700',
+  viewed: 'bg-yellow-100 text-yellow-700',
+  paid: 'bg-green-100 text-green-700',
   overdue: 'bg-red-100 text-red-700',
   cancelled: 'bg-gray-100 text-gray-600',
   void: 'bg-gray-100 text-gray-600',
@@ -97,10 +98,47 @@ export interface DuplicateGroup {
   match_reasons: string[];
 }
 
-// Merge request (Req 7)
+// Merge candidate from review queue (CRM Changes Update 2 Req 5, 6)
+export interface MergeCandidate {
+  id: string;
+  customer_a_id: string;
+  customer_b_id: string;
+  score: number;
+  match_signals: Record<string, unknown>;
+  status: string;
+  created_at: string;
+  resolved_at: string | null;
+  resolution: string | null;
+}
+
+export interface PaginatedMergeCandidates {
+  items: MergeCandidate[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export interface MergeFieldSelection {
+  field_name: string;
+  source: 'a' | 'b';
+}
+
+// Merge request (CRM Changes Update 2 Req 6)
 export interface MergeRequest {
-  primary_customer_id: string;
-  duplicate_customer_ids: string[];
+  duplicate_id: string;
+  field_selections: MergeFieldSelection[];
+}
+
+export interface MergePreview {
+  primary_id: string;
+  duplicate_id: string;
+  merged_fields: Record<string, unknown>;
+  jobs_to_reassign: number;
+  invoices_to_reassign: number;
+  properties_to_reassign: number;
+  communications_to_reassign: number;
+  agreements_to_reassign: number;
+  blockers: string[];
 }
 
 // Sent message entity (Req 82)
@@ -114,6 +152,18 @@ export interface SentMessage {
   sent_at: string;
   created_at: string;
 }
+
+// Service preference entity (CRM2 Req 7)
+export interface ServicePreference {
+  id: string;
+  service_type: string;
+  preferred_week: string | null;
+  preferred_date: string | null;
+  time_window: string;
+  notes: string | null;
+}
+
+export type ServicePreferenceCreate = Omit<ServicePreference, 'id'>;
 
 // Re-export PaginatedResponse for convenience
 export type { PaginatedResponse };
@@ -154,6 +204,10 @@ export interface CustomerListParams extends PaginationParams {
   is_priority?: boolean;
   is_red_flag?: boolean;
   is_slow_payer?: boolean;
+  sms_opt_in?: boolean;
+  property_type?: 'residential' | 'commercial';
+  is_hoa?: boolean;
+  is_subscription_property?: boolean;
 }
 
 // Customer flags for display

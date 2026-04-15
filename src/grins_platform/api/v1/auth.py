@@ -43,8 +43,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 REFRESH_TOKEN_COOKIE = "refresh_token"
 CSRF_TOKEN_COOKIE = "csrf_token"
 ACCESS_TOKEN_COOKIE = "access_token"
-COOKIE_MAX_AGE = 7 * 24 * 60 * 60  # 7 days in seconds
-ACCESS_COOKIE_MAX_AGE = 15 * 60  # 15 minutes in seconds
+COOKIE_MAX_AGE = 30 * 24 * 60 * 60  # 30 days in seconds
+ACCESS_COOKIE_MAX_AGE = 60 * 60  # 60 minutes in seconds
 # Only set Secure flag in local development (HTTP); deployed envs use HTTPS
 _ENV = os.getenv("ENVIRONMENT", "development")
 _IS_LOCAL = _ENV == "development" and not os.getenv("RAILWAY_ENVIRONMENT")
@@ -148,7 +148,7 @@ async def login(
     return LoginResponse(
         access_token=access_token,
         token_type="bearer",
-        expires_in=15 * 60,  # 15 minutes in seconds
+        expires_in=60 * 60,  # 60 minutes in seconds
         user=user_response,
         csrf_token=csrf_token,
     )

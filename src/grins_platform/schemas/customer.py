@@ -15,7 +15,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from grins_platform.models.enums import CustomerStatus, LeadSource
+from grins_platform.models.enums import CustomerStatus, LeadSource, PropertyType
 
 if TYPE_CHECKING:
     from grins_platform.schemas.property import PropertyResponse
@@ -167,6 +167,7 @@ class CustomerUpdate(BaseModel):
         default=None,
         description="Preferred service time window",
     )
+
     @field_validator("phone")  # type: ignore[misc,untyped-decorator]
     @classmethod
     def validate_phone(cls, v: str | None) -> str | None:
@@ -265,6 +266,17 @@ class CustomerResponse(BaseModel):
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Record last update timestamp")
 
+    @field_validator("preferred_service_times", mode="before")  # type: ignore[misc,untyped-decorator]
+    @classmethod
+    def coerce_service_times(
+        cls,
+        v: dict[str, Any] | list[Any] | None,
+    ) -> dict[str, Any] | None:
+        """Coerce non-dict values (e.g. empty list from DB) to None."""
+        if isinstance(v, dict):
+            return v
+        return None
+
     @field_validator("status", mode="before")  # type: ignore[misc,untyped-decorator]
     @classmethod
     def convert_status(cls, v: str | CustomerStatus) -> CustomerStatus:
@@ -341,9 +353,25 @@ class CustomerListParams(BaseModel):
         default=None,
         description="Filter by slow payer flag",
     )
+    sms_opt_in: bool | None = Field(
+        default=None,
+        description="Filter by SMS opt-in status",
+    )
     search: str | None = Field(
         default=None,
         description="Search by name or email (case-insensitive)",
+    )
+    property_type: PropertyType | None = Field(
+        default=None,
+        description="Filter by property type (residential/commercial)",
+    )
+    is_hoa: bool | None = Field(
+        default=None,
+        description="Filter by HOA property flag",
+    )
+    is_subscription_property: bool | None = Field(
+        default=None,
+        description="Filter by subscription property (has active service agreement)",
     )
     sort_by: str = Field(
         default="last_name",
@@ -549,6 +577,91 @@ class CustomerPhotoResponse(BaseModel):
         description="Pre-signed download URL",
     )
     created_at: datetime = Field(description="Upload timestamp")
+
+
+# =============================================================================
+# Service Preferences (CRM2 Req 7.1-7.6)
+# =============================================================================
+
+SERVICE_TYPE_CHOICES = [
+    "spring_startup",
+    "mid_season_inspection",
+    "fall_winterization",
+    "monthly_visit",
+    "custom",
+]
+
+TIME_WINDOW_CHOICES = ["morning", "afternoon", "evening", "any"]
+
+
+class ServicePreferenceCreate(BaseModel):
+    """Schema for creating a service preference entry.
+
+    Validates: CRM2 Req 7.1, 7.6
+    """
+
+    service_type: str = Field(
+        ...,
+        description="Service type",
+    )
+    preferred_week: str | None = Field(
+        default=None,
+        description="Preferred week as ISO date string of the Monday",
+    )
+    preferred_date: str | None = Field(
+        default=None,
+        description="Preferred specific date (overrides week)",
+    )
+    time_window: str = Field(
+        default="any",
+        description="Preferred time window (morning, afternoon, evening, any)",
+    )
+    notes: str | None = Field(default=None, description="Free text notes")
+
+    @field_validator("service_type")  # type: ignore[misc,untyped-decorator]
+    @classmethod
+    def validate_service_type(cls, v: str) -> str:
+        """Validate service type is a known value."""
+        if v not in SERVICE_TYPE_CHOICES:
+            msg = f"Invalid service_type. Must be one of: {SERVICE_TYPE_CHOICES}"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("time_window")  # type: ignore[misc,untyped-decorator]
+    @classmethod
+    def validate_time_window(cls, v: str) -> str:
+        """Validate time window is a known value."""
+        if v not in TIME_WINDOW_CHOICES:
+            msg = f"Invalid time_window. Must be one of: {TIME_WINDOW_CHOICES}"
+            raise ValueError(msg)
+        return v
+
+
+class ServicePreferenceUpdate(ServicePreferenceCreate):
+    """Schema for updating a service preference entry.
+
+    Validates: CRM2 Req 7.5
+    """
+
+
+class ServicePreferenceResponse(BaseModel):
+    """Schema for a service preference entry response.
+
+    Validates: CRM2 Req 7.1
+    """
+
+    id: str = Field(..., description="Preference UUID")
+    service_type: str = Field(..., description="Service type")
+    preferred_week: str | None = Field(
+        default=None,
+        description="Preferred week Monday date",
+    )
+    preferred_date: str | None = Field(
+        default=None,
+        description="Preferred specific date",
+    )
+    time_window: str = Field(default="any", description="Time window")
+    notes: str | None = Field(default=None, description="Notes")
 
 
 def _rebuild_models() -> None:

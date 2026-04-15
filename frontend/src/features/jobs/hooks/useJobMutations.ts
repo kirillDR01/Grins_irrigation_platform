@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { jobApi } from '../api/jobApi';
-import type { JobCreate, JobUpdate, JobStatusUpdate } from '../types';
+import type { JobCreate, JobUpdate, JobStatusUpdate, JobNoteCreate } from '../types';
 import { jobKeys } from './useJobs';
 
 // Create job mutation
@@ -129,6 +129,80 @@ export function useCloseJob() {
     onSuccess: (updatedJob) => {
       queryClient.setQueryData(jobKeys.detail(updatedJob.id), updatedJob);
       queryClient.invalidateQueries({ queryKey: jobKeys.lists() });
+    },
+  });
+}
+
+// On My Way mutation (Req 27.1)
+export function useOnMyWay() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => jobApi.onMyWay(id),
+    onSuccess: (updatedJob) => {
+      queryClient.setQueryData(jobKeys.detail(updatedJob.id), updatedJob);
+      queryClient.invalidateQueries({ queryKey: jobKeys.lists() });
+    },
+  });
+}
+
+// Job Started mutation (Req 27.2)
+export function useJobStarted() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => jobApi.jobStarted(id),
+    onSuccess: (updatedJob) => {
+      queryClient.setQueryData(jobKeys.detail(updatedJob.id), updatedJob);
+      queryClient.invalidateQueries({ queryKey: jobKeys.lists() });
+    },
+  });
+}
+
+// Complete job with payment warning (Req 27.3-27.5)
+export function useCompleteJobWithWarning() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, force }: { id: string; force?: boolean }) =>
+      jobApi.completeJob(id, force),
+    onSuccess: (result) => {
+      if (result.job) {
+        queryClient.setQueryData(jobKeys.detail(result.job.id), result.job);
+      }
+      queryClient.invalidateQueries({ queryKey: jobKeys.lists() });
+    },
+  });
+}
+
+// Add note to job (Req 26.3)
+export function useAddJobNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: JobNoteCreate }) =>
+      jobApi.addNote(id, data),
+    onSuccess: (_result, { id }) => {
+      queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) });
+    },
+  });
+}
+
+// Upload photo to job (Req 26.3)
+export function useUploadJobPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, file, caption }: { id: string; file: File; caption?: string }) =>
+      jobApi.uploadPhoto(id, file, caption),
+    onSuccess: (_result, { id }) => {
+      queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) });
+    },
+  });
+}
+
+// Google review push (Req 26.4)
+export function useReviewPush() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => jobApi.reviewPush(id),
+    onSuccess: (_result, id) => {
+      queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) });
     },
   });
 }

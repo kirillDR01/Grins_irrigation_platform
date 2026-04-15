@@ -3,14 +3,18 @@
 Validates: AI Assistant Requirements 15.8-15.10
 """
 
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from grins_platform.database import get_db_session as get_db
 from grins_platform.log_config import LoggerMixin
+from grins_platform.models.customer import Customer
+from grins_platform.models.enums import CampaignStatus
+from grins_platform.repositories.campaign_repository import CampaignRepository
 from grins_platform.repositories.communication_repository import (
     CommunicationRepository,
 )
@@ -18,15 +22,16 @@ from grins_platform.repositories.sent_message_repository import SentMessageRepos
 from grins_platform.schemas.ai import DeliveryStatus
 from grins_platform.schemas.communication import UnaddressedCountResponse
 from grins_platform.schemas.sms import (
+    BulkSendAcceptedResponse,
     BulkSendRequest,
-    BulkSendResponse,
     CommunicationsQueueResponse,
     SMSSendRequest,
     SMSSendResponse,
     WebhookResponse,
 )
 from grins_platform.services.ai.security import validate_twilio_signature
-from grins_platform.services.sms_service import SMSOptInError, SMSService
+from grins_platform.services.sms.recipient import Recipient
+from grins_platform.services.sms_service import SMSConsentDeniedError, SMSService
 
 router = APIRouter(prefix="/sms", tags=["SMS"])
 
@@ -44,28 +49,49 @@ async def send_sms(
 
     Returns:
         Send result
+
+    Validates: Requirements 4.7, 26
     """
+    # Fetch customer to build Recipient
+    stmt = select(Customer).where(Customer.id == request.customer_id)
+    result = await db.execute(stmt)
+    customer = result.scalar_one_or_none()
+    if customer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer {request.customer_id} not found",
+        )
+
+    recipient = Recipient.from_customer(customer)
     sms_service = SMSService(db)
 
     try:
-        result = await sms_service.send_message(
-            customer_id=request.customer_id,
-            phone=request.phone,
+        send_result = await sms_service.send_message(
+            recipient=recipient,
             message=request.message,
             message_type=request.message_type,
-            sms_opt_in=request.sms_opt_in,
+            consent_type="transactional",
             job_id=request.job_id,
             appointment_id=request.appointment_id,
         )
 
+        # Bug #5 fix: handle dedupe-blocked results gracefully
+        if not send_result.get("success", True):
+            return SMSSendResponse(
+                success=False,
+                message_id=None,
+                status=send_result.get("reason", "blocked"),
+                reason=send_result.get("reason"),
+            )
+
         return SMSSendResponse(
-            success=result["success"],
-            message_id=UUID(result["message_id"]),
-            twilio_sid=result.get("twilio_sid"),
-            status=result["status"],
+            success=send_result["success"],
+            message_id=UUID(send_result["message_id"]),
+            provider_message_id=send_result.get("provider_message_id"),
+            status=send_result["status"],
         )
 
-    except SMSOptInError as e:
+    except SMSConsentDeniedError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(e),
@@ -104,10 +130,10 @@ async def handle_webhook(
 
     from_phone = str(form_data.get("From", ""))
     body = str(form_data.get("Body", ""))
-    twilio_sid = str(form_data.get("MessageSid", ""))
+    provider_sid = str(form_data.get("MessageSid", ""))
 
     sms_service = SMSService(db)
-    result = await sms_service.handle_webhook(from_phone, body, twilio_sid)
+    result = await sms_service.handle_webhook(from_phone, body, provider_sid)
 
     return WebhookResponse(
         action=result["action"],
@@ -196,57 +222,65 @@ async def get_communications_queue(
     )
 
 
-@communications_router.post("/send-bulk", response_model=BulkSendResponse)
+@communications_router.post(
+    "/send-bulk",
+    response_model=BulkSendAcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def send_bulk(
     request: BulkSendRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> BulkSendResponse:
-    """Send bulk SMS messages.
+) -> BulkSendAcceptedResponse:
+    """Enqueue bulk SMS for background delivery.
+
+    Persists recipients as CampaignRecipient rows with delivery_status='pending'.
+    A background worker drains the queue asynchronously.
+
+    Validates: Requirements 8.1, 8.2, 8.3, 8.4
 
     Args:
-        request: Bulk send request
-        db: Database session
+        request: Bulk send request with recipients and message.
+        db: Database session.
 
     Returns:
-        Bulk send results
+        HTTP 202 with campaign ID and recipient count.
     """
-    sms_service = SMSService(db)
-    results = []
-    success_count = 0
-    failure_count = 0
+    _comms_endpoints.log_started(
+        "send_bulk",
+        recipient_count=len(request.recipients),
+    )
 
-    for recipient in request.recipients:
-        try:
-            result = await sms_service.send_message(
-                customer_id=recipient.customer_id,
-                phone=recipient.phone,
-                message=request.message,
-                message_type=request.message_type,
-                sms_opt_in=recipient.sms_opt_in,
-            )
-            results.append(
-                {
-                    "customer_id": str(recipient.customer_id),
-                    "success": True,
-                    "message_id": result["message_id"],
-                },
-            )
-            success_count += 1
-        except Exception as e:  # noqa: PERF203
-            results.append(
-                {
-                    "customer_id": str(recipient.customer_id),
-                    "success": False,
-                    "error": str(e),
-                },
-            )
-            failure_count += 1
+    repo = CampaignRepository(db)
 
-    return BulkSendResponse(
-        total=len(request.recipients),
-        success_count=success_count,
-        failure_count=failure_count,
-        results=results,
+    campaign = await repo.create(
+        name=f"Bulk SMS ({len(request.recipients)} recipients)",
+        campaign_type="SMS",
+        status=CampaignStatus.SENDING.value,
+        body=request.message,
+    )
+
+    recipient_dicts: list[dict[str, Any]] = [
+        {
+            "campaign_id": campaign.id,
+            "customer_id": r.customer_id,
+            "lead_id": r.lead_id,
+            "channel": "sms",
+            "delivery_status": "pending",
+        }
+        for r in request.recipients
+    ]
+    _ = await repo.add_recipients_bulk(recipient_dicts)
+    await db.commit()
+
+    _comms_endpoints.log_completed(
+        "send_bulk",
+        campaign_id=str(campaign.id),
+        recipient_count=len(request.recipients),
+    )
+
+    return BulkSendAcceptedResponse(
+        campaign_id=campaign.id,
+        total_recipients=len(request.recipients),
     )
 
 

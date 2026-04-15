@@ -61,7 +61,7 @@ describe('AppointmentForm', () => {
     render(<AppointmentForm />, { wrapper: createWrapper() });
 
     expect(screen.getByTestId('appointment-form')).toBeInTheDocument();
-    expect(screen.getByTestId('job-select')).toBeInTheDocument();
+    expect(screen.getByTestId('job-combobox-trigger')).toBeInTheDocument();
     expect(screen.getByTestId('staff-select')).toBeInTheDocument();
     expect(screen.getByTestId('date-input')).toBeInTheDocument();
     expect(screen.getByTestId('start-time-input')).toBeInTheDocument();
@@ -174,8 +174,8 @@ describe('AppointmentForm', () => {
       wrapper: createWrapper(),
     });
 
-    // The job select trigger should be disabled
-    const jobSelect = screen.getByTestId('job-select');
-    expect(jobSelect).toHaveAttribute('data-disabled');
+    // The job combobox trigger should be disabled
+    const jobSelect = screen.getByTestId('job-combobox-trigger');
+    expect(jobSelect).toBeDisabled();
   });
 });

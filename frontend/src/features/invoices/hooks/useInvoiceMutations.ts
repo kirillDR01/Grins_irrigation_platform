@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { invoiceApi } from '../api/invoiceApi';
 import { invoiceKeys } from './useInvoices';
-import type { InvoiceCreate, InvoiceUpdate, PaymentRecord, BulkNotifyRequest } from '../types';
+import type { InvoiceCreate, InvoiceUpdate, PaymentRecord, BulkNotifyRequest, MassNotifyRequest } from '../types';
 
 // Create invoice
 export function useCreateInvoice() {
@@ -119,6 +119,17 @@ export function useBulkNotify() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: BulkNotifyRequest) => invoiceApi.bulkNotify(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: invoiceKeys.lists() });
+    },
+  });
+}
+
+// Mass notify customers (Req 29.3, 29.4)
+export function useMassNotify() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: MassNotifyRequest) => invoiceApi.massNotify(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: invoiceKeys.lists() });
     },

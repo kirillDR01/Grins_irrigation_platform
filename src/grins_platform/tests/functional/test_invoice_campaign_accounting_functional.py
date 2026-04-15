@@ -45,6 +45,7 @@ from grins_platform.services.invoice_service import (
     InvoiceService,
 )
 from grins_platform.services.notification_service import NotificationService
+from grins_platform.services.sms.recipient import Recipient
 
 # =============================================================================
 # Helpers
@@ -90,6 +91,24 @@ def _mock_customer(**overrides: Any) -> MagicMock:
     c.state = overrides.get("state", "MN")
     c.zip_code = overrides.get("zip_code", "55401")
     return c
+
+
+def _recipient_from_mock(c: MagicMock) -> Recipient:
+    """Convert a customer mock to a Recipient."""
+    return Recipient(
+        phone=c.phone,
+        source_type="customer",
+        customer_id=c.id,
+        first_name=c.first_name,
+        last_name=c.last_name,
+    )
+
+
+def _scalar_result(value: Any) -> MagicMock:
+    """Create a mock DB execute result returning *value*."""
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = value
+    return result
 
 
 def _mock_appointment(**overrides: Any) -> MagicMock:
@@ -338,9 +357,10 @@ class TestCampaignLifecycleWorkflow:
 
         def _mock_resolve(
             _campaign: Any,
-            customer: Any,
+            _recipient: Any,
+            customer: Any = None,
         ) -> list[str]:
-            if not customer.sms_opt_in:
+            if customer is not None and not customer.sms_opt_in:
                 return []
             return ["sms"]
 
@@ -350,7 +370,11 @@ class TestCampaignLifecycleWorkflow:
             patch.object(
                 service,
                 "_filter_recipients",
-                return_value=[customer1, customer2, customer3],
+                return_value=[
+                    _recipient_from_mock(customer1),
+                    _recipient_from_mock(customer2),
+                    _recipient_from_mock(customer3),
+                ],
             ),
             patch.object(
                 service,
@@ -368,8 +392,16 @@ class TestCampaignLifecycleWorkflow:
                 return_value=biz_addr,
             ),
         ):
+            db_mock = AsyncMock()
+            db_mock.execute = AsyncMock(
+                side_effect=[
+                    _scalar_result(customer1),
+                    _scalar_result(customer2),
+                    _scalar_result(customer3),
+                ],
+            )
             result = await service.send_campaign(
-                db=AsyncMock(),
+                db=db_mock,
                 campaign_id=campaign_id,
             )
 

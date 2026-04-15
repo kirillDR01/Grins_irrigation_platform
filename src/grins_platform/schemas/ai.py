@@ -54,6 +54,8 @@ class MessageType(str, Enum):
     """Types of SMS messages."""
 
     APPOINTMENT_CONFIRMATION = "appointment_confirmation"
+    APPOINTMENT_RESCHEDULE = "appointment_reschedule"
+    APPOINTMENT_CANCELLATION = "appointment_cancellation"
     APPOINTMENT_REMINDER = "appointment_reminder"
     ON_THE_WAY = "on_the_way"
     ARRIVAL = "arrival"
@@ -66,6 +68,9 @@ class MessageType(str, Enum):
     REVIEW_REQUEST = "review_request"
     CAMPAIGN = "campaign"
     CUSTOM = "custom"
+    GOOGLE_REVIEW_REQUEST = "google_review_request"
+    ON_MY_WAY = "on_my_way"
+    AUTOMATED_NOTIFICATION = "automated_notification"
 
 
 class DeliveryStatus(str, Enum):

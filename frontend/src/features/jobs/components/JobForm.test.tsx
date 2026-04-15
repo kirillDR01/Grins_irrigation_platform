@@ -50,6 +50,16 @@ const mockJob: Job = {
   updated_at: '2025-01-20T10:00:00Z',
   customer_name: null,
   customer_tags: null,
+  property_address: null,
+  property_city: null,
+  property_type: null,
+  property_is_hoa: null,
+  property_is_subscription: null,
+  on_my_way_at: null,
+  time_tracking_metadata: null,
+  service_preference_notes: null,
+  service_agreement_name: null,
+  service_agreement_active: null,
 };
 
 // Helper to select value in Radix UI Select via hidden native select
@@ -310,5 +320,59 @@ describe('JobForm', () => {
     // Verify source select is present
     expect(screen.getByTestId('source-select')).toBeInTheDocument();
     expect(screen.getByText('Select source')).toBeInTheDocument();
+  });
+
+  it('shows current job type value when editing an existing job', () => {
+    render(<JobForm job={mockJob} />, { wrapper: createWrapper() });
+
+    // The job type select trigger should display the current job type label
+    const jobTypeSelect = screen.getByTestId('job-type-select');
+    expect(jobTypeSelect).toBeInTheDocument();
+    expect(jobTypeSelect).toHaveTextContent('Spring Startup');
+  });
+
+  it('shows correct job type for different job types when editing', () => {
+    const repairJob: Job = { ...mockJob, job_type: 'repair' };
+    render(<JobForm job={repairJob} />, { wrapper: createWrapper() });
+
+    const jobTypeSelect = screen.getByTestId('job-type-select');
+    expect(jobTypeSelect).toHaveTextContent('Repair');
+  });
+
+  it('allows changing job type when editing an existing job', async () => {
+    const onSuccess = vi.fn();
+    vi.mocked(jobApi.update).mockResolvedValue({
+      ...mockJob,
+      job_type: 'winterization',
+    });
+
+    const { container } = render(
+      <JobForm job={mockJob} onSuccess={onSuccess} />,
+      { wrapper: createWrapper() }
+    );
+
+    // Verify current value is shown
+    const jobTypeSelect = screen.getByTestId('job-type-select');
+    expect(jobTypeSelect).toHaveTextContent('Spring Startup');
+
+    // Change job type via hidden native select
+    selectOption(container, 'job-type-select', 'winterization');
+
+    // Submit form
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('submit-btn'));
+
+    await waitFor(() => {
+      expect(jobApi.update).toHaveBeenCalledWith(
+        mockJob.id,
+        expect.objectContaining({
+          job_type: 'winterization',
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(onSuccess).toHaveBeenCalled();
+    });
   });
 });

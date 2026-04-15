@@ -608,7 +608,12 @@ class TestScheduleClearServiceJobStatusReset:
         appt_to_be_scheduled = self._create_mock_appointment()
         appt_cancelled = self._create_mock_appointment()
 
-        appointments = [appt_in_progress, appt_completed, appt_to_be_scheduled, appt_cancelled]
+        appointments = [
+            appt_in_progress,
+            appt_completed,
+            appt_to_be_scheduled,
+            appt_cancelled,
+        ]
         mock_appointment_repo.get_daily_schedule.return_value = appointments
 
         # Set up job statuses

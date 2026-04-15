@@ -50,6 +50,16 @@ const mockJobs: Job[] = [
     updated_at: '2025-01-20T10:00:00Z',
     customer_name: 'John Doe',
     customer_tags: ['priority', 'new_customer'],
+    property_address: null,
+    property_city: null,
+    property_type: null,
+    property_is_hoa: null,
+    property_is_subscription: null,
+    on_my_way_at: null,
+    time_tracking_metadata: null,
+    service_preference_notes: null,
+    service_agreement_name: null,
+    service_agreement_active: null,
   },
   {
     id: '123e4567-e89b-12d3-a456-426614174002',
@@ -86,6 +96,16 @@ const mockJobs: Job[] = [
     updated_at: '2025-01-20T09:30:00Z',
     customer_name: 'Jane Smith',
     customer_tags: ['red_flag', 'slow_payer'],
+    property_address: null,
+    property_city: null,
+    property_type: null,
+    property_is_hoa: null,
+    property_is_subscription: null,
+    on_my_way_at: null,
+    time_tracking_metadata: null,
+    service_preference_notes: null,
+    service_agreement_name: null,
+    service_agreement_active: null,
   },
 ];
 
@@ -124,6 +144,16 @@ const mockSubscriptionJob: Job = {
   updated_at: '2025-01-20T10:00:00Z',
   customer_name: 'John Doe',
   customer_tags: ['priority'],
+  property_address: null,
+  property_city: null,
+  property_type: null,
+  property_is_hoa: null,
+  property_is_subscription: true,
+  on_my_way_at: null,
+  time_tracking_metadata: null,
+  service_preference_notes: null,
+  service_agreement_name: 'Professional',
+  service_agreement_active: true,
 };
 
 function createWrapper() {
@@ -296,9 +326,9 @@ describe('JobList', () => {
     expect(Number(daysEl.textContent)).toBeGreaterThanOrEqual(0);
   });
 
-  it('displays Due By column with "No deadline" for null dates (Req 23)', async () => {
+  it('displays Week Of column with "No week set" for null dates (CRM2 Req 20)', async () => {
     vi.mocked(jobApi.list).mockResolvedValue({
-      items: [mockJobs[0]], // No target_end_date
+      items: [mockJobs[0]], // No target_start_date
       total: 1,
       page: 1,
       page_size: 20,
@@ -308,10 +338,10 @@ describe('JobList', () => {
     render(<JobList />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByTestId(`due-by-${mockJobs[0].id}`)).toBeInTheDocument();
+      expect(screen.getByTestId(`week-of-${mockJobs[0].id}`)).toBeInTheDocument();
     });
 
-    expect(screen.getByText('No deadline')).toBeInTheDocument();
+    expect(screen.getByText('No week set')).toBeInTheDocument();
   });
 
   it('displays summary column (Req 20)', async () => {
@@ -462,7 +492,7 @@ describe('JobList', () => {
   });
 
   describe('Subscription extensions', () => {
-    it('displays subscription source badge for jobs with service_agreement_id', async () => {
+    it('displays prepaid badge for jobs with service_agreement_id', async () => {
       vi.mocked(jobApi.list).mockResolvedValue({
         items: [mockSubscriptionJob],
         total: 1,
@@ -474,10 +504,10 @@ describe('JobList', () => {
       render(<JobList />, { wrapper: createWrapper() });
 
       await waitFor(() => {
-        expect(screen.getByTestId(`subscription-badge-${mockSubscriptionJob.id}`)).toBeInTheDocument();
+        expect(screen.getByTestId(`prepaid-badge-${mockSubscriptionJob.id}`)).toBeInTheDocument();
       });
 
-      expect(screen.getByText('Sub')).toBeInTheDocument();
+      expect(screen.getByText('Prepaid')).toBeInTheDocument();
     });
 
     it('does not display subscription badge for standalone jobs', async () => {
@@ -495,8 +525,8 @@ describe('JobList', () => {
         expect(screen.getByTestId('job-table')).toBeInTheDocument();
       });
 
-      expect(screen.queryByTestId(`subscription-badge-${mockJobs[0].id}`)).not.toBeInTheDocument();
-      expect(screen.queryByTestId(`subscription-badge-${mockJobs[1].id}`)).not.toBeInTheDocument();
+      expect(screen.queryByTestId(`prepaid-badge-${mockJobs[0].id}`)).not.toBeInTheDocument();
+      expect(screen.queryByTestId(`prepaid-badge-${mockJobs[1].id}`)).not.toBeInTheDocument();
     });
 
     it('renders source type filter dropdown', async () => {
@@ -527,10 +557,108 @@ describe('JobList', () => {
       render(<JobList />, { wrapper: createWrapper() });
 
       await waitFor(() => {
-        expect(screen.getByTestId('target-date-filter')).toBeInTheDocument();
+        expect(screen.getByTestId('target-week-filter')).toBeInTheDocument();
       });
 
-      expect(screen.getByText('Target dates')).toBeInTheDocument();
+      expect(screen.getByText('Filter by week')).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * Schedule quick-action button tests.
+   * Validates: Requirements 11.7
+   */
+  describe('Schedule quick-action button (Req 11.7)', () => {
+    it('shows Schedule button for TO_BE_SCHEDULED jobs', async () => {
+      vi.mocked(jobApi.list).mockResolvedValue({
+        items: [mockJobs[0]], // status: to_be_scheduled
+        total: 1,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<JobList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('job-table')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId(`schedule-job-btn-${mockJobs[0].id}`)).toBeInTheDocument();
+    });
+
+    it('shows Schedule button for SCHEDULED jobs', async () => {
+      const scheduledJob: Job = { ...mockJobs[0], status: 'scheduled' };
+      vi.mocked(jobApi.list).mockResolvedValue({
+        items: [scheduledJob],
+        total: 1,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<JobList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('job-table')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId(`schedule-job-btn-${scheduledJob.id}`)).toBeInTheDocument();
+    });
+
+    it('does NOT show Schedule button for IN_PROGRESS jobs', async () => {
+      vi.mocked(jobApi.list).mockResolvedValue({
+        items: [mockJobs[1]], // status: in_progress
+        total: 1,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<JobList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('job-table')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId(`schedule-job-btn-${mockJobs[1].id}`)).not.toBeInTheDocument();
+    });
+
+    it('does NOT show Schedule button for COMPLETED jobs', async () => {
+      const completedJob: Job = { ...mockJobs[0], status: 'completed' };
+      vi.mocked(jobApi.list).mockResolvedValue({
+        items: [completedJob],
+        total: 1,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<JobList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('job-table')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId(`schedule-job-btn-${completedJob.id}`)).not.toBeInTheDocument();
+    });
+
+    it('Schedule button displays correct text', async () => {
+      vi.mocked(jobApi.list).mockResolvedValue({
+        items: [mockJobs[0]], // status: to_be_scheduled
+        total: 1,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      });
+
+      render(<JobList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId(`schedule-job-btn-${mockJobs[0].id}`)).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId(`schedule-job-btn-${mockJobs[0].id}`)).toHaveTextContent('Schedule');
     });
   });
 
@@ -606,7 +734,7 @@ describe('JobList', () => {
         (row) => row.getAttribute('data-job-id') === highlightJobId
       );
       expect(highlightedRow).toBeDefined();
-      expect(highlightedRow!.className).toContain('animate-highlight-fade');
+      expect(highlightedRow!.className).toContain('animate-highlight-pulse');
     });
 
     it('does not apply highlight class to non-matching rows', async () => {
@@ -632,7 +760,7 @@ describe('JobList', () => {
         (row) => row.getAttribute('data-job-id') !== highlightJobId
       );
       expect(nonHighlightedRow).toBeDefined();
-      expect(nonHighlightedRow!.className).not.toContain('animate-highlight-fade');
+      expect(nonHighlightedRow!.className).not.toContain('animate-highlight-pulse');
     });
 
     it('works correctly without any URL parameters (default state)', async () => {
@@ -658,7 +786,7 @@ describe('JobList', () => {
 
       const rows = screen.getAllByTestId('job-row');
       rows.forEach((row) => {
-        expect(row.className).not.toContain('animate-highlight-fade');
+        expect(row.className).not.toContain('animate-highlight-pulse');
       });
     });
 
@@ -713,7 +841,7 @@ describe('JobList', () => {
         (row) => row.getAttribute('data-job-id') === highlightJobId
       );
       expect(highlightedRow).toBeDefined();
-      expect(highlightedRow!.className).toContain('animate-highlight-fade');
+      expect(highlightedRow!.className).toContain('animate-highlight-pulse');
     });
   });
 });

@@ -8,11 +8,12 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import InstrumentedAttribute, joinedload, selectinload
 
 from grins_platform.log_config import LoggerMixin
+from grins_platform.models.customer import Customer
 from grins_platform.models.enums import InvoiceStatus
 from grins_platform.models.invoice import Invoice
 from grins_platform.schemas.invoice import InvoiceListParams
@@ -151,17 +152,117 @@ class InvoiceRepository(LoggerMixin):
         self.log_completed("update", invoice_id=str(invoice.id))
         return invoice
 
+    def _date_column_for_type(
+        self,
+        date_type: str,
+    ) -> InstrumentedAttribute:  # type: ignore[type-arg]
+        """Return the Invoice column matching the date_type string."""
+        if date_type == "due":
+            return Invoice.due_date
+        if date_type == "paid":
+            return Invoice.paid_at
+        return Invoice.invoice_date  # default: created
+
+    def _build_filters(
+        self,
+        params: InvoiceListParams,
+    ) -> list[Any]:
+        """Build a list of SQLAlchemy filter clauses from params.
+
+        Validates: Requirement 28.1 — 9-axis composable AND filtering.
+        """
+        filters: list[Any] = []
+
+        # Axis 1: Status
+        if params.status:
+            filters.append(Invoice.status == params.status.value)
+
+        # Axis 2: Customer
+        if params.customer_id:
+            filters.append(Invoice.customer_id == params.customer_id)
+
+        # Axis 2b: Customer name search
+        if params.customer_search:
+            search_term = f"%{params.customer_search}%"
+            filters.append(
+                Invoice.customer_id.in_(
+                    select(Customer.id).where(
+                        or_(
+                            func.concat(
+                                Customer.first_name,
+                                " ",
+                                Customer.last_name,
+                            ).ilike(search_term),
+                            Customer.first_name.ilike(search_term),
+                            Customer.last_name.ilike(search_term),
+                        ),
+                    ),
+                ),
+            )
+
+        # Axis 3: Job
+        if params.job_id:
+            filters.append(Invoice.job_id == params.job_id)
+
+        # Axis 4: Date range (created/due/paid)
+        date_col = self._date_column_for_type(params.date_type)
+        if params.date_from:
+            filters.append(date_col >= params.date_from)
+        if params.date_to:
+            filters.append(date_col <= params.date_to)
+
+        # Axis 5: Amount range
+        if params.amount_min is not None:
+            filters.append(Invoice.total_amount >= params.amount_min)
+        if params.amount_max is not None:
+            filters.append(Invoice.total_amount <= params.amount_max)
+
+        # Axis 6: Payment type (multi-select)
+        if params.payment_types:
+            types = [t.strip() for t in params.payment_types.split(",") if t.strip()]
+            if types:
+                filters.append(Invoice.payment_method.in_(types))
+
+        # Axis 7: Days until due (positive = future due date)
+        today = date.today()
+        if params.days_until_due_min is not None:
+            min_date = today + timedelta(days=params.days_until_due_min)
+            filters.append(Invoice.due_date >= min_date)
+        if params.days_until_due_max is not None:
+            max_date = today + timedelta(days=params.days_until_due_max)
+            filters.append(Invoice.due_date <= max_date)
+
+        # Axis 8: Days past due (positive = overdue)
+        if params.days_past_due_min is not None:
+            cutoff = today - timedelta(days=params.days_past_due_min)
+            filters.append(Invoice.due_date <= cutoff)
+        if params.days_past_due_max is not None:
+            cutoff = today - timedelta(days=params.days_past_due_max)
+            filters.append(Invoice.due_date >= cutoff)
+
+        # Axis 9: Invoice number (exact match)
+        if params.invoice_number:
+            filters.append(Invoice.invoice_number == params.invoice_number)
+
+        # Legacy: lien eligibility
+        if params.lien_eligible is not None:
+            filters.append(Invoice.lien_eligible == params.lien_eligible)
+
+        return filters
+
     async def list_with_filters(
         self,
         params: InvoiceListParams,
     ) -> tuple[list[Invoice], int]:
-        """List invoices with pagination and filters.
+        """List invoices with pagination and 9-axis composable AND filters.
 
         Args:
             params: Query parameters for filtering and pagination
 
         Returns:
             Tuple of (list of invoices, total count)
+
+        Validates: Requirement 28.1
         """
         self.log_started(
             "list_with_filters",
@@ -173,26 +274,10 @@ class InvoiceRepository(LoggerMixin):
         stmt = select(Invoice).options(joinedload(Invoice.customer))
         count_stmt = select(func.count(Invoice.id))
 
-        # Apply filters
-        if params.status:
-            stmt = stmt.where(Invoice.status == params.status.value)
-            count_stmt = count_stmt.where(Invoice.status == params.status.value)
-
-        if params.customer_id:
-            stmt = stmt.where(Invoice.customer_id == params.customer_id)
-            count_stmt = count_stmt.where(Invoice.customer_id == params.customer_id)
-
-        if params.date_from:
-            stmt = stmt.where(Invoice.invoice_date >= params.date_from)
-            count_stmt = count_stmt.where(Invoice.invoice_date >= params.date_from)
-
-        if params.date_to:
-            stmt = stmt.where(Invoice.invoice_date <= params.date_to)
-            count_stmt = count_stmt.where(Invoice.invoice_date <= params.date_to)
-
-        if params.lien_eligible is not None:
-            stmt = stmt.where(Invoice.lien_eligible == params.lien_eligible)
-            count_stmt = count_stmt.where(Invoice.lien_eligible == params.lien_eligible)
+        # Apply all filter axes (AND composition)
+        for clause in self._build_filters(params):
+            stmt = stmt.where(clause)
+            count_stmt = count_stmt.where(clause)
 
         # Get total count
         count_result = await self.session.execute(count_stmt)
@@ -372,3 +457,119 @@ class InvoiceRepository(LoggerMixin):
             total_amount=str(total_amount),
         )
         return int(count), Decimal(str(total_amount))
+
+    async def find_past_due(self) -> list[Invoice]:
+        """Find all past-due invoices with customer eager-loaded.
+
+        Returns:
+            List of past-due invoices with customer relationship loaded.
+
+        Validates: Requirement 29.3
+        """
+        self.log_started("find_past_due")
+
+        today = date.today()
+        active_statuses = [
+            InvoiceStatus.SENT.value,
+            InvoiceStatus.VIEWED.value,
+            InvoiceStatus.PARTIAL.value,
+            InvoiceStatus.OVERDUE.value,
+        ]
+
+        stmt = (
+            select(Invoice)
+            .options(joinedload(Invoice.customer))
+            .where(Invoice.due_date < today)
+            .where(Invoice.status.in_(active_statuses))
+            .order_by(Invoice.due_date.asc())
+        )
+
+        result = await self.session.execute(stmt)
+        invoices = list(result.scalars().all())
+
+        self.log_completed("find_past_due", count=len(invoices))
+        return invoices
+
+    async def find_due_soon(self, days_window: int = 7) -> list[Invoice]:
+        """Find invoices due within the given days window.
+
+        Args:
+            days_window: Number of days ahead to look.
+
+        Returns:
+            List of due-soon invoices with customer relationship loaded.
+
+        Validates: Requirement 29.3
+        """
+        self.log_started("find_due_soon", days_window=days_window)
+
+        today = date.today()
+        cutoff = today + timedelta(days=days_window)
+        active_statuses = [
+            InvoiceStatus.SENT.value,
+            InvoiceStatus.VIEWED.value,
+            InvoiceStatus.PARTIAL.value,
+        ]
+
+        stmt = (
+            select(Invoice)
+            .options(joinedload(Invoice.customer))
+            .where(Invoice.due_date >= today)
+            .where(Invoice.due_date <= cutoff)
+            .where(Invoice.status.in_(active_statuses))
+            .order_by(Invoice.due_date.asc())
+        )
+
+        result = await self.session.execute(stmt)
+        invoices = list(result.scalars().all())
+
+        self.log_completed("find_due_soon", count=len(invoices))
+        return invoices
+
+    async def find_lien_eligible(
+        self,
+        days_past_due: int = 60,
+        min_amount: Decimal = Decimal(500),
+    ) -> list[Invoice]:
+        """Find invoices eligible for lien notice.
+
+        Criteria: past due by ``days_past_due``+ days AND total >= ``min_amount``.
+
+        Args:
+            days_past_due: Minimum days past due.
+            min_amount: Minimum total amount.
+
+        Returns:
+            List of lien-eligible invoices with customer relationship loaded.
+
+        Validates: Requirement 29.3
+        """
+        self.log_started(
+            "find_lien_eligible",
+            days_past_due=days_past_due,
+            min_amount=str(min_amount),
+        )
+
+        cutoff = date.today() - timedelta(days=days_past_due)
+        active_statuses = [
+            InvoiceStatus.SENT.value,
+            InvoiceStatus.VIEWED.value,
+            InvoiceStatus.PARTIAL.value,
+            InvoiceStatus.OVERDUE.value,
+            InvoiceStatus.LIEN_WARNING.value,
+        ]
+
+        stmt = (
+            select(Invoice)
+            .options(joinedload(Invoice.customer))
+            .where(Invoice.due_date <= cutoff)
+            .where(Invoice.total_amount >= min_amount)
+            .where(Invoice.status.in_(active_statuses))
+            .order_by(Invoice.due_date.asc())
+        )
+
+        result = await self.session.execute(stmt)
+        invoices = list(result.scalars().all())
+
+        self.log_completed("find_lien_eligible", count=len(invoices))
+        return invoices

@@ -18,6 +18,7 @@ class GoogleSheetSubmissionResponse(BaseModel):
 
     id: UUID
     sheet_row_number: int
+    content_hash: str | None = None
     timestamp: str | None
     spring_startup: str | None
     fall_blowout: str | None
@@ -36,6 +37,9 @@ class GoogleSheetSubmissionResponse(BaseModel):
     property_type: str | None
     referral_source: str | None
     landscape_hardscape: str | None
+    zip_code: str | None = None
+    work_requested: str | None = None
+    agreed_to_terms: str | None = None
     processing_status: str
     processing_error: str | None
     lead_id: UUID | None
@@ -72,6 +76,8 @@ class SyncStatusResponse(BaseModel):
     last_sync: datetime | None
     is_running: bool
     last_error: str | None
+    detected_headers: list[str] = Field(default_factory=list)
+    column_map: dict[str, int] = Field(default_factory=dict)
 
 
 class TriggerSyncResponse(BaseModel):

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -10,17 +11,22 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { PageHeader } from '@/shared/components';
-import { CustomerList, CustomerDetail, CustomerForm } from '@/features/customers';
-import { useCustomer } from '@/features/customers/hooks';
+import { CustomerList, CustomerDetail, CustomerForm, DuplicateReviewQueue } from '@/features/customers';
+import { useCustomer, useDuplicateReviewQueue } from '@/features/customers/hooks';
 
 export function CustomersPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [showDuplicateQueue, setShowDuplicateQueue] = useState(false);
   
   // Fetch customer data when on detail page for edit form
   const { data: customer } = useCustomer(id ?? '');
+
+  // Fetch duplicate count for badge
+  const { data: dupData } = useDuplicateReviewQueue(0, 1);
+  const dupCount = dupData?.total ?? 0;
 
   const handleCreateSuccess = () => {
     setIsCreateDialogOpen(false);
@@ -58,16 +64,43 @@ export function CustomersPage() {
   }
 
   // Otherwise show the list view with header
+  if (showDuplicateQueue) {
+    return (
+      <div data-testid="customers-page">
+        <PageHeader
+          title="Customers"
+          description="Manage your customer database"
+        />
+        <DuplicateReviewQueue onClose={() => setShowDuplicateQueue(false)} />
+      </div>
+    );
+  }
+
   return (
     <div data-testid="customers-page">
       <PageHeader
         title="Customers"
         description="Manage your customer database"
         action={
-          <Button onClick={() => setIsCreateDialogOpen(true)} data-testid="add-customer-btn">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Customer
-          </Button>
+          <div className="flex gap-2">
+            {dupCount > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => setShowDuplicateQueue(true)}
+                data-testid="review-duplicates-btn"
+              >
+                <Users className="mr-2 h-4 w-4" />
+                Review Duplicates
+                <Badge variant="secondary" className="ml-2" data-testid="dup-count-badge">
+                  {dupCount}
+                </Badge>
+              </Button>
+            )}
+            <Button onClick={() => setIsCreateDialogOpen(true)} data-testid="add-customer-btn">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Customer
+            </Button>
+          </div>
         }
       />
       <CustomerList

@@ -66,7 +66,7 @@ class AuditService(LoggerMixin):
         """
         self.log_started(
             "log_action",
-            action=action,
+            audit_action=action,
             resource_type=resource_type,
             resource_id=str(resource_id) if resource_id else None,
         )
@@ -75,7 +75,7 @@ class AuditService(LoggerMixin):
         entry = await repo.create(
             action=action,
             resource_type=resource_type,
-            resource_id=str(resource_id) if resource_id else None,
+            resource_id=resource_id,
             actor_id=actor_id,
             actor_role=actor_role,
             details=details,
@@ -86,7 +86,7 @@ class AuditService(LoggerMixin):
         self.log_completed(
             "log_action",
             audit_log_id=str(entry.id),
-            action=action,
+            audit_action=action,
         )
         return entry
 

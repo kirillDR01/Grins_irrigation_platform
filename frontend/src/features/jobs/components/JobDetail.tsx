@@ -6,27 +6,29 @@ import {
   Clock,
   DollarSign,
   User,
-  Wrench,
   Users,
   FileText,
-  CreditCard,
   ChevronRight,
   MessageSquare,
   Sparkles,
   Save,
   TrendingUp,
+  Pencil,
+  MapPin,
+  AlertTriangle,
+  ShieldCheck,
+  Phone,
 } from 'lucide-react';
 import { parseLocalDate } from '@/shared/utils/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { LoadingPage, ErrorMessage } from '@/shared/components';
-import { useJob, useUpdateJobStatus, useUpdateJob, useJobFinancials } from '../hooks';
+import { LoadingPage, ErrorMessage, PropertyTags } from '@/shared/components';
+import { useJob, useUpdateJob, useJobFinancials } from '../hooks';
 import { JobStatusBadge } from './JobStatusBadge';
-import type { JobStatus } from '../types';
+import { OnSiteOperations } from './OnSiteOperations';
+import type { Job } from '../types';
 import {
   formatJobType,
   formatDuration,
@@ -35,27 +37,22 @@ import {
   getJobPriorityConfig,
   JOB_SOURCE_CONFIG,
 } from '../types';
-import { GenerateInvoiceButton, InvoiceStatusBadge, useInvoicesByJob } from '@/features/invoices';
+import { PaymentSection } from './PaymentSection';
 
 interface JobDetailProps {
   jobId?: string;
-  onEdit?: () => void;
+  onEdit?: (job: Job) => void;
   onClose?: () => void;
 }
 
-export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
+export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps) {
   const { id: paramId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const id = propJobId || paramId || '';
 
   const { data: job, isLoading, error, refetch } = useJob(id);
-  const updateStatusMutation = useUpdateJobStatus();
   const updateJobMutation = useUpdateJob();
   const { data: financials, isLoading: financialsLoading } = useJobFinancials(id);
-
-  // Get invoices for this job
-  const { data: invoices } = useInvoicesByJob(id);
-  const linkedInvoice = invoices?.[0];
 
   // Notes editing state (Req 20)
   const [notesValue, setNotesValue] = useState<string | null>(null);
@@ -63,30 +60,6 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
 
   // Initialize notes from job data
   const currentNotes = notesValue !== null ? notesValue : (job?.notes ?? '');
-
-  const handleStatusChange = async (newStatus: JobStatus) => {
-    if (!job) return;
-    try {
-      await updateStatusMutation.mutateAsync({
-        id: job.id,
-        data: { status: newStatus },
-      });
-    } catch (err) {
-      console.error('Failed to update status:', err);
-    }
-  };
-
-  const handlePaymentCollectedChange = async (checked: boolean) => {
-    if (!job) return;
-    try {
-      await updateJobMutation.mutateAsync({
-        id: job.id,
-        data: { payment_collected_on_site: checked },
-      });
-    } catch (err) {
-      console.error('Failed to update payment collected status:', err);
-    }
-  };
 
   const handleSaveNotes = async () => {
     if (!job) return;
@@ -128,7 +101,13 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
   const priorityConfig = getJobPriorityConfig(job.priority_level);
 
   return (
-    <div data-testid="job-detail" className="space-y-5">
+    <div data-testid="job-detail" className="flex flex-col space-y-5">
+      {/* On-Site Operations — positioned first on mobile via order (Req 12.1, 12.6) */}
+      <div className="order-first md:order-none md:hidden">
+        <OnSiteOperations job={job} />
+        <Separator className="mt-3" />
+      </div>
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -149,6 +128,18 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {onEdit && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onEdit(job)}
+              data-testid="edit-job-btn"
+              className="h-8"
+            >
+              <Pencil className="mr-1.5 h-3.5 w-3.5" />
+              Edit
+            </Button>
+          )}
           <JobStatusBadge status={job.status} data-testid="job-status-badge" />
         </div>
       </div>
@@ -161,13 +152,55 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
         >
           {categoryConfig.label}
         </span>
+        {job.category === 'requires_estimate' && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 border border-amber-200"
+            data-testid="estimate-needed-badge"
+          >
+            <AlertTriangle className="h-3 w-3" />
+            Estimate Needed
+          </span>
+        )}
+        {job.service_agreement_id && job.service_agreement_active && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 border border-emerald-200"
+            data-testid="prepaid-badge"
+          >
+            <ShieldCheck className="h-3 w-3" />
+            Prepaid
+          </span>
+        )}
         <span
           className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${priorityConfig.bgColor} ${priorityConfig.color}`}
           data-testid="job-priority-badge"
         >
           {priorityConfig.label}
         </span>
+        <PropertyTags
+          propertyType={job.property_type}
+          isHoa={job.property_is_hoa ?? false}
+          isSubscription={job.property_is_subscription ?? false}
+        />
       </div>
+
+      {/* Property Address (Req 19.1) */}
+      {job.property_address && (
+        <div className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-lg" data-testid="job-property-address">
+          <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
+          <p className="text-sm text-slate-700">{job.property_address}</p>
+        </div>
+      )}
+
+      {/* Service Preference Notes Hint (CRM2 Req 7.3) */}
+      {job.service_preference_notes && (
+        <div className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg" data-testid="service-preference-notes">
+          <Clock className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs font-medium text-amber-700 uppercase tracking-wider">Service Preference</p>
+            <p className="text-sm text-amber-800 mt-0.5">{job.service_preference_notes}</p>
+          </div>
+        </div>
+      )}
 
       {/* Description */}
       {job.description && (
@@ -225,6 +258,18 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
         </Link>
       )}
 
+      {/* Customer Phone — tap-to-call (Req 12.4) */}
+      {job.customer_phone && (
+        <a
+          href={`tel:${job.customer_phone}`}
+          className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
+          data-testid="customer-phone-link"
+        >
+          <Phone className="h-4 w-4 text-teal-500 shrink-0" />
+          <span className="text-sm font-medium text-slate-700">{job.customer_phone}</span>
+        </a>
+      )}
+
       <Separator />
 
       {/* Notes Section (Req 20) */}
@@ -237,7 +282,7 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
           value={currentNotes}
           onChange={(e) => setNotesValue(e.target.value)}
           placeholder="Add notes about this job..."
-          className="min-h-[100px] bg-slate-50 border-slate-200 text-sm"
+          className="min-h-[100px] bg-slate-50 border-slate-200 text-base md:text-sm"
           data-testid="job-notes-textarea"
         />
         <Button
@@ -253,6 +298,9 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
       </div>
 
       <Separator />
+
+      {/* Consolidated Payment Section (Req 17.1-17.4, 17.6) */}
+      <PaymentSection job={job} />
 
       {/* Pricing Section */}
       <div>
@@ -277,44 +325,6 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
             {job.source ? JOB_SOURCE_CONFIG[job.source]?.label || job.source : 'Not specified'}
           </p>
         </div>
-
-        {/* Payment Collection */}
-        <div className="mt-3 flex items-center space-x-2" data-testid="payment-collected-section">
-          <Checkbox
-            id="payment-collected"
-            checked={job.payment_collected_on_site}
-            onCheckedChange={handlePaymentCollectedChange}
-            disabled={updateJobMutation.isPending}
-            data-testid="payment-collected-checkbox"
-            className="data-[state=checked]:bg-teal-500 data-[state=checked]:border-teal-500"
-          />
-          <Label htmlFor="payment-collected" className="text-sm text-slate-600 flex items-center gap-1.5">
-            <CreditCard className="h-3.5 w-3.5" />
-            Payment collected on site
-          </Label>
-        </div>
-
-        {/* Linked Invoice */}
-        {linkedInvoice && (
-          <Link
-            to={`/invoices/${linkedInvoice.id}`}
-            className="mt-3 flex items-center justify-between p-2.5 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-            data-testid="linked-invoice-link"
-          >
-            <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-700">{linkedInvoice.invoice_number}</span>
-            </div>
-            <InvoiceStatusBadge status={linkedInvoice.status} />
-          </Link>
-        )}
-
-        {/* Generate Invoice Button */}
-        {!linkedInvoice && ['completed', 'closed'].includes(job.status) && (
-          <div className="mt-3" data-testid="generate-invoice-section">
-            <GenerateInvoiceButton job={job} />
-          </div>
-        )}
       </div>
 
       <Separator />
@@ -410,83 +420,12 @@ export function JobDetail({ jobId: propJobId, onClose }: JobDetailProps) {
 
       <Separator />
 
-      {/* Actions Section */}
-      <div>
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-          <Wrench className="h-3.5 w-3.5" />
-          Actions
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {job.status === 'requested' && (
-            <Button
-              size="sm"
-              className="bg-teal-500 hover:bg-teal-600 text-white"
-              onClick={() => handleStatusChange('approved')}
-              disabled={updateStatusMutation.isPending}
-              data-testid="approve-job-btn"
-            >
-              Approve Job
-            </Button>
-          )}
-          {job.status === 'approved' && (
-            <Button
-              size="sm"
-              className="bg-violet-500 hover:bg-violet-600 text-white"
-              onClick={() => handleStatusChange('scheduled')}
-              disabled={updateStatusMutation.isPending}
-              data-testid="schedule-job-btn"
-            >
-              Mark as Scheduled
-            </Button>
-          )}
-          {job.status === 'scheduled' && (
-            <Button
-              size="sm"
-              className="bg-orange-500 hover:bg-orange-600 text-white"
-              onClick={() => handleStatusChange('in_progress')}
-              disabled={updateStatusMutation.isPending}
-              data-testid="start-job-btn"
-            >
-              Start Job
-            </Button>
-          )}
-          {job.status === 'in_progress' && (
-            <Button
-              size="sm"
-              className="bg-emerald-500 hover:bg-emerald-600 text-white"
-              onClick={() => handleStatusChange('completed')}
-              disabled={updateStatusMutation.isPending}
-              data-testid="complete-job-btn"
-            >
-              Mark Complete
-            </Button>
-          )}
-          {job.status === 'completed' && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleStatusChange('closed')}
-              disabled={updateStatusMutation.isPending}
-              data-testid="close-job-btn"
-            >
-              Close Job
-            </Button>
-          )}
-          {!['cancelled', 'closed'].includes(job.status) && (
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => handleStatusChange('cancelled')}
-              disabled={updateStatusMutation.isPending}
-              data-testid="cancel-job-btn"
-            >
-              Cancel Job
-            </Button>
-          )}
-        </div>
+      {/* On-Site Operations — desktop only (mobile version is at top) (Req 12.1, 12.7) */}
+      <div className="hidden md:block">
+        <OnSiteOperations job={job} />
       </div>
 
-      {/* AI Communication Section */}
+      <Separator />
       <Card className="bg-slate-50 border-slate-100">
         <CardHeader className="p-4 pb-2">
           <CardTitle className="flex items-center gap-2 text-sm font-medium text-slate-700">

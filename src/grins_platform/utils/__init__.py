@@ -1,1 +1,1 @@
-"""Utility modules for the Grins Platform."""
+"""Utility functions for the Grins Platform."""

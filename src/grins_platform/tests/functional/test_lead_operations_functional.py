@@ -75,6 +75,11 @@ def _make_lead(**overrides: Any) -> MagicMock:
     lead.customer_type = overrides.get("customer_type")
     lead.property_type = overrides.get("property_type")
     lead.updated_at = datetime.now(tz=timezone.utc)
+    # CRM2 fields
+    lead.moved_to = overrides.get("moved_to")
+    lead.moved_at = overrides.get("moved_at")
+    lead.last_contacted_at = overrides.get("last_contacted_at")
+    lead.job_requested = overrides.get("job_requested")
     return lead
 
 
@@ -536,7 +541,7 @@ class TestLeadAttachmentWorkflow:
         # Minimal valid PDF
         pdf_data = b"%PDF-1.4" + b"\x00" * 100
 
-        import magic as magic_mod  # noqa: PLC0415
+        import magic as magic_mod
 
         original_from_buffer = magic_mod.from_buffer
 
@@ -612,7 +617,7 @@ class TestLeadAttachmentWorkflow:
 
         pdf_data = b"%PDF-1.4" + b"\x00" * 100
 
-        import magic as magic_mod  # noqa: PLC0415
+        import magic as magic_mod
 
         original_from_buffer = magic_mod.from_buffer
 

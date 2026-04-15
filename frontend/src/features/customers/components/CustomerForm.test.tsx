@@ -2,15 +2,30 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import { CustomerForm } from './CustomerForm';
-import * as customerMutations from '../hooks/useCustomerMutations';
 
-// Mock the mutation hooks
-vi.mock('../hooks/useCustomerMutations', () => ({
-  useCreateCustomer: vi.fn(),
-  useUpdateCustomer: vi.fn(),
-  useDeleteCustomer: vi.fn(),
-  useUpdateCustomerFlags: vi.fn(),
+const mockCreateMutateAsync = vi.fn();
+const mockUpdateMutateAsync = vi.fn();
+
+// Mock the hooks barrel export
+vi.mock('../hooks', () => ({
+  useCreateCustomer: vi.fn(() => ({
+    mutateAsync: mockCreateMutateAsync,
+    isPending: false,
+  })),
+  useUpdateCustomer: vi.fn(() => ({
+    mutateAsync: mockUpdateMutateAsync,
+    isPending: false,
+  })),
+  useDeleteCustomer: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useUpdateCustomerFlags: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useCheckDuplicate: vi.fn(() => ({
+    matches: [],
+    isChecking: false,
+    check: vi.fn().mockResolvedValue([]),
+    clear: vi.fn(),
+  })),
 }));
 
 // Mock sonner toast
@@ -48,26 +63,19 @@ function createWrapper() {
   });
 
   return function Wrapper({ children }: { children: React.ReactNode }) {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+    return (
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      </MemoryRouter>
+    );
   };
 }
 
 describe('CustomerForm', () => {
-  const mockCreateMutate = vi.fn();
-  const mockUpdateMutate = vi.fn();
-
   beforeEach(() => {
     vi.clearAllMocks();
-
-    vi.mocked(customerMutations.useCreateCustomer).mockReturnValue({
-      mutateAsync: mockCreateMutate,
-      isPending: false,
-    } as unknown as ReturnType<typeof customerMutations.useCreateCustomer>);
-
-    vi.mocked(customerMutations.useUpdateCustomer).mockReturnValue({
-      mutateAsync: mockUpdateMutate,
-      isPending: false,
-    } as unknown as ReturnType<typeof customerMutations.useUpdateCustomer>);
+    mockCreateMutateAsync.mockReset();
+    mockUpdateMutateAsync.mockReset();
   });
 
   it('renders form with empty fields for create mode', () => {
@@ -133,14 +141,14 @@ describe('CustomerForm', () => {
     // Wait for form to process - the form should not submit with invalid email
     // Since zod validation happens, the mutation should not be called
     await waitFor(() => {
-      expect(mockCreateMutate).not.toHaveBeenCalled();
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
     });
   });
 
   it('calls createMutation on submit in create mode', async () => {
     const user = userEvent.setup();
     const onSuccess = vi.fn();
-    mockCreateMutate.mockResolvedValue({ id: '1' });
+    mockCreateMutateAsync.mockResolvedValue({ id: '1' });
 
     render(<CustomerForm onSuccess={onSuccess} />, { wrapper: createWrapper() });
 
@@ -152,7 +160,7 @@ describe('CustomerForm', () => {
     await user.click(submitButton);
 
     await waitFor(() => {
-      expect(mockCreateMutate).toHaveBeenCalledWith(
+      expect(mockCreateMutateAsync).toHaveBeenCalledWith(
         expect.objectContaining({
           first_name: 'John',
           last_name: 'Doe',
@@ -165,7 +173,7 @@ describe('CustomerForm', () => {
   it('calls updateMutation on submit in edit mode', async () => {
     const user = userEvent.setup();
     const onSuccess = vi.fn();
-    mockUpdateMutate.mockResolvedValue({ id: '1' });
+    mockUpdateMutateAsync.mockResolvedValue({ id: '1' });
 
     render(<CustomerForm customer={mockCustomer} onSuccess={onSuccess} />, {
       wrapper: createWrapper(),
@@ -178,7 +186,7 @@ describe('CustomerForm', () => {
     await user.click(submitButton);
 
     await waitFor(() => {
-      expect(mockUpdateMutate).toHaveBeenCalledWith(
+      expect(mockUpdateMutateAsync).toHaveBeenCalledWith(
         expect.objectContaining({
           id: '1',
           data: expect.objectContaining({

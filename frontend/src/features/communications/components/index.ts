@@ -1,3 +1,11 @@
 export { CommunicationsDashboard } from './CommunicationsDashboard';
 export { CommunicationsQueue } from './CommunicationsQueue';
 export { SentMessagesLog } from './SentMessagesLog';
+export { AudienceBuilder } from './AudienceBuilder';
+export { MessageComposer } from './MessageComposer';
+export { CampaignReview } from './CampaignReview';
+export { NewTextCampaignModal } from './NewTextCampaignModal';
+export { CampaignsList } from './CampaignsList';
+export { FailedRecipientsDetail } from './FailedRecipientsDetail';
+export { PollOptionsEditor } from './PollOptionsEditor';
+export { CampaignResponsesView } from './CampaignResponsesView';

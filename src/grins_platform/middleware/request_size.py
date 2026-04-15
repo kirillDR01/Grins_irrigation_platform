@@ -28,15 +28,17 @@ logger = get_logger(__name__)
 DEFAULT_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 UPLOAD_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
 
-_UPLOAD_SUFFIXES = frozenset({
-    "/photos",
-    "/attachments",
-    "/media",
-    "/receipts",
-    "/upload",
-    "/extract-receipt",
-    "/generate-pdf",
-})
+_UPLOAD_SUFFIXES = frozenset(
+    {
+        "/photos",
+        "/attachments",
+        "/media",
+        "/receipts",
+        "/upload",
+        "/extract-receipt",
+        "/generate-pdf",
+    }
+)
 
 
 def _is_upload_path(path: str) -> bool:
@@ -73,10 +75,7 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
                     content_length=length,
                     max_bytes=max_bytes,
                 )
-                msg = (
-                    "Request body exceeds maximum size "
-                    f"of {max_bytes} bytes."
-                )
+                msg = f"Request body exceeds maximum size of {max_bytes} bytes."
                 return JSONResponse(
                     status_code=413,
                     content={

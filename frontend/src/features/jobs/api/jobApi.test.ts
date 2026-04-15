@@ -120,7 +120,7 @@ describe('jobApi', () => {
   });
 
   describe('getReadyToSchedule', () => {
-    it('fetches jobs ready to schedule', async () => {
+    it('fetches all jobs with to_be_scheduled status', async () => {
       const toBeScheduledJob = { ...mockJob, status: 'to_be_scheduled' };
       vi.mocked(apiClient.get).mockResolvedValue({
         data: { items: [toBeScheduledJob], total: 1, page: 1, page_size: 20 },
@@ -129,7 +129,7 @@ describe('jobApi', () => {
       const result = await jobApi.getReadyToSchedule();
 
       expect(apiClient.get).toHaveBeenCalledWith('/jobs', {
-        params: { category: 'ready_to_schedule', status: 'to_be_scheduled' },
+        params: { status: 'to_be_scheduled' },
       });
       expect(result.items[0].status).toBe('to_be_scheduled');
     });

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,14 +27,20 @@ function truncateContent(content: string, maxLength = 80): string {
   return content.slice(0, maxLength) + '…';
 }
 
+const PAGE_SIZE = 20;
+
 export function CommunicationsQueue() {
   const { data, isLoading, error } = useUnaddressedCommunications();
   const markAddressed = useMarkAddressed();
+  const [page, setPage] = useState(1);
+  const [mutatingId, setMutatingId] = useState<string | null>(null);
 
   if (isLoading) return <LoadingSpinner />;
   if (error) return <ErrorMessage error={error} />;
 
-  const items = data?.items ?? [];
+  const allItems = data?.items ?? [];
+  const totalPages = Math.ceil(allItems.length / PAGE_SIZE);
+  const items = allItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <Card data-testid="communications-queue">
@@ -58,6 +65,7 @@ export function CommunicationsQueue() {
             All caught up — no unaddressed messages.
           </p>
         ) : (
+          <>
           <Table data-testid="communications-queue-table">
             <TableHeader>
               <TableRow>
@@ -99,8 +107,13 @@ export function CommunicationsQueue() {
                       size="sm"
                       variant="outline"
                       data-testid={`mark-addressed-btn-${item.id}`}
-                      disabled={markAddressed.isPending}
-                      onClick={() => markAddressed.mutate(item.id)}
+                      disabled={mutatingId === item.id}
+                      onClick={() => {
+                        setMutatingId(item.id);
+                        markAddressed.mutate(item.id, {
+                          onSettled: () => setMutatingId(null),
+                        });
+                      }}
                     >
                       <CheckCircle2 className="h-4 w-4 mr-1" />
                       Mark as Addressed
@@ -110,6 +123,31 @@ export function CommunicationsQueue() {
               ))}
             </TableBody>
           </Table>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4 text-xs text-slate-500">
+              <span>Page {page} of {totalPages} ({allItems.length} total)</span>
+              <div className="flex gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </CardContent>
     </Card>

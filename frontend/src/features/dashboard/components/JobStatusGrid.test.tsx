@@ -1,6 +1,6 @@
 /**
  * Tests for JobStatusGrid component.
- * Validates: Requirements 6.1
+ * Estimates card removed per Req 4.1.
  */
 
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -50,7 +50,7 @@ describe('JobStatusGrid', () => {
     vi.clearAllMocks();
   });
 
-  it('renders all 6 status category cards', () => {
+  it('renders all 5 status category cards (estimates removed)', () => {
     mockUseJobStatusMetrics.mockReturnValue({
       data: mockData,
       isLoading: false,
@@ -62,7 +62,7 @@ describe('JobStatusGrid', () => {
     expect(grid).toBeInTheDocument();
 
     expect(screen.getByTestId('job-status-new-requests')).toBeInTheDocument();
-    expect(screen.getByTestId('job-status-estimates')).toBeInTheDocument();
+    expect(screen.queryByTestId('job-status-estimates')).not.toBeInTheDocument();
     expect(screen.getByTestId('job-status-pending-approval')).toBeInTheDocument();
     expect(screen.getByTestId('job-status-to-be-scheduled')).toBeInTheDocument();
     expect(screen.getByTestId('job-status-in-progress')).toBeInTheDocument();
@@ -78,7 +78,6 @@ describe('JobStatusGrid', () => {
     render(<JobStatusGrid />, { wrapper: createWrapper() });
 
     expect(screen.getByTestId('job-status-new-requests')).toHaveTextContent('5');
-    expect(screen.getByTestId('job-status-estimates')).toHaveTextContent('3');
     expect(screen.getByTestId('job-status-pending-approval')).toHaveTextContent('2');
     expect(screen.getByTestId('job-status-to-be-scheduled')).toHaveTextContent('4');
     expect(screen.getByTestId('job-status-in-progress')).toHaveTextContent('7');
@@ -94,7 +93,6 @@ describe('JobStatusGrid', () => {
     render(<JobStatusGrid />, { wrapper: createWrapper() });
 
     expect(screen.getByTestId('job-status-new-requests')).toHaveTextContent('New Requests');
-    expect(screen.getByTestId('job-status-estimates')).toHaveTextContent('Estimates');
     expect(screen.getByTestId('job-status-pending-approval')).toHaveTextContent('Pending Approval');
     expect(screen.getByTestId('job-status-to-be-scheduled')).toHaveTextContent('To Be Scheduled');
     expect(screen.getByTestId('job-status-in-progress')).toHaveTextContent('In Progress');
@@ -110,7 +108,7 @@ describe('JobStatusGrid', () => {
     render(<JobStatusGrid />, { wrapper: createWrapper() });
 
     const cards = screen.getAllByText('—');
-    expect(cards).toHaveLength(6);
+    expect(cards).toHaveLength(5);
   });
 
   it('shows zero counts when data has all zeros', () => {
@@ -129,7 +127,7 @@ describe('JobStatusGrid', () => {
     render(<JobStatusGrid />, { wrapper: createWrapper() });
 
     const zeros = screen.getAllByText('0');
-    expect(zeros).toHaveLength(6);
+    expect(zeros).toHaveLength(5);
   });
 
   it('navigates to /jobs?status=to_be_scheduled on New Requests click', () => {
@@ -142,18 +140,6 @@ describe('JobStatusGrid', () => {
 
     fireEvent.click(screen.getByTestId('job-status-new-requests'));
     expect(mockNavigate).toHaveBeenCalledWith('/jobs?status=to_be_scheduled');
-  });
-
-  it('navigates to /jobs?status=requires_estimate on Estimates click', () => {
-    mockUseJobStatusMetrics.mockReturnValue({
-      data: mockData,
-      isLoading: false,
-    });
-
-    render(<JobStatusGrid />, { wrapper: createWrapper() });
-
-    fireEvent.click(screen.getByTestId('job-status-estimates'));
-    expect(mockNavigate).toHaveBeenCalledWith('/jobs?status=requires_estimate');
   });
 
   it('navigates to /jobs?status=pending_approval on Pending Approval click', () => {
@@ -237,6 +223,6 @@ describe('JobStatusGrid', () => {
     render(<JobStatusGrid />, { wrapper: createWrapper() });
 
     const zeros = screen.getAllByText('0');
-    expect(zeros).toHaveLength(6);
+    expect(zeros).toHaveLength(5);
   });
 });

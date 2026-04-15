@@ -4,8 +4,9 @@
  * Includes clear day feature and recently cleared section.
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { format, startOfWeek, isSameDay } from 'date-fns';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { PageHeader } from '@/shared/components/PageHeader';
@@ -26,10 +27,13 @@ import { ClearDayButton } from './ClearDayButton';
 import { ClearDayDialog } from './ClearDayDialog';
 import { RecentlyClearedSection } from './RecentlyClearedSection';
 import { RestoreScheduleDialog } from './RestoreScheduleDialog';
+import { RescheduleRequestsQueue } from './RescheduleRequestsQueue';
 import { DaySelector } from './DaySelector';
 import { LeadTimeIndicator } from './LeadTimeIndicator';
 import { JobSelector } from './JobSelector';
+import { JobPickerPopup } from './JobPickerPopup';
 import { InlineCustomerPanel } from './InlineCustomerPanel';
+import { SendAllConfirmationsButton } from './SendAllConfirmationsButton';
 import { scheduleGenerationApi } from '../api/scheduleGenerationApi';
 import { useDailySchedule, useWeeklySchedule, appointmentKeys } from '../hooks/useAppointments';
 import { useStaff } from '@/features/staff/hooks/useStaff';
@@ -37,6 +41,7 @@ import { jobApi } from '@/features/jobs/api/jobApi';
 import { customerApi } from '@/features/customers/api/customerApi';
 import { formatJobType } from '@/features/jobs/types';
 import type { ScheduleClearRequest } from '../types';
+import type { Appointment } from '../types';
 
 type ViewMode = 'calendar' | 'list';
 
@@ -52,12 +57,31 @@ export function SchedulePage() {
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
   const [showJobSelector, setShowJobSelector] = useState(false);
+  const [showJobPicker, setShowJobPicker] = useState(false);
   const [inlinePanelAppointmentId, setInlinePanelAppointmentId] = useState<string | null>(null);
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   
+  // Pre-fill job from query param (Req 11.7 — "Schedule" button on Jobs tab)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [preSelectedJobId, setPreSelectedJobId] = useState<string | null>(null);
+
   // Track the current week displayed in the calendar
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => 
     startOfWeek(new Date(), { weekStartsOn: 0 })
   );
+
+  // Auto-open create dialog when navigated from Jobs tab with scheduleJobId (Req 11.7)
+  useEffect(() => {
+    const jobId = searchParams.get('scheduleJobId');
+    if (jobId) {
+      setPreSelectedJobId(jobId);
+      setShowCreateDialog(true);
+      // Clean up the URL param so it doesn't re-trigger
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('scheduleJobId');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const queryClient = useQueryClient();
 
@@ -160,6 +184,16 @@ export function SchedulePage() {
     return counts;
   }, [weeklySchedule]);
 
+  // Count DRAFT appointments in the current view (Req 8.7)
+  const draftAppointments = useMemo(() => {
+    if (!weeklySchedule?.days) return [];
+    return weeklySchedule.days.flatMap((day) =>
+      day.appointments.filter((apt) => apt.status === 'draft')
+    );
+  }, [weeklySchedule]);
+
+  const draftCount = draftAppointments.length;
+
   // Get appointment count and affected jobs for the clear day dialog
   const appointmentCount = dailySchedule?.appointments?.length ?? 0;
   const affectedJobs = useMemo(() => {
@@ -225,6 +259,7 @@ export function SchedulePage() {
   const handleCreateSuccess = () => {
     setShowCreateDialog(false);
     setCreateDialogDate(null);
+    setPreSelectedJobId(null);
   };
 
   const handleCloseDetail = () => {
@@ -276,6 +311,12 @@ export function SchedulePage() {
     setInlinePanelAppointmentId(appointmentId);
   }, []);
 
+  // Handle edit from AppointmentDetail (Req 18)
+  const handleEditAppointment = useCallback((appointment: Appointment) => {
+    setSelectedAppointmentId(null); // close detail dialog
+    setEditingAppointment(appointment); // open edit dialog
+  }, []);
+
   return (
     <div 
       data-testid="schedule-page" 
@@ -317,7 +358,7 @@ export function SchedulePage() {
               </TabsList>
             </Tabs>
             <Button
-              onClick={() => setShowJobSelector(true)}
+              onClick={() => setShowJobPicker(true)}
               variant="outline"
               data-testid="add-jobs-btn"
               className="border-teal-200 text-teal-600 hover:bg-teal-50"
@@ -325,6 +366,9 @@ export function SchedulePage() {
               <CalendarPlus className="mr-2 h-4 w-4" />
               Add Jobs
             </Button>
+            {draftCount > 0 && (
+              <SendAllConfirmationsButton draftAppointments={draftAppointments} />
+            )}
             <Button
               onClick={() => setShowCreateDialog(true)}
               data-testid="add-appointment-btn"
@@ -364,6 +408,11 @@ export function SchedulePage() {
         )}
       </div>
 
+      {/* Reschedule Requests Queue (Req 25) */}
+      <RescheduleRequestsQueue
+        onAppointmentClick={(id) => setSelectedAppointmentId(id)}
+      />
+
       {/* Recently Cleared Section */}
       <RecentlyClearedSection onViewDetails={handleViewClearDetails} />
 
@@ -382,10 +431,12 @@ export function SchedulePage() {
           </DialogHeader>
           <AppointmentForm
             initialDate={createDialogDate ?? undefined}
+            initialJobId={preSelectedJobId ?? undefined}
             onSuccess={handleCreateSuccess}
             onCancel={() => {
               setShowCreateDialog(false);
               setCreateDialogDate(null);
+              setPreSelectedJobId(null);
             }}
           />
         </DialogContent>
@@ -407,6 +458,7 @@ export function SchedulePage() {
             <AppointmentDetail
               appointmentId={selectedAppointmentId}
               onClose={handleCloseDetail}
+              onEdit={handleEditAppointment}
             />
           )}
         </DialogContent>
@@ -425,6 +477,44 @@ export function SchedulePage() {
         />
       )}
 
+      {/* Edit Appointment Dialog (Req 18) */}
+      <Dialog
+        open={!!editingAppointment}
+        onOpenChange={(open) => {
+          if (!open) {
+            // On cancel, re-open the detail modal
+            const apptId = editingAppointment?.id ?? null;
+            setEditingAppointment(null);
+            if (apptId) {
+              setSelectedAppointmentId(apptId);
+            }
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg" aria-describedby="edit-appointment-description">
+          <DialogHeader>
+            <DialogTitle>Edit Appointment</DialogTitle>
+            <p id="edit-appointment-description" className="text-sm text-muted-foreground">
+              Modify the appointment details below.
+            </p>
+          </DialogHeader>
+          {editingAppointment && (
+            <AppointmentForm
+              appointment={editingAppointment}
+              onSuccess={() => {
+                setEditingAppointment(null);
+                queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
+              }}
+              onCancel={() => {
+                const apptId = editingAppointment.id;
+                setEditingAppointment(null);
+                setSelectedAppointmentId(apptId);
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Restore Schedule Dialog */}
       <RestoreScheduleDialog
         open={showRestoreDialog}
@@ -432,7 +522,14 @@ export function SchedulePage() {
         auditId={selectedAuditId}
       />
 
-      {/* Job Selector Modal (Req 26) */}
+      {/* Job Picker Popup (Req 22, 23) — bulk assignment with per-job time adjustments */}
+      <JobPickerPopup
+        open={showJobPicker}
+        onOpenChange={setShowJobPicker}
+        defaultDate={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined}
+      />
+
+      {/* Legacy Job Selector Modal (Req 26) */}
       <JobSelector
         open={showJobSelector}
         onOpenChange={setShowJobSelector}
