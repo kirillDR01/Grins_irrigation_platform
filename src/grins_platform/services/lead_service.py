@@ -24,7 +24,7 @@ from grins_platform.exceptions import (
     LeadNotFoundError,
     StaffNotFoundError,
 )
-from grins_platform.log_config import LoggerMixin
+from grins_platform.log_config import LoggerMixin, get_logger
 from grins_platform.models.enums import (
     VALID_LEAD_STATUS_TRANSITIONS,
     ActionTag,
@@ -63,6 +63,8 @@ from grins_platform.utils.zip_lookup import extract_zip_from_address, lookup_zip
 if TYPE_CHECKING:
     from uuid import UUID
 
+    from fastapi import BackgroundTasks
+
     from grins_platform.models.google_sheet_submission import (
         GoogleSheetSubmission,
     )
@@ -74,6 +76,119 @@ if TYPE_CHECKING:
     from grins_platform.services.email_service import EmailService
     from grins_platform.services.job_service import JobService
     from grins_platform.services.sms_service import SMSService
+
+
+async def send_lead_confirmations_post_commit(lead_id: UUID) -> None:
+    """Send SMS + email confirmations after the intake transaction commits.
+
+    Runs as a FastAPI BackgroundTask with a fresh database session so any
+    SQLAlchemy error raised inside the notification path cannot roll back
+    the lead that was just persisted in the request transaction. Errors
+    are logged at ERROR severity for production visibility.
+
+    Validates: Requirements 46.7, 55.1-55.3 (async confirmation delivery);
+    BUG-001 fix (2026-04-14 lead-form silent-rollback when sms_consent=true).
+    """
+    from grins_platform.database import get_database_manager  # noqa: PLC0415
+    from grins_platform.repositories.lead_repository import (  # noqa: PLC0415
+        LeadRepository,
+    )
+    from grins_platform.services.email_service import (  # noqa: PLC0415
+        EmailService,
+    )
+    from grins_platform.services.sms_service import SMSService  # noqa: PLC0415
+
+    log = get_logger(__name__)
+    db_manager = get_database_manager()
+
+    async with db_manager.session_factory() as session:
+        try:
+            repo = LeadRepository(session=session)
+            lead = await repo.get_by_id(lead_id)
+            if lead is None:
+                log.error(
+                    "lead.post_commit_confirmations.lead_not_found",
+                    lead_id=str(lead_id),
+                )
+                return
+
+            sms_service = SMSService(session=session)
+            email_service = EmailService()
+
+            if lead.sms_consent and lead.phone:
+                try:
+                    confirmation_msg = (
+                        "Thanks for reaching out to Grins Irrigation! "
+                        "We received your request and will be in touch soon."
+                    )
+                    result = await sms_service.send_automated_message(
+                        phone=lead.phone,
+                        message=confirmation_msg,
+                        message_type="lead_confirmation",
+                    )
+                    if result.get("success"):
+                        if result.get("deferred"):
+                            log.info(
+                                "lead.confirmation.sms_deferred",
+                                lead_id=str(lead.id),
+                                scheduled_for=result.get("scheduled_for"),
+                            )
+                        else:
+                            log.info(
+                                "lead.confirmation.sms_sent",
+                                lead_id=str(lead.id),
+                            )
+                    else:
+                        log.info(
+                            "lead.confirmation.sms_skipped",
+                            lead_id=str(lead.id),
+                            reason=result.get("reason", "unknown"),
+                        )
+                except Exception as exc:  # noqa: BLE001
+                    log.error(
+                        "lead.confirmation.sms_failed",
+                        lead_id=str(lead.id),
+                        error=str(exc),
+                        exc_info=True,
+                    )
+                    await session.rollback()
+
+            if lead.email:
+                try:
+                    email_service.send_lead_confirmation(lead)
+                    log.info(
+                        "lead.email_confirmation.sent",
+                        lead_id=str(lead.id),
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    log.error(
+                        "lead.email_confirmation.failed",
+                        lead_id=str(lead.id),
+                        error=str(exc),
+                        exc_info=True,
+                    )
+
+            try:
+                await session.commit()
+            except Exception as exc:  # noqa: BLE001
+                log.error(
+                    "lead.post_commit_confirmations.commit_failed",
+                    lead_id=str(lead_id),
+                    error=str(exc),
+                    exc_info=True,
+                )
+                await session.rollback()
+        except Exception as exc:  # noqa: BLE001
+            log.error(
+                "lead.post_commit_confirmations.unhandled",
+                lead_id=str(lead_id),
+                error=str(exc),
+                exc_info=True,
+            )
+            try:
+                await session.rollback()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 class LeadService(LoggerMixin):
@@ -282,7 +397,11 @@ class LeadService(LoggerMixin):
                 error=str(e),
             )
 
-    async def submit_lead(self, data: LeadSubmission) -> LeadSubmissionResponse:
+    async def submit_lead(
+        self,
+        data: LeadSubmission,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> LeadSubmissionResponse:
         """Process a public form submission.
 
         Steps:
@@ -294,10 +413,19 @@ class LeadService(LoggerMixin):
         6. If no duplicate: create new lead with status "new"
         7. Create SmsConsentRecord for the lead
         8. Log lead.submitted event (lead_id + source_site only, no PII)
-        9. Send confirmations
+        9. Schedule SMS + email confirmations as post-commit background task
+
+        The SMS/email confirmations are scheduled to run *after* the
+        request transaction commits, in a fresh session, so any failure
+        in the notification path cannot roll back the lead insert
+        (BUG-001, 2026-04-14).
 
         Args:
             data: LeadSubmission schema with form data
+            background_tasks: Optional FastAPI BackgroundTasks for
+                scheduling post-commit confirmations. When None (e.g.
+                direct service calls from non-HTTP callers), no
+                confirmation is sent.
 
         Returns:
             LeadSubmissionResponse with success status and lead_id
@@ -435,9 +563,21 @@ class LeadService(LoggerMixin):
             source_site=data.source_site,
         )
 
-        # Step 8: Send confirmations (Req 54, 55)
-        await self._send_sms_confirmation(lead)
-        self._send_email_confirmation(lead)
+        # Step 8: Schedule SMS + email confirmations to run *after* the
+        # request transaction commits, in a fresh session. Failures in
+        # the notification path cannot roll back the lead insert
+        # (BUG-001 fix, 2026-04-14).
+        if background_tasks is not None:
+            background_tasks.add_task(
+                send_lead_confirmations_post_commit,
+                lead.id,
+            )
+        else:
+            self.logger.info(
+                "lead.confirmations.not_scheduled",
+                lead_id=str(lead.id),
+                reason="no_background_task_scheduler",
+            )
 
         return LeadSubmissionResponse(
             success=True,

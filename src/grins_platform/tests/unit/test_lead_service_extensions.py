@@ -578,8 +578,18 @@ class TestEmailConfirmation:
     """Tests for email confirmation on lead creation."""
 
     @pytest.mark.asyncio
-    async def test_email_sent_when_email_present(self) -> None:
-        """Email confirmation sent when lead has email."""
+    async def test_submit_lead_schedules_email_as_post_commit_task(self) -> None:
+        """Email confirmation is deferred to a post-commit background task.
+
+        Post BUG-001 fix (2026-04-14): email confirmation runs in a fresh
+        session after the lead-intake transaction commits, so it cannot
+        poison the intake transaction. The service must NOT call
+        ``email_service.send_lead_confirmation`` inline.
+        """
+        from grins_platform.services.lead_service import (  # noqa: PLC0415
+            send_lead_confirmations_post_commit,
+        )
+
         lead = _make_lead_mock(email="test@example.com")
         repo = AsyncMock()
         repo.get_by_phone_and_active_status.return_value = None
@@ -595,9 +605,14 @@ class TestEmailConfirmation:
             zip_code="55424",
             situation=LeadSituation.REPAIR,
         )
-        await svc.submit_lead(data)
+        background_tasks = MagicMock()
+        await svc.submit_lead(data, background_tasks=background_tasks)
 
-        email_svc.send_lead_confirmation.assert_called_once_with(lead)
+        email_svc.send_lead_confirmation.assert_not_called()
+        background_tasks.add_task.assert_called_once()
+        scheduled_fn, *scheduled_args = background_tasks.add_task.call_args.args
+        assert scheduled_fn is send_lead_confirmations_post_commit
+        assert scheduled_args[0] == lead.id
 
     @pytest.mark.asyncio
     async def test_email_skipped_when_no_email(self) -> None:

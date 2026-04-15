@@ -1526,10 +1526,22 @@ class TestProperty49SMSLeadConfirmation:
         sms_service.send_automated_message.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_submit_lead_with_consent_triggers_sms_confirmation(
+    async def test_submit_lead_with_consent_schedules_post_commit_sms(
         self,
     ) -> None:
-        """Full submit_lead flow with sms_consent=True triggers SMS confirmation."""
+        """submit_lead with sms_consent=True schedules SMS as a post-commit task.
+
+        Post BUG-001 fix (2026-04-14): SMS confirmation is deferred to
+        a FastAPI BackgroundTask running in a fresh session so it cannot
+        roll back the lead-intake transaction. The service must NOT call
+        ``sms_service.send_automated_message`` inline.
+        """
+        from unittest.mock import MagicMock  # noqa: PLC0415
+
+        from grins_platform.services.lead_service import (  # noqa: PLC0415
+            send_lead_confirmations_post_commit,
+        )
+
         created_lead = _make_lead_mock(
             sms_consent=True,
             phone="6125551234",
@@ -1556,10 +1568,15 @@ class TestProperty49SMSLeadConfirmation:
             sms_consent=True,
             address="123 Main St, Denver, CO 80209",
         )
-        result = await svc.submit_lead(data)
+        background_tasks = MagicMock()
+        result = await svc.submit_lead(data, background_tasks=background_tasks)
 
         assert result.success is True
-        sms_service.send_automated_message.assert_awaited_once()
+        sms_service.send_automated_message.assert_not_awaited()
+        background_tasks.add_task.assert_called_once()
+        scheduled_fn, *scheduled_args = background_tasks.add_task.call_args.args
+        assert scheduled_fn is send_lead_confirmations_post_commit
+        assert scheduled_args[0] == created_lead.id
 
     @pytest.mark.asyncio
     async def test_submit_lead_without_consent_does_not_trigger_sms(

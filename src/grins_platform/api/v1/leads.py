@@ -16,6 +16,7 @@ from uuid import UUID
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     Form,
@@ -139,6 +140,7 @@ async def _get_lead_service(
 )
 async def submit_lead(
     data: LeadSubmission,
+    background_tasks: BackgroundTasks,
     service: Annotated[LeadService, Depends(_get_lead_service)],
 ) -> LeadSubmissionResponse:
     """Submit a lead from the public website form.
@@ -156,7 +158,7 @@ async def submit_lead(
     # ``X-Request-ID`` (set by the FastAPI middleware) shows up on every
     # emitted line via log_config's context binding.
     try:
-        result = await service.submit_lead(data)
+        result = await service.submit_lead(data, background_tasks=background_tasks)
     except Exception as exc:  # noqa: BLE001 — re-raised below, purely for observability
         _endpoints.log_failed(
             "submit_lead",
