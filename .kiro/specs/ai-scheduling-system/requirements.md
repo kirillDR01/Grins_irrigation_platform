@@ -9,7 +9,7 @@ This spec builds upon three existing scheduling capabilities:
 - **route-optimization**: OR-Tools based schedule generation with staff availability, equipment matching, travel time, hard/soft constraints, emergency insertion, conflict resolution, and staff reassignment. This provides the constraint solver foundation for criteria #1–9 and the schedule generation engine.
 - **schedule-ai-updates**: Removes broken AI tab, adds schedule explanations, unassigned job explanations, natural language constraints, and AI help assistant. This provides the initial AI explanation layer and natural language parsing that this spec extends into full conversational co-piloting.
 
-The AI scheduling system extends these foundations with 30-constraint simultaneous evaluation (vs. competitors' 5–8), autonomous schedule building, predictive intelligence (weather, cancellation probability, job complexity, lead conversion timing), resource-facing chat with escalation workflows, a proactive alert/suggestion engine, and revenue-per-resource-hour optimization.
+The AI scheduling system extends these foundations with 30-constraint simultaneous evaluation (vs. competitors' 5–8), autonomous schedule building, predictive intelligence (weather, cancellation probability, job complexity, lead conversion timing), resource-facing chat with escalation workflows, a proactive alert/suggestion engine, and revenue-per-resource-hour optimization. This spec also covers composing the built frontend components into page views, registering routes, and wiring page-level data flow so users can access the AI scheduling views.
 
 ## Glossary
 
@@ -34,6 +34,11 @@ The AI scheduling system extends these foundations with 30-constraint simultaneo
 - **PBT**: Property-Based Testing using the Hypothesis library to generate random inputs and validate correctness properties hold for all generated cases.
 - **agent_browser**: The Vercel Agent Browser CLI tool used for end-to-end browser testing, providing snapshot-based element refs for reliable UI automation.
 - **LoggerMixin**: The project's structured logging mixin class that provides domain-scoped logging methods (log_started, log_completed, log_failed, log_rejected).
+- **AI_Schedule_Page**: The composed page view that renders ScheduleOverviewEnhanced (with CapacityHeatMap integrated at the bottom), AlertsPanel below the overview, and SchedulingChat as a persistent right sidebar — forming the admin AI scheduling workspace.
+- **Resource_Mobile_Page**: The composed mobile page view that renders ResourceScheduleView, ResourceMobileChat, and PreJobChecklist for field technicians.
+- **Router**: The `createBrowserRouter` configuration in `frontend/src/core/router/index.tsx` that maps URL paths to page components.
+- **Page_Wrapper**: A thin page component in `frontend/src/pages/` that imports and renders a composed feature view, following the project's existing pattern (e.g., `Schedule.tsx` wraps `SchedulePageComponent`).
+- **Generate_Routes_Tab**: The existing "Generate Routes" navigation item at `/schedule/generate` in the sidebar, which serves as the entry point for AI scheduling.
 
 ## Requirements
 
@@ -45,10 +50,10 @@ The AI scheduling system extends these foundations with 30-constraint simultaneo
 
 1. THE System SHALL support two user roles: User_Admin (dispatcher, office manager, or owner) and Resource (field technician, crew lead, or subcontractor).
 2. THE System SHALL provide three primary UI surfaces: Schedule_Overview, Alerts_Panel, and AI_Chat.
-3. WHEN a User_Admin accesses the scheduling system, THE System SHALL display the Schedule_Overview showing all assigned jobs across technicians by day and week, capacity utilization percentages, and status indicators (confirmed, in-progress, completed, flagged).
+3. WHEN a User_Admin accesses the scheduling system, THE System SHALL display the Schedule_Overview as a custom resource-row × day-column grid layout (not a generic calendar widget) where each row represents a resource (showing name, role, and utilization percentage inline, e.g., "Mike D. — Senior Tech — 87% utilized") and each column represents a day of the week (showing date and total job count in the header, e.g., "Mon 2/16 — 18 jobs"). Each cell SHALL contain job cards showing job type, time window, customer name, address, and indicator icons (⭐ for VIP, ⚠️ for conflict). Job cards SHALL be color-coded by job type (e.g., Spring Opening = green, Fall Closing = orange, Maintenance = blue, New Build = purple, Backflow Test = teal) with a visible color legend above the grid. A capacity row at the bottom SHALL show daily aggregate capacity utilization percentages with color coding (>90% red, 60–90% green, <60% yellow). The Schedule_Overview header SHALL include a week title (e.g., "Schedule Overview — Week of Feb 16, 2026"), Day/Week/Month view toggle buttons, and a "+ New Job" button.
 4. THE Schedule_Overview SHALL provide options to add or remove resources on the schedule.
 5. WHEN a User_Admin views the Alerts_Panel, THE System SHALL display the panel below the Schedule_Overview with alerts (red, critical conflicts requiring immediate attention) and suggestions (green, AI-recommended improvements that can be accepted or dismissed).
-6. THE AI_Chat SHALL provide a conversational interface where User_Admins give natural-language commands to build and modify schedules.
+6. THE AI_Chat SHALL be rendered as a persistent right sidebar panel alongside the Schedule_Overview (not a modal or collapsible section), providing a conversational interface where User_Admins give natural-language commands to build and modify schedules. AI responses SHALL include inline criteria tags (e.g., "Criteria #1 Proximity", "Criteria #26 Weather") as clickable badges showing which of the 30 criteria were used. WHEN the AI generates or modifies a schedule, the chat response SHALL include an actionable "Publish Schedule" button that applies the changes to the Schedule_Overview.
 7. THE AI_Chat SHALL provide a resource-facing interface where Resources request changes or get pre-job guidance.
 8. WHEN the AI_Chat receives a command from a User_Admin, THE AI_Scheduling_Engine SHALL ask clarifying questions before executing to ensure the most efficient outcome.
 9. WHEN the AI_Chat receives a request from a Resource, THE AI_Scheduling_Engine SHALL either handle the request autonomously or package it as a Change_Request for User_Admin approval.
@@ -577,3 +582,73 @@ The AI scheduling system extends these foundations with 30-constraint simultaneo
 2. THE System SHALL archive historical schedule data beyond a configurable retention period while maintaining access for ML training purposes.
 3. THE System SHALL scale schedule generation performance linearly with the number of jobs and resources, maintaining sub-30-second generation for up to 50 jobs per the existing route-optimization spec.
 4. WHEN the job count exceeds the single-generation threshold, THE System SHALL support batch generation that partitions jobs by zone or resource group for parallel optimization.
+
+### Requirement 36: AI Schedule Admin Page Composition
+
+**User Story:** As a User Admin, I want a single page that composes the AI scheduling components together (overview grid, alerts panel, and chat sidebar), so that I can manage AI-powered scheduling from one unified view.
+
+#### Acceptance Criteria
+
+1. THE AI_Schedule_Page SHALL render ScheduleOverviewEnhanced as the primary content area occupying the left portion of the viewport, with CapacityHeatMap integrated at the bottom of the overview grid.
+2. THE AI_Schedule_Page SHALL render AlertsPanel below the ScheduleOverviewEnhanced component.
+3. THE AI_Schedule_Page SHALL render SchedulingChat as a persistent right sidebar panel alongside the overview and alerts content.
+4. THE AI_Schedule_Page SHALL use a responsive layout where the SchedulingChat sidebar has a fixed width and the overview and alerts content fills the remaining horizontal space.
+5. WHEN the SchedulingChat produces schedule changes via the "Publish Schedule" button, THE AI_Schedule_Page SHALL pass those changes to the ScheduleOverviewEnhanced component for display.
+6. THE AI_Schedule_Page SHALL pass the current schedule date context to both the ScheduleOverviewEnhanced and AlertsPanel components so alerts are filtered to the viewed date.
+
+### Requirement 37: Route Registration for AI Schedule Page
+
+**User Story:** As a User Admin, I want to navigate to the AI scheduling view via the existing "Generate Routes" tab, so that I can access the AI scheduling workspace from the sidebar navigation without adding new navigation items.
+
+#### Acceptance Criteria
+
+1. THE Router SHALL register a route at `/schedule/generate` that renders the AI_Schedule_Page.
+2. THE Page_Wrapper for the AI schedule view SHALL follow the existing project pattern of a thin page component in `frontend/src/pages/` that imports and renders the composed view.
+3. THE Router SHALL lazy-load the AI_Schedule_Page using the same `lazy(() => import(...))` pattern used by all other pages in the router.
+4. THE Generate_Routes_Tab navigation item in the Layout sidebar SHALL continue to point to `/schedule/generate` and remain accessible to authenticated users.
+5. WHEN a user navigates to `/schedule/generate`, THE Router SHALL render the AI_Schedule_Page within the existing ProtectedLayoutWrapper (requiring authentication).
+
+### Requirement 38: Resource Mobile Page Composition
+
+**User Story:** As a Resource (field technician), I want a mobile-optimized page that composes my daily schedule view with the AI chat assistant, so that I can view my route and interact with the scheduling AI from the field.
+
+#### Acceptance Criteria
+
+1. THE Resource_Mobile_Page SHALL render ResourceScheduleView as the primary content showing the daily route with job cards, ETAs, and pre-job flags.
+2. THE Resource_Mobile_Page SHALL render ResourceMobileChat below the schedule view, providing the field assistant chat interface.
+3. THE Resource_Mobile_Page SHALL use a mobile-first stacked layout where the schedule view and chat are vertically arranged.
+4. WHEN a Resource accesses the Resource_Mobile_Page, THE page SHALL display the current day's schedule by default.
+
+### Requirement 39: Route Registration for Resource Mobile Page
+
+**User Story:** As a Resource (field technician), I want a dedicated mobile route to access my schedule and chat assistant, so that I can reach the mobile scheduling view from a direct URL.
+
+#### Acceptance Criteria
+
+1. THE Router SHALL register a route at `/schedule/mobile` that renders the Resource_Mobile_Page.
+2. THE Page_Wrapper for the resource mobile view SHALL follow the existing project pattern of a thin page component in `frontend/src/pages/`.
+3. THE Router SHALL lazy-load the Resource_Mobile_Page using the same `lazy(() => import(...))` pattern.
+4. WHEN a user navigates to `/schedule/mobile`, THE Router SHALL render the Resource_Mobile_Page within the existing ProtectedLayoutWrapper (requiring authentication).
+
+### Requirement 40: Page-Level Component Integration and Data Flow
+
+**User Story:** As a developer, I want the composed pages to properly wire component props and callbacks, so that the AI scheduling components communicate correctly within the page layout.
+
+#### Acceptance Criteria
+
+1. THE AI_Schedule_Page SHALL import ScheduleOverviewEnhanced from `@/features/schedule`, AlertsPanel from `@/features/scheduling-alerts`, and SchedulingChat from `@/features/ai`. Note: `features/ai/index.ts` does not currently exist and must be created as a root barrel export; `features/scheduling-alerts/` and `features/resource-mobile/` directories must be created in their respective implementation phases (10 and 12) before page composition.
+2. THE AI_Schedule_Page SHALL manage a shared `scheduleDate` state that is passed to both ScheduleOverviewEnhanced and AlertsPanel for date-synchronized display.
+3. WHEN the user changes the view mode or navigates to a different week in ScheduleOverviewEnhanced, THE AI_Schedule_Page SHALL update the shared schedule date context.
+4. THE Resource_Mobile_Page SHALL import ResourceScheduleView from `@/features/resource-mobile` and ResourceMobileChat from `@/features/ai`.
+5. IF the SchedulingChat returns an error, THEN THE AI_Schedule_Page SHALL continue rendering the ScheduleOverviewEnhanced and AlertsPanel without disruption, using the existing `ErrorBoundary` component from `@/shared/components/ErrorBoundary` with a custom `fallback` prop.
+
+### Requirement 41: Page Accessibility and Test Identifiers
+
+**User Story:** As a developer, I want the composed pages to include proper test identifiers and semantic structure, so that the pages are testable and accessible.
+
+#### Acceptance Criteria
+
+1. THE AI_Schedule_Page SHALL include a `data-testid="ai-schedule-page"` attribute on its root element.
+2. THE Resource_Mobile_Page SHALL include a `data-testid="resource-mobile-page"` attribute on its root element.
+3. THE AI_Schedule_Page SHALL use semantic HTML landmarks: a `main` element wrapping the overview and alerts content, and an `aside` element wrapping the SchedulingChat sidebar.
+4. THE AI_Schedule_Page SHALL include a visually hidden heading (e.g., `<h1>`) identifying the page as the AI Scheduling workspace for screen reader navigation.

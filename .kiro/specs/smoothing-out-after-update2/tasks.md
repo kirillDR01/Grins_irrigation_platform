@@ -135,10 +135,10 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
     - Test: cancelling edit returns to detail modal without changes
     - _Requirements: 18.1, 18.2, 18.3_
 
-- [-] 6. Checkpoint — Bugs & Data Integrity complete
+- [x] 6. Checkpoint — Bugs & Data Integrity complete
   - Run all unit tests, verify they pass. Ask the user if questions arise.
 
-- [ ] 6.1 E2E Visual Validation — Bugs & Data Integrity
+- [x] 6.1 E2E Visual Validation — Bugs & Data Integrity
   - **Prerequisite:** Ensure all changes are committed and pushed to `dev`. Wait 5 minutes for Railway deployment to complete before proceeding.
   - Start backend + frontend dev servers
   - **Auth guard test (Req 4):**
@@ -356,10 +356,10 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
     - Test: action button opens calendar form instead of just advancing
     - _Requirements: 10.1, 10.4, 10.5_
 
-- [ ] 14. Checkpoint — Workflow & Logic Gaps complete
+- [x] 14. Checkpoint — Workflow & Logic Gaps complete
   - Run all unit tests, verify they pass. Ask the user if questions arise.
 
-- [ ] 14.1 E2E Visual Validation — Workflow & Logic Gaps
+- [x] 14.1 E2E Visual Validation — Workflow & Logic Gaps
   - **Prerequisite:** Ensure all changes are committed and pushed to `dev`. Wait 5 minutes for Railway deployment to complete before proceeding.
   - **Scheduled job status test (Req 5):**
     - Navigate to /jobs — verify "Scheduled" appears in the status filter dropdown
@@ -504,10 +504,10 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
     - Test on wide viewport — verify no horizontal scrollbar appears when all columns fit
     - _Requirements: 20.2, 20.3, 20.5_
 
-- [ ] 21. Checkpoint — UX Improvements complete
+- [x] 21. Checkpoint — UX Improvements complete
   - Run all unit tests, verify they pass. Ask the user if questions arise.
 
-- [ ] 21.1 E2E Visual Validation — UX Improvements
+- [x] 21.1 E2E Visual Validation — UX Improvements
   - **Prerequisite:** Ensure all changes are committed and pushed to `dev`. Wait 5 minutes for Railway deployment to complete before proceeding.
   - **Job selector test (Req 11):**
     - Navigate to /schedule, click to create a new appointment
@@ -610,10 +610,10 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
     - Test: job with on-site payment → payment confirmation shown
     - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.6_
 
-- [ ] 24. Checkpoint — Payment Feature complete
+- [x] 24. Checkpoint — Payment Feature complete
   - Run all unit tests, verify they pass. Ask the user if questions arise.
 
-- [ ] 24.1 E2E Visual Validation — Payment Feature
+- [x] 24.1 E2E Visual Validation — Payment Feature
   - **Prerequisite:** Ensure all changes are committed and pushed to `dev`. Wait 5 minutes for Railway deployment to complete before proceeding.
   - **Stripe Tap-to-Pay test (Req 16):**
     - Navigate to a job's on-site view that has an invoice
@@ -677,11 +677,11 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
     - Confirm no AI routing / Generate Routes code
     - _Requirements: 21.1, 21.2, 21.3, 21.4, 21.5, 21.6_
 
-- [ ] 28. Final Checkpoint — All domains complete
+- [x] 28. Final Checkpoint — All domains complete
   - Ensure all 21 requirements are covered (Req 1-21), all unit tests pass, all property-based tests pass, all integration tests pass. Ask the user if questions arise.
 
-- [ ] 29. Final Comprehensive E2E Visual Validation
-  - [ ] 29.1 Run E2E Testing Playbook as regression baseline
+- [x] 29. Final Comprehensive E2E Visual Validation
+  - [x] 29.1 Run E2E Testing Playbook as regression baseline
     - **Prerequisite:** Ensure all changes are committed and pushed to `dev`. Wait 5 minutes for Railway deployment to complete before proceeding.
     - Execute the full `e2e-screenshots/E2E-TESTING-PLAYBOOK.md` playbook (all 16 phases) to verify the existing customer lifecycle still works after all smoothing-out changes
     - **CRITICAL:** Use phone 952-737-3312 for ALL test leads
@@ -699,7 +699,7 @@ This plan implements all 21 requirements across 4 domains: Bugs & Data Integrity
     - Any regression found must be fixed before proceeding
     - Save screenshots to `e2e-screenshots/smoothing-out-after-update2/playbook-regression/`
 
-  - [ ] 29.2 Full regression E2E pass across all NEW features
+  - [x] 29.2 Full regression E2E pass across all NEW features
     - **Prerequisite:** Ensure all changes are committed and pushed to `dev`. Wait 5 minutes for Railway deployment to complete before proceeding.
     - Use agent-browser to perform a complete walkthrough of every feature implemented in this spec
     - **Full lifecycle walkthrough (with new smoothing-out features):**

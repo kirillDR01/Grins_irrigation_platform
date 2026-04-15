@@ -2,9 +2,34 @@
 
 ## Overview
 
-This plan implements the full AI scheduling system in 7 phases following the project's dependency pattern: database foundations → core scoring services → AI services → API routes → frontend components → comprehensive testing → quality checks. The backend uses Python 3.11+ / FastAPI / SQLAlchemy 2.0 (async) / PostgreSQL. The frontend uses React 19 / TypeScript 5.9 / Vite 7 / TanStack Query v5 / Tailwind 4. All 35 requirements, 22 correctness properties, 6 backend services, 6 database tables, 4 model extensions, all API routes, and all frontend components are covered.
+This plan implements the full AI scheduling system in 8 phases following the project's dependency pattern: database foundations → core scoring services → AI services → API routes → frontend components → page composition and routing → comprehensive testing → quality checks. The backend uses Python 3.11+ / FastAPI / SQLAlchemy 2.0 (async) / PostgreSQL. The frontend uses React 19 / TypeScript 5.9 / Vite 7 / TanStack Query v5 / Tailwind 4. All 41 requirements, 27 correctness properties, 6 backend services, 6 database tables, 4 model extensions, all API routes, all frontend components, and page composition/routing are covered.
+
+## Prerequisites — Current Dev Branch State
+
+Before starting implementation, note the current state of the codebase:
+
+**Backend:**
+- `services/ai/scheduling/` directory exists but is **empty** (only `__pycache__/` and `scorers/` with `__pycache__/`). Clean up stale `__pycache__` before creating new files.
+- No AI scheduling models, schemas, migrations, API routes, or tests exist as source files.
+- Foundation services exist and should be wrapped: `ScheduleGenerationService`, `ScheduleSolverService`, `ConstraintChecker`, `AIAgentService`, `ConstraintParserService`, `ScheduleExplanationService`, `UnassignedJobAnalyzer`, `TravelTimeService`.
+- Existing AI infrastructure: `services/ai/agent.py`, `services/ai/audit.py`, `services/ai/prompts/scheduling.py`, `services/ai/tools/scheduling.py`, `services/ai/context/builder.py`.
+
+**Frontend:**
+- None of the AI scheduling components exist (no `ScheduleOverviewEnhanced`, `CapacityHeatMap`, `AlertsPanel`, `SchedulingChat`, etc.).
+- `features/scheduling-alerts/` directory does **not exist** — must be created from scratch.
+- `features/resource-mobile/` directory does **not exist** — must be created from scratch.
+- `features/ai/index.ts` (root barrel) does **not exist** — only `features/ai/components/index.ts` exists.
+- `features/schedule/index.ts` exists and exports `ScheduleGenerationPage` + 22 other components/hooks/types.
+- `pages/ScheduleGenerate.tsx` exists: imports `ScheduleGenerationPage` from `@/features/schedule`.
+- `shared/components/ErrorBoundary.tsx` exists with `fallback` prop support — use this, not `react-error-boundary`.
+- `fast-check` (v4.6.0) is already a frontend dependency. `hypothesis` (>=6.92.0) is already a backend dependency.
 
 ## Tasks
+
+- [ ] 0. Clean up stale scaffolds
+  - Remove `__pycache__` directories from `src/grins_platform/services/ai/scheduling/` and `src/grins_platform/services/ai/scheduling/scorers/`
+  - Create `__init__.py` files in `src/grins_platform/services/ai/scheduling/` and `src/grins_platform/services/ai/scheduling/scorers/`
+  - Verify clean state: `find src/grins_platform/services/ai/scheduling -type f` should show only `__init__.py` files
 
 - [ ] 1. Database migrations, models, and schemas
   - [ ] 1.1 Create Alembic migration for 6 new tables and 4 model extensions
@@ -36,7 +61,8 @@ This plan implements the full AI scheduling system in 7 phases following the pro
     - _Requirements: 3.3, 4.3, 5.1–5.5, 7.1, 7.3, 8.5, 19.1, 19.2, 20.1, 20.2_
 
   - [ ] 1.4 Create Pydantic schemas for all new endpoints
-    - Create `src/grins_platform/schemas/ai_scheduling.py` with:
+    - Create `src/grins_platform/schemas/ai_scheduling.py` (note: `schemas/ai.py` already exists with `ScheduleGenerateRequest/Response`, `GeneratedSchedule`, `ScheduleWarning`, `ScheduleDay`, `StaffAssignment`, `ScheduledJob` — the new file is for AI scheduling-specific schemas, not general AI schemas)
+    - New schemas in `ai_scheduling.py`:
       - `CriterionResult` (criterion_number, criterion_name, score, weight, is_hard, is_satisfied, explanation)
       - `CriteriaScore` / `ScheduleEvaluation` (schedule_date, total_score, hard_violations, criteria_scores list, alerts list)
       - `RankedCandidate` (staff_id, name, composite_score, criterion_breakdown)
@@ -59,6 +85,7 @@ This plan implements the full AI scheduling system in 7 phases following the pro
 
 
 - [ ] 3. Core services — CriteriaEvaluator and 6 scorer modules
+  - Note: `services/ai/scheduling/` and `services/ai/scheduling/scorers/` directories exist on dev but contain only stale `__pycache__/`. Task 0 cleans these up. Existing foundation services to wrap: `ScheduleSolverService` (`services/schedule_solver_service.py`), `ConstraintChecker` (`services/schedule_constraints.py`), `TravelTimeService` (`services/travel_time_service.py`).
   - [ ] 3.1 Create CriteriaEvaluator service
     - Create `src/grins_platform/services/ai/scheduling/criteria_evaluator.py`
     - Implement `CriteriaEvaluator(LoggerMixin)` with `DOMAIN = "scheduling"`
@@ -67,7 +94,7 @@ This plan implements the full AI scheduling system in 7 phases following the pro
     - Implement `evaluate_schedule(solution, context) → ScheduleEvaluation` — scores entire schedule, returns aggregate with per-criterion breakdown and alerts for violations
     - Implement `rank_candidates(job, candidates, context) → list[RankedCandidate]` — ranks staff candidates by composite criteria score
     - Load criteria config from DB (weights, hard/soft, enabled flags) with caching via Redis
-    - Wrap existing `ConstraintChecker` — criteria 1–2 delegate to existing travel/equipment checks
+    - Wrap existing `ConstraintChecker` (from `services/schedule_constraints.py`) — criteria 1–2 delegate to existing travel/equipment checks
     - _Requirements: 3.1–3.5, 4.1–4.5, 5.1–5.5, 6.1–6.5, 7.1–7.5, 8.1–8.5, 23.1, 23.2, 32.1, 32.2_
 
   - [ ] 3.2 Implement GeographicScorer (criteria 1–5)
@@ -136,10 +163,11 @@ This plan implements the full AI scheduling system in 7 phases following the pro
 
 
 - [ ] 5. AI services — SchedulingChatService, AlertEngine, PreJobGenerator, ChangeRequestService
+  - Note: Existing AI infrastructure to leverage: `AIAgentService` (`services/ai/agent.py`), `ConstraintParserService` (`services/ai/constraint_parser.py`), `ScheduleExplanationService` (`services/ai/explanation_service.py`), AI prompts (`services/ai/prompts/scheduling.py`), AI tools (`services/ai/tools/scheduling.py`), context builder (`services/ai/context/builder.py`). Also note: a general `chat_service.py` exists at `services/chat_service.py` (NOT in ai/scheduling/) — the new SchedulingChatService is separate and scheduling-specific.
   - [ ] 5.1 Implement SchedulingChatService
     - Create `src/grins_platform/services/ai/scheduling/chat_service.py`
     - Implement `SchedulingChatService(LoggerMixin)` with `DOMAIN = "scheduling"`
-    - Constructor takes `AsyncSession`, initializes `AIAgentService`, `CriteriaEvaluator`, `ScheduleGenerationService`
+    - Constructor takes `AsyncSession`, initializes `AIAgentService` (from `services/ai/agent.py`), `CriteriaEvaluator`, `ScheduleGenerationService` (from `services/schedule_generation_service.py`)
     - Implement `chat(user_id, role, message, session_id) → ChatResponse` — routes messages based on `UserRole` (admin vs resource)
     - Implement `_handle_admin_message()` — uses OpenAI function calling with admin tool set: `generate_schedule`, `reshuffle_day`, `insert_emergency`, `forecast_capacity`, `move_job`, `find_underutilized`, `batch_schedule`, `rank_profitable_jobs`, `weather_reschedule`, `create_recurring_route`
     - Implement `_handle_resource_message()` — uses OpenAI function calling with resource tool set: `report_delay`, `get_prejob_info`, `request_followup`, `report_access_issue`, `find_nearby_work`, `request_resequence`, `request_assistance`, `log_parts`, `get_tomorrow_schedule`, `request_upgrade_quote`
@@ -332,20 +360,27 @@ This plan implements the full AI scheduling system in 7 phases following the pro
 - [ ] 9. Frontend — Schedule Overview extensions
   - [ ] 9.1 Create CapacityHeatMap component
     - Create `frontend/src/features/schedule/components/CapacityHeatMap.tsx`
-    - Visual capacity utilization by day/resource with color indicators: >90% red (overbooking risk), 60–90% green (healthy), <60% yellow (underutilization opportunity)
-    - Accept schedule data as props, render grid of day × resource cells
-    - Use `data-testid="capacity-heat-map"` and per-cell `data-testid="capacity-cell-{day}-{resource}"`
+    - Capacity row rendered at the bottom of the schedule grid showing daily aggregate utilization percentages
+    - Color indicators: >90% red (overbooking risk), 60–90% green (healthy), <60% yellow (underutilization opportunity)
+    - Accept schedule data as props, render a single row of day cells with percentage values and color-coded backgrounds
+    - Use `data-testid="capacity-heat-map"` and per-cell `data-testid="capacity-cell-{day}"`
     - _Requirements: 1.3, 6.1, 10.1, 10.4_
 
   - [ ] 9.2 Create ScheduleOverviewEnhanced component
     - Create `frontend/src/features/schedule/components/ScheduleOverviewEnhanced.tsx`
-    - Extended schedule view showing all assigned jobs across technicians by day/week
+    - Custom resource-row × day-column grid layout (NOT FullCalendar — this is a purpose-built grid matching the mockup)
+    - Each row = one resource showing: name, role/title, inline utilization percentage (e.g., "Mike D. — Senior Tech — 87% utilized")
+    - Each column = one day showing: date and total job count in header (e.g., "Mon 2/16 — 18 jobs")
+    - Each cell contains job cards with: job type name, time window (e.g., "8:00 – 9:30 AM"), customer last name + address, indicator icons (⭐ for VIP customers, ⚠️ for conflicts)
+    - Job cards color-coded by job type: Spring Opening = green, Fall Closing = orange, Maintenance = blue, New Build = purple, Backflow Test = teal (configurable color map)
+    - Job type color legend bar above the grid with colored dots and labels
+    - Week title header: "Schedule Overview — Week of {date}" with Day/Week/Month toggle buttons and "+ New Job" button
+    - Add/remove resource controls on the schedule (Req 1.4)
+    - Integrate CapacityHeatMap as the bottom row of the grid
     - Status indicators: confirmed, in-progress, completed, flagged
     - Route sequences per resource with ETAs
-    - AI-generated annotations (explanations) per assignment
-    - Add/remove resource controls on the schedule (Req 1.4)
-    - Integrate CapacityHeatMap below the schedule grid
-    - Use `data-testid="schedule-overview-enhanced"`
+    - AI-generated annotations (explanations) per assignment from `criteria_scores` JSONB
+    - Use `data-testid="schedule-overview-enhanced"`, per-resource-row `data-testid="resource-row-{id}"`, per-job-card `data-testid="job-card-{id}"`
     - _Requirements: 1.3, 1.4, 10.1, 10.2, 10.3, 10.5, 10.6, 10.9, 10.10_
 
   - [ ] 9.3 Create BatchScheduleResults component
@@ -359,38 +394,47 @@ This plan implements the full AI scheduling system in 7 phases following the pro
 
   - [ ] 9.4 Create TanStack Query hooks for schedule extensions
     - Create `frontend/src/features/schedule/hooks/useAIScheduling.ts`
-    - `useCapacityForecast(params)` — query `GET /api/v1/schedule/capacity`
+    - Note: existing hooks in this directory include `useScheduleGeneration.ts` (with `useGenerateSchedule`, `usePreviewSchedule`, `useScheduleCapacity`), `useAppointments.ts` (with `useWeeklySchedule`, `useDailySchedule`), `useMapData.ts`, `useConstraintParser.ts`, `useScheduleExplanation.ts`, `useJobsReadyToSchedule.ts`. The new hooks extend but do not replace these.
+    - `useCapacityForecast(params)` — query `GET /api/v1/schedule/capacity` (extends existing `useScheduleCapacity` with 30-criteria analysis)
     - `useBatchGenerate()` — mutation `POST /api/v1/schedule/batch-generate`
     - `useUtilizationReport(params)` — query `GET /api/v1/schedule/utilization`
     - `useEvaluateSchedule()` — mutation `POST /api/v1/ai-scheduling/evaluate`
     - `useCriteriaConfig()` — query `GET /api/v1/ai-scheduling/criteria`
     - Define query key factory: `aiSchedulingKeys`
+    - Add new hooks to `features/schedule/hooks/index.ts` barrel and `features/schedule/index.ts` root barrel
     - _Requirements: 10.1–10.10_
 
 - [ ] 10. Frontend — Alerts/Suggestions Panel
+  - Note: `frontend/src/features/scheduling-alerts/` directory does NOT exist on dev. Create the full directory structure first: `scheduling-alerts/components/`, `scheduling-alerts/hooks/`, `scheduling-alerts/types/`, `scheduling-alerts/api/`.
   - [ ] 10.1 Create AlertsPanel component
     - Create `frontend/src/features/scheduling-alerts/components/AlertsPanel.tsx`
-    - Main panel rendering below Schedule Overview
+    - Main panel rendering below the Schedule Overview grid
+    - Header: "Alerts & Suggestions" with badge showing total alert count (e.g., "3 alerts")
     - Fetch alerts via `GET /api/v1/alerts/` with polling (configurable interval, default 30s)
-    - Separate sections for alerts (red/critical) and suggestions (green)
-    - Show alert/suggestion counts
-    - Use `data-testid="alerts-panel"`
+    - Render alerts (red/⚠) and suggestions (green/💡) in a single scrollable list, alerts first then suggestions
+    - Each item is an AlertCard or SuggestionCard component
+    - Use `data-testid="alerts-panel"`, `data-testid="alerts-count-badge"`
     - _Requirements: 1.5, 11.1–11.5, 12.1–12.5_
 
   - [ ] 10.2 Create AlertCard component
     - Create `frontend/src/features/scheduling-alerts/components/AlertCard.tsx`
-    - Individual alert card with red styling for critical alerts
-    - Display title, description, affected jobs/resources
-    - One-click resolution action buttons (reassign, shift timing, force-schedule, etc.)
+    - Individual alert card with red/critical styling: red left border or background accent, ⚠ icon prefix in title
+    - Header row: "⚠ ALERT — {alert_type}" with timestamp (e.g., "2 min ago")
+    - Brief summary line (e.g., "Backflow test on Tue assigned to Carlos R. — not backflow-certified")
+    - Detailed description paragraph with context and impact
+    - One-click resolution action buttons as a row of styled buttons (e.g., "Reassign to Mike D.", "See alternatives", "Dismiss")
     - Resolution actions call `POST /api/v1/alerts/{id}/resolve`
     - Use `data-testid="alert-card-{id}"`
     - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5_
 
   - [ ] 10.3 Create SuggestionCard component
     - Create `frontend/src/features/scheduling-alerts/components/SuggestionCard.tsx`
-    - Individual suggestion card with green styling
-    - Display title, description, metrics (drive time saved, revenue impact, cost savings)
-    - Accept/dismiss buttons — accept calls `POST /api/v1/alerts/{id}/resolve`, dismiss calls `POST /api/v1/alerts/{id}/dismiss`
+    - Individual suggestion card with green styling: green left border or background accent, 💡 icon prefix in title
+    - Header row: "💡 SUGGESTION — {suggestion_type}" with timestamp (e.g., "8 min ago")
+    - Brief summary line (e.g., "Swap 2 jobs between Sarah K. and Carlos R. on Monday — saves 28 min drive time")
+    - Detailed description paragraph with metrics (drive time saved, revenue impact, cost savings)
+    - Accept/dismiss buttons as a row: primary "Accept" action, secondary actions (e.g., "See on map", "Review jobs"), and "Keep current"/"Leave as-is" dismiss option
+    - Accept calls `POST /api/v1/alerts/{id}/resolve`, dismiss calls `POST /api/v1/alerts/{id}/dismiss`
     - Use `data-testid="suggestion-card-{id}"`
     - _Requirements: 13.6, 13.7, 13.8, 13.9, 13.10_
 
@@ -429,14 +473,19 @@ This plan implements the full AI scheduling system in 7 phases following the pro
     - _Requirements: 11.1–11.5, 12.1–12.5_
 
 - [ ] 11. Frontend — AI Chat extensions
+  - Note: `features/ai/` exists with 10 components and 6 hooks, but has NO root `index.ts` barrel (only `components/index.ts`). New components go in existing `features/ai/components/` directory. A root `features/ai/index.ts` must be created in task 11.5 to support `@/features/ai` imports in the page composition phase.
   - [ ] 11.1 Create SchedulingChat component
     - Create `frontend/src/features/ai/components/SchedulingChat.tsx`
-    - Enhanced chat component with scheduling-specific UI
-    - Inline schedule previews when AI generates/modifies schedules
-    - Clarifying question buttons for quick responses
+    - Persistent right sidebar panel layout (not modal or collapsible) — renders alongside the Schedule Overview in a two-column layout (schedule grid on left, chat on right)
+    - Header showing "AI Scheduling Assistant" with model name badge (e.g., "Opus 4.6")
+    - Chat messages with role labels: "AI ASSISTANT" (left-aligned, light background) and user name + role (right-aligned, colored background)
+    - AI responses include inline criteria tag badges (e.g., "Criteria #1 Proximity", "Criteria #3 Zones", "Criteria #26 Weather") as small clickable pills showing which of the 30 criteria were used for that response
+    - When AI generates or modifies a schedule, include an actionable "Publish Schedule →" button in the chat response that applies changes to the Schedule Overview
+    - Clarifying question display with numbered list format and quick-response buttons
+    - Schedule summary display inline (e.g., "Mon: 10 jobs, Tue: 10 jobs..." with metrics like total drive time and avg jobs/tech/day)
     - Send messages via `POST /api/v1/ai-scheduling/chat` with session management
     - Display schedule changes inline with accept/reject controls
-    - Use `data-testid="scheduling-chat"`
+    - Use `data-testid="scheduling-chat"`, `data-testid="chat-message-{role}"`, `data-testid="criteria-tag-{number}"`, `data-testid="publish-schedule-btn"`
     - _Requirements: 1.6, 1.8, 2.1, 2.2, 9.1–9.10_
 
   - [ ] 11.2 Create ResourceMobileChat component
@@ -463,7 +512,14 @@ This plan implements the full AI scheduling system in 7 phases following the pro
     - Define query key factory: `schedulingChatKeys`
     - _Requirements: 9.1–9.10, 14.1–14.10_
 
+  - [ ] 11.5 Create root barrel export for AI feature
+    - Create `frontend/src/features/ai/index.ts` — root barrel that re-exports from `./components/index.ts` and adds `SchedulingChat`, `ResourceMobileChat`, `PreJobChecklist`
+    - Currently only `features/ai/components/index.ts` exists (exports 10 components). The root barrel is needed so phase 13A page composition can import from `@/features/ai`.
+    - Also update `features/ai/components/index.ts` to add the 3 new component exports
+    - _Requirements: 40.1, 40.4_
+
 - [ ] 12. Frontend — Resource Mobile View
+  - Note: `frontend/src/features/resource-mobile/` directory does NOT exist on dev. Create the full directory structure first: `resource-mobile/components/`, `resource-mobile/hooks/`, `resource-mobile/types/`, `resource-mobile/api/`.
   - [ ] 12.1 Create ResourceScheduleView component
     - Create `frontend/src/features/resource-mobile/components/ResourceScheduleView.tsx`
     - Mobile schedule card with route order, ETAs, pre-job flags
@@ -496,6 +552,69 @@ This plan implements the full AI scheduling system in 7 phases following the pro
 
 - [ ] 13. Checkpoint — Frontend components complete
   - Run `cd frontend && npm run build` to verify all components compile. Run `npm test` to verify existing tests still pass. Ensure all tests pass, ask the user if questions arise.
+
+
+- [ ] 13A. Page composition and routing — Compose components into page views and register routes
+  - [ ] 13A.1 Create AIScheduleView composed page component
+    - Create `frontend/src/features/schedule/components/AIScheduleView.tsx`
+    - Import `ScheduleOverviewEnhanced` from local `./ScheduleOverviewEnhanced` (same feature), `AlertsPanel` from `@/features/scheduling-alerts` (created in phase 10), `SchedulingChat` from `@/features/ai` (root barrel created in task 11.5)
+    - Import `ErrorBoundary` from `@/shared/components/ErrorBoundary` (already exists on dev — class component with `fallback` prop)
+    - Manage shared `scheduleDate` state via `useState<string>` defaulting to today's ISO date
+    - Use CSS Grid layout with `grid-template-columns: 1fr 380px` for main content + chat sidebar
+    - Render `<main>` landmark wrapping `ScheduleOverviewEnhanced` and `AlertsPanel`
+    - Render `<aside>` landmark wrapping `SchedulingChat` inside `<ErrorBoundary fallback={<ChatErrorFallback />}>`
+    - Include `data-testid="ai-schedule-page"` on root element and visually hidden `<h1>` heading
+    - Wire `onViewModeChange` callback from `ScheduleOverviewEnhanced` to update `scheduleDate`
+    - Wire `onPublishSchedule` callback from `SchedulingChat` to invalidate schedule/alert queries via `queryClient.invalidateQueries` on `aiSchedulingKeys` and `alertKeys`
+    - Create a local `ChatErrorFallback` component rendering "Chat unavailable" with a retry link
+    - Prerequisite: phases 9–12 and task 11.5 must be complete (all child components and barrel exports must exist)
+    - _Requirements: 36.1–36.6, 40.1–40.3, 40.5, 41.1, 41.3, 41.4_
+
+  - [ ] 13A.2 Export `AIScheduleView` from `frontend/src/features/schedule/index.ts`
+    - _Requirements: 40.1_
+
+  - [ ] 13A.3 Update `frontend/src/pages/ScheduleGenerate.tsx` to render `AIScheduleView`
+    - Current content: `import { ScheduleGenerationPage } from '@/features/schedule'` → `return <ScheduleGenerationPage />`
+    - Change to: `import { AIScheduleView } from '@/features/schedule'` → `return <AIScheduleView />`
+    - _Requirements: 37.2_
+
+  - [ ] 13A.4 Create ResourceMobileView composed page component
+    - Create `frontend/src/features/resource-mobile/components/ResourceMobileView.tsx`
+    - Import `ResourceScheduleView` from local `./ResourceScheduleView` (same feature, created in phase 12), `ResourceMobileChat` from `@/features/ai` (root barrel created in task 11.5)
+    - Use mobile-first stacked layout (flex column) with schedule view on top, chat below
+    - Include `data-testid="resource-mobile-page"` on root element
+    - Prerequisite: phases 11.5 and 12 must be complete
+    - _Requirements: 38.1–38.4, 40.4, 41.2_
+
+  - [ ] 13A.5 Export `ResourceMobileView` from `frontend/src/features/resource-mobile/index.ts`
+    - _Requirements: 40.4_
+
+  - [ ] 13A.6 Create `frontend/src/pages/ScheduleMobile.tsx` page wrapper
+    - Follow the thin page-wrapper pattern: import `ResourceMobileView` from `@/features/resource-mobile` and render it
+    - _Requirements: 39.2_
+
+  - [ ] 13A.7 Add `/schedule/mobile` route to `frontend/src/core/router/index.tsx`
+    - Add lazy import: `const ScheduleMobilePage = lazy(() => import('@/pages/ScheduleMobile').then((m) => ({ default: m.ScheduleMobilePage })))`
+    - Register `{ path: 'schedule/mobile', element: <ScheduleMobilePage /> }` in the ProtectedLayoutWrapper children array, after the existing `schedule/generate` route (currently at line ~201-204 in router)
+    - _Requirements: 39.1, 39.3, 39.4_
+
+  - [ ] 13A.8 Verify page composition compiles
+    - Run TypeScript type checking (`npx tsc --noEmit`) and ESLint on all new/modified files
+
+  - [ ] 13A.9 Write unit tests for composed pages
+    - `AIScheduleView.test.tsx` — renders all three child components, data-testid present, semantic landmarks, error boundary catches chat crash
+    - `ResourceMobileView.test.tsx` — renders both child components, correct DOM ordering
+    - `ScheduleGenerate.test.tsx` and `ScheduleMobile.test.tsx` — thin wrapper tests
+    - Router route verification tests for `/schedule/generate` and `/schedule/mobile`
+    - _Requirements: 36.1–36.6, 38.1–38.2, 41.1–41.4_
+
+  - [ ] 13A.10 Write property-based tests (fast-check) for Properties 23–27
+    - **Property 23**: Admin page composition structure — generate random schedule data, assert DOM invariants
+    - **Property 24**: Shared schedule date propagation — generate random ISO dates, verify both children receive same date
+    - **Property 25**: Date context update on view change — generate random view mode sequences, verify date propagation
+    - **Property 26**: Mobile page composition structure — generate random data, assert DOM ordering
+    - **Property 27**: Chat error isolation — generate random errors, verify overview + alerts survive
+    - _Requirements: 36.1–36.6, 38.1–38.2, 40.2–40.3, 40.5, 41.1–41.4_
 
 
 - [ ] 14. Unit tests with Property-Based Testing (PBT) — Hypothesis strategies and properties 1–11
@@ -887,17 +1006,18 @@ This plan implements the full AI scheduling system in 7 phases following the pro
 - [ ] 24. Final checkpoint — Full quality gate
   - Run complete quality gate: `uv run ruff check --fix src/ && uv run ruff format --check src/ && uv run mypy src/ && uv run pyright src/ && uv run pytest -v`
   - Verify zero errors across all quality checks (Req 33.7)
-  - Verify all 35 requirements are covered by implementation and tests
-  - Verify all 22 correctness properties have passing PBT tests
+  - Verify all 41 requirements are covered by implementation and tests
+  - Verify all 27 correctness properties have passing PBT tests
   - Ensure all tests pass, ask the user if questions arise.
   - _Requirements: 30.1–30.8, 33.6, 33.7_
 
 ## Notes
 
 - All tasks are REQUIRED — none are optional. Every task must be implemented.
-- Tasks follow the project's phased dependency pattern: database → services → API → frontend → testing → quality.
-- Each task references specific requirements for traceability across all 35 requirements.
-- All 22 correctness properties from the design document have dedicated PBT tasks.
+- Task 0 (cleanup) must run first to remove stale `__pycache__` from empty scaffold directories.
+- Tasks follow the project's phased dependency pattern: cleanup → database → services → API → frontend components → page composition/routing → testing → quality.
+- Each task references specific requirements for traceability across all 41 requirements.
+- All 27 correctness properties from the design document have dedicated PBT tasks (Properties 1–22 backend Hypothesis, Properties 23–27 frontend fast-check).
 - Checkpoints ensure incremental validation at each phase boundary.
 - Property tests validate universal correctness properties; unit tests validate specific examples and edge cases.
 - Twilio notification delivery is deferred — tests validate notification event creation only.
@@ -906,3 +1026,8 @@ This plan implements the full AI scheduling system in 7 phases following the pro
 - Frontend: React 19 / TypeScript 5.9 / Vite 7 / TanStack Query v5 / Tailwind 4.
 - Logging: All services use `LoggerMixin` with `DOMAIN = "scheduling"`.
 - Test markers: `@pytest.mark.unit`, `@pytest.mark.functional`, `@pytest.mark.integration`.
+- Existing `ErrorBoundary` component at `shared/components/ErrorBoundary.tsx` — use this for chat error isolation, not `react-error-boundary`.
+- `fast-check` (v4.6.0) already in frontend `package.json`; `hypothesis` (>=6.92.0) already in backend `pyproject.toml`.
+- Frontend directories that must be created from scratch: `features/scheduling-alerts/`, `features/resource-mobile/`.
+- `features/ai/index.ts` root barrel does NOT exist — must be created in task 11.5 before page composition phase.
+- Existing `schemas/ai.py` has general AI schemas (`ScheduleGenerateRequest`, etc.) — new `schemas/ai_scheduling.py` is for scheduling-engine-specific schemas.

@@ -27,7 +27,8 @@
         "git_diff",
         "git_commit",
         "git_diff_unstaged",
-        "git_branch"
+        "git_branch",
+        "git_add"
       ]
     },
     "filesystem": {

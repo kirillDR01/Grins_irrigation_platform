@@ -49,7 +49,7 @@ The Grins Irrigation CRM is an all-in-one platform for managing the full lifecyc
 ## 2. Logging In and Security
 
 - Navigate to the CRM URL and log in with your admin credentials.
-- The system uses a secure password (minimum 16 characters, mixed case, digits, and symbols).
+- The system uses a secure password (minimum 8 characters, mixed case, and at least one digit).
 - Your session lasts **60 minutes** for the access token, with a **30-day** refresh token. You should not be randomly logged out during normal use. If you experience premature logouts, report it — this was a known bug that has been investigated and fixed.
 - There is currently a **single admin** login. All logged-in users have full admin privileges. There is no staff vs. admin role distinction in this version — that is planned for a future update.
 
@@ -104,7 +104,7 @@ This is the core flow of how a customer moves through the system. Every record e
                   (call or text them)
                           |
                   Click "Mark Contacted"
-                  (status: Contacted, Awaiting Response)
+                  (status: Contacted)
                           |
                   Wait for their response
                           |
@@ -222,11 +222,11 @@ This is the core flow of how a customer moves through the system. Every record e
     at [time]!"            |           |
               |           |           |
    Appointment status     |    [SYSTEM -> CUSTOMER]
-   -> CONFIRMED           |    "Your [service type] appointment
-   (solid border,         |     on [date] at [time] has been
-    full color on         |     cancelled. If you'd like to
-    calendar)             |     reschedule, please call us
-              |           |     at [business phone]."
+   -> CONFIRMED           |    "Your appointment on [date]
+   (solid border,         |     has been cancelled. Please
+    full color on         |     contact us if you'd like
+    calendar)             |     to reschedule."
+              |           |
               |           |           |
               |           |    Appointment status
               |           |    -> CANCELLED
@@ -367,7 +367,7 @@ Here's the step-by-step:
 1. **A new lead arrives** — it appears in the Leads tab with status "New"
 2. **Review the lead** — check the Job Requested, City, and Address columns so you know what they want before you call
 3. **Contact them** — call or text the lead
-4. **Click "Mark Contacted"** — this changes the status to "Contacted (Awaiting Response)" and timestamps the contact
+4. **Click "Mark Contacted"** — this changes the status to "Contacted" and timestamps the contact
 5. **Based on the conversation**, route them:
    - **"Move to Jobs"** — The job is confirmed and ready to schedule. The system auto-creates a customer record and a job with status "To Be Scheduled." The lead disappears from the Leads tab. **Note:** If the lead's situation maps to "requires estimate" (e.g., Exploring, New System, Upgrade), the system will show a confirmation modal: "This job type typically requires an estimate. Move to Jobs anyway, or move to Sales for the estimate workflow?" with three options: Move to Jobs (proceed with override), Move to Sales (redirect to Sales pipeline), or Cancel.
    - **"Move to Sales"** — They need an estimate before committing. The system auto-creates a customer record and a Sales pipeline entry with status "Schedule Estimate." The lead disappears from the Leads tab.
@@ -410,13 +410,15 @@ One important concept: **job status and appointment status are two separate thin
 
 | Status | Meaning |
 |--------|---------|
+| **Pending** | Legacy/system status for appointments awaiting initial processing. Rarely seen in normal workflow. |
 | **Draft** | Appointment placed on the calendar but customer has NOT been notified yet. No SMS sent. Shows as dotted border, grayed-out on calendar. Admin can move/delete silently. |
 | **Scheduled** | Confirmation SMS has been sent, waiting for customer response (shows as dashed border, muted color). Set when admin clicks "Send Confirmation." |
 | **Confirmed** | Customer replied "Y" (shows as solid border, full color) |
 | **En Route** | Admin clicked "On My Way" — technician is heading to the property. Set automatically from Confirmed or Scheduled. |
 | **In Progress** | Admin clicked "Job Started" — work has begun. Set automatically from En Route (or Confirmed if On My Way was skipped). |
 | **Completed** | Admin clicked "Job Complete" — work is done. Set automatically alongside job completion. |
-| **Cancelled** | Customer replied "C" or admin cancelled. If was Draft, no SMS sent. If was Scheduled/Confirmed, cancellation SMS sent with appointment details. On-site timestamps cleared. |
+| **Cancelled** | Customer replied "C" or admin cancelled. If was Draft, no SMS sent. If was Scheduled/Confirmed, cancellation SMS sent. On-site timestamps cleared. |
+| **No Show** | Customer did not show or was not available at the scheduled time. Can be set from Confirmed or En Route. Appointment can be rescheduled from this state. |
 
 **Key points:**
 - Appointments now start as **Draft** (not Scheduled). No SMS is sent until the admin explicitly clicks "Send Confirmation."
@@ -441,16 +443,20 @@ The Leads tab is where **every new request lives before you contact the person**
 | **Job Address** | Where the work would be performed |
 | **City** | City derived from the address — helps with scheduling by area |
 | **Job Requested** | What service they're asking for — you can see this at a glance without clicking in |
-| **Status** | Either "New" or "Contacted (Awaiting Response)" |
+| **Status** | Current lead status (New, Contacted, Qualified, Converted, Lost, Spam) |
 | **Last Contacted Date** | When you last reached out (auto-updates from SMS when messaging is active) |
 | **Source** | Where the lead came from (far right column, no color highlighting) |
 
 ### Statuses
 
-There are only **two** lead statuses — intentionally simple:
+The lead statuses you'll work with day-to-day are the first two. The others are set automatically by the system:
 
 - **New** — Default. This lead has not been contacted yet.
-- **Contacted (Awaiting Response)** — You've reached out and are waiting to hear back.
+- **Contacted** — You've reached out and are waiting to hear back. Set when you click "Mark Contacted."
+- **Qualified** — Lead has been evaluated and is ready to be routed.
+- **Converted** — Lead was moved to Jobs or Sales. Set automatically on conversion.
+- **Lost** — Lead is no longer interested or went elsewhere.
+- **Spam** — Lead was identified as spam.
 
 ### Actions Available Per Lead
 
@@ -458,7 +464,7 @@ Each lead row has action buttons. The intended order of operations is: **Mark Co
 
 | Button | When to Use | What It Does |
 |--------|-------------|--------------|
-| **Mark Contacted** | **Always do this first** — after you call or text the lead | Changes status to "Contacted (Awaiting Response)" and sets the Last Contacted Date to right now |
+| **Mark Contacted** | **Always do this first** — after you call or text the lead | Changes status to "Contacted" and sets the Last Contacted Date to right now |
 | **Move to Jobs** | After contacting — the customer confirmed the job and is ready to schedule | Auto-creates a customer (if one doesn't exist for this lead), creates a job with status "To Be Scheduled", removes the lead from this list |
 | **Move to Sales** | After contacting — the customer needs an estimate before committing | Auto-creates a customer (if one doesn't exist for this lead), creates a Sales pipeline entry with status "Schedule Estimate", removes the lead from this list |
 | **Delete** | The lead is spam, a duplicate, or they're not interested | Permanently deletes the lead (shows a confirmation modal — this cannot be undone) |
@@ -952,7 +958,7 @@ A **nightly background job** runs at 1:30 AM and scans all active customers. It 
 | Same street address (normalized) | +20 |
 | Same ZIP + same last name | +10 |
 
-Scores are capped at 100. Pairs scoring **80+** are flagged as "High confidence duplicate." Pairs scoring **50-79** are flagged as "Possible duplicate." Below 50, no flag.
+Scores are capped at 100. Pairs scoring **50 or above** are flagged as potential duplicates and appear in the review queue. Below 50, no flag.
 
 **Important:** The system **never auto-merges** customers, even at a perfect 100 score. All merges require your explicit action.
 
@@ -998,7 +1004,7 @@ The CRM uses SMS (currently via CallRail) for several automated and manual commu
 | **"On My Way" button clicked** | "We're on our way! Your technician is heading to your location now." |
 | **Customer confirms (Y)** | Auto-reply confirming the appointment |
 | **Customer reschedules (R)** | Acknowledgment reply + follow-up: "We'd be happy to reschedule. Please reply with 2-3 dates and times that work for you and we'll get you set up." |
-| **Customer cancels (C)** | Detailed cancellation: "Your [service type] appointment on [date] at [time] has been cancelled. If you'd like to reschedule, please call us at [business phone]." |
+| **Customer cancels (C)** | Cancellation: "Your appointment on [date] has been cancelled. Please contact us if you'd like to reschedule." |
 | **Appointment rescheduled** | Reschedule notification sent to customer (only for SCHEDULED/CONFIRMED appointments, not DRAFT) |
 | **Appointment deleted** | Cancellation SMS sent (only for SCHEDULED/CONFIRMED appointments, not DRAFT) |
 | **Mass invoice notification** | Template-based reminder with invoice details and amount |
@@ -1022,7 +1028,7 @@ When the system sends an appointment confirmation SMS, it tracks the message wit
 1. Go to **Leads** tab
 2. Review the lead — check Job Requested, City, and Address so you know what they want before calling
 3. **Contact the customer** — call or text them
-4. Click **"Mark Contacted"** to update the status to "Contacted (Awaiting Response)" and timestamp it
+4. Click **"Mark Contacted"** to update the status to "Contacted" and timestamp it
 5. When they respond, route them based on the conversation:
    - They're ready to schedule -> click **"Move to Jobs"**
    - They need an estimate first -> click **"Move to Sales"**

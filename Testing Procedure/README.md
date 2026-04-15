@@ -16,6 +16,7 @@ agent) can execute it top-to-bottom without needing prior context.
 - **`07-path-h-year-rollover.md`** — M-4 November onboarding → next year.
 - **`08-path-i-dashboard.md`** — E-BUG-J sidebar counter invalidation.
 - **`09-path-j-schedule-all.md`** — bulk-schedule every TB_SCHEDULED job + bulk-confirm.
+- **`10-customer-landing-flow.md`** — Path L (Service Packages purchase, 8 tiers + Stripe + onboarding 7-week-pickers) and Path Q (Free Quote lead intake, 5 scenarios across consent matrix + dedupe + validation). New 2026-04-14.
 - **`99-cleanup.md`** — teardown SQL for E2E records.
 - **`scripts/`** — ready-to-copy Python helpers (`clear_consent.py`, `cleanup.py`).
 

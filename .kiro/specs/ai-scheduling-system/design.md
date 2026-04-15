@@ -11,6 +11,7 @@ Key architectural decisions:
 - **LLM as orchestrator**: The AI Chat uses OpenAI function calling to invoke scheduling tools. The LLM interprets user intent, asks clarifying questions, and calls structured tool functions — it does not directly manipulate schedules.
 - **Event-driven alerts**: A background `AlertEngine` periodically scans schedule state and generates alerts/suggestions, stored in the database and pushed to the frontend via polling (WebSocket upgrade deferred).
 - **Role-based chat routing**: A single `SchedulingChatService` routes messages based on user role, applying different system prompts, tool sets, and escalation rules for Admin vs. Resource.
+- **Thin page composition**: All built components are composed into two page views (`AIScheduleView` for admins at `/schedule/generate`, `ResourceMobileView` for technicians at `/schedule/mobile`) following the project's thin page-wrapper pattern — pages import and render composed feature views, no business logic at the page level.
 
 ## Architecture
 
@@ -115,6 +116,54 @@ graph TB
 5. For actions requiring approval (route change, follow-up job, crew assist): packages as `ChangeRequest`
 6. `ChangeRequest` stored in DB, surfaces as alert in Admin's Alerts Panel
 7. Admin approves/denies via one-click action, result pushed back to Resource
+
+## Current Codebase Foundations
+
+The following existing services, models, and components provide the foundation that this spec extends. All items listed here exist on the dev branch and should be wrapped/extended, not replaced.
+
+### Backend Foundations
+
+| Component | Path | What it provides |
+|-----------|------|-----------------|
+| `ScheduleGenerationService(LoggerMixin)` | `services/schedule_generation_service.py` | Core schedule generation using OR-Tools solver |
+| `ScheduleSolverService(LoggerMixin)` | `services/schedule_solver_service.py` | Greedy + local search optimizer |
+| `ConstraintChecker` | `services/schedule_constraints.py` | Hard/soft constraint definitions and validation |
+| `AIAgentService(LoggerMixin)` | `services/ai/agent.py` | General AI agent with OpenAI integration |
+| `ConstraintParserService(LoggerMixin)` | `services/ai/constraint_parser.py` | Natural language → structured constraint parsing |
+| `ScheduleExplanationService(LoggerMixin)` | `services/ai/explanation_service.py` | AI-generated schedule explanations |
+| `UnassignedJobAnalyzer(LoggerMixin)` | `services/ai/unassigned_analyzer.py` | AI analysis of why jobs remain unassigned |
+| `TravelTimeService(LoggerMixin)` | `services/travel_time_service.py` | Google Maps travel time + haversine fallback |
+| AI prompts | `services/ai/prompts/scheduling.py` | Scheduling-specific prompt templates |
+| AI tools | `services/ai/tools/scheduling.py` | Scheduling tool definitions for function calling |
+| AI context | `services/ai/context/builder.py` | Context assembly for AI prompts |
+| Empty scaffolds | `services/ai/scheduling/`, `services/ai/scheduling/scorers/` | Empty directories (contain only `__pycache__` from prior branch work — clean up before implementing) |
+
+### Existing Models
+
+| Model | Path | Key columns for this spec |
+|-------|------|--------------------------|
+| `Job(Base)` | `models/job.py` | `weather_sensitive`, `priority_level`, `estimated_duration_minutes`, `equipment_required`, `job_type`, `category` |
+| `Staff(Base)` | `models/staff.py` | `certifications`, `assigned_equipment`, `default_start_lat/lng`, `skill_level`, `role`, `is_available` |
+| `Customer(Base)` | `models/customer.py` | `preferred_service_times`, `is_priority` |
+| `Appointment(Base)` | `models/appointment.py` | `scheduled_date`, `time_window_start/end`, `route_order`, `estimated_arrival`, `staff_id`, `job_id` |
+
+### Frontend Foundations
+
+| Component/Hook | Path | What it provides |
+|----------------|------|-----------------|
+| `ScheduleGenerationPage` | `features/schedule/components/ScheduleGenerationPage.tsx` | Current schedule generation UI (date picker, job selector, constraints input, results) — will be replaced by `AIScheduleView` at the page composition phase |
+| `SchedulePage` | `features/schedule/components/SchedulePage.tsx` | FullCalendar-based schedule view (remains for `/schedule` route) |
+| `useGenerateSchedule`, `usePreviewSchedule`, `useScheduleCapacity` | `features/schedule/hooks/useScheduleGeneration.ts` | TanStack Query hooks for schedule generation API |
+| `useWeeklySchedule`, `useDailySchedule` | `features/schedule/hooks/useAppointments.ts` | Existing schedule data fetching hooks |
+| `AIQueryChat` | `features/ai/components/AIQueryChat.tsx` | General-purpose AI chat component |
+| `AIScheduleGenerator` | `features/ai/components/AIScheduleGenerator.tsx` | AI schedule generation UI |
+| `useAIChat` | `features/ai/hooks/useAIChat.ts` | General AI chat hook |
+| `useAISchedule` | `features/ai/hooks/useAISchedule.ts` | AI schedule generation state hook |
+| `ErrorBoundary` | `shared/components/ErrorBoundary.tsx` | Class-based error boundary with `fallback` prop and retry button |
+| Feature barrel: `features/schedule/index.ts` | — | Exists, exports all schedule components/hooks/types |
+| Feature barrel: `features/ai/components/index.ts` | — | Exists, exports 10 AI components |
+| **No root barrel**: `features/ai/index.ts` | — | Does NOT exist — must be created to support `@/features/ai` imports |
+| **Missing directories** | `features/scheduling-alerts/`, `features/resource-mobile/` | Do NOT exist — must be created from scratch |
 
 ## Components and Interfaces
 
@@ -255,8 +304,8 @@ class ChangeRequestService(LoggerMixin):
 ### Frontend Components
 
 #### Schedule Overview Extensions (`features/schedule/`)
-- `CapacityHeatMap.tsx` — Visual capacity utilization by day/resource with >90% and <60% indicators
-- `ScheduleOverviewEnhanced.tsx` — Extended schedule view with status indicators, route sequences, and AI-generated annotations
+- `CapacityHeatMap.tsx` — Capacity row at the bottom of the schedule grid showing daily aggregate utilization percentages with color coding: >90% red (overbooking risk), 60–90% green (healthy), <60% yellow (underutilization opportunity)
+- `ScheduleOverviewEnhanced.tsx` — Custom resource-row × day-column grid layout (replaces FullCalendar for the AI scheduling view). Each row = one resource (name, role, inline utilization %, e.g., "Mike D. — Senior Tech — 87% utilized"). Each column = one day (date + total job count in header, e.g., "Mon 2/16 — 18 jobs"). Cells contain job cards color-coded by job type (Spring Opening = green, Fall Closing = orange, Maintenance = blue, New Build = purple, Backflow Test = teal) with ⭐ VIP and ⚠️ conflict icons. Includes a job type color legend above the grid, a week title header with Day/Week/Month toggle and "+ New Job" button, and integrates CapacityHeatMap at the bottom.
 - `BatchScheduleResults.tsx` — Multi-week campaign schedule display
 
 #### Alerts/Suggestions Panel (`features/scheduling-alerts/`)
@@ -267,7 +316,7 @@ class ChangeRequestService(LoggerMixin):
 - `ChangeRequestCard.tsx` — Resource change request with approve/deny
 
 #### AI Chat Extensions (`features/ai/`)
-- `SchedulingChat.tsx` — Enhanced chat component with scheduling-specific UI (schedule previews inline, clarifying question buttons)
+- `SchedulingChat.tsx` — Persistent right sidebar chat panel (not modal or collapsible) with scheduling-specific UI: inline schedule previews, clarifying question buttons, criteria tag badges (e.g., "Criteria #1 Proximity", "Criteria #26 Weather") in AI responses, and actionable "Publish Schedule" buttons when the AI generates/modifies schedules
 - `ResourceMobileChat.tsx` — Mobile-optimized chat for Resource role
 - `PreJobChecklist.tsx` — Pre-job requirements display for Resource mobile view
 
@@ -275,6 +324,88 @@ class ChangeRequestService(LoggerMixin):
 - `ResourceScheduleView.tsx` — Mobile schedule card with route order, ETAs, pre-job flags
 - `ResourceAlertsList.tsx` — Mobile alerts (job added/removed, resequenced, equipment, access)
 - `ResourceSuggestionsList.tsx` — Mobile suggestions (prep, upsell, departure, parts)
+
+### Page Composition and Routing
+
+All individual frontend components listed above are composed into two page views and registered with the router. No new business logic or API calls are introduced at the page level — this is purely composition, routing, and wiring.
+
+#### AI Schedule Admin Page (`/schedule/generate`)
+
+Replaces the current `ScheduleGeneratePage` wrapper. Composes `ScheduleOverviewEnhanced` (with integrated `CapacityHeatMap`), `AlertsPanel`, and `SchedulingChat` into a sidebar layout where the chat is a persistent right panel and the overview + alerts fill the main content area.
+
+**Layout:**
+- CSS Grid with `grid-template-columns: 1fr 380px` for main content + chat sidebar
+- `<main>` landmark wraps ScheduleOverviewEnhanced and AlertsPanel
+- `<aside>` landmark wraps SchedulingChat inside a React error boundary
+- Visually hidden `<h1>` heading for screen reader navigation
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Layout (sidebar nav + header — already exists)              │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ AIScheduleView  [data-testid="ai-schedule-page"]        │ │
+│ │ CSS Grid: 1fr 380px                                     │ │
+│ │ ┌───────────────────────────┐ ┌───────────────────────┐ │ │
+│ │ │ <main>                    │ │ <aside>               │ │ │
+│ │ │                           │ │                       │ │ │
+│ │ │ ScheduleOverviewEnhanced  │ │ SchedulingChat        │ │ │
+│ │ │ (with CapacityHeatMap)    │ │ (persistent sidebar)  │ │ │
+│ │ │                           │ │                       │ │ │
+│ │ │ ─────────────────────     │ │                       │ │ │
+│ │ │                           │ │                       │ │ │
+│ │ │ AlertsPanel               │ │                       │ │ │
+│ │ │ (date-filtered)           │ │                       │ │ │
+│ │ │                           │ │                       │ │ │
+│ │ └───────────────────────────┘ └───────────────────────┘ │ │
+│ └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Data flow:**
+- `AIScheduleView` holds `scheduleDate` state (defaults to today's ISO date)
+- `scheduleDate` is passed to `ScheduleOverviewEnhanced` (for grid data) and `AlertsPanel` (for date filtering)
+- `onViewModeChange` from `ScheduleOverviewEnhanced` updates `scheduleDate`
+- `onPublishSchedule` from `SchedulingChat` triggers `queryClient.invalidateQueries` to refresh both overview and alerts
+
+**Error boundary:** `SchedulingChat` errors do not crash the overview/alerts. The existing `ErrorBoundary` class component from `@/shared/components/ErrorBoundary` wraps the chat sidebar with a custom fallback prop so the main content remains functional.
+
+#### Resource Mobile Page (`/schedule/mobile`)
+
+New route. Composes `ResourceScheduleView` and `ResourceMobileChat` in a mobile-first stacked layout for field technicians.
+
+```
+┌───────────────────────────┐
+│ Layout (header)           │
+│ ┌───────────────────────┐ │
+│ │ ResourceMobileView    │ │
+│ │                       │ │
+│ │ ResourceScheduleView  │ │
+│ │ (daily route cards)   │ │
+│ │                       │ │
+│ │ ─────────────────     │ │
+│ │                       │ │
+│ │ ResourceMobileChat    │ │
+│ │ (field assistant)     │ │
+│ │                       │ │
+│ └───────────────────────┘ │
+└───────────────────────────┘
+```
+
+Both components fetch their own data via internal TanStack Query hooks.
+
+#### New/Modified Files for Page Composition
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `features/schedule/components/AIScheduleView.tsx` | New | Composed admin page view with shared `scheduleDate` state. Imports `ErrorBoundary` from `@/shared/components/ErrorBoundary` for chat isolation. |
+| `features/resource-mobile/components/ResourceMobileView.tsx` | New | Composed mobile page view |
+| `pages/ScheduleGenerate.tsx` | Modified | Replace `import { ScheduleGenerationPage } from '@/features/schedule'` with `import { AIScheduleView } from '@/features/schedule'` |
+| `pages/ScheduleMobile.tsx` | New | Thin page wrapper for `ResourceMobileView` |
+| `core/router/index.tsx` | Modified | Add lazy import for `ScheduleMobilePage` and `/schedule/mobile` route after line 204 (existing `schedule/generate` route) |
+| `features/schedule/index.ts` | Modified | Add `AIScheduleView` to components export list (currently exports `ScheduleGenerationPage` + 22 other components) |
+| `features/ai/index.ts` | New | Create root barrel export — currently only `features/ai/components/index.ts` exists. Must export `SchedulingChat` and `ResourceMobileChat` for page composition imports. |
+| `features/resource-mobile/index.ts` | New | Create root barrel — directory does not exist yet, created in phase 12. Export `ResourceMobileView`. |
+| `features/scheduling-alerts/index.ts` | New | Create root barrel — directory does not exist yet, created in phase 10. Export `AlertsPanel`. |
 
 ## Data Models
 
@@ -603,6 +734,42 @@ class ResolveAlertRequest(BaseModel):
 *For any* natural language scheduling constraint that is successfully parsed into structured parameters, converting those structured parameters back into a natural language description and re-parsing SHALL produce equivalent structured parameters.
 
 **Validates: Requirements 26.3**
+
+### Property 23: Admin Page Composition Structure
+
+*For any* render of `AIScheduleView`, the resulting DOM SHALL contain:
+- A root element with `data-testid="ai-schedule-page"`
+- A `<main>` landmark element containing both `[data-testid="schedule-overview-enhanced"]` and `[data-testid="alerts-panel"]`, with the alerts panel appearing after the overview in document order
+- An `<aside>` landmark element containing `[data-testid="scheduling-chat"]`
+- A visually hidden `<h1>` heading element for screen reader navigation
+
+**Validates: Requirements 36.1, 36.2, 36.3, 41.1, 41.3, 41.4**
+
+### Property 24: Shared Schedule Date Propagation
+
+*For any* ISO date string set as the `scheduleDate` state in `AIScheduleView`, both the `ScheduleOverviewEnhanced` component and the `AlertsPanel` component SHALL receive that same date value as a prop, ensuring date-synchronized display.
+
+**Validates: Requirements 36.6, 40.2**
+
+### Property 25: Date Context Update on View Change
+
+*For any* view mode change triggered in `ScheduleOverviewEnhanced` (day, week, or month), the `AIScheduleView` SHALL update its `scheduleDate` state, and the updated date SHALL propagate to the `AlertsPanel` component.
+
+**Validates: Requirements 40.3**
+
+### Property 26: Mobile Page Composition Structure
+
+*For any* render of `ResourceMobileView`, the resulting DOM SHALL contain:
+- A root element with `data-testid="resource-mobile-page"`
+- `[data-testid="resource-schedule-view"]` appearing before `[data-testid="resource-mobile-chat"]` in document order (vertically stacked)
+
+**Validates: Requirements 38.1, 38.2, 41.2**
+
+### Property 27: Chat Error Isolation
+
+*For any* error thrown by the `SchedulingChat` component, the `AIScheduleView` SHALL continue rendering both `[data-testid="schedule-overview-enhanced"]` and `[data-testid="alerts-panel"]` without disruption. The error SHALL be contained within the `<aside>` boundary.
+
+**Validates: Requirements 40.5**
 
 ## Error Handling
 

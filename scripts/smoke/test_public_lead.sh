@@ -26,7 +26,9 @@ response=$(curl --silent --show-error \
   "name": "Smoke Test",
   "phone": "${PHONE_E164}",
   "email": "smoke-test@example.com",
+  "address": "123 Smoke St, Eden Prairie MN 55344",
   "service_type": "spring_startup",
+  "situation": "repair",
   "source_site": "${SOURCE_SITE}",
   "notes": "Automated smoke test from scripts/smoke/test_public_lead.sh"
 }
@@ -43,9 +45,9 @@ echo "Response status: ${status}"
 echo "X-Request-ID:    ${request_id}"
 echo "Body:            ${body}"
 
-if [[ "${status}" != "201" ]]; then
-  echo "FAIL: expected 201, got ${status}" >&2
+if [[ "${status}" != "201" && "${status}" != "409" ]]; then
+  echo "FAIL: expected 201 (created) or 409 (duplicate_lead), got ${status}" >&2
   exit 1
 fi
 
-echo "PASS: public lead submission returned 201."
+echo "PASS: public lead submission returned ${status} (endpoint reachable, CORS + validation OK)."
