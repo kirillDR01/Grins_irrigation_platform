@@ -71,6 +71,11 @@ class MessageType(str, Enum):
     GOOGLE_REVIEW_REQUEST = "google_review_request"
     ON_MY_WAY = "on_my_way"
     AUTOMATED_NOTIFICATION = "automated_notification"
+    # bughunt M-9: outbound replies to inbound Y/R/C and the reschedule
+    # follow-up SMS now route through send_message and need their own
+    # message_type so per-type dedup and audit reporting stay meaningful.
+    APPOINTMENT_CONFIRMATION_REPLY = "appointment_confirmation_reply"
+    RESCHEDULE_FOLLOWUP = "reschedule_followup"
 
 
 class DeliveryStatus(str, Enum):

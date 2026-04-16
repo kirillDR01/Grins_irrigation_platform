@@ -334,29 +334,46 @@ class TestConfirmationReplyUsesRealPhone:
 
     @pytest.mark.asyncio
     async def test_auto_reply_sent_to_real_phone_not_mask(self) -> None:
+        from uuid import uuid4
+
+        from grins_platform.schemas.ai import MessageType
+
         service = _make_service()
         service.provider = AsyncMock()
         service.provider.send_text = AsyncMock(
             return_value={"success": True, "message_id": "SM-auto"},
         )
 
-        original = SimpleNamespace(recipient_phone="+19527373312")
+        cust_id = uuid4()
+        appt_id = uuid4()
+        job_id = uuid4()
+        original = SimpleNamespace(
+            recipient_phone="+19527373312",
+            customer_id=cust_id,
+            appointment_id=appt_id,
+            job_id=job_id,
+        )
         handle_result = {
             "action": "confirmed",
-            "appointment_id": "apt-1",
+            "appointment_id": str(appt_id),
             "auto_reply": "Your appointment has been confirmed.",
             "recipient_phone": "+19527373312",
         }
 
+        send_message_mock = AsyncMock(
+            return_value={"success": True, "message_id": "SM-auto"},
+        )
+
         with (
             patch(
-                "grins_platform.services.job_confirmation_service.JobConfirmationService._find_confirmation_message",
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.find_confirmation_message",
                 new=AsyncMock(return_value=original),
             ),
             patch(
                 "grins_platform.services.job_confirmation_service.JobConfirmationService.handle_confirmation",
                 new=AsyncMock(return_value=handle_result),
             ),
+            patch.object(service, "send_message", send_message_mock),
         ):
             out = await service._try_confirmation_reply(
                 from_phone="***3312",
@@ -366,39 +383,59 @@ class TestConfirmationReplyUsesRealPhone:
             )
 
         assert out is not None
-        service.provider.send_text.assert_awaited_once()
-        target_phone = service.provider.send_text.await_args.args[0]
-        assert target_phone == "+19527373312"
-        assert "3312" not in target_phone or target_phone.startswith("+1")
+        # bughunt M-9: the auto-reply must now route through send_message
+        # (so a SentMessage row is created), not directly through send_text.
+        send_message_mock.assert_awaited_once()
+        kwargs = send_message_mock.await_args.kwargs
+        assert kwargs["recipient"].phone == "+19527373312"
+        assert kwargs["recipient"].customer_id == cust_id
+        assert kwargs["message_type"] == MessageType.APPOINTMENT_CONFIRMATION_REPLY
+        assert kwargs["appointment_id"] == appt_id
+        assert kwargs["job_id"] == job_id
 
     @pytest.mark.asyncio
     async def test_follow_up_sms_also_sent_to_real_phone(self) -> None:
-        """Reschedule follow-up SMS must also bypass the masked sender."""
+        """Reschedule follow-up SMS must also route via send_message
+        (bughunt M-9) and target the unmasked E.164 phone."""
+        from uuid import uuid4
+
+        from grins_platform.schemas.ai import MessageType
+
         service = _make_service()
         service.provider = AsyncMock()
-        service.provider.send_text = AsyncMock(
-            return_value={"success": True, "message_id": "SM-fu"},
-        )
 
-        original = SimpleNamespace(recipient_phone="+19527373312")
+        cust_id = uuid4()
+        appt_id = uuid4()
+        job_id = uuid4()
+        original = SimpleNamespace(
+            recipient_phone="+19527373312",
+            customer_id=cust_id,
+            appointment_id=appt_id,
+            job_id=job_id,
+        )
         handle_result = {
             "action": "reschedule_requested",
-            "appointment_id": "apt-1",
+            "appointment_id": str(appt_id),
             "reschedule_request_id": "rr-1",
             "auto_reply": "We received your reschedule request.",
             "follow_up_sms": "Please reply with 2-3 dates and times.",
             "recipient_phone": "+19527373312",
         }
 
+        send_message_mock = AsyncMock(
+            return_value={"success": True, "message_id": "SM-x"},
+        )
+
         with (
             patch(
-                "grins_platform.services.job_confirmation_service.JobConfirmationService._find_confirmation_message",
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.find_confirmation_message",
                 new=AsyncMock(return_value=original),
             ),
             patch(
                 "grins_platform.services.job_confirmation_service.JobConfirmationService.handle_confirmation",
                 new=AsyncMock(return_value=handle_result),
             ),
+            patch.object(service, "send_message", send_message_mock),
         ):
             await service._try_confirmation_reply(
                 from_phone="***3312",
@@ -407,9 +444,16 @@ class TestConfirmationReplyUsesRealPhone:
                 thread_id="THR-1",
             )
 
-        assert service.provider.send_text.await_count == 2
-        for call in service.provider.send_text.await_args_list:
-            assert call.args[0] == "+19527373312"
+        # Two send_message calls: auto_reply + follow_up_sms. Both target
+        # the unmasked phone and use distinct message_types.
+        assert send_message_mock.await_count == 2
+        message_types = [
+            c.kwargs["message_type"] for c in send_message_mock.await_args_list
+        ]
+        assert MessageType.APPOINTMENT_CONFIRMATION_REPLY in message_types
+        assert MessageType.RESCHEDULE_FOLLOWUP in message_types
+        for call in send_message_mock.await_args_list:
+            assert call.kwargs["recipient"].phone == "+19527373312"
 
 
 @pytest.mark.unit
@@ -642,13 +686,21 @@ class TestInboundLeadTouchUsesRealPhone:
 
     @pytest.mark.asyncio
     async def test_confirmation_reply_touches_lead_with_real_phone(self) -> None:
+        from uuid import uuid4
+
         service = _make_service()
         service.provider = AsyncMock()
         service.provider.send_text = AsyncMock()
         touch_mock = AsyncMock()
         service._touch_lead_last_contacted = touch_mock  # type: ignore[method-assign]
 
-        original = SimpleNamespace(recipient_phone="+19527373312")
+        cust_id = uuid4()
+        original = SimpleNamespace(
+            recipient_phone="+19527373312",
+            customer_id=cust_id,
+            appointment_id=uuid4(),
+            job_id=uuid4(),
+        )
         handle_result = {
             "action": "confirmed",
             "appointment_id": "apt-1",
@@ -658,13 +710,14 @@ class TestInboundLeadTouchUsesRealPhone:
 
         with (
             patch(
-                "grins_platform.services.job_confirmation_service.JobConfirmationService._find_confirmation_message",
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.find_confirmation_message",
                 new=AsyncMock(return_value=original),
             ),
             patch(
                 "grins_platform.services.job_confirmation_service.JobConfirmationService.handle_confirmation",
                 new=AsyncMock(return_value=handle_result),
             ),
+            patch.object(service, "send_message", AsyncMock()),
         ):
             await service._try_confirmation_reply(
                 from_phone="***3312",

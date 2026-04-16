@@ -806,13 +806,34 @@ class SMSService(LoggerMixin):
         # ``self._format_phone(from_phone)`` there would produce ``+3312``.
         reply_phone = result.get("recipient_phone") or self._format_phone(from_phone)
 
-        # Send auto-reply if present
+        # bughunt M-9 (E2E-8 survivor): the auto-reply and the reschedule
+        # follow-up previously called ``provider.send_text`` directly, so
+        # neither produced a ``SentMessage`` row — the audit trail missed
+        # an entire class of outbound messages. Route them through
+        # ``send_message`` with their own message_type so per-type dedup
+        # and compliance reporting both stay accurate.
+        from grins_platform.services.sms.recipient import (  # noqa: PLC0415
+            Recipient,
+        )
+
+        reply_recipient = Recipient(
+            phone=reply_phone,
+            source_type="customer",
+            customer_id=original.customer_id,
+        )
+        appointment_id = original.appointment_id
+        job_id = original.job_id
+
         auto_reply = result.get("auto_reply")
         if auto_reply:
             try:
-                await self.provider.send_text(
-                    reply_phone,
-                    f"{self._prefix}{auto_reply}",
+                await self.send_message(
+                    recipient=reply_recipient,
+                    message=auto_reply,
+                    message_type=MessageType.APPOINTMENT_CONFIRMATION_REPLY,
+                    consent_type="transactional",
+                    job_id=job_id,
+                    appointment_id=appointment_id,
                 )
             except Exception:
                 logger.warning(
@@ -821,13 +842,17 @@ class SMSService(LoggerMixin):
                     exc_info=True,
                 )
 
-        # Send follow-up SMS if present (Req 14.1 — reschedule follow-up)
+        # Reschedule follow-up SMS (Req 14.1)
         follow_up_sms = result.get("follow_up_sms")
         if follow_up_sms:
             try:
-                await self.provider.send_text(
-                    reply_phone,
-                    f"{self._prefix}{follow_up_sms}",
+                await self.send_message(
+                    recipient=reply_recipient,
+                    message=follow_up_sms,
+                    message_type=MessageType.RESCHEDULE_FOLLOWUP,
+                    consent_type="transactional",
+                    job_id=job_id,
+                    appointment_id=appointment_id,
                 )
             except Exception:
                 logger.warning(
