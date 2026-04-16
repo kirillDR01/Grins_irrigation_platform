@@ -21,6 +21,17 @@ export const customerKeys = {
   servicePreferences: (id: string) => [...customerKeys.all, id, 'service-preferences'] as const,
 };
 
+// H-9: Cross-query invalidation key factory for the customer-detail invoice
+// history. Invoice mutation hooks (useUpdateInvoice, useRecordPayment, etc.)
+// import `customerInvoiceKeys` and invalidate `customerInvoiceKeys.all`
+// in their onSuccess handlers so InvoiceHistory reflects paid/voided/updated
+// invoices without a manual refresh.
+export const customerInvoiceKeys = {
+  all: ['customer-invoices'] as const,
+  byCustomer: (customerId: string) =>
+    [...customerInvoiceKeys.all, customerId] as const,
+};
+
 // List customers with pagination and filters
 export function useCustomers(params?: CustomerListParams) {
   return useQuery({
@@ -56,16 +67,28 @@ export function useCustomerPhotos(customerId: string) {
   });
 }
 
-// Customer invoices (Req 10, Req 29.5 — real-time refresh)
+// Customer invoices (Req 10, Req 29.5, H-9 — real-time refresh)
+// Two-layer freshness strategy:
+//   1. `refetchInterval: 30_000` polling safety-net (this hook).
+//   2. Cross-query invalidation from invoice mutation hooks via
+//      `customerInvoiceKeys.all` (see useInvoiceMutations.ts).
+// The query key includes BOTH the precise `customerKeys.invoices(...)` tuple
+// AND the coarse `customerInvoiceKeys.byCustomer(customerId)` tuple so mutations
+// can invalidate by either factory.
 export function useCustomerInvoices(
   customerId: string,
-  params?: { page?: number; page_size?: number }
+  params?: { page?: number; page_size?: number },
+  options?: { refetchInterval?: number | false; enabled?: boolean }
 ) {
   return useQuery({
-    queryKey: customerKeys.invoices(customerId, params),
+    queryKey: [
+      ...customerKeys.invoices(customerId, params),
+      ...customerInvoiceKeys.byCustomer(customerId),
+    ],
     queryFn: () => customerApi.listInvoices(customerId, params),
     enabled: !!customerId,
-    refetchInterval: 30_000, // Poll every 30s for real-time invoice state changes
+    refetchInterval: 30_000, // H-9: poll every 30s for real-time invoice state changes
+    ...(options ?? {}),
   });
 }
 

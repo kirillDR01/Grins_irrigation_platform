@@ -10,6 +10,7 @@ export {
   useCustomerSentMessages,
   useServicePreferences,
   customerKeys,
+  customerInvoiceKeys,
 } from './useCustomers';
 export {
   useCreateCustomer,
