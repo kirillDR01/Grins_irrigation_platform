@@ -72,19 +72,16 @@ export function useCustomerPhotos(customerId: string) {
 //   1. `refetchInterval: 30_000` polling safety-net (this hook).
 //   2. Cross-query invalidation from invoice mutation hooks via
 //      `customerInvoiceKeys.all` (see useInvoiceMutations.ts).
-// The query key includes BOTH the precise `customerKeys.invoices(...)` tuple
-// AND the coarse `customerInvoiceKeys.byCustomer(customerId)` tuple so mutations
-// can invalidate by either factory.
+// Query key is prefixed with `customerInvoiceKeys.byCustomer(customerId)` so
+// mutations invalidating `customerInvoiceKeys.all` match via React Query's
+// default prefix-based invalidation.
 export function useCustomerInvoices(
   customerId: string,
   params?: { page?: number; page_size?: number },
   options?: { refetchInterval?: number | false; enabled?: boolean }
 ) {
   return useQuery({
-    queryKey: [
-      ...customerKeys.invoices(customerId, params),
-      ...customerInvoiceKeys.byCustomer(customerId),
-    ],
+    queryKey: [...customerInvoiceKeys.byCustomer(customerId), params],
     queryFn: () => customerApi.listInvoices(customerId, params),
     enabled: !!customerId,
     refetchInterval: 30_000, // H-9: poll every 30s for real-time invoice state changes

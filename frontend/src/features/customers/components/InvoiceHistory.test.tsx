@@ -44,7 +44,7 @@ function createHarness() {
 
 describe('InvoiceHistory (H-9 real-time updates)', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.mocked(customerApi.listInvoices).mockReset();
   });
 
   it('refetches after an external mutation invalidates customerInvoiceKeys', async () => {

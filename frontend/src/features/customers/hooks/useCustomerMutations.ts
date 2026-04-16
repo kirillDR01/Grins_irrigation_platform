@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { customerApi } from '../api/customerApi';
 import type { CustomerCreate, CustomerUpdate, ChargeRequest, MergeRequest, ServicePreferenceCreate } from '../types';
-import { customerKeys } from './useCustomers';
+import { customerKeys, customerInvoiceKeys } from './useCustomers';
 
 // Create customer mutation
 export function useCreateCustomer() {
@@ -110,7 +110,9 @@ export function useChargeCustomer(customerId: string) {
   return useMutation({
     mutationFn: (data: ChargeRequest) => customerApi.chargeCustomer(customerId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: customerKeys.invoices(customerId) });
+      queryClient.invalidateQueries({
+        queryKey: customerInvoiceKeys.byCustomer(customerId),
+      });
     },
   });
 }
