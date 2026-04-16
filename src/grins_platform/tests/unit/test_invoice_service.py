@@ -2966,13 +2966,13 @@ class TestInvoiceServiceLienReviewQueue:
         invoices = [
             self._make_invoice(
                 customer_id=cust_a,
-                amount=Decimal("500"),
+                amount=Decimal(500),
                 days_overdue=90,
                 invoice_number="INV-A-1",
             ),
             self._make_invoice(
                 customer_id=cust_a,
-                amount=Decimal("300"),
+                amount=Decimal(300),
                 days_overdue=65,
                 invoice_number="INV-A-2",
                 first_name="Alice",
@@ -2980,7 +2980,7 @@ class TestInvoiceServiceLienReviewQueue:
             ),
             self._make_invoice(
                 customer_id=cust_b,
-                amount=Decimal("1000"),
+                amount=Decimal(1000),
                 days_overdue=80,
                 invoice_number="INV-B-1",
                 first_name="Bob",
@@ -2994,7 +2994,7 @@ class TestInvoiceServiceLienReviewQueue:
         assert len(candidates) == 2
         by_id = {c.customer_id: c for c in candidates}
         a = by_id[cust_a]
-        assert a.total_past_due_amount == Decimal("800")
+        assert a.total_past_due_amount == Decimal(800)
         assert a.oldest_invoice_age_days == 90
         assert set(a.invoice_numbers) == {"INV-A-1", "INV-A-2"}
 
@@ -3145,3 +3145,161 @@ class TestInvoiceServiceLienReviewQueue:
 
         assert result.success is False
         assert result.message == "no_eligible_invoices"
+
+
+# =============================================================================
+# H-12: compute_lien_candidates reads defaults from BusinessSettings
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestInvoiceServiceH12ReadsBusinessSettings:
+    """H-12 — compute_lien_candidates / mass_notify read defaults from
+    the business-settings service when callers don't override.
+
+    Validates: bughunt 2026-04-16 finding H-12.
+    """
+
+    @pytest.fixture
+    def mock_invoice_repo(self) -> AsyncMock:
+        repo = AsyncMock()
+        repo.session = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_job_repo(self) -> AsyncMock:
+        return AsyncMock()
+
+    @pytest.fixture
+    def mock_settings(self) -> AsyncMock:
+        """A BusinessSettingService stub with configured return values."""
+        settings = AsyncMock()
+        settings.get_int = AsyncMock()
+        settings.get_decimal = AsyncMock()
+        return settings
+
+    @pytest.fixture
+    def service(
+        self,
+        mock_invoice_repo: AsyncMock,
+        mock_job_repo: AsyncMock,
+        mock_settings: AsyncMock,
+    ) -> InvoiceService:
+        return InvoiceService(
+            invoice_repository=mock_invoice_repo,
+            job_repository=mock_job_repo,
+            business_settings=mock_settings,
+        )
+
+    @pytest.mark.asyncio
+    async def test_compute_lien_candidates_reads_defaults_from_business_settings(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+        mock_settings: AsyncMock,
+    ) -> None:
+        """compute_lien_candidates() with no args → uses settings defaults."""
+        mock_invoice_repo.find_lien_eligible.return_value = []
+        mock_settings.get_int.return_value = 90
+        mock_settings.get_decimal.return_value = Decimal("1250.00")
+
+        await service.compute_lien_candidates()
+
+        # The service pulled both knobs from BusinessSettings.
+        mock_settings.get_int.assert_awaited_once_with(
+            "lien_days_past_due", 60,
+        )
+        mock_settings.get_decimal.assert_awaited_once_with(
+            "lien_min_amount", Decimal(500),
+        )
+        # And forwarded them to the repository.
+        mock_invoice_repo.find_lien_eligible.assert_awaited_once_with(
+            days_past_due=90,
+            min_amount=Decimal("1250.00"),
+        )
+
+    @pytest.mark.asyncio
+    async def test_compute_lien_candidates_explicit_args_override_settings(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+        mock_settings: AsyncMock,
+    ) -> None:
+        """Explicit args still win over the persisted defaults."""
+        mock_invoice_repo.find_lien_eligible.return_value = []
+        mock_settings.get_int.return_value = 90
+        mock_settings.get_decimal.return_value = Decimal("1250.00")
+
+        await service.compute_lien_candidates(
+            days_past_due=45, min_amount=250.0,
+        )
+
+        # Settings service should NOT be queried when explicit args given.
+        mock_settings.get_int.assert_not_called()
+        mock_settings.get_decimal.assert_not_called()
+        mock_invoice_repo.find_lien_eligible.assert_awaited_once_with(
+            days_past_due=45,
+            min_amount=Decimal("250.0"),
+        )
+
+    @pytest.mark.asyncio
+    async def test_send_lien_notice_reads_defaults_from_business_settings(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+        mock_settings: AsyncMock,
+    ) -> None:
+        """send_lien_notice also pulls thresholds from BusinessSettings."""
+        mock_invoice_repo.find_lien_eligible_for_customer.return_value = []
+        mock_settings.get_int.return_value = 90
+        mock_settings.get_decimal.return_value = Decimal(1000)
+
+        customer_id = uuid4()
+        await service.send_lien_notice(
+            customer_id=customer_id, admin_user_id=uuid4(),
+        )
+
+        mock_settings.get_int.assert_awaited_once_with(
+            "lien_days_past_due", 60,
+        )
+        mock_settings.get_decimal.assert_awaited_once_with(
+            "lien_min_amount", Decimal(500),
+        )
+        mock_invoice_repo.find_lien_eligible_for_customer.assert_awaited_once_with(
+            customer_id,
+            days_past_due=90,
+            min_amount=Decimal(1000),
+        )
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_due_soon_reads_upcoming_due_days(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+        mock_settings: AsyncMock,
+    ) -> None:
+        """mass_notify('due_soon') with no override reads upcoming_due_days."""
+        mock_invoice_repo.find_due_soon.return_value = []
+        mock_settings.get_int.return_value = 14
+
+        await service.mass_notify("due_soon")
+
+        mock_settings.get_int.assert_awaited_once_with(
+            "upcoming_due_days", 7,
+        )
+        mock_invoice_repo.find_due_soon.assert_awaited_once_with(14)
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_due_soon_explicit_override_wins(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+        mock_settings: AsyncMock,
+    ) -> None:
+        """Explicit due_soon_days overrides the persisted setting."""
+        mock_invoice_repo.find_due_soon.return_value = []
+
+        await service.mass_notify("due_soon", due_soon_days=3)
+
+        mock_settings.get_int.assert_not_called()
+        mock_invoice_repo.find_due_soon.assert_awaited_once_with(3)

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter } from 'react-router-dom';
 
 import { MassNotifyPanel } from './MassNotifyPanel';
 import { MASS_NOTIFICATION_CONFIG } from '../types';
@@ -13,12 +14,29 @@ vi.mock('../hooks', () => ({
   }),
 }));
 
+vi.mock('@/features/settings', () => ({
+  useBusinessSettings: () => ({
+    data: {
+      lien_days_past_due: 60,
+      lien_min_amount: 500,
+      upcoming_due_days: 7,
+      confirmation_no_reply_days: 3,
+    },
+    isLoading: false,
+    error: null,
+  }),
+}));
+
 function createWrapper() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return function Wrapper({ children }: { children: React.ReactNode }) {
-    return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    return (
+      <QueryClientProvider client={client}>
+        <BrowserRouter>{children}</BrowserRouter>
+      </QueryClientProvider>
+    );
   };
 }
 

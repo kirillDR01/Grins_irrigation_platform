@@ -10,7 +10,7 @@ import { useTheme } from "@/core/providers";
 import { useAuth } from "@/features/auth";
 import { authApi } from "@/features/auth/api";
 import { toast } from "sonner";
-import { BusinessInfo, InvoiceDefaults, NotificationPrefs, EstimateDefaults } from "@/features/settings";
+import { BusinessInfo, InvoiceDefaults, NotificationPrefs, EstimateDefaults, BusinessSettingsPanel } from "@/features/settings";
 
 export function SettingsPage() {
   const { user, logout, updateUser } = useAuth();
@@ -253,6 +253,9 @@ export function SettingsPage() {
 
       {/* Estimate Defaults Section (Req 87.6) */}
       <EstimateDefaults />
+
+      {/* Business Thresholds Section (H-12 bughunt 2026-04-16) */}
+      <BusinessSettingsPanel />
 
       {/* Integration Settings Section */}
       <Card data-testid="integration-settings" className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow dark:bg-slate-800 dark:border-slate-700">
