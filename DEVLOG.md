@@ -5,6 +5,55 @@ Grin's Irrigation Platform — field service automation for residential/commerci
 
 ## Recent Activity
 
+## [2026-04-16 14:00] - BUGFIX: 6 Critical Customer Lifecycle Fixes (CR-1..CR-6)
+
+### What Was Accomplished
+Closed all 6 CRITICAL findings from the 2026-04-16 customer-lifecycle bug hunt (`bughunt/2026-04-16-customer-lifecycle-bughunt.md`). Six fix branches merged to `dev` across three waves.
+
+### Technical Details
+- **CR-1** (`fix/cr-1-apply-schedule-draft`, 2f7caaf): `apply_schedule` now writes `AppointmentStatus.DRAFT.value` and leaves `Job.status`/`Job.scheduled_at` untouched. Draft Mode silence restored.
+- **CR-2** (`fix/cr-2-job-started-scheduled`, c65283e): `SCHEDULED → IN_PROGRESS` added to the transitions table; `job_started` pre-state tuple includes SCHEDULED. DRAFT stays blocked per decision.
+- **CR-3** (`fix/cr-3-repeat-cancel-sms`, 9a30fac): `_handle_cancel` short-circuits when appointment already CANCELLED, returning empty `auto_reply` so the SMS guard suppresses the send.
+- **CR-4** (`fix/cr-4-invoice-billing-reason`, 6d99587): renewal branch gated on Stripe `billing_reason == "subscription_cycle"`. Three-branch dispatch: first_invoice / renewal_cycle / other.
+- **CR-5** (`fix/cr-5-lien-review-queue`, d679c25): `mass_notify("lien_eligible")` raises deprecation → 400; new `compute_lien_candidates` + `send_lien_notice` service methods; two new endpoints + `LienReviewQueue` component as tab on `/invoices`.
+- **CR-6** (`fix/cr-6-convert-lead-dedup`, 7007002): `convert_lead` runs `check_tier1_duplicates`; raises `LeadDuplicateFoundError` → 409 with structured detail; FE `LeadConversionConflictModal` surfaces "Use existing" / "Convert anyway" (force=true).
+
+### Files Created
+- `src/grins_platform/schemas/invoice.py` (LienCandidateResponse, LienNoticeResult)
+- `frontend/src/features/invoices/components/LienReviewQueue.tsx` + test
+- `frontend/src/features/invoices/hooks/useLienReview.ts` + test
+- `frontend/src/features/invoices/components/MassNotifyPanel.test.tsx`
+- `frontend/src/features/leads/components/LeadConversionConflictModal.tsx` + test
+- `frontend/src/features/leads/utils/isDuplicateConflict.ts`
+- `bughunt/2026-04-16-critical-fixes-plan.md`
+
+### Files Modified
+- `src/grins_platform/api/v1/schedule.py` (CR-1)
+- `src/grins_platform/api/v1/jobs.py`, `src/grins_platform/models/appointment.py` (CR-2)
+- `src/grins_platform/services/job_confirmation_service.py` (CR-3)
+- `src/grins_platform/api/v1/webhooks.py` (CR-4)
+- `src/grins_platform/services/invoice_service.py`, `api/v1/invoices.py`, `repositories/invoice_repository.py` (CR-5)
+- `src/grins_platform/services/lead_service.py`, `api/v1/leads.py`, `schemas/lead.py` (CR-6)
+- `frontend/src/features/invoices/{types,api,hooks}/*`, `pages/Invoices.tsx`, `components/MassNotifyPanel.tsx` (CR-5)
+- `frontend/src/features/leads/{types,components}/*`, plus ConvertLeadDialog wired to the conflict modal (CR-6)
+- `bughunt/2026-04-16-customer-lifecycle-bughunt.md` (History — Resolved table appended)
+
+### Quality Check Results
+- Each CR's new and modified tests pass locally. Pre-existing dev-branch failures were documented as drift notes per fix.
+- Ruff / MyPy / Pyright surfaces match baseline — fix branches add zero new errors.
+- FE typecheck + vitest pass on the new components and hooks; matched adjustments to existing `ConvertLeadDialog.test.tsx`.
+
+### Decisions
+- CR-1: Job status stays `to_be_scheduled` during DRAFT creation (admin promotes explicitly via Send Confirmation).
+- CR-2: DRAFT cannot skip to IN_PROGRESS; only SCHEDULED / CONFIRMED / EN_ROUTE can.
+- CR-5: Lien Review Queue is a tab on `/invoices`; client-side dismiss only for MVP.
+- CR-6: 409 detail uses structured `{error:"duplicate_found", duplicates:[...]}`; FE conflict handling lives in `ConvertLeadDialog` (where `useConvertLead` is actually called), not `LeadsList` as the plan originally described.
+
+### Next Steps
+- Address HIGH findings H-1..H-14 from the same hunt.
+- Persist lien-candidate dismissals server-side (CR-5 follow-up).
+- Run agent-browser E2E flows for CR-1, CR-5, CR-6 against the dev stack under the `+19527373312`-only SMS safety constraint.
+
 ## [2026-02-07 21:30] - BUGFIX: Lead Form CORS Error Diagnosis & Documentation
 
 ### What Was Accomplished
