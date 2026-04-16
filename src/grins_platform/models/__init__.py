@@ -20,6 +20,7 @@ CRM Gap Closure: Communication, CustomerPhoto, LeadAttachment, EstimateTemplate,
 from grins_platform.models.agreement_status_log import AgreementStatusLog
 from grins_platform.models.ai_audit_log import AIAuditLog
 from grins_platform.models.ai_usage import AIUsage
+from grins_platform.models.alert import Alert
 from grins_platform.models.appointment import Appointment
 from grins_platform.models.audit_log import AuditLog
 from grins_platform.models.business_setting import BusinessSetting
@@ -42,6 +43,8 @@ from grins_platform.models.enums import (
     ActionTag,
     AgreementPaymentStatus,
     AgreementStatus,
+    AlertSeverity,
+    AlertType,
     AppointmentStatus,
     AttachmentType,
     BillingFrequency,
@@ -123,6 +126,10 @@ __all__ = [
     "AgreementPaymentStatus",
     "AgreementStatus",
     "AgreementStatusLog",
+    # bughunt 2026-04-16 H-5: admin alerts
+    "Alert",
+    "AlertSeverity",
+    "AlertType",
     # Phase 3: Admin Dashboard
     "Appointment",
     "AppointmentStatus",

@@ -612,3 +612,191 @@ class TestRepeatCancelIsNoOp:
         assert result["action"] == "cancelled"
         assert result["auto_reply"]
         assert appt.status == AppointmentStatus.CANCELLED.value
+
+
+# ---------------------------------------------------------------------------
+# bughunt 2026-04-16 H-5 — admin cancellation alert on customer-SMS cancel
+# ---------------------------------------------------------------------------
+
+
+class TestAdminCancellationAlert:
+    """When a customer cancels via SMS, the admin must be notified.
+
+    D-4 (2026-04-16): both email and Alert row. The notification fires
+    only on a real state transition — a repeat ``C`` reply hits the CR-3
+    short-circuit and must not re-alert. Email failures are swallowed
+    inside the notification service.
+
+    Validates: bughunt 2026-04-16 finding H-5
+    """
+
+    @staticmethod
+    def _patch_notification_service(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> AsyncMock:
+        """Install a mock :class:`NotificationService` and return its alert hook."""
+        send_alert_mock = AsyncMock()
+        notification_svc_mock = MagicMock()
+        notification_svc_mock.send_admin_cancellation_alert = send_alert_mock
+
+        monkeypatch.setattr(
+            "grins_platform.services.notification_service.NotificationService",
+            MagicMock(return_value=notification_svc_mock),
+        )
+        # Neutralise the default EmailService constructor so tests never
+        # touch pydantic_settings / env vars.
+        monkeypatch.setattr(
+            "grins_platform.services.email_service.EmailService",
+            MagicMock(return_value=MagicMock()),
+        )
+        return send_alert_mock
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_handle_cancel_notifies_admin_on_first_cancellation(
+        self,
+        mock_db: AsyncMock,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """First ``C`` reply on a SCHEDULED appointment dispatches the alert.
+
+        Validates: bughunt 2026-04-16 finding H-5
+        """
+        from datetime import date, time
+
+        send_alert_mock = self._patch_notification_service(monkeypatch)
+
+        sent_msg = _make_sent_message()
+        appt = _make_appointment(status=AppointmentStatus.SCHEDULED.value)
+        # Align the appointment row with the sent_message's FK so
+        # ``handle_confirmation``'s appointment_id (from the sent message)
+        # matches the Appointment we load from the DB mock.
+        appt.id = sent_msg.appointment_id
+        appt.job_id = sent_msg.job_id
+        appt.scheduled_date = date(2026, 4, 17)
+        appt.time_window_start = time(9, 0)
+
+        job_mock = Mock()
+        job_mock.id = sent_msg.job_id
+        job_mock.job_type = "spring_startup"
+
+        customer_mock = Mock()
+        customer_mock.id = sent_msg.customer_id
+        customer_mock.first_name = "Jane"
+        customer_mock.last_name = "Doe"
+        customer_mock.full_name = "Jane Doe"
+
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = sent_msg
+        result_mock.scalar_one.return_value = 0
+        mock_db.execute = AsyncMock(return_value=result_mock)
+        # get(Appointment), get(Job), get(Customer)
+        mock_db.get = AsyncMock(side_effect=[appt, job_mock, customer_mock])
+
+        svc = JobConfirmationService(mock_db)
+        result = await svc.handle_confirmation(
+            thread_id="thread-123",
+            keyword=ConfirmationKeyword.CANCEL,
+            raw_body="C",
+            from_phone="+19527373312",
+        )
+
+        assert result["action"] == "cancelled"
+        send_alert_mock.assert_awaited_once()
+        call_kwargs = send_alert_mock.await_args.kwargs
+        assert call_kwargs["appointment_id"] == sent_msg.appointment_id
+        assert call_kwargs["customer_id"] == sent_msg.customer_id
+        assert call_kwargs["customer_name"] == "Jane Doe"
+        assert call_kwargs["source"] == "customer_sms"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_handle_cancel_does_not_notify_admin_when_already_cancelled(
+        self,
+        mock_db: AsyncMock,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """CR-3 short-circuit — repeat ``C`` must NOT re-alert.
+
+        Validates: bughunt 2026-04-16 finding H-5 (idempotency with CR-3)
+        """
+        send_alert_mock = self._patch_notification_service(monkeypatch)
+
+        sent_msg = _make_sent_message()
+        cancelled_appt = _make_appointment(status=AppointmentStatus.CANCELLED.value)
+
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = sent_msg
+        mock_db.execute = AsyncMock(return_value=result_mock)
+        mock_db.get = AsyncMock(return_value=cancelled_appt)
+
+        svc = JobConfirmationService(mock_db)
+        result = await svc.handle_confirmation(
+            thread_id="thread-123",
+            keyword=ConfirmationKeyword.CANCEL,
+            raw_body="C",
+            from_phone="+19527373312",
+        )
+
+        assert result["action"] == "cancelled"
+        assert result["auto_reply"] == ""
+        send_alert_mock.assert_not_awaited()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_handle_cancel_still_responds_when_admin_notification_fails(
+        self,
+        mock_db: AsyncMock,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Notification raising must not break the customer-facing reply.
+
+        Validates: bughunt 2026-04-16 finding H-5
+        """
+        from datetime import date, time
+
+        # Install a NotificationService whose send hook raises.
+        send_alert_mock = AsyncMock(side_effect=RuntimeError("boom"))
+        notification_svc_mock = MagicMock()
+        notification_svc_mock.send_admin_cancellation_alert = send_alert_mock
+        monkeypatch.setattr(
+            "grins_platform.services.notification_service.NotificationService",
+            MagicMock(return_value=notification_svc_mock),
+        )
+        monkeypatch.setattr(
+            "grins_platform.services.email_service.EmailService",
+            MagicMock(return_value=MagicMock()),
+        )
+
+        sent_msg = _make_sent_message()
+        appt = _make_appointment(status=AppointmentStatus.SCHEDULED.value)
+        appt.job_id = sent_msg.job_id
+        appt.scheduled_date = date(2026, 4, 17)
+        appt.time_window_start = time(9, 0)
+
+        job_mock = Mock()
+        job_mock.id = sent_msg.job_id
+        job_mock.job_type = "spring_startup"
+
+        customer_mock = Mock()
+        customer_mock.id = sent_msg.customer_id
+        customer_mock.full_name = "Jane Doe"
+
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = sent_msg
+        result_mock.scalar_one.return_value = 0
+        mock_db.execute = AsyncMock(return_value=result_mock)
+        mock_db.get = AsyncMock(side_effect=[appt, job_mock, customer_mock])
+
+        svc = JobConfirmationService(mock_db)
+        result = await svc.handle_confirmation(
+            thread_id="thread-123",
+            keyword=ConfirmationKeyword.CANCEL,
+            raw_body="C",
+            from_phone="+19527373312",
+        )
+
+        # Customer reply still produced despite the admin-alert failure.
+        assert result["action"] == "cancelled"
+        assert result["auto_reply"]  # non-empty — customer gets their SMS
+        send_alert_mock.assert_awaited_once()
