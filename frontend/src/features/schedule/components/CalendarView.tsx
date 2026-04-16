@@ -180,11 +180,11 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
   // Build draft appointments per day for day header buttons (Req 8.5)
   const draftsByDay = useMemo(() => {
     if (!weeklySchedule?.days) return {};
-    const map: Record<string, { count: number; ids: string[] }> = {};
+    const map: Record<string, Appointment[]> = {};
     weeklySchedule.days.forEach((day) => {
       const drafts = day.appointments.filter((apt) => apt.status === 'draft');
       if (drafts.length > 0) {
-        map[day.date] = { count: drafts.length, ids: drafts.map((d) => d.id) };
+        map[day.date] = drafts;
       }
     });
     return map;
@@ -234,8 +234,7 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
           {dayDrafts && (
             <SendDayConfirmationsButton
               date={dateStr}
-              draftCount={dayDrafts.count}
-              draftAppointmentIds={dayDrafts.ids}
+              draftAppointments={dayDrafts}
             />
           )}
         </div>
