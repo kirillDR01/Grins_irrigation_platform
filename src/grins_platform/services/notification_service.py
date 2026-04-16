@@ -41,6 +41,7 @@ from grins_platform.schemas.ai import MessageType
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from grins_platform.services.admin_config import AdminNotificationSettings
     from grins_platform.services.email_service import EmailService
     from grins_platform.services.invoice_portal_service import InvoicePortalService
     from grins_platform.services.settings_service import SettingsService
@@ -104,6 +105,7 @@ class NotificationService(LoggerMixin):
         google_review_url: str = "",
         settings_service: SettingsService | None = None,
         invoice_portal_service: InvoicePortalService | None = None,
+        admin_settings: AdminNotificationSettings | None = None,
     ) -> None:
         """Initialize NotificationService.
 
@@ -113,6 +115,8 @@ class NotificationService(LoggerMixin):
             google_review_url: Google Business review URL for completion notifications.
             settings_service: SettingsService for reading time windows (Req 87.8).
             invoice_portal_service: InvoicePortalService for portal links (Req 84.7).
+            admin_settings: AdminNotificationSettings for admin alert recipient
+                (H-5). If omitted, reads ``ADMIN_NOTIFICATION_EMAIL`` from env.
         """
         super().__init__()
         self.sms_service = sms_service
@@ -120,6 +124,7 @@ class NotificationService(LoggerMixin):
         self.google_review_url = google_review_url
         self.settings_service = settings_service
         self.invoice_portal_service = invoice_portal_service
+        self.admin_settings = admin_settings
 
     # ------------------------------------------------------------------ #
     # Settings helpers (Req 87.8)
@@ -1141,3 +1146,150 @@ class NotificationService(LoggerMixin):
             lead_id=str(lead_id),
         )
         return True
+
+    # ------------------------------------------------------------------ #
+    # Admin Alerts (bughunt H-5)
+    # ------------------------------------------------------------------ #
+
+    async def send_admin_cancellation_alert(
+        self,
+        db: AsyncSession,
+        *,
+        appointment_id: UUID,
+        customer_id: UUID,
+        customer_name: str,
+        scheduled_at: datetime,
+        source: str = "customer_sms",
+    ) -> None:
+        """Notify admin that a customer cancelled an appointment via SMS.
+
+        Dispatches an email to ``ADMIN_NOTIFICATION_EMAIL`` (via the
+        existing :class:`EmailService`) **and** persists an :class:`Alert`
+        row the dashboard surfaces via ``GET /api/v1/alerts``.
+
+        Per D-4 (2026-04-16): *both* channels, because email can fail
+        silently and the dashboard gives an always-visible fallback.
+
+        Failures are logged and swallowed — admin notification must never
+        block the customer-facing SMS reply.
+
+        Args:
+            db: Active database session (used to persist the Alert row).
+            appointment_id: UUID of the cancelled appointment.
+            customer_id: UUID of the cancelling customer.
+            customer_name: Human-readable customer name for the message
+                body.
+            scheduled_at: Original scheduled start time.
+            source: How the cancellation was received (default
+                ``"customer_sms"``; callers may pass other tokens for
+                forward compatibility).
+
+        Validates: bughunt 2026-04-16 finding H-5
+        """
+        self.log_started(
+            "send_admin_cancellation_alert",
+            appointment_id=str(appointment_id),
+            customer_id=str(customer_id),
+            source=source,
+        )
+
+        message = (
+            f"{customer_name} cancelled via {source} for "
+            f"{scheduled_at:%Y-%m-%d %H:%M}"
+        )
+
+        # --- Email dispatch (uses existing EmailService._send_email) ---
+        try:
+            recipient = self._get_admin_notification_email()
+            if recipient and self.email_service is not None:
+                from grins_platform.models.enums import (  # noqa: PLC0415
+                    EmailType,
+                )
+
+                subject = (
+                    f"Customer cancelled appointment — {customer_name} "
+                    f"({scheduled_at:%Y-%m-%d %H:%M})"
+                )
+                html_body = (
+                    f"<p><strong>{customer_name}</strong> cancelled their "
+                    f"appointment via {source}.</p>"
+                    f"<p><strong>Scheduled for:</strong> "
+                    f"{scheduled_at:%Y-%m-%d %H:%M}</p>"
+                    f"<p><strong>Appointment ID:</strong> "
+                    f"{appointment_id}</p>"
+                    f"<p><strong>Customer ID:</strong> {customer_id}</p>"
+                )
+                self.email_service._send_email(  # noqa: SLF001
+                    to_email=recipient,
+                    subject=subject,
+                    html_body=html_body,
+                    email_type=NotificationType.CAMPAIGN.value,
+                    classification=EmailType.TRANSACTIONAL,
+                )
+            elif not recipient:
+                self.logger.warning(
+                    "notification.admin_cancellation_alert.no_recipient",
+                    appointment_id=str(appointment_id),
+                    message=(
+                        "ADMIN_NOTIFICATION_EMAIL not configured — "
+                        "skipping email dispatch"
+                    ),
+                )
+        except Exception as exc:
+            # Per spec: never re-raise. Log and continue.
+            self.log_failed(
+                "send_admin_cancellation_alert.email",
+                error=exc,
+                appointment_id=str(appointment_id),
+            )
+
+        # --- Alert row persistence (dashboard surface) ---
+        try:
+            from grins_platform.models.alert import Alert  # noqa: PLC0415
+            from grins_platform.models.enums import (  # noqa: PLC0415
+                AlertSeverity,
+                AlertType,
+            )
+            from grins_platform.repositories.alert_repository import (  # noqa: PLC0415
+                AlertRepository,
+            )
+
+            alert_repo = AlertRepository(db)
+            alert = Alert(
+                type=AlertType.CUSTOMER_CANCELLED_APPOINTMENT.value,
+                severity=AlertSeverity.WARNING.value,
+                entity_type="appointment",
+                entity_id=appointment_id,
+                message=message,
+            )
+            await alert_repo.create(alert)
+        except Exception as exc:
+            # Per spec: never re-raise. Log and continue.
+            self.log_failed(
+                "send_admin_cancellation_alert.alert_row",
+                error=exc,
+                appointment_id=str(appointment_id),
+            )
+            return
+
+        self.log_completed(
+            "send_admin_cancellation_alert",
+            appointment_id=str(appointment_id),
+        )
+
+    def _get_admin_notification_email(self) -> str:
+        """Return the configured admin recipient, if any.
+
+        Prefers the explicitly-injected :class:`AdminNotificationSettings`
+        instance; falls back to reading the env var lazily so existing
+        call sites that never pass the settings object still work.
+        """
+        if self.admin_settings is not None:
+            return self.admin_settings.admin_notification_email
+        # Lazy fallback — avoids a hard import of pydantic_settings for
+        # callers that never use this path.
+        from grins_platform.services.admin_config import (  # noqa: PLC0415
+            AdminNotificationSettings,
+        )
+
+        return AdminNotificationSettings().admin_notification_email

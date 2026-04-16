@@ -576,6 +576,27 @@ class FollowUpStatus(str, Enum):
     SKIPPED = "skipped"
 
 
+class AlertSeverity(str, Enum):
+    """Severity level for admin-facing alerts.
+
+    Validates: bughunt 2026-04-16 H-5 (admin cancellation alert on C reply).
+    """
+
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+
+
+class AlertType(str, Enum):
+    """Type classification for admin-facing alerts.
+
+    Validates: bughunt 2026-04-16 H-5 (admin cancellation alert on C reply).
+    """
+
+    CUSTOMER_CANCELLED_APPOINTMENT = "customer_cancelled_appointment"
+    CONFIRMATION_NO_REPLY = "confirmation_no_reply"
+
+
 # =============================================================================
 # CRM Changes Update 2 Enums
 # =============================================================================
