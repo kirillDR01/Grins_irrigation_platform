@@ -529,7 +529,18 @@ class StripeWebhookHandler(LoggerMixin):
         amount_paid_cents: int = invoice_obj.get("amount_paid", 0)
         amount_paid = Decimal(str(amount_paid_cents)) / Decimal(100)
 
-        is_first_invoice = agreement.last_payment_date is None
+        # CR-4: Gate the renewal branch on Stripe's ``billing_reason`` rather
+        # than "any invoice after the first." Mid-cycle prorated additions
+        # and manual top-ups have ``last_payment_date != None`` too, but only
+        # ``subscription_cycle`` means "this is the renewal charge for the
+        # next term." Everything else (subscription_create/update/manual,
+        # or missing) is either the first invoice or a non-renewal charge.
+        billing_reason = (invoice_obj.get("billing_reason") or "").strip()
+        is_renewal_cycle = billing_reason == "subscription_cycle"
+        is_first_invoice = (
+            agreement.last_payment_date is None
+            and billing_reason in ("subscription_create", "", "manual")
+        )
 
         if is_first_invoice:
             # First invoice (Req 10.1)
@@ -541,7 +552,7 @@ class StripeWebhookHandler(LoggerMixin):
                     reason="First invoice paid",
                 )
             # No date updates or job generation — checkout already handled those
-        else:
+        elif is_renewal_cycle:
             # Renewal invoice (Req 10.2)
             current_status = AgreementStatus(agreement.status)
             if current_status != AgreementStatus.ACTIVE:
@@ -570,6 +581,16 @@ class StripeWebhookHandler(LoggerMixin):
                 )
             else:
                 _ = await job_gen.generate_jobs(agreement)
+        else:
+            # Non-first, non-renewal invoice (mid-cycle prorated add-on,
+            # subscription_update, manual top-up, etc.). No renewal logic;
+            # payment fields still update below so the dashboard stays fresh.
+            self.log_started(
+                "webhook_invoice_paid_noncycle",
+                agreement_id=str(agreement.id),
+                billing_reason=billing_reason,
+                stripe_event_id=event["id"],
+            )
 
         # Update payment fields (Req 10.3)
         _ = await agreement_repo.update(
@@ -587,6 +608,8 @@ class StripeWebhookHandler(LoggerMixin):
             "webhook_invoice_paid",
             agreement_id=str(agreement.id),
             is_first_invoice=is_first_invoice,
+            is_renewal_cycle=is_renewal_cycle,
+            billing_reason=billing_reason,
             stripe_event_id=event["id"],
         )
 

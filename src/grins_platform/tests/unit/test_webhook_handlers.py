@@ -1263,7 +1263,7 @@ class TestInvoicePaid:
     @patch("grins_platform.api.v1.webhooks.AgreementService")
     @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
     @patch("grins_platform.api.v1.webhooks.AgreementRepository")
-    async def test_renewal_invoice_generates_new_jobs(
+    async def test_invoice_paid_subscription_cycle_without_auto_renew_generates_jobs(
         self,
         mock_agr_repo_cls: MagicMock,
         mock_tier_repo_cls: MagicMock,
@@ -1271,7 +1271,7 @@ class TestInvoicePaid:
         mock_job_gen_cls: MagicMock,
         mock_renewal_svc_cls: MagicMock,
     ) -> None:
-        """Renewal invoice with auto_renew=False generates jobs directly."""
+        """CR-4: ``subscription_cycle`` + auto_renew=False → generate_jobs, no proposal."""
         handler, _session = _make_handler()
 
         agreement = _make_agreement(
@@ -1295,7 +1295,11 @@ class TestInvoicePaid:
 
         event = _make_event(
             "invoice.paid",
-            {"subscription": "sub_123", "amount_paid": 59900},
+            {
+                "subscription": "sub_123",
+                "amount_paid": 59900,
+                "billing_reason": "subscription_cycle",
+            },
         )
 
         result = await handler.handle_event(event)
@@ -1315,7 +1319,7 @@ class TestInvoicePaid:
     @patch("grins_platform.api.v1.webhooks.AgreementService")
     @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
     @patch("grins_platform.api.v1.webhooks.AgreementRepository")
-    async def test_renewal_invoice_auto_renew_creates_proposal(
+    async def test_invoice_paid_subscription_cycle_triggers_renewal_proposal(
         self,
         mock_agr_repo_cls: MagicMock,
         mock_tier_repo_cls: MagicMock,
@@ -1323,7 +1327,7 @@ class TestInvoicePaid:
         mock_job_gen_cls: MagicMock,
         mock_renewal_svc_cls: MagicMock,
     ) -> None:
-        """Renewal invoice with auto_renew=True creates proposal (Req 31.1)."""
+        """CR-4: ``subscription_cycle`` + auto_renew=True → proposal (Req 31.1)."""
         handler, _session = _make_handler()
 
         agreement = _make_agreement(
@@ -1347,7 +1351,11 @@ class TestInvoicePaid:
 
         event = _make_event(
             "invoice.paid",
-            {"subscription": "sub_123", "amount_paid": 59900},
+            {
+                "subscription": "sub_123",
+                "amount_paid": 59900,
+                "billing_reason": "subscription_cycle",
+            },
         )
 
         result = await handler.handle_event(event)
@@ -1356,6 +1364,276 @@ class TestInvoicePaid:
         # auto_renew=True → proposal, not direct jobs
         renewal_svc.generate_proposal.assert_called_once_with(agreement.id)
         job_gen.generate_jobs.assert_not_called()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.ContractRenewalReviewService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    async def test_invoice_paid_subscription_create_transitions_to_active_no_renewal(
+        self,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_renewal_svc_cls: MagicMock,
+    ) -> None:
+        """CR-4: ``subscription_create`` + first payment activates PENDING; no renewal."""
+        handler, _session = _make_handler()
+
+        agreement = _make_agreement(
+            status=AgreementStatus.PENDING.value,
+            last_payment_date=None,
+        )
+        agr_repo = AsyncMock()
+        agr_repo.get_by_stripe_subscription_id.return_value = agreement
+        mock_agr_repo_cls.return_value = agr_repo
+        mock_tier_repo_cls.return_value = AsyncMock()
+
+        agr_svc = AsyncMock()
+        mock_agr_svc_cls.return_value = agr_svc
+
+        job_gen = AsyncMock()
+        mock_job_gen_cls.return_value = job_gen
+
+        renewal_svc = AsyncMock()
+        mock_renewal_svc_cls.return_value = renewal_svc
+
+        event = _make_event(
+            "invoice.paid",
+            {
+                "subscription": "sub_123",
+                "amount_paid": 29900,
+                "billing_reason": "subscription_create",
+            },
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        agr_svc.transition_status.assert_called_once_with(
+            agreement.id,
+            AgreementStatus.ACTIVE,
+            reason="First invoice paid",
+        )
+        renewal_svc.generate_proposal.assert_not_called()
+        job_gen.generate_jobs.assert_not_called()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.ContractRenewalReviewService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    async def test_invoice_paid_subscription_update_skips_renewal_logic(
+        self,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_renewal_svc_cls: MagicMock,
+    ) -> None:
+        """CR-4: ``subscription_update`` (mid-cycle add-on) must NOT fire renewal."""
+        handler, _session = _make_handler()
+
+        agreement = _make_agreement(
+            status=AgreementStatus.ACTIVE.value,
+            last_payment_date=datetime(2025, 3, 1, tzinfo=timezone.utc),
+            auto_renew=True,
+        )
+        agr_repo = AsyncMock()
+        agr_repo.get_by_stripe_subscription_id.return_value = agreement
+        mock_agr_repo_cls.return_value = agr_repo
+        mock_tier_repo_cls.return_value = AsyncMock()
+
+        agr_svc = AsyncMock()
+        mock_agr_svc_cls.return_value = agr_svc
+
+        job_gen = AsyncMock()
+        mock_job_gen_cls.return_value = job_gen
+
+        renewal_svc = AsyncMock()
+        mock_renewal_svc_cls.return_value = renewal_svc
+
+        event = _make_event(
+            "invoice.paid",
+            {
+                "subscription": "sub_123",
+                "amount_paid": 5000,
+                "billing_reason": "subscription_update",
+            },
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        # No renewal proposal, no jobs, no transition
+        renewal_svc.generate_proposal.assert_not_called()
+        job_gen.generate_jobs.assert_not_called()
+        agr_svc.transition_status.assert_not_called()
+        # Payment fields still update
+        agr_repo.update.assert_called()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.ContractRenewalReviewService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    async def test_invoice_paid_manual_skips_renewal_logic(
+        self,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_renewal_svc_cls: MagicMock,
+    ) -> None:
+        """CR-4: manual Stripe-dashboard invoice on existing agreement is not a renewal."""
+        handler, _session = _make_handler()
+
+        agreement = _make_agreement(
+            status=AgreementStatus.ACTIVE.value,
+            last_payment_date=datetime(2025, 3, 1, tzinfo=timezone.utc),
+            auto_renew=True,
+        )
+        agr_repo = AsyncMock()
+        agr_repo.get_by_stripe_subscription_id.return_value = agreement
+        mock_agr_repo_cls.return_value = agr_repo
+        mock_tier_repo_cls.return_value = AsyncMock()
+
+        agr_svc = AsyncMock()
+        mock_agr_svc_cls.return_value = agr_svc
+
+        job_gen = AsyncMock()
+        mock_job_gen_cls.return_value = job_gen
+
+        renewal_svc = AsyncMock()
+        mock_renewal_svc_cls.return_value = renewal_svc
+
+        event = _make_event(
+            "invoice.paid",
+            {
+                "subscription": "sub_123",
+                "amount_paid": 10000,
+                "billing_reason": "manual",
+            },
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        renewal_svc.generate_proposal.assert_not_called()
+        job_gen.generate_jobs.assert_not_called()
+        agr_svc.transition_status.assert_not_called()
+        agr_repo.update.assert_called()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    async def test_invoice_paid_missing_billing_reason_first_payment_activates_agreement(
+        self,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+    ) -> None:
+        """CR-4: missing ``billing_reason`` on the FIRST payment still activates PENDING.
+
+        Backward-compat — legacy test fixtures and old Stripe events may not
+        include ``billing_reason``. When combined with
+        ``last_payment_date is None``, this is treated as the first invoice.
+        """
+        handler, _session = _make_handler()
+
+        agreement = _make_agreement(
+            status=AgreementStatus.PENDING.value,
+            last_payment_date=None,
+        )
+        agr_repo = AsyncMock()
+        agr_repo.get_by_stripe_subscription_id.return_value = agreement
+        mock_agr_repo_cls.return_value = agr_repo
+        mock_tier_repo_cls.return_value = AsyncMock()
+
+        agr_svc = AsyncMock()
+        mock_agr_svc_cls.return_value = agr_svc
+        mock_job_gen_cls.return_value = AsyncMock()
+
+        event = _make_event(
+            "invoice.paid",
+            {"subscription": "sub_123", "amount_paid": 29900},
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        agr_svc.transition_status.assert_called_once_with(
+            agreement.id,
+            AgreementStatus.ACTIVE,
+            reason="First invoice paid",
+        )
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "billing_reason",
+        ["subscription_create", "subscription_cycle", "subscription_update", "manual"],
+    )
+    @patch("grins_platform.api.v1.webhooks.ContractRenewalReviewService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    async def test_invoice_paid_always_updates_payment_fields(
+        self,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_renewal_svc_cls: MagicMock,
+        billing_reason: str,
+    ) -> None:
+        """CR-4: payment fields are ALWAYS refreshed regardless of billing_reason."""
+        handler, _session = _make_handler()
+
+        agreement = _make_agreement(
+            status=AgreementStatus.ACTIVE.value,
+            last_payment_date=datetime(2025, 3, 1, tzinfo=timezone.utc),
+            auto_renew=False,
+        )
+        agr_repo = AsyncMock()
+        agr_repo.get_by_stripe_subscription_id.return_value = agreement
+        mock_agr_repo_cls.return_value = agr_repo
+        mock_tier_repo_cls.return_value = AsyncMock()
+        mock_agr_svc_cls.return_value = AsyncMock()
+        job_gen = AsyncMock()
+        job_gen.generate_jobs.return_value = []
+        mock_job_gen_cls.return_value = job_gen
+        mock_renewal_svc_cls.return_value = AsyncMock()
+
+        event = _make_event(
+            "invoice.paid",
+            {
+                "subscription": "sub_123",
+                "amount_paid": 12345,
+                "billing_reason": billing_reason,
+            },
+        )
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        update_calls = agr_repo.update.call_args_list
+        payment_update_dict = update_calls[-1][0][1]
+        assert payment_update_dict["payment_status"] == AgreementPaymentStatus.CURRENT.value
+        assert payment_update_dict["last_payment_amount"] == Decimal("123.45")
+        assert payment_update_dict["last_payment_date"] is not None
 
     @pytest.mark.unit
     @pytest.mark.asyncio
