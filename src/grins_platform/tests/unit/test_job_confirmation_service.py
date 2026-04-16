@@ -465,3 +465,150 @@ class TestCancellationSMSDetails:
         # Verify the message structure
         assert "has been cancelled" in auto_reply
         assert "please call us at" in auto_reply.lower()
+
+
+# ---------------------------------------------------------------------------
+# CR-3 / 2026-04-14 E2E-3 — Repeat 'C' is a no-op (spec line 1070)
+# ---------------------------------------------------------------------------
+
+
+class TestRepeatCancelIsNoOp:
+    """Repeat cancellation short-circuits without a duplicate SMS.
+
+    **Validates: CR-3 (2026-04-14 E2E-3/H-2 survivor).** A second ``C`` reply
+    on an already-CANCELLED appointment must not rebuild the cancellation
+    message or dispatch another SMS; ``auto_reply`` must be empty so the
+    SMS service's ``if auto_reply`` guard suppresses the send.
+    """
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_handle_cancel_short_circuits_when_already_cancelled(
+        self,
+        mock_db: AsyncMock,
+    ) -> None:
+        sent_msg = _make_sent_message()
+        cancelled_appt = _make_appointment(status=AppointmentStatus.CANCELLED.value)
+
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = sent_msg
+        mock_db.execute = AsyncMock(return_value=result_mock)
+        mock_db.get = AsyncMock(return_value=cancelled_appt)
+
+        svc = JobConfirmationService(mock_db)
+        result = await svc.handle_confirmation(
+            thread_id="thread-123",
+            keyword=ConfirmationKeyword.CANCEL,
+            raw_body="C",
+            from_phone="+19527373312",
+        )
+
+        assert result["action"] == "cancelled"
+        assert result["auto_reply"] == ""  # falsy → sms_service skips send
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_handle_cancel_does_not_rebuild_message_when_already_cancelled(
+        self,
+        mock_db: AsyncMock,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        sent_msg = _make_sent_message()
+        cancelled_appt = _make_appointment(status=AppointmentStatus.CANCELLED.value)
+
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = sent_msg
+        mock_db.execute = AsyncMock(return_value=result_mock)
+        mock_db.get = AsyncMock(return_value=cancelled_appt)
+
+        build_mock = Mock(return_value="SHOULD_NOT_BUILD")
+        monkeypatch.setattr(
+            JobConfirmationService,
+            "_build_cancellation_message",
+            staticmethod(build_mock),
+        )
+
+        svc = JobConfirmationService(mock_db)
+        await svc.handle_confirmation(
+            thread_id="thread-123",
+            keyword=ConfirmationKeyword.CANCEL,
+            raw_body="C",
+            from_phone="+19527373312",
+        )
+
+        build_mock.assert_not_called()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_handle_cancel_still_cancels_from_scheduled(
+        self,
+        mock_db: AsyncMock,
+    ) -> None:
+        """Regression: 'C' from SCHEDULED still transitions and returns a real auto-reply."""
+        from datetime import date, time
+
+        sent_msg = _make_sent_message()
+        appt = _make_appointment(status=AppointmentStatus.SCHEDULED.value)
+        appt.job_id = sent_msg.job_id
+        appt.scheduled_date = date(2025, 4, 15)
+        appt.time_window_start = time(9, 30)
+
+        job_mock = Mock()
+        job_mock.id = sent_msg.job_id
+        job_mock.job_type = "spring_startup"
+
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = sent_msg
+        result_mock.scalar_one.return_value = 0
+        mock_db.execute = AsyncMock(return_value=result_mock)
+        mock_db.get = AsyncMock(side_effect=[appt, job_mock])
+
+        svc = JobConfirmationService(mock_db)
+        result = await svc.handle_confirmation(
+            thread_id="thread-123",
+            keyword=ConfirmationKeyword.CANCEL,
+            raw_body="C",
+            from_phone="+19527373312",
+        )
+
+        assert result["action"] == "cancelled"
+        assert result["auto_reply"]  # non-empty
+        assert "has been cancelled" in result["auto_reply"]
+        assert appt.status == AppointmentStatus.CANCELLED.value
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_handle_cancel_still_cancels_from_confirmed(
+        self,
+        mock_db: AsyncMock,
+    ) -> None:
+        """Regression: 'C' from CONFIRMED still transitions and returns a real auto-reply."""
+        from datetime import date, time
+
+        sent_msg = _make_sent_message()
+        appt = _make_appointment(status=AppointmentStatus.CONFIRMED.value)
+        appt.job_id = sent_msg.job_id
+        appt.scheduled_date = date(2025, 4, 15)
+        appt.time_window_start = time(9, 30)
+
+        job_mock = Mock()
+        job_mock.id = sent_msg.job_id
+        job_mock.job_type = "spring_startup"
+
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = sent_msg
+        result_mock.scalar_one.return_value = 0
+        mock_db.execute = AsyncMock(return_value=result_mock)
+        mock_db.get = AsyncMock(side_effect=[appt, job_mock])
+
+        svc = JobConfirmationService(mock_db)
+        result = await svc.handle_confirmation(
+            thread_id="thread-123",
+            keyword=ConfirmationKeyword.CANCEL,
+            raw_body="C",
+            from_phone="+19527373312",
+        )
+
+        assert result["action"] == "cancelled"
+        assert result["auto_reply"]
+        assert appt.status == AppointmentStatus.CANCELLED.value

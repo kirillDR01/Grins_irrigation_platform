@@ -384,6 +384,67 @@ class TestCancelReplyFlow:
         assert response.status == "cancelled"
         assert response.processed_at is not None
 
+    async def test_two_consecutive_c_replies_send_exactly_one_sms(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """CR-3: two consecutive 'C' replies dispatch exactly one cancellation SMS.
+
+        The second reply short-circuits because the appointment is already
+        CANCELLED; auto_reply returns empty so ``sms_service._try_confirmation_reply``
+        skips its ``provider.send_text`` call. **Validates: CR-3 / 2026-04-14 E2E-3.**
+
+        ``clear_on_site_data`` is patched to a no-op here: the shared
+        ``_build_mock_db`` helper doesn't stub the invoice-count query path
+        (pre-existing harness limitation, unrelated to CR-3).
+        """
+        appt_id = uuid4()
+        job_id = uuid4()
+        customer_id = uuid4()
+
+        sent_msg = _make_sent_message(
+            appointment_id=appt_id,
+            job_id=job_id,
+            customer_id=customer_id,
+        )
+        appointment = _make_appointment(
+            id=appt_id,
+            job_id=job_id,
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+        db = _build_mock_db(sent_message=sent_msg, appointment=appointment)
+
+        clear_on_site_mock = AsyncMock()
+        monkeypatch.setattr(
+            "grins_platform.services.appointment_service.clear_on_site_data",
+            clear_on_site_mock,
+        )
+
+        service = JobConfirmationService(db)
+
+        # First C — cancels and returns a real auto-reply.
+        first = await service.handle_confirmation(
+            thread_id="thread-abc-123",
+            keyword=ConfirmationKeyword.CANCEL,
+            raw_body="C",
+            from_phone="+19527373312",
+        )
+        assert appointment.status == AppointmentStatus.CANCELLED.value
+        assert first["auto_reply"]  # truthy → provider would be called once
+
+        # Second C — appointment is already CANCELLED, so auto_reply is empty.
+        second = await service.handle_confirmation(
+            thread_id="thread-abc-123",
+            keyword=ConfirmationKeyword.CANCEL,
+            raw_body="C",
+            from_phone="+19527373312",
+        )
+        assert second["action"] == "cancelled"
+        assert second["auto_reply"] == ""  # falsy → provider NOT called second time
+
+        # clear_on_site_data is only called on the first transition, not the second.
+        assert clear_on_site_mock.await_count == 1
+
 
 # =============================================================================
 # 4. Unknown Reply — logged as needs_review

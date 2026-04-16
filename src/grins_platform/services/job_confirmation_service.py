@@ -242,6 +242,24 @@ class JobConfirmationService(LoggerMixin):
         )
 
         appt = await self.db.get(Appointment, appointment_id)
+
+        # CR-3 / H-2 / 2026-04-14 E2E-3 — "repeat C is a no-op" (spec line 1070).
+        # Short-circuit before we build + send another cancellation SMS.
+        if appt and appt.status == AppointmentStatus.CANCELLED.value:
+            response.status = "cancelled"
+            response.processed_at = datetime.now(tz=timezone.utc)
+            await self.db.flush()
+            self.log_rejected(
+                "handle_cancel",
+                reason="already_cancelled",
+                appointment_id=str(appointment_id),
+            )
+            return {
+                "action": "cancelled",
+                "appointment_id": str(appointment_id),
+                "auto_reply": "",  # falsy → sms_service._try_confirmation_reply skips send
+            }
+
         if appt and appt.status in (
             AppointmentStatus.SCHEDULED.value,
             AppointmentStatus.CONFIRMED.value,
