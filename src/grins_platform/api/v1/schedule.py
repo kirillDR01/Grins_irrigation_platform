@@ -23,6 +23,7 @@ from grins_platform.database import get_database_manager, get_sync_db
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.appointment import Appointment
 from grins_platform.models.customer import Customer
+from grins_platform.models.enums import AppointmentStatus
 from grins_platform.models.job import Job
 from grins_platform.models.property import Property
 from grins_platform.schemas.analytics import LeadTimeResponse
@@ -549,14 +550,17 @@ def apply_schedule(
                 start_time = job.start_time
                 end_time = job.end_time
 
-                # Create appointment
+                # Create appointment in DRAFT — Draft Mode keeps the
+                # appointment silent (no SMS) until an admin clicks Send
+                # Confirmation on the calendar card. See CR-1 /
+                # bughunt 2026-04-16.
                 appointment = Appointment(
                     job_id=job_id,
                     staff_id=staff_id,
                     scheduled_date=request.schedule_date,
                     time_window_start=start_time,
                     time_window_end=end_time,
-                    status="scheduled",
+                    status=AppointmentStatus.DRAFT.value,
                     route_order=job.sequence_index,
                     estimated_arrival=start_time,
                     notes=f"Auto-generated from schedule for {request.schedule_date}",
@@ -566,16 +570,15 @@ def apply_schedule(
                 db.flush()
                 created_ids.append(appointment.id)
 
-                # Update job status to scheduled
-                job_record = db.execute(
-                    select(Job).where(Job.id == job_id),
-                ).scalar_one_or_none()
-                if job_record:
-                    job_record.status = "scheduled"
-                    job_record.scheduled_at = datetime.combine(
-                        request.schedule_date,
-                        start_time,
-                    )
+                # CR-1: Job.status stays ``to_be_scheduled`` and
+                # Job.scheduled_at stays None while the appointment is DRAFT.
+                # Promotion happens later, when the admin sends the
+                # confirmation SMS.
+
+        endpoints.log_started(
+            "apply_schedule.created_as_draft",
+            count=len(created_ids),
+        )
 
         db.commit()
 

@@ -170,6 +170,144 @@ class TestAppointmentCreationDraftMode:
 
 
 # =============================================================================
+# CR-1: apply_schedule creates DRAFT appointments, not SCHEDULED
+# =============================================================================
+
+
+def _build_apply_schedule_request(
+    *,
+    job_id: uuid4 | None = None,
+    staff_id: uuid4 | None = None,
+    schedule_date: date | None = None,
+) -> "ApplyScheduleRequest":
+    from grins_platform.schemas.schedule_generation import (
+        ApplyScheduleRequest,
+        ScheduleJobAssignment,
+        ScheduleStaffAssignment,
+    )
+
+    return ApplyScheduleRequest(
+        schedule_date=schedule_date or date(2025, 6, 2),
+        assignments=[
+            ScheduleStaffAssignment(
+                staff_id=staff_id or uuid4(),
+                staff_name="Test Tech",
+                jobs=[
+                    ScheduleJobAssignment(
+                        job_id=job_id or uuid4(),
+                        customer_name="Alice",
+                        service_type="spring_startup",
+                        start_time=time(9, 0),
+                        end_time=time(11, 0),
+                        duration_minutes=120,
+                        travel_time_minutes=0,
+                        sequence_index=0,
+                    ),
+                ],
+            ),
+        ],
+    )
+
+
+def _build_mock_sync_db() -> MagicMock:
+    """Mock sync Session that tracks db.add() calls and returns no existing appts."""
+    db = MagicMock()
+    # .query(Appointment).filter(...).all() returns [] (no overlap cleanup needed)
+    query_mock = MagicMock()
+    query_mock.filter.return_value.all.return_value = []
+    db.query.return_value = query_mock
+    db.added_objects: list = []
+
+    def _add(obj: object) -> None:
+        # Assign an id so apply_schedule's created_ids.append(appointment.id) works.
+        if getattr(obj, "id", None) is None:
+            obj.id = uuid4()
+        db.added_objects.append(obj)
+
+    db.add.side_effect = _add
+    db.flush = MagicMock()
+    db.commit = MagicMock()
+    db.rollback = MagicMock()
+    db.delete = MagicMock()
+    # .execute(select(Job)...).scalar_one_or_none() — only hit from the cleanup path
+    # when deleted_job_ids is populated, which is empty in our test.
+    execute_result = MagicMock()
+    execute_result.scalar_one_or_none.return_value = None
+    db.execute.return_value = execute_result
+    return db
+
+
+class TestApplyScheduleDraftMode:
+    """apply_schedule bulk-creates appointments in DRAFT, not SCHEDULED.
+
+    **Validates: CR-1 (bughunt 2026-04-16).** Before CR-1, the endpoint
+    wrote ``status="scheduled"`` and set ``job.status="scheduled"`` /
+    ``job.scheduled_at=...``, bypassing Draft Mode and the "no SMS until
+    Send Confirmation" contract. Job stays in ``to_be_scheduled`` now.
+    """
+
+    @pytest.mark.unit
+    def test_apply_schedule_creates_draft_appointments_not_scheduled(self) -> None:
+        from grins_platform.api.v1.schedule import apply_schedule
+        from grins_platform.models.appointment import Appointment
+
+        db = _build_mock_sync_db()
+        request = _build_apply_schedule_request()
+
+        response = apply_schedule(request=request, db=db)
+
+        created_appts = [o for o in db.added_objects if isinstance(o, Appointment)]
+        assert len(created_appts) == 1
+        assert created_appts[0].status == AppointmentStatus.DRAFT.value
+        assert response.success is True
+        assert response.appointments_created == 1
+
+    @pytest.mark.unit
+    def test_apply_schedule_does_not_promote_job_status(self) -> None:
+        from grins_platform.api.v1.schedule import apply_schedule
+
+        db = _build_mock_sync_db()
+        # db.execute(...).scalar_one_or_none() MUST NOT be called with a Job
+        # lookup in the create loop (the cleanup loop is bypassed because
+        # no existing appointments were returned). Stub returns a job anyway
+        # to catch regressions: if the old code path ran, the job's status
+        # would be mutated.
+        tracker_job = MagicMock()
+        tracker_job.status = JobStatus.TO_BE_SCHEDULED.value
+        tracker_job.scheduled_at = None
+        db.execute.return_value.scalar_one_or_none.return_value = tracker_job
+
+        request = _build_apply_schedule_request()
+
+        apply_schedule(request=request, db=db)
+
+        # Job status must remain TO_BE_SCHEDULED — Job.scheduled_at must stay None.
+        assert tracker_job.status == JobStatus.TO_BE_SCHEDULED.value
+        assert tracker_job.scheduled_at is None
+
+    @pytest.mark.unit
+    def test_apply_schedule_does_not_set_job_scheduled_at(self) -> None:
+        """Separately asserts the Job.scheduled_at invariant.
+
+        If someone re-introduces the job promotion but only updates
+        ``status`` (not ``scheduled_at``), the previous test still fires;
+        this second assertion nails the ``scheduled_at`` invariant.
+        """
+        from grins_platform.api.v1.schedule import apply_schedule
+
+        db = _build_mock_sync_db()
+        tracker_job = MagicMock()
+        tracker_job.status = JobStatus.TO_BE_SCHEDULED.value
+        tracker_job.scheduled_at = None
+        db.execute.return_value.scalar_one_or_none.return_value = tracker_job
+
+        request = _build_apply_schedule_request()
+        apply_schedule(request=request, db=db)
+
+        assert tracker_job.scheduled_at is None
+
+
+# =============================================================================
 # Cross-references to existing test files for completeness
 # =============================================================================
 

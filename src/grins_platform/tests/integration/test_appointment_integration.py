@@ -1139,3 +1139,99 @@ class TestCrossComponentAppointmentIntegration:
 
         with pytest.raises(AppointmentNotFoundError):
             await appointment_service.update_appointment(appointment_id, data)
+
+
+# =============================================================================
+# CR-1: apply_schedule bulk endpoint creates DRAFT appointments and is silent
+# =============================================================================
+
+
+@pytest.mark.integration
+class TestApplyScheduleIntegration:
+    """``POST /api/v1/schedule/apply`` returns DRAFT appointments and emits no SMS.
+
+    **Validates: CR-1 (bughunt 2026-04-16).**
+    """
+
+    def _build_request(self) -> "ApplyScheduleRequest":  # type: ignore[name-defined]
+        from grins_platform.schemas.schedule_generation import (
+            ApplyScheduleRequest,
+            ScheduleJobAssignment,
+            ScheduleStaffAssignment,
+        )
+
+        return ApplyScheduleRequest(
+            schedule_date=date(2025, 6, 2),
+            assignments=[
+                ScheduleStaffAssignment(
+                    staff_id=uuid.uuid4(),
+                    staff_name="Jane Tech",
+                    jobs=[
+                        ScheduleJobAssignment(
+                            job_id=uuid.uuid4(),
+                            customer_name="Alice",
+                            service_type="spring_startup",
+                            start_time=time(9, 0),
+                            end_time=time(11, 0),
+                            duration_minutes=120,
+                            travel_time_minutes=0,
+                            sequence_index=0,
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+    def _build_mock_db(self) -> MagicMock:
+        db = MagicMock()
+        q = MagicMock()
+        q.filter.return_value.all.return_value = []
+        db.query.return_value = q
+        db.added: list = []
+
+        def _add(obj: object) -> None:
+            if getattr(obj, "id", None) is None:
+                obj.id = uuid.uuid4()
+            db.added.append(obj)
+
+        db.add.side_effect = _add
+        db.flush = MagicMock()
+        db.commit = MagicMock()
+        db.rollback = MagicMock()
+        db.delete = MagicMock()
+        exec_result = MagicMock()
+        exec_result.scalar_one_or_none.return_value = None
+        db.execute.return_value = exec_result
+        return db
+
+    def test_apply_schedule_endpoint_returns_draft_appointments(self) -> None:
+        from grins_platform.api.v1.schedule import apply_schedule
+        from grins_platform.models.appointment import Appointment
+
+        db = self._build_mock_db()
+        request = self._build_request()
+
+        response = apply_schedule(request=request, db=db)
+
+        assert response.success is True
+        assert response.appointments_created == 1
+        created = [o for o in db.added if isinstance(o, Appointment)]
+        assert len(created) == 1
+        assert created[0].status == AppointmentStatus.DRAFT.value
+
+    def test_apply_schedule_emits_no_sms(self) -> None:
+        """Bulk apply must not dispatch any SMS — Draft Mode is silent."""
+        from unittest.mock import patch
+
+        from grins_platform.api.v1.schedule import apply_schedule
+
+        db = self._build_mock_db()
+        request = self._build_request()
+
+        with patch(
+            "grins_platform.services.sms_service.SMSService.send_message",
+            new_callable=AsyncMock,
+        ) as mock_sms:
+            apply_schedule(request=request, db=db)
+
+        mock_sms.assert_not_called()
