@@ -300,11 +300,14 @@ class JobConfirmationService(LoggerMixin):
                 "auto_reply": "",  # falsy → sms_service._try_confirmation_reply skips send
             }
 
+        pre_cancel_status = appt.status if appt else None
+        transitioned = False
         if appt and appt.status in (
             AppointmentStatus.SCHEDULED.value,
             AppointmentStatus.CONFIRMED.value,
         ):
             appt.status = AppointmentStatus.CANCELLED.value
+            transitioned = True
             await self.db.flush()
 
             # Clear on-site data after cancellation (Req 2.1, 2.2, 2.3)
@@ -320,11 +323,60 @@ class JobConfirmationService(LoggerMixin):
         response.processed_at = datetime.now(tz=timezone.utc)
         await self.db.flush()
 
+        # bughunt M-8: audit the customer-initiated cancel so the admin
+        # history view shows *why* an appointment was cancelled (the
+        # admin-side path already audits via _record_cancellation_audit).
+        if transitioned:
+            await self._record_customer_sms_cancel_audit(
+                appointment_id=appointment_id,
+                pre_cancel_status=pre_cancel_status or "",
+                response_id=response.id,
+                from_phone=response.from_phone,
+            )
+
         return {
             "action": "cancelled",
             "appointment_id": str(appointment_id),
             "auto_reply": auto_reply,
         }
+
+    async def _record_customer_sms_cancel_audit(
+        self,
+        *,
+        appointment_id: UUID,
+        pre_cancel_status: str,
+        response_id: Any,  # noqa: ANN401 — JobConfirmationResponse.id is UUID at runtime
+        from_phone: str | None,
+    ) -> None:
+        """Audit a ``C`` SMS cancel with ``source="customer_sms"`` (bughunt M-8).
+
+        Mirrors :meth:`AppointmentService._record_cancellation_audit` but
+        records the customer's phone in place of an admin actor so the
+        history view can tell admin- and customer-initiated cancels apart.
+        """
+        from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+            AuditLogRepository,
+        )
+
+        try:
+            repo = AuditLogRepository(self.db)
+            _ = await repo.create(
+                action="appointment.cancel",
+                resource_type="appointment",
+                resource_id=appointment_id,
+                actor_id=None,
+                details={
+                    "source": "customer_sms",
+                    "pre_cancel_status": pre_cancel_status,
+                    "response_id": str(response_id),
+                    "from_phone": from_phone,
+                },
+            )
+        except Exception:
+            self.log_failed(
+                "customer_sms_cancel_audit",
+                appointment_id=str(appointment_id),
+            )
 
     @staticmethod
     def _build_cancellation_message(

@@ -677,3 +677,95 @@ class TestRepeatCancelIsNoOp:
         assert result["action"] == "cancelled"
         assert result["auto_reply"]
         assert appt.status == AppointmentStatus.CANCELLED.value
+
+
+# ---------------------------------------------------------------------------
+# bughunt M-8: customer-SMS cancel writes an audit log row
+# ---------------------------------------------------------------------------
+
+
+class TestCustomerSmsCancelAudit:
+    """The admin-side cancel path already audits via
+    ``AppointmentService._record_cancellation_audit``. The customer-SMS
+    path now does the same with ``source="customer_sms"`` so the admin
+    history view can answer "who cancelled this?"."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_customer_sms_cancel_writes_audit_with_source(
+        self,
+        mock_db: AsyncMock,
+    ) -> None:
+        from datetime import date, time
+        from unittest.mock import patch
+
+        sent_msg = _make_sent_message()
+        appt = _make_appointment(status=AppointmentStatus.SCHEDULED.value)
+        appt.job_id = sent_msg.job_id
+        appt.scheduled_date = date(2026, 4, 22)
+        appt.time_window_start = time(9, 30)
+
+        job_mock = Mock()
+        job_mock.id = sent_msg.job_id
+        job_mock.job_type = "spring_startup"
+
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = sent_msg
+        result_mock.scalar_one.return_value = 0
+        mock_db.execute = AsyncMock(return_value=result_mock)
+        mock_db.get = AsyncMock(side_effect=[appt, job_mock])
+
+        audit_create = AsyncMock()
+        with patch(
+            "grins_platform.repositories.audit_log_repository.AuditLogRepository.create",
+            audit_create,
+        ):
+            svc = JobConfirmationService(mock_db)
+            await svc.handle_confirmation(
+                thread_id="thread-123",
+                keyword=ConfirmationKeyword.CANCEL,
+                raw_body="C",
+                from_phone="+19527373312",
+            )
+
+        audit_create.assert_awaited()
+        call = audit_create.await_args
+        assert call.kwargs["action"] == "appointment.cancel"
+        assert call.kwargs["actor_id"] is None
+        details = call.kwargs["details"]
+        assert details["source"] == "customer_sms"
+        assert details["pre_cancel_status"] == AppointmentStatus.SCHEDULED.value
+        assert details["from_phone"] == "+19527373312"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_repeat_c_does_not_double_audit(
+        self,
+        mock_db: AsyncMock,
+    ) -> None:
+        """CR-3 short-circuit must skip the audit row too — repeat C is a
+        complete no-op (no SMS, no DB write, no audit)."""
+        from unittest.mock import patch
+
+        sent_msg = _make_sent_message()
+        cancelled_appt = _make_appointment(status=AppointmentStatus.CANCELLED.value)
+
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = sent_msg
+        mock_db.execute = AsyncMock(return_value=result_mock)
+        mock_db.get = AsyncMock(return_value=cancelled_appt)
+
+        audit_create = AsyncMock()
+        with patch(
+            "grins_platform.repositories.audit_log_repository.AuditLogRepository.create",
+            audit_create,
+        ):
+            svc = JobConfirmationService(mock_db)
+            await svc.handle_confirmation(
+                thread_id="thread-123",
+                keyword=ConfirmationKeyword.CANCEL,
+                raw_body="C",
+                from_phone="+19527373312",
+            )
+
+        audit_create.assert_not_awaited()
