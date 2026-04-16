@@ -589,17 +589,23 @@ async def get_appointment(
 async def update_appointment(
     appointment_id: UUID,
     data: AppointmentUpdate,
-    _current_user: CurrentActiveUser,
+    current_user: CurrentActiveUser,
     service: Annotated[AppointmentService, Depends(get_appointment_service)],
 ) -> AppointmentResponse:
     """Update appointment information.
 
-    Validates: Admin Dashboard Requirement 1.2
+    Validates: Admin Dashboard Requirement 1.2; bughunt M-7
     """
     _endpoints.log_started("update_appointment", appointment_id=str(appointment_id))
 
     try:
-        result = await service.update_appointment(appointment_id, data)
+        # bughunt M-7: surface the actor so the audit log row can attribute
+        # the update to the admin who clicked Save.
+        result = await service.update_appointment(
+            appointment_id,
+            data,
+            actor_id=current_user.id,
+        )
     except AppointmentNotFoundError as e:
         _endpoints.log_rejected("update_appointment", reason="not_found")
         raise HTTPException(
