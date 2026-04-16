@@ -6,8 +6,11 @@
  * generic update-appointment endpoint) and shows the
  * "customer will receive a new confirmation request" success toast.
  *
- * Mocks the SMS provider — the backend path is already unit/functional
- * tested to restart the Y/R/C cycle. This test only checks the FE wiring.
+ * We stub ``AppointmentForm`` with a tiny test double so we exercise the
+ * queue's wiring (click → dialog → submitOverride → mutation → API) without
+ * driving the full react-hook-form + Radix Dialog + JobSelectorCombobox
+ * chain, which does not reliably flush in jsdom. The real form is covered
+ * by its own component tests.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -40,31 +43,52 @@ vi.mock('../api/rescheduleApi', () => ({
   },
 }));
 
-// The form uses these hooks; stub them to avoid pulling in jobs/staff loaders.
-vi.mock('@/features/jobs/hooks', () => ({
-  useJobsReadyToSchedule: () => ({ data: { items: [] }, isLoading: false }),
-}));
-vi.mock('@/features/staff/hooks', () => ({
-  useStaff: () => ({
-    data: {
-      items: [
-        { id: '11111111-2222-3333-4444-555555555555', name: 'Alice', role: 'tech' },
-      ],
-    },
-    isLoading: false,
-  }),
-}));
-vi.mock('@/features/jobs/api/jobApi', () => ({
-  jobApi: {
-    get: vi.fn().mockResolvedValue({ id: 'job-1', customer_id: 'cust-1' }),
-  },
-}));
-vi.mock('@/features/customers/api/customerApi', () => ({
-  customerApi: {
-    get: vi.fn().mockResolvedValue({
-      id: 'cust-1',
-      properties: [],
-    }),
+// Stub AppointmentForm: render a submit button that fires submitOverride
+// with a canned payload. This keeps the test focused on the queue's wiring
+// to useRescheduleFromRequest + appointmentApi.rescheduleFromRequest.
+vi.mock('./AppointmentForm', () => ({
+  AppointmentForm: ({
+    submitOverride,
+    submitLabel,
+    onSuccess,
+    onCancel,
+  }: {
+    submitOverride?: (payload: {
+      scheduled_date: string;
+      time_window_start: string;
+      time_window_end: string;
+      staff_id: string;
+      notes?: string;
+    }) => Promise<void>;
+    submitLabel?: string;
+    onSuccess?: () => void;
+    onCancel?: () => void;
+  }) => {
+    const handleSubmit = async () => {
+      try {
+        await submitOverride?.({
+          scheduled_date: '2026-04-23',
+          time_window_start: '14:00',
+          time_window_end: '16:00',
+          staff_id: '11111111-2222-3333-4444-555555555555',
+        });
+        onSuccess?.();
+      } catch {
+        // submitOverride re-throws on mutation failure; swallow so the
+        // promise rejection doesn't reach React and break the test harness.
+        // The error toast is already fired inside handleRescheduleSubmit.
+      }
+    };
+    return (
+      <div data-testid="mock-appointment-form">
+        <button data-testid="submit-btn" onClick={handleSubmit} type="button">
+          {submitLabel ?? 'Save'}
+        </button>
+        <button data-testid="cancel-btn" onClick={onCancel} type="button">
+          Cancel
+        </button>
+      </div>
+    );
   },
 }));
 
@@ -153,24 +177,16 @@ describe('RescheduleRequestsQueue (bughunt H-6)', () => {
     );
   });
 
-  // TODO(H-6 follow-up): these two tests validate end-to-end form submission
-  // through AppointmentForm, which has a deep chain (JobSelectorCombobox +
-  // react-hook-form + Radix Dialog) that does not reliably flush in jsdom
-  // even with a pre-filled valid appointment. The backend wiring is covered
-  // by test_appointment_service_crm.py + test_reschedule_flow_functional.py,
-  // and the FE wiring (handleRescheduleSubmit → useRescheduleFromRequest →
-  // appointmentApi.rescheduleFromRequest) is mechanically trivial. Re-enable
-  // after refactoring the queue to not require driving through the full form
-  // (e.g. a dedicated reschedule-date picker).
-  it.skip('calls the reschedule-from-request endpoint when admin picks a new date', async () => {
+  it('calls the reschedule-from-request endpoint when admin picks a new date', async () => {
     const user = userEvent.setup();
     render(<RescheduleRequestsQueue />, { wrapper: createWrapper() });
 
     const resBtn = await screen.findByTestId('reschedule-to-alternative-btn');
     await user.click(resBtn);
 
-    // The AppointmentForm dialog opens, pre-filled with the appointment's
-    // current values. The submit button label is overridden to "Send Reschedule".
+    // The (mocked) AppointmentForm mounts. Its submit button fires
+    // submitOverride with the canned payload (2026-04-23, 14:00, 16:00,
+    // the valid staff UUID).
     const submit = await screen.findByTestId('submit-btn');
     expect(submit).toHaveTextContent('Send Reschedule');
     await user.click(submit);
@@ -183,17 +199,17 @@ describe('RescheduleRequestsQueue (bughunt H-6)', () => {
     expect(appointmentApi.update).not.toHaveBeenCalled();
 
     // The call routes to the new endpoint with an ISO timestamp payload
-    // composed from the pre-filled scheduled_date + time_window_start.
+    // composed from scheduled_date + time_window_start.
     const [calledId, calledPayload] = (
       appointmentApi.rescheduleFromRequest as ReturnType<typeof vi.fn>
     ).mock.calls[0];
     expect(calledId).toBe('appt-1');
     expect(calledPayload).toEqual({
-      new_scheduled_at: '2026-04-20T09:00:00',
+      new_scheduled_at: '2026-04-23T14:00:00',
     });
   });
 
-  it.skip('shows the "customer will receive a new confirmation request" success toast', async () => {
+  it('shows the "customer will receive a new confirmation request" success toast', async () => {
     const user = userEvent.setup();
     render(<RescheduleRequestsQueue />, { wrapper: createWrapper() });
 

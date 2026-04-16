@@ -42,9 +42,9 @@ Closed all 14 HIGH findings from the 2026-04-16 customer-lifecycle bug hunt, on 
 - **D-6 (H-12):** BusinessSettings panel placed as a new `Card` on the existing `/settings` page (the page uses stacked cards, not tabs).
 
 ### Follow-ups
-- Two RescheduleRequestsQueue FE integration tests `.skip`ped — the jsdom chain through `AppointmentForm` + `JobSelectorCombobox` + Radix Dialog does not reliably flush. Backend owns the H-6 logic (8 unit + 2 functional tests covering the new endpoint, status reset, SMS-#1 restart, and audit log).
+- The two RescheduleRequestsQueue FE integration tests were re-enabled by mocking `AppointmentForm` (tests now verify the queue's own wiring rather than driving the full form + Radix Dialog chain in jsdom). Real form behavior still covered by its own component tests.
 - MEDIUM findings M-1..M-17 remain open (separate plan file: `bughunt/2026-04-16-medium-bugs-plan.md`).
-- The long-form customer-lifecycle-bughunt findings document was lost during subagent worktree operations; only the resolution record could be reconstructed.
+- The two long-form plan / finding documents that were lost mid-session (`customer-lifecycle-bughunt.md` and `critical-fixes-plan.md`) were reconstructed verbatim from the conversation's session-start Read captures.
 - Agent-browser E2E validation for H-1 / H-3 / H-7 / H-12 not yet run in this session.
 
 ## [2026-02-07 21:30] - BUGFIX: Lead Form CORS Error Diagnosis & Documentation
