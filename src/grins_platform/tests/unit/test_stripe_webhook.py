@@ -208,8 +208,11 @@ class TestWebhookEndpointSignature:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_missing_webhook_secret_returns_400(self) -> None:
-        """When STRIPE_WEBHOOK_SECRET is empty, return 400."""
+    async def test_missing_webhook_secret_returns_503(self) -> None:
+        """bughunt M-15: missing secret is an *infrastructure* misconfig
+        (not a bad request). 400 would make Stripe stop retrying — 503
+        keeps it retrying with backoff and pages on-call instead of
+        silently dropping events."""
         request = AsyncMock()
         request.body = AsyncMock(return_value=b'{"id": "evt_test"}')
         request.headers = {"stripe-signature": "t=123,v1=abc"}
@@ -222,7 +225,7 @@ class TestWebhookEndpointSignature:
             mock_settings_cls.return_value = MagicMock(stripe_webhook_secret="")
             response = await stripe_webhook(request, db)
 
-        assert response.status_code == 400
+        assert response.status_code == 503
         body = json.loads(response.body)
         assert "not configured" in body["error"]
 

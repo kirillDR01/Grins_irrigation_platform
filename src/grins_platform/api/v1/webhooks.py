@@ -969,12 +969,16 @@ async def stripe_webhook(
     raw_body = await request.body()
     sig_header = request.headers.get("stripe-signature", "")
 
-    # Verify signature
+    # bughunt M-15: missing secret is an *infrastructure* misconfig, not a
+    # bad request. Returning 400 makes Stripe stop retrying (4xx is
+    # treated as terminal), so the webhook quietly fails until someone
+    # notices the missed events. 503 keeps Stripe retrying with backoff
+    # *and* surfaces the issue on the on-call dashboard.
     if not settings.stripe_webhook_secret:
-        logger.warning("stripe.webhook.missing_secret")
+        logger.error("stripe.webhook.missing_secret")
         return Response(
             content='{"error": "Webhook secret not configured"}',
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             media_type="application/json",
         )
 
