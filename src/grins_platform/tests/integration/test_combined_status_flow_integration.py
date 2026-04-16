@@ -72,7 +72,11 @@ def _simulate_on_my_way(job: Mock, appt: Mock) -> None:
 
 
 def _simulate_started(job: Mock, appt: Mock) -> None:
-    """Simulate the Job Started button logic from the endpoint."""
+    """Simulate the Job Started button logic from the endpoint.
+
+    Mirrors ``job_started`` in ``api/v1/jobs.py``: SCHEDULED, CONFIRMED, and
+    EN_ROUTE are all valid pre-states per CR-2.
+    """
     job.started_at = datetime.now(tz=timezone.utc)
     if job.status in (
         JobStatus.TO_BE_SCHEDULED.value,
@@ -80,8 +84,9 @@ def _simulate_started(job: Mock, appt: Mock) -> None:
     ):
         job.status = JobStatus.IN_PROGRESS.value
     if appt and appt.status in (
-        AppointmentStatus.EN_ROUTE.value,
+        AppointmentStatus.SCHEDULED.value,
         AppointmentStatus.CONFIRMED.value,
+        AppointmentStatus.EN_ROUTE.value,
     ):
         appt.status = AppointmentStatus.IN_PROGRESS.value
 
@@ -456,3 +461,35 @@ class TestSkipScenarios:
 
         assert job.status == JobStatus.IN_PROGRESS.value
         assert appt.status == AppointmentStatus.IN_PROGRESS.value
+
+    def test_end_to_end_skip_confirm_and_on_my_way_flow(self) -> None:
+        """End-to-end: customer never replies Y, tech skips On My Way, clicks Started.
+
+        Starting state is SCHEDULED (Send Confirmation fired but no Y/R/C reply).
+        Clicking Job Started must promote both the job and the appointment to
+        IN_PROGRESS, then Job Complete promotes both to COMPLETED.
+
+        **Validates: CR-2 / 2026-04-14 E2E-6 fix.** Before CR-2, the appointment
+        remained SCHEDULED while the job advanced, violating the diagram promise
+        that steps can be skipped.
+        """
+        job = _make_job(job_status=JobStatus.SCHEDULED.value)
+        appt = _make_appointment(
+            appt_status=AppointmentStatus.SCHEDULED.value,
+            job_id=job.id,
+        )
+
+        # SCHEDULED → IN_PROGRESS is allowed per the transitions table
+        assert AppointmentStatus.IN_PROGRESS.value in VALID_APPOINTMENT_TRANSITIONS[
+            AppointmentStatus.SCHEDULED.value
+        ]
+
+        _simulate_started(job, appt)
+
+        assert job.status == JobStatus.IN_PROGRESS.value
+        assert appt.status == AppointmentStatus.IN_PROGRESS.value
+
+        _simulate_complete(job, appt)
+
+        assert job.status == JobStatus.COMPLETED.value
+        assert appt.status == AppointmentStatus.COMPLETED.value

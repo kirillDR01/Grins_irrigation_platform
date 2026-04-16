@@ -1379,8 +1379,9 @@ async def job_started(
     # Transition appointment to IN_PROGRESS (Req 3.3)
     appointment = await get_active_appointment_for_job(session, job_id)
     if appointment and appointment.status in (
-        AppointmentStatus.EN_ROUTE.value,
+        AppointmentStatus.SCHEDULED.value,  # Skip scenario: customer never replied Y
         AppointmentStatus.CONFIRMED.value,  # Skip scenario: On My Way was skipped
+        AppointmentStatus.EN_ROUTE.value,
     ):
         appointment.status = AppointmentStatus.IN_PROGRESS.value
         await session.flush()
