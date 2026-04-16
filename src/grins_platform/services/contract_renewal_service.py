@@ -73,10 +73,13 @@ _TIER_PRIORITY_MAP: dict[str, int] = {
 def _roll_forward_prefs(
     prefs: dict[str, Any],
 ) -> dict[str, Any]:
-    """Roll forward week preferences by +1 year.
+    """Roll forward week preferences by +1 calendar year, Monday-aligned.
 
-    Each value is an ISO date string (Monday). We parse it, add ~52 weeks
-    (landing on the same weekday), and return the new ISO string.
+    Each value is an ISO date string (Monday). We parse it, advance by
+    exactly one calendar year (falling back to Feb 28 if the source is
+    Feb 29 of a leap year), and snap to the closest preceding Monday so
+    the renewal keeps its weekly slot across many years without drifting
+    off the original weekday.
 
     Validates: Req 31.2
     """
@@ -87,10 +90,16 @@ def _roll_forward_prefs(
             continue
         try:
             d = date.fromisoformat(val)
-            new_d = d + timedelta(weeks=52)
-            rolled[key] = new_d.isoformat()
         except ValueError:
             rolled[key] = val
+            continue
+        try:
+            candidate = d.replace(year=d.year + 1)
+        except ValueError:
+            # Feb 29 → Feb 28 next year.
+            candidate = d.replace(year=d.year + 1, day=28)
+        monday = candidate - timedelta(days=candidate.weekday())
+        rolled[key] = monday.isoformat()
     return rolled
 
 

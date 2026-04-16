@@ -110,12 +110,13 @@ def _make_proposal(
 
 @pytest.mark.unit
 class TestRollForwardPrefs:
-    def test_rolls_dates_forward_52_weeks(self) -> None:
+    def test_rolls_dates_forward_one_calendar_year(self) -> None:
+        # 2025-04-07 is a Monday; +1 year lands on 2026-04-07 (Tuesday),
+        # snap to preceding Monday → 2026-04-06.
         prefs = {"spring_startup": "2025-04-07"}
         result = _roll_forward_prefs(prefs)
-        rolled = date.fromisoformat(result["spring_startup"])
-        original = date(2025, 4, 7)
-        assert (rolled - original).days == 364  # 52 weeks
+        assert result["spring_startup"] == "2026-04-06"
+        assert date.fromisoformat(result["spring_startup"]).weekday() == 0
 
     def test_preserves_non_string_values(self) -> None:
         prefs = {"count": 5, "spring_startup": "2025-04-07"}
@@ -129,6 +130,45 @@ class TestRollForwardPrefs:
 
     def test_empty_prefs(self) -> None:
         assert _roll_forward_prefs({}) == {}
+
+    def test_roll_forward_prefs_lands_on_monday_one_year_later(self) -> None:
+        # Spec §13: "Week of April 20, 2026" → "Week of April 21, 2027"
+        # 2026-04-20 is a Monday. +1 year is 2027-04-20 (Tuesday).
+        # Snap to the closest preceding Monday → 2027-04-19.
+        prefs = {"spring_startup_4": "2026-04-20"}
+        result = _roll_forward_prefs(prefs)
+        rolled = date.fromisoformat(result["spring_startup_4"])
+        assert rolled == date(2027, 4, 19)
+        assert rolled.weekday() == 0  # Monday
+
+    def test_roll_forward_prefs_handles_leap_day_source(self) -> None:
+        # Feb 29, 2028 is a leap day. +1 year → fall back to Feb 28, 2029
+        # (a Wednesday). Snap to preceding Monday → Feb 26, 2029.
+        prefs = {"leap_anchor": "2028-02-29"}
+        result = _roll_forward_prefs(prefs)
+        rolled = date.fromisoformat(result["leap_anchor"])
+        assert rolled == date(2029, 2, 26)
+        assert rolled.weekday() == 0
+
+    def test_roll_forward_prefs_preserves_non_date_values(self) -> None:
+        prefs: dict[str, object] = {"notes": "some string", "some_number": 42}
+        result = _roll_forward_prefs(prefs)
+        assert result["notes"] == "some string"
+        assert result["some_number"] == 42
+
+    def test_roll_forward_prefs_preserves_invalid_date_strings(self) -> None:
+        prefs = {"date": "not-a-date"}
+        result = _roll_forward_prefs(prefs)
+        assert result["date"] == "not-a-date"
+
+    def test_five_year_roll_stays_on_same_weekday(self) -> None:
+        # Start on a Monday; chain five rolls; each intermediate and final
+        # result must land on Monday.
+        current = {"spring_startup": "2026-04-20"}
+        assert date.fromisoformat(current["spring_startup"]).weekday() == 0
+        for _ in range(5):
+            current = _roll_forward_prefs(current)
+            assert date.fromisoformat(current["spring_startup"]).weekday() == 0
 
 
 # ===================================================================
