@@ -42,12 +42,18 @@ interface PaymentDialogProps {
   isLoading?: boolean;
 }
 
+// H-4 (bughunt 2026-04-16): spec vocabulary for NEW payments. `stripe`
+// is intentionally omitted — new credit-card charges should be recorded
+// as `credit_card` going forward. Legacy invoices already carrying
+// `stripe` keep that value in the DB and still render in read views.
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+  { value: 'credit_card', label: 'Credit Card' },
   { value: 'cash', label: 'Cash' },
   { value: 'check', label: 'Check' },
+  { value: 'ach', label: 'ACH' },
   { value: 'venmo', label: 'Venmo' },
   { value: 'zelle', label: 'Zelle' },
-  { value: 'stripe', label: 'Credit Card (Stripe)' },
+  { value: 'other', label: 'Other' },
 ];
 
 export function PaymentDialog({
