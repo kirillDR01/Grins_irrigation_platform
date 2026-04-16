@@ -1193,13 +1193,25 @@ async def upload_customer_photo(
             context=UploadContext.CUSTOMER_PHOTO,
         )
     except ValueError as e:
+        # bughunt M-16: size cap exceeded → 413 Payload Too Large.
         _endpoints.log_rejected(
             "upload_customer_photo",
-            reason="validation_failed",
+            reason="size_too_large",
             error=str(e),
         )
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=str(e),
+        ) from e
+    except TypeError as e:
+        # bughunt M-16: MIME not in allow-list → 415 Unsupported Media Type.
+        _endpoints.log_rejected(
+            "upload_customer_photo",
+            reason="unsupported_mime",
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail=str(e),
         ) from e
 

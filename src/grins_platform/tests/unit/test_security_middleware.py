@@ -533,9 +533,13 @@ class TestFileUploadValidation:
         self.service = PhotoService(s3_client=mock_s3, bucket="test")
 
     def test_rejects_text_file_as_image(self) -> None:
-        """Text file disguised as .jpg should be rejected."""
+        """Text file disguised as .jpg should be rejected.
+
+        bughunt M-16: MIME violations now raise TypeError so the API
+        layer can return 415 Unsupported Media Type (vs. 413 for size).
+        """
         data = b"This is not an image file at all"
-        with pytest.raises(ValueError, match="not allowed"):
+        with pytest.raises(TypeError, match="not allowed"):
             self.service.validate_file(
                 data,
                 "fake.jpg",
@@ -545,7 +549,7 @@ class TestFileUploadValidation:
     def test_rejects_html_as_image(self) -> None:
         """HTML file should be rejected for image context."""
         data = b"<html><body>Hello</body></html>"
-        with pytest.raises(ValueError, match="not allowed"):
+        with pytest.raises(TypeError, match="not allowed"):
             self.service.validate_file(
                 data,
                 "page.html",
@@ -585,7 +589,7 @@ class TestFileUploadValidation:
     def test_rejects_pdf_for_customer_photo(self) -> None:
         """PDF should be rejected for customer photo context."""
         data = b"%PDF-1.4 test content" + b"\x00" * 100
-        with pytest.raises(ValueError, match="not allowed"):
+        with pytest.raises(TypeError, match="not allowed"):
             self.service.validate_file(
                 data,
                 "doc.pdf",
