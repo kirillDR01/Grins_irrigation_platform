@@ -67,7 +67,7 @@ export function SchedulePage() {
 
   // Track the current week displayed in the calendar
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => 
-    startOfWeek(new Date(), { weekStartsOn: 0 })
+    startOfWeek(new Date(), { weekStartsOn: 1 })
   );
 
   // Auto-open create dialog when navigated from Jobs tab with scheduleJobId (Req 11.7)
