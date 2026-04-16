@@ -63,8 +63,8 @@ const statusColors: Record<AppointmentStatus, { bg: string; border: string }> = 
 export function CalendarView({ onDateClick, onEventClick, onWeekChange, selectedDate, onCustomerClick }: CalendarViewProps) {
   const [dateRange, setDateRange] = useState(() => {
     const today = new Date();
-    const start = startOfWeek(today, { weekStartsOn: 0 });
-    const end = endOfWeek(today, { weekStartsOn: 0 });
+    const start = startOfWeek(today, { weekStartsOn: 1 });
+    const end = endOfWeek(today, { weekStartsOn: 1 });
     return {
       start: format(start, 'yyyy-MM-dd'),
       end: format(addDays(end, 7), 'yyyy-MM-dd'), // Add extra week for buffer
@@ -305,7 +305,7 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
     });
     // Notify parent of week change
     if (onWeekChange) {
-      const weekStart = startOfWeek(arg.start, { weekStartsOn: 0 });
+      const weekStart = startOfWeek(arg.start, { weekStartsOn: 1 });
       onWeekChange(weekStart);
     }
   }, [onWeekChange]);
@@ -326,6 +326,7 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
       <FullCalendar
         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
         initialView="timeGridWeek"
+        firstDay={1}
         headerToolbar={{
           left: 'prev,next today',
           center: 'title',
