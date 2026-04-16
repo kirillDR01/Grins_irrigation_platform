@@ -29,7 +29,6 @@ import {
   FileText,
   Timer,
   ChevronDown,
-  Send,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAppointment } from '../hooks/useAppointments';
@@ -37,7 +36,6 @@ import {
   useConfirmAppointment,
   useCancelAppointment,
   useMarkAppointmentNoShow,
-  useSendConfirmation,
 } from '../hooks/useAppointmentMutations';
 import { appointmentStatusConfig } from '../types';
 import type { Appointment } from '../types';
@@ -51,6 +49,7 @@ import { EstimateCreator } from './EstimateCreator';
 import { AppointmentNotes } from './AppointmentNotes';
 import { ReviewRequest } from './ReviewRequest';
 import { CancelAppointmentDialog } from './CancelAppointmentDialog';
+import { SendConfirmationButton } from './SendConfirmationButton';
 
 interface AppointmentDetailProps {
   appointmentId: string;
@@ -68,7 +67,6 @@ export function AppointmentDetail({
   const confirmMutation = useConfirmAppointment();
   const cancelMutation = useCancelAppointment();
   const noShowMutation = useMarkAppointmentNoShow();
-  const sendConfirmationMutation = useSendConfirmation();
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
 
   // Fetch job details for enrichment (Req 40)
@@ -166,9 +164,6 @@ export function AppointmentDetail({
   };
   const handleNoShow = async () => {
     await noShowMutation.mutateAsync(appointmentId);
-  };
-  const handleSendConfirmation = async () => {
-    await sendConfirmationMutation.mutateAsync(appointmentId);
   };
 
   // Draft appointments have never been sent to the customer; cancelling them
@@ -447,16 +442,10 @@ export function AppointmentDetail({
         <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/30">
           <div className="flex flex-col gap-2 md:flex-row md:flex-wrap">
             {isDraft && (
-              <Button
-                onClick={handleSendConfirmation}
-                disabled={sendConfirmationMutation.isPending}
-                size="sm"
-                className="bg-teal-500 hover:bg-teal-600 text-white w-full min-h-[48px] text-sm md:w-auto md:min-h-0 md:h-8 md:text-xs"
-                data-testid="send-confirmation-btn"
-              >
-                <Send className="mr-1.5 h-3.5 w-3.5" />
-                Send Confirmation
-              </Button>
+              // bughunt M-1: use the canonical SendConfirmationButton so the
+              // detail modal shares the calendar card's send behavior
+              // (toast feedback, hook wiring, disabled state).
+              <SendConfirmationButton appointmentId={appointmentId} />
             )}
             {isPending && (
               <Button
