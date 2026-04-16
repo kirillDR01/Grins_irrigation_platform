@@ -45,41 +45,15 @@ def upgrade() -> None:
         ["needs_review_reason"],
     )
 
-    # Seed the BusinessSetting row so H-12's admin UI can tune the
-    # no-reply threshold without a redeploy. The business_settings
-    # table is created by migration 20260324_100100; if for some
-    # reason it is missing here we skip the seed silently — the H-7
-    # job hardcodes DEFAULT_NO_REPLY_DAYS = 3 as a fallback.
-    bind = op.get_bind()
-    inspector = sa.inspect(bind)
-    if "business_settings" in inspector.get_table_names():
-        bind.execute(
-            sa.text(
-                """
-                INSERT INTO business_settings (setting_key, setting_value)
-                VALUES (
-                    'confirmation_no_reply_days',
-                    :payload
-                )
-                ON CONFLICT (setting_key) DO NOTHING
-                """
-            ),
-            {"payload": '{"days": 3}'},
-        )
+    # Seed for ``confirmation_no_reply_days`` is owned by the H-12
+    # migration (``20260416_100300_seed_business_settings_h12``) which
+    # uses the canonical ``{"value": N}`` shape. H-7's cron reads either
+    # ``{"value": N}`` or ``{"days": N}`` for backwards compatibility.
 
 
 def downgrade() -> None:
-    """Remove the column + index + seeded setting row."""
-    bind = op.get_bind()
-    inspector = sa.inspect(bind)
-    if "business_settings" in inspector.get_table_names():
-        bind.execute(
-            sa.text(
-                "DELETE FROM business_settings WHERE setting_key = "
-                "'confirmation_no_reply_days'"
-            )
-        )
-
+    """Remove the column + index. The confirmation_no_reply_days seed
+    is owned by the H-12 migration; we do not touch it here."""
     op.drop_index(
         "ix_appointments_needs_review_reason",
         table_name="appointments",

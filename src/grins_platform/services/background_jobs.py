@@ -779,7 +779,11 @@ class NoReplyConfirmationFlagger(LoggerMixin):
             # rather than silently disabling the job.
             return DEFAULT_NO_REPLY_DAYS
 
-        days = value.get("days") if isinstance(value, dict) else None
+        # BusinessSettingService (H-12) persists as {"value": N}. Older
+        # SettingsService calls might store {"days": N}. Accept either.
+        if not isinstance(value, dict):
+            return DEFAULT_NO_REPLY_DAYS
+        days = value.get("value", value.get("days"))
         if not isinstance(days, int) or days <= 0:
             return DEFAULT_NO_REPLY_DAYS
         return days

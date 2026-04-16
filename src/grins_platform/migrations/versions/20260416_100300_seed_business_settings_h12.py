@@ -17,8 +17,8 @@ safe to re-run.
 The values are stored as ``{"value": <scalar>}`` to match the shape
 the :class:`BusinessSettingService` reads/writes.
 
-Revision ID: 20260416_100200
-Revises: 20260416_100100
+Revision ID: 20260416_100300
+Revises: 20260416_100200
 Requirements: bughunt 2026-04-16 finding H-12
 """
 
@@ -29,8 +29,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20260416_100200"
-down_revision: str | None = "20260416_100100"
+revision: str = "20260416_100300"
+down_revision: str | None = "20260416_100200"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
