@@ -12,6 +12,9 @@ import type {
   MassNotifyRequest,
   MassNotifyResponse,
   PdfUrlResponse,
+  LienCandidate,
+  LienCandidatesParams,
+  LienNoticeResult,
 } from '../types';
 
 const BASE_PATH = '/invoices';
@@ -139,6 +142,25 @@ export const invoiceApi = {
   getPdfUrl: async (id: string): Promise<PdfUrlResponse> => {
     const response = await apiClient.get<PdfUrlResponse>(
       `${BASE_PATH}/${id}/pdf`,
+    );
+    return response.data;
+  },
+
+  // CR-5: list lien-eligible customers for the admin review queue.
+  lienCandidates: async (
+    params?: LienCandidatesParams,
+  ): Promise<LienCandidate[]> => {
+    const response = await apiClient.get<LienCandidate[]>(
+      `${BASE_PATH}/lien-candidates`,
+      { params },
+    );
+    return response.data;
+  },
+
+  // CR-5: admin-approved per-customer lien notice SMS dispatch.
+  sendLienNotice: async (customerId: string): Promise<LienNoticeResult> => {
+    const response = await apiClient.post<LienNoticeResult>(
+      `${BASE_PATH}/lien-notices/${customerId}/send`,
     );
     return response.data;
   },

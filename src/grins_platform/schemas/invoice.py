@@ -521,3 +521,43 @@ class MassNotifyResponse(BaseModel):
     sent: int = Field(description="Number of notifications sent")
     failed: int = Field(description="Number of send failures")
     skipped: int = Field(description="Number skipped (no phone, consent denied)")
+
+
+class LienCandidateResponse(BaseModel):
+    """One row in the admin-facing lien review queue.
+
+    Groups all lien-eligible invoices for a single customer so the admin
+    can review + decide whether to send one Notice of Intent to Lien SMS.
+
+    Validates: CR-5 (bughunt 2026-04-16).
+    """
+
+    customer_id: UUID
+    customer_name: str
+    customer_phone: str | None
+    oldest_invoice_age_days: int = Field(
+        description="Max days past due across the customer's lien-eligible invoices",
+    )
+    total_past_due_amount: Decimal = Field(
+        description="Sum of total_amount across the customer's lien-eligible invoices",
+    )
+    invoice_ids: list[UUID]
+    invoice_numbers: list[str]
+
+
+class LienNoticeResult(BaseModel):
+    """Result of a single send-lien-notice attempt for one customer.
+
+    Validates: CR-5 (bughunt 2026-04-16).
+    """
+
+    success: bool
+    customer_id: UUID
+    sent_at: datetime | None
+    sms_message_id: UUID | None
+    message: str = Field(
+        description=(
+            "Status message: 'sent', 'customer_opted_out', 'no_phone', "
+            "'no_eligible_invoices', or provider error text."
+        ),
+    )

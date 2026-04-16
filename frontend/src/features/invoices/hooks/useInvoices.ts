@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { invoiceApi } from '../api/invoiceApi';
-import type { InvoiceListParams } from '../types';
+import type { InvoiceListParams, LienCandidatesParams } from '../types';
 
 // Query key factory
 export const invoiceKeys = {
@@ -12,6 +12,9 @@ export const invoiceKeys = {
   byJob: (jobId: string) => [...invoiceKeys.all, 'by-job', jobId] as const,
   overdue: (params?: InvoiceListParams) => [...invoiceKeys.all, 'overdue', params] as const,
   lienDeadlines: () => [...invoiceKeys.all, 'lien-deadlines'] as const,
+  // CR-5: lien review queue
+  lienCandidates: (params?: LienCandidatesParams) =>
+    [...invoiceKeys.all, 'lien-candidates', params] as const,
 };
 
 // List invoices with pagination and filters

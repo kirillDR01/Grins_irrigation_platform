@@ -188,12 +188,12 @@ export interface BulkNotifyResponse {
 }
 
 // Mass notify types (Req 29.3, 29.4)
-export type MassNotificationType = 'past_due' | 'due_soon' | 'lien_eligible';
+// CR-5: ``lien_eligible`` removed — use the /invoices?tab=lien-review queue.
+export type MassNotificationType = 'past_due' | 'due_soon';
 
 export const MASS_NOTIFICATION_CONFIG: Record<MassNotificationType, { label: string; description: string }> = {
   past_due: { label: 'Past Due', description: 'Notify all customers with past-due invoices' },
   due_soon: { label: 'Due Soon', description: 'Notify customers with invoices due within a configurable window' },
-  lien_eligible: { label: 'Lien Eligible', description: 'Notify customers meeting lien criteria (60+ days past due, $500+)' },
 };
 
 export interface MassNotifyRequest {
@@ -215,4 +215,28 @@ export interface MassNotifyResponse {
 // PDF generation types (Req 80)
 export interface PdfUrlResponse {
   url: string;
+}
+
+// CR-5: Lien Review Queue (bughunt 2026-04-16)
+export interface LienCandidate {
+  customer_id: string;
+  customer_name: string;
+  customer_phone: string | null;
+  oldest_invoice_age_days: number;
+  total_past_due_amount: string;
+  invoice_ids: string[];
+  invoice_numbers: string[];
+}
+
+export interface LienNoticeResult {
+  success: boolean;
+  customer_id: string;
+  sent_at: string | null;
+  sms_message_id: string | null;
+  message: string;
+}
+
+export interface LienCandidatesParams {
+  days_past_due?: number;
+  min_amount?: number;
 }
