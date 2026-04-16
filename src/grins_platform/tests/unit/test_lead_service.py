@@ -622,7 +622,12 @@ class TestConvertLead:
 
     @pytest.fixture
     def mock_customer_service(self) -> AsyncMock:
-        return AsyncMock()
+        svc = AsyncMock()
+        # CR-6: default to "no duplicates found" so pre-existing happy-path
+        # tests don't trip the new duplicate guard. Tests that care about
+        # duplicates override this return_value explicitly.
+        svc.check_tier1_duplicates.return_value = []
+        return svc
 
     @pytest.fixture
     def mock_job_service(self) -> AsyncMock:
@@ -958,3 +963,46 @@ class TestGetDashboardMetrics:
             "new_leads_today": 5,
             "uncontacted_leads": 12,
         }
+
+
+# =============================================================================
+# CR-6: convert_lead Tier-1 duplicate integration
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestConvertLeadTier1Duplicates:
+    """convert_lead invokes ``check_tier1_duplicates`` and enforces ``force``.
+
+    **Validates: CR-6 (bughunt 2026-04-16).**
+    """
+
+    @pytest.mark.asyncio
+    async def test_convert_lead_calls_check_tier1_duplicates(self) -> None:
+        """convert_lead must always call CustomerService.check_tier1_duplicates."""
+        lead_repo = AsyncMock()
+        lead = _make_lead_mock(
+            phone="+19527373312",
+            email="alice@test.example",
+            status=LeadStatus.QUALIFIED.value,
+        )
+        lead_repo.get_by_id.return_value = lead
+
+        customer_svc = AsyncMock()
+        customer_svc.check_tier1_duplicates.return_value = []
+        customer_svc.create_customer.return_value = MagicMock(id=uuid4())
+
+        service = LeadService(
+            lead_repository=lead_repo,
+            customer_service=customer_svc,
+            job_service=AsyncMock(),
+            staff_repository=AsyncMock(),
+        )
+
+        await service.convert_lead(
+            lead.id, LeadConversionRequest(create_job=False),
+        )
+
+        customer_svc.check_tier1_duplicates.assert_awaited_once_with(
+            phone="+19527373312", email="alice@test.example",
+        )

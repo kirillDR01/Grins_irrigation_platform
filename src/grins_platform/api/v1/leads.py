@@ -71,7 +71,10 @@ from grins_platform.services.compliance_service import ComplianceService
 from grins_platform.services.customer_service import CustomerService
 from grins_platform.services.email_service import EmailService
 from grins_platform.services.job_service import JobService
-from grins_platform.services.lead_service import LeadService
+from grins_platform.services.lead_service import (
+    LeadDuplicateFoundError,
+    LeadService,
+)
 from grins_platform.services.photo_service import PhotoService, UploadContext
 from grins_platform.services.sms_service import SMSService
 
@@ -486,6 +489,14 @@ async def update_lead(
     description=(
         "Convert a lead to a customer and optionally create a job. Admin auth required."
     ),
+    responses={
+        409: {
+            "description": (
+                "Duplicate customer found (Tier-1 phone/email match). "
+                "Retry with ``force=true`` to override."
+            ),
+        },
+    },
 )
 async def convert_lead(
     lead_id: UUID,
@@ -495,11 +506,29 @@ async def convert_lead(
 ) -> LeadConversionResponse:
     """Convert a lead to a customer.
 
-    Validates: Requirement 7
+    Validates: Requirement 7, CR-6 (bughunt 2026-04-16)
     """
     _endpoints.log_started("convert_lead", lead_id=str(lead_id))
 
-    result = await service.convert_lead(lead_id, data)
+    try:
+        result = await service.convert_lead(lead_id, data)
+    except LeadDuplicateFoundError as exc:
+        _endpoints.log_rejected(
+            "convert_lead",
+            reason="duplicate_found",
+            lead_id=str(lead_id),
+            duplicate_count=len(exc.duplicates),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "duplicate_found",
+                "lead_id": str(exc.lead_id),
+                "phone": exc.phone,
+                "email": exc.email,
+                "duplicates": [d.model_dump(mode="json") for d in exc.duplicates],
+            },
+        ) from exc
 
     _endpoints.log_completed(
         "convert_lead",

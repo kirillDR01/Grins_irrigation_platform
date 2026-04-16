@@ -24,6 +24,7 @@ from grins_platform.models.enums import (
 )
 from grins_platform.schemas.lead import (
     FromCallSubmission,
+    LeadConversionRequest,
     LeadSubmission,
 )
 from grins_platform.services.lead_service import LeadService
@@ -844,3 +845,99 @@ class TestWorkRequestMigration:
         assert summary.migrated_count == 0
         assert summary.skipped_count == 0
         assert summary.error_count == 0
+
+
+# =============================================================================
+# CR-6: convert_lead Tier-1 duplicate full flow
+# =============================================================================
+
+
+@pytest.mark.functional
+@pytest.mark.asyncio
+class TestConvertLeadTier1DuplicatesFullFlow:
+    """Full-flow tests: Tier-1 duplicate → 409; with force → audit + create.
+
+    **Validates: CR-6 (bughunt 2026-04-16).**
+    """
+
+    async def test_convert_lead_full_flow_with_real_duplicate_returns_409(
+        self,
+    ) -> None:
+        from grins_platform.services.lead_service import LeadDuplicateFoundError
+
+        lead = _make_lead(
+            phone="+19527373312",
+            email="dup@test.example",
+            status=LeadStatus.QUALIFIED.value,
+        )
+        lead_repo = AsyncMock()
+        lead_repo.get_by_id.return_value = lead
+
+        dup_customer = MagicMock()
+        dup_customer.id = uuid4()
+        customer_svc = AsyncMock()
+        customer_svc.check_tier1_duplicates.return_value = [dup_customer]
+
+        svc, _ = _build_service(
+            lead_repo=lead_repo, customer_service=customer_svc,
+        )
+
+        with pytest.raises(LeadDuplicateFoundError) as exc_info:
+            await svc.convert_lead(lead.id, LeadConversionRequest(create_job=False))
+
+        assert exc_info.value.lead_id == lead.id
+        assert len(exc_info.value.duplicates) == 1
+        assert exc_info.value.phone == "+19527373312"
+        # Customer creation never happened.
+        customer_svc.create_customer.assert_not_called()
+
+    async def test_convert_lead_force_override_full_flow(self) -> None:
+        """force=True skips the guard, writes audit, creates customer."""
+        lead = _make_lead(
+            phone="+19527373312",
+            email="dup@test.example",
+            status=LeadStatus.QUALIFIED.value,
+        )
+        lead_repo = AsyncMock()
+        lead_repo.get_by_id.return_value = lead
+        # repository.session is used by the audit helper to construct the
+        # AuditLogRepository; stub it so the audit call path doesn't blow up.
+        lead_repo.session = AsyncMock()
+
+        dup_customer = MagicMock()
+        dup_customer.id = uuid4()
+        customer_svc = AsyncMock()
+        customer_svc.check_tier1_duplicates.return_value = [dup_customer]
+        created_customer = MagicMock()
+        created_customer.id = uuid4()
+        customer_svc.create_customer.return_value = created_customer
+
+        svc, _ = _build_service(
+            lead_repo=lead_repo, customer_service=customer_svc,
+        )
+
+        # Patch the audit log repository to verify the override is audited
+        # without hitting real storage.
+        audit_mock = AsyncMock()
+        import grins_platform.repositories.audit_log_repository as audit_mod  # noqa: PLC0415
+
+        original_cls = audit_mod.AuditLogRepository
+        audit_mod.AuditLogRepository = MagicMock(return_value=audit_mock)  # type: ignore[assignment]
+        try:
+            result = await svc.convert_lead(
+                lead.id,
+                LeadConversionRequest(create_job=False, force=True),
+            )
+        finally:
+            audit_mod.AuditLogRepository = original_cls  # type: ignore[assignment]
+
+        assert result.customer_id == created_customer.id
+        customer_svc.create_customer.assert_awaited_once()
+        # Audit call: action="lead.convert.duplicate_override"
+        audit_mock.create.assert_awaited_once()
+        audit_kwargs = audit_mock.create.await_args.kwargs
+        assert audit_kwargs["action"] == "lead.convert.duplicate_override"
+        assert audit_kwargs["resource_type"] == "lead"
+        assert audit_kwargs["resource_id"] == lead.id
+        assert audit_kwargs["details"]["forced"] is True
+        assert str(dup_customer.id) in audit_kwargs["details"]["duplicate_customer_ids"]
