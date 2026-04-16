@@ -580,7 +580,7 @@ class AppointmentService(LoggerMixin):
 
         try:
             repo = AuditLogRepository(session)
-            await repo.create(
+            _ = await repo.create(
                 action="appointment.update",
                 resource_type="appointment",
                 resource_id=appointment_id,
@@ -622,7 +622,7 @@ class AppointmentService(LoggerMixin):
 
         try:
             repo = AuditLogRepository(session)
-            await repo.create(
+            _ = await repo.create(
                 action="appointment.reactivate",
                 resource_type="appointment",
                 resource_id=appointment_id,

@@ -827,7 +827,7 @@ class SMSService(LoggerMixin):
         auto_reply = result.get("auto_reply")
         if auto_reply:
             try:
-                await self.send_message(
+                _ = await self.send_message(
                     recipient=reply_recipient,
                     message=auto_reply,
                     message_type=MessageType.APPOINTMENT_CONFIRMATION_REPLY,
@@ -846,7 +846,7 @@ class SMSService(LoggerMixin):
         follow_up_sms = result.get("follow_up_sms")
         if follow_up_sms:
             try:
-                await self.send_message(
+                _ = await self.send_message(
                     recipient=reply_recipient,
                     message=follow_up_sms,
                     message_type=MessageType.RESCHEDULE_FOLLOWUP,
