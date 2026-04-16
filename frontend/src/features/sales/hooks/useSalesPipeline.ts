@@ -14,6 +14,8 @@ export const pipelineKeys = {
   detail: (id: string) => [...pipelineKeys.all, 'detail', id] as const,
   documents: (customerId: string) =>
     [...pipelineKeys.all, 'documents', customerId] as const,
+  documentPresign: (customerId: string, documentId: string) =>
+    [...pipelineKeys.all, 'documents', customerId, documentId, 'presign'] as const,
   calendarEvents: () => [...pipelineKeys.all, 'calendar'] as const,
   calendarEventList: (params?: {
     start_date?: string;
@@ -139,6 +141,37 @@ export function useUploadSalesDocument() {
         queryKey: pipelineKeys.documents(variables.customerId),
       });
     },
+  });
+}
+
+/**
+ * bughunt M-17: resolve a document's presigned download URL at render
+ * time so a stored ``file_key`` that no longer exists in S3 (404) or
+ * has expired surfaces as a hook ``error`` rather than an empty/broken
+ * iframe when the user clicks Sign or Download. Components can read
+ * ``isLoading`` for spinners and ``error``/``data == null`` to gate
+ * their action buttons.
+ *
+ * Backed by the existing /customers/{cid}/documents/{did}/download
+ * endpoint, which returns a presigned S3 URL with a 1-hour TTL.
+ */
+export function useDocumentPresign(
+  customerId: string | null | undefined,
+  documentId: string | null | undefined,
+) {
+  const enabled = Boolean(customerId && documentId);
+  return useQuery({
+    queryKey:
+      customerId && documentId
+        ? pipelineKeys.documentPresign(customerId, documentId)
+        : ['sales-pipeline', 'documents', 'idle'],
+    queryFn: () =>
+      salesPipelineApi.downloadDocument(customerId as string, documentId as string),
+    enabled,
+    // Presigned URLs expire after ~1 hour; refetch a bit early so the
+    // signing iframe never opens on a near-expired URL.
+    staleTime: 50 * 60 * 1000,
+    retry: false,
   });
 }
 

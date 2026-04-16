@@ -15,6 +15,7 @@ import {
   useSalesEntry,
   useSalesDocuments,
   useTriggerEmailSigning,
+  useDocumentPresign,
 } from '../hooks/useSalesPipeline';
 import { SALES_STATUS_CONFIG, TERMINAL_STATUSES } from '../types/pipeline';
 import { StatusActionButton } from './StatusActionButton';
@@ -47,6 +48,25 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
   // Track which document is selected when multiple exist
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const selectedDoc = signingDocs.find((d) => d.id === selectedDocId) ?? signingDocs[0] ?? null;
+
+  // bughunt M-17: validate that the selected doc's file_key actually
+  // resolves to a presigned URL before unlocking the signing buttons.
+  // A doc row whose underlying S3 object is missing/expired now
+  // disables Email/Embedded sign instead of opening a broken iframe.
+  const presign = useDocumentPresign(
+    entry?.customer_id,
+    selectedDoc?.id,
+  );
+  const presignReady = !!presign.data?.download_url;
+  const presignFailed = presign.isError;
+  const signingDisabledReason = !hasSigningDoc
+    ? 'Upload an estimate document first'
+    : presignFailed
+      ? 'Document file is missing or expired — re-upload required.'
+      : presign.isLoading
+        ? 'Resolving document…'
+        : undefined;
+  const signingReady = hasSigningDoc && presignReady;
 
   if (isLoading) return <LoadingPage message="Loading sales entry…" />;
   if (error || !entry)
@@ -176,15 +196,15 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
                 </DropdownMenu>
               )}
 
-              {/* Email signing — Validates: Req 9.3 */}
-              <span
-                title={!hasSigningDoc ? 'Upload an estimate document first' : undefined}
-              >
+              {/* Email signing — Validates: Req 9.3; bughunt M-17 */}
+              <span title={signingDisabledReason}>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={handleEmailSign}
-                  disabled={emailSign.isPending || !hasEmail || !hasSigningDoc}
+                  disabled={
+                    emailSign.isPending || !hasEmail || !signingReady
+                  }
                   data-testid="email-sign-btn"
                 >
                   <Mail className="mr-1 h-3.5 w-3.5" />
@@ -192,12 +212,12 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
                 </Button>
               </span>
 
-              {/* Embedded on-site signing — Validates: Req 9.3 */}
+              {/* Embedded on-site signing — Validates: Req 9.3; bughunt M-17 */}
               <SignWellEmbeddedSigner
                 entryId={entryId}
                 onComplete={() => refetch()}
-                disabled={!hasSigningDoc}
-                disabledReason={!hasSigningDoc ? 'Upload an estimate document first' : undefined}
+                disabled={!signingReady}
+                disabledReason={signingDisabledReason}
               />
             </div>
           )}
