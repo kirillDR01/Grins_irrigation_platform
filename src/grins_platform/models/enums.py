@@ -218,13 +218,21 @@ class PaymentMethod(str, Enum):
     """Payment method enumeration for invoice payments.
 
     Validates: Requirement 9.2
+
+    H-4 (bughunt 2026-04-16): extended with ``credit_card``, ``ach``, and
+    ``other`` to match the spec vocabulary. ``stripe`` is retained for
+    existing rows that were persisted before the change; new UI pickers
+    omit ``stripe`` in favor of ``credit_card``.
     """
 
     CASH = "cash"
     CHECK = "check"
     VENMO = "venmo"
     ZELLE = "zelle"
-    STRIPE = "stripe"
+    STRIPE = "stripe"  # retained for legacy rows — not offered in new UI
+    CREDIT_CARD = "credit_card"
+    ACH = "ach"
+    OTHER = "other"
 
 
 # =============================================================================
