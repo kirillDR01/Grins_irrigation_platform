@@ -107,6 +107,9 @@ export interface Invoice extends BaseEntity {
   line_items: InvoiceLineItem[] | null;
   notes: string | null;
   customer_name: string | null;
+  // bughunt M-12: server-computed fields, exclusive of each other.
+  days_until_due: number | null;
+  days_past_due: number | null;
 }
 
 // Invoice detail with job and customer info

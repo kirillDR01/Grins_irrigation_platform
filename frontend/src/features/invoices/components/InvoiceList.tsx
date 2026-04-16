@@ -125,24 +125,19 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-function daysDiff(dateStr: string): number {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const target = new Date(dateStr);
-  target.setHours(0, 0, 0, 0);
-  return Math.round((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-}
-
+// bughunt M-12: days_until_due / days_past_due are now computed
+// server-side and exposed on InvoiceResponse, so the list and the
+// filter axes read from one source. Paid/cancelled invoices have these
+// fields nulled-out by the backend's exclusivity logic, so the
+// status-based gate that lived here is no longer needed.
 function getDaysUntilDue(invoice: Invoice): number | null {
   if (invoice.status === 'paid' || invoice.status === 'cancelled') return null;
-  const diff = daysDiff(invoice.due_date);
-  return diff >= 0 ? diff : null;
+  return invoice.days_until_due ?? null;
 }
 
 function getDaysPastDue(invoice: Invoice): number | null {
   if (invoice.status === 'paid' || invoice.status === 'cancelled') return null;
-  const diff = daysDiff(invoice.due_date);
-  return diff < 0 ? Math.abs(diff) : null;
+  return invoice.days_past_due ?? null;
 }
 
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {

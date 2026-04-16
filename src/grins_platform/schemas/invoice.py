@@ -8,11 +8,11 @@ Validates: Schedule Workflow Improvements Requirements 7.1-7.10, 8.1-8.10,
            9.1-9.7, 10.1-10.7, 11.1-11.8, 12.1-12.5, 13.1-13.7
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from grins_platform.models.enums import InvoiceStatus, PaymentMethod
 
@@ -223,6 +223,24 @@ class InvoiceResponse(BaseModel):
     )
     created_at: datetime = Field(description="Record creation timestamp")
     updated_at: datetime = Field(description="Record update timestamp")
+
+    # bughunt M-12: compute days_until_due / days_past_due server-side so
+    # the list and the filter axes read from a single source of truth.
+    # Both are exclusive — exactly one is non-None — based on whether
+    # ``due_date`` is in the future or past relative to today (UTC).
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def days_until_due(self) -> int | None:
+        today = datetime.now(tz=timezone.utc).date()
+        delta = (self.due_date - today).days
+        return delta if delta >= 0 else None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def days_past_due(self) -> int | None:
+        today = datetime.now(tz=timezone.utc).date()
+        delta = (today - self.due_date).days
+        return delta if delta > 0 else None
 
 
 class InvoiceDetailResponse(InvoiceResponse):
