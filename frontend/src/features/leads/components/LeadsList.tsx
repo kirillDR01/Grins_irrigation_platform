@@ -8,7 +8,6 @@ import {
 } from '@tanstack/react-table';
 import { Phone, Inbox, MessageSquare, Plus, X, Trash2, ArrowRightCircle, Briefcase, ShoppingCart } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -29,10 +28,11 @@ import {
 } from '@/components/ui/table';
 import { LoadingPage, ErrorMessage } from '@/shared/components';
 import { useLeads } from '../hooks/useLeads';
-import { useDeleteLead, useMoveToJobs, useMoveToSales, useMarkContacted } from '../hooks/useLeadMutations';
+import { useLeadRoutingActions } from '../hooks/useLeadRoutingActions';
 import { LeadStatusBadge } from './LeadStatusBadge';
 import { LeadTagBadges } from './LeadTagBadges';
 import { LeadFilters } from './LeadFilters';
+import { LeadConversionConflictModal } from './LeadConversionConflictModal';
 import { FollowUpQueue } from './FollowUpQueue';
 import { BulkOutreach } from './BulkOutreach';
 import { SheetsSync } from './SheetsSync';
@@ -49,7 +49,6 @@ export function LeadsList() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [campaignModalOpen, setCampaignModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
-  const [estimateWarningLead, setEstimateWarningLead] = useState<Lead | null>(null);
 
   const urlStatus = searchParams.get('status') as LeadListParams['status'] | null;
   const urlHighlight = searchParams.get('highlight');
@@ -73,10 +72,23 @@ export function LeadsList() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data, isLoading, error, refetch } = useLeads(params);
-  const deleteLead = useDeleteLead();
-  const moveToJobs = useMoveToJobs();
-  const moveToSales = useMoveToSales();
-  const markContacted = useMarkContacted();
+
+  const {
+    markContacted,
+    moveToJobs,
+    moveToSales,
+    deleteLead,
+    deleteLeadMutation,
+    moveToJobsMutation,
+    moveToSalesMutation,
+    requiresEstimateState,
+    resolveRequiresEstimate,
+    closeRequiresEstimate,
+    conflictState,
+    onConvertAnyway,
+    onUseExisting,
+    closeConflict,
+  } = useLeadRoutingActions({ navigate, navigateOnSuccess: false });
 
   const handleFilterChange = useCallback(
     (changes: Partial<LeadListParams>) => {
@@ -102,90 +114,35 @@ export function LeadsList() {
   );
 
   const handleMoveToJobs = useCallback(
-    async (e: React.MouseEvent, lead: Lead) => {
+    (e: React.MouseEvent, lead: Lead) => {
       e.stopPropagation();
-      try {
-        const result = await moveToJobs.mutateAsync({ id: lead.id });
-        if (result.requires_estimate_warning) {
-          setEstimateWarningLead(lead);
-          return;
-        }
-        toast.success(`${lead.name} moved to Jobs`);
-      } catch {
-        toast.error('Failed to move lead to Jobs');
-      }
+      void moveToJobs(lead);
     },
     [moveToJobs]
   );
 
-  const handleEstimateConfirmMoveToJobs = useCallback(async () => {
-    if (!estimateWarningLead) return;
-    try {
-      await moveToJobs.mutateAsync({ id: estimateWarningLead.id, force: true });
-      toast.success(`${estimateWarningLead.name} moved to Jobs (estimate override)`);
-    } catch {
-      toast.error('Failed to move lead to Jobs');
-    } finally {
-      setEstimateWarningLead(null);
-    }
-  }, [estimateWarningLead, moveToJobs]);
-
-  const handleEstimateConfirmMoveToSales = useCallback(async () => {
-    if (!estimateWarningLead) return;
-    try {
-      const result = await moveToSales.mutateAsync(estimateWarningLead.id);
-      if (result.merged_into_customer) {
-        toast.success(`Merged into existing customer: ${result.merged_into_customer.name}`);
-      } else {
-        toast.success(`${estimateWarningLead.name} moved to Sales`);
-      }
-    } catch {
-      toast.error('Failed to move lead to Sales');
-    } finally {
-      setEstimateWarningLead(null);
-    }
-  }, [estimateWarningLead, moveToSales]);
-
   const handleMoveToSales = useCallback(
-    async (e: React.MouseEvent, lead: Lead) => {
+    (e: React.MouseEvent, lead: Lead) => {
       e.stopPropagation();
-      try {
-        const result = await moveToSales.mutateAsync(lead.id);
-        if (result.merged_into_customer) {
-          toast.success(`Merged into existing customer: ${result.merged_into_customer.name}`);
-        } else {
-          toast.success(`${lead.name} moved to Sales`);
-        }
-      } catch {
-        toast.error('Failed to move lead to Sales');
-      }
+      void moveToSales(lead);
     },
     [moveToSales]
   );
 
   const handleMarkContacted = useCallback(
-    async (e: React.MouseEvent, lead: Lead) => {
+    (e: React.MouseEvent, lead: Lead) => {
       e.stopPropagation();
-      try {
-        await markContacted.mutateAsync(lead.id);
-        toast.success(`${lead.name} marked as contacted`);
-      } catch {
-        toast.error('Failed to mark lead as contacted');
-      }
+      void markContacted(lead);
     },
     [markContacted]
   );
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return;
-    try {
-      await deleteLead.mutateAsync(deleteTarget.id);
-      toast.success(`${deleteTarget.name} permanently deleted`);
-    } catch {
-      toast.error('Failed to delete lead');
-    } finally {
-      setDeleteTarget(null);
-    }
+    // deleteLead swallows errors internally and toasts; close the dialog
+    // regardless of the outcome so the UI doesn't get stuck.
+    await deleteLead(deleteTarget);
+    setDeleteTarget(null);
   }, [deleteTarget, deleteLead]);
 
   // Select all / individual selection
@@ -644,17 +601,20 @@ export function LeadsList() {
             <Button
               variant="destructive"
               onClick={handleDeleteConfirm}
-              disabled={deleteLead.isPending}
+              disabled={deleteLeadMutation.isPending}
               data-testid="confirm-delete-btn"
             >
-              {deleteLead.isPending ? 'Deleting...' : 'Delete Permanently'}
+              {deleteLeadMutation.isPending ? 'Deleting...' : 'Delete Permanently'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Estimate Warning Modal (Smoothing Req 6.1, 6.3) */}
-      <Dialog open={!!estimateWarningLead} onOpenChange={(open) => !open && setEstimateWarningLead(null)}>
+      <Dialog
+        open={!!requiresEstimateState}
+        onOpenChange={(open) => !open && closeRequiresEstimate()}
+      >
         <DialogContent data-testid="estimate-warning-dialog">
           <DialogHeader>
             <DialogTitle>Estimate Required</DialogTitle>
@@ -665,7 +625,7 @@ export function LeadsList() {
           <DialogFooter className="flex flex-col sm:flex-row gap-2">
             <Button
               variant="outline"
-              onClick={() => setEstimateWarningLead(null)}
+              onClick={() => resolveRequiresEstimate('cancel')}
               data-testid="estimate-warning-cancel-btn"
             >
               Cancel
@@ -673,8 +633,8 @@ export function LeadsList() {
             <Button
               variant="default"
               className="bg-purple-600 hover:bg-purple-700 text-white"
-              onClick={handleEstimateConfirmMoveToSales}
-              disabled={moveToSales.isPending}
+              onClick={() => resolveRequiresEstimate('sales')}
+              disabled={moveToSalesMutation.isPending}
               data-testid="estimate-warning-move-to-sales-btn"
             >
               Move to Sales
@@ -682,8 +642,8 @@ export function LeadsList() {
             <Button
               variant="default"
               className="bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={handleEstimateConfirmMoveToJobs}
-              disabled={moveToJobs.isPending}
+              onClick={() => resolveRequiresEstimate('jobs-force')}
+              disabled={moveToJobsMutation.isPending}
               data-testid="estimate-warning-move-to-jobs-btn"
             >
               Move to Jobs
@@ -691,6 +651,22 @@ export function LeadsList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Duplicate Conflict Modal (CR-6) */}
+      {conflictState && (
+        <LeadConversionConflictModal
+          open={conflictState !== null}
+          onClose={closeConflict}
+          duplicates={conflictState.duplicates}
+          onUseExisting={onUseExisting}
+          onConvertAnyway={onConvertAnyway}
+          isConverting={
+            moveToJobsMutation.isPending || moveToSalesMutation.isPending
+          }
+          phone={conflictState.phone}
+          email={conflictState.email}
+        />
+      )}
     </div>
   );
 }
