@@ -78,6 +78,88 @@ class LienMassNotifyDeprecatedError(Exception):
         )
 
 
+# bughunt M-14: canonical merge keys for invoice notification templates.
+# Spec §11 lists the merge fields as bracket-form
+# ``[Customer name] [number] [amount] [date]``; admins writing custom
+# templates use either the canonical curly form or the spec brackets.
+_REQUIRED_INVOICE_MERGE_KEYS: tuple[str, ...] = (
+    "customer_name",
+    "invoice_number",
+    "amount",
+    "due_date",
+)
+_BRACKET_TO_CANONICAL: dict[str, str] = {
+    "[Customer name]": "{customer_name}",
+    "[customer name]": "{customer_name}",
+    "[number]": "{invoice_number}",
+    "[amount]": "{amount}",
+    "[date]": "{due_date}",
+}
+
+
+class InvalidInvoiceTemplateError(Exception):
+    """Raised when a custom mass-notify template is missing required keys.
+
+    The endpoint layer translates this to HTTP 400 so admins know which
+    merge fields they forgot. bughunt M-14.
+    """
+
+    def __init__(self, missing: list[str]) -> None:
+        self.missing = missing
+        msg = (
+            "Custom invoice template is missing required merge keys: "
+            + ", ".join(sorted(missing))
+            + ". Use the canonical curly-brace form (e.g. {customer_name}) "
+            "or the spec brackets (e.g. [Customer name])."
+        )
+        super().__init__(msg)
+
+
+def render_invoice_template(
+    template: str,
+    *,
+    customer_name: str,
+    invoice_number: str,
+    amount: str,
+    due_date: str,
+) -> str:
+    """Render a mass-notify template with the canonical merge keys.
+
+    Accepts both the canonical curly form (``{customer_name}``) and the
+    spec brackets (``[Customer name]``). Bracket forms are translated
+    to canonical form at parse time so the rendering always uses one
+    code path. Required keys are documented in
+    :data:`_REQUIRED_INVOICE_MERGE_KEYS`.
+
+    bughunt M-14.
+    """
+    canonical = template
+    for bracket, curly in _BRACKET_TO_CANONICAL.items():
+        canonical = canonical.replace(bracket, curly)
+    return canonical.format(
+        customer_name=customer_name,
+        invoice_number=invoice_number,
+        amount=amount,
+        due_date=due_date,
+    )
+
+
+def validate_invoice_template(template: str) -> None:
+    """Reject custom templates that drop a required merge key.
+
+    Caller (mass_notify) raises :class:`InvalidInvoiceTemplateError` so
+    the endpoint can return 400 with the offending keys named.
+    """
+    canonical = template
+    for bracket, curly in _BRACKET_TO_CANONICAL.items():
+        canonical = canonical.replace(bracket, curly)
+    missing = [
+        key for key in _REQUIRED_INVOICE_MERGE_KEYS if "{" + key + "}" not in canonical
+    ]
+    if missing:
+        raise InvalidInvoiceTemplateError(missing)
+
+
 class InvoiceService(LoggerMixin):
     """Service for invoice management operations.
 
@@ -810,19 +892,23 @@ class InvoiceService(LoggerMixin):
     # Mass Notification (Requirement 29.3, 29.4)
     # =========================================================================
 
+    # bughunt M-14: defaults use the canonical merge keys
+    # (customer_name / invoice_number / amount / due_date). The spec's
+    # bracket form is also accepted by render_invoice_template().
     _DEFAULT_TEMPLATES: ClassVar[dict[str, str]] = {
         "past_due": (
-            "Hi {first_name}, your invoice {invoice_number} for ${amount} "
-            "is past due. Please submit payment at your earliest convenience."
+            "{customer_name}, invoice {invoice_number} for ${amount} was due "
+            "on {due_date} and is now past due. Please remit payment at your "
+            "earliest convenience."
         ),
         "due_soon": (
-            "Hi {first_name}, a friendly reminder that invoice "
+            "{customer_name}, this is a reminder that invoice "
             "{invoice_number} for ${amount} is due on {due_date}."
         ),
         "lien_eligible": (
-            "Hi {first_name}, invoice {invoice_number} for ${amount} is "
-            "significantly past due. Please contact us immediately to "
-            "arrange payment and avoid further action."
+            "{customer_name}, invoice {invoice_number} for ${amount} (due "
+            "{due_date}) is significantly past due. Please contact us "
+            "immediately to arrange payment and avoid further action."
         ),
     }
 
@@ -879,6 +965,13 @@ class InvoiceService(LoggerMixin):
             self._DEFAULT_TEMPLATES["past_due"],
         )
 
+        # bughunt M-14: validate admin-supplied templates so we 400 with
+        # named missing keys instead of failing per-row inside the loop.
+        # Defaults are vouched for by InvoiceService and don't need
+        # re-validation on every request.
+        if template is not None:
+            validate_invoice_template(template)
+
         for inv in invoices:
             try:
                 customer = inv.customer  # type: ignore[union-attr]
@@ -886,10 +979,20 @@ class InvoiceService(LoggerMixin):
                     skipped += 1
                     continue
 
-                # Render template with invoice/customer fields
-                body = msg_template.format(
-                    first_name=customer.first_name,
-                    last_name=customer.last_name,
+                # Render template with invoice/customer fields. The
+                # canonical key is "customer_name" — full name, not just
+                # first — to match the spec's [Customer name] bracket.
+                full_name = " ".join(
+                    p
+                    for p in [
+                        getattr(customer, "first_name", None),
+                        getattr(customer, "last_name", None),
+                    ]
+                    if p
+                )
+                body = render_invoice_template(
+                    msg_template,
+                    customer_name=full_name,
                     invoice_number=inv.invoice_number,
                     amount=f"{inv.total_amount:.2f}",
                     due_date=inv.due_date.isoformat() if inv.due_date else "",
@@ -1098,14 +1201,24 @@ class InvoiceService(LoggerMixin):
             )
 
         # Build the SMS body from the lien template. Pick the oldest
-        # invoice for the template fields (matches mass_notify's behavior).
+        # invoice for the template fields (matches mass_notify's
+        # behavior). Now uses canonical merge keys (bughunt M-14).
         oldest_inv = invoices[0]
         total_amount = sum(
-            (inv.total_amount for inv in invoices), start=Decimal("0"),
+            (inv.total_amount for inv in invoices),
+            start=Decimal("0"),
         )
-        body = self._DEFAULT_TEMPLATES["lien_eligible"].format(
-            first_name=customer.first_name,
-            last_name=customer.last_name,
+        full_name = " ".join(
+            p
+            for p in [
+                getattr(customer, "first_name", None),
+                getattr(customer, "last_name", None),
+            ]
+            if p
+        )
+        body = render_invoice_template(
+            self._DEFAULT_TEMPLATES["lien_eligible"],
+            customer_name=full_name,
             invoice_number=oldest_inv.invoice_number,
             amount=f"{total_amount:.2f}",
             due_date=oldest_inv.due_date.isoformat() if oldest_inv.due_date else "",
@@ -1131,7 +1244,9 @@ class InvoiceService(LoggerMixin):
             consent_type="transactional",
         )
 
-        sms_id_raw = send_result.get("message_id") if isinstance(send_result, dict) else None
+        sms_id_raw = (
+            send_result.get("message_id") if isinstance(send_result, dict) else None
+        )
         sms_id: UUID | None = None
         if isinstance(sms_id_raw, UUID):
             sms_id = sms_id_raw
