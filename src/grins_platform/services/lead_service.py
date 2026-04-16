@@ -36,7 +36,7 @@ from grins_platform.models.enums import (
 )
 from grins_platform.models.sales import SalesEntry as SalesEntryModel
 from grins_platform.models.sms_consent_record import SmsConsentRecord
-from grins_platform.schemas.customer import CustomerCreate
+from grins_platform.schemas.customer import CustomerCreate, CustomerResponse
 from grins_platform.schemas.job import JobCreate
 from grins_platform.schemas.lead import (
     BulkOutreachSummary,
@@ -189,6 +189,30 @@ async def send_lead_confirmations_post_commit(lead_id: UUID) -> None:
                 await session.rollback()
             except Exception:  # noqa: BLE001
                 pass
+
+
+class LeadDuplicateFoundError(Exception):
+    """Raised by ``convert_lead`` when Tier-1 duplicates block conversion.
+
+    The caller (the endpoint layer) translates this to HTTP 409 with a
+    structured ``detail`` containing the duplicate customer list so the
+    frontend can offer "Use existing" / "Convert anyway (force=true)".
+
+    Validates: CR-6 (bughunt 2026-04-16).
+    """
+
+    def __init__(
+        self,
+        lead_id: UUID,
+        duplicates: list[CustomerResponse],
+        phone: str | None,
+        email: str | None,
+    ) -> None:
+        self.lead_id = lead_id
+        self.duplicates = duplicates
+        self.phone = phone
+        self.email = email
+        super().__init__(f"Duplicate customers found for lead {lead_id}")
 
 
 class LeadService(LoggerMixin):
@@ -946,6 +970,26 @@ class LeadService(LoggerMixin):
             last_name = data.last_name
         else:
             first_name, last_name = self.split_name(lead.name)
+
+        # CR-6: Tier-1 duplicate check before we create a new customer.
+        # Without ``force=True`` we stop here and raise so the endpoint can
+        # return 409 with the duplicate list for the admin to decide.
+        duplicates = await self.customer_service.check_tier1_duplicates(
+            phone=lead.phone,
+            email=lead.email,
+        )
+        if duplicates and not data.force:
+            raise LeadDuplicateFoundError(
+                lead_id=lead_id,
+                duplicates=duplicates,
+                phone=lead.phone,
+                email=lead.email,
+            )
+        if duplicates and data.force:
+            await self._audit_log_convert_override(
+                lead_id=lead_id,
+                duplicate_customer_ids=[d.id for d in duplicates],
+            )
 
         # Step 4: Create customer via CustomerService
         # CustomerCreate requires last_name min_length=1,
@@ -1923,3 +1967,40 @@ class LeadService(LoggerMixin):
         if sub.landscape_hardscape:
             parts.append(f"Landscape: {sub.landscape_hardscape}")
         return "; ".join(parts) if parts else None
+
+    async def _audit_log_convert_override(
+        self,
+        *,
+        lead_id: UUID,
+        duplicate_customer_ids: list[UUID],
+    ) -> None:
+        """Record a ``lead.convert.duplicate_override`` AuditLog entry.
+
+        Mirrors ``appointment_service._record_cancellation_audit`` — audit
+        failures must NEVER block the conversion itself. Validates: CR-6.
+        """
+        from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+            AuditLogRepository,
+        )
+
+        try:
+            session = self.lead_repository.session
+            repo = AuditLogRepository(session)
+            await repo.create(
+                action="lead.convert.duplicate_override",
+                resource_type="lead",
+                resource_id=lead_id,
+                actor_id=None,
+                details={
+                    "lead_id": str(lead_id),
+                    "duplicate_customer_ids": [
+                        str(cid) for cid in duplicate_customer_ids
+                    ],
+                    "forced": True,
+                },
+            )
+        except Exception:  # noqa: BLE001
+            self.log_failed(
+                "convert_override_audit",
+                lead_id=str(lead_id),
+            )

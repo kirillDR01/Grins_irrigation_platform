@@ -523,6 +523,14 @@ class LeadConversionRequest(BaseModel):
         max_length=500,
         description="Optional job description override",
     )
+    force: bool = Field(
+        default=False,
+        description=(
+            "Override Tier-1 duplicate check — create a new customer even "
+            "if an existing customer shares phone or email. Sends an audit "
+            "log entry on override. See bughunt CR-6."
+        ),
+    )
 
 
 class LeadConversionResponse(BaseModel):

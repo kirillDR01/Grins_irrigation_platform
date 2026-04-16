@@ -30,7 +30,9 @@ import { Switch } from '@/components/ui/switch';
 import { useConvertLead } from '../hooks';
 import { useCheckDuplicate } from '@/features/customers/hooks';
 import { DuplicateWarning } from '@/features/customers/components/DuplicateWarning';
-import type { Lead, LeadSituation } from '../types';
+import { LeadConversionConflictModal } from './LeadConversionConflictModal';
+import { isDuplicateConflict } from '../utils/isDuplicateConflict';
+import type { DuplicateConflictCustomer, Lead, LeadSituation } from '../types';
 import type { Customer } from '@/features/customers/types';
 
 interface ConvertLeadDialogProps {
@@ -117,6 +119,12 @@ function ConvertLeadForm({ lead, onOpenChange }: ConvertLeadFormProps) {
   const [jobDescription, setJobDescription] = useState(
     SITUATION_JOB_DESCRIPTIONS[lead.situation] ?? ''
   );
+  // CR-6: duplicate conflict modal state surfaced by the 409 response.
+  const [conflictState, setConflictState] = useState<{
+    duplicates: DuplicateConflictCustomer[];
+    phone: string | null;
+    email: string | null;
+  } | null>(null);
 
   // Check for duplicates on mount using lead's phone/email
   useEffect(() => {
@@ -128,30 +136,52 @@ function ConvertLeadForm({ lead, onOpenChange }: ConvertLeadFormProps) {
     navigate(`/customers/${existing.id}`);
   };
 
+  const handleUseExistingFromConflict = (dup: DuplicateConflictCustomer) => {
+    setConflictState(null);
+    onOpenChange(false);
+    navigate(`/customers/${dup.id}`);
+  };
+
+  const submitConversion = async (force: boolean) => {
+    const result = await convertMutation.mutateAsync({
+      id: lead.id,
+      data: {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        create_job: createJob,
+        job_description: createJob ? jobDescription.trim() : undefined,
+        force,
+      },
+    });
+
+    toast.success('Lead Converted', {
+      description: result.message || 'Lead successfully converted to customer.',
+    });
+
+    setConflictState(null);
+    onOpenChange(false);
+
+    if (result.customer_id) {
+      navigate(`/customers/${result.customer_id}`);
+    }
+  };
+
   const handleSubmit = async () => {
     try {
-      const result = await convertMutation.mutateAsync({
-        id: lead.id,
-        data: {
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          create_job: createJob,
-          job_description: createJob ? jobDescription.trim() : undefined,
-        },
-      });
-
-      toast.success('Lead Converted', {
-        description: result.message || 'Lead successfully converted to customer.',
-      });
-
-      onOpenChange(false);
-
-      // Navigate to the new customer detail page
-      if (result.customer_id) {
-        navigate(`/customers/${result.customer_id}`);
-      }
+      await submitConversion(false);
     } catch (error: unknown) {
-      // Check for already-converted error from backend
+      // CR-6: surface the duplicate-conflict modal so the admin can choose
+      // between Use existing and Convert anyway (force=true).
+      if (isDuplicateConflict(error)) {
+        const detail = error.response!.data.detail;
+        setConflictState({
+          duplicates: detail.duplicates,
+          phone: detail.phone,
+          email: detail.email,
+        });
+        return;
+      }
+
       if (axios.isAxiosError(error) && error.response?.data?.error?.code === 'LEAD_ALREADY_CONVERTED') {
         toast.error('Lead Already Converted', {
           description: 'This lead has already been converted to a customer.',
@@ -166,8 +196,32 @@ function ConvertLeadForm({ lead, onOpenChange }: ConvertLeadFormProps) {
     }
   };
 
+  const handleConvertAnyway = async () => {
+    try {
+      await submitConversion(true);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to convert lead';
+      toast.error('Conversion Failed', {
+        description: message,
+      });
+    }
+  };
+
   return (
     <>
+      {conflictState && (
+        <LeadConversionConflictModal
+          open={conflictState !== null}
+          onClose={() => setConflictState(null)}
+          duplicates={conflictState.duplicates}
+          onUseExisting={handleUseExistingFromConflict}
+          onConvertAnyway={handleConvertAnyway}
+          isConverting={convertMutation.isPending}
+          phone={conflictState.phone}
+          email={conflictState.email}
+        />
+      )}
       <DialogHeader className="pb-2">
         <DialogTitle className="flex items-center gap-2 text-lg font-bold text-slate-800">
           <UserPlus className="h-5 w-5 text-teal-600" />

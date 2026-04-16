@@ -260,6 +260,8 @@ describe('ConvertLeadDialog', () => {
         last_name: 'Doe',
         create_job: true,
         job_description: 'New irrigation system installation',
+        // CR-6: ``force`` defaults to false; set to true on "Convert anyway".
+        force: false,
       });
     });
 
@@ -305,6 +307,7 @@ describe('ConvertLeadDialog', () => {
         last_name: 'Doe',
         create_job: false,
         job_description: undefined,
+        force: false,
       });
     });
   });

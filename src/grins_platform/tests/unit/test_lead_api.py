@@ -28,17 +28,46 @@ from grins_platform.exceptions import (
     LeadAlreadyConvertedError,
     LeadNotFoundError,
 )
+from grins_platform.services.lead_service import LeadDuplicateFoundError
 from grins_platform.main import app
 from grins_platform.models.enums import (
     LeadSituation,
     LeadStatus,
 )
+from grins_platform.models.enums import CustomerStatus
+from grins_platform.schemas.customer import CustomerResponse
 from grins_platform.schemas.lead import (
     LeadConversionResponse,
     LeadResponse,
     LeadSubmissionResponse,
     PaginatedLeadResponse,
 )
+
+
+def _build_customer_response_stub(
+    *, phone: str, email: str | None = None,
+) -> CustomerResponse:
+    """Build a minimal CustomerResponse for duplicate-conflict test payloads."""
+    now = datetime.now(tz=timezone.utc)
+    return CustomerResponse(
+        id=uuid.uuid4(),
+        first_name="Alice",
+        last_name="Smith",
+        phone=phone,
+        email=email,
+        status=CustomerStatus.ACTIVE,
+        is_priority=False,
+        is_red_flag=False,
+        is_slow_payer=False,
+        is_new_customer=True,
+        sms_opt_in=False,
+        email_opt_in=True,
+        lead_source=None,
+        internal_notes=None,
+        preferred_service_times=None,
+        created_at=now,
+        updated_at=now,
+    )
 
 
 @pytest.fixture
@@ -418,6 +447,142 @@ class TestConvertLead:
         )
 
         assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_convert_lead_no_duplicates_returns_success(
+        self,
+        admin_client: AsyncClient,
+        mock_lead_service: AsyncMock,
+    ) -> None:
+        """CR-6: clean Tier-1 check still returns 200 + the conversion response."""
+        lead_id = uuid.uuid4()
+        customer_id = uuid.uuid4()
+        mock_lead_service.convert_lead.return_value = LeadConversionResponse(
+            lead_id=lead_id,
+            customer_id=customer_id,
+        )
+
+        response = await admin_client.post(
+            f"/api/v1/leads/{lead_id}/convert",
+            json={"create_job": False},
+        )
+
+        assert response.status_code == 200
+        mock_lead_service.convert_lead.assert_called_once()
+        passed_data = mock_lead_service.convert_lead.call_args.args[1]
+        assert passed_data.force is False
+
+    @pytest.mark.asyncio
+    async def test_convert_lead_with_duplicates_and_force_false_returns_409(
+        self,
+        admin_client: AsyncClient,
+        mock_lead_service: AsyncMock,
+    ) -> None:
+        """CR-6: force=False + duplicates → 409 with structured detail."""
+        lead_id = uuid.uuid4()
+        dup = _build_customer_response_stub(
+            phone="+19527373312", email="alice@test.example",
+        )
+        mock_lead_service.convert_lead.side_effect = LeadDuplicateFoundError(
+            lead_id=lead_id,
+            duplicates=[dup],
+            phone="+19527373312",
+            email="alice@test.example",
+        )
+
+        response = await admin_client.post(
+            f"/api/v1/leads/{lead_id}/convert",
+            json={"create_job": False},
+        )
+
+        assert response.status_code == 409
+        detail = response.json()["detail"]
+        assert detail["error"] == "duplicate_found"
+        assert detail["lead_id"] == str(lead_id)
+
+    @pytest.mark.asyncio
+    async def test_convert_lead_409_detail_contains_duplicate_list(
+        self,
+        admin_client: AsyncClient,
+        mock_lead_service: AsyncMock,
+    ) -> None:
+        """CR-6: 409 detail.duplicates preserves the full customer list."""
+        lead_id = uuid.uuid4()
+        dup1 = _build_customer_response_stub(
+            phone="+19527373312", email="alice@test.example",
+        )
+        dup2 = _build_customer_response_stub(
+            phone="+19527373313", email="alice@test.example",
+        )
+        mock_lead_service.convert_lead.side_effect = LeadDuplicateFoundError(
+            lead_id=lead_id,
+            duplicates=[dup1, dup2],
+            phone="+19527373312",
+            email="alice@test.example",
+        )
+
+        response = await admin_client.post(
+            f"/api/v1/leads/{lead_id}/convert",
+            json={"create_job": False},
+        )
+
+        assert response.status_code == 409
+        detail = response.json()["detail"]
+        assert len(detail["duplicates"]) == 2
+        assert {d["id"] for d in detail["duplicates"]} == {
+            str(dup1.id),
+            str(dup2.id),
+        }
+
+    @pytest.mark.asyncio
+    async def test_convert_lead_with_duplicates_and_force_true_creates_customer(
+        self,
+        admin_client: AsyncClient,
+        mock_lead_service: AsyncMock,
+    ) -> None:
+        """CR-6: force=True bypasses the duplicate guard → 200 + conversion response."""
+        lead_id = uuid.uuid4()
+        customer_id = uuid.uuid4()
+        mock_lead_service.convert_lead.return_value = LeadConversionResponse(
+            lead_id=lead_id,
+            customer_id=customer_id,
+        )
+
+        response = await admin_client.post(
+            f"/api/v1/leads/{lead_id}/convert",
+            json={"create_job": False, "force": True},
+        )
+
+        assert response.status_code == 200
+        passed_data = mock_lead_service.convert_lead.call_args.args[1]
+        assert passed_data.force is True
+
+    @pytest.mark.asyncio
+    async def test_convert_lead_force_true_writes_audit_log(
+        self,
+        admin_client: AsyncClient,
+        mock_lead_service: AsyncMock,
+    ) -> None:
+        """CR-6: the endpoint passes force=True through; audit is the service's job.
+
+        This test verifies the wire-up — the LeadService-side audit call is
+        covered separately in test_lead_service.py::test_convert_lead_force_true_writes_audit_log.
+        """
+        lead_id = uuid.uuid4()
+        customer_id = uuid.uuid4()
+        mock_lead_service.convert_lead.return_value = LeadConversionResponse(
+            lead_id=lead_id,
+            customer_id=customer_id,
+        )
+
+        response = await admin_client.post(
+            f"/api/v1/leads/{lead_id}/convert",
+            json={"create_job": False, "force": True},
+        )
+
+        assert response.status_code == 200
+        passed_data = mock_lead_service.convert_lead.call_args.args[1]
+        assert passed_data.force is True
 
 
 # =============================================================================

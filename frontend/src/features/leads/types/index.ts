@@ -200,6 +200,9 @@ export interface LeadConversionRequest {
   last_name?: string;
   create_job?: boolean;
   job_description?: string;
+  // CR-6: Override Tier-1 duplicate guard. Set to true after the admin
+  // confirms "Convert anyway" in <LeadConversionConflictModal>.
+  force?: boolean;
 }
 
 // Lead conversion response
@@ -209,6 +212,26 @@ export interface LeadConversionResponse {
   customer_id: string;
   job_id: string | null;
   message: string;
+}
+
+// CR-6: 409 conflict shape returned from POST /api/v1/leads/{id}/convert
+// when the customer already has a matching phone/email. The ``duplicates``
+// array mirrors the CustomerResponse shape from the BE.
+export interface DuplicateConflictCustomer {
+  id: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  email: string | null;
+  [key: string]: unknown;
+}
+
+export interface DuplicateConflictError {
+  error: 'duplicate_found';
+  lead_id: string;
+  phone: string | null;
+  email: string | null;
+  duplicates: DuplicateConflictCustomer[];
 }
 
 // Follow-up queue item
