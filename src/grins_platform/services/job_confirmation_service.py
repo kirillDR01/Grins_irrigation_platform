@@ -8,10 +8,9 @@ Validates: CRM Changes Update 2 Req 24.1-24.8, 25.1
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
-
-import os
 
 from sqlalchemy import select
 
@@ -35,23 +34,38 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 # Keyword mapping: normalised text → ConfirmationKeyword
+#
+# bughunt M-3: Spec §9 lists "Y (or yes, confirm, ok, okay)" and §15 leaves
+# room for common synonyms and number replies. ``stop`` is intentionally
+# excluded — it is a reserved compliance keyword handled by the SMS opt-out
+# pipeline, mapping it to CANCEL would silently swallow opt-outs.
 _KEYWORD_MAP: dict[str, ConfirmationKeyword] = {
+    # CONFIRM
     "y": ConfirmationKeyword.CONFIRM,
     "yes": ConfirmationKeyword.CONFIRM,
     "confirm": ConfirmationKeyword.CONFIRM,
     "confirmed": ConfirmationKeyword.CONFIRM,
+    "ok": ConfirmationKeyword.CONFIRM,
+    "okay": ConfirmationKeyword.CONFIRM,
+    "yup": ConfirmationKeyword.CONFIRM,
+    "yeah": ConfirmationKeyword.CONFIRM,
+    "1": ConfirmationKeyword.CONFIRM,
+    # RESCHEDULE
     "r": ConfirmationKeyword.RESCHEDULE,
     "reschedule": ConfirmationKeyword.RESCHEDULE,
+    "different time": ConfirmationKeyword.RESCHEDULE,
+    "change time": ConfirmationKeyword.RESCHEDULE,
+    "2": ConfirmationKeyword.RESCHEDULE,
+    # CANCEL — note: ``stop`` is NOT included; it's a compliance opt-out keyword.
     "c": ConfirmationKeyword.CANCEL,
     "cancel": ConfirmationKeyword.CANCEL,
 }
 
-# Auto-reply templates
+# Auto-reply templates. CONFIRM is built dynamically per appointment
+# (bughunt M-4) — see :func:`_build_confirm_message`.
 _AUTO_REPLIES: dict[ConfirmationKeyword, str] = {
-    ConfirmationKeyword.CONFIRM: ("Your appointment has been confirmed. See you then!"),
     ConfirmationKeyword.RESCHEDULE: (
-        "We received your reschedule request. "
-        "Our team will reach out with alternative times shortly."
+        "We've received your reschedule request. We'll be in touch with a new time."
     ),
     ConfirmationKeyword.CANCEL: (
         "Your appointment has been cancelled. "
@@ -189,8 +203,34 @@ class JobConfirmationService(LoggerMixin):
         return {
             "action": "confirmed",
             "appointment_id": str(appointment_id),
-            "auto_reply": _AUTO_REPLIES[ConfirmationKeyword.CONFIRM],
+            "auto_reply": self._build_confirm_message(appt),
         }
+
+    @staticmethod
+    def _build_confirm_message(appt: Any | None) -> str:  # noqa: ANN401
+        """Build the CONFIRM auto-reply with the appointment date and time.
+
+        Spec §4 (lines 219-222): ``"Your appointment has been confirmed.
+        See you on [date] at [time]!"``. Mirrors the formatting helpers used
+        by :meth:`_build_cancellation_message` so the wording is consistent
+        across CONFIRM and CANCEL flows (bughunt M-4).
+        """
+        from grins_platform.services.sms.formatters import (  # noqa: PLC0415
+            format_sms_time_12h,
+        )
+
+        appt_date = getattr(appt, "scheduled_date", None) if appt else None
+        appt_time = getattr(appt, "time_window_start", None) if appt else None
+
+        date_str = appt_date.strftime("%B %d, %Y") if appt_date else None
+        time_str = format_sms_time_12h(appt_time) if appt_time else None
+
+        if date_str and time_str:
+            return (
+                f"Your appointment has been confirmed. "
+                f"See you on {date_str} at {time_str}!"
+            )
+        return "Your appointment has been confirmed. See you then!"
 
     async def _handle_reschedule(
         self,
