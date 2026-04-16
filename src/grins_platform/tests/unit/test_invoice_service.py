@@ -9,7 +9,7 @@ Property 7: Lien Eligibility Determination
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -2652,23 +2652,25 @@ class TestInvoiceServiceMassNotify:
         assert result.targeted == 0
 
     @pytest.mark.asyncio
-    async def test_mass_notify_lien_eligible_targets_correct_invoices(
+    async def test_mass_notify_lien_eligible_raises_deprecation_error(
         self,
         service: InvoiceService,
         mock_invoice_repo: AsyncMock,
     ) -> None:
-        """lien_eligible type calls find_lien_eligible with configurable params."""
-        mock_invoice_repo.find_lien_eligible.return_value = []
-        result = await service.mass_notify(
-            "lien_eligible",
-            lien_days_past_due=90,
-            lien_min_amount=1000.0,
+        """CR-5: mass_notify('lien_eligible') now raises the deprecation error
+        to push callers onto the lien-review-queue endpoints.
+        """
+        from grins_platform.services.invoice_service import (
+            LienMassNotifyDeprecatedError,
         )
-        mock_invoice_repo.find_lien_eligible.assert_called_once_with(
-            days_past_due=90,
-            min_amount=Decimal("1000.0"),
-        )
-        assert result.notification_type == "lien_eligible"
+
+        with pytest.raises(LienMassNotifyDeprecatedError):
+            await service.mass_notify(
+                "lien_eligible",
+                lien_days_past_due=90,
+                lien_min_amount=1000.0,
+            )
+        mock_invoice_repo.find_lien_eligible.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_mass_notify_invalid_type_targets_nothing(
@@ -2734,15 +2736,269 @@ class TestInvoiceServiceMassNotify:
         assert result.sent == 0
 
     @pytest.mark.asyncio
-    async def test_mass_notify_default_lien_thresholds(
+    async def test_mass_notify_default_lien_thresholds_still_raises(
         self,
         service: InvoiceService,
         mock_invoice_repo: AsyncMock,
     ) -> None:
-        """Default lien thresholds: 60 days, $500."""
+        """CR-5: mass_notify('lien_eligible') raises even with default thresholds."""
+        from grins_platform.services.invoice_service import (
+            LienMassNotifyDeprecatedError,
+        )
+
+        with pytest.raises(LienMassNotifyDeprecatedError):
+            await service.mass_notify("lien_eligible")
+        mock_invoice_repo.find_lien_eligible.assert_not_called()
+
+
+# =============================================================================
+# CR-5: compute_lien_candidates + send_lien_notice
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestInvoiceServiceLienReviewQueue:
+    """CR-5 (bughunt 2026-04-16) — lien review queue service coverage."""
+
+    @pytest.fixture
+    def mock_invoice_repo(self) -> AsyncMock:
+        repo = AsyncMock()
+        repo.session = AsyncMock()
+        repo.update = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_job_repo(self) -> AsyncMock:
+        return AsyncMock()
+
+    @pytest.fixture
+    def service(
+        self,
+        mock_invoice_repo: AsyncMock,
+        mock_job_repo: AsyncMock,
+    ) -> InvoiceService:
+        return InvoiceService(
+            invoice_repository=mock_invoice_repo,
+            job_repository=mock_job_repo,
+        )
+
+    def _make_invoice(
+        self,
+        *,
+        customer_id: UUID,
+        amount: Decimal = Decimal("750.00"),
+        days_overdue: int = 90,
+        invoice_number: str = "INV-2025-000001",
+        phone: str | None = "+19527373312",
+        first_name: str = "Alice",
+        last_name: str = "Smith",
+    ) -> MagicMock:
+        customer = MagicMock()
+        customer.id = customer_id
+        customer.first_name = first_name
+        customer.last_name = last_name
+        customer.phone = phone
+        customer.sms_opt_in = True
+        customer.sms_consent_type = "transactional"
+
+        inv = MagicMock()
+        inv.id = uuid4()
+        inv.invoice_number = invoice_number
+        inv.total_amount = amount
+        inv.due_date = date.today() - timedelta(days=days_overdue)
+        inv.reminder_count = 0
+        inv.customer_id = customer_id
+        inv.customer = customer
+        return inv
+
+    @pytest.mark.asyncio
+    async def test_compute_lien_candidates_groups_by_customer(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        cust_a = uuid4()
+        cust_b = uuid4()
+        # Two invoices for A, one for B — expect 2 candidate rows.
+        invoices = [
+            self._make_invoice(
+                customer_id=cust_a,
+                amount=Decimal("500"),
+                days_overdue=90,
+                invoice_number="INV-A-1",
+            ),
+            self._make_invoice(
+                customer_id=cust_a,
+                amount=Decimal("300"),
+                days_overdue=65,
+                invoice_number="INV-A-2",
+                first_name="Alice",
+                last_name="Smith",
+            ),
+            self._make_invoice(
+                customer_id=cust_b,
+                amount=Decimal("1000"),
+                days_overdue=80,
+                invoice_number="INV-B-1",
+                first_name="Bob",
+                last_name="Jones",
+            ),
+        ]
+        mock_invoice_repo.find_lien_eligible.return_value = invoices
+
+        candidates = await service.compute_lien_candidates()
+
+        assert len(candidates) == 2
+        by_id = {c.customer_id: c for c in candidates}
+        a = by_id[cust_a]
+        assert a.total_past_due_amount == Decimal("800")
+        assert a.oldest_invoice_age_days == 90
+        assert set(a.invoice_numbers) == {"INV-A-1", "INV-A-2"}
+
+    @pytest.mark.asyncio
+    async def test_compute_lien_candidates_filters_by_days_past_due(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
         mock_invoice_repo.find_lien_eligible.return_value = []
-        await service.mass_notify("lien_eligible")
-        mock_invoice_repo.find_lien_eligible.assert_called_once_with(
-            days_past_due=60,
+        await service.compute_lien_candidates(days_past_due=120)
+        mock_invoice_repo.find_lien_eligible.assert_awaited_once_with(
+            days_past_due=120,
             min_amount=Decimal("500.0"),
         )
+
+    @pytest.mark.asyncio
+    async def test_compute_lien_candidates_filters_by_min_amount(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        mock_invoice_repo.find_lien_eligible.return_value = []
+        await service.compute_lien_candidates(min_amount=1000.0)
+        mock_invoice_repo.find_lien_eligible.assert_awaited_once_with(
+            days_past_due=60,
+            min_amount=Decimal("1000.0"),
+        )
+
+    @pytest.mark.asyncio
+    async def test_send_lien_notice_sends_sms_and_writes_audit(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        from unittest.mock import patch
+
+        customer_id = uuid4()
+        invoice = self._make_invoice(customer_id=customer_id)
+        mock_invoice_repo.find_lien_eligible_for_customer.return_value = [invoice]
+
+        # No opt-out record.
+        consent_result_mock = MagicMock()
+        consent_scalars_mock = MagicMock()
+        consent_scalars_mock.first.return_value = None
+        consent_result_mock.scalars.return_value = consent_scalars_mock
+        mock_invoice_repo.session.execute = AsyncMock(
+            return_value=consent_result_mock,
+        )
+
+        admin_id = uuid4()
+
+        with patch(
+            "grins_platform.services.sms_service.SMSService",
+        ) as mock_sms_cls, patch(
+            "grins_platform.repositories.audit_log_repository.AuditLogRepository",
+        ) as mock_audit_cls:
+            mock_sms_instance = MagicMock()
+            mock_sms_instance.send_message = AsyncMock(
+                return_value={"success": True, "message_id": str(uuid4())},
+            )
+            mock_sms_cls.return_value = mock_sms_instance
+
+            mock_audit_instance = AsyncMock()
+            mock_audit_cls.return_value = mock_audit_instance
+
+            result = await service.send_lien_notice(
+                customer_id=customer_id,
+                admin_user_id=admin_id,
+            )
+
+        assert result.success is True
+        assert result.message == "sent"
+        mock_sms_instance.send_message.assert_awaited_once()
+        mock_audit_instance.create.assert_awaited_once()
+        audit_kwargs = mock_audit_instance.create.await_args.kwargs
+        assert audit_kwargs["action"] == "invoice.lien_notice.sent"
+        assert audit_kwargs["resource_type"] == "customer"
+        assert str(invoice.id) in audit_kwargs["details"]["invoice_ids"]
+
+    @pytest.mark.asyncio
+    async def test_send_lien_notice_fails_when_customer_opted_out(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        from unittest.mock import patch
+
+        customer_id = uuid4()
+        invoice = self._make_invoice(customer_id=customer_id)
+        mock_invoice_repo.find_lien_eligible_for_customer.return_value = [invoice]
+
+        opted_out_record = MagicMock()
+        opted_out_record.consent_given = False
+        consent_result_mock = MagicMock()
+        consent_scalars_mock = MagicMock()
+        consent_scalars_mock.first.return_value = opted_out_record
+        consent_result_mock.scalars.return_value = consent_scalars_mock
+        mock_invoice_repo.session.execute = AsyncMock(
+            return_value=consent_result_mock,
+        )
+
+        with patch(
+            "grins_platform.services.sms_service.SMSService",
+        ) as mock_sms_cls:
+            mock_sms_instance = MagicMock()
+            mock_sms_instance.send_message = AsyncMock()
+            mock_sms_cls.return_value = mock_sms_instance
+
+            result = await service.send_lien_notice(
+                customer_id=customer_id,
+                admin_user_id=uuid4(),
+            )
+
+        assert result.success is False
+        assert result.message == "customer_opted_out"
+        mock_sms_instance.send_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_send_lien_notice_fails_when_customer_has_no_phone(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        customer_id = uuid4()
+        invoice = self._make_invoice(customer_id=customer_id, phone=None)
+        mock_invoice_repo.find_lien_eligible_for_customer.return_value = [invoice]
+
+        result = await service.send_lien_notice(
+            customer_id=customer_id, admin_user_id=uuid4(),
+        )
+
+        assert result.success is False
+        assert result.message == "no_phone"
+
+    @pytest.mark.asyncio
+    async def test_send_lien_notice_no_eligible_invoices(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """If eligibility changed (payment received), the send must no-op."""
+        mock_invoice_repo.find_lien_eligible_for_customer.return_value = []
+
+        result = await service.send_lien_notice(
+            customer_id=uuid4(), admin_user_id=uuid4(),
+        )
+
+        assert result.success is False
+        assert result.message == "no_eligible_invoices"

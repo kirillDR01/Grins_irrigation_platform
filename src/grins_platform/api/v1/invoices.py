@@ -37,14 +37,19 @@ from grins_platform.schemas.invoice import (
     InvoiceListParams,
     InvoiceResponse,
     InvoiceUpdate,
+    LienCandidateResponse,
     LienDeadlineResponse,
     LienFiledRequest,
+    LienNoticeResult,
     MassNotifyRequest,
     MassNotifyResponse,
     PaginatedInvoiceResponse,
     PaymentRecord,
 )
-from grins_platform.services.invoice_service import InvoiceService
+from grins_platform.services.invoice_service import (
+    InvoiceService,
+    LienMassNotifyDeprecatedError,
+)
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
@@ -353,6 +358,100 @@ async def generate_invoice_from_job(
 # =============================================================================
 # Dynamic Path Endpoints (/{invoice_id} routes)
 # =============================================================================
+
+
+# =============================================================================
+# CR-5: Lien Review Queue — GET /lien-candidates + POST /lien-notices/{id}/send
+# MUST appear before the /{invoice_id} routes so FastAPI doesn't try to parse
+# ``lien-candidates`` or ``lien-notices`` as a UUID path parameter.
+# =============================================================================
+
+
+@router.get(
+    "/lien-candidates",
+    response_model=list[LienCandidateResponse],
+    summary="List lien-eligible customers for admin review",
+    description=(
+        "Returns one row per customer aggregating their lien-eligible "
+        "invoices. Admin reviews the queue and approves per-customer sends."
+    ),
+)
+async def get_lien_candidates(
+    _current_user: ManagerOrAdminUser,
+    service: Annotated[InvoiceService, Depends(get_invoice_service)],
+    days_past_due: int = Query(default=60, ge=1),
+    min_amount: float = Query(default=500.0, ge=0),
+) -> list[LienCandidateResponse]:
+    """List customers eligible for a lien notice.
+
+    Validates: CR-5 (bughunt 2026-04-16).
+    """
+    _invoice_endpoints.log_started(
+        "get_lien_candidates",
+        days_past_due=days_past_due,
+        min_amount=min_amount,
+    )
+
+    candidates = await service.compute_lien_candidates(
+        days_past_due=days_past_due,
+        min_amount=min_amount,
+    )
+
+    _invoice_endpoints.log_completed(
+        "get_lien_candidates",
+        count=len(candidates),
+    )
+    return candidates
+
+
+@router.post(
+    "/lien-notices/{customer_id}/send",
+    response_model=LienNoticeResult,
+    summary="Send a lien notice SMS to one customer",
+    description=(
+        "Admin-approved per-customer send. Re-checks eligibility, "
+        "pre-filters for SMS consent, dispatches the SMS, and writes "
+        "an invoice.lien_notice.sent AuditLog entry."
+    ),
+)
+async def send_lien_notice_endpoint(
+    customer_id: UUID,
+    current_user: ManagerOrAdminUser,
+    service: Annotated[InvoiceService, Depends(get_invoice_service)],
+    days_past_due: int = Query(default=60, ge=1),
+    min_amount: float = Query(default=500.0, ge=0),
+) -> LienNoticeResult:
+    """Send a single lien notice SMS to one customer.
+
+    Validates: CR-5 (bughunt 2026-04-16).
+    """
+    _invoice_endpoints.log_started(
+        "send_lien_notice",
+        customer_id=str(customer_id),
+    )
+
+    try:
+        result = await service.send_lien_notice(
+            customer_id=customer_id,
+            admin_user_id=getattr(current_user, "id", None),
+            days_past_due=days_past_due,
+            min_amount=min_amount,
+        )
+    except Exception as exc:
+        _invoice_endpoints.log_failed(
+            "send_lien_notice",
+            customer_id=str(customer_id),
+            error=exc,
+        )
+        raise
+
+    _invoice_endpoints.log_completed(
+        "send_lien_notice",
+        customer_id=str(customer_id),
+        success=result.success,
+        message=result.message,
+    )
+    return result
 
 
 @router.get(
@@ -736,7 +835,13 @@ async def bulk_notify_invoices(
     "/mass-notify",
     response_model=MassNotifyResponse,
     summary="Mass notify customers by invoice criteria",
-    description="Send bulk SMS to past-due, due-soon, or lien-eligible customers.",
+    description=(
+        "Send bulk SMS to past-due or due-soon customers. "
+        "``lien_eligible`` is deprecated (CR-5) — use the Lien Review Queue."
+    ),
+    responses={
+        400: {"description": "Deprecated notification_type (e.g. lien_eligible)"},
+    },
 )
 async def mass_notify_invoices(
     request: MassNotifyRequest,
@@ -745,7 +850,7 @@ async def mass_notify_invoices(
 ) -> MassNotifyResponse:
     """Send mass notifications based on invoice criteria.
 
-    Validates: Requirements 29.3, 29.4
+    Validates: Requirements 29.3, 29.4, CR-5 (bughunt 2026-04-16).
     Single-admin scope: Req 38.1 — all logged-in users have full privileges.
     """
     _invoice_endpoints.log_started(
@@ -753,13 +858,30 @@ async def mass_notify_invoices(
         notification_type=request.notification_type,
     )
 
-    result = await service.mass_notify(
-        notification_type=request.notification_type,
-        due_soon_days=request.due_soon_days,
-        lien_days_past_due=request.lien_days_past_due,
-        lien_min_amount=request.lien_min_amount,
-        template=request.template,
-    )
+    try:
+        result = await service.mass_notify(
+            notification_type=request.notification_type,
+            due_soon_days=request.due_soon_days,
+            lien_days_past_due=request.lien_days_past_due,
+            lien_min_amount=request.lien_min_amount,
+            template=request.template,
+        )
+    except LienMassNotifyDeprecatedError as exc:
+        _invoice_endpoints.log_rejected(
+            "mass_notify_invoices",
+            reason="lien_eligible_deprecated",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "lien_eligible_deprecated",
+                "message": str(exc),
+                "replacement": {
+                    "list": "GET /api/v1/invoices/lien-candidates",
+                    "send": "POST /api/v1/invoices/lien-notices/{customer_id}/send",
+                },
+            },
+        ) from exc
 
     _invoice_endpoints.log_completed(
         "mass_notify_invoices",

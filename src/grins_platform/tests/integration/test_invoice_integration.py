@@ -709,3 +709,128 @@ class TestInvoiceAuthorizationIntegration:
         """Test unauthenticated user cannot list invoices."""
         response = await async_client.get("/api/v1/invoices")
         assert response.status_code == 401
+
+
+# =============================================================================
+# CR-5: lien review queue endpoints
+# =============================================================================
+
+
+@pytest.mark.integration
+class TestLienReviewQueueEndpoints:
+    """CR-5: GET /lien-candidates + POST /lien-notices/{customer_id}/send."""
+
+    @pytest.mark.asyncio
+    async def test_get_lien_candidates_endpoint_returns_review_list(
+        self,
+        async_client: AsyncClient,
+        sample_manager_user: MagicMock,
+    ) -> None:
+        from grins_platform.schemas.invoice import LienCandidateResponse
+
+        customer_a = uuid.uuid4()
+        candidate = LienCandidateResponse(
+            customer_id=customer_a,
+            customer_name="Alice Smith",
+            customer_phone="+19527373312",
+            oldest_invoice_age_days=90,
+            total_past_due_amount=Decimal("800.00"),
+            invoice_ids=[uuid.uuid4()],
+            invoice_numbers=["INV-2026-000001"],
+        )
+
+        svc = MagicMock()
+        svc.compute_lien_candidates = AsyncMock(return_value=[candidate])
+
+        app.dependency_overrides[get_invoice_service] = lambda: svc
+        app.dependency_overrides[require_manager_or_admin] = (
+            lambda: sample_manager_user
+        )
+        app.dependency_overrides[get_current_user] = lambda: sample_manager_user
+        try:
+            response = await async_client.get(
+                "/api/v1/invoices/lien-candidates?days_past_due=60&min_amount=500",
+                headers={"Authorization": "Bearer test_token"},
+            )
+            assert response.status_code == 200
+            rows = response.json()
+            assert len(rows) == 1
+            assert rows[0]["customer_id"] == str(customer_a)
+            assert rows[0]["customer_name"] == "Alice Smith"
+            assert rows[0]["oldest_invoice_age_days"] == 90
+            svc.compute_lien_candidates.assert_awaited_once_with(
+                days_past_due=60, min_amount=500.0,
+            )
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_send_lien_notice_endpoint_sends_sms_and_returns_success(
+        self,
+        async_client: AsyncClient,
+        sample_manager_user: MagicMock,
+    ) -> None:
+        from grins_platform.schemas.invoice import LienNoticeResult
+
+        customer_a = uuid.uuid4()
+        message_id = uuid.uuid4()
+        result = LienNoticeResult(
+            success=True,
+            customer_id=customer_a,
+            sent_at=datetime.now(timezone.utc),
+            sms_message_id=message_id,
+            message="sent",
+        )
+
+        svc = MagicMock()
+        svc.send_lien_notice = AsyncMock(return_value=result)
+
+        app.dependency_overrides[get_invoice_service] = lambda: svc
+        app.dependency_overrides[require_manager_or_admin] = (
+            lambda: sample_manager_user
+        )
+        app.dependency_overrides[get_current_user] = lambda: sample_manager_user
+        try:
+            response = await async_client.post(
+                f"/api/v1/invoices/lien-notices/{customer_a}/send",
+                headers={"Authorization": "Bearer test_token"},
+            )
+            assert response.status_code == 200
+            body = response.json()
+            assert body["success"] is True
+            assert body["customer_id"] == str(customer_a)
+            assert body["message"] == "sent"
+            svc.send_lien_notice.assert_awaited_once()
+            kwargs = svc.send_lien_notice.await_args.kwargs
+            assert kwargs["customer_id"] == customer_a
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_lien_eligible_returns_400(
+        self,
+        async_client: AsyncClient,
+        sample_manager_user: MagicMock,
+    ) -> None:
+        """CR-5: mass_notify('lien_eligible') → 400 pointing at the queue."""
+        from grins_platform.services.invoice_service import (
+            LienMassNotifyDeprecatedError,
+        )
+
+        svc = MagicMock()
+        svc.mass_notify = AsyncMock(side_effect=LienMassNotifyDeprecatedError())
+
+        app.dependency_overrides[get_invoice_service] = lambda: svc
+        app.dependency_overrides[get_current_user] = lambda: sample_manager_user
+        try:
+            response = await async_client.post(
+                "/api/v1/invoices/mass-notify",
+                json={"notification_type": "lien_eligible"},
+                headers={"Authorization": "Bearer test_token"},
+            )
+            assert response.status_code == 400
+            detail = response.json()["detail"]
+            assert detail["error"] == "lien_eligible_deprecated"
+            assert "lien-candidates" in detail["replacement"]["list"]
+        finally:
+            app.dependency_overrides.clear()

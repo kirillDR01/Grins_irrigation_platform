@@ -22,8 +22,10 @@ from grins_platform.schemas.invoice import (
     InvoiceListParams,
     InvoiceResponse,
     InvoiceUpdate,
+    LienCandidateResponse,
     LienDeadlineInvoice,
     LienDeadlineResponse,
+    LienNoticeResult,
     MassNotifyResponse,
     PaginatedInvoiceResponse,
     PaymentRecord,
@@ -57,6 +59,23 @@ class InvalidInvoiceOperationError(Exception):
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
+
+
+class LienMassNotifyDeprecatedError(Exception):
+    """Raised when a caller hits ``mass_notify('lien_eligible')``.
+
+    CR-5 moves lien notices out of the fire-and-forget mass path into an
+    admin review queue. Callers should use ``compute_lien_candidates`` +
+    ``send_lien_notice`` instead. The endpoint layer translates this to
+    HTTP 400 with a pointer to the new endpoints.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "mass_notify('lien_eligible') is deprecated. Use "
+            "GET /api/v1/invoices/lien-candidates + "
+            "POST /api/v1/invoices/lien-notices/{customer_id}/send instead.",
+        )
 
 
 class InvoiceService(LoggerMixin):
@@ -830,6 +849,12 @@ class InvoiceService(LoggerMixin):
 
         Validates: Requirements 29.3, 29.4
         """
+        # CR-5: mass_notify("lien_eligible") is deprecated — admins must
+        # send lien notices via the review queue instead. Endpoint layer
+        # translates this to HTTP 400.
+        if notification_type == "lien_eligible":
+            raise LienMassNotifyDeprecatedError
+
         self.log_started(
             "mass_notify",
             notification_type=notification_type,
@@ -841,11 +866,6 @@ class InvoiceService(LoggerMixin):
             invoices = await self.invoice_repository.find_past_due()
         elif notification_type == "due_soon":
             invoices = await self.invoice_repository.find_due_soon(due_soon_days)
-        elif notification_type == "lien_eligible":
-            invoices = await self.invoice_repository.find_lien_eligible(
-                days_past_due=lien_days_past_due,
-                min_amount=Decimal(str(lien_min_amount)),
-            )
         else:
             invoices = []
 
@@ -926,4 +946,248 @@ class InvoiceService(LoggerMixin):
             sent=sent,
             failed=failed,
             skipped=skipped,
+        )
+
+    async def compute_lien_candidates(
+        self,
+        *,
+        days_past_due: int = 60,
+        min_amount: float = 500.0,
+    ) -> list[LienCandidateResponse]:
+        """Build the admin review queue of lien-eligible customers.
+
+        Groups :meth:`InvoiceRepository.find_lien_eligible` by customer
+        so the admin sees one row per customer with the aggregated
+        oldest-invoice age and total past-due amount.
+
+        Validates: CR-5 (bughunt 2026-04-16).
+        """
+        self.log_started(
+            "compute_lien_candidates",
+            days_past_due=days_past_due,
+            min_amount=min_amount,
+        )
+
+        invoices = await self.invoice_repository.find_lien_eligible(
+            days_past_due=days_past_due,
+            min_amount=Decimal(str(min_amount)),
+        )
+
+        # Group by customer_id.
+        today = date.today()
+        by_customer: dict[UUID, dict[str, object]] = {}
+        for inv in invoices:
+            customer = inv.customer  # type: ignore[union-attr]
+            if customer is None:
+                continue
+            key = customer.id
+            bucket = by_customer.setdefault(
+                key,
+                {
+                    "customer_id": customer.id,
+                    "customer_name": f"{customer.first_name} {customer.last_name}".strip(),
+                    "customer_phone": getattr(customer, "phone", None),
+                    "oldest_age": 0,
+                    "total": Decimal("0"),
+                    "invoice_ids": [],
+                    "invoice_numbers": [],
+                },
+            )
+
+            age_days = (today - inv.due_date).days if inv.due_date else 0
+            bucket["oldest_age"] = max(int(bucket["oldest_age"]), age_days)  # type: ignore[arg-type]
+            bucket["total"] = cast(Decimal, bucket["total"]) + inv.total_amount
+            cast(list, bucket["invoice_ids"]).append(inv.id)
+            cast(list, bucket["invoice_numbers"]).append(inv.invoice_number)
+
+        candidates: list[LienCandidateResponse] = [
+            LienCandidateResponse(
+                customer_id=cast(UUID, b["customer_id"]),
+                customer_name=cast(str, b["customer_name"]),
+                customer_phone=cast("str | None", b["customer_phone"]),
+                oldest_invoice_age_days=int(cast(int, b["oldest_age"])),
+                total_past_due_amount=cast(Decimal, b["total"]),
+                invoice_ids=cast("list[UUID]", b["invoice_ids"]),
+                invoice_numbers=cast("list[str]", b["invoice_numbers"]),
+            )
+            for b in by_customer.values()
+        ]
+
+        self.log_completed(
+            "compute_lien_candidates",
+            count=len(candidates),
+        )
+        return candidates
+
+    async def send_lien_notice(
+        self,
+        *,
+        customer_id: UUID,
+        admin_user_id: UUID | None,
+        days_past_due: int = 60,
+        min_amount: float = 500.0,
+    ) -> LienNoticeResult:
+        """Send a single lien-notice SMS after admin approval.
+
+        Re-runs the eligibility check against the current DB state before
+        sending, pre-filters for SMS consent (H-11 overlap), dispatches via
+        :class:`SMSService`, and writes an AuditLog row
+        (``action="invoice.lien_notice.sent"``).
+
+        Validates: CR-5 (bughunt 2026-04-16).
+        """
+        self.log_started(
+            "send_lien_notice",
+            customer_id=str(customer_id),
+        )
+
+        now = datetime.now(timezone.utc)
+
+        invoices = await self.invoice_repository.find_lien_eligible_for_customer(
+            customer_id,
+            days_past_due=days_past_due,
+            min_amount=Decimal(str(min_amount)),
+        )
+        if not invoices:
+            self.log_completed(
+                "send_lien_notice",
+                customer_id=str(customer_id),
+                result="no_eligible_invoices",
+            )
+            return LienNoticeResult(
+                success=False,
+                customer_id=customer_id,
+                sent_at=None,
+                sms_message_id=None,
+                message="no_eligible_invoices",
+            )
+
+        customer = invoices[0].customer  # type: ignore[union-attr]
+        if customer is None or not getattr(customer, "phone", None):
+            return LienNoticeResult(
+                success=False,
+                customer_id=customer_id,
+                sent_at=None,
+                sms_message_id=None,
+                message="no_phone",
+            )
+
+        # SMS consent pre-filter (overlaps H-11).
+        from grins_platform.models.sms_consent_record import (  # noqa: PLC0415
+            SmsConsentRecord,
+        )
+        from sqlalchemy import select as _select  # noqa: PLC0415
+
+        consent_stmt = _select(SmsConsentRecord).where(
+            SmsConsentRecord.customer_id == customer.id,
+        )
+        consent_result = await self.invoice_repository.session.execute(consent_stmt)
+        consent_record = consent_result.scalars().first()
+        if consent_record is not None and not consent_record.consent_given:
+            self.log_completed(
+                "send_lien_notice",
+                customer_id=str(customer_id),
+                result="customer_opted_out",
+            )
+            return LienNoticeResult(
+                success=False,
+                customer_id=customer_id,
+                sent_at=None,
+                sms_message_id=None,
+                message="customer_opted_out",
+            )
+
+        # Build the SMS body from the lien template. Pick the oldest
+        # invoice for the template fields (matches mass_notify's behavior).
+        oldest_inv = invoices[0]
+        total_amount = sum(
+            (inv.total_amount for inv in invoices), start=Decimal("0"),
+        )
+        body = self._DEFAULT_TEMPLATES["lien_eligible"].format(
+            first_name=customer.first_name,
+            last_name=customer.last_name,
+            invoice_number=oldest_inv.invoice_number,
+            amount=f"{total_amount:.2f}",
+            due_date=oldest_inv.due_date.isoformat() if oldest_inv.due_date else "",
+        )
+
+        # Lazy imports to avoid circular references.
+        from grins_platform.schemas.ai import (  # noqa: PLC0415
+            MessageType,
+        )
+        from grins_platform.services.sms.recipient import (  # noqa: PLC0415
+            Recipient,
+        )
+        from grins_platform.services.sms_service import (  # noqa: PLC0415
+            SMSService,
+        )
+
+        sms_service = SMSService(self.invoice_repository.session)
+        recipient = Recipient.from_customer(customer)
+        send_result = await sms_service.send_message(
+            recipient=recipient,
+            message=body,
+            message_type=MessageType.PAYMENT_REMINDER,
+            consent_type="transactional",
+        )
+
+        sms_id_raw = send_result.get("message_id") if isinstance(send_result, dict) else None
+        sms_id: UUID | None = None
+        if isinstance(sms_id_raw, UUID):
+            sms_id = sms_id_raw
+        elif isinstance(sms_id_raw, str):
+            try:
+                sms_id = UUID(sms_id_raw)
+            except ValueError:
+                sms_id = None
+
+        # Bump reminder_count on every notified invoice so the dashboard
+        # reflects the outreach.
+        for inv in invoices:
+            await self.invoice_repository.update(
+                inv.id,
+                reminder_count=inv.reminder_count + 1,
+                last_reminder_sent=now,
+            )
+
+        # AuditLog: invoice.lien_notice.sent (mirrors
+        # appointment_service._record_cancellation_audit).
+        try:
+            from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+                AuditLogRepository,
+            )
+
+            audit_repo = AuditLogRepository(self.invoice_repository.session)
+            await audit_repo.create(
+                action="invoice.lien_notice.sent",
+                resource_type="customer",
+                resource_id=customer.id,
+                actor_id=admin_user_id,
+                details={
+                    "admin_user_id": str(admin_user_id) if admin_user_id else None,
+                    "customer_id": str(customer.id),
+                    "invoice_ids": [str(inv.id) for inv in invoices],
+                    "sent_at": now.isoformat(),
+                    "sms_message_id": str(sms_id) if sms_id else None,
+                },
+            )
+        except Exception:  # noqa: BLE001
+            # Audit must never block the SMS dispatch.
+            self.log_failed(
+                "send_lien_notice_audit",
+                customer_id=str(customer_id),
+            )
+
+        self.log_completed(
+            "send_lien_notice",
+            customer_id=str(customer_id),
+            result="sent",
+            invoice_count=len(invoices),
+        )
+        return LienNoticeResult(
+            success=True,
+            customer_id=customer.id,
+            sent_at=now,
+            sms_message_id=sms_id,
+            message="sent",
         )

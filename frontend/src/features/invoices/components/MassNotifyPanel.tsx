@@ -25,8 +25,6 @@ export function MassNotifyPanel() {
   const [open, setOpen] = useState(false);
   const [notificationType, setNotificationType] = useState<MassNotificationType | ''>('');
   const [dueSoonDays, setDueSoonDays] = useState(7);
-  const [lienDaysPastDue, setLienDaysPastDue] = useState(60);
-  const [lienMinAmount, setLienMinAmount] = useState(500);
   const massNotify = useMassNotify();
 
   const handleSend = async () => {
@@ -35,8 +33,6 @@ export function MassNotifyPanel() {
       const result = await massNotify.mutateAsync({
         notification_type: notificationType,
         due_soon_days: dueSoonDays,
-        lien_days_past_due: lienDaysPastDue,
-        lien_min_amount: lienMinAmount,
       });
       toast.success('Mass Notification Sent', {
         description: `Targeted: ${result.targeted}, Sent: ${result.sent}, Skipped: ${result.skipped}, Failed: ${result.failed}`,
@@ -104,31 +100,7 @@ export function MassNotifyPanel() {
                 />
               </div>
             )}
-
-            {notificationType === 'lien_eligible' && (
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700">Min Days Past Due</label>
-                  <Input
-                    type="number"
-                    value={lienDaysPastDue}
-                    onChange={(e) => setLienDaysPastDue(Number(e.target.value))}
-                    min={1}
-                    data-testid="mass-notify-lien-days"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700">Min Amount ($)</label>
-                  <Input
-                    type="number"
-                    value={lienMinAmount}
-                    onChange={(e) => setLienMinAmount(Number(e.target.value))}
-                    min={0}
-                    data-testid="mass-notify-lien-amount"
-                  />
-                </div>
-              </div>
-            )}
+            {/* CR-5: lien_eligible option removed — use /invoices?tab=lien-review instead. */}
           </div>
 
           <DialogFooter>

@@ -573,3 +573,53 @@ class InvoiceRepository(LoggerMixin):
 
         self.log_completed("find_lien_eligible", count=len(invoices))
         return invoices
+
+    async def find_lien_eligible_for_customer(
+        self,
+        customer_id: UUID,
+        days_past_due: int = 60,
+        min_amount: Decimal = Decimal(500),
+    ) -> list[Invoice]:
+        """Find lien-eligible invoices for a single customer.
+
+        Mirrors :meth:`find_lien_eligible` with an extra ``customer_id``
+        filter so the admin's per-row "Send Notice" action re-runs the
+        eligibility check against the latest DB state before sending.
+
+        Validates: CR-5 (bughunt 2026-04-16).
+        """
+        self.log_started(
+            "find_lien_eligible_for_customer",
+            customer_id=str(customer_id),
+            days_past_due=days_past_due,
+            min_amount=str(min_amount),
+        )
+
+        cutoff = date.today() - timedelta(days=days_past_due)
+        active_statuses = [
+            InvoiceStatus.SENT.value,
+            InvoiceStatus.VIEWED.value,
+            InvoiceStatus.PARTIAL.value,
+            InvoiceStatus.OVERDUE.value,
+            InvoiceStatus.LIEN_WARNING.value,
+        ]
+
+        stmt = (
+            select(Invoice)
+            .options(joinedload(Invoice.customer))
+            .where(Invoice.customer_id == customer_id)
+            .where(Invoice.due_date <= cutoff)
+            .where(Invoice.total_amount >= min_amount)
+            .where(Invoice.status.in_(active_statuses))
+            .order_by(Invoice.due_date.asc())
+        )
+
+        result = await self.session.execute(stmt)
+        invoices = list(result.scalars().all())
+
+        self.log_completed(
+            "find_lien_eligible_for_customer",
+            customer_id=str(customer_id),
+            count=len(invoices),
+        )
+        return invoices
