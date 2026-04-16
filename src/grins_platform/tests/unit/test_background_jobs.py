@@ -344,10 +344,11 @@ class TestRegisterScheduledJobs:
     """Tests for register_scheduled_jobs."""
 
     def test_registers_all_four_jobs(self):
-        """All seven scheduled jobs are registered."""
+        """All eight scheduled jobs are registered (H-7 added no-reply sweep)."""
         mock_scheduler = MagicMock()
         register_scheduled_jobs(mock_scheduler)
-        assert mock_scheduler.add_job.call_count == 7
+        # bughunt H-7 added flag_no_reply_confirmations — 7 → 8.
+        assert mock_scheduler.add_job.call_count == 8
 
         job_ids = [call.kwargs["id"] for call in mock_scheduler.add_job.call_args_list]
         assert "escalate_failed_payments" in job_ids
@@ -357,6 +358,23 @@ class TestRegisterScheduledJobs:
         assert "remind_incomplete_onboarding" in job_ids
         assert "process_pending_campaign_recipients" in job_ids
         assert "duplicate_detection_sweep" in job_ids
+        assert "flag_no_reply_confirmations" in job_ids
+
+    def test_registers_flag_no_reply_confirmations_via_cron_trigger(self):
+        """H-7 no-reply sweep is registered with a CronTrigger instance."""
+        from apscheduler.triggers.cron import CronTrigger
+
+        mock_scheduler = MagicMock()
+        register_scheduled_jobs(mock_scheduler)
+
+        no_reply_call = next(
+            c
+            for c in mock_scheduler.add_job.call_args_list
+            if c.kwargs["id"] == "flag_no_reply_confirmations"
+        )
+        # Trigger is positional arg index 1: add_job(func, trigger, ...)
+        trigger = no_reply_call.args[1]
+        assert isinstance(trigger, CronTrigger)
 
     def test_escalate_runs_daily(self):
         """escalate_failed_payments is a daily cron job."""
@@ -393,3 +411,283 @@ class TestRegisterScheduledJobs:
             if c.kwargs["id"] == "cleanup_orphaned_consent_records"
         )
         assert cleanup_call.kwargs["day_of_week"] == "sun"
+
+
+# =============================================================================
+# bughunt H-7: NoReplyConfirmationFlagger
+# =============================================================================
+
+
+class _CannedExecute:
+    """Callable that returns canned results in order of invocation.
+
+    Mocks the behavior of ``session.execute`` for the flagger's staged
+    queries so each test can prescribe exactly what each query returns
+    without building a full in-memory DB.
+    """
+
+    def __init__(self, results: list[MagicMock]) -> None:
+        self._results = list(results)
+        self.calls = 0
+
+    async def __call__(self, *args, **kwargs):
+        _ = (args, kwargs)  # absorb SQLAlchemy statement args
+        self.calls += 1
+        if not self._results:
+            empty = MagicMock()
+            empty.scalars.return_value.all.return_value = []
+            empty.scalar.return_value = 0
+            return empty
+        return self._results.pop(0)
+
+
+def _make_appointment_mock(
+    *,
+    appointment_id=None,
+    status_value: str = "scheduled",
+    needs_review_reason: str | None = None,
+    job_id=None,
+):
+    """Build a MagicMock Appointment row."""
+    from grins_platform.models.enums import AppointmentStatus as _Status
+
+    appt = MagicMock()
+    appt.id = appointment_id or uuid4()
+    appt.status = status_value or _Status.SCHEDULED.value
+    appt.needs_review_reason = needs_review_reason
+    appt.job_id = job_id or uuid4()
+    return appt
+
+
+def _canned_scalar(value):
+    """Wrap a scalar return value in a MagicMock result."""
+    r = MagicMock()
+    r.scalar.return_value = value
+    return r
+
+
+def _canned_scalars(rows):
+    """Wrap rows for ``.scalars().all()``."""
+    r = MagicMock()
+    r.scalars.return_value.all.return_value = rows
+    return r
+
+
+class TestNoReplyConfirmationFlagger:
+    """Unit tests for bughunt H-7 NoReplyConfirmationFlagger."""
+
+    @pytest.mark.asyncio
+    async def test_flag_no_reply_confirmations_creates_alert_rows_for_stale_scheduled(
+        self,
+    ):
+        """Stale SCHEDULED appointment without reply is flagged + alerted."""
+        from grins_platform.services.background_jobs import (
+            NoReplyConfirmationFlagger,
+        )
+
+        flagger = NoReplyConfirmationFlagger()
+        stale_sent_at = datetime.now(timezone.utc) - timedelta(days=5)
+        appt = _make_appointment_mock()
+
+        # Canned queries in the order the flagger calls session.execute:
+        # 1. _resolve_threshold_days → SettingsService may hit the DB;
+        #    we patch it below so this query is NOT issued.
+        # 2. main SELECT Appointment → returns [appt]
+        # 3. per-appt max(sent_at) lookup → stale_sent_at
+        # 4. per-appt reply count → 0 (no reply)
+        # 5. alert_repo.create → AlertRepository.create flushes +
+        #    refreshes; we stub via AsyncMock on session
+        canned = _CannedExecute(
+            [
+                _canned_scalars([appt]),
+                _canned_scalar(stale_sent_at),
+                _canned_scalar(0),
+            ]
+        )
+
+        mock_session = MagicMock()
+        mock_session.execute = canned
+        mock_session.add = MagicMock()
+        mock_session.flush = AsyncMock()
+        mock_session.refresh = AsyncMock()
+
+        # Mock the customer + job lookup via session.get
+        mock_customer = MagicMock(full_name="Jane Doe")
+        mock_job = MagicMock(customer_id=uuid4())
+        mock_session.get = AsyncMock(
+            side_effect=[mock_job, mock_customer],
+        )
+
+        mock_db = MagicMock()
+
+        async def mock_get_session():
+            yield mock_session
+
+        mock_db.get_session = mock_get_session
+
+        with (
+            patch(
+                "grins_platform.services.background_jobs.get_database_manager",
+                return_value=mock_db,
+            ),
+            patch.object(
+                NoReplyConfirmationFlagger,
+                "_resolve_threshold_days",
+                AsyncMock(return_value=3),
+            ),
+        ):
+            await flagger.run()
+
+        # Appointment was flagged
+        assert appt.needs_review_reason == "no_confirmation_response"
+        # AlertRepository.create called session.add with an Alert row
+        assert mock_session.add.called
+        added = mock_session.add.call_args.args[0]
+        assert added.type == "confirmation_no_reply"
+        assert added.severity == "info"
+        assert added.entity_type == "appointment"
+        assert "Jane Doe" in added.message
+
+    @pytest.mark.asyncio
+    async def test_flag_no_reply_confirmations_skips_appointments_with_inbound_sms(
+        self,
+    ):
+        """Appointments with a JobConfirmationResponse row are skipped."""
+        from grins_platform.services.background_jobs import (
+            NoReplyConfirmationFlagger,
+        )
+
+        flagger = NoReplyConfirmationFlagger()
+        stale_sent_at = datetime.now(timezone.utc) - timedelta(days=5)
+        appt = _make_appointment_mock()
+
+        # Main SELECT returns [appt]; max(sent_at) returns stale_sent_at;
+        # reply count returns 1 → appointment should be SKIPPED.
+        canned = _CannedExecute(
+            [
+                _canned_scalars([appt]),
+                _canned_scalar(stale_sent_at),
+                _canned_scalar(1),
+            ]
+        )
+
+        mock_session = MagicMock()
+        mock_session.execute = canned
+        mock_session.add = MagicMock()
+        mock_session.flush = AsyncMock()
+        mock_session.refresh = AsyncMock()
+        mock_session.get = AsyncMock(return_value=None)
+
+        mock_db = MagicMock()
+
+        async def mock_get_session():
+            yield mock_session
+
+        mock_db.get_session = mock_get_session
+
+        with (
+            patch(
+                "grins_platform.services.background_jobs.get_database_manager",
+                return_value=mock_db,
+            ),
+            patch.object(
+                NoReplyConfirmationFlagger,
+                "_resolve_threshold_days",
+                AsyncMock(return_value=3),
+            ),
+        ):
+            await flagger.run()
+
+        assert appt.needs_review_reason is None
+        assert not mock_session.add.called
+
+    @pytest.mark.asyncio
+    async def test_flag_no_reply_confirmations_is_idempotent(self):
+        """Second run over already-flagged rows must not duplicate alerts.
+
+        The main SELECT already filters on ``needs_review_reason IS NULL``,
+        so simulating the second run simply means the SELECT returns an
+        empty list. No alert rows should be created.
+        """
+        from grins_platform.services.background_jobs import (
+            NoReplyConfirmationFlagger,
+        )
+
+        flagger = NoReplyConfirmationFlagger()
+
+        # Empty SELECT → no appointments to process.
+        canned = _CannedExecute(
+            [
+                _canned_scalars([]),
+            ]
+        )
+
+        mock_session = MagicMock()
+        mock_session.execute = canned
+        mock_session.add = MagicMock()
+        mock_session.flush = AsyncMock()
+        mock_session.refresh = AsyncMock()
+        mock_session.get = AsyncMock(return_value=None)
+
+        mock_db = MagicMock()
+
+        async def mock_get_session():
+            yield mock_session
+
+        mock_db.get_session = mock_get_session
+
+        with (
+            patch(
+                "grins_platform.services.background_jobs.get_database_manager",
+                return_value=mock_db,
+            ),
+            patch.object(
+                NoReplyConfirmationFlagger,
+                "_resolve_threshold_days",
+                AsyncMock(return_value=3),
+            ),
+        ):
+            await flagger.run()
+
+        assert not mock_session.add.called
+        assert canned.calls == 1
+
+    @pytest.mark.asyncio
+    async def test_resolve_threshold_days_falls_back_to_default(self):
+        """A missing BusinessSetting falls back to DEFAULT_NO_REPLY_DAYS."""
+        from grins_platform.services.background_jobs import (
+            DEFAULT_NO_REPLY_DAYS,
+            NoReplyConfirmationFlagger,
+        )
+        from grins_platform.services.settings_service import (
+            SettingNotFoundError,
+            SettingsService,
+        )
+
+        flagger = NoReplyConfirmationFlagger()
+        mock_session = MagicMock()
+        with patch.object(
+            SettingsService,
+            "get_setting",
+            AsyncMock(side_effect=SettingNotFoundError("confirmation_no_reply_days")),
+        ):
+            result = await flagger._resolve_threshold_days(mock_session)
+        assert result == DEFAULT_NO_REPLY_DAYS
+
+    @pytest.mark.asyncio
+    async def test_resolve_threshold_days_reads_business_setting(self):
+        """A valid BusinessSetting row overrides the default."""
+        from grins_platform.services.background_jobs import (
+            NoReplyConfirmationFlagger,
+        )
+        from grins_platform.services.settings_service import SettingsService
+
+        flagger = NoReplyConfirmationFlagger()
+        mock_session = MagicMock()
+        with patch.object(
+            SettingsService,
+            "get_setting",
+            AsyncMock(return_value={"days": 7}),
+        ):
+            result = await flagger._resolve_threshold_days(mock_session)
+        assert result == 7

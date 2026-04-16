@@ -28,6 +28,7 @@ import { ClearDayDialog } from './ClearDayDialog';
 import { RecentlyClearedSection } from './RecentlyClearedSection';
 import { RestoreScheduleDialog } from './RestoreScheduleDialog';
 import { RescheduleRequestsQueue } from './RescheduleRequestsQueue';
+import { NoReplyReviewQueue } from './NoReplyReviewQueue';
 import { DaySelector } from './DaySelector';
 import { LeadTimeIndicator } from './LeadTimeIndicator';
 import { JobSelector } from './JobSelector';
@@ -410,6 +411,11 @@ export function SchedulePage() {
 
       {/* Reschedule Requests Queue (Req 25) */}
       <RescheduleRequestsQueue
+        onAppointmentClick={(id) => setSelectedAppointmentId(id)}
+      />
+
+      {/* No-Reply Confirmation Review Queue (bughunt H-7) */}
+      <NoReplyReviewQueue
         onAppointmentClick={(id) => setSelectedAppointmentId(id)}
       />
 
