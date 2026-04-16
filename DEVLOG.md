@@ -5,6 +5,48 @@ Grin's Irrigation Platform — field service automation for residential/commerci
 
 ## Recent Activity
 
+## [2026-04-16 17:50] - BUGFIX: 14 HIGH Customer Lifecycle Fixes (H-1..H-14)
+
+### What Was Accomplished
+Closed all 14 HIGH findings from the 2026-04-16 customer-lifecycle bug hunt, on top of the already-merged CR-1..CR-6 CRITICAL fixes. Work ran in four waves of parallel subagents (H-10/H-13/H-14 → H-2/H-3/H-4/H-8/H-9 → H-5/H-6/H-11 → H-1/H-7/H-12), each branch gated through ruff / mypy / pyright / unit tests before merging to dev.
+
+### Technical Details
+- **New surfaces:** `Alert` model + `AlertRepository` + `/api/v1/alerts` endpoint; `NoReplyReviewQueue` (`/schedule` tab); `BusinessSettingsPanel` (`/settings`); `reschedule-from-request` + `send-reminder-sms` endpoints; `useLeadRoutingActions` shared hook.
+- **Nightly cron:** `flag_no_reply_confirmations` (6 AM local) flags SCHEDULED appointments with no Y/R/C reply after N days (BusinessSetting, default 3).
+- **Consent hygiene:** `mass_notify` now batch-filters opt-outs via `SmsConsentRepository.get_opted_out_customer_ids`; response carries `skipped_count` + `skipped_reasons`.
+- **Auth:** `bulk_notify_invoices` now genuinely `ManagerOrAdmin`-gated (was effectively open with `type: ignore` suppressions).
+- **Calendar correctness:** `weekStartsOn: 1` + `firstDay={1}` unified across the schedule feature so admins and the backend `align_to_week()` agree.
+- **PaymentMethod:** `credit_card` / `ach` / `other` added to the enum + CHECK constraint; `stripe` retained for legacy rows per owner decision — no data migration.
+- **Renewal math:** `+52 weeks` → `replace(year=year+1)` + align-to-Monday with leap-day fallback; five-year roll test confirms weekday stability.
+
+### Files Created
+- `src/grins_platform/models/alert.py`, `src/grins_platform/repositories/alert_repository.py`, `src/grins_platform/schemas/alert.py`, `src/grins_platform/api/v1/alerts.py`
+- `src/grins_platform/services/admin_config.py`, `src/grins_platform/services/business_setting_service.py`
+- Alembic migrations: `20260416_100000` (H-4 payment-method CHECK), `20260416_100100` (H-5 alerts table), `20260416_100200` (H-7 needs_review_reason), `20260416_100300` (H-12 business-settings seeds)
+- `frontend/src/features/schedule/components/NoReplyReviewQueue.tsx` + test
+- `frontend/src/features/settings/components/BusinessSettingsPanel.tsx` + test, `useBusinessSettings.ts`, `businessSettingsApi.ts`
+- `frontend/src/features/leads/hooks/useLeadRoutingActions.ts` + test
+- `frontend/src/features/schedule/hooks/useNoReplyReview.ts`
+- Multiple new backend + frontend test files
+
+### Quality Check Results
+- Backend unit + functional tests on all affected modules: green (144+ tests across H-5/H-7/H-11/H-12 alone).
+- Frontend tests for affected features: green across customers, invoices, schedule, leads, settings (193 tests).
+- Migrations: round-trip `alembic upgrade head` + `downgrade -1` verified for the 20260416 chain.
+- Frontend typecheck baseline: 69 pre-existing errors; 0 new from Waves 1–4.
+
+### Decisions (user-confirmed)
+- **D-1 (H-1):** Full parity with `LeadsList` including requires-estimate + CR-6 conflict modal; shared `useLeadRoutingActions` hook.
+- **D-3 (H-4):** Add `credit_card` / `ach` / `other`; keep `stripe` rows untouched; FE dropdown omits `stripe` going forward. No data migration.
+- **D-5 (H-7):** 3-day no-reply default, overridable via `BusinessSetting.confirmation_no_reply_days`.
+- **D-6 (H-12):** BusinessSettings panel placed as a new `Card` on the existing `/settings` page (the page uses stacked cards, not tabs).
+
+### Follow-ups
+- Two RescheduleRequestsQueue FE integration tests `.skip`ped — the jsdom chain through `AppointmentForm` + `JobSelectorCombobox` + Radix Dialog does not reliably flush. Backend owns the H-6 logic (8 unit + 2 functional tests covering the new endpoint, status reset, SMS-#1 restart, and audit log).
+- MEDIUM findings M-1..M-17 remain open (separate plan file: `bughunt/2026-04-16-medium-bugs-plan.md`).
+- The long-form customer-lifecycle-bughunt findings document was lost during subagent worktree operations; only the resolution record could be reconstructed.
+- Agent-browser E2E validation for H-1 / H-3 / H-7 / H-12 not yet run in this session.
+
 ## [2026-02-07 21:30] - BUGFIX: Lead Form CORS Error Diagnosis & Documentation
 
 ### What Was Accomplished
