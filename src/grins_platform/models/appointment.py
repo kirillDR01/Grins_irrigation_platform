@@ -172,6 +172,16 @@ class Appointment(Base):
         nullable=True,
     )
 
+    # Admin review queue (bughunt H-7): tagged by the
+    # ``flag_no_reply_confirmations`` nightly cron when a SCHEDULED
+    # appointment has received no Y/R/C reply for N days. Cleared when
+    # the admin marks the row as contacted via the ``/schedule`` queue.
+    needs_review_reason: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        index=True,
+    )
+
     # Relationships
     job: Mapped["Job"] = relationship("Job", back_populates="appointments")
     staff: Mapped["Staff"] = relationship("Staff", back_populates="appointments")
@@ -266,4 +276,5 @@ class Appointment(Base):
             else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "needs_review_reason": self.needs_review_reason,
         }

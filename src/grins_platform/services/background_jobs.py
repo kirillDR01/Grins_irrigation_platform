@@ -15,22 +15,33 @@ from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 import stripe
+from apscheduler.triggers.cron import (  # type: ignore[import-untyped]
+    CronTrigger,
+)
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from grins_platform.database import get_database_manager
 from grins_platform.log_config import LoggerMixin, get_logger
+from grins_platform.models.alert import Alert
+from grins_platform.models.appointment import Appointment
 from grins_platform.models.campaign import Campaign, CampaignRecipient
 from grins_platform.models.customer import Customer
 from grins_platform.models.enums import (
     AgreementStatus,
+    AlertSeverity,
+    AlertType,
+    AppointmentStatus,
     CampaignStatus,
     DisclosureType,
     JobStatus,
 )
+from grins_platform.models.job import Job
 from grins_platform.models.lead import Lead
+from grins_platform.models.sent_message import SentMessage
 from grins_platform.models.service_agreement import ServiceAgreement
 from grins_platform.models.sms_consent_record import SmsConsentRecord
+from grins_platform.repositories.alert_repository import AlertRepository
 from grins_platform.schemas.ai import MessageType
 from grins_platform.services.campaign_utils import (
     render_poll_block as _render_poll_block,
@@ -696,6 +707,206 @@ class CampaignWorker(LoggerMixin):
             logger.debug("campaign.worker.redis_tick_failed")
 
 
+# ============================================================================
+# No-reply confirmation flagger (bughunt H-7)
+# ============================================================================
+
+
+# Default number of days after confirmation SMS with no reply before we
+# flag the appointment for admin review. BusinessSettingService can override
+# via the ``confirmation_no_reply_days`` key. Once H-12 lands we switch from
+# the hardcoded constant to the injected setting.
+DEFAULT_NO_REPLY_DAYS = 3
+
+
+class NoReplyConfirmationFlagger(LoggerMixin):
+    """Flag SCHEDULED appointments with no Y/R/C reply for N days.
+
+    The Y/R/C confirmation SMS flow fires once when the admin moves an
+    appointment from DRAFT → SCHEDULED. If the customer never replies,
+    the appointment sits silently in the schedule and nobody knows. This
+    nightly job looks up every SCHEDULED appointment whose most recent
+    ``appointment_confirmation`` ``SentMessage`` is older than the
+    configured threshold and has received no ``JobConfirmationResponse``
+    since, then:
+
+    1. sets ``Appointment.needs_review_reason = "no_confirmation_response"``
+    2. creates an ``Alert(type=CONFIRMATION_NO_REPLY, severity=INFO)``
+
+    so the ``/schedule`` admin review queue (H-7 FE) can surface the row.
+
+    Idempotent: the ``needs_review_reason IS NULL`` guard means a second
+    run sees the flagged rows as already-triaged and skips them.
+
+    Validates: bughunt 2026-04-16 finding H-7.
+    """
+
+    DOMAIN = "scheduler"
+
+    # Reason token written into ``Appointment.needs_review_reason`` so
+    # the FE can distinguish different review buckets later if needed.
+    REVIEW_REASON_NO_REPLY = "no_confirmation_response"
+
+    async def _resolve_threshold_days(self, session: AsyncSession) -> int:
+        """Return the "N days" threshold.
+
+        Attempts to read ``confirmation_no_reply_days`` from
+        ``BusinessSetting`` via :class:`SettingsService`. Falls back to
+        :data:`DEFAULT_NO_REPLY_DAYS` when the table / row is missing —
+        the H-12 migration seeds the row, but this fallback protects
+        against an out-of-order migration environment.
+        """
+        # Import lazily so test doubles can patch the module-level
+        # service without needing it resolved at import time.
+        try:
+            from grins_platform.services.settings_service import (  # noqa: PLC0415
+                SettingNotFoundError,
+                SettingsService,
+            )
+        except Exception:
+            return DEFAULT_NO_REPLY_DAYS
+
+        service = SettingsService()
+        try:
+            value = await service.get_setting(
+                session,
+                "confirmation_no_reply_days",
+            )
+        except SettingNotFoundError:
+            return DEFAULT_NO_REPLY_DAYS
+        except Exception:
+            # Any other failure — be conservative and use the default
+            # rather than silently disabling the job.
+            return DEFAULT_NO_REPLY_DAYS
+
+        days = value.get("days") if isinstance(value, dict) else None
+        if not isinstance(days, int) or days <= 0:
+            return DEFAULT_NO_REPLY_DAYS
+        return days
+
+    async def run(self) -> None:
+        """Execute the flag-no-reply-confirmations job."""
+        self.log_started("flag_no_reply_confirmations")
+        db_manager = get_database_manager()
+        flagged = 0
+
+        try:
+            async for session in db_manager.get_session():
+                flagged = await self._run_once(session)
+        except Exception as exc:
+            self.log_failed("flag_no_reply_confirmations", error=exc)
+            raise
+
+        self.log_completed(
+            "flag_no_reply_confirmations",
+            flagged_count=flagged,
+        )
+
+    async def _run_once(self, session: AsyncSession) -> int:
+        """Scan + flag in a single session."""
+        from grins_platform.models.job_confirmation import (  # noqa: PLC0415
+            JobConfirmationResponse,
+        )
+
+        days = await self._resolve_threshold_days(session)
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(days=days)
+
+        # Most-recent APPOINTMENT_CONFIRMATION sent_at per appointment,
+        # as a correlated subquery. We filter by ``sent_at IS NOT NULL``
+        # so in-flight / failed rows don't falsely trigger the flag.
+        latest_confirmation_subq = (
+            select(func.max(SentMessage.sent_at))
+            .where(
+                SentMessage.appointment_id == Appointment.id,
+                SentMessage.message_type
+                == MessageType.APPOINTMENT_CONFIRMATION.value,
+                SentMessage.sent_at.is_not(None),
+            )
+            .correlate(Appointment)
+            .scalar_subquery()
+        )
+
+        stmt = (
+            select(Appointment)
+            .where(
+                Appointment.status == AppointmentStatus.SCHEDULED.value,
+                Appointment.needs_review_reason.is_(None),
+                latest_confirmation_subq.is_not(None),
+                latest_confirmation_subq < cutoff,
+            )
+        )
+        result = await session.execute(stmt)
+        candidates = list(result.scalars().all())
+
+        alert_repo = AlertRepository(session)
+        flagged = 0
+
+        for appt in candidates:
+            # Re-read the most-recent confirmation sent_at so we can
+            # check for a later customer reply (and embed the age in
+            # the alert message).
+            sent_at_stmt = select(func.max(SentMessage.sent_at)).where(
+                SentMessage.appointment_id == appt.id,
+                SentMessage.message_type
+                == MessageType.APPOINTMENT_CONFIRMATION.value,
+                SentMessage.sent_at.is_not(None),
+            )
+            sent_at_result = await session.execute(sent_at_stmt)
+            last_confirmation_at: datetime | None = sent_at_result.scalar()
+            if last_confirmation_at is None:
+                # Defensive — the subquery above already filters this, but
+                # keep a guard in case of a race with a second scheduler.
+                continue
+
+            # Skip if the customer has already replied after the
+            # confirmation was sent.
+            reply_stmt = select(func.count()).where(
+                JobConfirmationResponse.appointment_id == appt.id,
+                JobConfirmationResponse.received_at > last_confirmation_at,
+            )
+            reply_result = await session.execute(reply_stmt)
+            reply_count = int(reply_result.scalar() or 0)
+            if reply_count > 0:
+                continue
+
+            # Lookup the customer name via Job → Customer.
+            customer_name = "the customer"
+            job = await session.get(Job, appt.job_id)
+            if job is not None:
+                customer = await session.get(Customer, job.customer_id)
+                if customer is not None:
+                    customer_name = customer.full_name or customer_name
+
+            # Flag the appointment.
+            appt.needs_review_reason = self.REVIEW_REASON_NO_REPLY
+
+            # Create the alert row via the shared repository.
+            try:
+                alert = Alert(
+                    type=AlertType.CONFIRMATION_NO_REPLY.value,
+                    severity=AlertSeverity.INFO.value,
+                    entity_type="appointment",
+                    entity_id=appt.id,
+                    message=(
+                        f"No reply from {customer_name} after {days} days"
+                    ),
+                )
+                await alert_repo.create(alert)
+                flagged += 1
+            except Exception as exc:  # pragma: no cover - defensive
+                # Never block the loop on a single alert failure; revert
+                # the flag so a retry on the next tick picks it back up.
+                appt.needs_review_reason = None
+                self.log_failed(
+                    "flag_no_reply_confirmations.create_alert",
+                    appointment_id=str(appt.id),
+                    error=exc,
+                )
+
+        return flagged
+
+
 # Singleton instances for job functions
 _escalator = FailedPaymentEscalator()
 _renewal_checker = UpcomingRenewalChecker()
@@ -703,6 +914,7 @@ _annual_sender = AnnualNoticeSender()
 _orphan_cleaner = OrphanedConsentCleaner()
 _onboarding_reminder = OnboardingReminderJob()
 _campaign_worker = CampaignWorker()
+_no_reply_flagger = NoReplyConfirmationFlagger()
 
 
 async def run_duplicate_detection_sweep_job() -> None:
@@ -744,6 +956,14 @@ async def remind_incomplete_onboarding_job() -> None:
 async def process_pending_campaign_recipients() -> None:
     """Entry point for the campaign worker scheduled job."""
     await _campaign_worker.run()
+
+
+async def flag_no_reply_confirmations() -> None:
+    """Entry point for the nightly flag-no-reply-confirmations job.
+
+    Validates: bughunt 2026-04-16 finding H-7.
+    """
+    await _no_reply_flagger.run()
 
 
 def register_scheduled_jobs(scheduler: BackgroundScheduler) -> None:
@@ -814,6 +1034,16 @@ def register_scheduled_jobs(scheduler: BackgroundScheduler) -> None:
         replace_existing=True,
     )
 
+    # bughunt H-7: nightly sweep that flags SCHEDULED appointments whose
+    # Y/R/C confirmation SMS has been silent for N days (default 3) so
+    # the admin review queue on /schedule can surface them.
+    scheduler.add_job(
+        flag_no_reply_confirmations,
+        CronTrigger(hour=6, minute=0),
+        id="flag_no_reply_confirmations",
+        replace_existing=True,
+    )
+
     logger.info(
         "scheduler.jobs.registered",
         jobs=[
@@ -824,5 +1054,6 @@ def register_scheduled_jobs(scheduler: BackgroundScheduler) -> None:
             "remind_incomplete_onboarding",
             "process_pending_campaign_recipients",
             "duplicate_detection_sweep",
+            "flag_no_reply_confirmations",
         ],
     )

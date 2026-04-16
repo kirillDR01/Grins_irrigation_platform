@@ -47,7 +47,7 @@ from grins_platform.exceptions import (
 )
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import (
-    AppointmentStatus,  # noqa: TC001 - Required at runtime for FastAPI query params
+    AppointmentStatus,
 )
 from grins_platform.schemas.appointment import (
     AppointmentCreate,
@@ -57,6 +57,8 @@ from grins_platform.schemas.appointment import (
     BulkSendConfirmationsRequest,
     BulkSendConfirmationsResponse,
     DailyScheduleResponse,
+    MarkContactedResponse,
+    NeedsReviewAppointmentResponse,
     SendConfirmationResponse,
     StaffDailyScheduleResponse,
     WeeklyScheduleResponse,
@@ -539,6 +541,229 @@ async def bulk_send_confirmations(
         failed_count=result["failed_count"],
         total_draft=result["total_draft"],
         results=result.get("results", []),
+    )
+
+
+# =============================================================================
+# GET /api/v1/appointments/needs-review - Admin review queue (bughunt H-7)
+# NOTE: Static routes must come BEFORE dynamic /{appointment_id} routes
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/needs-review",
+    response_model=list[NeedsReviewAppointmentResponse],
+    summary="List appointments flagged for admin review",
+    description=(
+        "Return every appointment whose ``needs_review_reason`` is populated "
+        "and matches the optional ``reason`` filter — used by the "
+        "/schedule no-reply-confirmation queue."
+    ),
+)
+async def list_needs_review_appointments(
+    _current_user: ManagerOrAdminUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    reason: str | None = Query(
+        default=None,
+        description=(
+            "Optional filter on the review reason token (for example "
+            "``no_confirmation_response``). If omitted, every flagged "
+            "appointment is returned."
+        ),
+    ),
+) -> list[NeedsReviewAppointmentResponse]:
+    """List flagged appointments for the admin review queue.
+
+    Validates: bughunt 2026-04-16 finding H-7
+    """
+    _endpoints.log_started(
+        "list_needs_review_appointments",
+        reason=reason,
+    )
+
+    from sqlalchemy import (  # noqa: PLC0415
+        func as _sa_func,
+        select as _select,
+    )
+    from sqlalchemy.orm import selectinload as _selectinload  # noqa: PLC0415
+
+    from grins_platform.models.appointment import (  # noqa: PLC0415
+        Appointment as _Appointment,
+    )
+    from grins_platform.models.job import Job as _Job  # noqa: PLC0415
+    from grins_platform.models.sent_message import (  # noqa: PLC0415
+        SentMessage as _SentMessage,
+    )
+    from grins_platform.schemas.ai import (  # noqa: PLC0415
+        MessageType as _MessageType,
+    )
+
+    stmt = (
+        _select(_Appointment)
+        .options(
+            _selectinload(_Appointment.job).selectinload(_Job.customer),
+        )
+        .where(_Appointment.needs_review_reason.is_not(None))
+    )
+    if reason is not None:
+        stmt = stmt.where(_Appointment.needs_review_reason == reason)
+    stmt = stmt.order_by(_Appointment.scheduled_date.asc())
+
+    result = await session.execute(stmt)
+    appointments = list(result.scalars().unique().all())
+
+    items: list[NeedsReviewAppointmentResponse] = []
+    for appt in appointments:
+        # Resolve the most-recent confirmation SMS sent_at so the FE can
+        # render "N days since confirmation sent".
+        sent_at_stmt = _select(_sa_func.max(_SentMessage.sent_at)).where(
+            _SentMessage.appointment_id == appt.id,
+            _SentMessage.message_type
+            == _MessageType.APPOINTMENT_CONFIRMATION.value,
+            _SentMessage.sent_at.is_not(None),
+        )
+        sent_at_result = await session.execute(sent_at_stmt)
+        confirmation_sent_at = sent_at_result.scalar()
+
+        customer = getattr(getattr(appt, "job", None), "customer", None)
+        customer_name = None
+        customer_phone = None
+        customer_id = None
+        if customer is not None:
+            customer_id = customer.id
+            customer_name = customer.full_name
+            customer_phone = customer.phone
+
+        items.append(
+            NeedsReviewAppointmentResponse(
+                id=appt.id,
+                job_id=appt.job_id,
+                staff_id=appt.staff_id,
+                scheduled_date=appt.scheduled_date,
+                time_window_start=appt.time_window_start,
+                time_window_end=appt.time_window_end,
+                status=AppointmentStatus(appt.status),
+                needs_review_reason=appt.needs_review_reason,
+                confirmation_sent_at=confirmation_sent_at,
+                customer_id=customer_id,
+                customer_name=customer_name,
+                customer_phone=customer_phone,
+            )
+        )
+
+    _endpoints.log_completed(
+        "list_needs_review_appointments",
+        count=len(items),
+    )
+    return items
+
+
+# =============================================================================
+# POST /api/v1/appointments/{id}/mark-contacted (bughunt H-7)
+# Clears needs_review_reason on an admin-reviewed appointment.
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{appointment_id}/mark-contacted",
+    response_model=MarkContactedResponse,
+    summary="Mark a needs-review appointment as contacted",
+    description=(
+        "Clears ``needs_review_reason`` so the appointment no longer shows "
+        "in the /schedule admin review queue. Used once admin has called "
+        "the customer to confirm."
+    ),
+)
+async def mark_appointment_contacted(
+    appointment_id: UUID,
+    _current_user: ManagerOrAdminUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> MarkContactedResponse:
+    """Clear the review flag on an appointment.
+
+    Validates: bughunt 2026-04-16 finding H-7
+    """
+    _endpoints.log_started(
+        "mark_appointment_contacted",
+        appointment_id=str(appointment_id),
+    )
+
+    from grins_platform.models.appointment import (  # noqa: PLC0415
+        Appointment as _Appointment,
+    )
+
+    appt = await session.get(_Appointment, appointment_id)
+    if appt is None:
+        _endpoints.log_rejected("mark_appointment_contacted", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Appointment not found: {appointment_id}",
+        )
+
+    appt.needs_review_reason = None
+    await session.flush()
+
+    _endpoints.log_completed(
+        "mark_appointment_contacted",
+        appointment_id=str(appointment_id),
+    )
+    return MarkContactedResponse(
+        appointment_id=appointment_id,
+        needs_review_reason=None,
+    )
+
+
+# =============================================================================
+# POST /api/v1/appointments/{id}/send-reminder-sms (bughunt H-7)
+# Re-fires the Y/R/C confirmation SMS without resetting appointment status.
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{appointment_id}/send-reminder-sms",
+    response_model=SendConfirmationResponse,
+    summary="Re-fire the Y/R/C confirmation SMS as a reminder",
+    description=(
+        "Re-sends SMS #1 (Y/R/C prompt) for a SCHEDULED appointment that "
+        "never received a customer reply. Unlike ``send-confirmation``, "
+        "this endpoint does not require DRAFT status — it is intended "
+        "for the needs-review queue where the appointment is already "
+        "SCHEDULED."
+    ),
+)
+async def send_reminder_sms(
+    appointment_id: UUID,
+    _current_user: ManagerOrAdminUser,
+    service: Annotated[AppointmentService, Depends(get_full_appointment_service)],
+) -> SendConfirmationResponse:
+    """Send a confirmation-SMS reminder for a flagged appointment.
+
+    Validates: bughunt 2026-04-16 finding H-7
+    """
+    _endpoints.log_started(
+        "send_reminder_sms",
+        appointment_id=str(appointment_id),
+    )
+
+    try:
+        result = await service.send_confirmation_sms(appointment_id)
+    except AppointmentNotFoundError as e:
+        _endpoints.log_rejected("send_reminder_sms", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Appointment not found: {e.appointment_id}",
+        ) from e
+
+    sms_sent = bool(result and result.get("success"))
+    _endpoints.log_completed(
+        "send_reminder_sms",
+        appointment_id=str(appointment_id),
+        sms_sent=sms_sent,
+    )
+    return SendConfirmationResponse(
+        appointment_id=appointment_id,
+        status=AppointmentStatus.SCHEDULED.value,
+        sms_sent=sms_sent,
     )
 
 

@@ -84,10 +84,15 @@ class BackgroundScheduler(LoggerMixin):
     def add_job(
         self,
         func: Callable[..., Any],
-        trigger: str,
+        trigger: Any,
         **kwargs: Any,
     ) -> Job:
-        """Add a job to the scheduler."""
+        """Add a job to the scheduler.
+
+        ``trigger`` may be either a string alias (``"cron"``,
+        ``"interval"``) with trigger kwargs, or a pre-built APScheduler
+        trigger instance (for example ``CronTrigger(hour=6, minute=0)``).
+        """
         return self._scheduler.add_job(func, trigger, **kwargs)
 
 
