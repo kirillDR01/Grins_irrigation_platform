@@ -393,18 +393,33 @@ class ContractRenewalReviewService(LoggerMixin):
         proposal: ContractRenewalProposal,
         admin_id: UUID,
     ) -> None:
-        """Recompute proposal status from its proposed jobs."""
+        """Recompute proposal status from its proposed jobs.
+
+        bughunt M-13: ``PARTIALLY_APPROVED`` now fires whenever at least
+        one job is APPROVED *and* at least one is REJECTED or PENDING.
+        Previously the partial state required *all* jobs to have been
+        decided (no PENDING remaining), so a proposal where the admin
+        approved 2 of 7 and walked away stayed PENDING on the dashboard
+        even though it visibly had approvals.
+        """
         now = datetime.now(timezone.utc)
         statuses = {pj.status for pj in proposal.proposed_jobs}
 
+        approved_present = ProposedJobStatus.APPROVED.value in statuses
+        rejected_present = ProposedJobStatus.REJECTED.value in statuses
+        pending_present = ProposedJobStatus.PENDING.value in statuses
+
         if statuses == {ProposedJobStatus.APPROVED.value}:
+            # Terminal: every job approved.
             proposal.status = ProposalStatus.APPROVED.value
         elif statuses == {ProposedJobStatus.REJECTED.value}:
+            # Terminal: every job rejected.
             proposal.status = ProposalStatus.REJECTED.value
-        elif ProposedJobStatus.PENDING.value not in statuses:
-            # Mix of approved and rejected, no pending left
+        elif approved_present and (rejected_present or pending_present):
+            # Mixed signal: at least one approval landed alongside
+            # rejections or still-pending jobs.
             proposal.status = ProposalStatus.PARTIALLY_APPROVED.value
-        # else: still has pending jobs, keep PENDING
+        # else: only REJECTED+PENDING (no approvals yet) — keep PENDING.
 
         proposal.reviewed_at = now
         proposal.reviewed_by = admin_id
