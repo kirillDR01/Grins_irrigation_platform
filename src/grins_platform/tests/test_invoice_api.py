@@ -19,6 +19,8 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from grins_platform.api.v1.auth_dependencies import (
+    get_current_active_user,
+    get_current_user,
     require_admin,
     require_manager_or_admin,
 )
@@ -827,7 +829,120 @@ class TestGenerateFromJobEndpoint:
             app.dependency_overrides.clear()
 
 
+# =============================================================================
+# Bulk Notify Endpoint Auth Tests — Finding H-14
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestBulkNotifyInvoicesEndpoint:
+    """Auth-gating tests for POST /api/v1/invoices/bulk-notify (H-14).
+
+    Prior to H-14 the endpoint had ``_current_user: ManagerOrAdminUser = None``
+    with a ``type: ignore[assignment]`` and no ``Depends(...)`` wire-up, so
+    FastAPI resolved the parameter to ``None`` and the route ran entirely
+    unauthenticated. These tests lock in the real auth gate.
+    """
+
+    @pytest.mark.asyncio
+    async def test_bulk_notify_invoices_requires_auth(self) -> None:
+        """POST without auth header returns 401."""
+        # No dependency overrides: real auth chain runs, finds no token,
+        # rejects with 401.
+        try:
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport,
+                base_url="http://test",
+            ) as client:
+                response = await client.post(
+                    "/api/v1/invoices/bulk-notify",
+                    json=[str(uuid.uuid4())],
+                )
+
+            assert response.status_code == 401
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_bulk_notify_invoices_rejects_non_admin(
+        self,
+        mock_invoice_service: MagicMock,
+        override_invoice_service: Callable[[], MagicMock],
+    ) -> None:
+        """POST with a tech-role user returns 403."""
+        tech_user = MagicMock()
+        tech_user.id = uuid.uuid4()
+        tech_user.username = "tech"
+        tech_user.email = "tech@example.com"
+        tech_user.role = UserRole.TECH.value
+        tech_user.is_active = True
+
+        async def _override_tech() -> MagicMock:
+            return tech_user
+
+        # Override the identity chain but leave ``require_manager_or_admin``
+        # intact so its real role check runs and rejects the tech user.
+        app.dependency_overrides[get_current_user] = _override_tech
+        app.dependency_overrides[get_current_active_user] = _override_tech
+        app.dependency_overrides[get_invoice_service] = override_invoice_service
+
+        try:
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport,
+                base_url="http://test",
+            ) as client:
+                response = await client.post(
+                    "/api/v1/invoices/bulk-notify",
+                    json=[str(uuid.uuid4())],
+                )
+
+            assert response.status_code == 403
+            # Service must never be called when auth rejects.
+            mock_invoice_service.send_reminder.assert_not_called()
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_bulk_notify_invoices_succeeds_as_admin(
+        self,
+        mock_invoice_service: MagicMock,
+        override_invoice_service: Callable[[], MagicMock],
+        override_admin_user: Callable[[], MagicMock],
+    ) -> None:
+        """POST with an admin token returns 200 and invokes the service."""
+        mock_invoice_service.send_reminder.return_value = None
+
+        app.dependency_overrides[get_invoice_service] = override_invoice_service
+        app.dependency_overrides[require_manager_or_admin] = override_admin_user
+
+        invoice_ids = [str(uuid.uuid4()), str(uuid.uuid4())]
+
+        try:
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport,
+                base_url="http://test",
+            ) as client:
+                response = await client.post(
+                    "/api/v1/invoices/bulk-notify",
+                    json=invoice_ids,
+                )
+
+            assert response.status_code == 200
+            body = response.json()
+            assert body["total"] == 2
+            assert body["sent"] == 2
+            assert body["failed"] == 0
+            assert body["skipped"] == 0
+            assert mock_invoice_service.send_reminder.await_count == 2
+        finally:
+            app.dependency_overrides.clear()
+
+
 __all__ = [
+    "TestBulkNotifyInvoicesEndpoint",
     "TestCancelInvoiceEndpoint",
     "TestCreateInvoiceEndpoint",
     "TestGenerateFromJobEndpoint",

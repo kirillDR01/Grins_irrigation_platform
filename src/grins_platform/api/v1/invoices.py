@@ -775,9 +775,9 @@ async def mark_lien_filed(
 )
 async def bulk_notify_invoices(
     invoice_ids: list[UUID],
+    _current_user: ManagerOrAdminUser,
+    service: Annotated[InvoiceService, Depends(get_invoice_service)],
     notification_type: str = "REMINDER",
-    _current_user: ManagerOrAdminUser = None,  # type: ignore[assignment]
-    service: Annotated[InvoiceService, Depends(get_invoice_service)] = None,  # type: ignore[assignment]
 ) -> dict[str, object]:
     """Send bulk notifications for invoices.
 
