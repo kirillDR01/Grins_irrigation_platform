@@ -5,27 +5,37 @@
  * Shows count of DRAFT appointments as a badge.
  */
 
+import { useMemo } from 'react';
 import { Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBulkSendConfirmations } from '../hooks/useAppointmentMutations';
+import type { Appointment } from '../types';
 
 interface SendDayConfirmationsButtonProps {
   date: string; // YYYY-MM-DD
-  draftCount: number;
-  draftAppointmentIds: string[];
+  draftAppointments: Appointment[];
 }
 
 export function SendDayConfirmationsButton({
   date,
-  draftCount,
-  draftAppointmentIds,
+  draftAppointments,
 }: SendDayConfirmationsButtonProps) {
   const bulkSendMutation = useBulkSendConfirmations();
+
+  // Defensive re-filter (H-2): callers are expected to pre-filter to DRAFTs,
+  // but this component re-filters so the count badge and submit payload
+  // always agree even if a caller regresses.
+  const onlyDrafts = useMemo(
+    () => draftAppointments.filter((a) => a.status === 'draft'),
+    [draftAppointments],
+  );
+  const draftCount = onlyDrafts.length;
 
   if (draftCount === 0) return null;
 
   const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    const draftAppointmentIds = onlyDrafts.map((apt) => apt.id);
     try {
       const result = await bulkSendMutation.mutateAsync({
         appointment_ids: draftAppointmentIds,

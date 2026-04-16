@@ -5,7 +5,7 @@
  * Modal has "Send All" and "Cancel" buttons.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,12 +28,19 @@ export function SendAllConfirmationsButton({
   const [showModal, setShowModal] = useState(false);
   const bulkSendMutation = useBulkSendConfirmations();
 
-  const draftCount = draftAppointments.length;
+  // Defensive re-filter (H-2): even though callers are expected to pre-filter
+  // to DRAFTs, a caller regression must not cause the count badge / modal
+  // list to disagree with the submit payload.
+  const onlyDrafts = useMemo(
+    () => draftAppointments.filter((a) => a.status === 'draft'),
+    [draftAppointments],
+  );
+  const draftCount = onlyDrafts.length;
 
   if (draftCount === 0) return null;
 
   const handleSendAll = async () => {
-    const ids = draftAppointments.map((apt) => apt.id);
+    const ids = onlyDrafts.map((apt) => apt.id);
     try {
       const result = await bulkSendMutation.mutateAsync({ appointment_ids: ids });
       const parts: string[] = [
@@ -87,7 +94,7 @@ export function SendAllConfirmationsButton({
               {draftCount} draft appointment{draftCount !== 1 ? 's' : ''} will receive a confirmation SMS:
             </p>
             <div className="max-h-60 overflow-y-auto space-y-2">
-              {draftAppointments.map((apt) => (
+              {onlyDrafts.map((apt) => (
                 <div
                   key={apt.id}
                   className="flex items-center justify-between text-sm p-2 bg-slate-50 rounded"
