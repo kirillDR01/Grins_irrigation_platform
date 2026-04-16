@@ -2577,13 +2577,24 @@ class TestInvoiceListParamsRoundTrip:
 class TestInvoiceServiceMassNotify:
     """Tests for InvoiceService.mass_notify targeting logic.
 
-    Validates: Requirements 29.3, 29.4
+    Validates: Requirements 29.3, 29.4, H-11 (bughunt 2026-04-16).
     """
 
     @pytest.fixture
     def mock_invoice_repo(self) -> AsyncMock:
         repo = AsyncMock()
         repo.update = AsyncMock()
+        # H-11: the new SmsConsentRepository pre-filter calls
+        # ``session.execute(stmt).scalars().all()`` inside mass_notify. Give
+        # the default mock session a sync MagicMock result chain that
+        # returns "no opt-outs" so legacy tests (which don't care about
+        # consent) still exercise the send loop.
+        scalars_mock = MagicMock()
+        scalars_mock.all.return_value = []
+        execute_result_mock = MagicMock()
+        execute_result_mock.scalars.return_value = scalars_mock
+        repo.session = MagicMock()
+        repo.session.execute = AsyncMock(return_value=execute_result_mock)
         return repo
 
     @pytest.fixture
@@ -2749,6 +2760,138 @@ class TestInvoiceServiceMassNotify:
         with pytest.raises(LienMassNotifyDeprecatedError):
             await service.mass_notify("lien_eligible")
         mock_invoice_repo.find_lien_eligible.assert_not_called()
+
+    # ==========================================================================
+    # H-11: batch SMS-consent pre-filter
+    # ==========================================================================
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_past_due_skips_opted_out_customers(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """H-11: past_due branch skips opted-out customers before send."""
+        from unittest.mock import patch
+
+        inv_opted_out = self._mock_invoice_with_customer()
+        inv_ok = self._mock_invoice_with_customer()
+        mock_invoice_repo.find_past_due.return_value = [inv_opted_out, inv_ok]
+
+        with patch(
+            "grins_platform.repositories.sms_consent_repository."
+            "SmsConsentRepository.get_opted_out_customer_ids",
+            new=AsyncMock(return_value={inv_opted_out.customer.id}),
+        ), patch(
+            "grins_platform.services.sms_service.SMSService",
+        ) as mock_sms_cls:
+            mock_sms_instance = MagicMock()
+            mock_sms_instance.send_message = AsyncMock(
+                return_value={"success": True, "message_id": str(uuid4())},
+            )
+            mock_sms_cls.return_value = mock_sms_instance
+
+            result = await service.mass_notify("past_due")
+
+        assert result.targeted == 2
+        assert result.skipped_count == 1
+        assert result.skipped_reasons == {"opted_out": 1}
+        assert result.sent == 1
+        assert result.failed == 0
+        # SMSService.send_message was only called for the non-opted-out one.
+        assert mock_sms_instance.send_message.await_count == 1
+        send_kwargs = mock_sms_instance.send_message.await_args.kwargs
+        # Opted-out customer's phone must NOT appear in any send call.
+        assert send_kwargs["recipient"].customer_id == inv_ok.customer.id
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_upcoming_due_skips_opted_out_customers(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """H-11: due_soon branch skips opted-out customers before send."""
+        from unittest.mock import patch
+
+        inv_opted_out = self._mock_invoice_with_customer()
+        inv_ok_a = self._mock_invoice_with_customer()
+        inv_ok_b = self._mock_invoice_with_customer()
+        mock_invoice_repo.find_due_soon.return_value = [
+            inv_opted_out,
+            inv_ok_a,
+            inv_ok_b,
+        ]
+
+        with patch(
+            "grins_platform.repositories.sms_consent_repository."
+            "SmsConsentRepository.get_opted_out_customer_ids",
+            new=AsyncMock(return_value={inv_opted_out.customer.id}),
+        ), patch(
+            "grins_platform.services.sms_service.SMSService",
+        ) as mock_sms_cls:
+            mock_sms_instance = MagicMock()
+            mock_sms_instance.send_message = AsyncMock(
+                return_value={"success": True, "message_id": str(uuid4())},
+            )
+            mock_sms_cls.return_value = mock_sms_instance
+
+            result = await service.mass_notify("due_soon", due_soon_days=14)
+
+        assert result.targeted == 3
+        assert result.skipped_count == 1
+        assert result.skipped_reasons == {"opted_out": 1}
+        assert result.sent == 2
+        # SMSService.send_message must not have been called for the opted-out
+        # customer.
+        sent_to_customer_ids = {
+            call.kwargs["recipient"].customer_id
+            for call in mock_sms_instance.send_message.await_args_list
+        }
+        assert inv_opted_out.customer.id not in sent_to_customer_ids
+        assert inv_ok_a.customer.id in sent_to_customer_ids
+        assert inv_ok_b.customer.id in sent_to_customer_ids
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_response_includes_skipped_count_and_reasons(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """H-11: response schema exposes skipped_count and skipped_reasons.
+
+        Default values (no opt-outs) must still be present as 0 and {}
+        so API consumers never see a missing key.
+        """
+        from unittest.mock import patch
+
+        inv = self._mock_invoice_with_customer()
+        mock_invoice_repo.find_past_due.return_value = [inv]
+
+        # No opt-outs -> empty set from the repo.
+        with patch(
+            "grins_platform.repositories.sms_consent_repository."
+            "SmsConsentRepository.get_opted_out_customer_ids",
+            new=AsyncMock(return_value=set()),
+        ), patch(
+            "grins_platform.services.sms_service.SMSService",
+        ) as mock_sms_cls:
+            mock_sms_instance = MagicMock()
+            mock_sms_instance.send_message = AsyncMock(
+                return_value={"success": True, "message_id": str(uuid4())},
+            )
+            mock_sms_cls.return_value = mock_sms_instance
+
+            result = await service.mass_notify("past_due")
+
+        # Field presence and sensible defaults.
+        assert hasattr(result, "skipped_count")
+        assert hasattr(result, "skipped_reasons")
+        assert result.skipped_count == 0
+        assert result.skipped_reasons == {}
+        # And the serialized response (API contract) includes them too.
+        payload = result.model_dump()
+        assert payload["skipped_count"] == 0
+        assert payload["skipped_reasons"] == {}
 
 
 # =============================================================================
