@@ -62,6 +62,19 @@ const appointmentSchema = z.object({
 
 type FormData = z.infer<typeof appointmentSchema>;
 
+interface AppointmentFormSubmitOverridePayload {
+  /** ``YYYY-MM-DD`` date string from the form. */
+  scheduled_date: string;
+  /** ``HH:MM`` time string from the form (start). */
+  time_window_start: string;
+  /** ``HH:MM`` time string from the form (end). */
+  time_window_end: string;
+  /** Staff ID selected in the form. */
+  staff_id: string;
+  /** Optional notes from the form. */
+  notes?: string;
+}
+
 interface AppointmentFormProps {
   appointment?: Appointment;
   initialDate?: Date;
@@ -69,6 +82,18 @@ interface AppointmentFormProps {
   initialStaffId?: string;
   onSuccess?: () => void;
   onCancel?: () => void;
+  /**
+   * Optional custom submit handler (bughunt H-6). When provided, the
+   * form delegates the edit path to this callback instead of calling
+   * the internal ``useUpdateAppointment`` mutation. Used by the
+   * Reschedule Requests queue so that admin-resolved customer
+   * reschedules route through ``/reschedule-from-request`` (which
+   * re-fires the Y/R/C confirmation SMS) rather than a generic
+   * update.
+   */
+  submitOverride?: (payload: AppointmentFormSubmitOverridePayload) => Promise<void>;
+  /** Override the primary submit button text (e.g. "Send Reschedule"). */
+  submitLabel?: string;
 }
 
 export function AppointmentForm({
@@ -78,6 +103,8 @@ export function AppointmentForm({
   initialStaffId,
   onSuccess,
   onCancel,
+  submitOverride,
+  submitLabel,
 }: AppointmentFormProps) {
   const createMutation = useCreateAppointment();
   const updateMutation = useUpdateAppointment();
@@ -138,6 +165,17 @@ export function AppointmentForm({
   const onSubmit = async (data: FormData) => {
     try {
       if (isEditing) {
+        if (submitOverride) {
+          await submitOverride({
+            scheduled_date: data.scheduled_date,
+            time_window_start: data.time_window_start,
+            time_window_end: data.time_window_end,
+            staff_id: data.staff_id,
+            notes: data.notes || undefined,
+          });
+          onSuccess?.();
+          return;
+        }
         const updateData: AppointmentUpdate = {
           staff_id: data.staff_id,
           scheduled_date: data.scheduled_date,
@@ -356,17 +394,19 @@ export function AppointmentForm({
               Cancel
             </Button>
           )}
-          <Button 
-            type="submit" 
-            disabled={isPending} 
+          <Button
+            type="submit"
+            disabled={isPending}
             data-testid="submit-btn"
             className="px-5 py-2.5"
           >
             {isPending
               ? 'Saving...'
-              : isEditing
-                ? 'Update Appointment'
-                : 'Create Appointment'}
+              : submitLabel
+                ? submitLabel
+                : isEditing
+                  ? 'Update Appointment'
+                  : 'Create Appointment'}
           </Button>
         </div>
       </form>

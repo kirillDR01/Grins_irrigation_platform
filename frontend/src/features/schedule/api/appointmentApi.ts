@@ -278,6 +278,25 @@ export const appointmentApi = {
   },
 
   /**
+   * Reschedule from a customer R-request (bughunt H-6).
+   *
+   * Moves the appointment to the new slot, resets status to SCHEDULED,
+   * and re-fires SMS #1 (Y/R/C) so the customer must re-confirm —
+   * instead of the drag-drop one-way "We moved your appointment to …"
+   * notice. ``new_scheduled_at`` must be an ISO-8601 timestamp.
+   */
+  async rescheduleFromRequest(
+    id: string,
+    data: { new_scheduled_at: string }
+  ): Promise<Appointment> {
+    const response = await apiClient.post<Appointment>(
+      `${BASE_URL}/${id}/reschedule-from-request`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
    * Get all staff locations (Req 41).
    */
   async getStaffLocations(): Promise<StaffLocation[]> {
