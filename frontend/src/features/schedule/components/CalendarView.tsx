@@ -194,6 +194,7 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
   // Also shows prepaid badge on service-agreement-linked appointments (Req 17.5)
   const renderEventContent = useCallback(
     (eventInfo: { event: { id: string; title: string; extendedProps: Record<string, unknown> }; timeText: string }) => {
+      const appointment = eventInfo.event.extendedProps.appointment as Appointment | undefined;
       const isDraft = eventInfo.event.extendedProps.status === 'draft';
       const isPrepaid = eventInfo.event.extendedProps.isPrepaid === true;
       return (
@@ -211,9 +212,9 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
             )}
             <span className="ml-1 truncate">{eventInfo.event.title}</span>
           </div>
-          {isDraft && (
+          {isDraft && appointment && (
             <SendConfirmationButton
-              appointmentId={eventInfo.event.id}
+              appointment={appointment}
               compact
             />
           )}
