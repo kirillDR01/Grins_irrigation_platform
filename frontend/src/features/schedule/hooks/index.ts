@@ -29,6 +29,7 @@ export {
   useRequestReview,
   useSendConfirmation,
   useBulkSendConfirmations,
+  useRescheduleFromRequest,
 } from './useAppointmentMutations';
 
 export {

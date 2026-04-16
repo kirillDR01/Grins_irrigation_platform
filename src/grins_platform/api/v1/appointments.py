@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import (
 
 from grins_platform.api.v1.auth_dependencies import (
     CurrentActiveUser,  # noqa: TC001 - Required at runtime for FastAPI DI
+    ManagerOrAdminUser,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
 from grins_platform.api.v1.dependencies import (
     get_appointment_service,
@@ -63,6 +64,7 @@ from grins_platform.schemas.appointment import (
 from grins_platform.schemas.appointment_ops import (
     PaymentCollectionRequest,
     PaymentResult,
+    RescheduleFromRequest,
     RescheduleRequest,
     ReviewRequestResult,
 )
@@ -789,6 +791,83 @@ async def reschedule_appointment(
 
     _endpoints.log_completed(
         "reschedule_appointment",
+        appointment_id=str(appointment_id),
+    )
+    return AppointmentResponse.model_validate(result)  # type: ignore[no-any-return]
+
+
+# =============================================================================
+# POST /api/v1/appointments/{id}/reschedule-from-request -
+#   Admin resolves a customer R-request, triggers new Y/R/C cycle (H-6)
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{appointment_id}/reschedule-from-request",
+    response_model=AppointmentResponse,
+    summary="Reschedule from a customer R-request (re-fire Y/R/C SMS)",
+    description=(
+        "Admin picks a new date from the Reschedule Requests queue. "
+        "Moves the appointment to the new slot, resets status to SCHEDULED, "
+        "and sends SMS #1 (Y/R/C prompt) so the customer must re-confirm. "
+        "Replaces the drag-drop one-way 'We moved your appointment to …' SMS "
+        "on the customer-requested-reschedule path only."
+    ),
+)
+async def reschedule_from_request(
+    appointment_id: UUID,
+    data: RescheduleFromRequest,
+    _current_user: ManagerOrAdminUser,
+    service: Annotated[
+        AppointmentService,
+        Depends(get_full_appointment_service),
+    ],
+) -> AppointmentResponse:
+    """Reschedule an appointment in response to a customer R-request.
+
+    Validates: bughunt H-6
+    """
+    _endpoints.log_started(
+        "reschedule_from_request",
+        appointment_id=str(appointment_id),
+        new_scheduled_at=data.new_scheduled_at.isoformat(),
+    )
+
+    try:
+        result = await service.reschedule_for_request(
+            appointment_id=appointment_id,
+            new_scheduled_at=data.new_scheduled_at,
+            actor_id=_current_user.id,
+        )
+    except AppointmentNotFoundError as e:
+        _endpoints.log_rejected("reschedule_from_request", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Appointment not found: {e.appointment_id}",
+        ) from e
+    except InvalidStatusTransitionError as e:
+        _endpoints.log_rejected(
+            "reschedule_from_request",
+            reason="invalid_state",
+            current=e.current_status.value,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Appointment cannot be rescheduled-from-request in its current "
+                f"state. Current status: {e.current_status.value}"
+            ),
+        ) from e
+    except Exception as exc:
+        _endpoints.log_failed(
+            "reschedule_from_request",
+            appointment_id=str(appointment_id),
+            error=exc,
+        )
+        raise
+
+    _endpoints.log_completed(
+        "reschedule_from_request",
         appointment_id=str(appointment_id),
     )
     return AppointmentResponse.model_validate(result)  # type: ignore[no-any-return]

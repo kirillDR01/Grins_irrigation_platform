@@ -2793,3 +2793,297 @@ class TestGoogleReviewUrlFailClosed:
         assert result.sent is False
         assert result.channel is None
         assert "GOOGLE_REVIEW_URL" in result.message
+
+
+# =============================================================================
+# Sprint 3 — H-6: reschedule_for_request re-fires Y/R/C SMS cycle
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestRescheduleForRequest:
+    """bughunt H-6: when an admin resolves a customer R-request by
+    picking a new date, the appointment must reset to SCHEDULED and
+    fire a fresh Y/R/C confirmation SMS (not the one-way "moved"
+    notice)."""
+
+    @pytest.mark.asyncio
+    async def test_reschedule_from_request_resets_status_to_scheduled(
+        self,
+    ) -> None:
+        """After an admin-resolved R-request, the appointment status is
+        SCHEDULED (intentionally NOT CONFIRMED) so the customer has to
+        re-confirm the new slot.
+        """
+        from unittest.mock import patch
+
+        apt_id = uuid4()
+        confirmed = _make_appointment_mock(
+            appointment_id=apt_id,
+            scheduled_date=date(2026, 4, 20),
+            time_window_start=time(9, 0),
+            time_window_end=time(11, 0),
+            status=AppointmentStatus.CONFIRMED.value,
+        )
+        updated = _make_appointment_mock(
+            appointment_id=apt_id,
+            scheduled_date=date(2026, 4, 23),
+            time_window_start=time(14, 0),
+            time_window_end=time(16, 0),
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=confirmed)
+        appt_repo.update = AsyncMock(return_value=updated)
+        appt_repo.session = AsyncMock()
+
+        svc = _build_service(appt_repo=appt_repo)
+
+        send_conf_mock = AsyncMock(return_value={"success": True})
+        audit_mock = AsyncMock()
+
+        with (
+            patch.object(svc, "_send_confirmation_sms", send_conf_mock),
+            patch.object(
+                svc,
+                "_record_reschedule_reconfirmation_audit",
+                audit_mock,
+            ),
+        ):
+            result = await svc.reschedule_for_request(
+                apt_id,
+                datetime(2026, 4, 23, 14, 0, tzinfo=timezone.utc),
+            )
+
+        # The repo was asked to update with status=SCHEDULED.
+        appt_repo.update.assert_awaited_once()
+        update_call = appt_repo.update.await_args
+        assert update_call.args[0] == apt_id
+        update_data = update_call.args[1]
+        assert update_data["status"] == AppointmentStatus.SCHEDULED.value
+        assert update_data["scheduled_date"] == date(2026, 4, 23)
+        assert update_data["time_window_start"] == time(14, 0)
+        # Window duration preserved (2h).
+        assert update_data["time_window_end"] == time(16, 0)
+
+        # Public result has SCHEDULED status (intentionally NOT CONFIRMED).
+        assert result.status == AppointmentStatus.SCHEDULED.value
+
+    @pytest.mark.asyncio
+    async def test_reschedule_from_request_sends_confirmation_sms_not_reschedule_sms(
+        self,
+    ) -> None:
+        """The R-request resolve path must call ``_send_confirmation_sms``
+        (SMS #1 / Y/R/C) — NOT ``_send_reschedule_sms`` (one-way notice).
+        """
+        from unittest.mock import patch
+
+        apt_id = uuid4()
+        appt = _make_appointment_mock(
+            appointment_id=apt_id,
+            scheduled_date=date(2026, 4, 20),
+            time_window_start=time(9, 0),
+            time_window_end=time(10, 0),
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+        updated = _make_appointment_mock(
+            appointment_id=apt_id,
+            scheduled_date=date(2026, 4, 25),
+            time_window_start=time(11, 0),
+            time_window_end=time(12, 0),
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appt)
+        appt_repo.update = AsyncMock(return_value=updated)
+        appt_repo.session = AsyncMock()
+
+        svc = _build_service(appt_repo=appt_repo)
+
+        confirm_mock = AsyncMock(return_value={"success": True})
+        reschedule_mock = AsyncMock()
+        audit_mock = AsyncMock()
+
+        with (
+            patch.object(svc, "_send_confirmation_sms", confirm_mock),
+            patch.object(svc, "_send_reschedule_sms", reschedule_mock),
+            patch.object(
+                svc,
+                "_record_reschedule_reconfirmation_audit",
+                audit_mock,
+            ),
+        ):
+            await svc.reschedule_for_request(
+                apt_id,
+                datetime(2026, 4, 25, 11, 0, tzinfo=timezone.utc),
+            )
+
+        confirm_mock.assert_awaited_once()
+        reschedule_mock.assert_not_awaited()
+        audit_mock.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_reschedule_from_request_rejects_cancelled_appointment(
+        self,
+    ) -> None:
+        """A CANCELLED appointment is not a valid R-request candidate."""
+        apt_id = uuid4()
+        cancelled = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.CANCELLED.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=cancelled)
+
+        svc = _build_service(appt_repo=appt_repo)
+
+        with pytest.raises(InvalidStatusTransitionError):
+            await svc.reschedule_for_request(
+                apt_id,
+                datetime(2026, 4, 23, 14, 0, tzinfo=timezone.utc),
+            )
+
+    @pytest.mark.asyncio
+    async def test_reschedule_from_request_raises_when_not_found(self) -> None:
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=None)
+
+        svc = _build_service(appt_repo=appt_repo)
+
+        with pytest.raises(AppointmentNotFoundError):
+            await svc.reschedule_for_request(
+                uuid4(),
+                datetime(2026, 4, 23, 14, 0, tzinfo=timezone.utc),
+            )
+
+    @pytest.mark.asyncio
+    async def test_reschedule_from_request_preserves_window_duration(
+        self,
+    ) -> None:
+        """Window duration (end - start) is preserved across the move."""
+        from unittest.mock import patch
+
+        apt_id = uuid4()
+        appt = _make_appointment_mock(
+            appointment_id=apt_id,
+            scheduled_date=date(2026, 4, 20),
+            time_window_start=time(8, 30),
+            time_window_end=time(11, 0),  # 2h30m
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+        updated = _make_appointment_mock(
+            appointment_id=apt_id,
+            scheduled_date=date(2026, 4, 22),
+            time_window_start=time(13, 0),
+            time_window_end=time(15, 30),
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appt)
+        appt_repo.update = AsyncMock(return_value=updated)
+        appt_repo.session = AsyncMock()
+
+        svc = _build_service(appt_repo=appt_repo)
+
+        with (
+            patch.object(svc, "_send_confirmation_sms", AsyncMock()),
+            patch.object(
+                svc,
+                "_record_reschedule_reconfirmation_audit",
+                AsyncMock(),
+            ),
+        ):
+            await svc.reschedule_for_request(
+                apt_id,
+                datetime(2026, 4, 22, 13, 0, tzinfo=timezone.utc),
+            )
+
+        update_data = appt_repo.update.await_args.args[1]
+        assert update_data["time_window_start"] == time(13, 0)
+        assert update_data["time_window_end"] == time(15, 30)
+
+    @pytest.mark.asyncio
+    async def test_reschedule_from_request_sms_failure_does_not_block_move(
+        self,
+    ) -> None:
+        """If the outbound SMS raises, the reschedule still succeeds —
+        the admin can re-fire manually."""
+        from unittest.mock import patch
+
+        apt_id = uuid4()
+        appt = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+        updated = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appt)
+        appt_repo.update = AsyncMock(return_value=updated)
+        appt_repo.session = AsyncMock()
+
+        svc = _build_service(appt_repo=appt_repo)
+
+        failing_sms = AsyncMock(side_effect=RuntimeError("provider down"))
+
+        with (
+            patch.object(svc, "_send_confirmation_sms", failing_sms),
+            patch.object(
+                svc,
+                "_record_reschedule_reconfirmation_audit",
+                AsyncMock(),
+            ),
+        ):
+            # Must NOT raise.
+            result = await svc.reschedule_for_request(
+                apt_id,
+                datetime(2026, 4, 23, 14, 0, tzinfo=timezone.utc),
+            )
+
+        failing_sms.assert_awaited_once()
+        assert result is updated
+
+
+@pytest.mark.unit
+class TestSendConfirmationSmsWrapper:
+    """bughunt H-6: public ``send_confirmation_sms`` wraps the private
+    helper so admin tooling can re-fire SMS #1 without reaching into the
+    service internals."""
+
+    @pytest.mark.asyncio
+    async def test_wrapper_delegates_to_private_helper(self) -> None:
+        from unittest.mock import patch
+
+        apt_id = uuid4()
+        appt = _make_appointment_mock(appointment_id=apt_id)
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appt)
+        appt_repo.session = AsyncMock()
+
+        svc = _build_service(appt_repo=appt_repo)
+
+        private_mock = AsyncMock(return_value={"success": True, "deferred": False})
+        with patch.object(svc, "_send_confirmation_sms", private_mock):
+            result = await svc.send_confirmation_sms(apt_id)
+
+        private_mock.assert_awaited_once()
+        assert result == {"success": True, "deferred": False}
+
+    @pytest.mark.asyncio
+    async def test_wrapper_raises_when_appointment_missing(self) -> None:
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=None)
+        appt_repo.session = AsyncMock()
+
+        svc = _build_service(appt_repo=appt_repo)
+
+        with pytest.raises(AppointmentNotFoundError):
+            await svc.send_confirmation_sms(uuid4())

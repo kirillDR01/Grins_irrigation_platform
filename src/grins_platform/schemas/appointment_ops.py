@@ -8,7 +8,7 @@ Validates: CRM Gap Closure Req 24, 25, 29, 30, 31, 32, 33, 34, 35, 36, 37
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -33,6 +33,22 @@ class RescheduleRequest(BaseModel):
         ...,
         pattern=r"^\d{2}:\d{2}$",
         description="New end time HH:MM",
+    )
+
+
+class RescheduleFromRequest(BaseModel):
+    """Request payload for admin-picked reschedule from an R-request.
+
+    Admin resolves a customer reschedule request by choosing a new
+    slot; the service then resets the appointment to SCHEDULED and
+    fires SMS #1 (Y/R/C) so the customer re-confirms.
+
+    Validates: bughunt H-6
+    """
+
+    new_scheduled_at: datetime = Field(
+        ...,
+        description="New appointment start datetime (UTC or TZ-aware).",
     )
 
 
