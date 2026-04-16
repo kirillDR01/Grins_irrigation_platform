@@ -79,7 +79,7 @@ from grins_platform.schemas.job import (
     PriceCalculationResponse,
 )
 from grins_platform.services.job_service import (
-    JobService,  # noqa: TC001 - Required at runtime for FastAPI DI
+    JobService,
 )
 from grins_platform.services.photo_service import (
     PhotoService,
@@ -97,7 +97,7 @@ router = APIRouter()
 async def get_active_appointment_for_job(
     session: AsyncSession,
     job_id: UUID,
-) -> "Appointment | None":
+) -> Appointment | None:
     """Get the most recent non-terminal appointment for a job.
 
     Queries for the latest appointment that is not COMPLETED, CANCELLED, or NO_SHOW.
@@ -1580,11 +1580,12 @@ async def review_push(
         "GOOGLE_REVIEW_URL",
         "https://g.page/r/grins-irrigations/review",
     )
+    # bughunt M-6: spec §4/§10 wording verbatim. ``customer`` is unused
+    # here intentionally — the spec wording is brand-only, no first-name
+    # personalization.
     message = (
-        f"Hi {customer.first_name or 'there'}! "
-        "Thank you for choosing Grin's Irrigations. "
-        "We'd love your feedback — please leave us a Google review: "
-        f"{review_url}"
+        "Thanks for choosing Grins Irrigation! "
+        f"We'd appreciate a quick review: {review_url}"
     )
 
     recipient = Recipient.from_customer(customer)
