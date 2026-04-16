@@ -873,10 +873,32 @@ class InvoiceService(LoggerMixin):
         sent = 0
         failed = 0
         skipped = 0
+        skipped_count = 0
+        skipped_reasons: dict[str, int] = {}
 
         msg_template = template or self._DEFAULT_TEMPLATES.get(
             notification_type,
             self._DEFAULT_TEMPLATES["past_due"],
+        )
+
+        # H-11: batch SMS-consent pre-filter. One query resolves the opt-out
+        # set for every targeted customer, so we don't hand STOPed customers
+        # to SMSService.send_message (which would raise and silently bump
+        # `failed`). The lien branch already has a per-customer check via
+        # ``send_lien_notice`` (CR-5) — this covers the past_due / due_soon
+        # branches at batch granularity.
+        from grins_platform.repositories.sms_consent_repository import (  # noqa: PLC0415
+            SmsConsentRepository,
+        )
+
+        candidate_customer_ids: list[UUID] = [
+            inv.customer.id  # type: ignore[union-attr]
+            for inv in invoices
+            if inv.customer is not None and getattr(inv.customer, "id", None)
+        ]
+        consent_repo = SmsConsentRepository(self.invoice_repository.session)
+        opted_out_ids = await consent_repo.get_opted_out_customer_ids(
+            customer_ids=candidate_customer_ids,
         )
 
         for inv in invoices:
@@ -884,6 +906,15 @@ class InvoiceService(LoggerMixin):
                 customer = inv.customer  # type: ignore[union-attr]
                 if customer is None or not getattr(customer, "phone", None):
                     skipped += 1
+                    continue
+
+                # H-11: filter opted-out customers before any SMS dispatch so
+                # the send loop doesn't blow up into `failed` on STOPed phones.
+                if customer.id in opted_out_ids:
+                    skipped_reasons["opted_out"] = (
+                        skipped_reasons.get("opted_out", 0) + 1
+                    )
+                    skipped_count += 1
                     continue
 
                 # Render template with invoice/customer fields
@@ -939,6 +970,8 @@ class InvoiceService(LoggerMixin):
             sent=sent,
             failed=failed,
             skipped=skipped,
+            skipped_count=skipped_count,
+            skipped_reasons=skipped_reasons,
         )
         return MassNotifyResponse(
             notification_type=notification_type,
@@ -946,6 +979,8 @@ class InvoiceService(LoggerMixin):
             sent=sent,
             failed=failed,
             skipped=skipped,
+            skipped_count=skipped_count,
+            skipped_reasons=skipped_reasons,
         )
 
     async def compute_lien_candidates(
