@@ -1857,6 +1857,40 @@ class TestProperty38StatusTransitionStateMachine:
         assert "en_route_at" in update_data
 
     @pytest.mark.asyncio
+    async def test_valid_transitions_includes_scheduled_to_in_progress(self) -> None:
+        """scheduled → in_progress is permitted (customer never replied Y, skip steps).
+
+        **Validates: CR-2 (2026-04-14 E2E-6 survivor).** SCHEDULED must be able to
+        skip directly to IN_PROGRESS when the tech clicks Job Started without
+        on-my-way or any prior confirmation reply.
+        """
+        apt_id = uuid4()
+        actor_id = uuid4()
+
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+        updated = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.IN_PROGRESS.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+        appt_repo.update = AsyncMock(return_value=updated)
+
+        svc = _build_service(appt_repo=appt_repo)
+        await svc.transition_status(
+            apt_id,
+            AppointmentStatus.IN_PROGRESS,
+            actor_id,
+        )
+
+        update_data = appt_repo.update.call_args[0][1]
+        assert update_data["status"] == AppointmentStatus.IN_PROGRESS.value
+
+    @pytest.mark.asyncio
     async def test_backward_transition_raises_error(self) -> None:
         """Going backward (e.g., in_progress → confirmed) is rejected.
 

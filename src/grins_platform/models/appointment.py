@@ -39,6 +39,7 @@ VALID_APPOINTMENT_TRANSITIONS: dict[str, list[str]] = {
     AppointmentStatus.SCHEDULED.value: [
         AppointmentStatus.CONFIRMED.value,
         AppointmentStatus.EN_ROUTE.value,
+        AppointmentStatus.IN_PROGRESS.value,
         AppointmentStatus.CANCELLED.value,
     ],
     AppointmentStatus.CONFIRMED.value: [
