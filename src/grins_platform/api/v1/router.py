@@ -16,6 +16,7 @@ from grins_platform.api.v1.agreements import (
     tier_router as agreement_tiers_router,
 )
 from grins_platform.api.v1.ai import router as ai_router
+from grins_platform.api.v1.alerts import router as alerts_router
 from grins_platform.api.v1.analytics import router as analytics_router
 from grins_platform.api.v1.appointments import router as appointments_router
 from grins_platform.api.v1.audit import router as audit_router
@@ -398,6 +399,12 @@ api_router.include_router(
 api_router.include_router(
     stripe_terminal_router,
     tags=["stripe-terminal"],
+)
+
+# Include Alerts endpoints (bughunt H-5 — admin cancellation alert)
+api_router.include_router(
+    alerts_router,
+    tags=["alerts"],
 )
 
 __all__ = ["api_router"]

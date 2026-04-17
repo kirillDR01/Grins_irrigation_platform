@@ -531,7 +531,7 @@ class MassNotifyRequest(BaseModel):
 class MassNotifyResponse(BaseModel):
     """Response schema for mass invoice notifications.
 
-    Validates: Requirement 29.3
+    Validates: Requirement 29.3, H-11 (bughunt 2026-04-16).
     """
 
     notification_type: str
@@ -539,6 +539,21 @@ class MassNotifyResponse(BaseModel):
     sent: int = Field(description="Number of notifications sent")
     failed: int = Field(description="Number of send failures")
     skipped: int = Field(description="Number skipped (no phone, consent denied)")
+    skipped_count: int = Field(
+        default=0,
+        description=(
+            "H-11: total number of invoices skipped for policy reasons "
+            "(opted_out, etc.). Sum of values in skipped_reasons."
+        ),
+    )
+    skipped_reasons: dict[str, int] = Field(
+        default_factory=dict,
+        description=(
+            "H-11: map of skip reason -> count. Example: "
+            '``{"opted_out": 3}``. Lets admins see why customers were '
+            "filtered out of the send batch."
+        ),
+    )
 
 
 class LienCandidateResponse(BaseModel):

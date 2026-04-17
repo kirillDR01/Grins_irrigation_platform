@@ -12,7 +12,8 @@
  */
 
 import { useMemo, useState } from 'react';
-import { AlertTriangle, FileText, Mail, XCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, FileText, Mail, Settings as SettingsIcon, XCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useBusinessSettings } from '@/features/settings';
 
 import { useLienCandidates, useSendLienNotice } from '../hooks/useLienReview';
 import type { LienCandidate } from '../types';
@@ -32,6 +34,10 @@ import type { LienCandidate } from '../types';
 export function LienReviewQueue() {
   const { data: candidates, isLoading, error } = useLienCandidates();
   const sendMutation = useSendLienNotice();
+  // H-12: display the live thresholds so admins see which knobs drive the queue.
+  const { data: thresholds } = useBusinessSettings();
+  const lienDays = thresholds?.lien_days_past_due ?? 60;
+  const lienMin = Number(thresholds?.lien_min_amount ?? 500);
 
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [confirmTarget, setConfirmTarget] = useState<LienCandidate | null>(null);
@@ -105,8 +111,16 @@ export function LienReviewQueue() {
           </h3>
           <Badge variant="secondary">{visibleCandidates.length}</Badge>
         </div>
-        <p className="text-xs text-slate-500">
-          Customers with invoices &gt; 60 days past due and ≥ $500 owed.
+        <p className="text-xs text-slate-500" data-testid="lien-threshold-note">
+          Customers with invoices &gt; {lienDays} days past due and ≥ ${lienMin.toFixed(0)} owed.{' '}
+          <Link
+            to="/settings?tab=business"
+            className="inline-flex items-center gap-1 text-sky-600 hover:underline dark:text-sky-400"
+            data-testid="lien-threshold-configure-link"
+          >
+            <SettingsIcon className="h-3 w-3" />
+            configure in Business Settings
+          </Link>
         </p>
       </div>
 

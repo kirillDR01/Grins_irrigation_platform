@@ -288,3 +288,39 @@ export function useBulkSendConfirmations() {
     },
   });
 }
+
+/**
+ * Hook to reschedule an appointment from a customer R-request (bughunt H-6).
+ *
+ * POSTs to ``/appointments/{id}/reschedule-from-request`` which moves the
+ * appointment to the new slot, resets status to SCHEDULED, and fires a
+ * fresh Y/R/C confirmation SMS so the customer must re-confirm.
+ */
+export function useRescheduleFromRequest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      new_scheduled_at,
+    }: {
+      id: string;
+      new_scheduled_at: string;
+    }) => appointmentApi.rescheduleFromRequest(id, { new_scheduled_at }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: appointmentKeys.detail(variables.id),
+      });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
+      queryClient.invalidateQueries({
+        queryKey: [...appointmentKeys.all, 'daily'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: [...appointmentKeys.all, 'weekly'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: [...appointmentKeys.all, 'staffDaily'],
+      });
+    },
+  });
+}

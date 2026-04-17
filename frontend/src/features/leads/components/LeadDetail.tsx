@@ -5,6 +5,13 @@
  * through the pipeline: mark as contacted, convert to customer, mark as lost/spam.
  * Enhanced with full address fields (Req 12), action tag badges (Req 13),
  * attachment panel (Req 15), and estimate/contract creation (Req 17).
+ *
+ * H-1 (bughunt 2026-04-16): LeadDetail now mirrors the LeadsList routing
+ * actions — Mark Contacted / Move to Jobs / Move to Sales / Delete — via the
+ * shared ``useLeadRoutingActions`` hook. The CR-6 duplicate-conflict modal
+ * is reused here so duplicate collisions surface regardless of entry point.
+ * Also folds in L-4: Mark Contacted now flows through ``useMarkContacted``
+ * so NEEDS_CONTACT tag cleanup and contacted_at stamping behave consistently.
  */
 
 import { useState, useCallback } from 'react';
@@ -31,6 +38,7 @@ import {
   Calculator,
   ScrollText,
   AlertTriangle,
+  ShoppingCart,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -56,13 +64,15 @@ import {
 } from '@/components/ui/select';
 import { LoadingPage, ErrorMessage, PageHeader } from '@/shared/components';
 
-import { useLead, useUpdateLead, useDeleteLead } from '../hooks';
+import { useLead, useUpdateLead } from '../hooks';
+import { useLeadRoutingActions } from '../hooks/useLeadRoutingActions';
 import { LeadStatusBadge } from './LeadStatusBadge';
 import { LeadSituationBadge } from './LeadSituationBadge';
 import { LeadSourceBadge } from './LeadSourceBadge';
 import { IntakeTagBadge } from './IntakeTagBadge';
 import { LeadTagBadges } from './LeadTagBadges';
 import { ConvertLeadDialog } from './ConvertLeadDialog';
+import { LeadConversionConflictModal } from './LeadConversionConflictModal';
 import { AttachmentPanel } from './AttachmentPanel';
 import { EstimateCreator } from './EstimateCreator';
 import { ContractCreator } from './ContractCreator';
@@ -85,8 +95,27 @@ export function LeadDetail() {
   const navigate = useNavigate();
   const { data: lead, isLoading, error, refetch } = useLead(id!);
   const updateMutation = useUpdateLead();
-  const deleteMutation = useDeleteLead();
   const { data: staffData } = useStaff({ page_size: 100, is_active: true });
+
+  // Shared routing hook (H-1) — drives Mark Contacted / Move to Jobs /
+  // Move to Sales / Delete plus the CR-6 conflict + estimate-override flows.
+  const {
+    markContacted,
+    moveToJobs,
+    moveToSales,
+    deleteLead,
+    markContactedMutation,
+    moveToJobsMutation,
+    moveToSalesMutation,
+    deleteLeadMutation,
+    requiresEstimateState,
+    resolveRequiresEstimate,
+    closeRequiresEstimate,
+    conflictState,
+    onConvertAnyway,
+    onUseExisting,
+    closeConflict,
+  } = useLeadRoutingActions({ navigate, navigateOnSuccess: true });
 
   const [showConvertDialog, setShowConvertDialog] = useState(false);
   const [showEstimateCreator, setShowEstimateCreator] = useState(false);
@@ -170,16 +199,20 @@ export function LeadDetail() {
     }
   };
 
-  const handleMarkContacted = async () => {
+  const handleMarkContacted = useCallback(() => {
     if (!lead) return;
-    try {
-      await updateMutation.mutateAsync({ id: lead.id, data: { status: 'contacted' } });
-      toast.success('Lead Contacted', { description: 'Lead marked as contacted.' });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to update status';
-      toast.error('Update Failed', { description: message });
-    }
-  };
+    void markContacted(lead);
+  }, [lead, markContacted]);
+
+  const handleMoveToJobs = useCallback(() => {
+    if (!lead) return;
+    void moveToJobs(lead);
+  }, [lead, moveToJobs]);
+
+  const handleMoveToSales = useCallback(() => {
+    if (!lead) return;
+    void moveToSales(lead);
+  }, [lead, moveToSales]);
 
   const handleMarkLost = async () => {
     if (!lead) return;
@@ -206,24 +239,14 @@ export function LeadDetail() {
   const executeDelete = useCallback(async () => {
     if (!lead) return;
     try {
-      await deleteMutation.mutateAsync(lead.id);
-      toast.success('Lead Deleted', {
-        description: `${lead.name} has been removed.`,
-      });
-      navigate('/leads');
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to delete lead';
-      toast.error('Delete Failed', {
-        description: message,
-        action: {
-          label: 'Retry',
-          onClick: () => executeDelete(),
-        },
-      });
+      const ok = await deleteLead(lead);
+      if (ok) {
+        navigate('/leads');
+      }
     } finally {
       setShowDeleteDialog(false);
     }
-  }, [lead, deleteMutation, navigate]);
+  }, [lead, deleteLead, navigate]);
 
   const handleDelete = () => {
     if (!lead) return;
@@ -235,8 +258,14 @@ export function LeadDetail() {
   if (!lead) return <ErrorMessage error={new Error('Lead not found')} />;
 
   const isTerminal = lead.status === 'converted' || lead.status === 'spam';
-  const canMarkContacted = lead.status === 'new';
+  // H-1 / L-3: keep Mark Contacted visible on new, contacted, qualified so
+  // admins can re-stamp on follow-up contact attempts.
+  const canMarkContacted =
+    lead.status === 'new' ||
+    lead.status === 'contacted' ||
+    lead.status === 'qualified';
   const canConvert = lead.status === 'qualified';
+  const canRoute = !isTerminal && lead.status !== 'lost';
   const canMarkLost = !isTerminal && lead.status !== 'lost';
   const canMarkSpam = !isTerminal;
   const availableTransitions = VALID_TRANSITIONS[lead.status] ?? [];
@@ -264,17 +293,49 @@ export function LeadDetail() {
               <Button
                 variant="outline"
                 onClick={handleMarkContacted}
-                disabled={updateMutation.isPending}
-                data-testid="mark-contacted-btn"
+                disabled={markContactedMutation.isPending}
+                data-testid="lead-detail-mark-contacted-btn"
                 className="text-yellow-700 border-yellow-200 hover:bg-yellow-50"
               >
-                {updateMutation.isPending ? (
+                {markContactedMutation.isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <PhoneCall className="mr-2 h-4 w-4" />
                 )}
                 Mark as Contacted
               </Button>
+            )}
+            {canRoute && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={handleMoveToJobs}
+                  disabled={moveToJobsMutation.isPending}
+                  data-testid="lead-detail-move-to-jobs-btn"
+                  className="text-blue-700 border-blue-200 hover:bg-blue-50"
+                >
+                  {moveToJobsMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Briefcase className="mr-2 h-4 w-4" />
+                  )}
+                  Move to Jobs
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleMoveToSales}
+                  disabled={moveToSalesMutation.isPending}
+                  data-testid="lead-detail-move-to-sales-btn"
+                  className="text-purple-700 border-purple-200 hover:bg-purple-50"
+                >
+                  {moveToSalesMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <ShoppingCart className="mr-2 h-4 w-4" />
+                  )}
+                  Move to Sales
+                </Button>
+              </>
             )}
             {canConvert && (
               <Button
@@ -307,10 +368,10 @@ export function LeadDetail() {
             <Button
               variant="destructive"
               onClick={handleDelete}
-              disabled={deleteMutation.isPending}
-              data-testid="delete-lead-btn"
+              disabled={deleteLeadMutation.isPending}
+              data-testid="lead-detail-delete-btn"
             >
-              {deleteMutation.isPending ? (
+              {deleteLeadMutation.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <Trash2 className="mr-2 h-4 w-4" />
@@ -691,7 +752,12 @@ export function LeadDetail() {
               </CardHeader>
               <CardContent className="p-6 space-y-3">
                 {canMarkContacted && (
-                  <Button variant="outline" className="w-full justify-start text-yellow-700 border-yellow-200 hover:bg-yellow-50" onClick={handleMarkContacted} disabled={updateMutation.isPending}>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-yellow-700 border-yellow-200 hover:bg-yellow-50"
+                    onClick={handleMarkContacted}
+                    disabled={markContactedMutation.isPending}
+                  >
                     <PhoneCall className="mr-2 h-4 w-4" />Mark as Contacted
                   </Button>
                 )}
@@ -742,7 +808,7 @@ export function LeadDetail() {
             <Button
               variant="outline"
               onClick={() => setShowDeleteDialog(false)}
-              disabled={deleteMutation.isPending}
+              disabled={deleteLeadMutation.isPending}
               data-testid="cancel-delete-btn"
             >
               Cancel
@@ -750,10 +816,10 @@ export function LeadDetail() {
             <Button
               variant="destructive"
               onClick={executeDelete}
-              disabled={deleteMutation.isPending}
+              disabled={deleteLeadMutation.isPending}
               data-testid="confirm-delete-btn"
             >
-              {deleteMutation.isPending ? (
+              {deleteLeadMutation.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <Trash2 className="mr-2 h-4 w-4" />
@@ -763,6 +829,64 @@ export function LeadDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Requires-estimate override modal (H-1) */}
+      <Dialog
+        open={!!requiresEstimateState}
+        onOpenChange={(open) => !open && closeRequiresEstimate()}
+      >
+        <DialogContent data-testid="lead-detail-requires-estimate-modal">
+          <DialogHeader>
+            <DialogTitle>Estimate Required</DialogTitle>
+            <DialogDescription>
+              This job type typically requires an estimate. Move to Jobs anyway, or move to Sales for the estimate workflow?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => resolveRequiresEstimate('cancel')}
+              data-testid="lead-detail-requires-estimate-cancel-btn"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+              onClick={() => resolveRequiresEstimate('sales')}
+              disabled={moveToSalesMutation.isPending}
+              data-testid="lead-detail-requires-estimate-move-to-sales-btn"
+            >
+              Move to Sales
+            </Button>
+            <Button
+              variant="default"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => resolveRequiresEstimate('jobs-force')}
+              disabled={moveToJobsMutation.isPending}
+              data-testid="lead-detail-requires-estimate-move-to-jobs-btn"
+            >
+              Move to Jobs
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Duplicate Conflict Modal (CR-6) */}
+      {conflictState && (
+        <LeadConversionConflictModal
+          open={conflictState !== null}
+          onClose={closeConflict}
+          duplicates={conflictState.duplicates}
+          onUseExisting={onUseExisting}
+          onConvertAnyway={onConvertAnyway}
+          isConverting={
+            moveToJobsMutation.isPending || moveToSalesMutation.isPending
+          }
+          phone={conflictState.phone}
+          email={conflictState.email}
+        />
+      )}
     </div>
   );
 }

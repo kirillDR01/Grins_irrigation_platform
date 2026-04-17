@@ -31,6 +31,9 @@ if TYPE_CHECKING:
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from grins_platform.models.appointment import Appointment
+    from grins_platform.services.email_service import EmailService
+
 logger = get_logger(__name__)
 
 # Keyword mapping: normalised text → ConfirmationKeyword
@@ -285,6 +288,8 @@ class JobConfirmationService(LoggerMixin):
 
         # CR-3 / H-2 / 2026-04-14 E2E-3 — "repeat C is a no-op" (spec line 1070).
         # Short-circuit before we build + send another cancellation SMS.
+        # Idempotency guarantee for H-5: the admin alert is dispatched after
+        # this short-circuit, so a repeat C reply does NOT re-alert the admin.
         if appt and appt.status == AppointmentStatus.CANCELLED.value:
             response.status = "cancelled"
             response.processed_at = datetime.now(tz=timezone.utc)
@@ -323,9 +328,22 @@ class JobConfirmationService(LoggerMixin):
         response.processed_at = datetime.now(tz=timezone.utc)
         await self.db.flush()
 
-        # bughunt M-8: audit the customer-initiated cancel so the admin
-        # history view shows *why* an appointment was cancelled (the
-        # admin-side path already audits via _record_cancellation_audit).
+        # bughunt H-5 (2026-04-16): notify admin + raise dashboard alert row.
+        # Runs AFTER the CR-3 short-circuit above so repeat C replies remain
+        # no-ops. Failures are swallowed inside the notification service so
+        # admin-side errors never block the customer reply.
+        await self._dispatch_admin_cancellation_alert(
+            appointment_id=appointment_id,
+            customer_id=response.customer_id,
+            appt=appt,
+        )
+
+        # bughunt M-8 (2026-04-16): audit the customer-initiated cancel so
+        # the admin history view shows *why* an appointment was cancelled
+        # (the admin-side path already audits via
+        # AppointmentService._record_cancellation_audit). Gated on
+        # ``transitioned`` so we don't write an audit row when the cancel
+        # was a no-op (already CANCELLED in some other state path).
         if transitioned:
             await self._record_customer_sms_cancel_audit(
                 appointment_id=appointment_id,
@@ -377,6 +395,98 @@ class JobConfirmationService(LoggerMixin):
                 "customer_sms_cancel_audit",
                 appointment_id=str(appointment_id),
             )
+
+    async def _dispatch_admin_cancellation_alert(
+        self,
+        *,
+        appointment_id: UUID,
+        customer_id: UUID,
+        appt: Appointment | None,
+    ) -> None:
+        """Notify admin of a customer SMS cancellation.
+
+        Resolves the customer name and scheduled-at from the supplied
+        appointment object (fetching the :class:`Customer` if needed) and
+        delegates to
+        :meth:`NotificationService.send_admin_cancellation_alert`.
+
+        Any exception is logged and swallowed — admin notification must
+        never block the customer-facing response (H-5 acceptance criteria).
+
+        Validates: bughunt 2026-04-16 finding H-5
+        """
+        from grins_platform.models.customer import Customer  # noqa: PLC0415
+        from grins_platform.services.notification_service import (  # noqa: PLC0415
+            NotificationService,
+        )
+
+        try:
+            customer = await self.db.get(Customer, customer_id)
+            if customer is None:
+                self.log_rejected(
+                    "handle_cancel.admin_notification",
+                    reason="customer_not_found",
+                    customer_id=str(customer_id),
+                )
+                return
+
+            customer_name = customer.full_name
+
+            scheduled_at = self._resolve_scheduled_at(appt)
+
+            notification_svc = NotificationService(
+                email_service=self._build_email_service(),
+            )
+            await notification_svc.send_admin_cancellation_alert(
+                self.db,
+                appointment_id=appointment_id,
+                customer_id=customer_id,
+                customer_name=customer_name,
+                scheduled_at=scheduled_at,
+                source="customer_sms",
+            )
+        except Exception as exc:
+            self.log_failed(
+                "handle_cancel.admin_notification_failed",
+                error=exc,
+                appointment_id=str(appointment_id),
+            )
+
+    @staticmethod
+    def _resolve_scheduled_at(appt: Appointment | None) -> datetime:
+        """Return the appointment start as a tz-aware UTC datetime.
+
+        Falls back to ``datetime.now(tz=UTC)`` when the appointment is
+        missing either ``scheduled_date`` or ``time_window_start`` (edge
+        case observed with legacy rows).
+        """
+        if appt is None:
+            return datetime.now(tz=timezone.utc)
+
+        scheduled_date = getattr(appt, "scheduled_date", None)
+        time_window_start = getattr(appt, "time_window_start", None)
+
+        if scheduled_date is None or time_window_start is None:
+            return datetime.now(tz=timezone.utc)
+
+        return datetime.combine(
+            scheduled_date,
+            time_window_start,
+            tzinfo=timezone.utc,
+        )
+
+    @staticmethod
+    def _build_email_service() -> EmailService:
+        """Construct the production :class:`EmailService`.
+
+        Separated into a helper so tests can monkeypatch a stub sender in
+        place of the real email dispatch path.
+        """
+        from grins_platform.services.email_service import (  # noqa: PLC0415
+            EmailService,
+        )
+
+        return EmailService()
 
     @staticmethod
     def _build_cancellation_message(

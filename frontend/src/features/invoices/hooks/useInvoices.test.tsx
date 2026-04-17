@@ -13,6 +13,12 @@ import {
   useInvoicesByJob,
   invoiceKeys,
 } from './useInvoices';
+import {
+  useRecordPayment,
+  useUpdateInvoice,
+  useCancelInvoice,
+} from './useInvoiceMutations';
+import { customerInvoiceKeys } from '@/features/customers/hooks/useCustomers';
 import { invoiceApi } from '../api/invoiceApi';
 import type { ReactNode } from 'react';
 
@@ -23,6 +29,9 @@ vi.mock('../api/invoiceApi', () => ({
     get: vi.fn(),
     getOverdue: vi.fn(),
     getLienDeadlines: vi.fn(),
+    recordPayment: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
   },
 }));
 
@@ -245,5 +254,72 @@ describe('useInvoicesByJob', () => {
 
     expect(result.current.fetchStatus).toBe('idle');
     expect(invoiceApi.list).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// H-9: invoice mutation hooks invalidate customer-invoices queries so that
+// InvoiceHistory on the customer detail page refreshes when an invoice is
+// paid/voided/updated elsewhere.
+// ---------------------------------------------------------------------------
+describe('invoice mutations invalidate customerInvoiceKeys (H-9)', () => {
+  function createWrapperWithSpy() {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const spy = vi.spyOn(queryClient, 'invalidateQueries');
+    const Wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    return { Wrapper, spy, queryClient };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('useRecordPayment (mark paid) invalidates customer-invoices queries on success', async () => {
+    vi.mocked(invoiceApi.recordPayment).mockResolvedValue(mockInvoice);
+    const { Wrapper, spy } = createWrapperWithSpy();
+
+    const { result } = renderHook(() => useRecordPayment(), { wrapper: Wrapper });
+
+    result.current.mutate({
+      id: 'inv-123',
+      data: { paid_amount: 150, payment_method: 'ach', payment_reference: 'ref' } as never,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(spy).toHaveBeenCalledWith({ queryKey: customerInvoiceKeys.all });
+  });
+
+  it('useUpdateInvoice invalidates customer-invoices queries on success', async () => {
+    vi.mocked(invoiceApi.update).mockResolvedValue(mockInvoice);
+    const { Wrapper, spy } = createWrapperWithSpy();
+
+    const { result } = renderHook(() => useUpdateInvoice(), { wrapper: Wrapper });
+
+    result.current.mutate({
+      id: 'inv-123',
+      data: { status: 'paid' } as never,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(spy).toHaveBeenCalledWith({ queryKey: customerInvoiceKeys.all });
+  });
+
+  it('useCancelInvoice (void) invalidates customer-invoices queries on success', async () => {
+    vi.mocked(invoiceApi.delete).mockResolvedValue();
+    const { Wrapper, spy } = createWrapperWithSpy();
+
+    const { result } = renderHook(() => useCancelInvoice(), { wrapper: Wrapper });
+
+    result.current.mutate('inv-123');
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(spy).toHaveBeenCalledWith({ queryKey: customerInvoiceKeys.all });
   });
 });

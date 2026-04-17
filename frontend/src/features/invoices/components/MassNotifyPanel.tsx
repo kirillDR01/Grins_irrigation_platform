@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Bell, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Bell, ChevronDown, ChevronUp, Loader2, Settings as SettingsIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,13 +19,20 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { useBusinessSettings } from '@/features/settings';
 import { useMassNotify } from '../hooks';
 import { MASS_NOTIFICATION_CONFIG, type MassNotificationType } from '../types';
 
 export function MassNotifyPanel() {
   const [open, setOpen] = useState(false);
   const [notificationType, setNotificationType] = useState<MassNotificationType | ''>('');
-  const [dueSoonDays, setDueSoonDays] = useState(7);
+  // H-12: upcoming_due_days now lives in business_settings. Default below is
+  // a best-effort client fallback used only if the GET /settings/business
+  // query is still loading when the dialog opens.
+  const { data: thresholds } = useBusinessSettings();
+  const defaultUpcomingDueDays = thresholds?.upcoming_due_days ?? 7;
+  const [overrideOnce, setOverrideOnce] = useState(false);
+  const [overrideDueSoonDays, setOverrideDueSoonDays] = useState<number>(defaultUpcomingDueDays);
   const massNotify = useMassNotify();
 
   const handleSend = async () => {
@@ -32,12 +40,18 @@ export function MassNotifyPanel() {
     try {
       const result = await massNotify.mutateAsync({
         notification_type: notificationType,
-        due_soon_days: dueSoonDays,
+        // Only pass an explicit due_soon_days when the admin flipped the
+        // override — otherwise the backend reads upcoming_due_days from
+        // business_settings (H-12).
+        ...(overrideOnce && notificationType === 'due_soon'
+          ? { due_soon_days: overrideDueSoonDays }
+          : {}),
       });
       toast.success('Mass Notification Sent', {
         description: `Targeted: ${result.targeted}, Sent: ${result.sent}, Skipped: ${result.skipped}, Failed: ${result.failed}`,
       });
       setOpen(false);
+      setOverrideOnce(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to send mass notifications';
       toast.error('Mass Notification Failed', { description: msg });
@@ -88,16 +102,51 @@ export function MassNotifyPanel() {
             </div>
 
             {notificationType === 'due_soon' && (
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-slate-700">Days Until Due</label>
-                <Input
-                  type="number"
-                  value={dueSoonDays}
-                  onChange={(e) => setDueSoonDays(Number(e.target.value))}
-                  min={1}
-                  max={90}
-                  data-testid="mass-notify-due-soon-days"
-                />
+              <div className="space-y-2">
+                <p
+                  className="text-xs text-slate-500"
+                  data-testid="mass-notify-threshold-note"
+                >
+                  Current due-soon window: <strong>{defaultUpcomingDueDays} days</strong>.{' '}
+                  <Link
+                    to="/settings?tab=business"
+                    className="inline-flex items-center gap-1 text-sky-600 hover:underline dark:text-sky-400"
+                    data-testid="mass-notify-configure-link"
+                  >
+                    <SettingsIcon className="h-3 w-3" />
+                    configure in Business Settings
+                  </Link>
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  type="button"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setOverrideOnce((v) => !v)}
+                  data-testid="mass-notify-override-toggle"
+                >
+                  {overrideOnce ? (
+                    <ChevronUp className="mr-1 h-3 w-3" />
+                  ) : (
+                    <ChevronDown className="mr-1 h-3 w-3" />
+                  )}
+                  Override once
+                </Button>
+                {overrideOnce && (
+                  <div className="space-y-1 rounded-md border border-dashed border-slate-200 p-2 dark:border-slate-700">
+                    <label className="text-xs font-medium text-slate-600">
+                      Days Until Due (this send only)
+                    </label>
+                    <Input
+                      type="number"
+                      value={overrideDueSoonDays}
+                      onChange={(e) => setOverrideDueSoonDays(Number(e.target.value))}
+                      min={1}
+                      max={90}
+                      data-testid="mass-notify-due-soon-days"
+                    />
+                  </div>
+                )}
               </div>
             )}
             {/* CR-5: lien_eligible option removed — use /invoices?tab=lien-review instead. */}

@@ -84,12 +84,18 @@ const INVOICE_FILTER_AXES: FilterAxis[] = [
     key: 'payment_types',
     label: 'Payment Type',
     type: 'multi-select',
+    // H-4 (bughunt 2026-04-16): new-data spec vocabulary. Legacy rows
+    // stored as `stripe` remain in the DB but are not offered as a
+    // filter option here — admins can still see the value in each
+    // invoice's `payment_type` column and on the detail page.
     options: [
+      { value: 'credit_card', label: 'Credit Card' },
       { value: 'cash', label: 'Cash' },
       { value: 'check', label: 'Check' },
+      { value: 'ach', label: 'ACH' },
       { value: 'venmo', label: 'Venmo' },
       { value: 'zelle', label: 'Zelle' },
-      { value: 'stripe', label: 'Stripe' },
+      { value: 'other', label: 'Other' },
     ],
   },
   {
@@ -145,7 +151,11 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   check: 'Check',
   venmo: 'Venmo',
   zelle: 'Zelle',
+  // H-4 (bughunt 2026-04-16): `stripe` still renders for legacy rows.
   stripe: 'Stripe',
+  credit_card: 'Credit Card',
+  ach: 'ACH',
+  other: 'Other',
 };
 
 /* ------------------------------------------------------------------ */

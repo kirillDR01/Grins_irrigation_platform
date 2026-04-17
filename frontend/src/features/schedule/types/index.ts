@@ -451,6 +451,32 @@ export interface RescheduleRequestDetail {
   resolved_at: string | null;
 }
 
+// =============================================================================
+// Needs-Review Queue (bughunt H-7)
+// =============================================================================
+
+/**
+ * Row returned by ``GET /appointments/needs-review``. Bundles the minimum
+ * appointment + customer fields required to render the no-reply review
+ * queue on ``/schedule`` without a second customer round-trip.
+ *
+ * Validates: bughunt 2026-04-16 finding H-7.
+ */
+export interface NeedsReviewAppointment {
+  id: string;
+  job_id: string;
+  staff_id: string;
+  scheduled_date: string;
+  time_window_start: string;
+  time_window_end: string;
+  status: AppointmentStatus;
+  needs_review_reason: string | null;
+  confirmation_sent_at: string | null;
+  customer_id: string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+}
+
 export type PaymentMethod = 'credit_card' | 'cash' | 'check' | 'venmo' | 'zelle' | 'send_invoice' | 'stripe_terminal';
 
 export interface CollectPaymentRequest {

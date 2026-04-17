@@ -2577,13 +2577,24 @@ class TestInvoiceListParamsRoundTrip:
 class TestInvoiceServiceMassNotify:
     """Tests for InvoiceService.mass_notify targeting logic.
 
-    Validates: Requirements 29.3, 29.4
+    Validates: Requirements 29.3, 29.4, H-11 (bughunt 2026-04-16).
     """
 
     @pytest.fixture
     def mock_invoice_repo(self) -> AsyncMock:
         repo = AsyncMock()
         repo.update = AsyncMock()
+        # H-11: the new SmsConsentRepository pre-filter calls
+        # ``session.execute(stmt).scalars().all()`` inside mass_notify. Give
+        # the default mock session a sync MagicMock result chain that
+        # returns "no opt-outs" so legacy tests (which don't care about
+        # consent) still exercise the send loop.
+        scalars_mock = MagicMock()
+        scalars_mock.all.return_value = []
+        execute_result_mock = MagicMock()
+        execute_result_mock.scalars.return_value = scalars_mock
+        repo.session = MagicMock()
+        repo.session.execute = AsyncMock(return_value=execute_result_mock)
         return repo
 
     @pytest.fixture
@@ -2844,6 +2855,15 @@ class TestInvoiceServiceMassNotifyExtra:
     def mock_invoice_repo(self) -> AsyncMock:
         repo = AsyncMock()
         repo.update = AsyncMock()
+        # H-11: SmsConsentRepository pre-filter calls
+        # session.execute(stmt).scalars().all() — give it a sync mock
+        # chain returning "no opt-outs" so the send loop runs.
+        scalars_mock = MagicMock()
+        scalars_mock.all.return_value = []
+        execute_result_mock = MagicMock()
+        execute_result_mock.scalars.return_value = scalars_mock
+        repo.session = MagicMock()
+        repo.session.execute = AsyncMock(return_value=execute_result_mock)
         return repo
 
     @pytest.fixture
@@ -2920,6 +2940,138 @@ class TestInvoiceServiceMassNotifyExtra:
             await service.mass_notify("lien_eligible")
         mock_invoice_repo.find_lien_eligible.assert_not_called()
 
+    # ==========================================================================
+    # H-11: batch SMS-consent pre-filter
+    # ==========================================================================
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_past_due_skips_opted_out_customers(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """H-11: past_due branch skips opted-out customers before send."""
+        from unittest.mock import patch
+
+        inv_opted_out = self._mock_invoice_with_customer()
+        inv_ok = self._mock_invoice_with_customer()
+        mock_invoice_repo.find_past_due.return_value = [inv_opted_out, inv_ok]
+
+        with patch(
+            "grins_platform.repositories.sms_consent_repository."
+            "SmsConsentRepository.get_opted_out_customer_ids",
+            new=AsyncMock(return_value={inv_opted_out.customer.id}),
+        ), patch(
+            "grins_platform.services.sms_service.SMSService",
+        ) as mock_sms_cls:
+            mock_sms_instance = MagicMock()
+            mock_sms_instance.send_message = AsyncMock(
+                return_value={"success": True, "message_id": str(uuid4())},
+            )
+            mock_sms_cls.return_value = mock_sms_instance
+
+            result = await service.mass_notify("past_due")
+
+        assert result.targeted == 2
+        assert result.skipped_count == 1
+        assert result.skipped_reasons == {"opted_out": 1}
+        assert result.sent == 1
+        assert result.failed == 0
+        # SMSService.send_message was only called for the non-opted-out one.
+        assert mock_sms_instance.send_message.await_count == 1
+        send_kwargs = mock_sms_instance.send_message.await_args.kwargs
+        # Opted-out customer's phone must NOT appear in any send call.
+        assert send_kwargs["recipient"].customer_id == inv_ok.customer.id
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_upcoming_due_skips_opted_out_customers(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """H-11: due_soon branch skips opted-out customers before send."""
+        from unittest.mock import patch
+
+        inv_opted_out = self._mock_invoice_with_customer()
+        inv_ok_a = self._mock_invoice_with_customer()
+        inv_ok_b = self._mock_invoice_with_customer()
+        mock_invoice_repo.find_due_soon.return_value = [
+            inv_opted_out,
+            inv_ok_a,
+            inv_ok_b,
+        ]
+
+        with patch(
+            "grins_platform.repositories.sms_consent_repository."
+            "SmsConsentRepository.get_opted_out_customer_ids",
+            new=AsyncMock(return_value={inv_opted_out.customer.id}),
+        ), patch(
+            "grins_platform.services.sms_service.SMSService",
+        ) as mock_sms_cls:
+            mock_sms_instance = MagicMock()
+            mock_sms_instance.send_message = AsyncMock(
+                return_value={"success": True, "message_id": str(uuid4())},
+            )
+            mock_sms_cls.return_value = mock_sms_instance
+
+            result = await service.mass_notify("due_soon", due_soon_days=14)
+
+        assert result.targeted == 3
+        assert result.skipped_count == 1
+        assert result.skipped_reasons == {"opted_out": 1}
+        assert result.sent == 2
+        # SMSService.send_message must not have been called for the opted-out
+        # customer.
+        sent_to_customer_ids = {
+            call.kwargs["recipient"].customer_id
+            for call in mock_sms_instance.send_message.await_args_list
+        }
+        assert inv_opted_out.customer.id not in sent_to_customer_ids
+        assert inv_ok_a.customer.id in sent_to_customer_ids
+        assert inv_ok_b.customer.id in sent_to_customer_ids
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_response_includes_skipped_count_and_reasons(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        """H-11: response schema exposes skipped_count and skipped_reasons.
+
+        Default values (no opt-outs) must still be present as 0 and {}
+        so API consumers never see a missing key.
+        """
+        from unittest.mock import patch
+
+        inv = self._mock_invoice_with_customer()
+        mock_invoice_repo.find_past_due.return_value = [inv]
+
+        # No opt-outs -> empty set from the repo.
+        with patch(
+            "grins_platform.repositories.sms_consent_repository."
+            "SmsConsentRepository.get_opted_out_customer_ids",
+            new=AsyncMock(return_value=set()),
+        ), patch(
+            "grins_platform.services.sms_service.SMSService",
+        ) as mock_sms_cls:
+            mock_sms_instance = MagicMock()
+            mock_sms_instance.send_message = AsyncMock(
+                return_value={"success": True, "message_id": str(uuid4())},
+            )
+            mock_sms_cls.return_value = mock_sms_instance
+
+            result = await service.mass_notify("past_due")
+
+        # Field presence and sensible defaults.
+        assert hasattr(result, "skipped_count")
+        assert hasattr(result, "skipped_reasons")
+        assert result.skipped_count == 0
+        assert result.skipped_reasons == {}
+        # And the serialized response (API contract) includes them too.
+        payload = result.model_dump()
+        assert payload["skipped_count"] == 0
+        assert payload["skipped_reasons"] == {}
+
 
 # =============================================================================
 # CR-5: compute_lien_candidates + send_lien_notice
@@ -2993,13 +3145,13 @@ class TestInvoiceServiceLienReviewQueue:
         invoices = [
             self._make_invoice(
                 customer_id=cust_a,
-                amount=Decimal("500"),
+                amount=Decimal(500),
                 days_overdue=90,
                 invoice_number="INV-A-1",
             ),
             self._make_invoice(
                 customer_id=cust_a,
-                amount=Decimal("300"),
+                amount=Decimal(300),
                 days_overdue=65,
                 invoice_number="INV-A-2",
                 first_name="Alice",
@@ -3007,7 +3159,7 @@ class TestInvoiceServiceLienReviewQueue:
             ),
             self._make_invoice(
                 customer_id=cust_b,
-                amount=Decimal("1000"),
+                amount=Decimal(1000),
                 days_overdue=80,
                 invoice_number="INV-B-1",
                 first_name="Bob",
@@ -3021,7 +3173,7 @@ class TestInvoiceServiceLienReviewQueue:
         assert len(candidates) == 2
         by_id = {c.customer_id: c for c in candidates}
         a = by_id[cust_a]
-        assert a.total_past_due_amount == Decimal("800")
+        assert a.total_past_due_amount == Decimal(800)
         assert a.oldest_invoice_age_days == 90
         assert set(a.invoice_numbers) == {"INV-A-1", "INV-A-2"}
 
@@ -3172,3 +3324,161 @@ class TestInvoiceServiceLienReviewQueue:
 
         assert result.success is False
         assert result.message == "no_eligible_invoices"
+
+
+# =============================================================================
+# H-12: compute_lien_candidates reads defaults from BusinessSettings
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestInvoiceServiceH12ReadsBusinessSettings:
+    """H-12 — compute_lien_candidates / mass_notify read defaults from
+    the business-settings service when callers don't override.
+
+    Validates: bughunt 2026-04-16 finding H-12.
+    """
+
+    @pytest.fixture
+    def mock_invoice_repo(self) -> AsyncMock:
+        repo = AsyncMock()
+        repo.session = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_job_repo(self) -> AsyncMock:
+        return AsyncMock()
+
+    @pytest.fixture
+    def mock_settings(self) -> AsyncMock:
+        """A BusinessSettingService stub with configured return values."""
+        settings = AsyncMock()
+        settings.get_int = AsyncMock()
+        settings.get_decimal = AsyncMock()
+        return settings
+
+    @pytest.fixture
+    def service(
+        self,
+        mock_invoice_repo: AsyncMock,
+        mock_job_repo: AsyncMock,
+        mock_settings: AsyncMock,
+    ) -> InvoiceService:
+        return InvoiceService(
+            invoice_repository=mock_invoice_repo,
+            job_repository=mock_job_repo,
+            business_settings=mock_settings,
+        )
+
+    @pytest.mark.asyncio
+    async def test_compute_lien_candidates_reads_defaults_from_business_settings(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+        mock_settings: AsyncMock,
+    ) -> None:
+        """compute_lien_candidates() with no args → uses settings defaults."""
+        mock_invoice_repo.find_lien_eligible.return_value = []
+        mock_settings.get_int.return_value = 90
+        mock_settings.get_decimal.return_value = Decimal("1250.00")
+
+        await service.compute_lien_candidates()
+
+        # The service pulled both knobs from BusinessSettings.
+        mock_settings.get_int.assert_awaited_once_with(
+            "lien_days_past_due", 60,
+        )
+        mock_settings.get_decimal.assert_awaited_once_with(
+            "lien_min_amount", Decimal(500),
+        )
+        # And forwarded them to the repository.
+        mock_invoice_repo.find_lien_eligible.assert_awaited_once_with(
+            days_past_due=90,
+            min_amount=Decimal("1250.00"),
+        )
+
+    @pytest.mark.asyncio
+    async def test_compute_lien_candidates_explicit_args_override_settings(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+        mock_settings: AsyncMock,
+    ) -> None:
+        """Explicit args still win over the persisted defaults."""
+        mock_invoice_repo.find_lien_eligible.return_value = []
+        mock_settings.get_int.return_value = 90
+        mock_settings.get_decimal.return_value = Decimal("1250.00")
+
+        await service.compute_lien_candidates(
+            days_past_due=45, min_amount=250.0,
+        )
+
+        # Settings service should NOT be queried when explicit args given.
+        mock_settings.get_int.assert_not_called()
+        mock_settings.get_decimal.assert_not_called()
+        mock_invoice_repo.find_lien_eligible.assert_awaited_once_with(
+            days_past_due=45,
+            min_amount=Decimal("250.0"),
+        )
+
+    @pytest.mark.asyncio
+    async def test_send_lien_notice_reads_defaults_from_business_settings(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+        mock_settings: AsyncMock,
+    ) -> None:
+        """send_lien_notice also pulls thresholds from BusinessSettings."""
+        mock_invoice_repo.find_lien_eligible_for_customer.return_value = []
+        mock_settings.get_int.return_value = 90
+        mock_settings.get_decimal.return_value = Decimal(1000)
+
+        customer_id = uuid4()
+        await service.send_lien_notice(
+            customer_id=customer_id, admin_user_id=uuid4(),
+        )
+
+        mock_settings.get_int.assert_awaited_once_with(
+            "lien_days_past_due", 60,
+        )
+        mock_settings.get_decimal.assert_awaited_once_with(
+            "lien_min_amount", Decimal(500),
+        )
+        mock_invoice_repo.find_lien_eligible_for_customer.assert_awaited_once_with(
+            customer_id,
+            days_past_due=90,
+            min_amount=Decimal(1000),
+        )
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_due_soon_reads_upcoming_due_days(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+        mock_settings: AsyncMock,
+    ) -> None:
+        """mass_notify('due_soon') with no override reads upcoming_due_days."""
+        mock_invoice_repo.find_due_soon.return_value = []
+        mock_settings.get_int.return_value = 14
+
+        await service.mass_notify("due_soon")
+
+        mock_settings.get_int.assert_awaited_once_with(
+            "upcoming_due_days", 7,
+        )
+        mock_invoice_repo.find_due_soon.assert_awaited_once_with(14)
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_due_soon_explicit_override_wins(
+        self,
+        service: InvoiceService,
+        mock_invoice_repo: AsyncMock,
+        mock_settings: AsyncMock,
+    ) -> None:
+        """Explicit due_soon_days overrides the persisted setting."""
+        mock_invoice_repo.find_due_soon.return_value = []
+
+        await service.mass_notify("due_soon", due_soon_days=3)
+
+        mock_settings.get_int.assert_not_called()
+        mock_invoice_repo.find_due_soon.assert_awaited_once_with(3)

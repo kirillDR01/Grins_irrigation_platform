@@ -18,8 +18,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getErrorMessage } from '@/core/api/client';
 import { AppointmentForm } from './AppointmentForm';
 import { useAppointment } from '../hooks/useAppointments';
+import { useRescheduleFromRequest } from '../hooks/useAppointmentMutations';
 import {
   useRescheduleRequests,
   useResolveRescheduleRequest,
@@ -35,6 +37,7 @@ export function RescheduleRequestsQueue({
 }: RescheduleRequestsQueueProps) {
   const { data: requests, isLoading, error } = useRescheduleRequests('open');
   const resolveMutation = useResolveRescheduleRequest();
+  const rescheduleFromRequestMutation = useRescheduleFromRequest();
   const [rescheduleTarget, setRescheduleTarget] =
     useState<RescheduleRequestDetail | null>(null);
 
@@ -57,7 +60,40 @@ export function RescheduleRequestsQueue({
       resolveMutation.mutate({ id: rescheduleTarget.id });
     }
     setRescheduleTarget(null);
-    toast.success('Appointment rescheduled');
+    toast.success(
+      'Reschedule sent — customer will receive a new confirmation request.'
+    );
+  };
+
+  /**
+   * Admin-picked reschedule from an R-request (bughunt H-6).
+   *
+   * Routes through the new ``/reschedule-from-request`` endpoint so the
+   * backend resets the appointment to SCHEDULED and fires SMS #1 (Y/R/C)
+   * rather than the one-way "We moved your appointment to …" notice.
+   */
+  const handleRescheduleSubmit = async (payload: {
+    scheduled_date: string;
+    time_window_start: string;
+    time_window_end: string;
+    staff_id: string;
+    notes?: string;
+  }) => {
+    if (!rescheduleTarget?.appointment_id) {
+      throw new Error('Missing appointment id for reschedule');
+    }
+    const iso = `${payload.scheduled_date}T${payload.time_window_start}:00`;
+    try {
+      await rescheduleFromRequestMutation.mutateAsync({
+        id: rescheduleTarget.appointment_id,
+        new_scheduled_at: iso,
+      });
+    } catch (err) {
+      toast.error('Failed to send reschedule', {
+        description: getErrorMessage(err),
+      });
+      throw err;
+    }
   };
 
   if (isLoading) {
@@ -168,6 +204,8 @@ export function RescheduleRequestsQueue({
               appointment={targetAppointment}
               onSuccess={handleRescheduleSuccess}
               onCancel={() => setRescheduleTarget(null)}
+              submitOverride={handleRescheduleSubmit}
+              submitLabel="Send Reschedule"
             />
           )}
         </DialogContent>

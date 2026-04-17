@@ -3,10 +3,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
 import { LeadDetail } from './LeadDetail';
 import { leadApi } from '../api/leadApi';
 import { staffApi } from '@/features/staff/api/staffApi';
-import type { Lead } from '../types';
+import type { Lead, LeadMoveResponse, DuplicateConflictError } from '../types';
 
 // Mock the lead API
 vi.mock('../api/leadApi', () => ({
@@ -19,6 +20,18 @@ vi.mock('../api/leadApi', () => ({
     listAttachments: vi.fn(),
     listEstimateTemplates: vi.fn(),
     listContractTemplates: vi.fn(),
+    moveToJobs: vi.fn(),
+    moveToSales: vi.fn(),
+    markContacted: vi.fn(),
+  },
+}));
+
+// Mock sonner toast so assertions stay noise-free
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
   },
 }));
 
@@ -235,8 +248,10 @@ describe('LeadDetail', () => {
       expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
     });
 
-    // "Mark as Contacted" should be visible (appears in header and quick actions)
-    expect(screen.getByTestId('mark-contacted-btn')).toBeInTheDocument();
+    // H-1: Mark Contacted, Move to Jobs, Move to Sales, Delete all visible in header
+    expect(screen.getByTestId('lead-detail-mark-contacted-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('lead-detail-move-to-jobs-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('lead-detail-move-to-sales-btn')).toBeInTheDocument();
     // "Mark as Lost" should be visible
     expect(screen.getByTestId('mark-lost-btn')).toBeInTheDocument();
     // "Mark as Spam" should be visible
@@ -244,7 +259,7 @@ describe('LeadDetail', () => {
     // "Convert to Customer" should NOT be visible (only for qualified)
     expect(screen.queryByTestId('convert-lead-btn')).not.toBeInTheDocument();
     // Delete should always be visible
-    expect(screen.getByTestId('delete-lead-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('lead-detail-delete-btn')).toBeInTheDocument();
   });
 
   it('shows correct action buttons for "contacted" status', async () => {
@@ -256,8 +271,11 @@ describe('LeadDetail', () => {
       expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
     });
 
-    // "Mark as Contacted" should NOT be visible (already contacted)
-    expect(screen.queryByTestId('mark-contacted-btn')).not.toBeInTheDocument();
+    // H-1 / L-3: Mark Contacted remains visible on contacted so admin can re-stamp
+    expect(screen.getByTestId('lead-detail-mark-contacted-btn')).toBeInTheDocument();
+    // Routing actions still visible on contacted
+    expect(screen.getByTestId('lead-detail-move-to-jobs-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('lead-detail-move-to-sales-btn')).toBeInTheDocument();
     // "Mark as Lost" should be visible
     expect(screen.getByTestId('mark-lost-btn')).toBeInTheDocument();
     // "Mark as Spam" should be visible
@@ -277,8 +295,8 @@ describe('LeadDetail', () => {
 
     // "Convert to Customer" should be visible for qualified leads
     expect(screen.getByTestId('convert-lead-btn')).toBeInTheDocument();
-    // "Mark as Contacted" should NOT be visible (not new)
-    expect(screen.queryByTestId('mark-contacted-btn')).not.toBeInTheDocument();
+    // H-1 / L-3: Mark Contacted stays visible on qualified too
+    expect(screen.getByTestId('lead-detail-mark-contacted-btn')).toBeInTheDocument();
     // "Mark as Lost" should be visible
     expect(screen.getByTestId('mark-lost-btn')).toBeInTheDocument();
   });
@@ -292,8 +310,10 @@ describe('LeadDetail', () => {
       expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
     });
 
-    // No quick action buttons for terminal state
-    expect(screen.queryByTestId('mark-contacted-btn')).not.toBeInTheDocument();
+    // No header routing action or quick-actions buttons for terminal state
+    expect(screen.queryByTestId('lead-detail-mark-contacted-btn')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('lead-detail-move-to-jobs-btn')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('lead-detail-move-to-sales-btn')).not.toBeInTheDocument();
     expect(screen.queryByTestId('convert-lead-btn')).not.toBeInTheDocument();
     expect(screen.queryByTestId('mark-lost-btn')).not.toBeInTheDocument();
     expect(screen.queryByTestId('mark-spam-btn')).not.toBeInTheDocument();
@@ -494,7 +514,7 @@ describe('LeadDetail', () => {
       });
 
       // Click the delete button
-      await user.click(screen.getByTestId('delete-lead-btn'));
+      await user.click(screen.getByTestId('lead-detail-delete-btn'));
 
       // Confirmation dialog should appear
       await waitFor(() => {
@@ -517,7 +537,7 @@ describe('LeadDetail', () => {
       });
 
       // Open dialog
-      await user.click(screen.getByTestId('delete-lead-btn'));
+      await user.click(screen.getByTestId('lead-detail-delete-btn'));
       await waitFor(() => {
         expect(screen.getByTestId('delete-confirmation-dialog')).toBeInTheDocument();
       });
@@ -546,7 +566,7 @@ describe('LeadDetail', () => {
       });
 
       // Open dialog and confirm
-      await user.click(screen.getByTestId('delete-lead-btn'));
+      await user.click(screen.getByTestId('lead-detail-delete-btn'));
       await waitFor(() => {
         expect(screen.getByTestId('delete-confirmation-dialog')).toBeInTheDocument();
       });
@@ -575,7 +595,7 @@ describe('LeadDetail', () => {
       });
 
       // Open dialog and confirm
-      await user.click(screen.getByTestId('delete-lead-btn'));
+      await user.click(screen.getByTestId('lead-detail-delete-btn'));
       await waitFor(() => {
         expect(screen.getByTestId('delete-confirmation-dialog')).toBeInTheDocument();
       });
@@ -588,6 +608,214 @@ describe('LeadDetail', () => {
 
       // Should NOT navigate (deletion failed)
       expect(mockNavigate).not.toHaveBeenCalledWith('/leads');
+    });
+  });
+
+  // ---- H-1: Routing action buttons ----
+
+  describe('Routing actions (H-1)', () => {
+    const successMoveResponse: LeadMoveResponse = {
+      success: true,
+      lead_id: 'lead-001',
+      customer_id: 'cust-1',
+      job_id: 'job-1',
+      sales_entry_id: null,
+      message: 'Moved to Jobs',
+      requires_estimate_warning: false,
+      merged_into_customer: null,
+    };
+
+    const requiresEstimateMoveResponse: LeadMoveResponse = {
+      ...successMoveResponse,
+      requires_estimate_warning: true,
+    };
+
+    function buildDuplicate409(): AxiosError {
+      const detail: DuplicateConflictError = {
+        error: 'duplicate_found',
+        lead_id: 'lead-001',
+        phone: '6125551234',
+        email: 'john@example.com',
+        duplicates: [
+          {
+            id: 'existing-cust-1',
+            first_name: 'Existing',
+            last_name: 'Customer',
+            phone: '6125551234',
+            email: 'john@example.com',
+          },
+        ],
+      };
+      return new AxiosError(
+        'Request failed with status code 409',
+        'ERR_BAD_REQUEST',
+        undefined,
+        undefined,
+        {
+          status: 409,
+          data: { detail },
+          headers: {},
+          statusText: 'Conflict',
+          config: {} as InternalAxiosRequestConfig,
+        } as AxiosResponse,
+      );
+    }
+
+    it('renders all four routing action buttons for a routable lead', async () => {
+      vi.mocked(leadApi.getById).mockResolvedValue(baseLead);
+
+      render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+      });
+
+      expect(
+        screen.getByTestId('lead-detail-mark-contacted-btn'),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId('lead-detail-move-to-jobs-btn'),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId('lead-detail-move-to-sales-btn'),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId('lead-detail-delete-btn')).toBeInTheDocument();
+    });
+
+    it('fires useMoveToJobs on click and navigates to /jobs', async () => {
+      const user = userEvent.setup();
+      vi.mocked(leadApi.getById).mockResolvedValue(baseLead);
+      vi.mocked(leadApi.moveToJobs).mockResolvedValue(successMoveResponse);
+
+      render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId('lead-detail-move-to-jobs-btn'));
+
+      await waitFor(() => {
+        expect(leadApi.moveToJobs).toHaveBeenCalledWith('lead-001', false);
+      });
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/jobs');
+      });
+    });
+
+    it('fires useMoveToSales on click and navigates to /sales', async () => {
+      const user = userEvent.setup();
+      vi.mocked(leadApi.getById).mockResolvedValue(baseLead);
+      vi.mocked(leadApi.moveToSales).mockResolvedValue(successMoveResponse);
+
+      render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId('lead-detail-move-to-sales-btn'));
+
+      await waitFor(() => {
+        expect(leadApi.moveToSales).toHaveBeenCalledWith('lead-001');
+      });
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/sales');
+      });
+    });
+
+    it('opens requires-estimate modal when move returns requires_estimate_warning', async () => {
+      const user = userEvent.setup();
+      vi.mocked(leadApi.getById).mockResolvedValue(baseLead);
+      vi.mocked(leadApi.moveToJobs).mockResolvedValue(
+        requiresEstimateMoveResponse,
+      );
+
+      render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId('lead-detail-move-to-jobs-btn'));
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId('lead-detail-requires-estimate-modal'),
+        ).toBeInTheDocument();
+      });
+    });
+
+    it('opens conflict modal when move returns 409', async () => {
+      const user = userEvent.setup();
+      vi.mocked(leadApi.getById).mockResolvedValue(baseLead);
+      vi.mocked(leadApi.moveToJobs).mockRejectedValue(buildDuplicate409());
+
+      render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId('lead-detail-move-to-jobs-btn'));
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId('lead-conversion-conflict-modal'),
+        ).toBeInTheDocument();
+      });
+    });
+
+    it('retries with force=true on Convert anyway', async () => {
+      const user = userEvent.setup();
+      vi.mocked(leadApi.getById).mockResolvedValue(baseLead);
+      vi.mocked(leadApi.moveToJobs)
+        .mockRejectedValueOnce(buildDuplicate409())
+        .mockResolvedValueOnce(successMoveResponse);
+
+      render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId('lead-detail-move-to-jobs-btn'));
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId('lead-conversion-conflict-modal'),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId('convert-anyway-btn'));
+
+      await waitFor(() => {
+        expect(leadApi.moveToJobs).toHaveBeenCalledTimes(2);
+      });
+      expect(leadApi.moveToJobs).toHaveBeenNthCalledWith(2, 'lead-001', true);
+    });
+
+    it('fires useMarkContacted on header Mark Contacted click', async () => {
+      const user = userEvent.setup();
+      vi.mocked(leadApi.getById).mockResolvedValue(baseLead);
+      vi.mocked(leadApi.markContacted).mockResolvedValue({
+        ...baseLead,
+        status: 'contacted',
+      });
+
+      render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+      });
+
+      await user.click(
+        screen.getByTestId('lead-detail-mark-contacted-btn'),
+      );
+
+      await waitFor(() => {
+        expect(leadApi.markContacted).toHaveBeenCalledWith('lead-001');
+      });
     });
   });
 });

@@ -216,3 +216,47 @@ class BulkSendConfirmationsResponse(BaseModel):
     failed_count: int = 0
     total_draft: int
     results: list[BulkSendConfirmationItemResult] = Field(default_factory=list)
+
+
+# =============================================================================
+# Needs-Review Queue schemas (bughunt H-7)
+# =============================================================================
+
+
+class NeedsReviewAppointmentResponse(BaseModel):
+    """Row returned by ``GET /appointments/needs-review``.
+
+    Bundles the minimum appointment + customer fields required by the
+    ``/schedule`` admin review queue so the FE does not have to round-trip
+    the customer endpoint to render the row.
+
+    Validates: bughunt 2026-04-16 finding H-7
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    job_id: UUID
+    staff_id: UUID
+    scheduled_date: date
+    time_window_start: time
+    time_window_end: time
+    status: AppointmentStatus
+    needs_review_reason: Optional[str] = None
+    # ISO-8601 timestamp of the most recent
+    # ``appointment_confirmation`` SMS, so the FE can render
+    # "N days since confirmation sent".
+    confirmation_sent_at: Optional[datetime] = None
+    customer_id: Optional[UUID] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+
+
+class MarkContactedResponse(BaseModel):
+    """Response for ``POST /appointments/{id}/mark-contacted``.
+
+    Validates: bughunt 2026-04-16 finding H-7
+    """
+
+    appointment_id: UUID
+    needs_review_reason: Optional[str] = None

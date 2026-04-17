@@ -63,8 +63,8 @@ const statusColors: Record<AppointmentStatus, { bg: string; border: string }> = 
 export function CalendarView({ onDateClick, onEventClick, onWeekChange, selectedDate, onCustomerClick }: CalendarViewProps) {
   const [dateRange, setDateRange] = useState(() => {
     const today = new Date();
-    const start = startOfWeek(today, { weekStartsOn: 0 });
-    const end = endOfWeek(today, { weekStartsOn: 0 });
+    const start = startOfWeek(today, { weekStartsOn: 1 });
+    const end = endOfWeek(today, { weekStartsOn: 1 });
     return {
       start: format(start, 'yyyy-MM-dd'),
       end: format(addDays(end, 7), 'yyyy-MM-dd'), // Add extra week for buffer
@@ -180,11 +180,11 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
   // Build draft appointments per day for day header buttons (Req 8.5)
   const draftsByDay = useMemo(() => {
     if (!weeklySchedule?.days) return {};
-    const map: Record<string, { count: number; ids: string[] }> = {};
+    const map: Record<string, Appointment[]> = {};
     weeklySchedule.days.forEach((day) => {
       const drafts = day.appointments.filter((apt) => apt.status === 'draft');
       if (drafts.length > 0) {
-        map[day.date] = { count: drafts.length, ids: drafts.map((d) => d.id) };
+        map[day.date] = drafts;
       }
     });
     return map;
@@ -194,6 +194,7 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
   // Also shows prepaid badge on service-agreement-linked appointments (Req 17.5)
   const renderEventContent = useCallback(
     (eventInfo: { event: { id: string; title: string; extendedProps: Record<string, unknown> }; timeText: string }) => {
+      const appointment = eventInfo.event.extendedProps.appointment as Appointment | undefined;
       const isDraft = eventInfo.event.extendedProps.status === 'draft';
       const isPrepaid = eventInfo.event.extendedProps.isPrepaid === true;
       return (
@@ -211,9 +212,9 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
             )}
             <span className="ml-1 truncate">{eventInfo.event.title}</span>
           </div>
-          {isDraft && (
+          {isDraft && appointment && (
             <SendConfirmationButton
-              appointmentId={eventInfo.event.id}
+              appointment={appointment}
               compact
             />
           )}
@@ -234,8 +235,7 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
           {dayDrafts && (
             <SendDayConfirmationsButton
               date={dateStr}
-              draftCount={dayDrafts.count}
-              draftAppointmentIds={dayDrafts.ids}
+              draftAppointments={dayDrafts}
             />
           )}
         </div>
@@ -305,7 +305,7 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
     });
     // Notify parent of week change
     if (onWeekChange) {
-      const weekStart = startOfWeek(arg.start, { weekStartsOn: 0 });
+      const weekStart = startOfWeek(arg.start, { weekStartsOn: 1 });
       onWeekChange(weekStart);
     }
   }, [onWeekChange]);
@@ -326,6 +326,7 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
       <FullCalendar
         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
         initialView="timeGridWeek"
+        firstDay={1}
         headerToolbar={{
           left: 'prev,next today',
           center: 'title',

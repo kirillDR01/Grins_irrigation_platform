@@ -1083,6 +1083,218 @@ class AppointmentService(LoggerMixin):
         self.log_completed("reschedule", appointment_id=str(appointment_id))
         return updated  # type: ignore[return-value]
 
+    async def reschedule_for_request(
+        self,
+        appointment_id: UUID,
+        new_scheduled_at: datetime,
+        actor_id: UUID | None = None,
+    ) -> Appointment:
+        """Resolve a customer R-request by moving the appointment and
+        re-firing SMS #1 (Y/R/C).
+
+        The standard ``reschedule`` / ``update_appointment`` drag-drop
+        paths fire ``_send_reschedule_sms`` which is a one-way "We moved
+        your appointment to …" note. For a *customer-initiated*
+        reschedule request (admin resolved via the queue), the spec
+        requires the full confirmation cycle to restart: we send a new
+        SMS #1 so the customer must reply Y/R/C against the new slot.
+
+        Status is reset to SCHEDULED (intentionally NOT CONFIRMED) — the
+        customer has not yet re-confirmed.
+
+        Args:
+            appointment_id: UUID of the appointment to reschedule.
+            new_scheduled_at: New appointment start datetime. The date
+                and start-time components are extracted; the existing
+                ``time_window_end`` is preserved relative to the start
+                so the window duration stays constant.
+            actor_id: Staff/admin resolving the request (audit log).
+
+        Returns:
+            Updated Appointment instance (status=SCHEDULED).
+
+        Raises:
+            AppointmentNotFoundError: If appointment not found.
+            InvalidStatusTransitionError: If the appointment is not in
+                a state where a reschedule-from-request is meaningful
+                (CANCELLED / COMPLETED / NO_SHOW).
+
+        Validates: bughunt H-6
+        """
+        self.log_started(
+            "reschedule_for_request",
+            appointment_id=str(appointment_id),
+            new_scheduled_at=new_scheduled_at.isoformat(),
+        )
+
+        appointment = await self.appointment_repository.get_by_id(appointment_id)
+        if not appointment:
+            self.log_rejected("reschedule_for_request", reason="not_found")
+            raise AppointmentNotFoundError(appointment_id)
+
+        allowed_statuses = {
+            AppointmentStatus.DRAFT.value,
+            AppointmentStatus.SCHEDULED.value,
+            AppointmentStatus.CONFIRMED.value,
+        }
+        if appointment.status not in allowed_statuses:
+            self.log_rejected(
+                "reschedule_for_request",
+                reason="invalid_state",
+                current_status=appointment.status,
+            )
+            raise InvalidStatusTransitionError(
+                AppointmentStatus(appointment.status),
+                AppointmentStatus.SCHEDULED,
+            )
+
+        new_date = new_scheduled_at.date()
+        new_start = new_scheduled_at.time().replace(microsecond=0)
+
+        # Preserve the existing window duration so staff routing stays sane.
+        existing_start = appointment.time_window_start
+        existing_end = appointment.time_window_end
+        start_seconds = (
+            existing_start.hour * 3600
+            + existing_start.minute * 60
+            + existing_start.second
+        )
+        end_seconds = (
+            existing_end.hour * 3600
+            + existing_end.minute * 60
+            + existing_end.second
+        )
+        duration_seconds = max(end_seconds - start_seconds, 0)
+
+        new_start_seconds = (
+            new_start.hour * 3600 + new_start.minute * 60 + new_start.second
+        )
+        new_end_seconds_total = new_start_seconds + duration_seconds
+        # Clamp to end-of-day so we never wrap past midnight.
+        new_end_seconds_total = min(new_end_seconds_total, 24 * 3600 - 1)
+        new_end = time(
+            hour=new_end_seconds_total // 3600,
+            minute=(new_end_seconds_total % 3600) // 60,
+            second=new_end_seconds_total % 60,
+        )
+
+        updated = await self.appointment_repository.update(
+            appointment_id,
+            {
+                "scheduled_date": new_date,
+                "time_window_start": new_start,
+                "time_window_end": new_end,
+                "status": AppointmentStatus.SCHEDULED.value,
+            },
+        )
+
+        # Send SMS #1 (full Y/R/C prompt) instead of a one-way notice.
+        session = self.appointment_repository.session
+        try:
+            await self._send_confirmation_sms(session, updated)  # type: ignore[arg-type]
+        except Exception as exc:
+            # A failure here must not block the reschedule itself — the
+            # admin can manually resend. Mirror the pattern used by the
+            # drag-drop reschedule path.
+            self.log_failed(
+                "reschedule_for_request_sms",
+                appointment_id=str(appointment_id),
+                error=exc,
+            )
+
+        await self._record_reschedule_reconfirmation_audit(
+            session,
+            appointment_id=appointment_id,
+            new_scheduled_at=new_scheduled_at,
+            actor_id=actor_id,
+        )
+
+        self.log_completed(
+            "reschedule_for_request",
+            appointment_id=str(appointment_id),
+            new_scheduled_at=new_scheduled_at.isoformat(),
+        )
+        return updated  # type: ignore[return-value]
+
+    async def _record_reschedule_reconfirmation_audit(
+        self,
+        session: AsyncSession,
+        *,
+        appointment_id: UUID,
+        new_scheduled_at: datetime,
+        actor_id: UUID | None,
+    ) -> None:
+        """Write an AuditLog entry for a reschedule-from-request reconfirm.
+
+        Mirrors ``_record_cancellation_audit``: any failure writing the
+        audit row is logged but never propagated — the admin-facing
+        reschedule response succeeds regardless.
+
+        Validates: bughunt H-6
+        """
+        from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+            AuditLogRepository,
+        )
+
+        try:
+            repo = AuditLogRepository(session)
+            await repo.create(
+                action="appointment.reschedule.reconfirmation_sent",
+                resource_type="appointment",
+                resource_id=appointment_id,
+                actor_id=actor_id,
+                details={
+                    "new_scheduled_at": new_scheduled_at.isoformat(),
+                },
+            )
+        except Exception:
+            self.log_failed(
+                "reschedule_reconfirmation_audit",
+                appointment_id=str(appointment_id),
+            )
+
+    async def send_confirmation_sms(
+        self,
+        appointment_id: UUID,
+    ) -> dict[str, Any] | None:
+        """Public wrapper for ``_send_confirmation_sms`` (bughunt H-6).
+
+        Fetches the appointment by ID and delegates to the existing
+        ``_send_confirmation_sms`` helper so other callers (admin UI
+        reconfirm buttons, reschedule-from-request flows, etc.) can
+        re-fire SMS #1 without touching the private helper directly.
+
+        Args:
+            appointment_id: UUID of the appointment to confirm.
+
+        Returns:
+            The provider-level send result dict (or ``None`` if the
+            appointment's job or customer is missing).
+
+        Raises:
+            AppointmentNotFoundError: If the appointment does not exist.
+
+        Validates: bughunt H-6
+        """
+        self.log_started(
+            "send_confirmation_sms",
+            appointment_id=str(appointment_id),
+        )
+
+        appointment = await self.appointment_repository.get_by_id(appointment_id)
+        if not appointment:
+            self.log_rejected("send_confirmation_sms", reason="not_found")
+            raise AppointmentNotFoundError(appointment_id)
+
+        session = self.appointment_repository.session
+        result = await self._send_confirmation_sms(session, appointment)
+
+        self.log_completed(
+            "send_confirmation_sms",
+            appointment_id=str(appointment_id),
+        )
+        return result
+
     # =========================================================================
     # Draft Mode Methods (Req 8)
     # =========================================================================

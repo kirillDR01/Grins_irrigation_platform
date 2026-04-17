@@ -1,6 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { invoiceApi } from '../api/invoiceApi';
 import { invoiceKeys } from './useInvoices';
+// H-9: cross-query invalidation so InvoiceHistory on the customer detail
+// page refreshes when an invoice is paid / voided / updated elsewhere.
+import { customerInvoiceKeys } from '@/features/customers/hooks/useCustomers';
 import type { InvoiceCreate, InvoiceUpdate, PaymentRecord, BulkNotifyRequest, MassNotifyRequest } from '../types';
 
 // Create invoice
@@ -11,6 +14,8 @@ export function useCreateInvoice() {
     onSuccess: () => {
       // Invalidate all invoice queries to ensure fresh data everywhere
       queryClient.invalidateQueries({ queryKey: invoiceKeys.all });
+      // H-9: refresh customer InvoiceHistory
+      queryClient.invalidateQueries({ queryKey: customerInvoiceKeys.all });
     },
   });
 }
@@ -24,6 +29,8 @@ export function useUpdateInvoice() {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: invoiceKeys.lists() });
       queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(id) });
+      // H-9: refresh customer InvoiceHistory
+      queryClient.invalidateQueries({ queryKey: customerInvoiceKeys.all });
     },
   });
 }
@@ -35,6 +42,8 @@ export function useCancelInvoice() {
     mutationFn: (id: string) => invoiceApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: invoiceKeys.lists() });
+      // H-9: refresh customer InvoiceHistory
+      queryClient.invalidateQueries({ queryKey: customerInvoiceKeys.all });
     },
   });
 }
@@ -47,6 +56,8 @@ export function useSendInvoice() {
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: invoiceKeys.lists() });
       queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(id) });
+      // H-9: refresh customer InvoiceHistory
+      queryClient.invalidateQueries({ queryKey: customerInvoiceKeys.all });
     },
   });
 }
@@ -61,6 +72,8 @@ export function useRecordPayment() {
       queryClient.invalidateQueries({ queryKey: invoiceKeys.lists() });
       queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: invoiceKeys.overdue() });
+      // H-9: refresh customer InvoiceHistory (this is the "mark paid" path)
+      queryClient.invalidateQueries({ queryKey: customerInvoiceKeys.all });
     },
   });
 }
@@ -72,6 +85,8 @@ export function useSendReminder() {
     mutationFn: (id: string) => invoiceApi.sendReminder(id),
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(id) });
+      // H-9: refresh customer InvoiceHistory (reminder_count changed)
+      queryClient.invalidateQueries({ queryKey: customerInvoiceKeys.all });
     },
   });
 }
@@ -85,6 +100,8 @@ export function useSendLienWarning() {
       queryClient.invalidateQueries({ queryKey: invoiceKeys.lists() });
       queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: invoiceKeys.lienDeadlines() });
+      // H-9: refresh customer InvoiceHistory
+      queryClient.invalidateQueries({ queryKey: customerInvoiceKeys.all });
     },
   });
 }
@@ -99,6 +116,8 @@ export function useMarkLienFiled() {
       queryClient.invalidateQueries({ queryKey: invoiceKeys.lists() });
       queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: invoiceKeys.lienDeadlines() });
+      // H-9: refresh customer InvoiceHistory
+      queryClient.invalidateQueries({ queryKey: customerInvoiceKeys.all });
     },
   });
 }
@@ -110,6 +129,8 @@ export function useGenerateInvoiceFromJob() {
     mutationFn: (jobId: string) => invoiceApi.generateFromJob(jobId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: invoiceKeys.lists() });
+      // H-9: refresh customer InvoiceHistory
+      queryClient.invalidateQueries({ queryKey: customerInvoiceKeys.all });
     },
   });
 }
@@ -121,6 +142,8 @@ export function useBulkNotify() {
     mutationFn: (data: BulkNotifyRequest) => invoiceApi.bulkNotify(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: invoiceKeys.lists() });
+      // H-9: refresh customer InvoiceHistory
+      queryClient.invalidateQueries({ queryKey: customerInvoiceKeys.all });
     },
   });
 }
@@ -132,6 +155,8 @@ export function useMassNotify() {
     mutationFn: (data: MassNotifyRequest) => invoiceApi.massNotify(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: invoiceKeys.lists() });
+      // H-9: refresh customer InvoiceHistory
+      queryClient.invalidateQueries({ queryKey: customerInvoiceKeys.all });
     },
   });
 }

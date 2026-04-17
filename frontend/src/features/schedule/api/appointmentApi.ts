@@ -11,6 +11,7 @@ import type {
   AppointmentListParams,
   AppointmentPaginatedResponse,
   DailyScheduleResponse,
+  NeedsReviewAppointment,
   StaffDailyScheduleResponse,
   WeeklyScheduleResponse,
   CollectPaymentRequest,
@@ -274,6 +275,76 @@ export const appointmentApi = {
       `${BASE_URL}/send-confirmations`,
       data
     );
+    return response.data;
+  },
+
+  /**
+   * Reschedule from a customer R-request (bughunt H-6).
+   *
+   * Moves the appointment to the new slot, resets status to SCHEDULED,
+   * and re-fires SMS #1 (Y/R/C) so the customer must re-confirm —
+   * instead of the drag-drop one-way "We moved your appointment to …"
+   * notice. ``new_scheduled_at`` must be an ISO-8601 timestamp.
+   */
+  async rescheduleFromRequest(
+    id: string,
+    data: { new_scheduled_at: string }
+  ): Promise<Appointment> {
+    const response = await apiClient.post<Appointment>(
+      `${BASE_URL}/${id}/reschedule-from-request`,
+      data
+    );
+    return response.data;
+  },
+
+  // =============================================================================
+  // Needs-Review Queue (bughunt H-7)
+  // =============================================================================
+
+  /**
+   * List appointments flagged by the nightly
+   * ``flag_no_reply_confirmations`` cron (bughunt H-7).
+   *
+   * @param reason Optional filter on the review-reason token
+   *   (default ``no_confirmation_response``).
+   */
+  async noReviewList(params?: {
+    reason?: string;
+  }): Promise<NeedsReviewAppointment[]> {
+    const response = await apiClient.get<NeedsReviewAppointment[]>(
+      `${BASE_URL}/needs-review`,
+      { params: params?.reason ? { reason: params.reason } : undefined }
+    );
+    return response.data;
+  },
+
+  /**
+   * Clear the review flag on an appointment after the admin has
+   * contacted the customer (bughunt H-7).
+   */
+  async markContacted(
+    appointmentId: string
+  ): Promise<{ appointment_id: string; needs_review_reason: string | null }> {
+    const response = await apiClient.post<{
+      appointment_id: string;
+      needs_review_reason: string | null;
+    }>(`${BASE_URL}/${appointmentId}/mark-contacted`);
+    return response.data;
+  },
+
+  /**
+   * Re-fire the Y/R/C confirmation SMS as a reminder for a SCHEDULED
+   * appointment on the needs-review queue (bughunt H-7). Unlike
+   * ``sendConfirmation``, this endpoint accepts SCHEDULED status.
+   */
+  async sendReminder(
+    appointmentId: string
+  ): Promise<{ appointment_id: string; status: string; sms_sent: boolean }> {
+    const response = await apiClient.post<{
+      appointment_id: string;
+      status: string;
+      sms_sent: boolean;
+    }>(`${BASE_URL}/${appointmentId}/send-reminder-sms`);
     return response.data;
   },
 

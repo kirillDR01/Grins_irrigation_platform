@@ -35,6 +35,9 @@ if TYPE_CHECKING:
     from grins_platform.models.invoice import Invoice
     from grins_platform.repositories.invoice_repository import InvoiceRepository
     from grins_platform.repositories.job_repository import JobRepository
+    from grins_platform.services.business_setting_service import (
+        BusinessSettingService,
+    )
 
 
 # Job types that are eligible for mechanic's lien (Requirement 11.1)
@@ -179,16 +182,68 @@ class InvoiceService(LoggerMixin):
         self,
         invoice_repository: InvoiceRepository,
         job_repository: JobRepository,
+        business_settings: BusinessSettingService | None = None,
     ) -> None:
         """Initialize service with repositories.
 
         Args:
             invoice_repository: Repository for invoice operations
             job_repository: Repository for job operations
+            business_settings: Optional :class:`BusinessSettingService` used
+                by :meth:`compute_lien_candidates` and :meth:`mass_notify` to
+                read firm-wide defaults from the ``business_settings`` table.
+                If ``None`` (legacy / unit-test constructions), the service
+                lazily instantiates one against the repository's session when
+                first needed. Dependency injection in the API layer passes
+                this explicitly. See H-12 (bughunt 2026-04-16).
         """
         super().__init__()
         self.invoice_repository = invoice_repository
         self.job_repository = job_repository
+        self._settings = business_settings
+
+    def _get_settings_service(self) -> BusinessSettingService:
+        """Return (and cache) a :class:`BusinessSettingService`.
+
+        Lazy so unit tests that pass in a mocked repo with a ``.session``
+        attribute still work without having to construct the settings
+        service themselves. The API layer's DI should inject one via the
+        ``business_settings`` constructor argument instead.
+        """
+        if self._settings is None:
+            from grins_platform.services.business_setting_service import (  # noqa: PLC0415
+                BusinessSettingService,
+            )
+
+            self._settings = BusinessSettingService(
+                self.invoice_repository.session,
+            )
+        return self._settings
+
+    async def _resolve_lien_defaults(
+        self,
+        days_past_due: int | None,
+        min_amount: float | None,
+    ) -> tuple[int, Decimal]:
+        """Coalesce per-call lien thresholds against the business settings.
+
+        If the caller passed explicit values they win (backwards-compat +
+        one-time overrides). Otherwise we pull defaults from the
+        ``business_settings`` table via :class:`BusinessSettingService`.
+        Final fallback: the hard-coded CR-5 defaults (60 days, $500).
+        """
+        settings = self._get_settings_service()
+        resolved_days = (
+            days_past_due
+            if days_past_due is not None
+            else await settings.get_int("lien_days_past_due", 60)
+        )
+        resolved_amount = (
+            Decimal(str(min_amount))
+            if min_amount is not None
+            else await settings.get_decimal("lien_min_amount", Decimal(500))
+        )
+        return resolved_days, resolved_amount
 
     async def _generate_invoice_number(self) -> str:
         """Generate a unique invoice number.
@@ -916,24 +971,27 @@ class InvoiceService(LoggerMixin):
         self,
         notification_type: str,
         *,
-        due_soon_days: int = 7,
-        lien_days_past_due: int = 60,
-        lien_min_amount: float = 500.0,
+        due_soon_days: int | None = None,
+        lien_days_past_due: int | None = None,  # noqa: ARG002
+        lien_min_amount: float | None = None,  # noqa: ARG002
         template: str | None = None,
     ) -> MassNotifyResponse:
         """Send mass notifications to customers based on invoice criteria.
 
         Args:
             notification_type: One of past_due, due_soon, lien_eligible.
-            due_soon_days: Days window for due-soon targeting.
-            lien_days_past_due: Min days past due for lien eligibility.
-            lien_min_amount: Min amount for lien eligibility.
+            due_soon_days: Days window for due-soon targeting. ``None`` reads
+                ``upcoming_due_days`` from the ``business_settings`` table
+                (default 7). Accepted for back-compat / one-time override.
+            lien_days_past_due: Deprecated one-time override (lien branch is
+                routed through the review queue now — CR-5). Ignored here.
+            lien_min_amount: Deprecated one-time override (see above).
             template: Custom message template (uses default if None).
 
         Returns:
             MassNotifyResponse with counts.
 
-        Validates: Requirements 29.3, 29.4
+        Validates: Requirements 29.3, 29.4; H-12 (persisted defaults).
         """
         # CR-5: mass_notify("lien_eligible") is deprecated — admins must
         # send lien notices via the review queue instead. Endpoint layer
@@ -945,6 +1003,12 @@ class InvoiceService(LoggerMixin):
             "mass_notify",
             notification_type=notification_type,
         )
+
+        # H-12: resolve due-soon window from BusinessSettings when caller
+        # didn't pass an explicit override.
+        if due_soon_days is None:
+            settings = self._get_settings_service()
+            due_soon_days = await settings.get_int("upcoming_due_days", 7)
 
         # Discover target invoices
         invoices: list[Invoice]
@@ -959,6 +1023,8 @@ class InvoiceService(LoggerMixin):
         sent = 0
         failed = 0
         skipped = 0
+        skipped_count = 0
+        skipped_reasons: dict[str, int] = {}
 
         msg_template = template or self._DEFAULT_TEMPLATES.get(
             notification_type,
@@ -972,6 +1038,26 @@ class InvoiceService(LoggerMixin):
         if template is not None:
             validate_invoice_template(template)
 
+        # H-11: batch SMS-consent pre-filter. One query resolves the opt-out
+        # set for every targeted customer, so we don't hand STOPed customers
+        # to SMSService.send_message (which would raise and silently bump
+        # `failed`). The lien branch already has a per-customer check via
+        # ``send_lien_notice`` (CR-5) — this covers the past_due / due_soon
+        # branches at batch granularity.
+        from grins_platform.repositories.sms_consent_repository import (  # noqa: PLC0415
+            SmsConsentRepository,
+        )
+
+        candidate_customer_ids: list[UUID] = [
+            inv.customer.id  # type: ignore[union-attr]
+            for inv in invoices
+            if inv.customer is not None and getattr(inv.customer, "id", None)
+        ]
+        consent_repo = SmsConsentRepository(self.invoice_repository.session)
+        opted_out_ids = await consent_repo.get_opted_out_customer_ids(
+            customer_ids=candidate_customer_ids,
+        )
+
         for inv in invoices:
             try:
                 customer = inv.customer  # type: ignore[union-attr]
@@ -979,9 +1065,19 @@ class InvoiceService(LoggerMixin):
                     skipped += 1
                     continue
 
-                # Render template with invoice/customer fields. The
-                # canonical key is "customer_name" — full name, not just
-                # first — to match the spec's [Customer name] bracket.
+                # H-11: filter opted-out customers before any SMS dispatch so
+                # the send loop doesn't blow up into `failed` on STOPed phones.
+                if customer.id in opted_out_ids:
+                    skipped_reasons["opted_out"] = (
+                        skipped_reasons.get("opted_out", 0) + 1
+                    )
+                    skipped_count += 1
+                    continue
+
+                # bughunt M-14: render through the canonical helper using
+                # the spec's full ``customer_name`` (first + last) instead
+                # of `first_name` only. The helper also accepts the spec's
+                # bracket form for admin-supplied templates.
                 full_name = " ".join(
                     p
                     for p in [
@@ -1042,6 +1138,8 @@ class InvoiceService(LoggerMixin):
             sent=sent,
             failed=failed,
             skipped=skipped,
+            skipped_count=skipped_count,
+            skipped_reasons=skipped_reasons,
         )
         return MassNotifyResponse(
             notification_type=notification_type,
@@ -1049,13 +1147,15 @@ class InvoiceService(LoggerMixin):
             sent=sent,
             failed=failed,
             skipped=skipped,
+            skipped_count=skipped_count,
+            skipped_reasons=skipped_reasons,
         )
 
     async def compute_lien_candidates(
         self,
         *,
-        days_past_due: int = 60,
-        min_amount: float = 500.0,
+        days_past_due: int | None = None,
+        min_amount: float | None = None,
     ) -> list[LienCandidateResponse]:
         """Build the admin review queue of lien-eligible customers.
 
@@ -1063,17 +1163,26 @@ class InvoiceService(LoggerMixin):
         so the admin sees one row per customer with the aggregated
         oldest-invoice age and total past-due amount.
 
-        Validates: CR-5 (bughunt 2026-04-16).
+        When ``days_past_due`` / ``min_amount`` are ``None``, defaults come
+        from the ``business_settings`` table (H-12). Explicit values still
+        win so one-time overrides stay possible.
+
+        Validates: CR-5 (bughunt 2026-04-16); H-12 (persisted defaults).
         """
+        resolved_days, resolved_amount = await self._resolve_lien_defaults(
+            days_past_due,
+            min_amount,
+        )
+
         self.log_started(
             "compute_lien_candidates",
-            days_past_due=days_past_due,
-            min_amount=min_amount,
+            days_past_due=resolved_days,
+            min_amount=float(resolved_amount),
         )
 
         invoices = await self.invoice_repository.find_lien_eligible(
-            days_past_due=days_past_due,
-            min_amount=Decimal(str(min_amount)),
+            days_past_due=resolved_days,
+            min_amount=resolved_amount,
         )
 
         # Group by customer_id.
@@ -1091,7 +1200,7 @@ class InvoiceService(LoggerMixin):
                     "customer_name": f"{customer.first_name} {customer.last_name}".strip(),
                     "customer_phone": getattr(customer, "phone", None),
                     "oldest_age": 0,
-                    "total": Decimal("0"),
+                    "total": Decimal(0),
                     "invoice_ids": [],
                     "invoice_numbers": [],
                 },
@@ -1099,17 +1208,17 @@ class InvoiceService(LoggerMixin):
 
             age_days = (today - inv.due_date).days if inv.due_date else 0
             bucket["oldest_age"] = max(int(bucket["oldest_age"]), age_days)  # type: ignore[arg-type]
-            bucket["total"] = cast(Decimal, bucket["total"]) + inv.total_amount
-            cast(list, bucket["invoice_ids"]).append(inv.id)
-            cast(list, bucket["invoice_numbers"]).append(inv.invoice_number)
+            bucket["total"] = cast("Decimal", bucket["total"]) + inv.total_amount
+            cast("list", bucket["invoice_ids"]).append(inv.id)
+            cast("list", bucket["invoice_numbers"]).append(inv.invoice_number)
 
         candidates: list[LienCandidateResponse] = [
             LienCandidateResponse(
-                customer_id=cast(UUID, b["customer_id"]),
-                customer_name=cast(str, b["customer_name"]),
+                customer_id=cast("UUID", b["customer_id"]),
+                customer_name=cast("str", b["customer_name"]),
                 customer_phone=cast("str | None", b["customer_phone"]),
-                oldest_invoice_age_days=int(cast(int, b["oldest_age"])),
-                total_past_due_amount=cast(Decimal, b["total"]),
+                oldest_invoice_age_days=int(cast("int", b["oldest_age"])),
+                total_past_due_amount=cast("Decimal", b["total"]),
                 invoice_ids=cast("list[UUID]", b["invoice_ids"]),
                 invoice_numbers=cast("list[str]", b["invoice_numbers"]),
             )
@@ -1127,8 +1236,8 @@ class InvoiceService(LoggerMixin):
         *,
         customer_id: UUID,
         admin_user_id: UUID | None,
-        days_past_due: int = 60,
-        min_amount: float = 500.0,
+        days_past_due: int | None = None,
+        min_amount: float | None = None,
     ) -> LienNoticeResult:
         """Send a single lien-notice SMS after admin approval.
 
@@ -1137,8 +1246,16 @@ class InvoiceService(LoggerMixin):
         :class:`SMSService`, and writes an AuditLog row
         (``action="invoice.lien_notice.sent"``).
 
-        Validates: CR-5 (bughunt 2026-04-16).
+        When ``days_past_due`` / ``min_amount`` are ``None``, defaults come
+        from the ``business_settings`` table (H-12).
+
+        Validates: CR-5 (bughunt 2026-04-16); H-12 (persisted defaults).
         """
+        resolved_days, resolved_amount = await self._resolve_lien_defaults(
+            days_past_due,
+            min_amount,
+        )
+
         self.log_started(
             "send_lien_notice",
             customer_id=str(customer_id),
@@ -1148,8 +1265,8 @@ class InvoiceService(LoggerMixin):
 
         invoices = await self.invoice_repository.find_lien_eligible_for_customer(
             customer_id,
-            days_past_due=days_past_due,
-            min_amount=Decimal(str(min_amount)),
+            days_past_due=resolved_days,
+            min_amount=resolved_amount,
         )
         if not invoices:
             self.log_completed(
@@ -1176,10 +1293,11 @@ class InvoiceService(LoggerMixin):
             )
 
         # SMS consent pre-filter (overlaps H-11).
+        from sqlalchemy import select as _select  # noqa: PLC0415
+
         from grins_platform.models.sms_consent_record import (  # noqa: PLC0415
             SmsConsentRecord,
         )
-        from sqlalchemy import select as _select  # noqa: PLC0415
 
         consent_stmt = _select(SmsConsentRecord).where(
             SmsConsentRecord.customer_id == customer.id,
@@ -1205,8 +1323,7 @@ class InvoiceService(LoggerMixin):
         # behavior). Now uses canonical merge keys (bughunt M-14).
         oldest_inv = invoices[0]
         total_amount = sum(
-            (inv.total_amount for inv in invoices),
-            start=Decimal("0"),
+            (inv.total_amount for inv in invoices), start=Decimal(0),
         )
         full_name = " ".join(
             p
@@ -1286,7 +1403,7 @@ class InvoiceService(LoggerMixin):
                     "sms_message_id": str(sms_id) if sms_id else None,
                 },
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             # Audit must never block the SMS dispatch.
             self.log_failed(
                 "send_lien_notice_audit",

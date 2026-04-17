@@ -13,7 +13,7 @@ Validates: Requirements 39.1, 39.2, 39.3, 39.4, 39.5, 39.8,
 
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -1115,3 +1115,169 @@ class TestProperty55InvoiceReminderScheduling:
             assert result is True
         else:
             assert result is False
+
+
+# =============================================================================
+# bughunt 2026-04-16 H-5: admin cancellation alert
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestSendAdminCancellationAlert:
+    """Tests for ``send_admin_cancellation_alert`` (H-5).
+
+    D-4 (2026-04-16): the method must dispatch *both* an email to the
+    configured admin address **and** create an :class:`Alert` row. Email
+    failures must be logged and swallowed so the customer SMS flow is
+    never blocked.
+
+    Validates: bughunt 2026-04-16 finding H-5
+    """
+
+    @pytest.mark.asyncio
+    async def test_send_admin_cancellation_alert_dispatches_email_and_creates_alert_row(
+        self,
+    ) -> None:
+        """Both channels fire on the happy path.
+
+        Validates: bughunt 2026-04-16 finding H-5
+        """
+        from grins_platform.models.alert import Alert
+        from grins_platform.services.admin_config import (
+            AdminNotificationSettings,
+        )
+
+        email_svc = MagicMock()
+        email_svc._send_email = MagicMock(return_value=True)
+
+        admin_settings = AdminNotificationSettings(
+            admin_notification_email="admin@example.com",
+        )
+
+        svc = NotificationService(
+            email_service=email_svc,
+            admin_settings=admin_settings,
+        )
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        appointment_id = uuid4()
+        customer_id = uuid4()
+        scheduled_at = datetime(2026, 4, 17, 9, 0, tzinfo=timezone.utc)
+
+        await svc.send_admin_cancellation_alert(
+            db,
+            appointment_id=appointment_id,
+            customer_id=customer_id,
+            customer_name="Jane Doe",
+            scheduled_at=scheduled_at,
+            source="customer_sms",
+        )
+
+        # --- Email dispatch ---
+        email_svc._send_email.assert_called_once()
+        email_kwargs = email_svc._send_email.call_args.kwargs
+        assert email_kwargs["to_email"] == "admin@example.com"
+        assert "Jane Doe" in email_kwargs["subject"]
+        assert "customer_sms" in email_kwargs["html_body"]
+
+        # --- Alert row persisted ---
+        db.add.assert_called_once()
+        added_alert = db.add.call_args[0][0]
+        assert isinstance(added_alert, Alert)
+        assert added_alert.type == "customer_cancelled_appointment"
+        assert added_alert.severity == "warning"
+        assert added_alert.entity_type == "appointment"
+        assert added_alert.entity_id == appointment_id
+        assert "Jane Doe" in added_alert.message
+        assert "customer_sms" in added_alert.message
+        assert "2026-04-17 09:00" in added_alert.message
+
+    @pytest.mark.asyncio
+    async def test_send_admin_cancellation_alert_swallows_email_failure(
+        self,
+    ) -> None:
+        """Email sender raising must NOT propagate — Alert row still created.
+
+        Validates: bughunt 2026-04-16 finding H-5
+        """
+        from grins_platform.models.alert import Alert
+        from grins_platform.services.admin_config import (
+            AdminNotificationSettings,
+        )
+
+        email_svc = MagicMock()
+        email_svc._send_email = MagicMock(
+            side_effect=RuntimeError("SMTP down"),
+        )
+
+        admin_settings = AdminNotificationSettings(
+            admin_notification_email="admin@example.com",
+        )
+
+        svc = NotificationService(
+            email_service=email_svc,
+            admin_settings=admin_settings,
+        )
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        # Must not raise
+        await svc.send_admin_cancellation_alert(
+            db,
+            appointment_id=uuid4(),
+            customer_id=uuid4(),
+            customer_name="Jane Doe",
+            scheduled_at=datetime(2026, 4, 17, 9, 0, tzinfo=timezone.utc),
+        )
+
+        # Alert row still created despite email failure.
+        db.add.assert_called_once()
+        added_alert = db.add.call_args[0][0]
+        assert isinstance(added_alert, Alert)
+
+    @pytest.mark.asyncio
+    async def test_send_admin_cancellation_alert_skips_email_when_not_configured(
+        self,
+    ) -> None:
+        """No ``ADMIN_NOTIFICATION_EMAIL`` → email skipped, alert row still written.
+
+        Validates: bughunt 2026-04-16 finding H-5
+        """
+        from grins_platform.services.admin_config import (
+            AdminNotificationSettings,
+        )
+
+        email_svc = MagicMock()
+        email_svc._send_email = MagicMock(return_value=True)
+
+        # Empty recipient simulates the missing-env-var case.
+        admin_settings = AdminNotificationSettings(admin_notification_email="")
+
+        svc = NotificationService(
+            email_service=email_svc,
+            admin_settings=admin_settings,
+        )
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        await svc.send_admin_cancellation_alert(
+            db,
+            appointment_id=uuid4(),
+            customer_id=uuid4(),
+            customer_name="Jane Doe",
+            scheduled_at=datetime(2026, 4, 17, 9, 0, tzinfo=timezone.utc),
+        )
+
+        email_svc._send_email.assert_not_called()
+        # Alert row still created.
+        db.add.assert_called_once()

@@ -16,7 +16,19 @@ export type InvoiceStatus =
   | 'lien_filed'
   | 'cancelled';
 
-export type PaymentMethod = 'cash' | 'check' | 'venmo' | 'zelle' | 'stripe';
+// PaymentMethod mirrors the backend enum in grins_platform.models.enums.
+// H-4 (bughunt 2026-04-16): `credit_card`, `ach`, and `other` were
+// added as spec values. `stripe` is retained so legacy rows stored
+// before H-4 still round-trip through the API — new UI pickers omit it.
+export type PaymentMethod =
+  | 'cash'
+  | 'check'
+  | 'venmo'
+  | 'zelle'
+  | 'stripe'
+  | 'credit_card'
+  | 'ach'
+  | 'other';
 
 export interface InvoiceStatusConfig {
   label: string;

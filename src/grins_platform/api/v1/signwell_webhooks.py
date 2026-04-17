@@ -180,6 +180,14 @@ async def signwell_webhook(
     if entry.status == SalesEntryStatus.PENDING_APPROVAL.value:
         entry.status = SalesEntryStatus.SEND_CONTRACT.value
         entry.updated_at = datetime.now(tz=timezone.utc)
+    else:
+        logger.warning(
+            "signwell.document_signed.unexpected_pre_state",
+            entry_id=str(entry.id),
+            pre_state=entry.status,
+            expected=SalesEntryStatus.PENDING_APPROVAL.value,
+            document_id=document_id,
+        )
 
     await db.commit()
 
