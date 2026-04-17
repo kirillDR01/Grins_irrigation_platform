@@ -9,9 +9,15 @@ types are added: ``appointment_confirmation_reply`` for the Y/R/C
 acknowledgment auto-reply, and ``reschedule_followup`` for the
 "Please reply with 2-3 dates" follow-up.
 
-Revision ID: 20260416_100000
-Revises: 20260414_100900
+Revision ID: 20260416_100400
+Revises: 20260416_100300
 Requirements: bughunt M-9 / 2026-04-16
+
+The original draft of this migration used revision id ``20260416_100000``
+which collided with the H-4 payment-method-CHECK migration that landed
+in the H-1..H-14 wave. Renumbered to ``20260416_100400`` and chained
+off H-12's seed-business-settings migration so the dev deploy applies
+cleanly. (See the post-merge fixup that introduced this rename.)
 """
 
 from collections.abc import Sequence
@@ -19,8 +25,8 @@ from typing import Union
 
 from alembic import op
 
-revision: str = "20260416_100000"
-down_revision: Union[str, None] = "20260414_100900"
+revision: str = "20260416_100400"
+down_revision: Union[str, None] = "20260416_100300"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
