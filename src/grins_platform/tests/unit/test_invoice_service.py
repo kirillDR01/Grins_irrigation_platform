@@ -2725,6 +2725,185 @@ class TestInvoiceServiceMassNotify:
         assert result.skipped == 1
         assert result.sent == 0
 
+
+# ---------------------------------------------------------------------------
+# bughunt M-14: canonical merge keys + admin template validation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestRenderInvoiceTemplate:
+    """``render_invoice_template`` accepts both the canonical curly form
+    and the spec brackets, mapping the latter to canonical at parse
+    time so all rendering goes through one ``str.format`` call."""
+
+    def test_canonical_curly_form_renders(self) -> None:
+        from grins_platform.services.invoice_service import (
+            render_invoice_template,
+        )
+
+        body = render_invoice_template(
+            "{customer_name}, invoice {invoice_number} for ${amount} due {due_date}.",
+            customer_name="Jane Doe",
+            invoice_number="INV-2026-0001",
+            amount="250.00",
+            due_date="2026-04-22",
+        )
+        assert (
+            body == "Jane Doe, invoice INV-2026-0001 for $250.00 due 2026-04-22."
+        )
+
+    def test_spec_brackets_translate_to_canonical(self) -> None:
+        from grins_platform.services.invoice_service import (
+            render_invoice_template,
+        )
+
+        body = render_invoice_template(
+            "[Customer name], invoice #[number] for $[amount] was due on [date].",
+            customer_name="Jane Doe",
+            invoice_number="INV-2026-0001",
+            amount="250.00",
+            due_date="2026-04-22",
+        )
+        assert (
+            body
+            == "Jane Doe, invoice #INV-2026-0001 for $250.00 was due on 2026-04-22."
+        )
+
+
+@pytest.mark.unit
+class TestValidateInvoiceTemplate:
+    """Admin custom templates must reference the four canonical merge
+    keys so the loop never silently drops merge fields."""
+
+    def test_complete_template_passes(self) -> None:
+        from grins_platform.services.invoice_service import (
+            validate_invoice_template,
+        )
+
+        validate_invoice_template(
+            "{customer_name} {invoice_number} {amount} {due_date}",
+        )
+
+    def test_complete_bracket_template_passes(self) -> None:
+        from grins_platform.services.invoice_service import (
+            validate_invoice_template,
+        )
+
+        validate_invoice_template(
+            "[Customer name] [number] [amount] [date]",
+        )
+
+    def test_missing_keys_raises_with_named_offenders(self) -> None:
+        from grins_platform.services.invoice_service import (
+            InvalidInvoiceTemplateError,
+            validate_invoice_template,
+        )
+
+        with pytest.raises(InvalidInvoiceTemplateError) as exc_info:
+            validate_invoice_template("Pay your invoice now.")
+
+        missing = exc_info.value.missing
+        assert set(missing) == {
+            "customer_name",
+            "invoice_number",
+            "amount",
+            "due_date",
+        }
+
+
+@pytest.mark.unit
+class TestMassNotifyValidatesCustomTemplate:
+    """``mass_notify`` raises ``InvalidInvoiceTemplateError`` upfront for
+    admin-supplied templates that omit required merge keys, so the
+    endpoint can return 400 with named offenders instead of failing
+    silently per-row inside the send loop."""
+
+    @pytest.fixture
+    def service(self) -> InvoiceService:
+        return InvoiceService(
+            invoice_repository=AsyncMock(),
+            job_repository=AsyncMock(),
+        )
+
+    @pytest.mark.asyncio
+    async def test_mass_notify_with_invalid_template_raises_before_send(
+        self,
+        service: InvoiceService,
+    ) -> None:
+        from grins_platform.services.invoice_service import (
+            InvalidInvoiceTemplateError,
+        )
+
+        with pytest.raises(InvalidInvoiceTemplateError):
+            await service.mass_notify(
+                "past_due",
+                template="Pay up.",
+            )
+
+
+@pytest.mark.unit
+class TestInvoiceServiceMassNotifyExtra:
+    """Continuation of TestInvoiceServiceMassNotify. Split from the
+    original class so the bughunt M-14 test classes can sit between
+    them without breaking fixture inheritance — these tests use the
+    repo-mock fixture flavor, not the `InvoiceService(AsyncMock())`
+    fixture used by the M-14 templating-validation tests above.
+    """
+
+    @pytest.fixture
+    def mock_invoice_repo(self) -> AsyncMock:
+        repo = AsyncMock()
+        repo.update = AsyncMock()
+        # H-11: SmsConsentRepository pre-filter calls
+        # session.execute(stmt).scalars().all() — give it a sync mock
+        # chain returning "no opt-outs" so the send loop runs.
+        scalars_mock = MagicMock()
+        scalars_mock.all.return_value = []
+        execute_result_mock = MagicMock()
+        execute_result_mock.scalars.return_value = scalars_mock
+        repo.session = MagicMock()
+        repo.session.execute = AsyncMock(return_value=execute_result_mock)
+        return repo
+
+    @pytest.fixture
+    def mock_job_repo(self) -> AsyncMock:
+        return AsyncMock()
+
+    @pytest.fixture
+    def service(
+        self,
+        mock_invoice_repo: AsyncMock,
+        mock_job_repo: AsyncMock,
+    ) -> InvoiceService:
+        return InvoiceService(
+            invoice_repository=mock_invoice_repo,
+            job_repository=mock_job_repo,
+        )
+
+    def _mock_invoice_with_customer(
+        self,
+        *,
+        phone: str | None = "+16125551234",
+    ) -> MagicMock:
+        customer = MagicMock()
+        customer.first_name = "Jane"
+        customer.last_name = "Doe"
+        customer.phone = phone
+        customer.id = uuid4()
+        customer.sms_opt_in = True
+        customer.sms_consent_type = "transactional"
+        customer.sms_consent_date = datetime.now(timezone.utc)
+
+        inv = MagicMock()
+        inv.id = uuid4()
+        inv.invoice_number = "INV-2025-000001"
+        inv.total_amount = Decimal("250.00")
+        inv.due_date = date.today() - timedelta(days=45)
+        inv.reminder_count = 0
+        inv.customer = customer
+        return inv
+
     @pytest.mark.asyncio
     async def test_mass_notify_counts_send_failures(
         self,

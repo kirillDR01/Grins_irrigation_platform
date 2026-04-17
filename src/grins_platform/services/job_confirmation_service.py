@@ -8,10 +8,9 @@ Validates: CRM Changes Update 2 Req 24.1-24.8, 25.1
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
-
-import os
 
 from sqlalchemy import select
 
@@ -38,23 +37,38 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 # Keyword mapping: normalised text → ConfirmationKeyword
+#
+# bughunt M-3: Spec §9 lists "Y (or yes, confirm, ok, okay)" and §15 leaves
+# room for common synonyms and number replies. ``stop`` is intentionally
+# excluded — it is a reserved compliance keyword handled by the SMS opt-out
+# pipeline, mapping it to CANCEL would silently swallow opt-outs.
 _KEYWORD_MAP: dict[str, ConfirmationKeyword] = {
+    # CONFIRM
     "y": ConfirmationKeyword.CONFIRM,
     "yes": ConfirmationKeyword.CONFIRM,
     "confirm": ConfirmationKeyword.CONFIRM,
     "confirmed": ConfirmationKeyword.CONFIRM,
+    "ok": ConfirmationKeyword.CONFIRM,
+    "okay": ConfirmationKeyword.CONFIRM,
+    "yup": ConfirmationKeyword.CONFIRM,
+    "yeah": ConfirmationKeyword.CONFIRM,
+    "1": ConfirmationKeyword.CONFIRM,
+    # RESCHEDULE
     "r": ConfirmationKeyword.RESCHEDULE,
     "reschedule": ConfirmationKeyword.RESCHEDULE,
+    "different time": ConfirmationKeyword.RESCHEDULE,
+    "change time": ConfirmationKeyword.RESCHEDULE,
+    "2": ConfirmationKeyword.RESCHEDULE,
+    # CANCEL — note: ``stop`` is NOT included; it's a compliance opt-out keyword.
     "c": ConfirmationKeyword.CANCEL,
     "cancel": ConfirmationKeyword.CANCEL,
 }
 
-# Auto-reply templates
+# Auto-reply templates. CONFIRM is built dynamically per appointment
+# (bughunt M-4) — see :func:`_build_confirm_message`.
 _AUTO_REPLIES: dict[ConfirmationKeyword, str] = {
-    ConfirmationKeyword.CONFIRM: ("Your appointment has been confirmed. See you then!"),
     ConfirmationKeyword.RESCHEDULE: (
-        "We received your reschedule request. "
-        "Our team will reach out with alternative times shortly."
+        "We've received your reschedule request. We'll be in touch with a new time."
     ),
     ConfirmationKeyword.CANCEL: (
         "Your appointment has been cancelled. "
@@ -192,8 +206,34 @@ class JobConfirmationService(LoggerMixin):
         return {
             "action": "confirmed",
             "appointment_id": str(appointment_id),
-            "auto_reply": _AUTO_REPLIES[ConfirmationKeyword.CONFIRM],
+            "auto_reply": self._build_confirm_message(appt),
         }
+
+    @staticmethod
+    def _build_confirm_message(appt: Any | None) -> str:  # noqa: ANN401
+        """Build the CONFIRM auto-reply with the appointment date and time.
+
+        Spec §4 (lines 219-222): ``"Your appointment has been confirmed.
+        See you on [date] at [time]!"``. Mirrors the formatting helpers used
+        by :meth:`_build_cancellation_message` so the wording is consistent
+        across CONFIRM and CANCEL flows (bughunt M-4).
+        """
+        from grins_platform.services.sms.formatters import (  # noqa: PLC0415
+            format_sms_time_12h,
+        )
+
+        appt_date = getattr(appt, "scheduled_date", None) if appt else None
+        appt_time = getattr(appt, "time_window_start", None) if appt else None
+
+        date_str = appt_date.strftime("%B %d, %Y") if appt_date else None
+        time_str = format_sms_time_12h(appt_time) if appt_time else None
+
+        if date_str and time_str:
+            return (
+                f"Your appointment has been confirmed. "
+                f"See you on {date_str} at {time_str}!"
+            )
+        return "Your appointment has been confirmed. See you then!"
 
     async def _handle_reschedule(
         self,
@@ -265,11 +305,14 @@ class JobConfirmationService(LoggerMixin):
                 "auto_reply": "",  # falsy → sms_service._try_confirmation_reply skips send
             }
 
+        pre_cancel_status = appt.status if appt else None
+        transitioned = False
         if appt and appt.status in (
             AppointmentStatus.SCHEDULED.value,
             AppointmentStatus.CONFIRMED.value,
         ):
             appt.status = AppointmentStatus.CANCELLED.value
+            transitioned = True
             await self.db.flush()
 
             # Clear on-site data after cancellation (Req 2.1, 2.2, 2.3)
@@ -295,11 +338,63 @@ class JobConfirmationService(LoggerMixin):
             appt=appt,
         )
 
+        # bughunt M-8 (2026-04-16): audit the customer-initiated cancel so
+        # the admin history view shows *why* an appointment was cancelled
+        # (the admin-side path already audits via
+        # AppointmentService._record_cancellation_audit). Gated on
+        # ``transitioned`` so we don't write an audit row when the cancel
+        # was a no-op (already CANCELLED in some other state path).
+        if transitioned:
+            await self._record_customer_sms_cancel_audit(
+                appointment_id=appointment_id,
+                pre_cancel_status=pre_cancel_status or "",
+                response_id=response.id,
+                from_phone=response.from_phone,
+            )
+
         return {
             "action": "cancelled",
             "appointment_id": str(appointment_id),
             "auto_reply": auto_reply,
         }
+
+    async def _record_customer_sms_cancel_audit(
+        self,
+        *,
+        appointment_id: UUID,
+        pre_cancel_status: str,
+        response_id: Any,  # noqa: ANN401 — JobConfirmationResponse.id is UUID at runtime
+        from_phone: str | None,
+    ) -> None:
+        """Audit a ``C`` SMS cancel with ``source="customer_sms"`` (bughunt M-8).
+
+        Mirrors :meth:`AppointmentService._record_cancellation_audit` but
+        records the customer's phone in place of an admin actor so the
+        history view can tell admin- and customer-initiated cancels apart.
+        """
+        from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+            AuditLogRepository,
+        )
+
+        try:
+            repo = AuditLogRepository(self.db)
+            _ = await repo.create(
+                action="appointment.cancel",
+                resource_type="appointment",
+                resource_id=appointment_id,
+                actor_id=None,
+                details={
+                    "source": "customer_sms",
+                    "pre_cancel_status": pre_cancel_status,
+                    "response_id": str(response_id),
+                    "from_phone": from_phone,
+                },
+            )
+        except Exception:
+            self.log_failed(
+                "customer_sms_cancel_audit",
+                appointment_id=str(appointment_id),
+            )
 
     async def _dispatch_admin_cancellation_alert(
         self,

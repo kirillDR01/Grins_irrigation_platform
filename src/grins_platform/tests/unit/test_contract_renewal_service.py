@@ -589,17 +589,53 @@ class TestUpdateProposalStatus:
         assert proposal.status == ProposalStatus.PARTIALLY_APPROVED.value
 
     @pytest.mark.asyncio
-    async def test_still_pending_keeps_pending(
+    async def test_approved_plus_pending_sets_partially_approved(
         self,
         service: ContractRenewalReviewService,
     ) -> None:
+        """bughunt M-13: an APPROVED+PENDING mix is now PARTIALLY_APPROVED
+        instead of staying PENDING. Previously the partial state required
+        every job to be decided, so a proposal where the admin approved
+        2 of 7 and walked away stayed PENDING on the dashboard despite
+        having visible approvals."""
         pj1 = _make_proposed_job(status=ProposedJobStatus.APPROVED.value)
         pj2 = _make_proposed_job(status=ProposedJobStatus.PENDING.value)
         proposal = _make_proposal(proposed_jobs=[pj1, pj2])
 
         await service._update_proposal_status(proposal, uuid4())
 
-        # Still has pending, so stays pending
+        assert proposal.status == ProposalStatus.PARTIALLY_APPROVED.value
+
+    @pytest.mark.asyncio
+    async def test_approved_plus_rejected_plus_pending_sets_partially_approved(
+        self,
+        service: ContractRenewalReviewService,
+    ) -> None:
+        """All three statuses present → still PARTIALLY_APPROVED — at
+        least one approval has landed, so the proposal is no longer in
+        the "untouched" PENDING state."""
+        pj1 = _make_proposed_job(status=ProposedJobStatus.APPROVED.value)
+        pj2 = _make_proposed_job(status=ProposedJobStatus.REJECTED.value)
+        pj3 = _make_proposed_job(status=ProposedJobStatus.PENDING.value)
+        proposal = _make_proposal(proposed_jobs=[pj1, pj2, pj3])
+
+        await service._update_proposal_status(proposal, uuid4())
+
+        assert proposal.status == ProposalStatus.PARTIALLY_APPROVED.value
+
+    @pytest.mark.asyncio
+    async def test_rejected_plus_pending_keeps_pending(
+        self,
+        service: ContractRenewalReviewService,
+    ) -> None:
+        """bughunt M-13: REJECTED+PENDING (no approvals) stays PENDING —
+        the dashboard signal is "still untouched on the approval side"."""
+        pj1 = _make_proposed_job(status=ProposedJobStatus.REJECTED.value)
+        pj2 = _make_proposed_job(status=ProposedJobStatus.PENDING.value)
+        proposal = _make_proposal(proposed_jobs=[pj1, pj2])
+
+        await service._update_proposal_status(proposal, uuid4())
+
         assert proposal.status == ProposalStatus.PENDING.value
 
 

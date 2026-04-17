@@ -18,6 +18,7 @@ from grins_platform.schemas.invoice import (
     InvoiceCreate,
     InvoiceLineItem,
     InvoiceListParams,
+    InvoiceResponse,
     InvoiceUpdate,
     LienFiledRequest,
     PaymentRecord,
@@ -507,3 +508,52 @@ class TestEnumValidation:
         """Test PaymentMethod can be created from string."""
         for method in PaymentMethod:
             assert PaymentMethod(method.value) == method
+
+
+class TestInvoiceResponseDaysComputed:
+    """bughunt M-12: ``days_until_due`` and ``days_past_due`` are now
+    computed server-side on the response, replacing the frontend
+    ``daysDiff`` branch. They're exclusive — exactly one is non-None
+    based on whether ``due_date`` is in the future or the past relative
+    to today (UTC)."""
+
+    def _base_kwargs(self, *, due_date: date) -> dict[str, object]:
+        now = date.today()
+        return {
+            "id": uuid4(),
+            "job_id": uuid4(),
+            "customer_id": uuid4(),
+            "invoice_number": "INV-2026-0001",
+            "amount": Decimal("100.00"),
+            "late_fee_amount": Decimal("0.00"),
+            "total_amount": Decimal("100.00"),
+            "invoice_date": now,
+            "due_date": due_date,
+            "status": InvoiceStatus.SENT,
+            "reminder_count": 0,
+            "lien_eligible": False,
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+        }
+
+    def test_future_due_date_populates_days_until_due(self) -> None:
+        from datetime import timedelta
+
+        future = date.today() + timedelta(days=14)
+        resp = InvoiceResponse(**self._base_kwargs(due_date=future))  # type: ignore[arg-type]
+        assert resp.days_until_due == 14
+        assert resp.days_past_due is None
+
+    def test_past_due_date_populates_days_past_due(self) -> None:
+        from datetime import timedelta
+
+        past = date.today() - timedelta(days=7)
+        resp = InvoiceResponse(**self._base_kwargs(due_date=past))  # type: ignore[arg-type]
+        assert resp.days_past_due == 7
+        assert resp.days_until_due is None
+
+    def test_due_today_returns_zero_until_due(self) -> None:
+        today = date.today()
+        resp = InvoiceResponse(**self._base_kwargs(due_date=today))  # type: ignore[arg-type]
+        assert resp.days_until_due == 0
+        assert resp.days_past_due is None

@@ -344,6 +344,37 @@ class TestReviewPush:
         assert data["sms_sent"] is True
         mock_sms.assert_called_once()
 
+    def test_review_push_uses_spec_exact_wording(
+        self,
+        client: TestClient,
+        mock_session: AsyncMock,
+    ) -> None:
+        """bughunt M-6: spec §4/§10 wording verbatim — no first-name prefix,
+        ``Grins Irrigation`` (no apostrophe / no plural).
+        """
+        job = _make_job()
+        customer = _make_customer()
+
+        job_result = Mock()
+        job_result.scalar_one_or_none.return_value = job
+        cust_result = Mock()
+        cust_result.scalar_one_or_none.return_value = customer
+        mock_session.execute = AsyncMock(side_effect=[job_result, cust_result])
+
+        with patch(
+            "grins_platform.services.sms_service.SMSService.send_message",
+            new_callable=AsyncMock,
+            return_value={"success": True, "message_id": str(uuid4())},
+        ) as mock_sms:
+            client.post(f"/api/v1/jobs/{job.id}/review-push")
+
+        body = mock_sms.call_args.kwargs["message"]
+        assert body.startswith("Thanks for choosing Grins Irrigation!")
+        assert "We'd appreciate a quick review:" in body
+        # Negative assertions to lock the regression
+        assert "Grin's Irrigations" not in body
+        assert "Hi " not in body
+
     def test_review_push_no_phone(
         self,
         client: TestClient,

@@ -17,7 +17,6 @@ import pytest
 
 from grins_platform.models.customer_document import CustomerDocument
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -133,6 +132,59 @@ class TestGetSigningDocument:
         result = await _get_signing_document(mock_session, uuid4())
 
         assert result is None
+
+    @pytest.mark.asyncio()
+    async def test_strict_scope_excludes_legacy_unscoped_rows(self) -> None:
+        """bughunt M-11: with sales_entry_id provided and the default
+        ``include_legacy=False``, the WHERE clause must demand
+        ``CustomerDocument.sales_entry_id == sales_entry_id`` so a
+        legacy ``sales_entry_id IS NULL`` row never leaks across to a
+        different entry's signing flow.
+        """
+        from grins_platform.api.v1.sales_pipeline import _get_signing_document
+
+        mock_session = AsyncMock()
+        mock_result = Mock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        sales_entry_id = uuid4()
+        await _get_signing_document(
+            mock_session,
+            uuid4(),
+            sales_entry_id=sales_entry_id,
+        )
+
+        # Inspect the compiled SQL — the strict WHERE must reference
+        # an equality check on sales_entry_id, never the IS NULL branch.
+        stmt = mock_session.execute.await_args.args[0]
+        sql = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+        assert "sales_entry_id =" in sql
+        # Strict-scope path must not include the legacy-fallback OR clause.
+        assert "sales_entry_id IS NULL" not in sql
+
+    @pytest.mark.asyncio()
+    async def test_include_legacy_restores_unscoped_fallback(self) -> None:
+        """bughunt M-11: opting back into the legacy fallback (for
+        reporting reads) re-enables the ``sales_entry_id IS NULL``
+        branch in the WHERE clause."""
+        from grins_platform.api.v1.sales_pipeline import _get_signing_document
+
+        mock_session = AsyncMock()
+        mock_result = Mock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        await _get_signing_document(
+            mock_session,
+            uuid4(),
+            sales_entry_id=uuid4(),
+            include_legacy=True,
+        )
+
+        stmt = mock_session.execute.await_args.args[0]
+        sql = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+        assert "IS NULL" in sql
 
 
 # ---------------------------------------------------------------------------

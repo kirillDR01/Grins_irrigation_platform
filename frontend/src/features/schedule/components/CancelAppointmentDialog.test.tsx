@@ -93,6 +93,28 @@ describe('CancelAppointmentDialog', () => {
     ).toBeInTheDocument();
   });
 
+  // bughunt M-2: layout stays consistent for DRAFT — both action buttons
+  // must remain visible, and the disabled "send-text" variant must
+  // explain itself via tooltip rather than disappearing.
+  it('keeps both Cancel buttons visible and adds tooltip when DRAFT', () => {
+    render(
+      <CancelAppointmentDialog
+        {...baseProps}
+        willNotifyByDefault={false}
+      />,
+    );
+
+    const noTextBtn = screen.getByTestId('cancel-dialog-cancel-no-text');
+    const withTextBtn = screen.getByTestId('cancel-dialog-cancel-with-text');
+    expect(noTextBtn).toBeInTheDocument();
+    expect(withTextBtn).toBeInTheDocument();
+    expect(withTextBtn).toBeDisabled();
+    expect(withTextBtn).toHaveAttribute(
+      'title',
+      'Draft was never sent, no text needed.',
+    );
+  });
+
   it('disables "Cancel & text customer" when the customer has no phone', () => {
     render(
       <CancelAppointmentDialog {...baseProps} customerPhone={null} />,

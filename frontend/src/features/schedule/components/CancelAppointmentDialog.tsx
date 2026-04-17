@@ -153,12 +153,26 @@ export function CancelAppointmentDialog({
           >
             Cancel (no text)
           </Button>
+          {/*
+            bughunt M-2: keep BOTH buttons visible for DRAFT cancellations
+            — the spec wants a consistent two-button layout with the
+            inapplicable one disabled so admins always see the same set
+            of choices. The native `title` tooltip explains why the
+            send-text variant is greyed out for drafts.
+          */}
           <Button
             variant="destructive"
             onClick={() => onConfirm(true)}
             disabled={isLoading || !willNotifyByDefault || !customerPhone}
             data-testid="cancel-dialog-cancel-with-text"
             className="bg-red-500 hover:bg-red-600 sm:flex-1"
+            title={
+              !willNotifyByDefault
+                ? 'Draft was never sent, no text needed.'
+                : !customerPhone
+                  ? 'Customer has no phone number on file.'
+                  : undefined
+            }
           >
             {isLoading ? 'Cancelling…' : 'Cancel & text customer'}
           </Button>

@@ -3087,3 +3087,157 @@ class TestSendConfirmationSmsWrapper:
 
         with pytest.raises(AppointmentNotFoundError):
             await svc.send_confirmation_sms(uuid4())
+
+# =============================================================================
+# bughunt M-7: appointment.update / appointment.reactivate audit log
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestUpdateAppointmentAuditLog:
+    """bughunt M-7: every admin-initiated update or reactivation must
+    write an AuditLog entry capturing pre/post values, the
+    ``notify_customer`` flag, and the staff actor."""
+
+    @pytest.mark.asyncio
+    async def test_update_writes_audit_with_pre_post_snapshot(self) -> None:
+        from unittest.mock import patch
+
+        from grins_platform.schemas.appointment import AppointmentUpdate
+
+        apt_id = uuid4()
+        actor_id = uuid4()
+        original = _make_appointment_mock(
+            appointment_id=apt_id,
+            scheduled_date=date(2026, 4, 22),
+            time_window_start=time(9, 0),
+            time_window_end=time(10, 0),
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+        updated = _make_appointment_mock(
+            appointment_id=apt_id,
+            scheduled_date=date(2026, 4, 22),
+            time_window_start=time(11, 0),
+            time_window_end=time(12, 0),
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=original)
+        appt_repo.update = AsyncMock(return_value=updated)
+        appt_repo.session = AsyncMock()
+
+        svc = _build_service(appt_repo=appt_repo)
+
+        audit_create = AsyncMock()
+        with (
+            patch.object(svc, "_send_reschedule_sms", AsyncMock()),
+            patch(
+                "grins_platform.repositories.audit_log_repository.AuditLogRepository.create",
+                audit_create,
+            ),
+        ):
+            await svc.update_appointment(
+                apt_id,
+                AppointmentUpdate(time_window_start=time(11, 0)),
+                actor_id=actor_id,
+            )
+
+        audit_create.assert_awaited()
+        call = audit_create.await_args
+        assert call.kwargs["action"] == "appointment.update"
+        assert call.kwargs["resource_id"] == apt_id
+        assert call.kwargs["actor_id"] == actor_id
+        details = call.kwargs["details"]
+        assert details["pre"]["time_window_start"] == "09:00:00"
+        assert details["post"]["time_window_start"] == "11:00:00"
+        assert "time_window_start" in details["changed_fields"]
+        assert details["notify_customer"] is True
+
+    @pytest.mark.asyncio
+    async def test_reactivate_writes_distinct_audit_action(self) -> None:
+        """bughunt M-7: CANCELLED → SCHEDULED reactivation gets its own
+        ``appointment.reactivate`` action so it doesn't get lost in the
+        normal-update stream."""
+        from unittest.mock import patch
+
+        from grins_platform.schemas.appointment import AppointmentUpdate
+
+        apt_id = uuid4()
+        actor_id = uuid4()
+        cancelled = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.CANCELLED.value,
+        )
+        reactivated = _make_appointment_mock(
+            appointment_id=apt_id,
+            scheduled_date=date(2026, 4, 22),
+            time_window_start=time(11, 0),
+            time_window_end=time(13, 0),
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=cancelled)
+        appt_repo.update = AsyncMock(return_value=reactivated)
+        appt_repo.session = AsyncMock()
+
+        svc = _build_service(appt_repo=appt_repo)
+
+        audit_create = AsyncMock()
+        with (
+            patch.object(svc, "_send_reschedule_sms", AsyncMock()),
+            patch(
+                "grins_platform.repositories.audit_log_repository.AuditLogRepository.create",
+                audit_create,
+            ),
+        ):
+            await svc.update_appointment(
+                apt_id,
+                AppointmentUpdate(scheduled_date=date(2026, 4, 22)),
+                actor_id=actor_id,
+            )
+
+        audit_create.assert_awaited()
+        actions = [c.kwargs["action"] for c in audit_create.await_args_list]
+        assert "appointment.reactivate" in actions
+
+    @pytest.mark.asyncio
+    async def test_update_audit_failure_does_not_block_update(self) -> None:
+        """Audit write failure must never block the user-visible update
+        path — the audit row is best-effort observability."""
+        from unittest.mock import patch
+
+        from grins_platform.schemas.appointment import AppointmentUpdate
+
+        apt_id = uuid4()
+        original = _make_appointment_mock(
+            appointment_id=apt_id,
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+        updated = _make_appointment_mock(
+            appointment_id=apt_id,
+            time_window_start=time(11, 0),
+            status=AppointmentStatus.SCHEDULED.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=original)
+        appt_repo.update = AsyncMock(return_value=updated)
+        appt_repo.session = AsyncMock()
+
+        svc = _build_service(appt_repo=appt_repo)
+
+        with (
+            patch.object(svc, "_send_reschedule_sms", AsyncMock()),
+            patch(
+                "grins_platform.repositories.audit_log_repository.AuditLogRepository.create",
+                AsyncMock(side_effect=RuntimeError("DB exploded")),
+            ),
+        ):
+            result = await svc.update_appointment(
+                apt_id,
+                AppointmentUpdate(time_window_start=time(11, 0)),
+            )
+
+        assert result is updated

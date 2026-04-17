@@ -222,20 +222,30 @@ This is the core flow of how a customer moves through the system. Every record e
     at [time]!"            |           |
               |           |           |
    Appointment status     |    [SYSTEM -> CUSTOMER]
-   -> CONFIRMED           |    "Your appointment on [date]
-   (solid border,         |     has been cancelled. Please
-    full color on         |     contact us if you'd like
-    calendar)             |     to reschedule."
-              |           |
+   -> CONFIRMED           |    "Your [service type] appointment
+   (solid border,         |     on [date] at [time] has been
+    full color on         |     cancelled. If you'd like to
+    calendar)             |     reschedule, please call us at
+              |           |     [business phone]."
               |           |           |
               |           |    Appointment status
               |           |    -> CANCELLED
-              |           |    (If was SCHEDULED/CONFIRMED,
-              |           |     cancellation SMS sent.
-              |           |     If was DRAFT, no SMS.)
-              |           |    On-site timestamps cleared.
-              |           |    If last appointment for job,
-              |           |    job reverts: SCHEDULED -> TO BE SCHEDULED.
+              |           |    Cancellation SMS is sent when
+              |           |    the pre-cancel status was
+              |           |    SCHEDULED, CONFIRMED, EN_ROUTE,
+              |           |    or IN_PROGRESS. DRAFT cancels
+              |           |    are silent (customer was never
+              |           |    notified).
+              |           |    On-site timestamps cleared
+              |           |    (on_my_way_at, started_at,
+              |           |     completed_at, en_route_at).
+              |           |    If this was the last active
+              |           |    appointment for the job, the
+              |           |    job reverts to TO BE SCHEDULED
+              |           |    (from SCHEDULED or IN PROGRESS).
+              |           |    A repeat "C" from the same
+              |           |    customer is a no-op (no second
+              |           |    cancellation SMS).
               |           |    Admin is notified
               |           |
               |    [SYSTEM -> CUSTOMER]
@@ -309,7 +319,6 @@ This is the core flow of how a customer moves through the system. Every record e
               |              2. Payment collected on site? -> skip warning
               |              3. Invoice exists? -> skip warning
               |              4. None of above? -> show warning
-              |              On-site timestamps cleared on cancel.
               |
              ========= SMS #3: GOOGLE REVIEW (Optional) =========
               |
@@ -356,6 +365,48 @@ SMS #6: LIEN NOTICE ELIGIBILITY FLAG
            This is a flag for admin review — the SMS
            itself is sent manually after admin decides
            to proceed.
+
+
+========= ADMIN-INITIATED APPOINTMENT CHANGES =========
+
+These are admin actions on the calendar (outside the Y/R/C
+reply flow above). They reuse the same SMS templates and
+produce the same downstream effects, but the trigger is the
+admin clicking a button in the CRM rather than a customer
+text.
+
+Admin cancels an appointment (Cancel button on calendar):
+  A confirmation dialog opens with two action buttons:
+    - "Cancel (no text)" — cancels the appointment and
+      SUPPRESSES the cancellation SMS. Use when the admin
+      has already called the customer or when the customer
+      shouldn't be notified for some reason.
+    - "Cancel & text customer" — cancels and sends the
+      cancellation SMS to the customer.
+  Both choices are audit-logged with notify_customer=true/false.
+  If the pre-cancel status is DRAFT, no SMS is sent either
+  way — the customer was never notified of the appointment.
+  If the pre-cancel status is SCHEDULED, CONFIRMED, EN_ROUTE,
+  or IN_PROGRESS, the default is to text; admin can override.
+  On-site timestamps are cleared. If this was the last active
+  appointment for the job, the job reverts from SCHEDULED or
+  IN_PROGRESS back to TO_BE_SCHEDULED.
+
+Admin moves/edits a SCHEDULED or CONFIRMED appointment
+(drag-drop on calendar, or the Edit button in the
+ appointment details modal):
+  [SYSTEM -> CUSTOMER] Reschedule notification SMS:
+    "Your appointment has been rescheduled to [new date]
+     at [new time]. Reply Y to confirm, R to reschedule,
+     or C to cancel."
+  Appointment status resets: SCHEDULED/CONFIRMED -> SCHEDULED.
+  Customer must confirm the new time. Moving a DRAFT is silent.
+
+Admin reactivates a CANCELLED appointment (rescheduling from
+the Reschedule Requests queue after a previous "C" reply, or
+moving a cancelled card on the calendar):
+  Same reschedule notification SMS is sent so the customer
+  knows the appointment is back on. Status -> SCHEDULED.
 ```
 
 ### The Correct Sequence: Always Contact First, Then Route
@@ -404,7 +455,7 @@ One important concept: **job status and appointment status are two separate thin
 | **Completed** | Work is done (triggered by clicking "Job Complete"). Both job and appointment transition to Completed together. |
 | **Cancelled** | Job was cancelled. On-site timestamps are cleared. |
 
-**Status progression:** Creating an appointment transitions the job from "To Be Scheduled" to "Scheduled." "On My Way" does not change the job status — it transitions the appointment to "En Route." "Job Started" transitions the job to "In Progress" and the appointment to "In Progress." "Job Complete" transitions both job and appointment to "Completed." Cancelling the last appointment reverts the job from "Scheduled" back to "To Be Scheduled."
+**Status progression:** Creating an appointment transitions the job from "To Be Scheduled" to "Scheduled." "On My Way" does not change the job status — it transitions the appointment to "En Route." "Job Started" transitions the job to "In Progress" and the appointment to "In Progress." "Job Complete" transitions both job and appointment to "Completed." Cancelling the last active appointment reverts the job from "Scheduled" **or** "In Progress" back to "To Be Scheduled."
 
 **Appointment status** tracks the scheduling and field progression:
 
@@ -417,13 +468,13 @@ One important concept: **job status and appointment status are two separate thin
 | **En Route** | Admin clicked "On My Way" — technician is heading to the property. Set automatically from Confirmed or Scheduled. |
 | **In Progress** | Admin clicked "Job Started" — work has begun. Set automatically from En Route (or Confirmed if On My Way was skipped). |
 | **Completed** | Admin clicked "Job Complete" — work is done. Set automatically alongside job completion. |
-| **Cancelled** | Customer replied "C" or admin cancelled. If was Draft, no SMS sent. If was Scheduled/Confirmed, cancellation SMS sent. On-site timestamps cleared. |
+| **Cancelled** | Customer replied "C", or admin cancelled via the calendar. A cancellation SMS is sent when the pre-cancel status was Scheduled, Confirmed, En Route, or In Progress. Draft cancels are silent. The admin cancel dialog also offers "Cancel (no text)" to suppress the SMS deliberately. On-site timestamps are cleared. Cancelled appointments can be reactivated back to Scheduled via reschedule. |
 | **No Show** | Customer did not show or was not available at the scheduled time. Can be set from Confirmed or En Route. Appointment can be rescheduled from this state. |
 
 **Key points:**
 - Appointments now start as **Draft** (not Scheduled). No SMS is sent until the admin explicitly clicks "Send Confirmation."
-- Moving a Draft appointment on the calendar is silent — no SMS. Moving a Scheduled or Confirmed appointment sends a reschedule notification SMS and resets to Scheduled.
-- Deleting a Draft appointment is silent. Deleting a Scheduled or Confirmed appointment sends a cancellation SMS.
+- Moving a Draft appointment on the calendar is silent — no SMS. Moving a Scheduled, Confirmed, or reactivating a Cancelled appointment sends a reschedule notification SMS and resets the status to Scheduled.
+- Deleting/cancelling a Draft appointment is silent. Cancelling a Scheduled/Confirmed/En Route/In Progress appointment sends a cancellation SMS by default; the admin confirmation dialog has a "Cancel (no text)" option to suppress it.
 - "On My Way" transitions the appointment to En Route. "Job Started" transitions both job and appointment to In Progress. "Job Complete" transitions both to Completed.
 - Job and appointment statuses now progress together through the on-site workflow. Skip scenarios are handled gracefully (e.g., clicking "Job Complete" without "Job Started" still completes both).
 - Service agreement jobs show "Covered by [Agreement Name]" and skip the payment warning on completion.
@@ -502,17 +553,18 @@ The pipeline progresses through these stages. Each stage has an **action button*
 
 | Status | What It Means | What You Do | Action Button |
 |--------|--------------|-------------|---------------|
-| **Schedule Estimate** | Need to set up an estimate visit | Schedule the visit on the Estimate Calendar | Click to advance to "Estimate Scheduled" |
-| **Estimate Scheduled** | Estimate visit is on the calendar | Go to the property, assess the job | (Advance after the visit) |
-| **Send Estimate** | Visit done, need to send the written estimate | Create the estimate externally, upload it to the Documents section, then send for signature | Click to advance to "Pending Approval" |
-| **Pending Approval** | Estimate sent to customer, waiting for them to sign | Wait for the customer to sign | (Advances automatically when they sign via SignWell) |
-| **Send Contract** | Estimate approved, need to send the final contract | Send the final contract for signature | Click to advance |
-| **Closed-Won** | Customer signed, ready to convert to a Job | Click "Convert to Job" | Terminal state |
-| **Closed-Lost** | Customer declined or went elsewhere | — | Terminal state |
+| **Schedule Estimate** | Need to set up an estimate visit | Schedule the visit on the Estimate Calendar | **"Schedule Estimate"** — opens a pre-filled calendar event form. Saving the event auto-advances the entry to "Estimate Scheduled." |
+| **Estimate Scheduled** | Estimate visit is on the calendar | Go to the property, assess the job | **"Send Estimate"** — advances to "Send Estimate" after the visit. |
+| **Send Estimate** | Visit done, need to upload and send the written estimate | Upload the estimate PDF to the Documents section, then click "Send Estimate for Signature (Email)" or "Sign On-Site (Embedded)" to transmit it via SignWell | **"Mark Sent"** — advances to "Pending Approval." Gated: requires a SignWell document on file (i.e., you have already clicked one of the Send for Signature buttons), otherwise the advance is rejected with "Upload an estimate before advancing." |
+| **Pending Approval** | Estimate sent to customer, waiting for them to sign | Wait for the customer to sign | (Auto-advances to "Send Contract" on the SignWell signing webhook — no manual button) |
+| **Send Contract** | Customer signed the estimate; ready to create the job | Review and convert | **"Convert to Job"** — creates a real Job record and moves the entry to "Closed-Won." Gated on a signature existing (SignWell document id) unless the admin uses "Force Convert to Job." |
+| **Closed-Won** | Job created from this sales entry | — | Terminal state (no action button) |
+| **Closed-Lost** | Customer declined or went elsewhere | — | Terminal state (no action button) |
 
 **How status advances work:**
 - Click the action button on a row and the status moves **exactly one step forward**. You can't skip steps.
-- If a customer signs via email or the embedded signing iframe, the system **automatically** advances from "Pending Approval" to "Send Contract."
+- If a customer signs via email or the embedded signing iframe, the system **automatically** advances from "Pending Approval" to "Send Contract." You don't click anything.
+- "Convert to Job" is the action button at "Send Contract" — it converts the entry into a real Job record and moves the entry to Closed-Won in one step. A **"Force Convert to Job"** override exists for exceptional cases where the signature is missing; it's logged with an audit flag on the record.
 - You can **manually override** the status via a dropdown for exceptional cases.
 - You can click **"Mark Lost"** on any entry at any stage to move it to Closed-Lost.
 
@@ -699,7 +751,18 @@ When a confirmation is sent, the appointment transitions from DRAFT to SCHEDULED
 
 Click on any appointment to open the **Appointment Details** modal. From there, click **"Edit"** to modify the appointment's date, time, staff, or notes. The edit form opens pre-populated with the current data. Saving refreshes the calendar view.
 
-If you edit a SCHEDULED or CONFIRMED appointment's date or time, the system automatically sends a **reschedule notification SMS** to the customer and resets the status to SCHEDULED. Editing a DRAFT appointment is silent — no SMS.
+If you edit a SCHEDULED, CONFIRMED, or CANCELLED appointment's date or time (the last case is a reactivation from the Reschedule Requests queue), the system automatically sends a **reschedule notification SMS** to the customer and resets the status to SCHEDULED. Editing a DRAFT appointment is silent — no SMS.
+
+### Cancelling an Appointment
+
+From the appointment details modal, the **Cancel** action opens a confirmation dialog that shows the customer name, phone, date, and time. The dialog offers two cancel options:
+
+- **"Cancel (no text)"** — cancels the appointment and **suppresses** the cancellation SMS. Use this when you've already spoken with the customer or otherwise don't want the automated text to go out.
+- **"Cancel & text customer"** — cancels the appointment and sends the cancellation SMS to the customer.
+
+Both paths are audit-logged server-side with the admin's choice. If the pre-cancel status is DRAFT, no SMS is sent either way (the customer was never notified in the first place). For any other customer-visible status (SCHEDULED, CONFIRMED, EN_ROUTE, IN_PROGRESS), the default is to text; you can override it with "Cancel (no text)."
+
+When an appointment is cancelled, the system also clears the on-site timestamps (`on_my_way_at`, `started_at`, `completed_at`, `en_route_at`) and deletes any "On My Way" SMS records for that appointment so a replacement appointment can send a fresh SMS. If this was the last active appointment for the job, the job reverts from SCHEDULED or IN_PROGRESS back to TO_BE_SCHEDULED.
 
 ### Appointment Confirmation Flow (Y/R/C)
 
@@ -1004,9 +1067,9 @@ The CRM uses SMS (currently via CallRail) for several automated and manual commu
 | **"On My Way" button clicked** | "We're on our way! Your technician is heading to your location now." |
 | **Customer confirms (Y)** | Auto-reply confirming the appointment |
 | **Customer reschedules (R)** | Acknowledgment reply + follow-up: "We'd be happy to reschedule. Please reply with 2-3 dates and times that work for you and we'll get you set up." |
-| **Customer cancels (C)** | Cancellation: "Your appointment on [date] has been cancelled. Please contact us if you'd like to reschedule." |
-| **Appointment rescheduled** | Reschedule notification sent to customer (only for SCHEDULED/CONFIRMED appointments, not DRAFT) |
-| **Appointment deleted** | Cancellation SMS sent (only for SCHEDULED/CONFIRMED appointments, not DRAFT) |
+| **Customer cancels (C)** | Cancellation: "Your [service type] appointment on [date] at [time] has been cancelled. If you'd like to reschedule, please call us at [business phone]." A repeat "C" from the same customer is a no-op. |
+| **Appointment rescheduled/moved** | Reschedule notification sent when a SCHEDULED, CONFIRMED, or (reactivated) CANCELLED appointment's date/time changes. DRAFT moves are silent. Appointment status resets to SCHEDULED and the customer re-confirms with Y/R/C. |
+| **Appointment cancelled by admin** | Cancellation SMS sent when the pre-cancel status was SCHEDULED, CONFIRMED, EN_ROUTE, or IN_PROGRESS. DRAFT cancels are silent. The admin confirmation dialog offers "Cancel (no text)" to suppress the SMS deliberately. |
 | **Mass invoice notification** | Template-based reminder with invoice details and amount |
 
 ### Manual SMS Triggers
@@ -1114,4 +1177,4 @@ When the system sends an appointment confirmation SMS, it tracks the message wit
 
 ---
 
-*Last updated: April 14, 2026 — Smoothing Out After Update 2 (Draft mode, Scheduled status, on-site status wiring, cancellation cleanup, payment UI differentiation, Stripe Tap-to-Pay, estimate calendar sync, signing wiring, no-estimate enforcement, reschedule follow-up SMS, mobile-friendly on-site view)*
+*Last updated: April 15, 2026 — Smoothing Out After Update 2 (Draft mode, Scheduled status, on-site status wiring, cancellation cleanup, payment UI differentiation, Stripe Tap-to-Pay, estimate calendar sync, signing wiring, no-estimate enforcement, reschedule follow-up SMS, mobile-friendly on-site view). Corrected: cancellation SMS rules now cover EN_ROUTE/IN_PROGRESS pre-cancel states; admin "Cancel (no text)" opt-out documented; last-appointment revert covers both SCHEDULED and IN_PROGRESS → TO_BE_SCHEDULED; CANCELLED appointments can be reactivated via reschedule and trigger a reschedule SMS.*

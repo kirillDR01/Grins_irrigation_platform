@@ -5,6 +5,66 @@ Grin's Irrigation Platform — field service automation for residential/commerci
 
 ## Recent Activity
 
+## [2026-04-16 20:30] - BUGFIX: 17 MEDIUM Customer Lifecycle Fixes (M-1..M-17)
+
+### What Was Accomplished
+Closed all 17 MEDIUM findings from the 2026-04-16 customer-lifecycle bug hunt, on top of the already-merged CR-1..CR-6 + H-1..H-14 fixes. Work ran in seven phases (1: SMS templates → 2: audits → 3: send_message routing → 4: schedule UX → 5: invoices → 6: sales → 7: renewals/uploads/docs), each commit gated through ruff/mypy/pyright/unit tests before merge.
+
+### Technical Details
+- **SMS template alignment (M-3/M-4/M-5/M-6):** `_KEYWORD_MAP` extended with `ok/okay/yup/yeah/1` (CONFIRM) and `different time/change time/2` (RESCHEDULE) — `stop` and `3` intentionally excluded. CONFIRM auto-reply now includes appointment date + time via new `_build_confirm_message` helper. Reschedule ack uses spec-exact wording. Google Review SMS uses spec verbiage (no `Grin's Irrigations`, no first-name prefix).
+- **Audit coverage (M-7/M-8):** New `_record_update_audit` and `_record_reactivate_audit` on `AppointmentService` capture pre/post field snapshots, `notify_customer`, and `actor_id`. Customer-SMS cancel writes audit with `source="customer_sms"` and gates on `transitioned` to skip CR-3 short-circuit cases.
+- **Audit trail completeness (M-9):** Y/R/C auto-reply and reschedule follow-up SMS now route through `SMSService.send_message` with new `APPOINTMENT_CONFIRMATION_REPLY` and `RESCHEDULE_FOLLOWUP` MessageType values. Migration `20260416_100000` widens the `ck_sent_messages_message_type` CHECK constraint.
+- **Schedule UX (M-1/M-2):** `AppointmentDetail` now renders the canonical `SendConfirmationButton` for drafts (was a hand-rolled inline button). `CancelAppointmentDialog` keeps both action buttons visible for DRAFT and adds a `title` tooltip on the disabled "Cancel & text" variant.
+- **Invoices (M-12/M-14/M-15):** `days_until_due` / `days_past_due` are now Pydantic `computed_field`s on `InvoiceResponse` (UTC, mutually exclusive). Frontend reads them directly. New `render_invoice_template()` + `validate_invoice_template()` helpers introduce canonical merge keys (`{customer_name}/{invoice_number}/{amount}/{due_date}`) and accept the spec's bracket form. Invalid templates → 400 with named missing keys. Stripe webhook returns 503 (was 400) on missing secret so Stripe retries.
+- **Sales (M-10/M-11):** Regression test locks `StatusActionButton` calling convertToJob first on `SEND_CONTRACT` (no code change — the bughunt's "advance-first" claim was stale). `_get_signing_document` defaults to strict `sales_entry_id` scope; legacy customer-scope fallback gated behind `include_legacy=True` (reporting reads only).
+- **Renewals/uploads/docs (M-13/M-16/M-17):** `PARTIALLY_APPROVED` fires on first approval (was waiting for zero PENDING). `PhotoService.validate_file` raises `TypeError` for MIME (→ 415) vs. `ValueError` for size (→ 413); all upload endpoints differentiate. New `useDocumentPresign` hook resolves presigned URL at render so signing buttons disable when the file is missing or expired.
+
+### Files Created
+- `src/grins_platform/migrations/versions/20260416_100000_widen_sent_messages_for_confirmation_reply_and_followup.py`
+- `frontend/src/features/sales/components/StatusActionButton.test.tsx` (M-10 regression)
+- `frontend/src/features/sales/components/SalesDetail.test.tsx` (M-17 signing gate)
+
+### Files Modified
+- `src/grins_platform/services/job_confirmation_service.py` (M-3/M-4/M-5/M-8)
+- `src/grins_platform/services/appointment_service.py` (M-7)
+- `src/grins_platform/services/sms_service.py` (M-9)
+- `src/grins_platform/services/invoice_service.py` (M-14)
+- `src/grins_platform/services/contract_renewal_service.py` (M-13)
+- `src/grins_platform/services/photo_service.py` (M-16)
+- `src/grins_platform/api/v1/jobs.py` (M-6, M-16)
+- `src/grins_platform/api/v1/customers.py` (M-16)
+- `src/grins_platform/api/v1/leads.py` (M-16)
+- `src/grins_platform/api/v1/appointments.py` (M-7, M-16)
+- `src/grins_platform/api/v1/invoices.py` (M-14)
+- `src/grins_platform/api/v1/sales_pipeline.py` (M-11)
+- `src/grins_platform/api/v1/webhooks.py` (M-15)
+- `src/grins_platform/schemas/invoice.py`, `schemas/ai.py` (M-12, M-9)
+- `src/grins_platform/models/enums.py`, `models/sent_message.py` (M-9)
+- `frontend/src/features/schedule/components/AppointmentDetail.tsx` + test (M-1)
+- `frontend/src/features/schedule/components/CancelAppointmentDialog.tsx` + test (M-2)
+- `frontend/src/features/invoices/components/InvoiceList.tsx`, `types/index.ts` (M-12)
+- `frontend/src/features/sales/components/SalesDetail.tsx`, `hooks/useSalesPipeline.ts` (M-17)
+
+### Quality Check Results
+- Backend `ruff check src/`: 179 errors baseline = 179 mine (no regression).
+- Backend `mypy src/`: 230 errors baseline = 230 mine.
+- Backend `pyright` on touched files: 10 errors / 102 warnings baseline = 10 / 102 mine after cleanup commit.
+- Backend `pytest -m unit`: 49 fail / 3066 pass baseline = same on this branch (all 49 failures pre-existing).
+- Frontend `tsc --noEmit`: clean.
+- Frontend `eslint`: 4 errors baseline = 4 mine.
+- Frontend `vitest`: 3 fail / 1379 pass baseline = same on this branch.
+
+### Decisions
+- **M-3:** `stop` and `3` are NOT cancel synonyms (`stop` is reserved compliance keyword; `3` would be ambiguous numeric mapping).
+- **M-9:** Two new MessageType values (`appointment_confirmation_reply`, `reschedule_followup`) over reusing `appointment_confirmation` so per-type dedup and audit reporting stay accurate.
+- **M-11:** Default behavior change — multi-entry customers with legacy unscoped docs now get a 422 prompting upload rather than silently signing the wrong entry's doc. Reporting reads opt back in with `include_legacy=True`.
+- **M-15:** Behavioral change — Stripe missing-secret returns 503 (Stripe retries with backoff + on-call paged) rather than 400 (terminal, silent drop).
+
+### Next Steps
+- Manual E2E verification on dev for SMS #1 happy path with each new keyword (`ok`, `yup`, `1`, `R`, `different time`, repeat `C`) against `+19527373312`.
+- Manual E2E for Job Complete → Google Review SMS (verify spec wording on owner's phone).
+- LOW/UX findings L-1..L-11 remain open from the same hunt.
+
 ## [2026-04-16 17:50] - BUGFIX: 14 HIGH Customer Lifecycle Fixes (H-1..H-14)
 
 ### What Was Accomplished
@@ -43,9 +103,32 @@ Closed all 14 HIGH findings from the 2026-04-16 customer-lifecycle bug hunt, on 
 
 ### Follow-ups
 - The two RescheduleRequestsQueue FE integration tests were re-enabled by mocking `AppointmentForm` (tests now verify the queue's own wiring rather than driving the full form + Radix Dialog chain in jsdom). Real form behavior still covered by its own component tests.
-- MEDIUM findings M-1..M-17 remain open (separate plan file: `bughunt/2026-04-16-medium-bugs-plan.md`).
 - The two long-form plan / finding documents that were lost mid-session (`customer-lifecycle-bughunt.md` and `critical-fixes-plan.md`) were reconstructed verbatim from the conversation's session-start Read captures.
 - Agent-browser E2E validation for H-1 / H-3 / H-7 / H-12 not yet run in this session.
+
+## [2026-04-16 14:00] - BUGFIX: 6 Critical Customer Lifecycle Fixes (CR-1..CR-6)
+
+### What Was Accomplished
+Closed all 6 CRITICAL findings from the 2026-04-16 customer-lifecycle bug hunt (`bughunt/2026-04-16-customer-lifecycle-bughunt.md`). Six fix branches merged to `dev` across three waves.
+
+### Technical Details
+- **CR-1** (`fix/cr-1-apply-schedule-draft`, 2f7caaf): `apply_schedule` now writes `AppointmentStatus.DRAFT.value` and leaves `Job.status`/`Job.scheduled_at` untouched. Draft Mode silence restored.
+- **CR-2** (`fix/cr-2-job-started-scheduled`, c65283e): `SCHEDULED → IN_PROGRESS` added to the transitions table; `job_started` pre-state tuple includes SCHEDULED. DRAFT stays blocked per decision.
+- **CR-3** (`fix/cr-3-repeat-cancel-sms`, 9a30fac): `_handle_cancel` short-circuits when appointment already CANCELLED, returning empty `auto_reply` so the SMS guard suppresses the send.
+- **CR-4** (`fix/cr-4-invoice-billing-reason`, 6d99587): renewal branch gated on Stripe `billing_reason == "subscription_cycle"`. Three-branch dispatch: first_invoice / renewal_cycle / other.
+- **CR-5** (`fix/cr-5-lien-review-queue`, d679c25): `mass_notify("lien_eligible")` raises deprecation → 400; new `compute_lien_candidates` + `send_lien_notice` service methods; two new endpoints + `LienReviewQueue` component as tab on `/invoices`.
+- **CR-6** (`fix/cr-6-convert-lead-dedup`, 7007002): `convert_lead` runs `check_tier1_duplicates`; raises `LeadDuplicateFoundError` → 409 with structured detail; FE `LeadConversionConflictModal` surfaces "Use existing" / "Convert anyway" (force=true).
+
+### Quality Check Results
+- Each CR's new and modified tests pass locally. Pre-existing dev-branch failures were documented as drift notes per fix.
+- Ruff / MyPy / Pyright surfaces match baseline — fix branches add zero new errors.
+- FE typecheck + vitest pass on the new components and hooks.
+
+### Decisions
+- CR-1: Job status stays `to_be_scheduled` during DRAFT creation (admin promotes explicitly via Send Confirmation).
+- CR-2: DRAFT cannot skip to IN_PROGRESS; only SCHEDULED / CONFIRMED / EN_ROUTE can.
+- CR-5: Lien Review Queue is a tab on `/invoices`; client-side dismiss only for MVP.
+- CR-6: 409 detail uses structured `{error:"duplicate_found", duplicates:[...]}`.
 
 ## [2026-02-07 21:30] - BUGFIX: Lead Form CORS Error Diagnosis & Documentation
 

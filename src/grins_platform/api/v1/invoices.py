@@ -47,6 +47,7 @@ from grins_platform.schemas.invoice import (
     PaymentRecord,
 )
 from grins_platform.services.invoice_service import (
+    InvalidInvoiceTemplateError,
     InvoiceService,
     LienMassNotifyDeprecatedError,
 )
@@ -840,7 +841,12 @@ async def bulk_notify_invoices(
         "``lien_eligible`` is deprecated (CR-5) — use the Lien Review Queue."
     ),
     responses={
-        400: {"description": "Deprecated notification_type (e.g. lien_eligible)"},
+        400: {
+            "description": (
+                "Deprecated notification_type (e.g. lien_eligible) or "
+                "custom template missing required merge keys (M-14)"
+            ),
+        },
     },
 )
 async def mass_notify_invoices(
@@ -880,6 +886,21 @@ async def mass_notify_invoices(
                     "list": "GET /api/v1/invoices/lien-candidates",
                     "send": "POST /api/v1/invoices/lien-notices/{customer_id}/send",
                 },
+            },
+        ) from exc
+    except InvalidInvoiceTemplateError as exc:
+        # bughunt M-14: admin custom template missing required merge keys.
+        _invoice_endpoints.log_rejected(
+            "mass_notify_invoices",
+            reason="template_missing_keys",
+            missing=exc.missing,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "invalid_template",
+                "message": str(exc),
+                "missing_keys": exc.missing,
             },
         ) from exc
 

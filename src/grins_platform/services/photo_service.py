@@ -216,11 +216,15 @@ class PhotoService(LoggerMixin):
         """Validate file via magic bytes and size.
 
         Returns detected MIME type.
-        Raises ``ValueError`` on validation failure.
+
+        bughunt M-16: distinct exception types for the two rejection
+        reasons so the API layer can translate to the right status:
+        size → 413 Payload Too Large, MIME → 415 Unsupported Media Type.
         """
         rules = _RULES[context]
 
-        # Size check
+        # Size check — server-enforced even when the frontend gates the
+        # input, since a direct API/curl call bypasses any browser cap.
         if len(data) > rules.max_bytes:
             max_mb = rules.max_bytes / (1024 * 1024)
             self.log_rejected(
@@ -233,7 +237,8 @@ class PhotoService(LoggerMixin):
             msg = f"File exceeds maximum size of {max_mb:.0f} MB"
             raise ValueError(msg)
 
-        # Magic-byte detection
+        # Magic-byte detection — never trust the multipart Content-Type;
+        # check the actual bytes against the allow-list for this context.
         detected_mime = magic.from_buffer(data[:2048], mime=True)
 
         if detected_mime not in rules.allowed_mimes:
@@ -245,7 +250,7 @@ class PhotoService(LoggerMixin):
                 context=context.value,
             )
             msg = f"File type '{detected_mime}' is not allowed for {context.value}"
-            raise ValueError(msg)
+            raise TypeError(msg)
 
         return detected_mime
 

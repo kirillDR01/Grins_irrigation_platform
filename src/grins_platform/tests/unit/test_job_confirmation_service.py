@@ -39,10 +39,23 @@ class TestParseConfirmationReply:
             ("YES", ConfirmationKeyword.CONFIRM),
             ("confirm", ConfirmationKeyword.CONFIRM),
             ("Confirmed", ConfirmationKeyword.CONFIRM),
+            # bughunt M-3 synonyms
+            ("ok", ConfirmationKeyword.CONFIRM),
+            ("OK", ConfirmationKeyword.CONFIRM),
+            ("okay", ConfirmationKeyword.CONFIRM),
+            ("Okay", ConfirmationKeyword.CONFIRM),
+            ("yup", ConfirmationKeyword.CONFIRM),
+            ("yeah", ConfirmationKeyword.CONFIRM),
+            ("1", ConfirmationKeyword.CONFIRM),
             ("r", ConfirmationKeyword.RESCHEDULE),
             ("R", ConfirmationKeyword.RESCHEDULE),
             ("reschedule", ConfirmationKeyword.RESCHEDULE),
             ("RESCHEDULE", ConfirmationKeyword.RESCHEDULE),
+            # bughunt M-3 reschedule synonyms
+            ("different time", ConfirmationKeyword.RESCHEDULE),
+            ("Different Time", ConfirmationKeyword.RESCHEDULE),
+            ("change time", ConfirmationKeyword.RESCHEDULE),
+            ("2", ConfirmationKeyword.RESCHEDULE),
             ("c", ConfirmationKeyword.CANCEL),
             ("C", ConfirmationKeyword.CANCEL),
             ("cancel", ConfirmationKeyword.CANCEL),
@@ -55,6 +68,15 @@ class TestParseConfirmationReply:
     @pytest.mark.unit
     @pytest.mark.parametrize("body", ["hello", "maybe", "123", ""])
     def test_unknown_keywords_return_none(self, body: str) -> None:
+        assert parse_confirmation_reply(body) is None
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("body", ["stop", "STOP", "Stop", "3"])
+    def test_stop_and_3_are_not_cancel(self, body: str) -> None:
+        """bughunt M-3: ``stop`` is a compliance opt-out keyword and must NOT
+        collide with C/cancel. ``3`` was considered but excluded to avoid an
+        ambiguous numeric mapping (1=CONFIRM, 2=RESCHEDULE only).
+        """
         assert parse_confirmation_reply(body) is None
 
     @pytest.mark.unit
@@ -142,8 +164,12 @@ class TestHandleConfirmation:
         mock_db: AsyncMock,
     ) -> None:
         """Req 24.2: Y keyword → SCHEDULED → CONFIRMED."""
+        from datetime import date, time
+
         sent_msg = _make_sent_message()
         appt = _make_appointment(status=AppointmentStatus.SCHEDULED.value)
+        appt.scheduled_date = date(2026, 4, 20)
+        appt.time_window_start = time(14, 0)
 
         result_mock = MagicMock()
         result_mock.scalar_one_or_none.return_value = sent_msg
@@ -160,7 +186,42 @@ class TestHandleConfirmation:
 
         assert result["action"] == "confirmed"
         assert appt.status == AppointmentStatus.CONFIRMED.value
-        assert "auto_reply" in result
+        # bughunt M-4: confirm auto-reply must include date and time
+        assert (
+            result["auto_reply"] == "Your appointment has been confirmed. "
+            "See you on April 20, 2026 at 2:00 PM!"
+        )
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_confirm_falls_back_when_date_time_missing(
+        self,
+        mock_db: AsyncMock,
+    ) -> None:
+        """bughunt M-4: graceful fallback when appt has no date/time set."""
+        sent_msg = _make_sent_message()
+        appt = _make_appointment(status=AppointmentStatus.SCHEDULED.value)
+        # Mock without scheduled_date / time_window_start attrs returns None
+        # via getattr() in the helper.
+        appt.scheduled_date = None
+        appt.time_window_start = None
+
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = sent_msg
+        mock_db.execute = AsyncMock(return_value=result_mock)
+        mock_db.get = AsyncMock(return_value=appt)
+
+        svc = JobConfirmationService(mock_db)
+        result = await svc.handle_confirmation(
+            thread_id="thread-123",
+            keyword=ConfirmationKeyword.CONFIRM,
+            raw_body="y",
+            from_phone="+16125551234",
+        )
+
+        assert (
+            result["auto_reply"] == "Your appointment has been confirmed. See you then!"
+        )
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -349,7 +410,11 @@ class TestRescheduleFollowUp:
         # Verify both auto_reply (acknowledgment) and follow_up_sms are present
         assert "auto_reply" in result
         assert "follow_up_sms" in result
-        assert "reschedule" in result["auto_reply"].lower()
+        # bughunt M-5: spec-exact wording (§4 lines 251-254)
+        assert (
+            result["auto_reply"] == "We've received your reschedule request. "
+            "We'll be in touch with a new time."
+        )
         assert "2-3 dates" in result["follow_up_sms"]
         assert "we'd be happy to reschedule" in result["follow_up_sms"].lower()
 
@@ -612,6 +677,98 @@ class TestRepeatCancelIsNoOp:
         assert result["action"] == "cancelled"
         assert result["auto_reply"]
         assert appt.status == AppointmentStatus.CANCELLED.value
+
+
+# ---------------------------------------------------------------------------
+# bughunt M-8: customer-SMS cancel writes an audit log row
+# ---------------------------------------------------------------------------
+
+
+class TestCustomerSmsCancelAudit:
+    """The admin-side cancel path already audits via
+    ``AppointmentService._record_cancellation_audit``. The customer-SMS
+    path now does the same with ``source="customer_sms"`` so the admin
+    history view can answer "who cancelled this?"."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_customer_sms_cancel_writes_audit_with_source(
+        self,
+        mock_db: AsyncMock,
+    ) -> None:
+        from datetime import date, time
+        from unittest.mock import patch
+
+        sent_msg = _make_sent_message()
+        appt = _make_appointment(status=AppointmentStatus.SCHEDULED.value)
+        appt.job_id = sent_msg.job_id
+        appt.scheduled_date = date(2026, 4, 22)
+        appt.time_window_start = time(9, 30)
+
+        job_mock = Mock()
+        job_mock.id = sent_msg.job_id
+        job_mock.job_type = "spring_startup"
+
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = sent_msg
+        result_mock.scalar_one.return_value = 0
+        mock_db.execute = AsyncMock(return_value=result_mock)
+        mock_db.get = AsyncMock(side_effect=[appt, job_mock])
+
+        audit_create = AsyncMock()
+        with patch(
+            "grins_platform.repositories.audit_log_repository.AuditLogRepository.create",
+            audit_create,
+        ):
+            svc = JobConfirmationService(mock_db)
+            await svc.handle_confirmation(
+                thread_id="thread-123",
+                keyword=ConfirmationKeyword.CANCEL,
+                raw_body="C",
+                from_phone="+19527373312",
+            )
+
+        audit_create.assert_awaited()
+        call = audit_create.await_args
+        assert call.kwargs["action"] == "appointment.cancel"
+        assert call.kwargs["actor_id"] is None
+        details = call.kwargs["details"]
+        assert details["source"] == "customer_sms"
+        assert details["pre_cancel_status"] == AppointmentStatus.SCHEDULED.value
+        assert details["from_phone"] == "+19527373312"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_repeat_c_does_not_double_audit(
+        self,
+        mock_db: AsyncMock,
+    ) -> None:
+        """CR-3 short-circuit must skip the audit row too — repeat C is a
+        complete no-op (no SMS, no DB write, no audit)."""
+        from unittest.mock import patch
+
+        sent_msg = _make_sent_message()
+        cancelled_appt = _make_appointment(status=AppointmentStatus.CANCELLED.value)
+
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = sent_msg
+        mock_db.execute = AsyncMock(return_value=result_mock)
+        mock_db.get = AsyncMock(return_value=cancelled_appt)
+
+        audit_create = AsyncMock()
+        with patch(
+            "grins_platform.repositories.audit_log_repository.AuditLogRepository.create",
+            audit_create,
+        ):
+            svc = JobConfirmationService(mock_db)
+            await svc.handle_confirmation(
+                thread_id="thread-123",
+                keyword=ConfirmationKeyword.CANCEL,
+                raw_body="C",
+                from_phone="+19527373312",
+            )
+
+        audit_create.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

@@ -58,18 +58,25 @@ async def _get_signing_document(
     session: AsyncSession,
     customer_id: UUID,
     sales_entry_id: UUID | None = None,
+    *,
+    include_legacy: bool = False,
 ) -> CustomerDocument | None:
     """Find the most recent estimate/contract document for a pipeline entry.
 
-    When ``sales_entry_id`` is provided, the query prioritises rows
-    scoped to that specific pipeline entry (bughunt H-7), falling back
-    to customer-scoped rows (typically ``sales_entry_id IS NULL`` — a
-    legacy upload that predates the migration) only if no entry-scoped
-    row exists. Implemented as a single SQL statement using a
-    priority ``ORDER BY`` so the endpoint still performs exactly one
-    execute round-trip.
+    By default (``include_legacy=False``) the query is **strictly** scoped
+    to the supplied ``sales_entry_id`` — an unscoped/legacy row never
+    leaks across to a different entry's signing flow. This is the
+    behavior wanted by every active pipeline operation (bughunt M-11):
+    a customer with two open entries where only the older one ever
+    uploaded a doc must not be allowed to sign that doc against the
+    newer entry. The admin gets a 422 ("Upload an estimate document
+    first") and is prompted to upload a properly-scoped document.
 
-    Validates: Req 9.1, 9.2; bughunt H-7.
+    Reporting reads that need to surface every historical document
+    (including the pre-migration ``sales_entry_id IS NULL`` rows) can
+    opt back into the old behavior with ``include_legacy=True``.
+
+    Validates: Req 9.1, 9.2; bughunt H-7, M-11.
     """
     from sqlalchemy import case  # noqa: PLC0415
 
@@ -78,25 +85,38 @@ async def _get_signing_document(
         CustomerDocument.document_type.in_(("estimate", "contract")),
     ]
     if sales_entry_id is not None:
-        # Prefer entry-scoped rows (priority 0), fall back to
-        # unscoped/legacy rows (priority 1). Rows scoped to a
-        # *different* entry score priority 2 and will lose the tie
-        # unless they are the only option — protect against that by
-        # excluding them entirely.
-        conditions.append(
-            (CustomerDocument.sales_entry_id == sales_entry_id)
-            | (CustomerDocument.sales_entry_id.is_(None)),
-        )
-        priority = case(
-            (CustomerDocument.sales_entry_id == sales_entry_id, 0),
-            else_=1,
-        )
-        stmt = (
-            select(CustomerDocument)
-            .where(*conditions)
-            .order_by(priority, CustomerDocument.uploaded_at.desc())
-            .limit(1)
-        )
+        if include_legacy:
+            # Legacy/reporting path: prefer entry-scoped rows (priority 0),
+            # fall back to unscoped/legacy rows (priority 1). Rows scoped
+            # to a *different* entry are excluded entirely.
+            conditions.append(
+                (CustomerDocument.sales_entry_id == sales_entry_id)
+                | (CustomerDocument.sales_entry_id.is_(None)),
+            )
+            priority = case(
+                (CustomerDocument.sales_entry_id == sales_entry_id, 0),
+                else_=1,
+            )
+            stmt = (
+                select(CustomerDocument)
+                .where(*conditions)
+                .order_by(priority, CustomerDocument.uploaded_at.desc())
+                .limit(1)
+            )
+        else:
+            # Strict scope (default): only entry-scoped rows count. The
+            # legacy ``sales_entry_id IS NULL`` fallback is dropped so
+            # multi-entry customers can't accidentally sign the wrong
+            # entry's doc.
+            conditions.append(
+                CustomerDocument.sales_entry_id == sales_entry_id,
+            )
+            stmt = (
+                select(CustomerDocument)
+                .where(*conditions)
+                .order_by(CustomerDocument.uploaded_at.desc())
+                .limit(1)
+            )
     else:
         stmt = (
             select(CustomerDocument)
@@ -106,7 +126,12 @@ async def _get_signing_document(
         )
     result = await session.execute(stmt)
     doc = result.scalar_one_or_none()
-    if sales_entry_id is not None and doc is not None and doc.sales_entry_id is None:
+    if (
+        include_legacy
+        and sales_entry_id is not None
+        and doc is not None
+        and doc.sales_entry_id is None
+    ):
         _ep.log_started(
             "signing_document.ambiguous_scope",
             customer_id=str(customer_id),
@@ -310,9 +335,9 @@ async def trigger_email_signing(
         )
 
     # Look up the most recent estimate/contract document — Validates: Req 9.1, 9.2, 9.4
-    # Scoped by sales_entry_id first so multi-entry customers sign the
-    # right doc (bughunt H-7); falls back to customer-scoped with a warning
-    # log when the doc predates the sales_entry_id migration.
+    # Strict entry-scope: bughunt M-11 removed the legacy customer-scoped
+    # fallback so a multi-entry customer can't sign the wrong entry's
+    # doc. Admins prompted to upload a properly-scoped doc on miss.
     signing_doc = await _get_signing_document(
         session,
         entry.customer_id,
@@ -365,9 +390,9 @@ async def get_embedded_signing(
     )
 
     # Look up the most recent estimate/contract document — Validates: Req 9.1, 9.2, 9.4
-    # Scoped by sales_entry_id first so multi-entry customers sign the
-    # right doc (bughunt H-7); falls back to customer-scoped with a warning
-    # log when the doc predates the sales_entry_id migration.
+    # Strict entry-scope: bughunt M-11 removed the legacy customer-scoped
+    # fallback so a multi-entry customer can't sign the wrong entry's
+    # doc. Admins prompted to upload a properly-scoped doc on miss.
     signing_doc = await _get_signing_document(
         session,
         entry.customer_id,

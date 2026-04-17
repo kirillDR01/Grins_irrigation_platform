@@ -383,12 +383,20 @@ class AppointmentService(LoggerMixin):
         self,
         appointment_id: UUID,
         data: AppointmentUpdate,
+        *,
+        actor_id: UUID | None = None,
+        notify_customer: bool = True,
     ) -> Appointment:
         """Update appointment details.
 
         Args:
             appointment_id: UUID of the appointment to update
             data: Update data
+            actor_id: Staff/admin performing the update (for audit log).
+            notify_customer: Whether the reschedule SMS may fire when the
+                pre-update state is customer-visible. Today the path is
+                always wired through, but the flag is captured in the audit
+                log so future opt-out behavior is traceable.
 
         Returns:
             Updated Appointment instance
@@ -397,7 +405,7 @@ class AppointmentService(LoggerMixin):
             AppointmentNotFoundError: If appointment not found
             InvalidStatusTransitionError: If status transition is invalid
 
-        Validates: Admin Dashboard Requirement 1.2
+        Validates: Admin Dashboard Requirement 1.2; bughunt M-7
         """
         self.log_started("update_appointment", appointment_id=str(appointment_id))
 
@@ -408,17 +416,23 @@ class AppointmentService(LoggerMixin):
 
         update_data = data.model_dump(exclude_unset=True)
 
+        # bughunt M-7: snapshot the pre-update field values for the audit
+        # log. Captures every field the API allows to mutate so admins can
+        # see exactly what changed, not just status.
+        pre_update_snapshot = self._snapshot_appointment_fields(appointment)
+
         # If rescheduling a cancelled appointment, reactivate it
         is_rescheduling = (
             "scheduled_date" in update_data
             or "time_window_start" in update_data
             or "time_window_end" in update_data
         )
-        if (
+        is_reactivation = (
             appointment.status == AppointmentStatus.CANCELLED.value
             and is_rescheduling
             and "status" not in update_data
-        ):
+        )
+        if is_reactivation:
             update_data["status"] = AppointmentStatus.SCHEDULED.value
             self.log_started(
                 "reactivate_cancelled_appointment",
@@ -458,19 +472,22 @@ class AppointmentService(LoggerMixin):
         # changed — including reactivation from CANCELLED (bughunt H-8),
         # since the customer was told "cancelled" and now needs to know
         # it's back on.
+        sms_sent = False
+        session = self.appointment_repository.session
         if is_rescheduling and pre_update_status in (
             AppointmentStatus.SCHEDULED.value,
             AppointmentStatus.CONFIRMED.value,
             AppointmentStatus.CANCELLED.value,
         ):
-            session = self.appointment_repository.session
-            try:
-                await self._send_reschedule_sms(session, updated)  # type: ignore[arg-type]
-            except Exception:
-                self.log_failed(
-                    "reschedule_sms",
-                    appointment_id=str(appointment_id),
-                )
+            if notify_customer:
+                try:
+                    await self._send_reschedule_sms(session, updated)  # type: ignore[arg-type]
+                    sms_sent = True
+                except Exception:
+                    self.log_failed(
+                        "reschedule_sms",
+                        appointment_id=str(appointment_id),
+                    )
             # Reset status to SCHEDULED (unconfirmed)
             if updated and updated.status != AppointmentStatus.SCHEDULED.value:  # type: ignore[union-attr]
                 await self.appointment_repository.update(
@@ -478,8 +495,150 @@ class AppointmentService(LoggerMixin):
                     {"status": AppointmentStatus.SCHEDULED.value},
                 )
 
+        # bughunt M-7: snapshot post-update values and write the audit row.
+        # Reactivation gets its own action label so the admin history can
+        # distinguish "reschedule" from "cancelled-then-reactivated".
+        refreshed = updated or appointment
+        post_update_snapshot = self._snapshot_appointment_fields(refreshed)
+
+        if is_reactivation:
+            await self._record_reactivate_audit(
+                session,
+                appointment_id=appointment_id,
+                pre_update_snapshot=pre_update_snapshot,
+                post_update_snapshot=post_update_snapshot,
+                notify_customer=notify_customer,
+                sms_sent=sms_sent,
+                actor_id=actor_id,
+            )
+        else:
+            await self._record_update_audit(
+                session,
+                appointment_id=appointment_id,
+                pre_update_snapshot=pre_update_snapshot,
+                post_update_snapshot=post_update_snapshot,
+                notify_customer=notify_customer,
+                sms_sent=sms_sent,
+                actor_id=actor_id,
+            )
+
         self.log_completed("update_appointment", appointment_id=str(appointment_id))
         return updated  # type: ignore[return-value]
+
+    @staticmethod
+    def _snapshot_appointment_fields(appt: Any) -> dict[str, Any]:  # noqa: ANN401
+        """Capture the fields ``AppointmentUpdate`` is allowed to mutate.
+
+        Stored in the audit-log ``details`` JSONB so admins can see exactly
+        what changed on a reschedule or reactivation (bughunt M-7). Values
+        are coerced to strings for cleanly JSON-serializable output.
+        """
+        if appt is None:
+            return {}
+        fields = (
+            "status",
+            "staff_id",
+            "scheduled_date",
+            "time_window_start",
+            "time_window_end",
+            "notes",
+            "route_order",
+            "estimated_arrival",
+        )
+        snapshot: dict[str, Any] = {}
+        for field in fields:
+            value = getattr(appt, field, None)
+            snapshot[field] = None if value is None else str(value)
+        return snapshot
+
+    async def _record_update_audit(
+        self,
+        session: AsyncSession,
+        *,
+        appointment_id: UUID,
+        pre_update_snapshot: dict[str, Any],
+        post_update_snapshot: dict[str, Any],
+        notify_customer: bool,
+        sms_sent: bool,
+        actor_id: UUID | None,
+    ) -> None:
+        """Write an ``appointment.update`` audit row (bughunt M-7).
+
+        Captures pre/post field snapshots and the ``notify_customer`` flag
+        so the admin history view can answer "what changed?" without
+        cross-referencing log lines.
+        """
+        from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+            AuditLogRepository,
+        )
+
+        changed_fields = sorted(
+            field
+            for field in pre_update_snapshot
+            if pre_update_snapshot.get(field) != post_update_snapshot.get(field)
+        )
+
+        try:
+            repo = AuditLogRepository(session)
+            _ = await repo.create(
+                action="appointment.update",
+                resource_type="appointment",
+                resource_id=appointment_id,
+                actor_id=actor_id,
+                details={
+                    "pre": pre_update_snapshot,
+                    "post": post_update_snapshot,
+                    "changed_fields": changed_fields,
+                    "notify_customer": notify_customer,
+                    "sms_sent": sms_sent,
+                },
+            )
+        except Exception:
+            self.log_failed(
+                "update_audit",
+                appointment_id=str(appointment_id),
+            )
+
+    async def _record_reactivate_audit(
+        self,
+        session: AsyncSession,
+        *,
+        appointment_id: UUID,
+        pre_update_snapshot: dict[str, Any],
+        post_update_snapshot: dict[str, Any],
+        notify_customer: bool,
+        sms_sent: bool,
+        actor_id: UUID | None,
+    ) -> None:
+        """Write an ``appointment.reactivate`` audit row (bughunt M-7).
+
+        Mirrors :meth:`_record_update_audit` but with a distinct action so
+        ``CANCELLED → SCHEDULED`` reactivations show up clearly in the
+        audit history alongside cancels.
+        """
+        from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+            AuditLogRepository,
+        )
+
+        try:
+            repo = AuditLogRepository(session)
+            _ = await repo.create(
+                action="appointment.reactivate",
+                resource_type="appointment",
+                resource_id=appointment_id,
+                actor_id=actor_id,
+                details={
+                    "pre": pre_update_snapshot,
+                    "post": post_update_snapshot,
+                    "notify_customer": notify_customer,
+                    "sms_sent": sms_sent,
+                },
+            )
+        except Exception:
+            self.log_failed(
+                "reactivate_audit",
+                appointment_id=str(appointment_id),
+            )
 
     async def cancel_appointment(
         self,

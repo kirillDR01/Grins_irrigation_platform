@@ -367,3 +367,51 @@ describe('AppointmentDetail — Edit Wiring (Req 18)', () => {
     expect(screen.queryByTestId('edit-btn')).not.toBeInTheDocument();
   });
 });
+
+// bughunt M-1: AppointmentDetail must render the canonical
+// SendConfirmationButton when the appointment is in DRAFT — admins
+// drilling into a draft from the detail modal previously had to back
+// out to the calendar card to send.
+describe('AppointmentDetail — Send Confirmation button (bughunt M-1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders SendConfirmationButton for DRAFT appointments', async () => {
+    mockUseAppointment.mockReturnValue({
+      data: { ...mockAppointment, status: 'draft' },
+      isLoading: false,
+      error: null,
+    });
+
+    render(<AppointmentDetail appointmentId="appt-001" />, {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('send-confirmation-btn-appt-001'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('does not render SendConfirmationButton for non-DRAFT statuses', async () => {
+    mockUseAppointment.mockReturnValue({
+      data: { ...mockAppointment, status: 'confirmed' },
+      isLoading: false,
+      error: null,
+    });
+
+    render(<AppointmentDetail appointmentId="appt-001" />, {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('appointment-detail')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByTestId('send-confirmation-btn-appt-001'),
+    ).not.toBeInTheDocument();
+  });
+});

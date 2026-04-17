@@ -816,17 +816,23 @@ async def get_appointment(
 async def update_appointment(
     appointment_id: UUID,
     data: AppointmentUpdate,
-    _current_user: CurrentActiveUser,
+    current_user: CurrentActiveUser,
     service: Annotated[AppointmentService, Depends(get_appointment_service)],
 ) -> AppointmentResponse:
     """Update appointment information.
 
-    Validates: Admin Dashboard Requirement 1.2
+    Validates: Admin Dashboard Requirement 1.2; bughunt M-7
     """
     _endpoints.log_started("update_appointment", appointment_id=str(appointment_id))
 
     try:
-        result = await service.update_appointment(appointment_id, data)
+        # bughunt M-7: surface the actor so the audit log row can attribute
+        # the update to the admin who clicked Save.
+        result = await service.update_appointment(
+            appointment_id,
+            data,
+            actor_id=current_user.id,
+        )
     except AppointmentNotFoundError as e:
         _endpoints.log_rejected("update_appointment", reason="not_found")
         raise HTTPException(
@@ -1323,8 +1329,15 @@ async def upload_appointment_photos(
             context=UploadContext.CUSTOMER_PHOTO,
         )
     except ValueError as e:
+        # bughunt M-16: size cap exceeded → 413 Payload Too Large.
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=str(e),
+        ) from e
+    except TypeError as e:
+        # bughunt M-16: MIME not in allow-list → 415 Unsupported Media Type.
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail=str(e),
         ) from e
 

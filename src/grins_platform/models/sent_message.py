@@ -125,10 +125,13 @@ class SentMessage(Base):
             name="ck_sent_messages_recipient",
         ),
         CheckConstraint(
-            "message_type IN ('appointment_confirmation', 'appointment_reminder', "
+            "message_type IN ('appointment_confirmation', 'appointment_reschedule', "
+            "'appointment_cancellation', 'appointment_reminder', "
             "'on_the_way', 'arrival', 'completion', 'invoice', 'payment_reminder', "
             "'custom', 'lead_confirmation', 'estimate_sent', 'contract_sent', "
-            "'review_request', 'campaign')",
+            "'review_request', 'campaign', 'google_review_request', 'on_my_way', "
+            "'automated_notification', 'appointment_confirmation_reply', "
+            "'reschedule_followup')",
             name="ck_sent_messages_message_type",
         ),
         CheckConstraint(
