@@ -19,7 +19,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { LoadingSpinner } from '@/shared/components/LoadingSpinner';
 import { CustomerContextBlock } from '@/shared/components/CustomerContextBlock';
-import { useQuery } from '@tanstack/react-query';
+import { InternalNotesCard } from '@/shared/components/InternalNotesCard';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useUpdateCustomer } from '@/features/customers/hooks';
+import { invalidateAfterCustomerInternalNotesSave } from '@/shared/utils/invalidationHelpers';
 import { customerApi } from '@/features/customers/api/customerApi';
 import { Link } from 'react-router-dom';
 import {
@@ -66,6 +69,8 @@ export function SalesCalendar() {
   const createEvent = useCreateCalendarEvent();
   const updateEvent = useUpdateCalendarEvent();
   const deleteEvent = useDeleteCalendarEvent();
+  const updateCustomerMutation = useUpdateCustomer();
+  const queryClient = useQueryClient();
 
   const calendarEvents: EventInput[] = useMemo(() => {
     if (!events) return [];
@@ -199,6 +204,19 @@ export function SalesCalendar() {
     queryFn: () => customerApi.get(formState!.customerId),
     enabled: !!formState?.customerId,
   });
+
+  // Internal notes save handler — PATCHes the customer
+  const handleSaveEstimateNotes = useCallback(
+    async (next: string | null) => {
+      if (!formState?.customerId) return;
+      await updateCustomerMutation.mutateAsync({
+        id: formState.customerId,
+        data: { internal_notes: next },
+      });
+      invalidateAfterCustomerInternalNotesSave(queryClient, formState.customerId);
+    },
+    [formState?.customerId, updateCustomerMutation, queryClient],
+  );
 
   if (isLoading) {
     return (
@@ -404,6 +422,20 @@ export function SalesCalendar() {
                   rows={2}
                 />
               </div>
+
+              {/* Internal Notes Card — customer's internal_notes */}
+              {formState.customerId ? (
+                <InternalNotesCard
+                  value={contextCustomer?.internal_notes ?? null}
+                  onSave={handleSaveEstimateNotes}
+                  isSaving={updateCustomerMutation.isPending}
+                  data-testid-prefix="sales-calendar-"
+                />
+              ) : (
+                <p className="text-sm text-slate-400 italic">
+                  Notes will appear here once the customer is created
+                </p>
+              )}
             </div>
 
             <div className="flex items-center justify-between pt-2">

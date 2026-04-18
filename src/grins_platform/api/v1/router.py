@@ -44,7 +44,6 @@ from grins_platform.api.v1.jobs import router as jobs_router
 from grins_platform.api.v1.leads import router as leads_router
 from grins_platform.api.v1.marketing import router as marketing_router
 from grins_platform.api.v1.media import router as media_router
-from grins_platform.api.v1.notes import router as notes_router
 from grins_platform.api.v1.notifications import router as notifications_router
 from grins_platform.api.v1.onboarding import router as onboarding_router
 from grins_platform.api.v1.portal import router as portal_router
@@ -409,12 +408,6 @@ api_router.include_router(
 api_router.include_router(
     alerts_router,
     tags=["alerts"],
-)
-
-# Include Notes endpoints (april-16th-fixes-enhancements Req 4)
-api_router.include_router(
-    notes_router,
-    tags=["notes"],
 )
 
 # Include Appointment Attachments endpoints (april-16th-fixes-enhancements Req 10.5)

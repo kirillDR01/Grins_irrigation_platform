@@ -18,7 +18,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
@@ -37,7 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { StatusBadge, LoadingPage, ErrorMessage, PageHeader, NotesTimeline } from '@/shared/components';
+import { StatusBadge, LoadingPage, ErrorMessage, PageHeader, InternalNotesCard } from '@/shared/components';
 import {
   useCustomer,
   useDeleteCustomer,
@@ -81,9 +80,17 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
   const setPrimaryMutation = useSetPropertyPrimary(id!);
   const { draft, isLoading: isDraftLoading, error: draftError, sendNow, scheduleLater } = useAICommunication();
 
-  // Internal notes state
-  const [notesValue, setNotesValue] = useState<string | null>(null);
-  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  // Internal notes save handler — wired to InternalNotesCard
+  const handleSaveCustomerNotes = useCallback(
+    async (next: string | null) => {
+      if (!customer) return;
+      await updateMutation.mutateAsync({
+        id: customer.id,
+        data: { internal_notes: next },
+      });
+    },
+    [customer, updateMutation],
+  );
 
   // ── Task 6.5: Basic info inline edit ──
   const [editingBasicInfo, setEditingBasicInfo] = useState(false);
@@ -130,20 +137,6 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
       }
     }
   };
-
-  const handleSaveNotes = useCallback(async () => {
-    if (!customer || notesValue === null) return;
-    try {
-      await updateMutation.mutateAsync({
-        id: customer.id,
-        data: { internal_notes: notesValue || null },
-      });
-      setIsEditingNotes(false);
-      toast.success('Notes saved');
-    } catch (err) {
-      toast.error('Failed to save notes', { description: getErrorMessage(err) });
-    }
-  }, [customer, notesValue, updateMutation]);
 
   // ── Task 6.5: Basic info handlers ──
   const startEditBasicInfo = () => {
@@ -697,15 +690,13 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
           {/* Overview Tab */}
           <TabsContent value="overview" data-testid="tab-content-overview">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Notes Timeline */}
-              <Card>
-                <CardHeader className="border-b border-slate-100">
-                  <CardTitle className="text-lg font-bold text-slate-800">Notes</CardTitle>
-                </CardHeader>
-                <CardContent className="p-4">
-                  <NotesTimeline subjectType="customer" subjectId={customer.id} />
-                </CardContent>
-              </Card>
+              {/* Internal Notes Card */}
+              <InternalNotesCard
+                value={customer.internal_notes}
+                onSave={handleSaveCustomerNotes}
+                isSaving={updateMutation.isPending}
+                data-testid-prefix="customer-"
+              />
 
               {/* Service Preferences */}
               <ServicePreferencesSection customerId={customer.id} />

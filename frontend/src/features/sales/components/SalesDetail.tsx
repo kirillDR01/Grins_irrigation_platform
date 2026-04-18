@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, ChevronDown, FileText, Mail, Phone, Edit, Loader2 } from 'lucide-react';
@@ -18,9 +18,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LoadingPage, ErrorMessage, NotesTimeline } from '@/shared/components';
+import { LoadingPage, ErrorMessage, InternalNotesCard } from '@/shared/components';
 import { getErrorMessage } from '@/core/api';
-import { useUpdateCustomer } from '@/features/customers/hooks';
+import { useUpdateCustomer, useCustomer as useCustomerDetail } from '@/features/customers/hooks';
+import { useQueryClient } from '@tanstack/react-query';
+import { invalidateAfterCustomerInternalNotesSave } from '@/shared/utils/invalidationHelpers';
 import { useStaff } from '@/features/staff/hooks/useStaff';
 import {
   useSalesEntry,
@@ -46,8 +48,12 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
   const { data: entry, isLoading, error, refetch } = useSalesEntry(entryId);
   const emailSign = useTriggerEmailSigning();
   const updateCustomer = useUpdateCustomer();
+  const queryClient = useQueryClient();
   const overrideStatus = useOverrideSalesStatus();
   const { data: staffData } = useStaff({ is_active: true });
+
+  // Fetch customer for internal_notes display
+  const { data: salesCustomer } = useCustomerDetail(entry?.customer_id ?? '');
 
   // Inline edit state — Task 10.1
   const [editingCustomerInfo, setEditingCustomerInfo] = useState(false);
@@ -93,7 +99,21 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
         : undefined;
   const signingReady = hasSigningDoc && presignReady;
 
+  // Internal notes save handler — PATCHes the customer, not the sales entry
+  const handleSaveSalesEntryNotes = useCallback(
+    async (next: string | null) => {
+      if (!entry?.customer_id) return;
+      await updateCustomer.mutateAsync({
+        id: entry.customer_id,
+        data: { internal_notes: next },
+      });
+      invalidateAfterCustomerInternalNotesSave(queryClient, entry.customer_id);
+    },
+    [entry?.customer_id, updateCustomer, queryClient],
+  );
+
   if (isLoading) return <LoadingPage message="Loading sales entry…" />;
+
   if (error || !entry)
     return <ErrorMessage error={error ?? new Error('Not found')} onRetry={() => refetch()} />;
 
@@ -343,12 +363,14 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
       {/* Documents section */}
       <DocumentsSection customerId={entry.customer_id} />
 
-      {/* Notes Timeline — Req 4, 12.5, 12.7 */}
-      <Card>
-        <CardContent className="p-4">
-          <NotesTimeline subjectType="sales_entry" subjectId={entryId} />
-        </CardContent>
-      </Card>
+      {/* Internal Notes Card — reads/writes customer.internal_notes */}
+      <InternalNotesCard
+        value={salesCustomer?.internal_notes ?? null}
+        onSave={handleSaveSalesEntryNotes}
+        isSaving={updateCustomer.isPending}
+        readOnly={!entry.customer_id}
+        data-testid-prefix="sales-"
+      />
     </div>
   );
 }

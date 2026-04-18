@@ -91,6 +91,7 @@ class AppointmentResponse(BaseModel):
     # Extended fields for display (populated from relationships)
     job_type: Optional[str] = None
     customer_name: Optional[str] = None
+    customer_internal_notes: Optional[str] = None
     staff_name: Optional[str] = None
     # Service agreement indicator for calendar display (Smoothing Req 7.5)
     service_agreement_id: Optional[UUID] = None

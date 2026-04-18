@@ -75,7 +75,6 @@ if TYPE_CHECKING:
     from grins_platform.services.customer_service import CustomerService
     from grins_platform.services.email_service import EmailService
     from grins_platform.services.job_service import JobService
-    from grins_platform.services.note_service import NoteService
     from grins_platform.services.sms_service import SMSService
 
 
@@ -277,7 +276,6 @@ class LeadService(LoggerMixin):
         sms_service: SMSService | None = None,
         email_service: EmailService | None = None,
         compliance_service: ComplianceService | None = None,
-        note_service: NoteService | None = None,
     ) -> None:
         """Initialize service with dependencies.
 
@@ -289,7 +287,6 @@ class LeadService(LoggerMixin):
             sms_service: Optional SMSService for SMS confirmations
             email_service: Optional EmailService for email confirmations
             compliance_service: Optional ComplianceService for consent records
-            note_service: Optional NoteService for stage transition notes
         """
         super().__init__()
         self.lead_repository = lead_repository
@@ -299,7 +296,6 @@ class LeadService(LoggerMixin):
         self.sms_service = sms_service
         self.email_service = email_service
         self.compliance_service = compliance_service
-        self.note_service = note_service
 
     @staticmethod
     def split_name(full_name: str) -> tuple[str, str]:
@@ -1124,6 +1120,62 @@ class LeadService(LoggerMixin):
 
         await self.lead_repository.delete(lead_id)
 
+    async def _carry_forward_lead_notes(
+        self,
+        lead: Lead,
+        customer: Any,
+    ) -> None:
+        """Fold leads.notes into customers.internal_notes per Requirement 5.
+
+        Rules (in order):
+          1. lead.notes is null/empty  -> no-op
+          2. customer.internal_notes is null/empty -> overwrite with lead.notes
+          3. both populated -> append lead.notes to customer.internal_notes
+             separated by "\\n\\n--- From lead (<date>) ---\\n"
+
+        Writes one audit entry via AuditService capturing actor, lead_id,
+        customer_id, and old/new value lengths.
+
+        Validates: internal-notes-simplification Requirement 5
+        """
+        if not lead.notes or not lead.notes.strip():
+            return
+
+        existing = (customer.internal_notes or "").strip()
+        if not existing:
+            customer.internal_notes = lead.notes
+        else:
+            divider = f"\n\n--- From lead ({lead.created_at:%Y-%m-%d}) ---\n"
+            customer.internal_notes = f"{existing}{divider}{lead.notes}"
+
+        try:
+            from grins_platform.services.audit_service import (  # noqa: PLC0415
+                AuditService,
+            )
+
+            audit = AuditService()
+            session = self.lead_repository.session
+            actor_id = lead.assigned_to or lead.id
+            await audit.log_action(
+                session,
+                actor_id=actor_id,
+                action="internal_notes.carry_forward",
+                resource_type="customer",
+                resource_id=customer.id,
+                details={
+                    "lead_id": str(lead.id),
+                    "old_value_len": len(existing),
+                    "new_value_len": len(customer.internal_notes or ""),
+                },
+            )
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning(
+                "lead.carry_forward_notes.audit_failed",
+                lead_id=str(lead.id),
+                customer_id=str(customer.id),
+                error=str(e),
+            )
+
     async def _ensure_customer_for_lead(
         self,
         lead: Lead,
@@ -1257,25 +1309,11 @@ class LeadService(LoggerMixin):
             {"moved_to": "jobs", "moved_at": now},
         )
 
-        # Create stage transition note and set origin_lead_id
-        # Validates: april-16th-fixes-enhancements Req 4.4, 4.5, 12.5
-        if self.note_service:
-            try:
-                # Use assigned staff or fallback to a system actor
-                actor = lead.assigned_to or lead_id
-                await self.note_service.create_stage_transition_note(
-                    from_type="lead",
-                    from_id=lead_id,
-                    to_type="customer",
-                    to_id=customer_id,
-                    actor_id=actor,
-                )
-            except Exception as e:
-                self.logger.warning(
-                    "lead.move_to_jobs.note_creation_failed",
-                    lead_id=str(lead_id),
-                    error=str(e),
-                )
+        # Carry forward lead notes to customer (internal-notes-simplification Req 5)
+        customer_obj = await self.customer_service.repository.get_by_id(customer_id)
+        if customer_obj:
+            await self._carry_forward_lead_notes(lead, customer_obj)
+            await self.lead_repository.session.flush()
 
         self.log_completed("move_to_jobs", lead_id=str(lead_id), job_id=str(job.id))
         message = (
@@ -1340,25 +1378,11 @@ class LeadService(LoggerMixin):
             {"moved_to": "sales", "moved_at": now},
         )
 
-        # Create stage transition note and set origin_lead_id
-        # Validates: april-16th-fixes-enhancements Req 4.4, 4.5, 12.6
-        if self.note_service:
-            try:
-                # Use assigned staff or fallback to a system actor
-                actor = lead.assigned_to or lead_id
-                await self.note_service.create_stage_transition_note(
-                    from_type="lead",
-                    from_id=lead_id,
-                    to_type="sales_entry",
-                    to_id=sales_entry.id,
-                    actor_id=actor,
-                )
-            except Exception as e:
-                self.logger.warning(
-                    "lead.move_to_sales.note_creation_failed",
-                    lead_id=str(lead_id),
-                    error=str(e),
-                )
+        # Carry forward lead notes to customer (internal-notes-simplification Req 5)
+        customer_obj = await self.customer_service.repository.get_by_id(customer_id)
+        if customer_obj:
+            await self._carry_forward_lead_notes(lead, customer_obj)
+            await session.flush()
 
         self.log_completed(
             "move_to_sales",

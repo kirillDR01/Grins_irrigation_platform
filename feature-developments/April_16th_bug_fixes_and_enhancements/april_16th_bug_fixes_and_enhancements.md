@@ -358,12 +358,17 @@ The recommended approach:
 
 ### Frontend wiring
 
-- Replace the single "Notes" field on Lead Detail / Customer Detail /
+> **Note:** The `NotesTimeline` component described below was reverted by the
+> `internal-notes-simplification` spec. The current implementation uses a
+> single-blob `InternalNotesCard` component instead. See
+> `.kiro/specs/internal-notes-simplification/` for details.
+
+- ~~Replace the single "Notes" field on Lead Detail / Customer Detail /
   Sales entry with a `<NotesTimeline>` component that renders the
-  merged history and exposes an "Add note" form.
-- When viewing the Customer record for a customer that originated as a
+  merged history and exposes an "Add note" form.~~
+- ~~When viewing the Customer record for a customer that originated as a
   lead, the timeline shows the original lead notes inline — labeled
-  with their original Lead stage.
+  with their original Lead stage.~~
 
 ### Data-model latitude
 

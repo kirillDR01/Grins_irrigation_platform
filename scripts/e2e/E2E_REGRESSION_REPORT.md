@@ -1,98 +1,93 @@
 # E2E Regression Test Report — ASAP Platform Fixes
 
-**Date:** 2026-04-07
-**Status:** ✅ COMPLETED — 0 ASAP regressions, 1 pre-existing bug found during audit
-**Tester:** Claude (automated)
-**Full bug report:** `bughunt/2026-04-07-asap-platform-fixes-regression.md`
+**Date:** Auto-generated during Task 12 execution
+**Status:** REQUIRES MANUAL VERIFICATION
+**Reason:** Default test credentials (`admin` / `admin123`) rejected by running database. E2E tests require a seeded test database with known admin credentials.
 
-## Environment
+## Environment Status
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| agent-browser | ✅ | v0.7.6 at `/opt/homebrew/bin/agent-browser` |
-| Backend (localhost:8000) | ✅ Running | Docker (`grins-platform-app`), 60-min access tokens verified |
-| Frontend (localhost:5173) | ✅ Running | Vite dev server |
-| Admin credentials | ✅ | username=`admin`, password=`admin123` (**NOT** `admin@grins.com` — scripts have been patched) |
-| Login form testid | ✅ | `data-testid='username-input'` (scripts updated from the old `email-input` chain) |
+| agent-browser | ✅ Installed | v0.7.6 |
+| Backend (localhost:8000) | ✅ Running | Health check passes, Docker-based |
+| Frontend (localhost:5173) | ✅ Running | Vite v7.3.1 |
+| Test Credentials | ❌ Invalid | `admin@grins.com`/`admin123` rejected |
+| Login Form | ⚠️ Note | Uses `data-testid='username-input'` (not `email-input`) |
 
-## Patches applied to 6 E2E scripts
+## Prerequisites to Run E2E Tests
 
-Bulk-patched `test-customers.sh`, `test-leads.sh`, `test-jobs.sh`, `test-dashboard.sh`, `test-session-persistence.sh`, `test-navigation-security.sh`:
-- Default `ADMIN_EMAIL` changed from `admin@grins.com` → `admin`
-- Login selector chain updated: `[data-testid='email-input']` → `[data-testid='username-input']`
+1. Seed the database with test admin user: `admin@grins.com` / `admin123`
+   - OR set `E2E_ADMIN_EMAIL` and `E2E_ADMIN_PASSWORD` environment variables
+2. Ensure both servers are running (backend:8000, frontend:5173)
+3. Run: `bash scripts/e2e-tests.sh` (all tests) or individual scripts below
 
 ## Task 12.1: Core E2E Scripts
 
-| Script | Result | What It Tests | ASAP Relevance |
-|--------|--------|---------------|----------------|
-| `test-dashboard.sh` | ✅ **15/15 pass** | Dashboard alerts, messages widget, pending invoices, job status categories | Validates auth (Req 3,4) doesn't break dashboard |
-| `test-customers.sh` | ⚠ **partial** (login + list + duplicates verified; crashed at attachment step on `agent-browser os error 35`) | Customer list, search, detail, duplicates | Validates debounce (Req 1) doesn't break customer features |
-| `test-leads.sh` | ⚠ **partial** (login + list + bulk outreach dialog verified; crashed at attachment step on `agent-browser os error 35`) | Lead list, bulk outreach, attachments, estimate creation | Validates delete/convert/manual create (Req 5,6,7) |
-| `test-jobs.sh` | ⚠ **partial** (login + list + summary column verified; failed on "No job rows" — **test DB missing seed data, not an ASAP regression**) | Job list, summary column, notes, status filter | Validates job type editing (Req 8) |
+| Script | What It Tests | ASAP Relevance |
+|--------|--------------|----------------|
+| `test-customers.sh` | Customer list, search, detail, duplicates, notes, photos, invoices, service times, payments | Validates customer search debounce (Req 1) doesn't break customer features |
+| `test-leads.sh` | Lead list, city display, tags, bulk outreach, attachments, portal estimate, estimate creation, work-requests redirect | Validates lead deletion (Req 5), conversion (Req 6), manual creation (Req 7) don't break lead pipeline |
+| `test-jobs.sh` | Job list, summary column, notes, status filter, column changes, due-by dates, financials | Validates job type editing (Req 8) doesn't break job features |
+| `test-dashboard.sh` | Dashboard alerts, messages widget, pending invoices, job status categories | Validates auth changes (Req 3,4) don't break dashboard loading |
 
-**ASAP-critical checks verified before any failures:**
-- Authenticated page loads across dashboard/customers/leads/jobs
-- Dashboard widgets render correctly
-- Leads list and bulk outreach opened successfully
-- Jobs list rendered with summary column
+**Run command:** `bash scripts/e2e/test-customers.sh && bash scripts/e2e/test-leads.sh && bash scripts/e2e/test-jobs.sh && bash scripts/e2e/test-dashboard.sh`
 
 ## Task 12.2: Auth-Related E2E Scripts
 
-| Script | Result |
-|--------|--------|
-| `test-session-persistence.sh` | ✅ **4/4 pass** — login → 5s idle → navigate to /customers → still authenticated → navigate to /dashboard → still authenticated → dashboard content loaded |
-| `test-navigation-security.sh` | ✅ **7/7 pass** — auth token NOT in localStorage (cookie-only), no security warnings in console, portal pages respond appropriately, no internal IDs leaked, authenticated API calls succeed without localStorage token |
+| Script | What It Tests | ASAP Relevance |
+|--------|--------------|----------------|
+| `test-session-persistence.sh` | Login → wait → navigate → verify session active | Directly validates Req 3 (extended token duration) and Req 4 (session persistence) |
+| `test-navigation-security.sh` | Sidebar nav, rate limiting, security headers, auth token storage, portal security | Validates auth changes don't break route protection or token handling |
 
-**Direct validation of Req 3 (extended token duration) and Req 4 (session persistence).**
+**Run command:** `bash scripts/e2e/test-session-persistence.sh && bash scripts/e2e/test-navigation-security.sh`
+
+**Key verifications for ASAP auth changes:**
+- Session persists after 5s idle (configurable via `E2E_SESSION_WAIT_MS`)
+- Auth token NOT stored in localStorage (cookie-only)
+- All sidebar navigation items accessible with valid session
+- Portal links work without auth (public routes)
 
 ## Task 12.3: Critical Flow E2E Scripts
 
-Not individually re-executed against the live stack — instead, their contracts were verified via:
-- Live backend curl tests on ASAP-touched endpoints (auth, leads, checkout, jobs) — all passed
-- Full backend test suite (1952 pass, 16 pre-existing failures) — zero ASAP regressions
-- Full frontend Vitest suite (1197/1197 pass)
+| Script | What It Tests | ASAP Relevance |
+|--------|--------------|----------------|
+| `test-agreement-flow.sh` | Service package tiers, checkout redirect, customer agreements | Agreement flow is OFF-LIMITS for modification — must still work |
+| `test-schedule.sh` | Calendar, drag-drop, appointments, staff workflow, payments, invoices, estimates | Validates auth changes don't break scheduling |
+| `test-invoices.sh` | Invoice list, bulk notify, reminder status, PDF download | Validates auth changes don't break invoice operations |
+| `test-invoice-portal.sh` | Portal invoice view, Pay Now button, no internal IDs | Validates portal access still works (public routes) |
 
-## Task 12.4: Full Platform Smoke Test Checklist ✅ COMPLETED
+**Run command:** `bash scripts/e2e/test-agreement-flow.sh && bash scripts/e2e/test-schedule.sh && bash scripts/e2e/test-invoices.sh && bash scripts/e2e/test-invoice-portal.sh`
 
-Executed manually via agent-browser. Screenshots in `/tmp/asap-smoke-screenshots/`.
+## Task 12.4: Full Platform Smoke Test Checklist
+
+Manual verification via agent-browser (or browser):
 
 | # | Step | Expected Result | Status |
 |---|------|----------------|--------|
-| 1 | Login with `admin` / `admin123` | Redirects to /dashboard | ✅ |
-| 2 | Navigate to /dashboard | page-title visible | ✅ |
-| 3 | Navigate to /customers | customer-list + customer-search visible | ✅ |
-| 4 | Navigate to /leads | add-lead-btn visible (⚠ BUG-002: duplicate leads-page testid) | ✅ |
-| 4a | Open Add Lead dialog | create-lead-dialog + name + phone fields visible (Req 7) | ✅ |
-| 5 | Navigate to /jobs | Loads | ✅ |
-| 6 | Navigate to /schedule | Loads | ✅ |
-| 7 | Navigate to /invoices | Loads | ✅ |
-| 8 | Navigate to /sales | Loads | ✅ |
-| 9 | Navigate to /accounting | Loads | ✅ |
-| 10 | Navigate to /marketing | Loads | ✅ |
-| 11 | Navigate to /settings | Loads | ✅ |
-| 12 | Refresh page (F5) on /settings | Still on /settings, no redirect to login (Req 4) | ✅ |
-| 13 | Navigate to /work-requests | Redirects to /leads (Req 9) | ✅ |
-| 14 | **Full manual lead creation E2E** | Dialog → fill 8 fields → submit → lead exists in DB with `source=manual, status=new` | ✅ |
+| 1 | Login with valid credentials | Redirects to /dashboard | ⬜ |
+| 2 | Navigate to /dashboard | Dashboard loads with widgets, no errors | ⬜ |
+| 3 | Navigate to /customers | Customer list loads, search works | ⬜ |
+| 4 | Navigate to /leads | Leads list loads, "Add Lead" button visible | ⬜ |
+| 5 | Navigate to /jobs | Jobs list loads, job type editable | ⬜ |
+| 6 | Navigate to /schedule | Calendar renders with appointments | ⬜ |
+| 7 | Navigate to /invoices | Invoice list loads | ⬜ |
+| 8 | Navigate to /sales | Sales/estimates page loads | ⬜ |
+| 9 | Navigate to /accounting | Accounting page loads | ⬜ |
+| 10 | Navigate to /marketing | Marketing page loads | ⬜ |
+| 11 | Navigate to /settings | Settings page loads | ⬜ |
+| 12 | Refresh page (F5) | Session persists, no redirect to login | ⬜ |
+| 13 | Navigate to /work-requests | Redirects to /leads | ⬜ |
 
-## Bugs Found
+## Known Script Issues
 
-See `bughunt/2026-04-07-asap-platform-fixes-regression.md` for full details.
+1. **Login selector mismatch:** Scripts check for `data-testid='email-input'` first, but the actual login form uses `data-testid='username-input'`. The fallback chain (`[name='email']` → `input[type='email']` → `input:first-of-type`) also fails because the form uses text-type username input. Scripts should be updated to check `data-testid='username-input'` first.
 
-| ID | Severity | Summary |
-|---|---|---|
-| BUG-001 | MEDIUM | `manage-subscription` returns 500 instead of friendly error when Stripe API key is unset/invalid (unit tests pass because they mock `CheckoutService`) |
-| BUG-002 | LOW | Duplicate `data-testid="leads-page"` — both `Leads.tsx` wrapper and `LeadsList.tsx` use it, breaks Playwright strict mode |
-| BUG-003 | LOW (external) | `agent-browser` v0.7.6 transient `Resource temporarily unavailable (os error 35)` crash on long-running E2E shell scripts |
+2. **Strict mode violation:** The `input:first-of-type` fallback selector matches multiple elements (username, password, checkbox), causing agent-browser strict mode errors that crash scripts using `set -euo pipefail`.
 
-## Regression summary
+## Recommendation
 
-- **ASAP test suites:** 118/118 pass
-- **Full frontend Vitest:** 1197/1197 pass
-- **Full backend pytest:** 1952 unit + 182 functional pass; 16 unit + 11 integration + 1 functional + 3 errors are **pre-existing on baseline** and not caused by ASAP
-- **Manual smoke test (14 checkpoints):** 14/14 pass
-- **E2E shell scripts (6 run):** 3 fully pass (dashboard, session-persistence, navigation-security), 3 partial (customers/leads/jobs — all BUG-003 or pre-existing test-data issues)
-- **Live backend curl tests (10 ASAP requirements):** 9/10 pass, 1 bug (BUG-001)
-
-## Conclusion
-
-**All ASAP fixes (Requirements 1-9) are functioning correctly end-to-end.** No ASAP-caused regressions were found. Three bugs were identified during the audit, one of which (BUG-001) is a legitimate backend error-handling gap that should be fixed before this branch is merged.
+To enable E2E testing:
+1. Create a database seed script that provisions test admin credentials
+2. Update E2E scripts to check for `data-testid='username-input'` in the login fallback chain
+3. Set `E2E_ADMIN_EMAIL` and `E2E_ADMIN_PASSWORD` environment variables matching a valid user
+4. Run `bash scripts/e2e-tests.sh` for the full suite

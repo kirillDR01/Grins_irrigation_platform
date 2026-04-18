@@ -14,6 +14,50 @@ vi.mock('../api/appointmentApi', () => ({
   },
 }));
 
+// Mock customer API for InternalNotesCard
+vi.mock('@/features/customers/api/customerApi', () => ({
+  customerApi: {
+    get: vi.fn().mockResolvedValue({
+      id: 'cust-001',
+      first_name: 'Test',
+      last_name: 'Customer',
+      phone: '6125551234',
+      internal_notes: 'Customer notes from appointment',
+      properties: [{ is_primary: true, address: '123 Main St', city: 'Minneapolis', state: 'MN', zip_code: '55401' }],
+    }),
+  },
+}));
+
+// Mock job API for InternalNotesCard
+vi.mock('@/features/jobs/api/jobApi', () => ({
+  jobApi: {
+    get: vi.fn().mockResolvedValue({
+      id: '123e4567-e89b-12d3-a456-426614174001',
+      customer_id: 'cust-001',
+      job_type: 'install',
+    }),
+  },
+}));
+
+const mockUpdateCustomerMutateAsync = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/features/customers/hooks', () => ({
+  useUpdateCustomer: () => ({
+    mutateAsync: mockUpdateCustomerMutateAsync,
+    isPending: false,
+  }),
+  customerKeys: {
+    all: ['customers'],
+    lists: () => ['customers', 'list'],
+    detail: (id: string) => ['customers', 'detail', id],
+  },
+}));
+
+const mockInvalidateAfterCustomerInternalNotesSave = vi.fn();
+vi.mock('@/shared/utils/invalidationHelpers', () => ({
+  invalidateAfterCustomerInternalNotesSave: (...args: unknown[]) =>
+    mockInvalidateAfterCustomerInternalNotesSave(...args),
+}));
+
 const mockAppointment: Appointment = {
   id: '123e4567-e89b-12d3-a456-426614174000',
   job_id: '123e4567-e89b-12d3-a456-426614174001',
@@ -177,5 +221,70 @@ describe('AppointmentForm', () => {
     // The job combobox trigger should be disabled
     const jobSelect = screen.getByTestId('job-combobox-trigger');
     expect(jobSelect).toBeDisabled();
+  });
+
+  // ---- InternalNotesCard (internal-notes-simplification Req 4, 9) ----
+
+  describe('InternalNotesCard', () => {
+    beforeEach(() => {
+      mockUpdateCustomerMutateAsync.mockClear();
+      mockInvalidateAfterCustomerInternalNotesSave.mockClear();
+    });
+
+    it('renders InternalNotesCard for job appointments in edit mode', async () => {
+      render(<AppointmentForm appointment={mockAppointment} />, {
+        wrapper: createWrapper(),
+      });
+
+      // Wait for customer data to load (fetched via job_id → customer_id)
+      await waitFor(() => {
+        expect(screen.getByTestId('appointment-notes-editor')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Customer notes from appointment')).toBeInTheDocument();
+    });
+
+    it('does not render InternalNotesCard for new appointments', () => {
+      render(<AppointmentForm />, { wrapper: createWrapper() });
+
+      // InternalNotesCard should not be present for new appointments
+      expect(screen.queryByTestId('appointment-notes-editor')).not.toBeInTheDocument();
+    });
+
+    it('Save PATCHes the customer and triggers invalidation', async () => {
+      const user = userEvent.setup();
+
+      render(<AppointmentForm appointment={mockAppointment} />, {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('appointment-edit-notes-btn')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId('appointment-edit-notes-btn'));
+
+      const textarea = screen.getByTestId('appointment-internal-notes-textarea');
+      await user.clear(textarea);
+      await user.type(textarea, 'Updated from appointment');
+
+      await user.click(screen.getByTestId('appointment-save-notes-btn'));
+
+      await waitFor(() => {
+        expect(mockUpdateCustomerMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: 'cust-001',
+            data: { internal_notes: 'Updated from appointment' },
+          })
+        );
+      });
+
+      await waitFor(() => {
+        expect(mockInvalidateAfterCustomerInternalNotesSave).toHaveBeenCalledWith(
+          expect.anything(),
+          'cust-001'
+        );
+      });
+    });
   });
 });

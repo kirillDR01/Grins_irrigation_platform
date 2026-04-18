@@ -155,6 +155,7 @@ def _entry_to_response(entry: SalesEntry) -> SalesEntryResponse:
     resp = SalesEntryResponse.model_validate(entry)
     resp.customer_name = customer_name
     resp.customer_phone = customer_phone
+    resp.customer_internal_notes = customer.internal_notes if customer else None
     resp.property_address = property_address
     resp.job_type_display = job_type_display(entry.job_type) or None
     return resp  # type: ignore[no-any-return]

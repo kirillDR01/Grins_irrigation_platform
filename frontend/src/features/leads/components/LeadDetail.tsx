@@ -60,7 +60,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { LoadingPage, ErrorMessage, PageHeader } from '@/shared/components';
+import { LoadingPage, ErrorMessage, PageHeader, InternalNotesCard } from '@/shared/components';
 import { getErrorMessage } from '@/core/api';
 
 import { useLead, useUpdateLead } from '../hooks';
@@ -71,7 +71,6 @@ import { LeadSourceBadge } from './LeadSourceBadge';
 import { LeadTagBadges } from './LeadTagBadges';
 import { LeadConversionConflictModal } from './LeadConversionConflictModal';
 import { AttachmentPanel } from './AttachmentPanel';
-import { NotesTimeline } from '@/shared/components/NotesTimeline';
 import type { LeadStatus, LeadSituation, LeadSource, IntakeTag } from '../types';
 import {
   LEAD_STATUS_LABELS,
@@ -153,6 +152,18 @@ export function LeadDetail() {
     state: '',
     zip_code: '',
   });
+
+  // Internal notes save handler — wired to InternalNotesCard
+  const handleSaveLeadNotes = useCallback(
+    async (next: string | null) => {
+      if (!lead) return;
+      await updateMutation.mutateAsync({
+        id: lead.id,
+        data: { notes: next },
+      });
+    },
+    [lead, updateMutation],
+  );
 
   const startEditAddress = () => {
     if (!lead) return;
@@ -768,9 +779,14 @@ export function LeadDetail() {
               )}
             </div>
 
-            {/* Notes Timeline */}
+            {/* Internal Notes Card */}
             <Separator className="bg-slate-100" />
-            <NotesTimeline subjectType="lead" subjectId={lead.id} />
+            <InternalNotesCard
+              value={lead.notes}
+              onSave={handleSaveLeadNotes}
+              isSaving={updateMutation.isPending}
+              data-testid-prefix="lead-"
+            />
 
             {/* Consent Status — Task 6.3 inline edit */}
             <Separator className="bg-slate-100" />

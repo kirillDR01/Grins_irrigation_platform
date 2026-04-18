@@ -81,6 +81,7 @@ def _make_sales_entry_mock(
     # Denormalized fields expected by SalesEntryResponse
     entry.customer_name = None
     entry.customer_phone = None
+    entry.customer_internal_notes = None
     entry.property_address = None
     return entry
 

@@ -104,7 +104,6 @@ from grins_platform.models.lead import Lead
 from grins_platform.models.lead_attachment import LeadAttachment
 from grins_platform.models.marketing_budget import MarketingBudget
 from grins_platform.models.media_library import MediaLibraryItem
-from grins_platform.models.note import Note
 from grins_platform.models.property import Property
 from grins_platform.models.sales import SalesCalendarEvent, SalesEntry
 from grins_platform.models.schedule_clear_audit import ScheduleClearAudit
@@ -200,8 +199,6 @@ __all__ = [
     "MediaType",
     "MergeCandidateStatus",
     "MessageType",
-    # April 16th: Unified Notes Timeline
-    "Note",
     "NotificationType",
     "PackageType",
     "PaymentMethod",

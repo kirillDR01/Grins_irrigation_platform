@@ -110,6 +110,7 @@ def _populate_appointment_extended_fields(
         customer = getattr(job, "customer", None)
         if customer:
             response.customer_name = f"{customer.first_name} {customer.last_name}"
+            response.customer_internal_notes = customer.internal_notes
     staff = getattr(appointment, "staff", None)
     if staff:
         response.staff_name = staff.name

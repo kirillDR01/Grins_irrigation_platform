@@ -5,6 +5,38 @@ Grin's Irrigation Platform — field service automation for residential/commerci
 
 ## Recent Activity
 
+## [2026-04-18 18:00] - REFACTOR: Internal Notes Simplification — Revert Notes Timeline to Single-Blob Edit/Save
+
+### What Was Accomplished
+Reverted the multi-entry Notes Timeline system (introduced April 16th) back to the simple single-blob Edit/Save pattern. The timeline's per-entry author/timestamp/stage-tag chrome proved unwieldy for day-to-day admin use. A new shared `InternalNotesCard` component now renders the same Edit → type → Save Notes interaction on every surface where a customer or lead appears.
+
+### Technical Details
+**Removed:**
+- `NotesTimeline` component, `useNotes`/`useCreateNote` hooks, `NoteService`, `Note` model, notes API endpoints (`/api/v1/.../notes`), `notes` database table
+- All timeline-related tests (PBT Properties 7/8/9, NoteService functional/integration tests, NotesTimeline.test.tsx)
+
+**Added/Kept:**
+- `InternalNotesCard` shared component at `frontend/src/shared/components/InternalNotesCard.tsx` — encapsulates collapsed/expanded state, Edit/Cancel/Save buttons, toasts, readOnly mode
+- Consumer wiring on 5 surfaces: CustomerDetail, LeadDetail, SalesDetail, AppointmentForm, SalesCalendar
+- `invalidateAfterCustomerInternalNotesSave()` helper for cross-surface query invalidation
+- Lead-to-customer notes carry-forward (`_carry_forward_lead_notes`) on Move to Sales / Move to Jobs
+- `customers.internal_notes` and `leads.notes` columns (pre-existing, no new columns)
+
+**Fold Migration:** `20260418_100700_fold_notes_table_into_internal_notes.py`
+- Folds `notes.body` entries into `customers.internal_notes` (subject_type='customer') and `leads.notes` (subject_type='lead')
+- Discards `sales_entry` and `appointment` subject_type entries (logged count + sample before drop)
+- Drops the `notes` table
+- Notes rows migrated per subject_type: counts depend on dev DB state at migration time (logged to migration output)
+
+### Decision Rationale
+- The always-visible textarea + append-only history felt noisy for the simple task of jotting context about a customer
+- One source-of-truth blob per individual, one interaction pattern, shown everywhere that individual appears
+- Sales entries and appointments read/write the customer's `internal_notes` — no per-surface duplication
+
+### Next Steps
+- Manual smoke test on dev: edit notes on Customer Detail, verify propagation to Sales Entry and Appointment surfaces
+- Verify lead notes carry-forward on a newly-routed lead
+
 ## [2026-04-16 20:30] - BUGFIX: 17 MEDIUM Customer Lifecycle Fixes (M-1..M-17)
 
 ### What Was Accomplished

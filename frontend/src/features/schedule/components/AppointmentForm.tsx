@@ -7,8 +7,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format } from 'date-fns';
-import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -33,9 +33,11 @@ import { toast } from 'sonner';
 import { getErrorMessage } from '@/core/api/client';
 import { CustomerContextBlock } from '@/shared/components/CustomerContextBlock';
 import { AppointmentAttachments } from '@/shared/components/AppointmentAttachments';
-import { NotesTimeline } from '@/shared/components/NotesTimeline';
+import { InternalNotesCard } from '@/shared/components/InternalNotesCard';
 import { Link } from 'react-router-dom';
 import { useCreateAppointment, useUpdateAppointment } from '../hooks/useAppointmentMutations';
+import { useUpdateCustomer } from '@/features/customers/hooks';
+import { invalidateAfterCustomerInternalNotesSave } from '@/shared/utils/invalidationHelpers';
 import { useJobsReadyToSchedule } from '@/features/jobs/hooks';
 import { useStaff } from '@/features/staff/hooks';
 import { jobApi } from '@/features/jobs/api/jobApi';
@@ -112,6 +114,8 @@ export function AppointmentForm({
 }: AppointmentFormProps) {
   const createMutation = useCreateAppointment();
   const updateMutation = useUpdateAppointment();
+  const updateCustomerMutation = useUpdateCustomer();
+  const queryClient = useQueryClient();
   
   // Fetch real jobs and staff from API
   const { data: jobsData, isLoading: jobsLoading } = useJobsReadyToSchedule();
@@ -165,6 +169,19 @@ export function AppointmentForm({
       setAutoAddress(null);
     }
   }, [selectedCustomer]);
+
+  // Internal notes save handler — PATCHes the customer
+  const handleSaveAppointmentNotes = useCallback(
+    async (next: string | null) => {
+      if (!selectedCustomer?.id) return;
+      await updateCustomerMutation.mutateAsync({
+        id: selectedCustomer.id,
+        data: { internal_notes: next },
+      });
+      invalidateAfterCustomerInternalNotesSave(queryClient, selectedCustomer.id);
+    },
+    [selectedCustomer?.id, updateCustomerMutation, queryClient],
+  );
 
   const onSubmit = async (data: FormData) => {
     try {
@@ -436,25 +453,14 @@ export function AppointmentForm({
           <AppointmentAttachments appointmentId={appointment.id} />
         )}
 
-        {/* Notes Timeline — Req 10D */}
-        {isEditing && appointment?.id && (
-          <div className="space-y-1">
-            <NotesTimeline
-              subjectType="appointment"
-              subjectId={appointment.id}
-              readOnly
-              maxEntries={3}
-            />
-            {selectedJob?.customer_id && (
-              <Link
-                to={`/customers/${selectedJob.customer_id}`}
-                className="text-xs text-teal-600 hover:text-teal-700"
-                data-testid="view-full-timeline-link"
-              >
-                View full timeline →
-              </Link>
-            )}
-          </div>
+        {/* Internal Notes Card — bound to customer's internal_notes */}
+        {isEditing && selectedCustomer && (
+          <InternalNotesCard
+            value={selectedCustomer.internal_notes ?? null}
+            onSave={handleSaveAppointmentNotes}
+            isSaving={updateCustomerMutation.isPending}
+            data-testid-prefix="appointment-"
+          />
         )}
 
         {/* Actions */}

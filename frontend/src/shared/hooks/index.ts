@@ -1,7 +1,5 @@
 export { useDebounce } from './useDebounce';
 export { useHighlight } from './useHighlight';
-export { useNotes, useCreateNote, noteKeys } from './useNotes';
-export type { NoteEntry } from './useNotes';
 export {
   useAppointmentAttachments,
   useUploadAppointmentAttachment,

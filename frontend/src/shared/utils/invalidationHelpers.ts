@@ -14,6 +14,7 @@ import { customerKeys, customerInvoiceKeys } from '@/features/customers/hooks/us
 import { jobKeys } from '@/features/jobs/hooks/useJobs';
 import { salesKeys } from '@/features/sales/hooks';
 import { pipelineKeys } from '@/features/sales/hooks/useSalesPipeline';
+import { appointmentKeys } from '@/features/schedule/hooks/useAppointments';
 import { dashboardKeys } from '@/features/dashboard/hooks/useDashboard';
 
 /**
@@ -109,4 +110,66 @@ export function invalidateAfterSalesPipelineTransition(
     queryClient.invalidateQueries({ queryKey: jobKeys.lists() });
     queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
   }
+}
+
+
+/**
+ * Invalidate after saving customer internal notes from any surface.
+ *
+ * Covers: Customer Detail, Sales Entry Detail, Appointment Modal.
+ * Uses predicate-based invalidation for sales and appointment detail keys
+ * since we may not know the specific IDs that reference this customer.
+ *
+ * Validates: internal-notes-simplification Requirement 6
+ */
+export function invalidateAfterCustomerInternalNotesSave(
+  queryClient: QueryClient,
+  customerId: string
+): void {
+  // Customer queries
+  queryClient.invalidateQueries({ queryKey: customerKeys.detail(customerId) });
+  queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+
+  // Sales queries — invalidate all estimate lists and use predicate for details
+  // since we don't know which sales entries reference this customer
+  queryClient.invalidateQueries({ queryKey: salesKeys.estimates() });
+  queryClient.invalidateQueries({
+    predicate: (query) => {
+      const key = query.queryKey;
+      // Match salesKeys.estimateDetail pattern: ['sales', 'estimates', 'detail', id]
+      if (
+        key[0] === 'sales' &&
+        key[1] === 'estimates' &&
+        key[2] === 'detail'
+      ) {
+        const data = query.state.data as
+          | { customer?: { id?: string } }
+          | undefined;
+        return data?.customer?.id === customerId;
+      }
+      return false;
+    },
+  });
+
+  // Appointment queries — invalidate lists and predicate-match details
+  queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
+  queryClient.invalidateQueries({
+    predicate: (query) => {
+      const key = query.queryKey;
+      // Match appointmentKeys.detail pattern: ['appointments', 'detail', id]
+      if (
+        key[0] === 'appointments' &&
+        key[1] === 'detail'
+      ) {
+        const data = query.state.data as
+          | { customer?: { id?: string }; customer_id?: string }
+          | undefined;
+        return (
+          data?.customer?.id === customerId ||
+          data?.customer_id === customerId
+        );
+      }
+      return false;
+    },
+  });
 }

@@ -173,7 +173,7 @@ describe('CustomerDetail', () => {
       expect(screen.getByTestId('tab-content-overview')).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId('internal-notes-display')).toBeInTheDocument();
+    expect(screen.getByTestId('customer-internal-notes-display')).toBeInTheDocument();
     expect(screen.getByText('VIP customer, prefers morning calls')).toBeInTheDocument();
   });
 
@@ -260,16 +260,16 @@ describe('CustomerDetail', () => {
     render(<CustomerDetail />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByTestId('edit-notes-btn')).toBeInTheDocument();
+      expect(screen.getByTestId('customer-edit-notes-btn')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByTestId('edit-notes-btn'));
+    await user.click(screen.getByTestId('customer-edit-notes-btn'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('notes-editor')).toBeInTheDocument();
+      expect(screen.getByTestId('customer-notes-editor')).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId('internal-notes-textarea')).toBeInTheDocument();
+    expect(screen.getByTestId('customer-internal-notes-textarea')).toBeInTheDocument();
   });
 
   it('renders loading state', () => {
@@ -296,6 +296,95 @@ describe('CustomerDetail', () => {
     render(<CustomerDetail />, { wrapper: createWrapper() });
 
     expect(screen.getByText(/error/i)).toBeInTheDocument();
+  });
+
+  // ---- Internal Notes Card (internal-notes-simplification Req 2, 9) ----
+
+  describe('InternalNotesCard', () => {
+    it('renders InternalNotesCard with customer.internal_notes', async () => {
+      render(<CustomerDetail />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('customer-notes-editor')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('VIP customer, prefers morning calls')).toBeInTheDocument();
+      expect(screen.getByTestId('customer-internal-notes-display')).toBeInTheDocument();
+    });
+
+    it('renders placeholder when internal_notes is null', async () => {
+      vi.mocked(customerHooks.useCustomer).mockReturnValue({
+        data: { ...mockCustomer, internal_notes: null },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      } as unknown as ReturnType<typeof customerHooks.useCustomer>);
+
+      render(<CustomerDetail />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('customer-notes-editor')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('No internal notes')).toBeInTheDocument();
+    });
+
+    it('Edit → type → Save triggers useUpdateCustomer with { internal_notes }', async () => {
+      const user = userEvent.setup();
+      const mockMutateAsync = vi.fn().mockResolvedValue(undefined);
+      const { useUpdateCustomer } = await import('../hooks/useCustomerMutations');
+      vi.mocked(useUpdateCustomer).mockReturnValue({
+        mutateAsync: mockMutateAsync,
+        isPending: false,
+      } as unknown as ReturnType<typeof useUpdateCustomer>);
+
+      render(<CustomerDetail />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('customer-edit-notes-btn')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId('customer-edit-notes-btn'));
+
+      const textarea = screen.getByTestId('customer-internal-notes-textarea');
+      await user.clear(textarea);
+      await user.type(textarea, 'Updated customer notes');
+
+      await user.click(screen.getByTestId('customer-save-notes-btn'));
+
+      await waitFor(() => {
+        expect(mockMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: 'cust-1',
+            data: { internal_notes: 'Updated customer notes' },
+          })
+        );
+      });
+    });
+
+    it('Cancel reverts unsaved changes', async () => {
+      const user = userEvent.setup();
+
+      render(<CustomerDetail />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('customer-edit-notes-btn')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId('customer-edit-notes-btn'));
+
+      const textarea = screen.getByTestId('customer-internal-notes-textarea');
+      await user.clear(textarea);
+      await user.type(textarea, 'Discarded changes');
+
+      await user.click(screen.getByText('Cancel'));
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('customer-internal-notes-textarea')).not.toBeInTheDocument();
+      });
+
+      expect(screen.getByText('VIP customer, prefers morning calls')).toBeInTheDocument();
+    });
   });
 
   // ---- April 16th: Inline edit sections ----

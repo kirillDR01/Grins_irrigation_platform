@@ -52,12 +52,12 @@
 
 ## Phase 7: Frontend Notes & Calendar Enhancements (Parallel after Phase 6)
 
-- [x] 7.1 Create shared `NotesTimeline` component at `frontend/src/shared/components/NotesTimeline.tsx`: renders notes newest-first with author, timestamp, body, and stage tag (Lead/Sales/Customer/Appointment). Includes "Add note" form. Supports `readOnly` and `maxEntries` props for appointment modal slice. Add `useNotes` and `useCreateNote` hooks.
-- [x] 7.2 Integrate `NotesTimeline` into Lead Detail, Sales Entry Detail, and Customer Detail pages. Replace single notes field with timeline component. Wire to notes API endpoints.
+- [x] ~~7.1 Create shared `NotesTimeline` component at `frontend/src/shared/components/NotesTimeline.tsx`: renders notes newest-first with author, timestamp, body, and stage tag (Lead/Sales/Customer/Appointment). Includes "Add note" form. Supports `readOnly` and `maxEntries` props for appointment modal slice. Add `useNotes` and `useCreateNote` hooks.~~ **SUPERSEDED by `.kiro/specs/internal-notes-simplification/` — NotesTimeline reverted to single-blob InternalNotesCard.**
+- [x] ~~7.2 Integrate `NotesTimeline` into Lead Detail, Sales Entry Detail, and Customer Detail pages. Replace single notes field with timeline component. Wire to notes API endpoints.~~ **SUPERSEDED by `.kiro/specs/internal-notes-simplification/`**
 - [x] 7.3 Appointment modal — Customer context block: add read-only context block to both `AppointmentForm.tsx` (job appointments) and `SalesCalendar.tsx` edit dialog (estimate appointments). Display customer name, phone (tap-to-call), primary address (maps link), job type, last_contacted_at, preferred_service_time, is_priority badge, dogs_on_property warning, gate_code, access_instructions, is_red_flag/is_slow_payer pills. Group safety warnings separately.
 - [x] 7.4 Appointment modal — Source record links: add "View sales entry →" link on estimate appointments, "View customer →" link on job appointments.
 - [x] 7.5 Appointment modal — File upload: add "Attach files" affordance supporting multiple files, any MIME type, 25 MB cap. Render appropriate previews (image thumbnail, PDF icon, other file icon). Reuse presign pipeline from `AttachmentPanel.tsx`. Wire to appointment attachments API.
-- [x] 7.6 Appointment modal — Notes integration: display read-only NotesTimeline slice with "View full timeline →" link. New notes recorded with `subject_type: 'appointment'`.
+- [x] ~~7.6 Appointment modal — Notes integration: display read-only NotesTimeline slice with "View full timeline →" link. New notes recorded with `subject_type: 'appointment'`.~~ **SUPERSEDED by `.kiro/specs/internal-notes-simplification/`**
 - [x] 7.7 Calendar grid — Attachment badge: display small attachment-count badge on appointment cards that have attachments.
 
 ## Phase 8: Cross-Feature Cache Invalidation (After Phase 6)
@@ -74,7 +74,7 @@
 ## Phase 10: Sales Entry Editability (After Phase 6)
 
 - [x] 10.1 Sales Entry Detail — Inline edit for all fields: customer name, phone, job type, last_contacted_at, pipeline stage, assigned staff, estimate amount, dates, address. Customer-sourced fields (name, phone) PATCH the underlying Customer row via `useUpdateCustomer`, not the sales entry row.
-- [x] 10.2 Sales Entry Detail — Bidirectional notes: integrate NotesTimeline showing merged history from all linked stages (Lead, Sales, Appointment, Customer). New notes created with `subject_type: 'sales_entry'`.
+- [x] ~~10.2 Sales Entry Detail — Bidirectional notes: integrate NotesTimeline showing merged history from all linked stages (Lead, Sales, Appointment, Customer). New notes created with `subject_type: 'sales_entry'`.~~ **SUPERSEDED by `.kiro/specs/internal-notes-simplification/`**
 
 ## Phase 11: Backend Tests (After Phases 3-4)
 
@@ -102,6 +102,6 @@
 - [x] 12.2 Update `CustomerDetail.test.tsx` — Assert all inline edit sections render; property management CRUD works; primary property switching works.
 - [x] 12.3 Update or create `CustomerForm.test.tsx` — Assert error messages display on failure; LEAD_SOURCES matches LeadSourceExtended.
 - [x] 12.4 Update `CustomerList.test.tsx` — Assert search text retained across refetch; export button triggers download.
-- [x] 12.5 Create `NotesTimeline.test.tsx` — Assert notes render newest-first; stage tags display; add note form works.
+- [x] ~~12.5 Create `NotesTimeline.test.tsx` — Assert notes render newest-first; stage tags display; add note form works.~~ **SUPERSEDED by `.kiro/specs/internal-notes-simplification/`**
 - [x] 12.6 Create appointment modal tests — Assert customer context block renders all fields; file upload works; notes slice displays.
 - [x] 12.7 Create frontend property-based tests using fast-check for Properties 3, 11, 12, 13, 15, 16.

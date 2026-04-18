@@ -500,6 +500,62 @@ describe('LeadDetail', () => {
     expect(termsAccepted).toHaveTextContent('Not accepted');
   });
 
+  // ---- Internal Notes Card (internal-notes-simplification Req 3, 9) ----
+
+  describe('InternalNotesCard', () => {
+    it('renders InternalNotesCard with lead.notes', async () => {
+      vi.mocked(leadApi.getById).mockResolvedValue(baseLead);
+
+      render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('lead-notes-editor')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Large backyard needs full irrigation')).toBeInTheDocument();
+      expect(screen.getByTestId('lead-internal-notes-display')).toBeInTheDocument();
+    });
+
+    it('renders placeholder when lead.notes is null', async () => {
+      vi.mocked(leadApi.getById).mockResolvedValue({ ...baseLead, notes: null });
+
+      render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('lead-notes-editor')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('No internal notes')).toBeInTheDocument();
+    });
+
+    it('Save triggers useUpdateLead with { notes: <typed> }', async () => {
+      const user = userEvent.setup();
+      vi.mocked(leadApi.getById).mockResolvedValue(baseLead);
+      vi.mocked(leadApi.update).mockResolvedValue({ ...baseLead, notes: 'New lead notes' });
+
+      render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('lead-edit-notes-btn')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId('lead-edit-notes-btn'));
+
+      const textarea = screen.getByTestId('lead-internal-notes-textarea');
+      await user.clear(textarea);
+      await user.type(textarea, 'New lead notes');
+
+      await user.click(screen.getByTestId('lead-save-notes-btn'));
+
+      await waitFor(() => {
+        expect(leadApi.update).toHaveBeenCalledWith(
+          'lead-001',
+          expect.objectContaining({ notes: 'New lead notes' })
+        );
+      });
+    });
+  });
+
   // ---- Lead Deletion Flow (Req 5) ----
 
   describe('Lead Deletion', () => {

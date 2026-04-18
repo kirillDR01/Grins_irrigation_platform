@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import { InternalNotesCard } from './InternalNotesCard';
 
 interface CustomerContextData {
   customer_name?: string;
@@ -40,10 +41,21 @@ interface CustomerContextData {
   access_instructions?: string;
   is_red_flag?: boolean;
   is_slow_payer?: boolean;
+  /** Customer's internal notes blob — displayed via InternalNotesCard when provided. */
+  internal_notes?: string | null;
 }
 
 interface CustomerContextBlockProps {
   data: CustomerContextData;
+  /**
+   * Save handler for the internal notes card.
+   * When provided (along with `isSavingNotes`), the block renders an
+   * editable InternalNotesCard. When omitted, notes are shown read-only
+   * (if `data.internal_notes` is present) or hidden entirely.
+   */
+  onSaveNotes?: (next: string | null) => Promise<void>;
+  /** Whether a notes save is currently in flight. Required when `onSaveNotes` is provided. */
+  isSavingNotes?: boolean;
 }
 
 function formatAddress(data: CustomerContextData): string | null {
@@ -59,7 +71,7 @@ function getMapsUrl(address: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 }
 
-export function CustomerContextBlock({ data }: CustomerContextBlockProps) {
+export function CustomerContextBlock({ data, onSaveNotes, isSavingNotes }: CustomerContextBlockProps) {
   const address = formatAddress(data);
   const hasSafetyWarnings =
     data.dogs_on_property ||
@@ -199,6 +211,19 @@ export function CustomerContextBlock({ data }: CustomerContextBlockProps) {
               {data.access_instructions}
             </p>
           )}
+        </div>
+      )}
+
+      {/* Internal Notes Card — shown when notes data or save handler is provided */}
+      {(data.internal_notes !== undefined || onSaveNotes) && (
+        <div className="border-t border-slate-200 pt-2">
+          <InternalNotesCard
+            value={data.internal_notes ?? null}
+            onSave={onSaveNotes ?? (async () => {})}
+            isSaving={isSavingNotes ?? false}
+            readOnly={!onSaveNotes}
+            data-testid-prefix="ctx-"
+          />
         </div>
       )}
     </div>

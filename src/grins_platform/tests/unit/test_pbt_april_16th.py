@@ -36,12 +36,6 @@ short_text = st.text(
     max_size=60,
 ).filter(lambda s: len(s.strip()) > 0)
 
-note_bodies = st.text(
-    alphabet=st.characters(whitelist_categories=("L", "N", "Zs", "P")),
-    min_size=1,
-    max_size=500,
-).filter(lambda s: len(s.strip()) > 0)
-
 phone_digits = st.text(
     alphabet="0123456789",
     min_size=10,
@@ -66,7 +60,6 @@ legacy_lead_statuses = st.sampled_from([
     LeadStatus.SPAM,
 ])
 
-subject_types = st.sampled_from(["lead", "sales_entry", "customer", "appointment"])
 
 file_sizes_valid = st.integers(min_value=1, max_value=25 * 1024 * 1024)
 file_sizes_too_large = st.integers(
@@ -431,178 +424,6 @@ class TestProperty6LegacyStatusRendering:
         display_text = "Archived" if status.value in archived_statuses else status.value
 
         assert display_text == "Archived"
-
-
-# ===================================================================
-# Property 7: Notes creation round-trip
-# Feature: april-16th-fixes-enhancements, Property 7: Notes creation round-trip
-# Validates: Requirements 4.3, 4.7
-# ===================================================================
-
-
-@pytest.mark.unit
-class TestProperty7NotesCreationRoundTrip:
-    """Property 7: Notes creation round-trip.
-
-    For any valid note body and any subject type, creating a note via POST
-    and then listing notes via GET should return the created note with
-    matching body, author, and subject.
-
-    **Validates: Requirements 4.3, 4.7**
-    """
-
-    @given(
-        body=note_bodies,
-        subject_type=subject_types,
-        subject_id=uuids,
-        author_id=uuids,
-    )
-    @settings(max_examples=100)
-    def test_note_schema_round_trip(
-        self,
-        body: str,
-        subject_type: str,
-        subject_id: UUID,
-        author_id: UUID,
-    ) -> None:
-        """Creating a NoteCreate and reading back via NoteResponse preserves fields."""
-        from grins_platform.schemas.note import NoteCreate, NoteResponse
-
-        # Validate creation schema
-        create = NoteCreate(body=body)
-        assert create.body == body
-
-        # Simulate response
-        now = datetime.now(tz=timezone.utc)
-        response = NoteResponse(
-            id=uuid4(),
-            subject_type=subject_type,
-            subject_id=subject_id,
-            author_id=author_id,
-            author_name="Test Author",
-            body=body,
-            origin_lead_id=None,
-            is_system=False,
-            created_at=now,
-            updated_at=now,
-            stage_tag=subject_type.replace("_", " ").title(),
-        )
-
-        assert response.body == body
-        assert response.subject_type == subject_type
-        assert response.subject_id == subject_id
-        assert response.author_id == author_id
-        assert response.is_system is False
-
-
-# ===================================================================
-# Property 8: Cross-stage note visibility
-# Feature: april-16th-fixes-enhancements, Property 8: Cross-stage note visibility
-# Validates: Requirements 4.4, 4.5, 4.6, 4.8, 12.5, 12.6, 12.7
-# ===================================================================
-
-
-@pytest.mark.unit
-class TestProperty8CrossStageNoteVisibility:
-    """Property 8: Cross-stage note visibility.
-
-    For any lead with N notes that is routed, the resulting timeline
-    should contain all N original lead notes plus a system stage-transition
-    note, for a total of at least N+1 notes.
-
-    **Validates: Requirements 4.4, 4.5, 4.6, 4.8, 12.5, 12.6, 12.7**
-    """
-
-    @given(
-        num_lead_notes=st.integers(min_value=0, max_value=20),
-        target_type=st.sampled_from(["sales_entry", "customer"]),
-    )
-    @settings(max_examples=100)
-    def test_merged_timeline_has_n_plus_1_entries(
-        self,
-        num_lead_notes: int,
-        target_type: str,
-    ) -> None:
-        """After routing, merged timeline has N lead notes + 1 system note."""
-        lead_id = uuid4()
-        target_id = uuid4()
-        author_id = uuid4()
-
-        # Simulate lead notes with origin_lead_id set
-        lead_notes = []
-        for i in range(num_lead_notes):
-            note = MagicMock()
-            note.id = uuid4()
-            note.subject_type = "lead"
-            note.subject_id = lead_id
-            note.origin_lead_id = lead_id
-            note.is_deleted = False
-            note.is_system = False
-            note.body = f"Lead note {i}"
-            lead_notes.append(note)
-
-        # Simulate system stage-transition note
-        transition_note = MagicMock()
-        transition_note.id = uuid4()
-        transition_note.subject_type = target_type
-        transition_note.subject_id = target_id
-        transition_note.origin_lead_id = lead_id
-        transition_note.is_deleted = False
-        transition_note.is_system = True
-        transition_note.body = f"Stage transition: Lead → {target_type.replace('_', ' ').title()}"
-
-        # Merged timeline: direct notes on target + notes with origin_lead_id
-        all_notes = lead_notes + [transition_note]
-
-        # Filter as the service would: non-deleted notes matching either
-        # (subject_type=target AND subject_id=target_id) OR origin_lead_id=target_id
-        # In this simulation, all notes have origin_lead_id=lead_id
-        merged = [n for n in all_notes if not n.is_deleted]
-
-        assert len(merged) >= num_lead_notes + 1
-        # Verify system note is present
-        system_notes = [n for n in merged if n.is_system]
-        assert len(system_notes) >= 1
-
-
-# ===================================================================
-# Property 9: Notes timeline ordering
-# Feature: april-16th-fixes-enhancements, Property 9: Notes timeline ordering
-# Validates: Requirements 4.2
-# ===================================================================
-
-
-@pytest.mark.unit
-class TestProperty9NotesTimelineOrdering:
-    """Property 9: Notes timeline ordering.
-
-    For any set of notes, the timeline should be ordered by created_at
-    descending (newest first).
-
-    **Validates: Requirements 4.2**
-    """
-
-    @given(
-        num_notes=st.integers(min_value=2, max_value=30),
-    )
-    @settings(max_examples=100)
-    def test_notes_ordered_newest_first(self, num_notes: int) -> None:
-        """Notes are returned in descending created_at order."""
-        base_time = datetime(2025, 1, 1, tzinfo=timezone.utc)
-
-        # Create notes with random-ish timestamps
-        notes = []
-        for i in range(num_notes):
-            note = MagicMock()
-            note.created_at = base_time + timedelta(hours=i * 3, minutes=i * 7)
-            notes.append(note)
-
-        # Sort as the service does: descending by created_at
-        sorted_notes = sorted(notes, key=lambda n: n.created_at, reverse=True)
-
-        # Verify ordering
-        for i in range(len(sorted_notes) - 1):
-            assert sorted_notes[i].created_at >= sorted_notes[i + 1].created_at
 
 
 # ===================================================================
