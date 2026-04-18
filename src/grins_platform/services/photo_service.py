@@ -15,6 +15,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Protocol
+from urllib.parse import quote
 
 import boto3
 import magic
@@ -353,11 +354,25 @@ class PhotoService(LoggerMixin):
         self,
         file_key: str,
         expiry: int = _PRESIGNED_EXPIRY,
+        *,
+        download_filename: str | None = None,
     ) -> str:
-        """Generate a pre-signed download URL."""
+        """Generate a pre-signed download URL.
+
+        When ``download_filename`` is provided, the URL carries a
+        ``response-content-disposition=attachment; filename=…`` override
+        so the browser saves the file to disk instead of rendering it
+        inline. Leave it ``None`` for image-gallery contexts where an
+        ``<img src>`` tag should render the object directly.
+        """
+        params: dict[str, Any] = {"Bucket": self._bucket, "Key": file_key}
+        if download_filename:
+            params["ResponseContentDisposition"] = (
+                format_attachment_disposition(download_filename)
+            )
         url: str = self._client.generate_presigned_url(
             "get_object",
-            Params={"Bucket": self._bucket, "Key": file_key},
+            Params=params,
             ExpiresIn=expiry,
         )
         return url
@@ -425,6 +440,36 @@ class PhotoService(LoggerMixin):
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
+
+def format_attachment_disposition(file_name: str) -> str:
+    """Build an RFC 6266 ``Content-Disposition: attachment`` header value.
+
+    Emits both an ASCII ``filename="..."`` fallback and a UTF-8
+    ``filename*=UTF-8''...`` variant per RFC 5987 so unicode names
+    survive on any browser. Control characters and quote/backslash
+    characters are stripped from the fallback to prevent header
+    injection via user-supplied upload names.
+    """
+    cleaned = (
+        file_name.replace("\r", "")
+        .replace("\n", "")
+        .replace("\\", "_")
+    )
+    cleaned = "".join(c for c in cleaned if c.isprintable())
+    ascii_fallback = (
+        cleaned.encode("ascii", "replace")
+        .decode("ascii")
+        .replace("?", "_")
+        .replace('"', "'")
+    )
+    if not ascii_fallback.strip():
+        ascii_fallback = "download"
+    encoded_utf8 = quote(cleaned, safe="")
+    return (
+        f'attachment; filename="{ascii_fallback}"; '
+        f"filename*=UTF-8''{encoded_utf8}"
+    )
 
 
 def _build_default_client() -> S3ClientProtocol:

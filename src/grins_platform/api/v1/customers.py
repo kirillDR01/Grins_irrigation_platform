@@ -1991,7 +1991,10 @@ async def download_customer_document(
             detail="Document not found",
         )
 
-    url = photo_service.generate_presigned_url(doc.file_key)
+    url = photo_service.generate_presigned_url(
+        doc.file_key,
+        download_filename=doc.file_name,
+    )
     return {"download_url": url, "file_name": doc.file_name}
 
 

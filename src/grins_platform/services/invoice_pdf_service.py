@@ -15,6 +15,7 @@ from sqlalchemy import select
 
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.invoice import Invoice
+from grins_platform.services.photo_service import format_attachment_disposition
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -312,8 +313,13 @@ class InvoicePDFService(LoggerMixin):
         invoice.document_url = s3_key
         await db.flush()
 
-        # Generate pre-signed URL
-        download_url = self._generate_presigned_url(s3_key)
+        # Generate pre-signed URL — force browser to save-as-file so
+        # clicking "Download PDF" in InvoiceDetail actually triggers a
+        # download instead of opening the PDF inline in a new tab.
+        download_url = self._generate_presigned_url(
+            s3_key,
+            download_filename=f"{invoice.invoice_number}.pdf",
+        )
 
         self.logger.info(
             "invoice.pdf.generated",
@@ -356,16 +362,29 @@ class InvoicePDFService(LoggerMixin):
         if invoice.document_url is None:
             raise InvoicePDFNotFoundError(invoice_id)
 
-        url = self._generate_presigned_url(invoice.document_url)
+        url = self._generate_presigned_url(
+            invoice.document_url,
+            download_filename=f"{invoice.invoice_number}.pdf",
+        )
 
         self.log_completed("get_pdf_url", invoice_id=str(invoice_id))
         return url
 
-    def _generate_presigned_url(self, s3_key: str) -> str:
+    def _generate_presigned_url(
+        self,
+        s3_key: str,
+        *,
+        download_filename: str | None = None,
+    ) -> str:
         """Generate a pre-signed S3 download URL.
+
+        When ``download_filename`` is provided, the response carries a
+        ``Content-Disposition: attachment; filename=…`` header so the
+        browser saves the PDF to disk instead of rendering it inline.
 
         Args:
             s3_key: S3 object key.
+            download_filename: Optional filename for forced download.
 
         Returns:
             Pre-signed URL string (1hr expiry).
@@ -373,10 +392,15 @@ class InvoicePDFService(LoggerMixin):
         if self.s3_client is None:
             return f"https://{self.s3_bucket}.s3.amazonaws.com/{s3_key}"
 
+        params: dict[str, Any] = {"Bucket": self.s3_bucket, "Key": s3_key}
+        if download_filename:
+            params["ResponseContentDisposition"] = (
+                format_attachment_disposition(download_filename)
+            )
         try:
             url: str = self.s3_client.generate_presigned_url(
                 "get_object",
-                Params={"Bucket": self.s3_bucket, "Key": s3_key},
+                Params=params,
                 ExpiresIn=3600,
             )
         except Exception as exc:

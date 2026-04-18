@@ -114,7 +114,16 @@ class AppointmentAttachmentService(LoggerMixin):
 
         items: list[AttachmentUploadResponse] = []
         for att in attachments:
-            presigned_url = self.photo_service.generate_presigned_url(att.file_key)
+            # Images render inline (thumbnails); other types force download.
+            disposition_name = (
+                None
+                if att.content_type.startswith("image/")
+                else att.file_name
+            )
+            presigned_url = self.photo_service.generate_presigned_url(
+                att.file_key,
+                download_filename=disposition_name,
+            )
             items.append(
                 AttachmentUploadResponse(
                     id=att.id,
@@ -206,9 +215,17 @@ class AppointmentAttachmentService(LoggerMixin):
         await self.session.flush()
         await self.session.refresh(attachment)
 
-        # Generate presigned URL for immediate use
+        # Generate presigned URL for immediate use. Images stay inline so
+        # AppointmentAttachments can render thumbnails; other types force
+        # the browser to save-as-file instead of opening in a new tab.
+        disposition_name = (
+            None
+            if attachment.content_type.startswith("image/")
+            else attachment.file_name
+        )
         presigned_url = self.photo_service.generate_presigned_url(
             attachment.file_key,
+            download_filename=disposition_name,
         )
 
         self.log_completed(

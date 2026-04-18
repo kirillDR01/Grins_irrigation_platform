@@ -675,7 +675,12 @@ class TestProperty77InvoicePDFGeneration:
             await svc.generate_pdf(db, uuid4())
 
     async def test_get_pdf_url_with_document_url_returns_presigned(self) -> None:
-        """get_pdf_url returns pre-signed URL."""
+        """get_pdf_url returns a pre-signed URL with attachment disposition.
+
+        The URL must carry ``ResponseContentDisposition=attachment;
+        filename="…"`` so clicking "Download PDF" actually triggers a
+        browser download instead of inline rendering.
+        """
         invoice = _mock_invoice(document_url="invoices/abc.pdf")
         db = _make_db_returning(invoice)
 
@@ -688,11 +693,14 @@ class TestProperty77InvoicePDFGeneration:
         url = await svc.get_pdf_url(db, invoice.id)
 
         assert url == "https://s3.example.com/signed/invoices/abc.pdf"
-        s3.generate_presigned_url.assert_called_once_with(
-            "get_object",
-            Params={"Bucket": "test-bucket", "Key": "invoices/abc.pdf"},
-            ExpiresIn=3600,
-        )
+        s3.generate_presigned_url.assert_called_once()
+        call_kwargs = s3.generate_presigned_url.call_args.kwargs
+        assert call_kwargs["Params"]["Bucket"] == "test-bucket"
+        assert call_kwargs["Params"]["Key"] == "invoices/abc.pdf"
+        assert call_kwargs["ExpiresIn"] == 3600
+        disp = call_kwargs["Params"]["ResponseContentDisposition"]
+        assert disp.startswith("attachment;")
+        assert f'filename="{invoice.invoice_number}.pdf"' in disp
 
     async def test_get_pdf_url_with_no_document_url_raises_not_found(self) -> None:
         """get_pdf_url raises InvoicePDFNotFoundError when no document_url."""
