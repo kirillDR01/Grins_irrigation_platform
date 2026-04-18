@@ -1824,6 +1824,7 @@ async def get_customer_sent_messages(
 )
 async def upload_customer_document(
     customer_id: UUID,
+    _user: CurrentActiveUser,
     service: Annotated[CustomerService, Depends(get_customer_service)],
     db: Annotated[AsyncSession, Depends(get_db_session)],
     photo_service: Annotated[PhotoService, Depends(get_photo_service)],
@@ -1921,6 +1922,7 @@ async def upload_customer_document(
 )
 async def list_customer_documents(
     customer_id: UUID,
+    _user: CurrentActiveUser,
     service: Annotated[CustomerService, Depends(get_customer_service)],
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> list[CustomerDocumentResponse]:
@@ -1962,6 +1964,7 @@ async def list_customer_documents(
 async def download_customer_document(
     customer_id: UUID,
     document_id: UUID,
+    _user: CurrentActiveUser,
     db: Annotated[AsyncSession, Depends(get_db_session)],
     photo_service: Annotated[PhotoService, Depends(get_photo_service)],
 ) -> dict[str, str]:
@@ -2001,6 +2004,7 @@ async def download_customer_document(
 async def delete_customer_document(
     customer_id: UUID,
     document_id: UUID,
+    _user: CurrentActiveUser,
     db: Annotated[AsyncSession, Depends(get_db_session)],
     photo_service: Annotated[PhotoService, Depends(get_photo_service)],
 ) -> None:

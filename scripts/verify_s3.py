@@ -19,10 +19,10 @@ SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "minioadmin")
 
 PREFIXES = [
     "customer-photos/",
+    "customer-documents/",
     "lead-attachments/",
     "media-library/",
     "receipts/",
-    "invoices/",
 ]
 
 

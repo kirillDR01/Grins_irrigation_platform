@@ -105,6 +105,19 @@ AUTH_REQUIRED_ENDPOINTS: list[tuple[str, str, dict[str, Any] | None]] = [
         "/api/v1/customers/lookup/email/test@example.com",
         None,
     ),
+    # --- customers: documents (upload, list, download, delete) ---
+    (
+        "POST",
+        f"/api/v1/customers/{_uuid()}/documents?document_type=estimate",
+        None,
+    ),
+    ("GET", f"/api/v1/customers/{_uuid()}/documents", None),
+    (
+        "GET",
+        f"/api/v1/customers/{_uuid()}/documents/{_uuid()}/download",
+        None,
+    ),
+    ("DELETE", f"/api/v1/customers/{_uuid()}/documents/{_uuid()}", None),
 ]
 
 
