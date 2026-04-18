@@ -445,7 +445,7 @@ export function AppointmentDetail({
               // bughunt M-1: use the canonical SendConfirmationButton so the
               // detail modal shares the calendar card's send behavior
               // (toast feedback, hook wiring, disabled state).
-              <SendConfirmationButton appointmentId={appointmentId} />
+              <SendConfirmationButton appointment={appointment} />
             )}
             {isPending && (
               <Button

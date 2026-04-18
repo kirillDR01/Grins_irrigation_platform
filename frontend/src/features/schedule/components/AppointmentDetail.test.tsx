@@ -395,6 +395,36 @@ describe('AppointmentDetail — Send Confirmation button (bughunt M-1)', () => {
     });
   });
 
+  // Regression: the initial M-1 fix called
+  // <SendConfirmationButton appointmentId={appointmentId} /> but the canonical
+  // button's prop is `appointment: Appointment`. With appointmentId passed
+  // instead, `appointment` was undefined and `appointment.status` threw
+  // "can't access property 'status', appointment is undefined" — which
+  // surfaced on Vercel every time an admin clicked a draft job on the
+  // schedule. This test pins the prop shape so the regression can't come
+  // back.
+  it('passes the appointment object (not the id) to SendConfirmationButton', async () => {
+    const draftAppt = { ...mockAppointment, status: 'draft' as const };
+    mockUseAppointment.mockReturnValue({
+      data: draftAppt,
+      isLoading: false,
+      error: null,
+    });
+
+    render(<AppointmentDetail appointmentId="appt-001" />, {
+      wrapper: createWrapper(),
+    });
+
+    // The canonical button reads appointment.customer_name for its tooltip;
+    // if we passed an id string instead of the object, the render crashes
+    // before this assertion and the test fails.
+    const btn = await screen.findByTestId('send-confirmation-btn-appt-001');
+    expect(btn).toHaveAttribute(
+      'title',
+      `Send confirmation SMS to ${draftAppt.customer_name}`,
+    );
+  });
+
   it('does not render SendConfirmationButton for non-DRAFT statuses', async () => {
     mockUseAppointment.mockReturnValue({
       data: { ...mockAppointment, status: 'confirmed' },
