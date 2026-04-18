@@ -26,6 +26,7 @@ export interface Customer extends BaseEntity {
   last_name: string;
   phone: string;
   email: string | null;
+  status: string;
   is_priority: boolean;
   is_red_flag: boolean;
   is_slow_payer: boolean;
@@ -33,6 +34,7 @@ export interface Customer extends BaseEntity {
   sms_opt_in: boolean;
   email_opt_in: boolean;
   lead_source: string | null;
+  lead_source_details: string | null;
   internal_notes: string | null;
   preferred_service_times: { preference: string } | null;
   properties?: Property[];
@@ -182,18 +184,28 @@ export interface CustomerCreate {
   lead_source?: string | null;
 }
 
+// Customer status values
+export type CustomerStatus = 'active' | 'inactive';
+
+export const CUSTOMER_STATUS_LABELS: Record<CustomerStatus, string> = {
+  active: 'Active',
+  inactive: 'Inactive',
+};
+
 // Update customer request
 export interface CustomerUpdate {
   first_name?: string;
   last_name?: string;
   phone?: string;
   email?: string | null;
+  status?: CustomerStatus;
   is_priority?: boolean;
   is_red_flag?: boolean;
   is_slow_payer?: boolean;
   sms_opt_in?: boolean;
   email_opt_in?: boolean;
   lead_source?: string | null;
+  lead_source_details?: string | null;
   internal_notes?: string | null;
   preferred_service_times?: { preference: string } | null;
 }

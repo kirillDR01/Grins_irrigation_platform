@@ -11,7 +11,7 @@ Validates: Requirement 1.1-1.11, 5.1-5.5, 7.1-7.6
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -226,7 +226,7 @@ class LeadSubmissionResponse(BaseModel):
 class LeadUpdate(BaseModel):
     """Schema for admin lead updates.
 
-    Validates: Requirement 5, 48.5
+    Validates: Requirement 5, 48.5, April-16th Req 2.9, 3.6, 13.5, 13.6
     """
 
     status: LeadStatus | None = Field(
@@ -265,6 +265,102 @@ class LeadUpdate(BaseModel):
         default=None,
         description="Action tags for pipeline tracking",
     )
+    sms_consent: bool | None = Field(
+        default=None,
+        description="SMS consent toggle",
+    )
+    email_marketing_consent: bool | None = Field(
+        default=None,
+        description="Email marketing consent toggle",
+    )
+    terms_accepted: bool | None = Field(
+        default=None,
+        description="Terms of service accepted toggle",
+    )
+    lead_source: LeadSourceExtended | None = Field(
+        default=None,
+        description="Lead source channel",
+    )
+    source_site: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Source site identifier",
+    )
+    source_detail: str | None = Field(
+        default=None,
+        max_length=255,
+        description="Additional source context",
+    )
+    last_contacted_at: datetime | None = Field(
+        default=None,
+        description="Last contacted timestamp (timezone-aware ISO-8601)",
+    )
+    phone: str | None = Field(
+        default=None,
+        min_length=7,
+        max_length=20,
+        description="Phone number",
+    )
+    email: EmailStr | None = Field(
+        default=None,
+        description="Email address",
+    )
+    situation: LeadSituation | None = Field(
+        default=None,
+        description="Lead situation from dropdown",
+    )
+    # Context field: set by the service/API layer before validation when
+    # last_contacted_at needs to be checked against the lead's creation date.
+    # Not included in request body serialization.
+    _lead_created_at: datetime | None = None
+
+    @field_validator("status")  # type: ignore[misc,untyped-decorator]
+    @classmethod
+    def validate_status_not_deprecated(cls, v: LeadStatus | None) -> LeadStatus | None:
+        """Reject deprecated status values.
+
+        Only 'new' and 'contacted' are valid for writes. Legacy statuses
+        are read-only and cannot be set via PATCH.
+
+        Validates: April-16th Requirement 3.6
+        """
+        if v is None:
+            return None
+        allowed = {LeadStatus.NEW, LeadStatus.CONTACTED}
+        if v not in allowed:
+            msg = (
+                "Status must be 'new' or 'contacted'. "
+                "Legacy statuses are read-only. [lead_status_deprecated]"
+            )
+            raise ValueError(msg)
+        return v
+
+    @field_validator("last_contacted_at")  # type: ignore[misc,untyped-decorator]
+    @classmethod
+    def validate_last_contacted_at_not_future(
+        cls, v: datetime | None
+    ) -> datetime | None:
+        """Reject future timestamps for last_contacted_at.
+
+        Validates: April-16th Requirement 13.5
+        """
+        if v is None:
+            return None
+        now = datetime.now(tz=timezone.utc)
+        # Make naive datetimes UTC-aware for comparison
+        check_v = v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+        if check_v > now:
+            msg = "last_contacted_at cannot be in the future"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("phone")  # type: ignore[misc,untyped-decorator]
+    @classmethod
+    def validate_phone(cls, v: str | None) -> str | None:
+        """Normalize phone to 10 digits if provided."""
+        if v is None:
+            return None
+        return normalize_phone(v)
 
     @field_validator("notes")  # type: ignore[misc,untyped-decorator]
     @classmethod
@@ -273,6 +369,32 @@ class LeadUpdate(BaseModel):
         if v is None:
             return None
         return strip_html_tags(v)
+
+    def validate_last_contacted_at_against_created(
+        self, lead_created_at: datetime
+    ) -> None:
+        """Validate last_contacted_at is not before the lead's created_at.
+
+        This method should be called by the service/API layer which has
+        access to the lead's creation timestamp.
+
+        Validates: April-16th Requirement 13.6
+
+        Raises:
+            ValueError: If last_contacted_at is before lead_created_at.
+        """
+        if self.last_contacted_at is None:
+            return
+        v = self.last_contacted_at
+        check_v = v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+        check_created = (
+            lead_created_at
+            if lead_created_at.tzinfo
+            else lead_created_at.replace(tzinfo=timezone.utc)
+        )
+        if check_v < check_created:
+            msg = "last_contacted_at cannot be before lead creation date"
+            raise ValueError(msg)
 
 
 class LeadResponse(BaseModel):

@@ -9,7 +9,7 @@ import {
   type SortingState,
   type RowSelectionState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, MoreHorizontal, Phone, Filter, Download, MessageSquare, X } from 'lucide-react';
+import { ArrowUpDown, MoreHorizontal, Phone, Filter, Download, MessageSquare, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CustomerSearch } from './CustomerSearch';
@@ -41,7 +41,9 @@ import {
 } from '@/components/ui/table';
 import { StatusBadge, LoadingPage, ErrorMessage } from '@/shared/components';
 import { NewTextCampaignModal } from '@/features/communications';
-import { useCustomers } from '../hooks';
+import { toast } from 'sonner';
+import { getErrorMessage } from '@/core/api';
+import { useCustomers, useExportCustomers } from '../hooks';
 import type { Customer, CustomerListParams } from '../types';
 import { getCustomerFlags, getCustomerFullName } from '../types';
 
@@ -52,6 +54,7 @@ interface CustomerListProps {
 
 export function CustomerList({ onEdit, onDelete }: CustomerListProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [campaignModalOpen, setCampaignModalOpen] = useState(false);
@@ -79,6 +82,25 @@ export function CustomerList({ onEdit, onDelete }: CustomerListProps) {
     .filter(Boolean) as string[];
 
   const selectedCount = selectedCustomerIds.length;
+
+  const exportMutation = useExportCustomers();
+
+  const handleExport = async () => {
+    try {
+      const blob = await exportMutation.mutateAsync();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `customers-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Export downloaded');
+    } catch (err: unknown) {
+      toast.error('Export failed', { description: getErrorMessage(err) });
+    }
+  };
 
   const columns: ColumnDef<Customer>[] = [
     {
@@ -245,7 +267,7 @@ export function CustomerList({ onEdit, onDelete }: CustomerListProps) {
     },
   });
 
-  if (isLoading) {
+  if (isLoading && !data) {
     return <LoadingPage message="Loading customers..." />;
   }
 
@@ -261,7 +283,7 @@ export function CustomerList({ onEdit, onDelete }: CustomerListProps) {
         <div className="p-4 border-b border-slate-100 flex gap-4 items-center">
           {/* Debounced Search Input */}
           <div className="flex-1 max-w-sm">
-            <CustomerSearch onSearch={handleSearch} />
+            <CustomerSearch onSearch={handleSearch} value={searchInput} onValueChange={setSearchInput} />
           </div>
           {/* Filter Button */}
           <Popover>
@@ -340,8 +362,19 @@ export function CustomerList({ onEdit, onDelete }: CustomerListProps) {
             </PopoverContent>
           </Popover>
           {/* Export Button */}
-          <Button variant="outline" size="sm" className="gap-2">
-            <Download className="h-4 w-4" />
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={handleExport}
+            disabled={exportMutation.isPending}
+            data-testid="export-customers-btn"
+          >
+            {exportMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
             Export
           </Button>
         </div>

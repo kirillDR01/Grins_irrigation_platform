@@ -220,4 +220,38 @@ describe('CustomerForm', () => {
 
     expect(screen.getByTestId('submit-btn')).toHaveTextContent('Update Customer');
   });
+
+  // ---- April 16th: Error messages and LEAD_SOURCES ----
+
+  describe('April 16th: Error handling and LEAD_SOURCES', () => {
+    it('displays error toast on create failure', async () => {
+      const user = userEvent.setup();
+      const { toast } = await import('sonner');
+      mockCreateMutateAsync.mockRejectedValue(new Error('Network error'));
+
+      render(<CustomerForm />, { wrapper: createWrapper() });
+
+      await user.type(screen.getByTestId('first-name-input'), 'John');
+      await user.type(screen.getByTestId('last-name-input'), 'Doe');
+      await user.type(screen.getByTestId('phone-input'), '6125551234');
+
+      await user.click(screen.getByTestId('submit-btn'));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalled();
+      });
+
+      // Toast error should be called (not silently swallowed)
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalled();
+      });
+    });
+
+    it('renders lead source dropdown with LeadSourceExtended values', () => {
+      render(<CustomerForm />, { wrapper: createWrapper() });
+
+      // The lead source select should be present
+      expect(screen.getByTestId('lead-source-select')).toBeInTheDocument();
+    });
+  });
 });

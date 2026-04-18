@@ -1,13 +1,16 @@
 """AuditService for tracking administrative actions.
 
 Provides log_action() to create audit log entries and get_audit_log()
-for paginated, filterable retrieval.
+for paginated, filterable retrieval. Also provides TCPA audit logging
+for consent field toggles on leads and customers.
 
-Validates: CRM Gap Closure Req 74.1, 74.2, 74.3
+Validates: CRM Gap Closure Req 74.1, 74.2, 74.3;
+           april-16th-fixes-enhancements Req 2.7, 5.5, 5.9
 """
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -20,6 +23,12 @@ if TYPE_CHECKING:
 
     from grins_platform.models.audit_log import AuditLog
 
+# Consent fields that require TCPA audit logging
+LEAD_CONSENT_FIELDS = frozenset(
+    {"sms_consent", "email_marketing_consent", "terms_accepted"},
+)
+CUSTOMER_CONSENT_FIELDS = frozenset({"sms_opt_in", "email_opt_in"})
+
 
 class AuditService(LoggerMixin):
     """Service for audit log management.
@@ -28,7 +37,8 @@ class AuditService(LoggerMixin):
     A FastAPI dependency extracts ip_address and user_agent from
     the request and passes them through.
 
-    Validates: CRM Gap Closure Req 74.1, 74.2, 74.3
+    Validates: CRM Gap Closure Req 74.1, 74.2, 74.3;
+               april-16th-fixes-enhancements Req 2.7, 5.5, 5.9
     """
 
     DOMAIN = "audit"
@@ -128,3 +138,171 @@ class AuditService(LoggerMixin):
             "page": filters.page,
             "page_size": filters.page_size,
         }
+
+    async def log_tcpa_consent_change(
+        self,
+        db: AsyncSession,
+        *,
+        actor_id: UUID,
+        subject_type: str,
+        subject_id: UUID,
+        field: str,
+        old_value: bool | None,
+        new_value: bool | None,
+    ) -> AuditLog:
+        """Log a TCPA-relevant consent field change.
+
+        Called when a consent field (sms_consent, email_marketing_consent,
+        terms_accepted on leads; sms_opt_in, email_opt_in on customers)
+        is toggled. Creates an audit log entry with the actor, subject,
+        field name, old value, new value, and timestamp.
+
+        Args:
+            db: Database session.
+            actor_id: Staff UUID who performed the change.
+            subject_type: Entity type ('lead' or 'customer').
+            subject_id: UUID of the entity being modified.
+            field: Name of the consent field being changed.
+            old_value: Previous value of the field.
+            new_value: New value of the field.
+
+        Returns:
+            Created AuditLog instance.
+
+        Validates: april-16th-fixes-enhancements Req 2.7, 5.5, 5.9
+        """
+        self.log_started(
+            "log_tcpa_consent_change",
+            subject_type=subject_type,
+            subject_id=str(subject_id),
+            field=field,
+        )
+
+        details = {
+            "field": field,
+            "old_value": old_value,
+            "new_value": new_value,
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "tcpa_relevant": True,
+        }
+
+        entry = await self.log_action(
+            db,
+            actor_id=actor_id,
+            action=f"{subject_type}.consent_change",
+            resource_type=subject_type,
+            resource_id=subject_id,
+            details=details,
+        )
+
+        self.log_completed(
+            "log_tcpa_consent_change",
+            audit_log_id=str(entry.id),
+            field=field,
+        )
+        return entry
+
+    async def log_status_change(
+        self,
+        db: AsyncSession,
+        *,
+        actor_id: UUID,
+        subject_type: str,
+        subject_id: UUID,
+        old_status: str | None,
+        new_status: str,
+    ) -> AuditLog:
+        """Log a status change on a lead or customer.
+
+        Args:
+            db: Database session.
+            actor_id: Staff UUID who performed the change.
+            subject_type: Entity type ('lead' or 'customer').
+            subject_id: UUID of the entity being modified.
+            old_status: Previous status value.
+            new_status: New status value.
+
+        Returns:
+            Created AuditLog instance.
+
+        Validates: april-16th-fixes-enhancements Req 5.9
+        """
+        self.log_started(
+            "log_status_change",
+            subject_type=subject_type,
+            subject_id=str(subject_id),
+            old_status=old_status,
+            new_status=new_status,
+        )
+
+        details = {
+            "old_status": old_status,
+            "new_status": new_status,
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        }
+
+        entry = await self.log_action(
+            db,
+            actor_id=actor_id,
+            action=f"{subject_type}.status_change",
+            resource_type=subject_type,
+            resource_id=subject_id,
+            details=details,
+        )
+
+        self.log_completed(
+            "log_status_change",
+            audit_log_id=str(entry.id),
+        )
+        return entry
+
+    async def log_last_contacted_edit(
+        self,
+        db: AsyncSession,
+        *,
+        actor_id: UUID,
+        lead_id: UUID,
+        old_value: datetime | None,
+        new_value: datetime | None,
+    ) -> AuditLog:
+        """Log a manual edit of last_contacted_at on a lead.
+
+        Args:
+            db: Database session.
+            actor_id: Staff UUID who performed the edit.
+            lead_id: UUID of the lead being modified.
+            old_value: Previous last_contacted_at value.
+            new_value: New last_contacted_at value.
+
+        Returns:
+            Created AuditLog instance.
+
+        Validates: april-16th-fixes-enhancements Req 13.5
+        """
+        self.log_started(
+            "log_last_contacted_edit",
+            lead_id=str(lead_id),
+        )
+
+        details = {
+            "field": "last_contacted_at",
+            "old_value": old_value.isoformat() if old_value else None,
+            "new_value": new_value.isoformat() if new_value else None,
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "manual_edit": True,
+        }
+
+        entry = await self.log_action(
+            db,
+            actor_id=actor_id,
+            action="lead.last_contacted_edit",
+            resource_type="lead",
+            resource_id=lead_id,
+            details=details,
+        )
+
+        self.log_completed(
+            "log_last_contacted_edit",
+            audit_log_id=str(entry.id),
+        )
+        return entry

@@ -18,6 +18,9 @@ from grins_platform.api.v1.agreements import (
 from grins_platform.api.v1.ai import router as ai_router
 from grins_platform.api.v1.alerts import router as alerts_router
 from grins_platform.api.v1.analytics import router as analytics_router
+from grins_platform.api.v1.appointment_attachments import (
+    router as appointment_attachments_router,
+)
 from grins_platform.api.v1.appointments import router as appointments_router
 from grins_platform.api.v1.audit import router as audit_router
 from grins_platform.api.v1.auth import router as auth_router
@@ -41,6 +44,7 @@ from grins_platform.api.v1.jobs import router as jobs_router
 from grins_platform.api.v1.leads import router as leads_router
 from grins_platform.api.v1.marketing import router as marketing_router
 from grins_platform.api.v1.media import router as media_router
+from grins_platform.api.v1.notes import router as notes_router
 from grins_platform.api.v1.notifications import router as notifications_router
 from grins_platform.api.v1.onboarding import router as onboarding_router
 from grins_platform.api.v1.portal import router as portal_router
@@ -62,9 +66,9 @@ from grins_platform.api.v1.sms import (
     router as sms_router,
 )
 from grins_platform.api.v1.staff import router as staff_router
-from grins_platform.api.v1.stripe_terminal import router as stripe_terminal_router
 from grins_platform.api.v1.staff_availability import router as staff_availability_router
 from grins_platform.api.v1.staff_reassignment import router as reassignment_router
+from grins_platform.api.v1.stripe_terminal import router as stripe_terminal_router
 from grins_platform.api.v1.templates import router as templates_router
 from grins_platform.api.v1.voice import router as voice_router
 from grins_platform.api.v1.webhooks import router as webhooks_router
@@ -405,6 +409,18 @@ api_router.include_router(
 api_router.include_router(
     alerts_router,
     tags=["alerts"],
+)
+
+# Include Notes endpoints (april-16th-fixes-enhancements Req 4)
+api_router.include_router(
+    notes_router,
+    tags=["notes"],
+)
+
+# Include Appointment Attachments endpoints (april-16th-fixes-enhancements Req 10.5)
+api_router.include_router(
+    appointment_attachments_router,
+    tags=["appointment-attachments"],
 )
 
 __all__ = ["api_router"]

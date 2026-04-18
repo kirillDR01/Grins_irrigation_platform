@@ -75,6 +75,7 @@ if TYPE_CHECKING:
     from grins_platform.services.customer_service import CustomerService
     from grins_platform.services.email_service import EmailService
     from grins_platform.services.job_service import JobService
+    from grins_platform.services.note_service import NoteService
     from grins_platform.services.sms_service import SMSService
 
 
@@ -276,6 +277,7 @@ class LeadService(LoggerMixin):
         sms_service: SMSService | None = None,
         email_service: EmailService | None = None,
         compliance_service: ComplianceService | None = None,
+        note_service: NoteService | None = None,
     ) -> None:
         """Initialize service with dependencies.
 
@@ -287,6 +289,7 @@ class LeadService(LoggerMixin):
             sms_service: Optional SMSService for SMS confirmations
             email_service: Optional EmailService for email confirmations
             compliance_service: Optional ComplianceService for consent records
+            note_service: Optional NoteService for stage transition notes
         """
         super().__init__()
         self.lead_repository = lead_repository
@@ -296,6 +299,7 @@ class LeadService(LoggerMixin):
         self.sms_service = sms_service
         self.email_service = email_service
         self.compliance_service = compliance_service
+        self.note_service = note_service
 
     @staticmethod
     def split_name(full_name: str) -> tuple[str, str]:
@@ -893,9 +897,14 @@ class LeadService(LoggerMixin):
                     new_status_enum,
                 )
 
-            # Auto-set contacted_at
-            if new_status_enum == LeadStatus.CONTACTED and lead.contacted_at is None:
-                update_data["contacted_at"] = datetime.now(tz=timezone.utc)
+            # Auto-stamp last_contacted_at on transition to contacted
+            # Validates: april-16th-fixes-enhancements Requirement 13.1, 13.2, 13.3
+            if new_status_enum == LeadStatus.CONTACTED:
+                now = datetime.now(tz=timezone.utc)
+                update_data["last_contacted_at"] = now
+                # If contacted_at is null, also set it (first contact)
+                if lead.contacted_at is None:
+                    update_data["contacted_at"] = now
 
             # Auto-set converted_at
             if new_status_enum == LeadStatus.CONVERTED:
@@ -1248,6 +1257,26 @@ class LeadService(LoggerMixin):
             {"moved_to": "jobs", "moved_at": now},
         )
 
+        # Create stage transition note and set origin_lead_id
+        # Validates: april-16th-fixes-enhancements Req 4.4, 4.5, 12.5
+        if self.note_service:
+            try:
+                # Use assigned staff or fallback to a system actor
+                actor = lead.assigned_to or lead_id
+                await self.note_service.create_stage_transition_note(
+                    from_type="lead",
+                    from_id=lead_id,
+                    to_type="customer",
+                    to_id=customer_id,
+                    actor_id=actor,
+                )
+            except Exception as e:
+                self.logger.warning(
+                    "lead.move_to_jobs.note_creation_failed",
+                    lead_id=str(lead_id),
+                    error=str(e),
+                )
+
         self.log_completed("move_to_jobs", lead_id=str(lead_id), job_id=str(job.id))
         message = (
             f"Merged into existing customer: {merged_info.name}"
@@ -1310,6 +1339,26 @@ class LeadService(LoggerMixin):
             lead_id,
             {"moved_to": "sales", "moved_at": now},
         )
+
+        # Create stage transition note and set origin_lead_id
+        # Validates: april-16th-fixes-enhancements Req 4.4, 4.5, 12.6
+        if self.note_service:
+            try:
+                # Use assigned staff or fallback to a system actor
+                actor = lead.assigned_to or lead_id
+                await self.note_service.create_stage_transition_note(
+                    from_type="lead",
+                    from_id=lead_id,
+                    to_type="sales_entry",
+                    to_id=sales_entry.id,
+                    actor_id=actor,
+                )
+            except Exception as e:
+                self.logger.warning(
+                    "lead.move_to_sales.note_creation_failed",
+                    lead_id=str(lead_id),
+                    error=str(e),
+                )
 
         self.log_completed(
             "move_to_sales",

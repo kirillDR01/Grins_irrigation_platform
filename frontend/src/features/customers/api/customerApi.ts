@@ -16,6 +16,7 @@ import type {
   SentMessage,
   ServicePreference,
   ServicePreferenceCreate,
+  Property,
 } from '../types';
 
 const BASE_PATH = '/customers';
@@ -189,5 +190,39 @@ export const customerApi = {
       `${BASE_PATH}/${customerId}/service-preferences/${preferenceId}`
     );
     return response.data;
+  },
+
+  // --- Properties (Phase 6 inline edit) ---
+  listProperties: async (customerId: string): Promise<Property[]> => {
+    const response = await apiClient.get<Property[]>(`${BASE_PATH}/${customerId}/properties`);
+    return response.data;
+  },
+
+  addProperty: async (customerId: string, data: Partial<Property>): Promise<Property> => {
+    const response = await apiClient.post<Property>(`${BASE_PATH}/${customerId}/properties`, data);
+    return response.data;
+  },
+
+  updateProperty: async (propertyId: string, data: Partial<Property>): Promise<Property> => {
+    const response = await apiClient.put<Property>(`/properties/${propertyId}`, data);
+    return response.data;
+  },
+
+  deleteProperty: async (propertyId: string): Promise<void> => {
+    await apiClient.delete(`/properties/${propertyId}`);
+  },
+
+  setPropertyPrimary: async (propertyId: string): Promise<Property> => {
+    const response = await apiClient.put<Property>(`/properties/${propertyId}/primary`);
+    return response.data;
+  },
+
+  // --- Export (Req 15) ---
+  exportCustomers: async (): Promise<Blob> => {
+    const response = await apiClient.post('/customers/export', null, {
+      params: { format: 'xlsx' },
+      responseType: 'blob',
+    });
+    return response.data as Blob;
   },
 };

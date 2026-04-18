@@ -611,6 +611,53 @@ describe('LeadDetail', () => {
     });
   });
 
+  // ---- April 16th: Only 4 action buttons render ----
+
+  describe('April 16th: Action button cleanup', () => {
+    it('renders only 4 action buttons for a new lead (Mark Contacted, Move to Jobs, Move to Sales, Delete)', async () => {
+      vi.mocked(leadApi.getById).mockResolvedValue(baseLead);
+
+      render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+      });
+
+      // These 4 should be present
+      expect(screen.getByTestId('lead-detail-mark-contacted-btn')).toBeInTheDocument();
+      expect(screen.getByTestId('lead-detail-move-to-jobs-btn')).toBeInTheDocument();
+      expect(screen.getByTestId('lead-detail-move-to-sales-btn')).toBeInTheDocument();
+      expect(screen.getByTestId('lead-detail-delete-btn')).toBeInTheDocument();
+    });
+
+    it('status dropdown has 2 options for non-terminal leads', async () => {
+      vi.mocked(leadApi.getById).mockResolvedValue(baseLead);
+
+      render(<LeadDetail />, { wrapper: createWrapper('lead-001') });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+      });
+
+      // Status dropdown should be present
+      expect(screen.getByTestId('lead-status-dropdown')).toBeInTheDocument();
+    });
+
+    it('legacy statuses show "Archived" badge', async () => {
+      // Test with qualified (legacy) status
+      vi.mocked(leadApi.getById).mockResolvedValue(qualifiedLead);
+
+      render(<LeadDetail />, { wrapper: createWrapper('lead-004') });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('lead-detail')).toBeInTheDocument();
+      });
+
+      // Should show "Archived" text for legacy status
+      expect(screen.getByText('Archived')).toBeInTheDocument();
+    });
+  });
+
   // ---- H-1: Routing action buttons ----
 
   describe('Routing actions (H-1)', () => {

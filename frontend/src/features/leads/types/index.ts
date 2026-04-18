@@ -192,6 +192,17 @@ export interface LeadUpdate {
   state?: string | null;
   zip_code?: string | null;
   action_tags?: ActionTag[];
+  // Phase 6 inline-edit fields
+  phone?: string;
+  email?: string | null;
+  situation?: LeadSituation;
+  source_site?: string;
+  lead_source?: LeadSource;
+  source_detail?: string | null;
+  sms_consent?: boolean;
+  email_marketing_consent?: boolean;
+  terms_accepted?: boolean;
+  last_contacted_at?: string | null;
 }
 
 // Lead conversion request

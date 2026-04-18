@@ -8,7 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
 import { useDebounce } from '@/shared/hooks/useDebounce';
 import type { LeadListParams, LeadStatus, LeadSituation, LeadSource, ActionTag } from '../types';
 import { LEAD_STATUS_LABELS, LEAD_SITUATION_LABELS, LEAD_SOURCE_LABELS, ACTION_TAG_LABELS } from '../types';
@@ -19,12 +18,6 @@ interface LeadFiltersProps {
   /** Callback when any filter changes */
   onChange: (params: Partial<LeadListParams>) => void;
 }
-
-const INTAKE_TABS = [
-  { label: 'All', value: 'all' },
-  { label: 'Schedule', value: 'schedule' },
-  { label: 'Follow Up', value: 'follow_up' },
-] as const;
 
 export function LeadFilters({ params, onChange }: LeadFiltersProps) {
   const [searchInput, setSearchInput] = useState(params.search ?? '');
@@ -78,16 +71,6 @@ export function LeadFilters({ params, onChange }: LeadFiltersProps) {
     [onChange]
   );
 
-  const handleIntakeTabChange = useCallback(
-    (value: string) => {
-      onChange({
-        intake_tag: value === 'all' ? undefined : value,
-        page: 1,
-      });
-    },
-    [onChange]
-  );
-
   const handleDateFromChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       onChange({ date_from: e.target.value || undefined, page: 1 });
@@ -102,30 +85,8 @@ export function LeadFilters({ params, onChange }: LeadFiltersProps) {
     [onChange]
   );
 
-  const activeIntakeTab = params.intake_tag ?? 'all';
-
   return (
     <div className="space-y-3" data-testid="lead-filters">
-      {/* Intake Tag Quick-Filter Tabs */}
-      <div className="flex items-center gap-1" data-testid="intake-tag-tabs">
-        {INTAKE_TABS.map((tab) => (
-          <Button
-            key={tab.value}
-            variant={activeIntakeTab === tab.value ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => handleIntakeTabChange(tab.value)}
-            className={
-              activeIntakeTab === tab.value
-                ? 'bg-slate-800 text-white hover:bg-slate-700'
-                : 'text-slate-600 hover:text-slate-800'
-            }
-            data-testid={`intake-tab-${tab.value}`}
-          >
-            {tab.label}
-          </Button>
-        ))}
-      </div>
-
       {/* Filter Row */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Search Input */}

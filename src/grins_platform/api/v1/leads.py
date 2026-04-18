@@ -162,7 +162,7 @@ async def submit_lead(
     # emitted line via log_config's context binding.
     try:
         result = await service.submit_lead(data, background_tasks=background_tasks)
-    except Exception as exc:  # noqa: BLE001 — re-raised below, purely for observability
+    except Exception as exc:
         _endpoints.log_failed(
             "submit_lead",
             error=exc,
@@ -487,8 +487,12 @@ async def update_lead(
     response_model=LeadConversionResponse,
     summary="Convert lead to customer",
     description=(
-        "Convert a lead to a customer and optionally create a job. Admin auth required."
+        "Convert a lead to a customer and optionally create a job. "
+        "Admin auth required. "
+        "DEPRECATED: Use 'Move to Jobs' or 'Move to Sales' "
+        "routing actions instead."
     ),
+    deprecated=True,
     responses={
         409: {
             "description": (

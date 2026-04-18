@@ -22,6 +22,7 @@ from grins_platform.models.ai_audit_log import AIAuditLog
 from grins_platform.models.ai_usage import AIUsage
 from grins_platform.models.alert import Alert
 from grins_platform.models.appointment import Appointment
+from grins_platform.models.appointment_attachment import AppointmentAttachment
 from grins_platform.models.audit_log import AuditLog
 from grins_platform.models.business_setting import BusinessSetting
 from grins_platform.models.campaign import Campaign, CampaignRecipient
@@ -103,6 +104,7 @@ from grins_platform.models.lead import Lead
 from grins_platform.models.lead_attachment import LeadAttachment
 from grins_platform.models.marketing_budget import MarketingBudget
 from grins_platform.models.media_library import MediaLibraryItem
+from grins_platform.models.note import Note
 from grins_platform.models.property import Property
 from grins_platform.models.sales import SalesCalendarEvent, SalesEntry
 from grins_platform.models.schedule_clear_audit import ScheduleClearAudit
@@ -132,6 +134,8 @@ __all__ = [
     "AlertType",
     # Phase 3: Admin Dashboard
     "Appointment",
+    # April 16th: Appointment Attachments
+    "AppointmentAttachment",
     "AppointmentStatus",
     "AttachmentType",
     # CRM Gap Closure
@@ -196,6 +200,8 @@ __all__ = [
     "MediaType",
     "MergeCandidateStatus",
     "MessageType",
+    # April 16th: Unified Notes Timeline
+    "Note",
     "NotificationType",
     "PackageType",
     "PaymentMethod",

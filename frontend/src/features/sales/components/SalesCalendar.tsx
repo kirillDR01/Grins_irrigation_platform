@@ -12,12 +12,16 @@ import type { DateClickArg } from '@fullcalendar/interaction';
 import type { DatesSetArg, EventInput, EventClickArg } from '@fullcalendar/core';
 import { format, startOfMonth, endOfMonth, addMonths } from 'date-fns';
 import { toast } from 'sonner';
-import { CalendarDays, Plus, Trash2, X } from 'lucide-react';
+import { CalendarDays, Plus, Trash2, X, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { LoadingSpinner } from '@/shared/components/LoadingSpinner';
+import { CustomerContextBlock } from '@/shared/components/CustomerContextBlock';
+import { useQuery } from '@tanstack/react-query';
+import { customerApi } from '@/features/customers/api/customerApi';
+import { Link } from 'react-router-dom';
 import {
   useSalesCalendarEvents,
   useCreateCalendarEvent,
@@ -189,6 +193,13 @@ export function SalesCalendar() {
     [pipelineData],
   );
 
+  // Fetch customer data for context block when editing
+  const { data: contextCustomer } = useQuery({
+    queryKey: ['customers', 'detail', formState?.customerId],
+    queryFn: () => customerApi.get(formState!.customerId),
+    enabled: !!formState?.customerId,
+  });
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64" data-testid="loading-spinner">
@@ -267,6 +278,38 @@ export function SalesCalendar() {
             </div>
 
             <div className="space-y-3">
+              {/* Customer Context Block — Req 10A */}
+              {contextCustomer && (
+                <CustomerContextBlock
+                  data={{
+                    customer_name: [contextCustomer.first_name, contextCustomer.last_name].filter(Boolean).join(' '),
+                    customer_phone: contextCustomer.phone,
+                    primary_address: contextCustomer.properties?.find((p: { is_primary?: boolean }) => p.is_primary)?.address,
+                    primary_city: contextCustomer.properties?.find((p: { is_primary?: boolean }) => p.is_primary)?.city,
+                    primary_state: contextCustomer.properties?.find((p: { is_primary?: boolean }) => p.is_primary)?.state,
+                    primary_zip: contextCustomer.properties?.find((p: { is_primary?: boolean }) => p.is_primary)?.zip_code,
+                    is_priority: contextCustomer.is_priority,
+                    is_red_flag: contextCustomer.is_red_flag,
+                    is_slow_payer: contextCustomer.is_slow_payer,
+                    dogs_on_property: contextCustomer.properties?.find((p: { is_primary?: boolean }) => p.is_primary)?.dogs_on_property,
+                    gate_code: contextCustomer.properties?.find((p: { is_primary?: boolean }) => p.is_primary)?.gate_code,
+                    access_instructions: contextCustomer.properties?.find((p: { is_primary?: boolean }) => p.is_primary)?.access_instructions,
+                    last_contacted_at: contextCustomer.last_contacted_at,
+                  }}
+                />
+              )}
+
+              {/* Source record link — Req 10B */}
+              {formState.salesEntryId && (
+                <Link
+                  to={`/sales?entry=${formState.salesEntryId}`}
+                  className="text-sm text-purple-600 hover:text-purple-700 flex items-center gap-1"
+                  data-testid="view-sales-entry-link"
+                >
+                  View sales entry <ExternalLink className="h-3 w-3" />
+                </Link>
+              )}
+
               <div>
                 <Label htmlFor="sales-entry">Sales Entry</Label>
                 <select

@@ -461,4 +461,54 @@ describe('CustomerList', () => {
       expect(screen.getByTestId('selected-count')).toHaveTextContent('2 selected');
     });
   });
+
+  // ---- April 16th: Search retention and export ----
+
+  describe('April 16th: Search text retention and export', () => {
+    beforeEach(() => {
+      capturedOnSearch = null;
+      vi.mocked(customerHooks.useCustomers).mockReturnValue({
+        data: {
+          items: mockCustomers,
+          total: 2,
+          page: 1,
+          page_size: 20,
+          total_pages: 1,
+        },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      } as unknown as ReturnType<typeof customerHooks.useCustomers>);
+    });
+
+    it('retains search text across refetch', async () => {
+      render(<CustomerList />, { wrapper: createWrapper() });
+
+      // Simulate search
+      act(() => {
+        capturedOnSearch!('John');
+      });
+
+      // Verify search param is set
+      await waitFor(() => {
+        const calls = vi.mocked(customerHooks.useCustomers).mock.calls;
+        const lastCall = calls[calls.length - 1][0];
+        expect(lastCall?.search).toBe('John');
+      });
+
+      // The search component should still be rendered (not unmounted)
+      expect(screen.getByTestId('customer-search')).toBeInTheDocument();
+    });
+
+    it('renders export button', async () => {
+      render(<CustomerList />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('customer-list')).toBeInTheDocument();
+      });
+
+      // Export button should be present
+      expect(screen.getByTestId('export-customers-btn')).toBeInTheDocument();
+    });
+  });
 });

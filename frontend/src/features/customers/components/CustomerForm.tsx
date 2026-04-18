@@ -27,6 +27,7 @@ import { X, Plus } from 'lucide-react';
 import { useCreateCustomer, useUpdateCustomer, useCheckDuplicate } from '../hooks';
 import type { Customer, CustomerCreate, CustomerUpdate } from '../types';
 import { toast } from 'sonner';
+import { getErrorMessage } from '@/core/api';
 import { DuplicateWarning } from './DuplicateWarning';
 
 // Validation schema
@@ -58,12 +59,16 @@ interface CustomerFormProps {
 
 const LEAD_SOURCES = [
   { value: 'website', label: 'Website' },
-  { value: 'google', label: 'Google' },
+  { value: 'google_form', label: 'Google Form' },
+  { value: 'phone_call', label: 'Phone Call' },
+  { value: 'text_message', label: 'Text Message' },
+  { value: 'google_ad', label: 'Google Ad' },
+  { value: 'social_media', label: 'Social Media' },
+  { value: 'qr_code', label: 'QR Code' },
+  { value: 'email_campaign', label: 'Email Campaign' },
+  { value: 'text_campaign', label: 'Text Campaign' },
   { value: 'referral', label: 'Referral' },
-  { value: 'facebook', label: 'Facebook' },
-  { value: 'nextdoor', label: 'Nextdoor' },
   { value: 'yard_sign', label: 'Yard Sign' },
-  { value: 'repeat', label: 'Repeat Customer' },
   { value: 'other', label: 'Other' },
 ];
 
@@ -165,8 +170,10 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
         toast.success('Customer created successfully');
       }
       onSuccess?.();
-    } catch {
-      toast.error(isEditing ? 'Failed to update customer' : 'Failed to create customer');
+    } catch (err) {
+      toast.error(isEditing ? 'Failed to update customer' : 'Failed to create customer', {
+        description: getErrorMessage(err),
+      });
     }
   };
 

@@ -28,9 +28,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { MapPin } from 'lucide-react';
+import { MapPin, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { getErrorMessage } from '@/core/api/client';
+import { CustomerContextBlock } from '@/shared/components/CustomerContextBlock';
+import { AppointmentAttachments } from '@/shared/components/AppointmentAttachments';
+import { NotesTimeline } from '@/shared/components/NotesTimeline';
+import { Link } from 'react-router-dom';
 import { useCreateAppointment, useUpdateAppointment } from '../hooks/useAppointmentMutations';
 import { useJobsReadyToSchedule } from '@/features/jobs/hooks';
 import { useStaff } from '@/features/staff/hooks';
@@ -221,6 +225,51 @@ export function AppointmentForm({
         className="p-6 space-y-6"
         data-testid="appointment-form"
       >
+        {/* Customer Context Block — Req 10A */}
+        {selectedCustomer && (
+          <CustomerContextBlock
+            data={{
+              customer_name: [selectedCustomer.first_name, selectedCustomer.last_name].filter(Boolean).join(' '),
+              customer_phone: selectedCustomer.phone,
+              primary_address: selectedCustomer.properties?.find((p: { is_primary?: boolean }) => p.is_primary)?.address,
+              primary_city: selectedCustomer.properties?.find((p: { is_primary?: boolean }) => p.is_primary)?.city,
+              primary_state: selectedCustomer.properties?.find((p: { is_primary?: boolean }) => p.is_primary)?.state,
+              primary_zip: selectedCustomer.properties?.find((p: { is_primary?: boolean }) => p.is_primary)?.zip_code,
+              job_type: selectedJob?.job_type,
+              last_contacted_at: selectedCustomer.last_contacted_at,
+              preferred_service_time: selectedCustomer.preferred_service_time,
+              is_priority: selectedCustomer.is_priority,
+              dogs_on_property: selectedCustomer.properties?.find((p: { is_primary?: boolean }) => p.is_primary)?.dogs_on_property,
+              gate_code: selectedCustomer.properties?.find((p: { is_primary?: boolean }) => p.is_primary)?.gate_code,
+              access_instructions: selectedCustomer.properties?.find((p: { is_primary?: boolean }) => p.is_primary)?.access_instructions,
+              is_red_flag: selectedCustomer.is_red_flag,
+              is_slow_payer: selectedCustomer.is_slow_payer,
+            }}
+          />
+        )}
+
+        {/* Source record links — Req 10B */}
+        {selectedJob?.customer_id && (
+          <div className="flex gap-3 flex-wrap">
+            <Link
+              to={`/customers/${selectedJob.customer_id}`}
+              className="text-sm text-teal-600 hover:text-teal-700 flex items-center gap-1"
+              data-testid="view-customer-link"
+            >
+              View customer <ExternalLink className="h-3 w-3" />
+            </Link>
+            {selectedJob?.id && (
+              <Link
+                to={`/jobs/${selectedJob.id}`}
+                className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                data-testid="view-job-link"
+              >
+                View job <ExternalLink className="h-3 w-3" />
+              </Link>
+            )}
+          </div>
+        )}
+
         {/* Job Selection — Searchable Combobox (Req 11.1-11.6) */}
         <FormField
           control={form.control}
@@ -381,6 +430,32 @@ export function AppointmentForm({
             </FormItem>
           )}
         />
+
+        {/* Appointment Attachments — Req 10C */}
+        {isEditing && appointment?.id && (
+          <AppointmentAttachments appointmentId={appointment.id} />
+        )}
+
+        {/* Notes Timeline — Req 10D */}
+        {isEditing && appointment?.id && (
+          <div className="space-y-1">
+            <NotesTimeline
+              subjectType="appointment"
+              subjectId={appointment.id}
+              readOnly
+              maxEntries={3}
+            />
+            {selectedJob?.customer_id && (
+              <Link
+                to={`/customers/${selectedJob.customer_id}`}
+                className="text-xs text-teal-600 hover:text-teal-700"
+                data-testid="view-full-timeline-link"
+              >
+                View full timeline →
+              </Link>
+            )}
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">

@@ -6,15 +6,23 @@ interface CustomerSearchProps {
   onSearch: (query: string) => void;
   placeholder?: string;
   initialValue?: string;
+  /** Controlled value — when provided, the component uses this instead of internal state */
+  value?: string;
+  /** Controlled onChange — when provided alongside value, updates the parent state */
+  onValueChange?: (value: string) => void;
 }
 
 export function CustomerSearch({
   onSearch,
   placeholder = 'Search customers...',
   initialValue = '',
+  value: controlledValue,
+  onValueChange,
 }: CustomerSearchProps) {
-  const [value, setValue] = useState(initialValue);
-  const debouncedValue = useDebounce(value, 300);
+  const isControlled = controlledValue !== undefined;
+  const [internalValue, setInternalValue] = useState(initialValue);
+  const displayValue = isControlled ? controlledValue : internalValue;
+  const debouncedValue = useDebounce(displayValue, 300);
 
   // Trigger search when debounced value changes
   useEffect(() => {
@@ -23,11 +31,19 @@ export function CustomerSearch({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
-    setValue(newValue);
+    if (isControlled && onValueChange) {
+      onValueChange(newValue);
+    } else {
+      setInternalValue(newValue);
+    }
   };
 
   const handleClear = () => {
-    setValue('');
+    if (isControlled && onValueChange) {
+      onValueChange('');
+    } else {
+      setInternalValue('');
+    }
     onSearch('');
   };
 
@@ -44,7 +60,7 @@ export function CustomerSearch({
       {/* Input - pl-10 for icon space, bg-slate-50, border-slate-200, rounded-lg, focus ring */}
       <input
         type="text"
-        value={value}
+        value={displayValue}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
@@ -52,7 +68,7 @@ export function CustomerSearch({
         data-testid="customer-search-input"
       />
       {/* Clear button - absolute right-3, only show when input has value */}
-      {value && (
+      {displayValue && (
         <button
           type="button"
           className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"

@@ -1,23 +1,36 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, ChevronDown, FileText, Mail, Phone } from 'lucide-react';
+import { ArrowLeft, ChevronDown, FileText, Mail, Phone, Edit, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LoadingPage, ErrorMessage } from '@/shared/components';
+import { LoadingPage, ErrorMessage, NotesTimeline } from '@/shared/components';
+import { getErrorMessage } from '@/core/api';
+import { useUpdateCustomer } from '@/features/customers/hooks';
+import { useStaff } from '@/features/staff/hooks/useStaff';
 import {
   useSalesEntry,
   useSalesDocuments,
   useTriggerEmailSigning,
   useDocumentPresign,
+  useOverrideSalesStatus,
 } from '../hooks/useSalesPipeline';
-import { SALES_STATUS_CONFIG, TERMINAL_STATUSES } from '../types/pipeline';
+import { SALES_STATUS_CONFIG, TERMINAL_STATUSES, ALL_STATUSES } from '../types/pipeline';
+import type { SalesEntryStatus } from '../types/pipeline';
 import { StatusActionButton } from './StatusActionButton';
 import { DocumentsSection } from './DocumentsSection';
 import { SignWellEmbeddedSigner } from './SignWellEmbeddedSigner';
@@ -32,6 +45,18 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
   const navigate = useNavigate();
   const { data: entry, isLoading, error, refetch } = useSalesEntry(entryId);
   const emailSign = useTriggerEmailSigning();
+  const updateCustomer = useUpdateCustomer();
+  const overrideStatus = useOverrideSalesStatus();
+  const { data: staffData } = useStaff({ is_active: true });
+
+  // Inline edit state — Task 10.1
+  const [editingCustomerInfo, setEditingCustomerInfo] = useState(false);
+  const [customerInfoForm, setCustomerInfoForm] = useState({
+    customer_name: '',
+    customer_phone: '',
+  });
+
+  const [editingStatus, setEditingStatus] = useState(false);
 
   // Fetch documents to determine signing button state — Validates: Req 9.3, 9.5
   const { data: documents } = useSalesDocuments(entry?.customer_id ?? '');
@@ -76,6 +101,51 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
   const isTerminal = TERMINAL_STATUSES.includes(entry.status);
   const hasEmail = !!entry.customer_name; // email availability checked server-side
 
+  const startEditCustomerInfo = () => {
+    setCustomerInfoForm({
+      customer_name: entry.customer_name ?? '',
+      customer_phone: entry.customer_phone ?? '',
+    });
+    setEditingCustomerInfo(true);
+  };
+
+  const saveCustomerInfo = async () => {
+    if (!entry.customer_id) return;
+    try {
+      // Parse name into first/last
+      const parts = customerInfoForm.customer_name.trim().split(/\s+/);
+      const firstName = parts[0] || '';
+      const lastName = parts.slice(1).join(' ') || '';
+      await updateCustomer.mutateAsync({
+        id: entry.customer_id,
+        data: {
+          first_name: firstName,
+          last_name: lastName,
+          phone: customerInfoForm.customer_phone.trim(),
+        },
+      });
+      toast.success('Customer info updated');
+      setEditingCustomerInfo(false);
+      refetch();
+    } catch (err: unknown) {
+      toast.error('Update failed', { description: getErrorMessage(err) });
+    }
+  };
+
+  const handleStatusOverride = async (newStatus: string) => {
+    try {
+      await overrideStatus.mutateAsync({
+        id: entryId,
+        body: { status: newStatus as SalesEntryStatus },
+      });
+      toast.success('Pipeline stage updated');
+      setEditingStatus(false);
+      refetch();
+    } catch (err: unknown) {
+      toast.error('Update failed', { description: getErrorMessage(err) });
+    }
+  };
+
   const handleEmailSign = async () => {
     try {
       await emailSign.mutateAsync(entryId);
@@ -106,29 +176,75 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
       <Card>
         <CardHeader className="flex flex-row items-start justify-between">
           <div className="space-y-1">
-            <CardTitle className="text-lg">
-              {entry.customer_name ?? 'Unknown Customer'}
-            </CardTitle>
-            <div className="flex items-center gap-4 text-sm text-slate-500">
-              {entry.customer_phone && (
-                <span className="flex items-center gap-1">
-                  <Phone className="h-3.5 w-3.5" />
-                  {entry.customer_phone}
-                </span>
-              )}
-              {entry.property_address && (
-                <span>{entry.property_address}</span>
-              )}
-            </div>
-          </div>
-          <span
-            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusConfig?.className ?? 'bg-slate-100 text-slate-700'}`}
-          >
-            {statusConfig?.label ?? entry.status}
-            {entry.override_flag && (
-              <span className="ml-1" title="Manually overridden">⚠</span>
+            {editingCustomerInfo ? (
+              <div className="space-y-2" data-testid="customer-info-form">
+                <Input
+                  value={customerInfoForm.customer_name}
+                  onChange={(e) => setCustomerInfoForm((p) => ({ ...p, customer_name: e.target.value }))}
+                  placeholder="Customer name"
+                  data-testid="sales-customer-name-input"
+                />
+                <Input
+                  value={customerInfoForm.customer_phone}
+                  onChange={(e) => setCustomerInfoForm((p) => ({ ...p, customer_phone: e.target.value }))}
+                  placeholder="Phone"
+                  data-testid="sales-customer-phone-input"
+                />
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setEditingCustomerInfo(false)}>Cancel</Button>
+                  <Button size="sm" onClick={saveCustomerInfo} disabled={updateCustomer.isPending} data-testid="save-customer-info-btn">
+                    {updateCustomer.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-lg">
+                    {entry.customer_name ?? 'Unknown Customer'}
+                  </CardTitle>
+                  <Button variant="ghost" size="sm" onClick={startEditCustomerInfo} data-testid="edit-customer-info-btn" className="h-6 px-2">
+                    <Edit className="h-3 w-3" />
+                  </Button>
+                </div>
+                <div className="flex items-center gap-4 text-sm text-slate-500">
+                  {entry.customer_phone && (
+                    <span className="flex items-center gap-1">
+                      <Phone className="h-3.5 w-3.5" />
+                      {entry.customer_phone}
+                    </span>
+                  )}
+                  {entry.property_address && (
+                    <span>{entry.property_address}</span>
+                  )}
+                </div>
+              </>
             )}
-          </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusConfig?.className ?? 'bg-slate-100 text-slate-700'}`}
+            >
+              {statusConfig?.label ?? entry.status}
+              {entry.override_flag && (
+                <span className="ml-1" title="Manually overridden">⚠</span>
+              )}
+            </span>
+            {!isTerminal && (
+              <Select value="" onValueChange={handleStatusOverride}>
+                <SelectTrigger className="h-7 w-auto text-xs border-slate-200" data-testid="pipeline-stage-select">
+                  <SelectValue placeholder="Change stage..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {ALL_STATUSES.filter((s) => s !== entry.status).map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {SALES_STATUS_CONFIG[s]?.label ?? s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Details grid */}
@@ -226,6 +342,13 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
 
       {/* Documents section */}
       <DocumentsSection customerId={entry.customer_id} />
+
+      {/* Notes Timeline — Req 4, 12.5, 12.7 */}
+      <Card>
+        <CardContent className="p-4">
+          <NotesTimeline subjectType="sales_entry" subjectId={entryId} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -15,7 +15,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from grins_platform.models.enums import CustomerStatus, LeadSource, PropertyType
+from grins_platform.models.enums import (
+    CustomerStatus,
+    LeadSource,
+    LeadSourceExtended,
+    PropertyType,
+)
 
 if TYPE_CHECKING:
     from grins_platform.schemas.property import PropertyResponse
@@ -75,13 +80,25 @@ class CustomerCreate(BaseModel):
         default=None,
         description="Customer's email address (RFC 5322 format)",
     )
-    lead_source: LeadSource | None = Field(
+    lead_source: LeadSourceExtended | None = Field(
         default=None,
         description="How the customer found the business",
     )
     lead_source_details: dict[str, Any] | None = Field(
         default=None,
         description="Additional lead source information",
+    )
+    is_priority: bool = Field(
+        default=False,
+        description="Priority customer flag for expedited service",
+    )
+    is_red_flag: bool = Field(
+        default=False,
+        description="Red flag for behavioral or access concerns",
+    )
+    is_slow_payer: bool = Field(
+        default=False,
+        description="Slow payer flag for payment history issues",
     )
     sms_opt_in: bool = Field(
         default=False,
@@ -142,13 +159,17 @@ class CustomerUpdate(BaseModel):
         default=None,
         description="Customer status (active/inactive)",
     )
-    lead_source: LeadSource | None = Field(
+    is_priority: bool | None = Field(
         default=None,
-        description="How the customer found the business",
+        description="Priority customer flag for expedited service",
     )
-    lead_source_details: dict[str, Any] | None = Field(
+    is_red_flag: bool | None = Field(
         default=None,
-        description="Additional lead source information",
+        description="Red flag for behavioral or access concerns",
+    )
+    is_slow_payer: bool | None = Field(
+        default=None,
+        description="Slow payer flag for payment history issues",
     )
     sms_opt_in: bool | None = Field(
         default=None,
@@ -157,6 +178,14 @@ class CustomerUpdate(BaseModel):
     email_opt_in: bool | None = Field(
         default=None,
         description="Email communication opt-in status",
+    )
+    lead_source: LeadSourceExtended | None = Field(
+        default=None,
+        description="How the customer found the business",
+    )
+    lead_source_details: dict[str, Any] | None = Field(
+        default=None,
+        description="Additional lead source information",
     )
     internal_notes: str | None = Field(
         default=None,

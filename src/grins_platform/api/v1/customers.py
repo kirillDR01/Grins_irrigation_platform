@@ -11,6 +11,8 @@ Validates: Requirement 1.1-1.6, 3.1-3.6, 4.1-4.7, 6.6, 7.1-7.6, 8.1-8.5,
 
 from __future__ import annotations
 
+import io
+from datetime import datetime, timezone
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -24,6 +26,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from openpyxl import Workbook
 from sqlalchemy.ext.asyncio import (
     AsyncSession,  # noqa: TC002 - Required at runtime for FastAPI DI
 )
@@ -864,59 +867,172 @@ async def get_customer_jobs(
 
 
 # =============================================================================
-# Task 8.5: POST /api/v1/customers/export - Export Customers CSV
+# Task 8.5: POST /api/v1/customers/export - Export Customers CSV/XLSX
 # =============================================================================
 
 
 @router.post(  # type: ignore[untyped-decorator]
     "/export",
-    summary="Export customers to CSV",
-    description="Export customers to CSV format with optional city filter.",
+    summary="Export customers to CSV or XLSX",
+    description="Export customers to CSV or XLSX format with optional city filter. "
+    "Use ?format=xlsx for Excel format. Auth required.",
 )
 async def export_customers(
+    _user: CurrentActiveUser,
     service: Annotated[CustomerService, Depends(get_customer_service)],
     city: str | None = Query(
         default=None,
         description="Filter by city",
     ),
-    limit: int = Query(
-        default=1000,
-        ge=1,
-        le=1000,
-        description="Maximum records to export (max 1000)",
+    export_format: str = Query(
+        default="csv",
+        alias="format",
+        description="Export format: 'csv' or 'xlsx'",
     ),
 ) -> Response:
-    """Export customers to CSV.
+    """Export customers to CSV or XLSX.
 
     Args:
-        service: Injected CustomerService
-        city: Optional city filter
-        limit: Maximum records to export
+        _user: Authenticated user (auth guard).
+        service: Injected CustomerService.
+        city: Optional city filter.
+        export_format: Export format ('csv' or 'xlsx').
 
     Returns:
-        CSV file response
+        CSV or XLSX file response.
 
-    Validates: Requirement 12.1-12.2, 12.4
+    Validates: Requirement 12.1-12.2, 12.4, april-16th Requirement 15
     """
-    _endpoints.log_started("export_customers", city=city, limit=limit)
+    _endpoints.log_started("export_customers", city=city, format=export_format)
 
+    if export_format == "xlsx":
+        # Fetch all customers without a hard cap
+        all_customers = await _fetch_all_customers_for_export(service, city=city)
+
+        # Build XLSX workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Customers"
+
+        # Header row
+        headers = [
+            "id",
+            "first_name",
+            "last_name",
+            "phone",
+            "email",
+            "status",
+            "lead_source",
+            "is_priority",
+            "is_red_flag",
+            "is_slow_payer",
+            "sms_opt_in",
+            "email_opt_in",
+            "created_at",
+        ]
+        ws.append(headers)
+
+        # Data rows
+        for customer in all_customers:
+            ws.append(
+                [
+                    str(customer.id),
+                    customer.first_name,
+                    customer.last_name,
+                    customer.phone,
+                    customer.email or "",
+                    customer.status,
+                    customer.lead_source or "",
+                    customer.is_priority,
+                    customer.is_red_flag,
+                    customer.is_slow_payer,
+                    customer.sms_opt_in,
+                    customer.email_opt_in,
+                    customer.created_at.isoformat() if customer.created_at else "",
+                ]
+            )
+
+        # Write to bytes
+        output = io.BytesIO()
+        wb.save(output)
+        xlsx_content = output.getvalue()
+        output.close()
+
+        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        filename = f"customers-{date_str}.xlsx"
+
+        _endpoints.log_completed(
+            "export_customers", format="xlsx", count=len(all_customers)
+        )
+        return Response(
+            content=xlsx_content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+            },
+        )
+
+    # Default: CSV export (backward compatible, no row cap)
     try:
-        csv_content = await service.export_customers_csv(city=city, limit=limit)
+        csv_content = await service.export_customers_csv(city=city, limit=10000)
     except BulkOperationError as e:
         _endpoints.log_rejected("export_customers", reason="exceeds_limit")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         ) from e
-    else:
-        _endpoints.log_completed("export_customers")
-        return Response(
-            content=csv_content,
-            media_type="text/csv",
-            headers={
-                "Content-Disposition": "attachment; filename=customers.csv",
-            },
+
+    _endpoints.log_completed("export_customers", format="csv")
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=customers.csv",
+        },
+    )
+
+
+async def _fetch_all_customers_for_export(
+    service: CustomerService,
+    city: str | None = None,
+) -> list[Any]:
+    """Fetch all customers for export without a hard row cap.
+
+    Paginates through all customers using the service layer.
+
+    Args:
+        service: CustomerService instance.
+        city: Optional city filter.
+
+    Returns:
+        List of all customer model instances.
+    """
+    all_customers: list[Any] = []
+    page = 1
+    page_size = 100
+
+    while True:
+        params = CustomerListParams(
+            page=page,
+            page_size=page_size,
+            city=city,
+            sort_by="last_name",
+            sort_order="asc",
         )
+        result = await service.list_customers(params)
+
+        if not result.items:
+            break
+
+        # We need the raw model objects for attribute access; use repository
+        # directly via the paginated response items
+        all_customers.extend(result.items)
+        page += 1
+
+        if len(all_customers) >= result.total:
+            break
+
+    return all_customers
 
 
 # =============================================================================

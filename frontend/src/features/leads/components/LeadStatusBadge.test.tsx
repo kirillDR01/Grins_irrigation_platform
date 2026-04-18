@@ -16,19 +16,19 @@ describe('LeadStatusBadge', () => {
   const expectedLabels: Record<LeadStatus, string> = {
     new: 'New',
     contacted: 'Contacted (Awaiting Response)',
-    qualified: 'Qualified',
-    converted: 'Converted',
-    lost: 'Lost',
-    spam: 'Spam',
+    qualified: 'Archived',
+    converted: 'Archived',
+    lost: 'Archived',
+    spam: 'Archived',
   };
 
   const expectedColorClasses: Record<LeadStatus, string[]> = {
     new: ['bg-blue-100', 'text-blue-800'],
     contacted: ['bg-yellow-100', 'text-yellow-800'],
-    qualified: ['bg-purple-100', 'text-purple-800'],
-    converted: ['bg-green-100', 'text-green-800'],
-    lost: ['bg-gray-100', 'text-gray-800'],
-    spam: ['bg-red-100', 'text-red-800'],
+    qualified: ['bg-gray-100', 'text-gray-600'],
+    converted: ['bg-gray-100', 'text-gray-600'],
+    lost: ['bg-gray-100', 'text-gray-600'],
+    spam: ['bg-gray-100', 'text-gray-600'],
   };
 
   describe('rendering', () => {

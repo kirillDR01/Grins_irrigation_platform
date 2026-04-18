@@ -1,7 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { customerApi } from '../api/customerApi';
-import type { CustomerCreate, CustomerUpdate, ChargeRequest, MergeRequest, ServicePreferenceCreate } from '../types';
+import type { CustomerCreate, CustomerUpdate, ChargeRequest, MergeRequest, ServicePreferenceCreate, Property } from '../types';
 import { customerKeys, customerInvoiceKeys } from './useCustomers';
+import {
+  invalidateAfterCustomerMutation,
+} from '@/shared/utils/invalidationHelpers';
 
 // Create customer mutation
 export function useCreateCustomer() {
@@ -10,7 +13,7 @@ export function useCreateCustomer() {
   return useMutation({
     mutationFn: (data: CustomerCreate) => customerApi.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      invalidateAfterCustomerMutation(queryClient);
     },
   });
 }
@@ -24,7 +27,7 @@ export function useUpdateCustomer() {
       customerApi.update(id, data),
     onSuccess: (updatedCustomer) => {
       queryClient.setQueryData(customerKeys.detail(updatedCustomer.id), updatedCustomer);
-      queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      invalidateAfterCustomerMutation(queryClient, updatedCustomer.id);
     },
   });
 }
@@ -165,5 +168,70 @@ export function useDeleteServicePreference(customerId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: customerKeys.servicePreferences(customerId) });
     },
+  });
+}
+
+
+// Add property mutation
+export function useAddProperty(customerId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: Partial<Property>) =>
+      customerApi.addProperty(customerId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.detail(customerId) });
+      queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+    },
+  });
+}
+
+// Update property mutation
+export function useUpdateProperty(customerId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ propertyId, data }: { propertyId: string; data: Partial<Property> }) =>
+      customerApi.updateProperty(propertyId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.detail(customerId) });
+      queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+    },
+  });
+}
+
+// Delete property mutation
+export function useDeleteProperty(customerId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (propertyId: string) =>
+      customerApi.deleteProperty(propertyId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.detail(customerId) });
+      queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+    },
+  });
+}
+
+// Set property as primary mutation
+export function useSetPropertyPrimary(customerId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (propertyId: string) =>
+      customerApi.setPropertyPrimary(propertyId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.detail(customerId) });
+      queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+    },
+  });
+}
+
+
+// Export customers to XLSX (Req 15)
+export function useExportCustomers() {
+  return useMutation({
+    mutationFn: () => customerApi.exportCustomers(),
   });
 }

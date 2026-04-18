@@ -5,6 +5,9 @@ import type {
   SalesCalendarEventCreate,
   SalesCalendarEventUpdate,
 } from '../types/pipeline';
+import {
+  invalidateAfterSalesPipelineTransition,
+} from '@/shared/utils/invalidationHelpers';
 
 export const pipelineKeys = {
   all: ['sales-pipeline'] as const,
@@ -69,7 +72,7 @@ export function useConvertToJob() {
   return useMutation({
     mutationFn: (id: string) => salesPipelineApi.convert(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: pipelineKeys.lists() });
+      invalidateAfterSalesPipelineTransition(qc, true);
     },
   });
 }
@@ -79,7 +82,7 @@ export function useForceConvertToJob() {
   return useMutation({
     mutationFn: (id: string) => salesPipelineApi.forceConvert(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: pipelineKeys.lists() });
+      invalidateAfterSalesPipelineTransition(qc, true);
     },
   });
 }
@@ -95,7 +98,7 @@ export function useMarkSalesLost() {
       closedReason?: string;
     }) => salesPipelineApi.markLost(id, closedReason),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: pipelineKeys.lists() });
+      invalidateAfterSalesPipelineTransition(qc);
     },
   });
 }

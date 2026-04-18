@@ -9,3 +9,6 @@ export { PropertyTags } from './PropertyTags';
 export { WeekPicker } from './WeekPicker';
 export { FilterPanel } from './FilterPanel';
 export type { FilterAxis, FilterAxisType, FilterOption, FilterState, FilterPanelProps } from './FilterPanel';
+export { NotesTimeline } from './NotesTimeline';
+export { CustomerContextBlock } from './CustomerContextBlock';
+export { AppointmentAttachments } from './AppointmentAttachments';

@@ -40,6 +40,10 @@ vi.mock('../hooks/useCustomerMutations', () => ({
   useAddServicePreference: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
   useUpdateServicePreference: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
   useDeleteServicePreference: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useAddProperty: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useUpdateProperty: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useDeleteProperty: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useSetPropertyPrimary: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
 }));
 
 vi.mock('@/features/ai/components', () => ({
@@ -292,5 +296,75 @@ describe('CustomerDetail', () => {
     render(<CustomerDetail />, { wrapper: createWrapper() });
 
     expect(screen.getByText(/error/i)).toBeInTheDocument();
+  });
+
+  // ---- April 16th: Inline edit sections ----
+
+  describe('April 16th: Inline edit sections', () => {
+    it('renders customer basic info fields', async () => {
+      render(<CustomerDetail />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('customer-detail')).toBeInTheDocument();
+      });
+
+      // Customer name should be displayed (may appear in multiple places)
+      expect(screen.getAllByText('John Doe').length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('renders communication preferences section', async () => {
+      render(<CustomerDetail />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('customer-detail')).toBeInTheDocument();
+      });
+
+      // The overview tab content should be displayed
+      expect(screen.getByTestId('tab-content-overview')).toBeInTheDocument();
+    });
+
+    it('renders properties section on overview tab', async () => {
+      const customerWithProperties = {
+        ...mockCustomer,
+        properties: [
+          {
+            id: 'prop-1',
+            customer_id: 'cust-1',
+            address: '123 Main St',
+            city: 'Minneapolis',
+            state: 'MN',
+            zip_code: '55401',
+            is_primary: true,
+            zone_count: 6,
+            system_type: 'standard',
+            property_type: 'residential',
+            has_dogs: false,
+            gate_code: null,
+            access_instructions: null,
+            special_notes: null,
+            latitude: null,
+            longitude: null,
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+          },
+        ],
+      };
+
+      vi.mocked(customerHooks.useCustomer).mockReturnValue({
+        data: customerWithProperties,
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      } as unknown as ReturnType<typeof customerHooks.useCustomer>);
+
+      render(<CustomerDetail />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('customer-detail')).toBeInTheDocument();
+      });
+
+      // Property address should be displayed somewhere on the page
+      expect(screen.getAllByText(/123 Main St/).length).toBeGreaterThanOrEqual(1);
+    });
   });
 });

@@ -12,17 +12,23 @@ interface LeadStatusBadgeProps {
 const leadStatusColors: Record<LeadStatus, string> = {
   new: 'bg-blue-100 text-blue-800',
   contacted: 'bg-yellow-100 text-yellow-800',
-  qualified: 'bg-purple-100 text-purple-800',
-  converted: 'bg-green-100 text-green-800',
-  lost: 'bg-gray-100 text-gray-800',
-  spam: 'bg-red-100 text-red-800',
+  qualified: 'bg-gray-100 text-gray-600',
+  converted: 'bg-gray-100 text-gray-600',
+  lost: 'bg-gray-100 text-gray-600',
+  spam: 'bg-gray-100 text-gray-600',
 };
+
+/** Legacy statuses that should render as "Archived" */
+const LEGACY_STATUSES: Set<LeadStatus> = new Set(['qualified', 'converted', 'lost', 'spam']);
 
 export const LeadStatusBadge = memo(function LeadStatusBadge({
   status,
   className,
   'data-testid': dataTestId,
 }: LeadStatusBadgeProps) {
+  const isLegacy = LEGACY_STATUSES.has(status);
+  const label = isLegacy ? 'Archived' : LEAD_STATUS_LABELS[status];
+
   return (
     <span
       className={cn(
@@ -32,7 +38,7 @@ export const LeadStatusBadge = memo(function LeadStatusBadge({
       )}
       data-testid={dataTestId || 'lead-status-badge'}
     >
-      {LEAD_STATUS_LABELS[status]}
+      {label}
     </span>
   );
 });

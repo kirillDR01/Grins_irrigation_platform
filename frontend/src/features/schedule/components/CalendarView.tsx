@@ -192,11 +192,13 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
 
   // Custom event content renderer to show send confirmation button on draft events (Req 8.4)
   // Also shows prepaid badge on service-agreement-linked appointments (Req 17.5)
+  // Also shows attachment count badge (Req 10.10)
   const renderEventContent = useCallback(
     (eventInfo: { event: { id: string; title: string; extendedProps: Record<string, unknown> }; timeText: string }) => {
       const appointment = eventInfo.event.extendedProps.appointment as Appointment | undefined;
       const isDraft = eventInfo.event.extendedProps.status === 'draft';
       const isPrepaid = eventInfo.event.extendedProps.isPrepaid === true;
+      const attachmentCount = (eventInfo.event.extendedProps.attachment_count as number) ?? 0;
       return (
         <div className="flex items-center gap-1 w-full overflow-hidden">
           <div className="flex-1 truncate">
@@ -208,6 +210,15 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
                 title="Covered by service agreement — no payment needed"
               >
                 PREPAID
+              </span>
+            )}
+            {attachmentCount > 0 && (
+              <span
+                className="ml-1 inline-flex items-center rounded px-1 py-0.5 text-[9px] font-bold leading-none bg-blue-100 text-blue-700 border border-blue-200"
+                data-testid={`attachment-badge-${eventInfo.event.id}`}
+                title={`${attachmentCount} attachment${attachmentCount > 1 ? 's' : ''}`}
+              >
+                📎{attachmentCount}
               </span>
             )}
             <span className="ml-1 truncate">{eventInfo.event.title}</span>
