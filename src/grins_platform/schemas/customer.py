@@ -52,6 +52,20 @@ def normalize_phone(phone: str) -> str:
     return digits
 
 
+class PrimaryPropertyCreate(BaseModel):
+    """Minimal address payload for creating a primary Property alongside a Customer.
+
+    Used only when a new customer is registered with an address so we can
+    persist the property in the same transaction. Full property creation
+    (zone_count, system_type, access info, etc.) is done via the properties API.
+    """
+
+    address: str = Field(..., min_length=1, max_length=255)
+    city: str = Field(..., min_length=1, max_length=100)
+    state: str = Field(default="MN", min_length=1, max_length=50)
+    zip_code: str | None = Field(default=None, max_length=20)
+
+
 class CustomerCreate(BaseModel):
     """Schema for creating a new customer.
 
@@ -107,6 +121,18 @@ class CustomerCreate(BaseModel):
     email_opt_in: bool = Field(
         default=False,
         description="Email communication opt-in status",
+    )
+    internal_notes: str | None = Field(
+        default=None,
+        max_length=10000,
+        description="Internal notes captured at customer creation time",
+    )
+    primary_property: PrimaryPropertyCreate | None = Field(
+        default=None,
+        description=(
+            "Optional address payload. When provided, a Property row is created "
+            "in the same transaction and flagged is_primary=True."
+        ),
     )
 
     @field_validator("phone")  # type: ignore[misc,untyped-decorator]

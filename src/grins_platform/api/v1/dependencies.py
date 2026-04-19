@@ -70,8 +70,9 @@ async def get_customer_service(
 ) -> CustomerService:
     """Get CustomerService dependency.
 
-    This creates a CustomerService with a CustomerRepository using
-    the injected database session.
+    Both CustomerRepository and PropertyRepository are constructed against
+    the same AsyncSession so that creating a customer together with a
+    primary property stays atomic.
 
     Args:
         session: Database session from dependency injection
@@ -80,7 +81,11 @@ async def get_customer_service(
         CustomerService instance
     """
     repository = CustomerRepository(session=session)
-    return CustomerService(repository=repository)
+    property_repository = PropertyRepository(session=session)
+    return CustomerService(
+        repository=repository,
+        property_repository=property_repository,
+    )
 
 
 def get_duplicate_detection_service() -> DuplicateDetectionService:

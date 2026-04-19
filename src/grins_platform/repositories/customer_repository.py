@@ -60,6 +60,7 @@ class CustomerRepository(LoggerMixin):
         lead_source_details: dict[str, Any] | None = None,
         sms_opt_in: bool = False,
         email_opt_in: bool = False,
+        internal_notes: str | None = None,
     ) -> Customer:
         """Create a new customer record.
 
@@ -72,6 +73,7 @@ class CustomerRepository(LoggerMixin):
             lead_source_details: Additional lead source information
             sms_opt_in: SMS communication opt-in status
             email_opt_in: Email communication opt-in status
+            internal_notes: Free-text notes captured at creation time
 
         Returns:
             Created Customer instance
@@ -89,6 +91,7 @@ class CustomerRepository(LoggerMixin):
             lead_source_details=lead_source_details,
             sms_opt_in=sms_opt_in,
             email_opt_in=email_opt_in,
+            internal_notes=internal_notes,
         )
 
         self.session.add(customer)

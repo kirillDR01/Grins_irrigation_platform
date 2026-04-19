@@ -27,6 +27,7 @@ from grins_platform.schemas.customer import (
     CustomerFlagsUpdate,
     CustomerListParams,
     CustomerUpdate,
+    PrimaryPropertyCreate,
     ServiceHistorySummary,
 )
 from grins_platform.services.customer_service import MAX_BULK_RECORDS, CustomerService
@@ -127,6 +128,114 @@ class TestCustomerServiceCreate:
 
         assert exc_info.value.existing_id == sample_customer.id
         mock_repository.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_create_customer_passes_internal_notes(
+        self,
+        mock_repository: AsyncMock,
+        sample_customer: MagicMock,
+    ) -> None:
+        """internal_notes on CustomerCreate should flow through to the repo."""
+        mock_repository.find_by_phone.return_value = None
+        mock_repository.create.return_value = sample_customer
+        service = CustomerService(repository=mock_repository)
+
+        payload = CustomerCreate(
+            first_name="Ann",
+            last_name="Smith",
+            phone="6125559999",
+            internal_notes="Prefers mornings.",
+        )
+
+        await service.create_customer(payload)
+
+        mock_repository.create.assert_called_once()
+        kwargs = mock_repository.create.call_args.kwargs
+        assert kwargs["internal_notes"] == "Prefers mornings."
+
+    @pytest.mark.asyncio
+    async def test_create_customer_with_primary_property(
+        self,
+        mock_repository: AsyncMock,
+        sample_customer: MagicMock,
+    ) -> None:
+        """primary_property on CustomerCreate should create a Property row."""
+        mock_repository.find_by_phone.return_value = None
+        mock_repository.create.return_value = sample_customer
+        mock_property_repository = AsyncMock()
+
+        service = CustomerService(
+            repository=mock_repository,
+            property_repository=mock_property_repository,
+        )
+
+        payload = CustomerCreate(
+            first_name="Pat",
+            last_name="Lee",
+            phone="6125557777",
+            primary_property=PrimaryPropertyCreate(
+                address="123 Oak St",
+                city="Minneapolis",
+                state="MN",
+                zip_code="55401",
+            ),
+        )
+
+        await service.create_customer(payload)
+
+        mock_property_repository.create.assert_called_once()
+        kwargs = mock_property_repository.create.call_args.kwargs
+        assert kwargs["address"] == "123 Oak St"
+        assert kwargs["city"] == "Minneapolis"
+        assert kwargs["state"] == "MN"
+        assert kwargs["zip_code"] == "55401"
+        assert kwargs["is_primary"] is True
+        assert kwargs["customer_id"] == sample_customer.id
+
+    @pytest.mark.asyncio
+    async def test_create_customer_with_primary_property_requires_property_repo(
+        self,
+        mock_repository: AsyncMock,
+        sample_customer: MagicMock,
+    ) -> None:
+        """Calling with primary_property but no property_repository must raise."""
+        mock_repository.find_by_phone.return_value = None
+        mock_repository.create.return_value = sample_customer
+        service = CustomerService(repository=mock_repository)
+
+        payload = CustomerCreate(
+            first_name="Rae",
+            last_name="Kim",
+            phone="6125558888",
+            primary_property=PrimaryPropertyCreate(
+                address="1 Pine Rd",
+                city="St Paul",
+            ),
+        )
+
+        with pytest.raises(RuntimeError, match="primary_property"):
+            await service.create_customer(payload)
+
+    @pytest.mark.asyncio
+    async def test_create_customer_without_primary_property_does_not_touch_property_repo(
+        self,
+        mock_repository: AsyncMock,
+        sample_customer: MagicMock,
+        sample_customer_create: CustomerCreate,
+    ) -> None:
+        """When no primary_property is given, PropertyRepository must be untouched."""
+        mock_repository.find_by_phone.return_value = None
+        mock_repository.create.return_value = sample_customer
+        mock_property_repository = AsyncMock()
+
+        service = CustomerService(
+            repository=mock_repository,
+            property_repository=mock_property_repository,
+        )
+
+        await service.create_customer(sample_customer_create)
+
+        mock_property_repository.create.assert_not_called()
 
 
 class TestCustomerServiceGet:

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -31,23 +32,56 @@ import { getErrorMessage } from '@/core/api';
 import { DuplicateWarning } from './DuplicateWarning';
 
 // Validation schema
-const customerSchema = z.object({
-  first_name: z.string().min(1, 'First name is required').max(100),
-  last_name: z.string().min(1, 'Last name is required').max(100),
-  phone: z
-    .string()
-    .min(10, 'Phone must be at least 10 digits')
-    .max(20)
-    .regex(/^[\d\s\-()]+$/, 'Invalid phone format'),
-  email: z.string().email('Invalid email').optional().or(z.literal('')),
-  is_priority: z.boolean(),
-  is_red_flag: z.boolean(),
-  is_slow_payer: z.boolean(),
-  sms_opt_in: z.boolean(),
-  email_opt_in: z.boolean(),
-  lead_source: z.string().optional().nullable(),
-  custom_flags: z.array(z.string()),
-});
+const customerSchema = z
+  .object({
+    first_name: z.string().min(1, 'First name is required').max(100),
+    last_name: z.string().min(1, 'Last name is required').max(100),
+    phone: z
+      .string()
+      .min(10, 'Phone must be at least 10 digits')
+      .max(20)
+      .regex(/^[\d\s\-()]+$/, 'Invalid phone format'),
+    email: z.string().email('Invalid email').optional().or(z.literal('')),
+    is_priority: z.boolean(),
+    is_red_flag: z.boolean(),
+    is_slow_payer: z.boolean(),
+    sms_opt_in: z.boolean(),
+    email_opt_in: z.boolean(),
+    lead_source: z.string().optional().nullable(),
+    custom_flags: z.array(z.string()),
+    address: z.string().max(255).optional().or(z.literal('')),
+    city: z.string().max(100).optional().or(z.literal('')),
+    state: z.string().max(50).optional().or(z.literal('')),
+    zip_code: z.string().max(20).optional().or(z.literal('')),
+    internal_notes: z
+      .string()
+      .max(10000, 'Notes must be 10,000 characters or fewer')
+      .optional()
+      .or(z.literal('')),
+  })
+  .superRefine((data, ctx) => {
+    // If any address field is filled, require address line + city together
+    // (matches Property NOT NULL constraints on the backend).
+    const anyAddressFilled = Boolean(
+      data.address || data.city || data.zip_code || (data.state && data.state !== 'MN'),
+    );
+    if (anyAddressFilled) {
+      if (!data.address || !data.address.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['address'],
+          message: 'Address is required when entering a property',
+        });
+      }
+      if (!data.city || !data.city.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['city'],
+          message: 'City is required when entering a property',
+        });
+      }
+    }
+  });
 
 type CustomerFormData = z.infer<typeof customerSchema>;
 
@@ -111,6 +145,13 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
           email_opt_in: customer.email_opt_in,
           lead_source: customer.lead_source,
           custom_flags: (customer as Customer & { custom_flags?: string[] }).custom_flags ?? [],
+          // Address is managed separately via the Properties section when
+          // editing; we only surface these inputs in create mode.
+          address: '',
+          city: '',
+          state: 'MN',
+          zip_code: '',
+          internal_notes: customer.internal_notes ?? '',
         }
       : {
           first_name: '',
@@ -124,6 +165,11 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
           email_opt_in: false,
           lead_source: null,
           custom_flags: [],
+          address: '',
+          city: '',
+          state: 'MN',
+          zip_code: '',
+          internal_notes: '',
         },
   });
 
@@ -150,23 +196,53 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
 
   const onSubmit = async (data: CustomerFormData) => {
     try {
-      // Clean up email - convert empty string to null
-      // Exclude custom_flags from API request (not supported by backend yet)
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { custom_flags, ...apiData } = data;
-      const cleanedData = {
-        ...apiData,
-        email: data.email || null,
-      };
+      // Strip UI-only / flat address fields before shaping the API payload.
+      // custom_flags is not yet supported by the backend.
+      const {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        custom_flags,
+        address,
+        city,
+        state,
+        zip_code,
+        internal_notes,
+        ...apiData
+      } = data;
+
+      const trimmedAddress = address?.trim() ?? '';
+      const trimmedCity = city?.trim() ?? '';
+      const trimmedZip = zip_code?.trim() ?? '';
+      const trimmedState = state?.trim() ?? '';
+      const trimmedNotes = internal_notes?.trim() ?? '';
 
       if (isEditing && customer) {
+        // On edit we don't create properties from this form — the Properties
+        // section on the detail page owns that. We do pass notes through.
+        const updatePayload: CustomerUpdate = {
+          ...apiData,
+          email: data.email || null,
+          internal_notes: trimmedNotes ? trimmedNotes : null,
+        };
         await updateMutation.mutateAsync({
           id: customer.id,
-          data: cleanedData as CustomerUpdate,
+          data: updatePayload,
         });
         toast.success('Customer updated successfully');
       } else {
-        await createMutation.mutateAsync(cleanedData as CustomerCreate);
+        const createPayload: CustomerCreate = {
+          ...apiData,
+          email: data.email || null,
+          internal_notes: trimmedNotes ? trimmedNotes : null,
+          primary_property: trimmedAddress
+            ? {
+                address: trimmedAddress,
+                city: trimmedCity,
+                state: trimmedState || 'MN',
+                zip_code: trimmedZip ? trimmedZip : null,
+              }
+            : null,
+        };
+        await createMutation.mutateAsync(createPayload);
         toast.success('Customer created successfully');
       }
       onSuccess?.();
@@ -298,6 +374,101 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
             </CardContent>
           </Card>
         </div>
+
+        {/* Primary Property Address (create-only) */}
+        {!isEditing && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+              Primary Address <span className="text-xs font-normal text-slate-400 normal-case">(optional)</span>
+            </h3>
+            <Card className="bg-white rounded-2xl shadow-sm border border-slate-100">
+              <CardContent className="p-6 space-y-4">
+                <p className="text-xs text-slate-500">
+                  If provided, we'll create the customer's primary property with this address. You can add more properties later.
+                </p>
+                <FormField
+                  control={form.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium text-slate-700">Address</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          value={field.value ?? ''}
+                          placeholder="123 Main St"
+                          data-testid="address-input"
+                          className="border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                        />
+                      </FormControl>
+                      <FormMessage className="text-sm text-red-500 mt-1" data-testid="address-error" />
+                    </FormItem>
+                  )}
+                />
+                <div className="grid gap-4 md:grid-cols-3">
+                  <FormField
+                    control={form.control}
+                    name="city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium text-slate-700">City</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            value={field.value ?? ''}
+                            placeholder="Minneapolis"
+                            data-testid="city-input"
+                            className="border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                          />
+                        </FormControl>
+                        <FormMessage className="text-sm text-red-500 mt-1" data-testid="city-error" />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="state"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium text-slate-700">State</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            value={field.value ?? ''}
+                            placeholder="MN"
+                            maxLength={50}
+                            data-testid="state-input"
+                            className="border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                          />
+                        </FormControl>
+                        <FormMessage className="text-sm text-red-500 mt-1" />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="zip_code"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium text-slate-700">ZIP</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            value={field.value ?? ''}
+                            placeholder="55401"
+                            data-testid="zip-input"
+                            className="border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                          />
+                        </FormControl>
+                        <FormMessage className="text-sm text-red-500 mt-1" />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
           {/* Customer Flags */}
           <div className="space-y-4">
@@ -478,6 +649,41 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
                     )}
                   />
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Notes */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+              Notes <span className="text-xs font-normal text-slate-400 normal-case">(optional)</span>
+            </h3>
+            <Card className="bg-white rounded-2xl shadow-sm border border-slate-100">
+              <CardContent className="p-6">
+                <FormField
+                  control={form.control}
+                  name="internal_notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium text-slate-700">Internal Notes</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          {...field}
+                          value={field.value ?? ''}
+                          placeholder="Anything worth remembering about this customer (access notes, preferences, history)..."
+                          rows={4}
+                          maxLength={10000}
+                          data-testid="internal-notes-input"
+                          className="border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                        />
+                      </FormControl>
+                      <FormDescription className="text-xs text-slate-400">
+                        Visible only to staff. Up to 10,000 characters.
+                      </FormDescription>
+                      <FormMessage className="text-sm text-red-500 mt-1" data-testid="internal-notes-error" />
+                    </FormItem>
+                  )}
+                />
               </CardContent>
             </Card>
           </div>

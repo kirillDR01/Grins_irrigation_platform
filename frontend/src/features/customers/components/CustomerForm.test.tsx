@@ -254,4 +254,93 @@ describe('CustomerForm', () => {
       expect(screen.getByTestId('lead-source-select')).toBeInTheDocument();
     });
   });
+
+  describe('Primary address + internal notes on create', () => {
+    it('submits internal_notes when notes are entered and no address', async () => {
+      const user = userEvent.setup();
+      mockCreateMutateAsync.mockResolvedValue({ id: '1' });
+
+      render(<CustomerForm />, { wrapper: createWrapper() });
+
+      await user.type(screen.getByTestId('first-name-input'), 'Ann');
+      await user.type(screen.getByTestId('last-name-input'), 'Smith');
+      await user.type(screen.getByTestId('phone-input'), '6125559999');
+      await user.type(
+        screen.getByTestId('internal-notes-input'),
+        'Prefers morning service. Dog in backyard.',
+      );
+
+      await user.click(screen.getByTestId('submit-btn'));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            first_name: 'Ann',
+            last_name: 'Smith',
+            internal_notes: 'Prefers morning service. Dog in backyard.',
+            primary_property: null,
+          }),
+        );
+      });
+    });
+
+    it('submits primary_property when full address is entered', async () => {
+      const user = userEvent.setup();
+      mockCreateMutateAsync.mockResolvedValue({ id: '1' });
+
+      render(<CustomerForm />, { wrapper: createWrapper() });
+
+      await user.type(screen.getByTestId('first-name-input'), 'Pat');
+      await user.type(screen.getByTestId('last-name-input'), 'Lee');
+      await user.type(screen.getByTestId('phone-input'), '6125557777');
+      await user.type(screen.getByTestId('address-input'), '123 Oak St');
+      await user.type(screen.getByTestId('city-input'), 'Minneapolis');
+      await user.clear(screen.getByTestId('state-input'));
+      await user.type(screen.getByTestId('state-input'), 'MN');
+      await user.type(screen.getByTestId('zip-input'), '55401');
+
+      await user.click(screen.getByTestId('submit-btn'));
+
+      await waitFor(() => {
+        expect(mockCreateMutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            primary_property: {
+              address: '123 Oak St',
+              city: 'Minneapolis',
+              state: 'MN',
+              zip_code: '55401',
+            },
+          }),
+        );
+      });
+    });
+
+    it('blocks submit when address is filled but city is missing', async () => {
+      const user = userEvent.setup();
+
+      render(<CustomerForm />, { wrapper: createWrapper() });
+
+      await user.type(screen.getByTestId('first-name-input'), 'Sam');
+      await user.type(screen.getByTestId('last-name-input'), 'Jones');
+      await user.type(screen.getByTestId('phone-input'), '6125556666');
+      await user.type(screen.getByTestId('address-input'), '999 Elm Ave');
+      // intentionally leave city blank
+
+      await user.click(screen.getByTestId('submit-btn'));
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('City is required when entering a property'),
+        ).toBeInTheDocument();
+      });
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it('hides the address section in edit mode', () => {
+      render(<CustomerForm customer={mockCustomer} />, { wrapper: createWrapper() });
+
+      expect(screen.queryByTestId('address-input')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('city-input')).not.toBeInTheDocument();
+    });
+  });
 });

@@ -170,6 +170,16 @@ export type ServicePreferenceCreate = Omit<ServicePreference, 'id'>;
 // Re-export PaginatedResponse for convenience
 export type { PaginatedResponse };
 
+// Optional primary-property payload sent with CustomerCreate. When present,
+// the backend creates a Property row in the same transaction and marks it
+// is_primary=true.
+export interface PrimaryPropertyCreate {
+  address: string;
+  city: string;
+  state?: string;
+  zip_code?: string | null;
+}
+
 // Create customer request
 export interface CustomerCreate {
   first_name: string;
@@ -182,6 +192,8 @@ export interface CustomerCreate {
   sms_opt_in?: boolean;
   email_opt_in?: boolean;
   lead_source?: string | null;
+  internal_notes?: string | null;
+  primary_property?: PrimaryPropertyCreate | null;
 }
 
 // Customer status values

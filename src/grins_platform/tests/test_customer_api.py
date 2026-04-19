@@ -17,6 +17,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from grins_platform.api.v1.auth_dependencies import (
+    get_current_active_user,
+    get_current_user,
+)
 from grins_platform.api.v1.customers import router
 from grins_platform.api.v1.dependencies import get_customer_service
 from grins_platform.exceptions import CustomerNotFoundError, DuplicateCustomerError
@@ -41,13 +45,26 @@ def mock_service() -> AsyncMock:
 
 
 @pytest.fixture
-def app(mock_service: AsyncMock) -> FastAPI:
+def mock_auth_user() -> object:
+    """Minimal stand-in user so endpoints requiring auth don't 401."""
+
+    class _U:
+        id = uuid.uuid4()
+        is_active = True
+
+    return _U()
+
+
+@pytest.fixture
+def app(mock_service: AsyncMock, mock_auth_user: object) -> FastAPI:
     """Create FastAPI app with mocked dependencies."""
     app = FastAPI()
     app.include_router(router, prefix="/api/v1/customers")
 
-    # Override dependency
+    # Override service + auth dependencies so tests can reach the handlers.
     app.dependency_overrides[get_customer_service] = lambda: mock_service
+    app.dependency_overrides[get_current_user] = lambda: mock_auth_user
+    app.dependency_overrides[get_current_active_user] = lambda: mock_auth_user
 
     return app
 
@@ -198,6 +215,83 @@ class TestCreateCustomer:
             json={
                 "first_name": "John",
                 # Missing last_name and phone
+            },
+        )
+
+        assert response.status_code == 422
+
+    def test_create_customer_with_internal_notes_forwarded_to_service(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+        sample_customer_response: CustomerResponse,
+    ) -> None:
+        """internal_notes in the request body should reach the service layer."""
+        mock_service.create_customer.return_value = sample_customer_response
+
+        response = client.post(
+            "/api/v1/customers",
+            json={
+                "first_name": "Ann",
+                "last_name": "Smith",
+                "phone": "6125559999",
+                "internal_notes": "Prefers mornings.",
+            },
+        )
+
+        assert response.status_code == 201
+        mock_service.create_customer.assert_called_once()
+        payload = mock_service.create_customer.call_args.args[0]
+        assert payload.internal_notes == "Prefers mornings."
+
+    def test_create_customer_with_primary_property_forwarded_to_service(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+        sample_customer_response: CustomerResponse,
+    ) -> None:
+        """primary_property nested object should reach the service layer."""
+        mock_service.create_customer.return_value = sample_customer_response
+
+        response = client.post(
+            "/api/v1/customers",
+            json={
+                "first_name": "Pat",
+                "last_name": "Lee",
+                "phone": "6125557777",
+                "primary_property": {
+                    "address": "123 Oak St",
+                    "city": "Minneapolis",
+                    "state": "MN",
+                    "zip_code": "55401",
+                },
+            },
+        )
+
+        assert response.status_code == 201
+        payload = mock_service.create_customer.call_args.args[0]
+        assert payload.primary_property is not None
+        assert payload.primary_property.address == "123 Oak St"
+        assert payload.primary_property.city == "Minneapolis"
+        assert payload.primary_property.state == "MN"
+        assert payload.primary_property.zip_code == "55401"
+
+    def test_create_customer_primary_property_missing_address_returns_422(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+    ) -> None:
+        """primary_property without required address field should be rejected."""
+        response = client.post(
+            "/api/v1/customers",
+            json={
+                "first_name": "Rae",
+                "last_name": "Kim",
+                "phone": "6125558888",
+                "primary_property": {
+                    # Missing address
+                    "city": "Minneapolis",
+                },
             },
         )
 

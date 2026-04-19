@@ -56,6 +56,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from grins_platform.repositories.customer_repository import CustomerRepository
+    from grins_platform.repositories.property_repository import PropertyRepository
 
 
 # Maximum records allowed for bulk operations
@@ -76,14 +77,24 @@ class CustomerService(LoggerMixin):
 
     DOMAIN = "customer"
 
-    def __init__(self, repository: CustomerRepository) -> None:
+    def __init__(
+        self,
+        repository: CustomerRepository,
+        property_repository: PropertyRepository | None = None,
+    ) -> None:
         """Initialize service with repository.
 
         Args:
             repository: CustomerRepository for database operations
+            property_repository: Optional PropertyRepository. Required when
+                CustomerCreate.primary_property is provided so the Property
+                can be persisted in the same session/transaction. Left
+                optional so existing unit tests that don't exercise the
+                property-creation path don't need to wire it.
         """
         super().__init__()
         self.repository = repository
+        self.property_repository = property_repository
 
     # =========================================================================
     # Task 5.1: CRUD Operations
@@ -125,7 +136,27 @@ class CustomerService(LoggerMixin):
             lead_source_details=data.lead_source_details,
             sms_opt_in=data.sms_opt_in,
             email_opt_in=data.email_opt_in,
+            internal_notes=data.internal_notes,
         )
+
+        # If the caller provided an address, persist it as the primary property
+        # in the same session. The PropertyRepository shares the AsyncSession
+        # with CustomerRepository, so a failure rolls back both inserts.
+        if data.primary_property is not None:
+            if self.property_repository is None:
+                msg = (
+                    "primary_property was provided but CustomerService was "
+                    "initialized without a PropertyRepository"
+                )
+                raise RuntimeError(msg)
+            await self.property_repository.create(
+                customer_id=customer.id,
+                address=data.primary_property.address,
+                city=data.primary_property.city,
+                state=data.primary_property.state,
+                zip_code=data.primary_property.zip_code,
+                is_primary=True,
+            )
 
         self.log_completed("create_customer", customer_id=str(customer.id))
         response: CustomerResponse = CustomerResponse.model_validate(customer)
