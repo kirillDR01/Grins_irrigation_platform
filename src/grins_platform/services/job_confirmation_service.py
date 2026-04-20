@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from grins_platform.log_config import LoggerMixin, get_logger
 from grins_platform.models.enums import (
@@ -127,12 +128,26 @@ class JobConfirmationService(LoggerMixin):
         # 1. Correlate thread_id → original confirmation SMS
         original = await self.find_confirmation_message(thread_id)
         if original is None:
-            self.log_rejected(
-                "handle_confirmation",
-                reason="no_matching_confirmation",
-                thread_id=thread_id,
-            )
-            return {"action": "no_match", "thread_id": thread_id}
+            # Gap 1.C — fall through to the reschedule-followup thread so
+            # free-text alternatives land on the open RescheduleRequest.
+            # Keyword replies stay locked to the confirmation thread to
+            # avoid a numeric body on a follow-up thread (e.g. "2pm")
+            # being parsed as RESCHEDULE.
+            if keyword is not None:
+                self.log_rejected(
+                    "handle_confirmation",
+                    reason="no_matching_confirmation",
+                    thread_id=thread_id,
+                )
+                return {"action": "no_match", "thread_id": thread_id}
+            original = await self.find_reschedule_thread(thread_id)
+            if original is None:
+                self.log_rejected(
+                    "handle_confirmation",
+                    reason="no_matching_thread",
+                    thread_id=thread_id,
+                )
+                return {"action": "no_match", "thread_id": thread_id}
 
         appointment_id: UUID = original.appointment_id  # type: ignore[assignment]
         job_id: UUID = original.job_id  # type: ignore[assignment]
@@ -243,7 +258,76 @@ class JobConfirmationService(LoggerMixin):
         customer_id: UUID,
         raw_body: str,
     ) -> dict[str, Any]:
-        """RESCHEDULE: create reschedule_request + follow-up SMS."""
+        """RESCHEDULE: create reschedule_request + follow-up SMS.
+
+        Gap 1.B — state guard: refuse "R" replies when the appointment is
+        already in a field-work or terminal state and fire a
+        ``late_reschedule_attempt`` admin alert so the admin still sees
+        the customer's intent.
+
+        Gap 1.A — idempotency: a second identical "R" does not create a
+        second open ``RescheduleRequest``. The partial unique index
+        ``uq_reschedule_requests_open_per_appointment`` is a DB safety
+        net behind the application-level dedup; a concurrent-webhook
+        race is caught via a SAVEPOINT around the insert.
+        """
+        from grins_platform.models.appointment import Appointment  # noqa: PLC0415
+
+        # Gap 1.B — state guard. If the appointment is in a field-work or
+        # terminal state, do NOT create a RescheduleRequest (the admin
+        # resolve path rejects these source statuses anyway). Fire an
+        # admin alert and send a tailored auto-reply instead.
+        appt = await self.db.get(Appointment, appointment_id)
+        blocked_statuses = {
+            AppointmentStatus.EN_ROUTE.value,
+            AppointmentStatus.IN_PROGRESS.value,
+            AppointmentStatus.COMPLETED.value,
+            AppointmentStatus.CANCELLED.value,
+            AppointmentStatus.NO_SHOW.value,
+        }
+        if appt is not None and appt.status in blocked_statuses:
+            response.status = "reschedule_rejected"
+            response.processed_at = datetime.now(tz=timezone.utc)
+            await self.db.flush()
+            await self._dispatch_late_reschedule_alert(
+                appointment_id=appointment_id,
+                customer_id=customer_id,
+                appt=appt,
+            )
+            self.log_rejected(
+                "handle_reschedule",
+                reason="invalid_state",
+                appointment_id=str(appointment_id),
+                current_status=appt.status,
+            )
+            return {
+                "action": "reschedule_rejected",
+                "appointment_id": str(appointment_id),
+                "current_status": appt.status,
+                "auto_reply": self._build_late_reschedule_reply(appt),
+            }
+
+        # Gap 1.A — application-level dedup. Oldest open request wins so
+        # any admin resolve path touches the original row.
+        open_stmt = (
+            select(RescheduleRequest)
+            .where(
+                RescheduleRequest.appointment_id == appointment_id,
+                RescheduleRequest.status == "open",
+            )
+            .order_by(RescheduleRequest.created_at.asc())
+            .limit(1)
+        )
+        existing = (await self.db.execute(open_stmt)).scalar_one_or_none()
+        if existing is not None:
+            return await self._append_duplicate_open_request(
+                response=response,
+                existing=existing,
+                raw_body=raw_body,
+                appointment_id=appointment_id,
+                reason="duplicate_open_request",
+            )
+
         reschedule = RescheduleRequest(
             job_id=job_id,
             appointment_id=appointment_id,
@@ -252,7 +336,25 @@ class JobConfirmationService(LoggerMixin):
             raw_alternatives_text=raw_body,
             status="open",
         )
-        self.db.add(reschedule)
+        try:
+            # SAVEPOINT — preserves the JobConfirmationResponse row added
+            # by handle_confirmation() even when the partial unique index
+            # rejects our insert because a concurrent webhook won the race.
+            async with self.db.begin_nested():
+                self.db.add(reschedule)
+                await self.db.flush()
+        except IntegrityError:
+            # Race: the concurrent webhook inserted the open row first.
+            existing = (await self.db.execute(open_stmt)).scalar_one_or_none()
+            if existing is None:
+                raise
+            return await self._append_duplicate_open_request(
+                response=response,
+                existing=existing,
+                raw_body=raw_body,
+                appointment_id=appointment_id,
+                reason="duplicate_open_request_race",
+            )
 
         response.status = "reschedule_requested"
         response.processed_at = datetime.now(tz=timezone.utc)
@@ -271,6 +373,143 @@ class JobConfirmationService(LoggerMixin):
             "auto_reply": _AUTO_REPLIES[ConfirmationKeyword.RESCHEDULE],
             "follow_up_sms": follow_up_text,
         }
+
+    async def _append_duplicate_open_request(
+        self,
+        *,
+        response: JobConfirmationResponse,
+        existing: RescheduleRequest,
+        raw_body: str,
+        appointment_id: UUID,
+        reason: str,
+    ) -> dict[str, Any]:
+        """Fold a duplicate "R" reply into the existing open request.
+
+        Appends the new reply body onto ``raw_alternatives_text`` so the
+        admin sees both messages, marks the response as
+        ``reschedule_requested``, and returns a result dict that
+        deliberately omits ``follow_up_sms`` — the follow-up was already
+        sent on the first "R", re-sending would be spammy.
+        """
+        existing.raw_alternatives_text = (
+            f"{existing.raw_alternatives_text or ''}\n---\n{raw_body}".strip()
+        )
+        response.status = "reschedule_requested"
+        response.processed_at = datetime.now(tz=timezone.utc)
+        await self.db.flush()
+        self.log_rejected(
+            "handle_reschedule",
+            reason=reason,
+            appointment_id=str(appointment_id),
+            existing_request_id=str(existing.id),
+        )
+        return {
+            "action": "reschedule_requested",
+            "appointment_id": str(appointment_id),
+            "reschedule_request_id": str(existing.id),
+            "auto_reply": _AUTO_REPLIES[ConfirmationKeyword.RESCHEDULE],
+            "duplicate": True,
+        }
+
+    @staticmethod
+    def _build_late_reschedule_reply(appt: Appointment) -> str:
+        """Build a state-specific SMS for customers who text "R" too late.
+
+        Selects wording by appointment status so the message is honest
+        about *why* the reschedule can't run through the automated flow
+        and directs the customer to the business line.
+        """
+        from grins_platform.services.sms.formatters import (  # noqa: PLC0415
+            format_sms_time_12h,
+        )
+
+        business_phone = os.environ.get("BUSINESS_PHONE_NUMBER", "")
+        call_clause = f" at {business_phone}" if business_phone else ""
+        status = getattr(appt, "status", None)
+
+        if status == AppointmentStatus.EN_ROUTE.value:
+            return (
+                "Your technician is already on the way. "
+                f"Please call us{call_clause} if you need to make a change."
+            )
+        if status == AppointmentStatus.IN_PROGRESS.value:
+            return (
+                "Your technician is already on site. "
+                f"Please call us{call_clause} if you need to make a change."
+            )
+        if status == AppointmentStatus.COMPLETED.value:
+            appt_date = getattr(appt, "scheduled_date", None)
+            appt_time = getattr(appt, "time_window_start", None)
+            date_str = appt_date.strftime("%B %d, %Y") if appt_date else None
+            time_str = format_sms_time_12h(appt_time) if appt_time else None
+            when = None
+            if date_str and time_str:
+                when = f" on {date_str} at {time_str}"
+            elif date_str:
+                when = f" on {date_str}"
+            when = when or ""
+            tail = (
+                f"To book a new service, call{call_clause}"
+                if business_phone
+                else "To book a new service, please contact us"
+            )
+            return f"Your appointment was completed{when}. {tail}."
+
+        # CANCELLED / NO_SHOW (and any other blocked state).
+        tail = (
+            f"Please call us{call_clause}." if business_phone else "Please contact us."
+        )
+        return f"This appointment is no longer active. {tail}"
+
+    async def _dispatch_late_reschedule_alert(
+        self,
+        *,
+        appointment_id: UUID,
+        customer_id: UUID,
+        appt: Appointment | None,
+    ) -> None:
+        """Notify admin of a late reschedule attempt.
+
+        Mirrors :meth:`_dispatch_admin_cancellation_alert` — resolves the
+        customer name and scheduled-at, then delegates to
+        :meth:`NotificationService.send_admin_late_reschedule_alert`.
+        Exceptions are logged and swallowed so admin notification never
+        blocks the customer-facing reply.
+
+        Validates: gap-01 (1.B).
+        """
+        from grins_platform.models.customer import Customer  # noqa: PLC0415
+        from grins_platform.services.notification_service import (  # noqa: PLC0415
+            NotificationService,
+        )
+
+        try:
+            customer = await self.db.get(Customer, customer_id)
+            if customer is None:
+                self.log_rejected(
+                    "handle_reschedule.late_alert",
+                    reason="customer_not_found",
+                    customer_id=str(customer_id),
+                )
+                return
+
+            notification_svc = NotificationService(
+                email_service=self._build_email_service(),
+            )
+            await notification_svc.send_admin_late_reschedule_alert(
+                self.db,
+                appointment_id=appointment_id,
+                customer_id=customer_id,
+                customer_name=customer.full_name,
+                scheduled_at=self._resolve_scheduled_at(appt),
+                current_status=getattr(appt, "status", "") or "",
+            )
+        except Exception as exc:
+            self.log_failed(
+                "handle_reschedule.late_alert_failed",
+                error=exc,
+                appointment_id=str(appointment_id),
+            )
 
     async def _handle_cancel(
         self,
@@ -629,6 +868,45 @@ class JobConfirmationService(LoggerMixin):
             .where(
                 SentMessage.provider_thread_id == thread_id,
                 SentMessage.message_type == MessageType.APPOINTMENT_CONFIRMATION.value,
+            )
+            .order_by(SentMessage.created_at.desc())
+            .limit(1)
+        )
+        result = await self.db.execute(stmt)
+        row: SentMessage | None = result.scalar_one_or_none()
+        return row
+
+    async def find_reschedule_thread(
+        self,
+        thread_id: str,
+    ) -> SentMessage | None:
+        """Find the most recent confirmation or reschedule-followup SMS.
+
+        Used to attribute free-text follow-up replies (the 2-3 alternative
+        dates the customer sends after texting "R") back to the right
+        :class:`RescheduleRequest`. Gap 1.C: the follow-up SMS is stored
+        as ``MessageType.RESCHEDULE_FOLLOWUP`` on the same thread, and
+        :meth:`find_confirmation_message` filters that type out — so a
+        customer's reply on the follow-up thread falls through to the
+        orphan path. This sibling accepts both message types.
+
+        Kept separate from :meth:`find_confirmation_message` so Y/R/C
+        keyword gating stays locked to the confirmation thread; if
+        widened, a stray "2" inside a free-text date could be misparsed
+        as RESCHEDULE.
+
+        Validates: gap-01 (1.C).
+        """
+        stmt = (
+            select(SentMessage)
+            .where(
+                SentMessage.provider_thread_id == thread_id,
+                SentMessage.message_type.in_(
+                    [
+                        MessageType.APPOINTMENT_CONFIRMATION.value,
+                        MessageType.RESCHEDULE_FOLLOWUP.value,
+                    ],
+                ),
             )
             .order_by(SentMessage.created_at.desc())
             .limit(1)

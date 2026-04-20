@@ -1194,8 +1194,7 @@ class NotificationService(LoggerMixin):
         )
 
         message = (
-            f"{customer_name} cancelled via {source} for "
-            f"{scheduled_at:%Y-%m-%d %H:%M}"
+            f"{customer_name} cancelled via {source} for {scheduled_at:%Y-%m-%d %H:%M}"
         )
 
         # --- Email dispatch (uses existing EmailService._send_email) ---
@@ -1274,6 +1273,121 @@ class NotificationService(LoggerMixin):
 
         self.log_completed(
             "send_admin_cancellation_alert",
+            appointment_id=str(appointment_id),
+        )
+
+    async def send_admin_late_reschedule_alert(
+        self,
+        db: AsyncSession,
+        *,
+        appointment_id: UUID,
+        customer_id: UUID,
+        customer_name: str,
+        scheduled_at: datetime,
+        current_status: str,
+    ) -> None:
+        """Notify admin that a customer texted "R" in a blocked state.
+
+        Fired from :meth:`JobConfirmationService._handle_reschedule` when
+        the appointment is in ``EN_ROUTE``, ``IN_PROGRESS``,
+        ``COMPLETED``, ``CANCELLED``, or ``NO_SHOW`` — states the admin
+        resolve path refuses anyway, so a ``RescheduleRequest`` row
+        would be unresolvable. Mirrors the email + dashboard-alert
+        channels of :meth:`send_admin_cancellation_alert`; failures are
+        logged and swallowed so admin notification never blocks the
+        customer-facing SMS reply.
+
+        Validates: gap-01 (1.B).
+        """
+        self.log_started(
+            "send_admin_late_reschedule_alert",
+            appointment_id=str(appointment_id),
+            customer_id=str(customer_id),
+            current_status=current_status,
+        )
+
+        message = (
+            f"{customer_name} attempted to reschedule via SMS while "
+            f"appointment was in {current_status} state "
+            f"({scheduled_at:%Y-%m-%d %H:%M})"
+        )
+
+        # --- Email dispatch ---
+        try:
+            recipient = self._get_admin_notification_email()
+            if recipient and self.email_service is not None:
+                from grins_platform.models.enums import (  # noqa: PLC0415
+                    EmailType,
+                )
+
+                subject = (
+                    f"Late reschedule attempt — {customer_name} ({current_status})"
+                )
+                html_body = (
+                    f'<p><strong>{customer_name}</strong> texted "R" '
+                    f"while the appointment was in "
+                    f"<strong>{current_status}</strong> state.</p>"
+                    f"<p><strong>Scheduled for:</strong> "
+                    f"{scheduled_at:%Y-%m-%d %H:%M}</p>"
+                    f"<p><strong>Current status:</strong> "
+                    f"{current_status}</p>"
+                    f"<p><strong>Appointment ID:</strong> "
+                    f"{appointment_id}</p>"
+                    f"<p><strong>Customer ID:</strong> {customer_id}</p>"
+                )
+                self.email_service._send_email(  # noqa: SLF001
+                    to_email=recipient,
+                    subject=subject,
+                    html_body=html_body,
+                    email_type=NotificationType.CAMPAIGN.value,
+                    classification=EmailType.TRANSACTIONAL,
+                )
+            elif not recipient:
+                self.logger.warning(
+                    "notification.admin_late_reschedule_alert.no_recipient",
+                    appointment_id=str(appointment_id),
+                    message=(
+                        "ADMIN_NOTIFICATION_EMAIL not configured — "
+                        "skipping email dispatch"
+                    ),
+                )
+        except Exception as exc:
+            self.log_failed(
+                "send_admin_late_reschedule_alert.email",
+                error=exc,
+                appointment_id=str(appointment_id),
+            )
+
+        # --- Alert row persistence (dashboard surface) ---
+        try:
+            from grins_platform.models.alert import Alert  # noqa: PLC0415
+            from grins_platform.models.enums import (  # noqa: PLC0415
+                AlertSeverity,
+                AlertType,
+            )
+            from grins_platform.repositories.alert_repository import (  # noqa: PLC0415
+                AlertRepository,
+            )
+
+            alert_repo = AlertRepository(db)
+            alert = Alert(
+                type=AlertType.LATE_RESCHEDULE_ATTEMPT.value,
+                severity=AlertSeverity.WARNING.value,
+                entity_type="appointment",
+                entity_id=appointment_id,
+                message=message,
+            )
+            await alert_repo.create(alert)
+        except Exception as exc:
+            self.log_failed(
+                "send_admin_late_reschedule_alert.alert_row",
+                error=exc,
+                appointment_id=str(appointment_id),
+            )
+            return
+
+        self.log_completed(
+            "send_admin_late_reschedule_alert",
             appointment_id=str(appointment_id),
         )
 

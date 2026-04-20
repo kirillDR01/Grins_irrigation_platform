@@ -789,10 +789,18 @@ class SMSService(LoggerMixin):
         # Check if thread_id correlates to an APPOINTMENT_CONFIRMATION message
         # (bughunt L-14: use the public name now that one exists).
         original = await svc.find_confirmation_message(thread_id)
-        if original is None:
-            return None
-
         keyword = parse_confirmation_reply(body)
+        if original is None:
+            # Gap 1.C — a free-text reply on the reschedule-follow-up
+            # thread should still land on the open RescheduleRequest.
+            # Keyword replies (Y/R/C) stay gated on the confirmation
+            # thread so e.g. "2" inside a free-text date can't be
+            # misparsed as RESCHEDULE on an unrelated follow-up thread.
+            if keyword is not None:
+                return None
+            original = await svc.find_reschedule_thread(thread_id)
+            if original is None:
+                return None
         result = await svc.handle_confirmation(
             thread_id=thread_id,
             keyword=keyword,

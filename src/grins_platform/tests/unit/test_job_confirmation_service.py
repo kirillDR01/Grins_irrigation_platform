@@ -124,6 +124,10 @@ def mock_db() -> AsyncMock:
     db = AsyncMock()
     db.flush = AsyncMock()
     db.add = Mock()
+    # ``_handle_reschedule`` wraps the RescheduleRequest insert in a
+    # SAVEPOINT (``async with db.begin_nested():``). AsyncMock's auto
+    # method would return a coroutine — unusable as a context manager.
+    db.begin_nested = MagicMock(return_value=AsyncMock())
     return db
 
 
@@ -229,9 +233,18 @@ class TestHandleConfirmation:
         """Req 24.3: R keyword → reschedule_request created."""
         sent_msg = _make_sent_message()
 
-        result_mock = MagicMock()
-        result_mock.scalar_one_or_none.return_value = sent_msg
-        mock_db.execute = AsyncMock(return_value=result_mock)
+        # Order of execute() calls: find_confirmation_message (→ sent_msg),
+        # open-request dedup lookup (→ None so the insert path runs). The
+        # state-guard fetch for ``appt`` uses ``db.get``, not ``execute``.
+        find_msg_result = MagicMock()
+        find_msg_result.scalar_one_or_none.return_value = sent_msg
+        no_existing_result = MagicMock()
+        no_existing_result.scalar_one_or_none.return_value = None
+        mock_db.execute = AsyncMock(
+            side_effect=[find_msg_result, no_existing_result],
+        )
+        # appt is None → state guard falls through to the normal path.
+        mock_db.get = AsyncMock(return_value=None)
 
         svc = JobConfirmationService(mock_db)
         result = await svc.handle_confirmation(
@@ -394,9 +407,16 @@ class TestRescheduleFollowUp:
         """Req 14.1: 'R' reply → acknowledgment sent + follow-up SMS (two SMS total)."""
         sent_msg = _make_sent_message()
 
-        result_mock = MagicMock()
-        result_mock.scalar_one_or_none.return_value = sent_msg
-        mock_db.execute = AsyncMock(return_value=result_mock)
+        # Order: find_confirmation_message → sent_msg, open-request dedup → None.
+        find_msg_result = MagicMock()
+        find_msg_result.scalar_one_or_none.return_value = sent_msg
+        no_existing_result = MagicMock()
+        no_existing_result.scalar_one_or_none.return_value = None
+        mock_db.execute = AsyncMock(
+            side_effect=[find_msg_result, no_existing_result],
+        )
+        # appt is None → state guard falls through to the normal path.
+        mock_db.get = AsyncMock(return_value=None)
 
         svc = JobConfirmationService(mock_db)
         result = await svc.handle_confirmation(
