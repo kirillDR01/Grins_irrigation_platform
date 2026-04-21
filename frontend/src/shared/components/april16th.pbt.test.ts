@@ -270,7 +270,7 @@ describe('Property 13: Appointment customer context completeness', () => {
           customer_phone: fc.stringMatching(/^\d{10}$/),
           primary_address: fc.string({ minLength: 1, maxLength: 200 }),
           job_type: fc.string({ minLength: 1, maxLength: 50 }),
-          last_contacted_at: fc.date().map((d) => d.toISOString()),
+          last_contacted_at: fc.integer({ min: 0, max: 4102444800000 }).map((ms) => new Date(ms).toISOString()),
           is_priority: fc.boolean(),
           dogs_on_property: fc.boolean(),
           gate_code: fc.oneof(fc.string({ minLength: 1, maxLength: 10 }), fc.constant(null)),

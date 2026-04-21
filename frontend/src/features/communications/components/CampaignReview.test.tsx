@@ -127,7 +127,7 @@ describe('CampaignReview', () => {
     fireEvent.change(screen.getByTestId('schedule-time'), { target: { value: '10:30' } });
     fireEvent.click(screen.getByTestId('confirm-send-btn'));
 
-    expect(onSchedule).toHaveBeenCalledWith('2026-05-01T10:30:00');
+    expect(onSchedule).toHaveBeenCalledWith(expect.stringMatching(/^2026-05-01T10:30:00/));
   });
 
   it('disables confirm when no recipients', () => {

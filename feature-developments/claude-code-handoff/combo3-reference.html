@@ -1,0 +1,3458 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Schedule · Pick Jobs UX v2 — cascading group/filter</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Kalam:wght@400;700&family=Architects+Daughter&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --ink-soft: #4a4a4a;
+    --ink-faint: #8a8a8a;
+    --paper: #fafaf6;
+    --accent: #d4622a;
+    --highlight: #ffe066;
+    --blue: #3a6ea8;
+    --blue-soft: #dbe6f2;
+    --green: #4a8a5a;
+    --green-soft: #e6f2dc;
+    --red: #c44a3a;
+    --red-soft: #fbe1dc;
+    --amber: #d89730;
+    --amber-soft: #fff2d0;
+    --purple: #8b5a9f;
+    --purple-soft: #ece0f2;
+    --teal: #3a8a8a;
+    --teal-soft: #d6ebeb;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #efece4;
+    color: var(--ink);
+    font-family: 'Kalam', 'Architects Daughter', sans-serif;
+  }
+  body { min-height: 100vh; padding: 24px 32px 120px; }
+
+  .page-header { max-width: 1320px; margin: 0 auto 14px; }
+  .eyebrow {
+    font-family: 'Kalam'; font-size: 13px; color: var(--ink-faint);
+    letter-spacing: .08em; text-transform: uppercase; margin: 0 0 2px;
+  }
+  .page-title {
+    font-family: 'Caveat', cursive; font-size: 44px; font-weight: 700;
+    margin: 0 0 4px; line-height: 1;
+  }
+  .page-title em {
+    background: var(--highlight); font-style: normal; padding: 0 6px;
+    box-shadow: -1px 1px 0 rgba(0,0,0,.08);
+  }
+  .page-sub {
+    font-family: 'Kalam'; color: var(--ink-soft);
+    font-size: 15px; margin: 0; max-width: 960px; line-height: 1.5;
+  }
+
+  .tabs {
+    max-width: 1320px; margin: 16px auto 18px;
+    display: flex; gap: 8px; flex-wrap: wrap;
+    border-bottom: 2px dashed var(--ink); padding-bottom: 10px;
+  }
+  .tab {
+    font-family: 'Kalam'; font-size: 15px; font-weight: 700;
+    padding: 9px 16px; border: 2px solid var(--ink);
+    background: var(--paper); cursor: pointer;
+    border-radius: 14px 18px 12px 20px;
+    transform: rotate(-0.3deg); box-shadow: 2px 2px 0 rgba(0,0,0,.15);
+    color: var(--ink); transition: all .1s;
+  }
+  .tab:nth-child(even) { transform: rotate(0.4deg); }
+  .tab:hover { background: #fff7d6; }
+  .tab.active { background: var(--ink); color: var(--paper); }
+  .tab small { display: block; font-weight: 400; font-size: 11px; opacity: .75; margin-top: 1px; }
+
+  .panel { display: none; max-width: 1320px; margin: 0 auto; }
+  .panel.active { display: block; }
+
+  .panel-caption { font-family: 'Caveat'; font-size: 28px; margin: 0 0 4px; }
+  .panel-desc {
+    font-family: 'Kalam'; color: var(--ink-soft);
+    margin: 0 0 18px; max-width: 960px; line-height: 1.45;
+  }
+  .panel-desc em { background: var(--highlight); font-style: normal; padding: 0 3px; }
+
+  /* ---- App frame ---- */
+  .app {
+    background: var(--paper);
+    border: 2.5px solid var(--ink);
+    border-radius: 6px;
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    min-height: 760px;
+    box-shadow: 4px 4px 0 rgba(0,0,0,.12);
+    overflow: hidden;
+    position: relative;
+  }
+  .side {
+    border-right: 2px dashed var(--ink);
+    padding: 14px 10px; background: #f4f1e8;
+  }
+  .side .logo {
+    font-family: 'Caveat'; font-weight: 700; font-size: 22px;
+    display: flex; align-items: center; gap: 6px;
+    padding: 2px 6px 10px;
+    border-bottom: 1.5px dashed var(--ink); margin-bottom: 10px;
+  }
+  .side .logo .dot {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--ink); color: var(--paper);
+    font-size: 12px; display: grid; place-items: center;
+  }
+  .side ul { list-style: none; margin: 0; padding: 0; font-family: 'Kalam'; font-size: 14px; }
+  .side li {
+    padding: 5px 8px; border-radius: 4px; color: var(--ink-soft);
+    display: flex; align-items: center; gap: 7px;
+  }
+  .side li::before { content: "▢"; font-size: 10px; opacity: .6; }
+  .side li.active {
+    background: #ffe7a8; color: var(--ink); font-weight: 700;
+    border: 1.5px solid var(--ink); transform: rotate(-0.3deg);
+  }
+  .side li.active::before { content: "▶"; color: var(--accent); }
+  .main { padding: 16px 20px; overflow: hidden; }
+  .crumb { font-family: 'Kalam'; font-size: 13px; color: var(--ink-faint); margin-bottom: 6px; }
+  .h1 { font-family: 'Caveat'; font-size: 34px; margin: 0 0 4px; line-height: 1; }
+  .h1-sub { font-family: 'Kalam'; color: var(--ink-soft); font-size: 14px; margin: 0 0 12px; }
+
+  /* ---- Toolbar ---- */
+  .toolbar {
+    display: grid;
+    grid-template-columns: 1.5fr auto auto auto auto;
+    gap: 8px; margin-bottom: 10px; align-items: center;
+  }
+  .search {
+    position: relative;
+    border: 2px solid var(--ink); border-radius: 14px 18px 12px 20px;
+    background: #fff; padding: 8px 10px 8px 36px;
+    font-family: 'Kalam'; font-size: 14px;
+    display: flex; align-items: center;
+  }
+  .search::before {
+    content: "🔍"; position: absolute; left: 10px; top: 50%;
+    transform: translateY(-50%); font-size: 14px;
+  }
+  .search input {
+    border: none; outline: none; background: transparent;
+    font-family: 'Kalam'; font-size: 14px; width: 100%;
+  }
+  .mini-filter {
+    border: 1.5px dashed var(--ink); border-radius: 12px 16px 10px 18px;
+    background: var(--paper); padding: 7px 12px;
+    font-family: 'Kalam'; font-size: 13px; cursor: pointer;
+    display: flex; align-items: center; gap: 6px; white-space: nowrap;
+    color: var(--ink);
+  }
+  .mini-filter:hover { background: #fff7d6; }
+  .mini-filter.on { background: var(--ink); color: var(--paper); border-style: solid; }
+  .mini-filter .count {
+    background: var(--accent); color: #fff; font-weight: 700;
+    font-size: 11px; padding: 0 6px; border-radius: 999px; margin-left: 2px;
+  }
+
+  /* ---- Chip row (active filters) ---- */
+  .chip-row {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    margin: 0 0 10px; min-height: 22px;
+    font-family: 'Kalam'; font-size: 12px;
+  }
+  .filter-chip {
+    border: 1.5px solid var(--ink); background: var(--paper);
+    padding: 2px 8px 2px 10px; border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 6px;
+    transform: rotate(-0.4deg);
+  }
+  .filter-chip:nth-child(even) { transform: rotate(0.5deg); }
+  .filter-chip .x { color: var(--ink-faint); cursor: pointer; font-size: 11px; }
+  .filter-chip b { font-weight: 700; color: var(--accent); }
+  .filter-chip.clear {
+    border-style: dashed; color: var(--ink-faint);
+    cursor: pointer; transform: none;
+  }
+
+  /* ---- View switcher (group mode) ---- */
+  .view-switch {
+    display: inline-flex; border: 1.5px solid var(--ink); border-radius: 12px;
+    overflow: hidden; background: var(--paper);
+  }
+  .view-switch button {
+    border: none; background: transparent;
+    padding: 6px 10px; font-family: 'Kalam'; font-size: 12.5px;
+    cursor: pointer; border-right: 1.5px dashed var(--ink); color: var(--ink);
+  }
+  .view-switch button:last-child { border-right: none; }
+  .view-switch button.on { background: var(--ink); color: var(--paper); font-weight: 700; }
+
+  /* ---- Enhanced table ---- */
+  table.jobs {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    font-family: 'Kalam'; font-size: 13px;
+    overflow: hidden;
+  }
+  table.jobs th {
+    text-align: left;
+    padding: 9px 10px;
+    border-bottom: 2px dashed var(--ink);
+    background: #efece0;
+    font-family: 'Kalam'; font-size: 11.5px;
+    color: var(--ink-soft); font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    white-space: nowrap;
+  }
+  table.jobs th .sort-arrow { color: var(--accent); }
+  table.jobs td {
+    padding: 9px 10px;
+    border-bottom: 1px dashed var(--ink-faint);
+    vertical-align: top;
+  }
+  table.jobs tr:hover td { background: #fffaf0; }
+  table.jobs tr.selected td { background: #fff4d6; }
+  table.jobs tr.group-header td {
+    background: #e9e5d6;
+    font-family: 'Caveat'; font-size: 18px; font-weight: 700;
+    padding: 6px 10px; border-bottom: 2px solid var(--ink);
+    color: var(--ink);
+  }
+  table.jobs tr.group-header td .count {
+    font-family: 'Kalam'; font-size: 11px; color: var(--ink-faint);
+    font-weight: 400; margin-left: 6px;
+  }
+  table.jobs tr.group-header td .quick {
+    float: right; font-family: 'Kalam'; font-size: 11px;
+    color: var(--accent); text-decoration: underline dotted; cursor: pointer;
+    font-weight: 400;
+  }
+
+  .check {
+    width: 16px; height: 16px;
+    border: 2px solid var(--ink); border-radius: 3px;
+    background: var(--paper); display: inline-block; position: relative;
+    cursor: pointer; vertical-align: middle;
+  }
+  tr.selected .check { background: var(--ink); }
+  tr.selected .check::after {
+    content: "✓"; color: #fff; font-size: 12px;
+    position: absolute; top: -3px; left: 1px;
+  }
+
+  .cust-cell b { font-weight: 700; }
+  .cust-sub {
+    font-family: 'Kalam'; font-size: 11.5px; color: var(--ink-faint);
+    line-height: 1.15; margin-top: 1px;
+  }
+  .note-icon {
+    display: inline-block; margin-left: 4px; font-size: 11px;
+    color: var(--amber); cursor: help;
+  }
+
+  /* ---- Tag pills ---- */
+  .tag {
+    display: inline-flex; align-items: center;
+    font-family: 'Kalam'; font-weight: 700; font-size: 10.5px;
+    padding: 1px 7px; border-radius: 999px;
+    border: 1.5px solid; letter-spacing: .03em;
+    margin: 1px 2px 1px 0;
+    white-space: nowrap;
+  }
+  .tag.vip       { background: var(--amber-soft); color: var(--amber); border-color: var(--amber); }
+  .tag.commercial{ background: var(--blue-soft); color: var(--blue); border-color: var(--blue); }
+  .tag.hoa       { background: var(--purple-soft); color: var(--purple); border-color: var(--purple); }
+  .tag.prepaid   { background: var(--green-soft); color: var(--green); border-color: var(--green); }
+  .tag.ladder    { background: var(--red-soft); color: var(--red); border-color: var(--red); }
+  .tag.dog       { background: #fff; color: var(--ink-soft); border-color: var(--ink-soft); border-style: dashed; }
+  .tag.recur     { background: var(--teal-soft); color: var(--teal); border-color: var(--teal); }
+  .tag.gate      { background: #fff; color: var(--ink-soft); border-color: var(--ink-soft); border-style: dashed; }
+
+  .job-type {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px; color: var(--ink-soft);
+    background: #f2efe2;
+    padding: 1px 6px; border-radius: 3px;
+    border: 1px solid var(--ink-faint);
+  }
+  .priority {
+    display: inline-flex; gap: 1px; letter-spacing: -1px;
+    font-size: 12px;
+  }
+  .priority .star.on { color: var(--amber); }
+  .priority .star.off { color: var(--ink-faint); opacity: .4; }
+
+  .week-cell {
+    font-family: 'Kalam'; font-size: 12px; color: var(--ink);
+  }
+  .week-cell small {
+    display: block; font-size: 11px; color: var(--ink-faint);
+  }
+
+  /* ---- Selection tray ---- */
+  .tray {
+    position: sticky; bottom: 0;
+    margin: 12px -20px -16px;
+    background: var(--ink); color: var(--paper);
+    padding: 12px 20px;
+    display: flex; align-items: center; gap: 14px;
+    font-family: 'Kalam'; font-size: 13.5px;
+    border-top: 3px solid var(--accent);
+    box-shadow: 0 -4px 0 rgba(0,0,0,.08);
+    flex-wrap: wrap;
+  }
+  .tray .count-pill {
+    background: var(--accent); color: #fff; font-weight: 700;
+    padding: 3px 11px; border-radius: 999px; font-size: 13px;
+  }
+  .tray .summary { opacity: .78; font-size: 12.5px; }
+  .tray .spacer { flex: 1; }
+  .tray input, .tray select {
+    font-family: 'Kalam'; font-size: 13px;
+    background: #2a2a2a; color: var(--paper);
+    border: 1.5px dashed var(--paper); border-radius: 4px;
+    padding: 5px 8px;
+  }
+  .tray .btn {
+    font-family: 'Kalam'; font-weight: 700;
+    border: 2px solid var(--paper);
+    background: transparent; color: var(--paper);
+    padding: 6px 14px; border-radius: 12px 18px 10px 22px;
+    cursor: pointer; font-size: 13px; transform: rotate(-0.2deg);
+  }
+  .tray .btn:nth-child(even) { transform: rotate(0.3deg); }
+  .tray .btn.primary {
+    background: var(--accent); border-color: var(--accent);
+  }
+
+  /* ---- Flyout (for grouping picker on toolbar) ---- */
+  .fly {
+    position: absolute;
+    background: var(--paper); border: 2px solid var(--ink);
+    border-radius: 6px; padding: 10px 12px;
+    box-shadow: 3px 3px 0 rgba(0,0,0,.12);
+    font-family: 'Kalam'; font-size: 13px;
+    z-index: 20; min-width: 180px; display: none;
+  }
+  .fly.open { display: block; }
+  .fly label { display: flex; gap: 7px; padding: 3px 0; cursor: pointer; align-items: center; }
+  .fly .hd {
+    font-family: 'Caveat'; font-size: 18px; font-weight: 700;
+    margin-bottom: 4px; border-bottom: 1.5px dashed var(--ink-faint); padding-bottom: 3px;
+  }
+
+  /* ---- Side detail panel (for selected customer notes) ---- */
+  .detail-panel {
+    background: var(--paper); border: 2px solid var(--ink);
+    border-radius: 5px 4px 6px 5px;
+    padding: 12px 14px; margin-top: 14px;
+    font-family: 'Kalam'; font-size: 13px;
+    box-shadow: 2px 2px 0 rgba(0,0,0,.08);
+  }
+  .detail-panel h4 {
+    font-family: 'Caveat'; font-size: 22px; margin: 0 0 4px;
+  }
+  .detail-panel .meta {
+    display: grid; grid-template-columns: auto 1fr;
+    column-gap: 10px; row-gap: 3px;
+    color: var(--ink-soft); font-size: 12.5px;
+  }
+  .detail-panel .meta b { color: var(--ink-faint); font-weight: 400; }
+  .detail-panel .notes {
+    margin-top: 8px; padding: 8px 10px;
+    background: #fff7d6; border: 1.5px dashed var(--amber);
+    border-radius: 4px; font-size: 13px; line-height: 1.4;
+  }
+  .detail-panel .notes::before {
+    content: "📝 Notes"; display: block;
+    font-family: 'Caveat'; font-weight: 700; font-size: 15px;
+    color: var(--amber); margin-bottom: 2px;
+  }
+
+  /* ---- Variation 2: grouped board ---- */
+  .week-board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .week-col {
+    background: #fff; border: 2px solid var(--ink);
+    border-radius: 5px 4px 6px 5px;
+    padding: 8px; min-height: 480px;
+    display: flex; flex-direction: column;
+  }
+  .week-col .wk-head {
+    font-family: 'Caveat'; font-size: 22px; font-weight: 700;
+    padding: 2px 4px 6px; border-bottom: 1.5px dashed var(--ink-faint);
+    margin-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .week-col .wk-head small {
+    font-family: 'Kalam'; font-weight: 400; font-size: 11px; color: var(--ink-faint);
+  }
+  .week-col.overdue { background: #fbe1dc; border-color: var(--red); }
+  .week-col.overdue .wk-head { color: var(--red); }
+
+  .job-card {
+    border: 1.5px dashed var(--ink); border-radius: 4px;
+    padding: 7px 8px; margin-bottom: 6px;
+    background: var(--paper); cursor: pointer;
+    position: relative;
+    font-family: 'Kalam'; font-size: 12.5px;
+  }
+  .job-card:hover { background: #fff7d6; }
+  .job-card.selected { background: #fff4d6; border-style: solid; border-color: var(--accent); box-shadow: 2px 2px 0 rgba(0,0,0,.08); }
+  .job-card .row1 {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-weight: 700;
+  }
+  .job-card .row1 .prio { font-size: 11px; color: var(--amber); }
+  .job-card .row2 { color: var(--ink-faint); font-size: 11.5px; margin: 1px 0 3px; }
+  .job-card .row2 .dot { opacity: .4; margin: 0 4px; }
+  .job-card .tags { display: flex; flex-wrap: wrap; gap: 2px; }
+
+  /* ---- Variation 3: map + list ---- */
+  .map-split {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 12px;
+  }
+  .map-box {
+    background: #eef3ed;
+    border: 2px solid var(--ink);
+    border-radius: 5px 4px 6px 5px;
+    min-height: 520px;
+    position: relative; overflow: hidden;
+    background-image:
+      linear-gradient(rgba(58,138,138,.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(58,138,138,.08) 1px, transparent 1px),
+      linear-gradient(135deg, #edf2ed 0%, #e5eee3 100%);
+    background-size: 32px 32px, 32px 32px, 100% 100%;
+  }
+  .map-box .map-label {
+    position: absolute; top: 10px; left: 14px;
+    font-family: 'Caveat'; font-size: 20px;
+    color: var(--ink-soft);
+    background: rgba(255,255,255,.85); padding: 2px 10px;
+    border: 1.5px dashed var(--ink-faint); border-radius: 4px;
+  }
+  .city-cluster {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    font-family: 'Kalam'; text-align: center;
+    cursor: pointer;
+  }
+  .city-cluster .bubble {
+    background: var(--paper); border: 2.5px solid var(--ink);
+    border-radius: 50%;
+    width: 52px; height: 52px;
+    display: grid; place-items: center;
+    font-family: 'Caveat'; font-size: 22px; font-weight: 700;
+    box-shadow: 2px 2px 0 rgba(0,0,0,.18);
+    transform: rotate(-3deg);
+  }
+  .city-cluster.active .bubble {
+    background: var(--accent); color: #fff;
+    transform: rotate(-3deg) scale(1.12);
+  }
+  .city-cluster .cname {
+    font-size: 12px; color: var(--ink); margin-top: 3px;
+    background: #fff; padding: 1px 6px; border-radius: 3px;
+    border: 1px solid var(--ink-faint); display: inline-block;
+  }
+  .city-cluster .pulse {
+    position: absolute; inset: -4px; border-radius: 50%;
+    border: 2px dashed var(--accent); animation: breathe 2s ease-in-out infinite;
+    display: none;
+  }
+  .city-cluster.active .pulse { display: block; }
+  @keyframes breathe {
+    0%,100% { transform: scale(1); opacity: .8; }
+    50%     { transform: scale(1.2); opacity: .3; }
+  }
+  .route-line {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+
+  .list-side {
+    display: flex; flex-direction: column;
+    max-height: 520px;
+  }
+  .list-side .sticky-head {
+    background: #efece0; border: 2px solid var(--ink); border-bottom: none;
+    border-radius: 5px 4px 0 0;
+    padding: 8px 12px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'Caveat'; font-size: 20px; font-weight: 700;
+  }
+  .list-side .sticky-head small {
+    font-family: 'Kalam'; font-size: 11.5px; color: var(--ink-faint);
+    font-weight: 400;
+  }
+  .list-side .list-body {
+    background: var(--paper); border: 2px solid var(--ink); border-top: 1.5px dashed var(--ink);
+    border-radius: 0 0 6px 5px;
+    padding: 6px; overflow-y: auto; flex: 1;
+  }
+  .list-side .route-footer {
+    background: var(--green-soft); border: 1.5px dashed var(--green);
+    border-top: none; border-radius: 0 0 6px 5px;
+    padding: 7px 12px; font-family: 'Kalam'; font-size: 12.5px;
+    color: var(--green); display: flex; justify-content: space-between;
+    margin-top: -2px;
+  }
+  .list-side .route-footer b { font-weight: 700; }
+
+  /* ---- Expandable note row ---- */
+  tr.note-row td {
+    background: #fff7d6 !important;
+    border-top: none;
+    padding: 4px 10px 8px 40px;
+    font-family: 'Kalam'; font-size: 12.5px;
+    color: var(--ink-soft); line-height: 1.45;
+  }
+  tr.note-row td::before {
+    content: "↳ "; color: var(--amber); font-weight: 700;
+  }
+
+  /* ---- What-changed caption ---- */
+  .caption-band {
+    font-family: 'Kalam'; font-size: 13px; color: var(--ink-faint);
+    margin: 18px 0 8px;
+    letter-spacing: .04em; display: flex; align-items: center; gap: 6px;
+  }
+  .caption-band::before, .caption-band::after {
+    content: ""; flex: 1; border-top: 1px dashed var(--ink-faint);
+  }
+  .change-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    font-family: 'Kalam'; font-size: 13px;
+  }
+  .change-grid .card {
+    background: var(--paper); border: 2px solid var(--ink);
+    border-radius: 5px 4px 6px 5px; padding: 12px 14px;
+    box-shadow: 2px 2px 0 rgba(0,0,0,.08);
+  }
+  .change-grid b {
+    font-family: 'Caveat'; font-size: 19px; display: block; margin-bottom: 2px;
+  }
+
+  /* ---- Tweaks ---- */
+  #tweaks {
+    position: fixed; bottom: 16px; right: 16px;
+    width: 270px; background: var(--paper);
+    border: 2.5px solid var(--ink); border-radius: 8px;
+    padding: 12px 14px;
+    box-shadow: 4px 4px 0 rgba(0,0,0,.15);
+    display: none; z-index: 999;
+    font-family: 'Kalam'; font-size: 13px;
+  }
+  #tweaks.active { display: block; }
+  #tweaks h4 { font-family: 'Caveat'; font-size: 22px; margin: 0 0 8px; }
+  .tw-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 5px 0; border-top: 1px dashed var(--ink-faint); gap: 8px;
+  }
+  .tw-row:first-of-type { border-top: none; }
+  .tw-row select, .tw-row input {
+    font-family: 'Kalam'; font-size: 13px;
+    border: 1.5px solid var(--ink); border-radius: 4px;
+    padding: 2px 4px; background: var(--paper);
+  }
+
+  /* ---- Callouts ---- */
+  .callouts { position: relative; }
+  .callout {
+    position: absolute; font-family: 'Caveat';
+    font-size: 15px; color: var(--accent);
+    line-height: 1.1; pointer-events: none;
+    max-width: 180px;
+  }
+  .callout .arr { display: block; font-size: 20px; margin-top: -2px; }
+
+  /* ---- v2: sub-tabs ---- */
+  .sub-tabs {
+    display: flex; gap: 6px; margin: 0 0 12px;
+    flex-wrap: wrap;
+  }
+  .sub-tab {
+    font-family: 'Kalam'; font-size: 13px; font-weight: 700;
+    padding: 6px 12px; border: 1.5px dashed var(--ink);
+    background: var(--paper); cursor: pointer; color: var(--ink);
+    border-radius: 10px 14px 8px 16px;
+  }
+  .sub-tab:hover { background: #fff7d6; }
+  .sub-tab.active { background: var(--accent); color: #fff; border-style: solid; border-color: var(--ink); }
+  .sub-panel { display: none; }
+  .sub-panel.active { display: block; }
+  .sub-desc {
+    font-family: 'Kalam'; color: var(--ink-soft);
+    font-size: 14px; margin: 0 0 12px; max-width: 920px; line-height: 1.45;
+  }
+  .sub-desc em { background: var(--highlight); font-style: normal; padding: 0 3px; }
+
+  /* ---- v2: cascading flyout ---- */
+  .cascade-fly {
+    position: absolute;
+    background: var(--paper); border: 2px solid var(--ink);
+    border-radius: 6px;
+    box-shadow: 4px 4px 0 rgba(0,0,0,.15);
+    display: none;
+    z-index: 30;
+    grid-template-columns: 180px 220px;
+    font-family: 'Kalam'; font-size: 13px;
+    top: 210px; left: 275px;
+    overflow: hidden;
+  }
+  .cascade-fly.open { display: grid; }
+  .casc-col { padding: 8px 10px; }
+  .casc-col.secondary { border-left: 1.5px dashed var(--ink); background: #fdfbf2; }
+  .casc-hd {
+    font-family: 'Caveat'; font-size: 18px; font-weight: 700;
+    margin-bottom: 4px; border-bottom: 1.5px dashed var(--ink-faint); padding-bottom: 3px;
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .casc-actions {
+    font-family: 'Kalam'; font-size: 11px; font-weight: 400;
+    color: var(--ink-faint);
+  }
+  .casc-actions a {
+    color: var(--accent); cursor: pointer; text-decoration: underline dotted;
+  }
+  .casc-opt {
+    padding: 4px 8px; border-radius: 4px; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+    color: var(--ink-soft);
+  }
+  .casc-opt:hover { background: #fff7d6; color: var(--ink); }
+  .casc-opt.on {
+    background: var(--ink); color: var(--paper); font-weight: 700;
+  }
+  .casc-opt .chevron { opacity: .6; }
+  .casc-search {
+    width: 100%; font-family: 'Kalam'; font-size: 12px;
+    border: 1.5px dashed var(--ink-faint); background: #fff;
+    padding: 4px 8px; border-radius: 4px; margin: 3px 0 6px;
+  }
+  .casc-check {
+    display: flex; align-items: center; gap: 6px;
+    padding: 3px 6px; border-radius: 4px; cursor: pointer;
+    font-size: 13px;
+  }
+  .casc-check:hover { background: #fff7d6; }
+  .casc-check.on { background: #fff4d6; }
+  .casc-check input { margin: 0; }
+  .casc-count {
+    margin-left: auto; font-size: 11px; color: var(--ink-faint);
+    background: #efece0; padding: 0 6px; border-radius: 999px;
+    font-weight: 700;
+  }
+  .casc-foot {
+    margin-top: 6px; padding-top: 5px;
+    border-top: 1px dashed var(--ink-faint);
+    font-size: 11.5px; color: var(--ink-soft);
+  }
+  .casc-save {
+    color: var(--accent); cursor: pointer; text-decoration: underline dotted;
+    margin-left: 4px;
+  }
+
+  /* ---- v2: facet rail ---- */
+  .facet-rail {
+    border-right: 2px dashed var(--ink);
+    padding: 12px 10px;
+    background: #f4f1e8;
+    font-family: 'Kalam'; font-size: 13px;
+    overflow-y: auto;
+  }
+  .facet-sec {
+    border-bottom: 1.5px dashed var(--ink-faint);
+    padding: 4px 0 10px;
+    margin-bottom: 8px;
+  }
+  .facet-sec:last-child { border-bottom: none; }
+  .facet-hd {
+    font-family: 'Caveat'; font-size: 18px; font-weight: 700;
+    margin-bottom: 4px; display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .group-mark {
+    font-family: 'Kalam'; font-size: 10.5px; font-weight: 400;
+    color: var(--ink-faint); cursor: pointer;
+    padding: 1px 6px; border-radius: 999px;
+    border: 1px dashed var(--ink-faint);
+  }
+  .group-mark.on {
+    color: var(--accent); border-color: var(--accent);
+    background: #fef6ef; font-weight: 700;
+  }
+  .facet-more {
+    font-family: 'Kalam'; font-size: 12px;
+    color: var(--accent); cursor: pointer;
+    text-decoration: underline dotted;
+    display: inline-block; margin: 4px 6px 0;
+  }
+
+  .group-header.muted td {
+    background: #f4f1e8 !important;
+    font-family: 'Kalam' !important;
+    font-size: 12.5px !important;
+    font-weight: 400 !important;
+  }
+
+  /* ---- v2: app override for 3-col layout ---- */
+  .app { position: relative; }
+  .callouts { position: relative; }
+  .callout {
+    position: absolute; font-family: 'Caveat';
+    font-size: 15px; color: var(--accent);
+    line-height: 1.1; pointer-events: none;
+    max-width: 180px;
+  }
+  .callout .arr { display: block; font-size: 20px; margin-top: -2px; }
+
+  /* ---- Form tab ---- */
+  .form-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+  }
+  .form-card {
+    background: var(--paper); border: 2px solid var(--ink);
+    border-radius: 5px 4px 6px 5px; padding: 14px 16px;
+    box-shadow: 2px 2px 0 rgba(0,0,0,.08);
+  }
+  .form-card h4 {
+    font-family: 'Caveat'; font-size: 22px;
+    margin: 0 0 10px; display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .form-card h4 small {
+    font-family: 'Kalam'; font-size: 11px; color: var(--ink-faint); font-weight: 400;
+  }
+  .field { margin-bottom: 10px; }
+  .field label {
+    display: block;
+    font-family: 'Kalam'; font-size: 11.5px; color: var(--ink-faint);
+    text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px;
+  }
+  .field label .req { color: var(--red); margin-left: 2px; }
+  .field input, .field textarea, .field select {
+    width: 100%;
+    font-family: 'Kalam'; font-size: 13.5px;
+    border: 1.5px solid var(--ink); border-radius: 4px;
+    padding: 6px 8px; background: #fff;
+    color: var(--ink);
+  }
+  .field input.dashed, .field textarea.dashed {
+    border-style: dashed; background: transparent;
+  }
+  .field textarea { min-height: 70px; resize: vertical; }
+  .field .hint {
+    font-family: 'Kalam'; font-size: 11.5px;
+    color: var(--ink-faint); margin-top: 2px; font-style: italic;
+  }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tag-picker {
+    display: flex; flex-wrap: wrap; gap: 5px;
+    padding: 6px; border: 1.5px dashed var(--ink);
+    border-radius: 4px; min-height: 40px; background: #fff;
+  }
+  .tag-picker .tag { cursor: pointer; opacity: .5; }
+  .tag-picker .tag.on { opacity: 1; box-shadow: 1px 1px 0 rgba(0,0,0,.12); }
+  .tag-picker .add {
+    font-family: 'Kalam'; font-size: 12px;
+    color: var(--ink-faint);
+    border: 1.5px dashed var(--ink-faint); padding: 1px 8px;
+    border-radius: 999px; cursor: pointer;
+  }
+  .week-picker {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px;
+  }
+  .week-picker button {
+    font-family: 'Kalam'; font-size: 11.5px;
+    border: 1.5px dashed var(--ink); background: var(--paper);
+    padding: 6px 4px; border-radius: 4px; cursor: pointer;
+    color: var(--ink);
+  }
+  .week-picker button small {
+    display: block; font-size: 10px; color: var(--ink-faint); font-weight: 400;
+  }
+  .week-picker button.on {
+    background: var(--ink); color: var(--paper); border-style: solid;
+  }
+  .week-picker button.on small { color: rgba(255,255,255,.7); }
+  .form-foot {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 14px; padding-top: 12px;
+    border-top: 2px dashed var(--ink);
+  }
+  .form-foot .btn {
+    font-family: 'Kalam'; font-weight: 700; border: 2px solid var(--ink);
+    background: var(--paper); padding: 8px 16px;
+    border-radius: 12px 18px 10px 22px; cursor: pointer;
+    font-size: 14px; transform: rotate(-0.2deg);
+    box-shadow: 2px 2px 0 rgba(0,0,0,.12);
+  }
+  .form-foot .btn:nth-child(even) { transform: rotate(0.3deg); }
+  .form-foot .btn.primary { background: var(--ink); color: var(--paper); }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <p class="eyebrow">Grins CRM · Schedule UX v2 — "Pick Jobs to Schedule"</p>
+  <h1 class="page-title">Group <em>and</em> filter in one control</h1>
+  <p class="page-sub">
+    v1 gave you a Group-by menu with City / Tag / Priority. The question this v2 answers: once
+    you group by City, how do you say <em>“but only these 3 cities”</em>? Or <em>“group by tag,
+    but only show VIP and HOA”</em>? Answer: the Group button becomes a <em>cascading picker</em> —
+    pick the dimension, then narrow within it, without leaving the toolbar.
+  </p>
+</div>
+
+<div class="tabs" id="tabs">
+  <button class="tab active" data-panel="combo1">★ Combo 1 — unified tray<small>all columns + cascading picker + tray</small></button>
+  <button class="tab" data-panel="combo3">★ Combo 3 — persistent tray<small>scheduling tray always visible</small></button>
+  <button class="tab" data-panel="cascade">ⓐ Cascading picker<small>group → narrow, one control</small></button>
+  <button class="tab" data-panel="table">① Enhanced table<small>v1 — plain group-by</small></button>
+  <button class="tab" data-panel="board">② Week board<small>requested-week swim lanes</small></button>
+  <button class="tab" data-panel="map">③ Map + list<small>route-aware assignment</small></button>
+  <button class="tab" data-panel="form">④ Add Job form<small>captures all fields</small></button>
+</div>
+
+<!-- ============================================================ -->
+<!-- COMBO 1 — Unified tray                                        -->
+<!-- ============================================================ -->
+<section class="panel active" id="panel-combo1">
+  <h2 class="panel-caption">★ Combo 1 — full table + cascading group + unified tray</h2>
+  <p class="panel-desc">
+    Every enhanced column — <em>notes, tags, job type, requested, priority, duration, equipment</em> —
+    plus the cascading <b>Group</b> button on the toolbar, plus a persistent scheduling tray
+    with calendar popover, staff picker, default duration, and per-job time adjustments.
+  </p>
+
+  <div class="app">
+    <aside class="side">
+      <div class="logo"><span class="dot">G</span>Grins CRM</div>
+      <ul>
+        <li>Dashboard</li><li>Leads</li><li>Sales</li><li>Customers</li>
+        <li>Jobs</li><li class="active">Schedule</li><li>Invoices</li>
+      </ul>
+    </aside>
+
+    <div class="main" style="position:relative;">
+      <div class="crumb">Schedule / <b style="color:var(--ink)">Pick Jobs to Schedule</b></div>
+      <h2 class="h1">Pick Jobs to Schedule</h2>
+      <p class="h1-sub">All fields visible · group from the toolbar · schedule below.</p>
+
+      <div class="toolbar" style="grid-template-columns: 1.5fr auto auto;">
+        <label class="search"><input id="c1Search" placeholder="Search customer, address, phone, notes…" /></label>
+        <button class="mini-filter cascade-btn" id="c1GroupBtn">📂 Group: <b id="c1GroupLbl">None</b> ▾</button>
+        <button class="mini-filter" id="c1Reset">Reset</button>
+      </div>
+
+      <!-- Cascading flyout -->
+      <div class="cascade-fly" id="c1Cascade"></div>
+
+      <div class="chip-row" id="c1Chips" style="margin-top: 8px; min-height:22px;"></div>
+
+      <div class="c1-table-wrap">
+        <table class="jobs" id="c1Table">
+          <thead>
+            <tr>
+              <th style="width:28px;"><span class="check"></span></th>
+              <th>Customer</th>
+              <th>Job Type</th>
+              <th>Tags</th>
+              <th>City</th>
+              <th>Requested</th>
+              <th>Prio</th>
+              <th>Dur.</th>
+              <th>Equipment</th>
+            </tr>
+          </thead>
+          <tbody id="c1Body"></tbody>
+        </table>
+      </div>
+
+      <!-- Scheduling tray -->
+      <div class="sched-tray" style="margin-top:14px;">
+        <div class="sched-row">
+          <label class="sched-field">
+            <span>Date</span>
+            <button class="date-btn" id="c1DateBtn">
+              <span id="c1DateLbl">04 / 27 / 2026</span> 📅
+            </button>
+            <div class="cal-pop" id="c1CalPop" style="display:none;"></div>
+          </label>
+          <label class="sched-field">
+            <span>Staff Member</span>
+            <select id="c1Staff">
+              <option value="">Select staff…</option>
+              <option>Maria Gonzalez</option>
+              <option>Jordan Reeves</option>
+              <option>Sam Chen</option>
+              <option>Ty Williams</option>
+            </select>
+          </label>
+          <label class="sched-field">
+            <span>Start Time</span>
+            <input type="text" id="c1Start" value="08 : 00 AM" />
+          </label>
+          <label class="sched-field">
+            <span>Default Duration (min)</span>
+            <input type="number" id="c1Dur" value="60" />
+          </label>
+        </div>
+
+        <div class="sched-toggle collapsed" id="c1PjtToggle">
+          <span class="sched-chev">▾</span> Per-job time adjustments
+        </div>
+        <table class="pjt-table" id="c1Pjt">
+          <thead>
+            <tr><th>Customer</th><th>Job Type</th><th>Start</th><th>End</th></tr>
+          </thead>
+          <tbody id="c1PjtBody"></tbody>
+        </table>
+
+        <div class="sched-foot">
+          <span class="sched-count" id="c1Count">0 jobs selected</span>
+          <button class="sched-assign" id="c1Assign">📅 Assign 0 Jobs</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="caption-band">Why unified</p>
+  <div class="change-grid" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="card"><b>Nothing hidden</b> All columns + all scheduling controls on one screen. No modal, no nav away.</div>
+    <div class="card"><b>Tray always visible</b> Schedulers see the date and duration while they browse, so selections feel immediate.</div>
+    <div class="card"><b>Cascading group stays</b> One button for group+filter, preserving the power of sub-A.</div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!-- COMBO 3 — Slide-up drawer                                     -->
+<!-- ============================================================ -->
+<section class="panel" id="panel-combo3">
+  <h2 class="panel-caption">★ Combo 3 — full table + persistent scheduling tray</h2>
+  <p class="panel-desc">
+    Same enhanced table + cascading group, with a scheduling tray <b>pinned to the
+    bottom of the page at all times</b>. Fill in date / staff / time upfront, tick jobs,
+    hit Assign. No mode switch, no reveal — the controls are always where you expect.
+  </p>
+
+  <div class="app" style="grid-template-columns: 180px 220px 1fr;">
+    <aside class="side">
+      <div class="logo"><span class="dot">G</span>Grins CRM</div>
+      <ul>
+        <li>Dashboard</li><li>Leads</li><li>Sales</li><li>Customers</li>
+        <li>Jobs</li><li class="active">Schedule</li><li>Invoices</li>
+      </ul>
+    </aside>
+
+    <aside class="facet-rail" id="c3Rail"></aside>
+
+    <div class="main" style="position:relative;">
+      <div class="crumb">Schedule / <b style="color:var(--ink)">Pick Jobs to Schedule</b></div>
+      <h2 class="h1">Pick Jobs to Schedule</h2>
+      <p class="h1-sub">Browse freely. Facet rail on the left narrows · scheduling tray pinned below.</p>
+
+      <div class="toolbar" style="grid-template-columns: 1.5fr auto;">
+        <label class="search"><input id="c3Search" placeholder="Search customer, address, phone, notes…" /></label>
+        <button class="mini-filter" id="c3Reset">Reset</button>
+      </div>
+
+      <div class="chip-row" id="c3Chips" style="margin-top: 8px; min-height:22px;"></div>
+
+      <div class="c3-table-wrap" id="c3TableWrap">
+        <table class="jobs" id="c3Table">
+          <thead>
+            <tr>
+              <th style="width:28px;"><span class="check"></span></th>
+              <th>Customer</th>
+              <th>Job Type</th>
+              <th>Tags</th>
+              <th>City</th>
+              <th>Requested</th>
+              <th>Prio</th>
+              <th>Dur.</th>
+              <th>Equipment</th>
+            </tr>
+          </thead>
+          <tbody id="c3Body"></tbody>
+        </table>
+      </div>
+
+      <!-- Persistent scheduling tray -->
+      <div class="drawer" id="c3Drawer">
+        <div class="drawer-handle">
+          <span class="drawer-title">Schedule <span id="c3DrawerCount">0</span> jobs</span>
+        </div>
+        <div class="sched-row">
+          <label class="sched-field">
+            <span>Date</span>
+            <button class="date-btn" id="c3DateBtn">
+              <span id="c3DateLbl">04 / 27 / 2026</span> 📅
+            </button>
+            <div class="cal-pop" id="c3CalPop" style="display:none;"></div>
+          </label>
+          <label class="sched-field">
+            <span>Staff Member</span>
+            <select id="c3Staff">
+              <option value="">Select staff…</option>
+              <option>Maria Gonzalez</option>
+              <option>Jordan Reeves</option>
+              <option>Sam Chen</option>
+              <option>Ty Williams</option>
+            </select>
+          </label>
+          <label class="sched-field">
+            <span>Start Time</span>
+            <input type="text" id="c3Start" value="08 : 00 AM" />
+          </label>
+          <label class="sched-field">
+            <span>Default Duration (min)</span>
+            <input type="number" id="c3Dur" value="60" />
+          </label>
+        </div>
+        <div class="sched-toggle collapsed" id="c3PjtToggle">
+          <span class="sched-chev">▾</span> Per-job time adjustments
+        </div>
+        <table class="pjt-table" id="c3Pjt">
+          <thead><tr><th>Customer</th><th>Job Type</th><th>Start</th><th>End</th></tr></thead>
+          <tbody id="c3PjtBody"></tbody>
+        </table>
+        <div class="sched-foot">
+          <span class="sched-count" id="c3Count">0 jobs selected</span>
+          <button class="sched-assign" id="c3Assign">📅 Assign 0 Jobs</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="caption-band">Why a persistent tray</p>
+  <div class="change-grid" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="card"><b>Set context first</b> Date, staff and start time stay visible the whole time you're picking jobs.</div>
+    <div class="card"><b>No hidden state</b> Nothing pops in or out — the scheduling controls are always where your eyes are.</div>
+    <div class="card"><b>Predictable flow</b> Pick a day, pick some jobs, hit Assign. Same shape every time.</div>
+  </div>
+</section>
+
+
+<!-- ============================================================ -->
+<!-- PANEL A — Cascading picker (NEW in v2)                        -->
+<!-- ============================================================ -->
+<section class="panel" id="panel-cascade">
+  <h2 class="panel-caption">ⓐ Group <em>and</em> filter together — three options</h2>
+  <p class="panel-desc">
+    Same picker, same rows. What changes is the <b>Group</b> control on the toolbar. Each
+    option below solves the same problem — <em>once you pick a grouping dimension, how do
+    you narrow within it?</em> — in a different way. Switch between them with the sub-tabs.
+  </p>
+
+  <div class="sub-tabs" id="subTabs">
+    <button class="sub-tab active" data-sub="A">A — Cascading dropdown</button>
+    <button class="sub-tab" data-sub="B">B — Split group + filter chips</button>
+    <button class="sub-tab" data-sub="C">C — Facet rail (sidebar)</button>
+  </div>
+
+  <!-- ====================== OPTION A ======================= -->
+  <div class="sub-panel active" id="sub-A">
+    <p class="sub-desc">
+      Click <b>Group</b>: first column is <em>dimension</em> (City, Tag, Type, Priority).
+      Hover a dimension — a second column appears with checkboxes: <em>which cities, which tags,</em>
+      etc. Pick one dimension, narrow as much as you like. The button label summarizes both.
+    </p>
+
+    <div class="app">
+      <aside class="side">
+        <div class="logo"><span class="dot">G</span>Grins CRM</div>
+        <ul>
+          <li>Dashboard</li><li>Leads</li><li>Sales</li><li>Customers</li>
+          <li>Jobs</li><li class="active">Schedule</li><li>Invoices</li>
+        </ul>
+      </aside>
+
+      <div class="main callouts">
+        <div class="crumb">Schedule / <b style="color:var(--ink)">Pick Jobs to Schedule</b></div>
+        <h2 class="h1">Pick Jobs to Schedule</h2>
+        <p class="h1-sub">Group button now doubles as a filter.</p>
+
+        <div class="toolbar">
+          <label class="search"><input placeholder="Search customer, address, phone, notes…" /></label>
+          <button class="mini-filter on cascade-btn">
+            📂 Group: <b>City</b> · <span style="color: var(--amber);">3 of 8</span> ▾
+          </button>
+          <button class="mini-filter">📅 Week</button>
+          <button class="mini-filter">🛠 Type</button>
+        </div>
+
+        <!-- Cascading flyout -->
+        <div class="cascade-fly open">
+          <div class="casc-col primary">
+            <div class="casc-hd">Group by</div>
+            <div class="casc-opt">None (flat list)</div>
+            <div class="casc-opt">Requested week<span class="chevron">›</span></div>
+            <div class="casc-opt on">City<span class="chevron">›</span></div>
+            <div class="casc-opt">Customer</div>
+            <div class="casc-opt">Job type<span class="chevron">›</span></div>
+            <div class="casc-opt">Tag<span class="chevron">›</span></div>
+            <div class="casc-opt">Priority<span class="chevron">›</span></div>
+          </div>
+          <div class="casc-col secondary">
+            <div class="casc-hd">
+              Show cities
+              <span class="casc-actions">
+                <a>all</a> · <a>none</a>
+              </span>
+            </div>
+            <input class="casc-search" placeholder="🔍 filter cities…" />
+            <label class="casc-check on">
+              <input type="checkbox" checked> Golden Valley
+              <span class="casc-count">3</span>
+            </label>
+            <label class="casc-check on">
+              <input type="checkbox" checked> Plymouth
+              <span class="casc-count">3</span>
+            </label>
+            <label class="casc-check">
+              <input type="checkbox"> Carver
+              <span class="casc-count">2</span>
+            </label>
+            <label class="casc-check on">
+              <input type="checkbox" checked> Wayzata
+              <span class="casc-count">1</span>
+            </label>
+            <label class="casc-check">
+              <input type="checkbox"> Maple Grove
+              <span class="casc-count">1</span>
+            </label>
+            <label class="casc-check">
+              <input type="checkbox"> Minnetonka
+              <span class="casc-count">2</span>
+            </label>
+            <label class="casc-check">
+              <input type="checkbox"> Minneapolis
+              <span class="casc-count">1</span>
+            </label>
+            <label class="casc-check">
+              <input type="checkbox"> Eden Prairie
+              <span class="casc-count">1</span>
+            </label>
+            <label class="casc-check">
+              <input type="checkbox"> Hamel
+              <span class="casc-count">1</span>
+            </label>
+            <div class="casc-foot">
+              <b>3 of 8</b> selected ·
+              <span class="casc-save">save as preset</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chip row -->
+        <div class="chip-row" style="margin-top: 8px;">
+          <span style="margin-left:auto; color:var(--ink-faint); font-size:12px;">
+            Showing 7 of 47 jobs · grouped by city (3 of 8)
+          </span>
+        </div>
+
+        <table class="jobs">
+          <thead>
+            <tr>
+              <th style="width:28px;"><span class="check"></span></th>
+              <th>Customer</th>
+              <th>Job Type</th>
+              <th>Tags</th>
+              <th>Requested</th>
+              <th>Prio</th>
+              <th>Dur.</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="group-header"><td colspan="7">Golden Valley <span class="count">3 jobs</span><span class="quick">select all 3 →</span></td></tr>
+            <tr><td><span class="check"></span></td><td class="cust-cell"><b>Cinda Baxter</b><span class="note-icon">📝</span><div class="cust-sub">1842 Harold Ave</div></td><td><span class="job-type">fall_winterization</span></td><td><span class="tag vip">VIP</span><span class="tag prepaid">PREPAID</span></td><td class="week-cell">Wk of Apr 27</td><td><span class="priority"><span class="star on">★</span></span></td><td>60m</td></tr>
+            <tr><td><span class="check"></span></td><td class="cust-cell"><b>Cinda Baxter</b><div class="cust-sub">1842 Harold Ave</div></td><td><span class="job-type">mid_season_inspection</span></td><td><span class="tag vip">VIP</span><span class="tag prepaid">PREPAID</span></td><td class="week-cell">Wk of Apr 27</td><td><span class="priority"><span class="star on">★</span></span></td><td>60m</td></tr>
+            <tr><td><span class="check"></span></td><td class="cust-cell"><b>Cinda Baxter</b><div class="cust-sub">1842 Harold Ave</div></td><td><span class="job-type">spring_startup</span></td><td><span class="tag vip">VIP</span><span class="tag prepaid">PREPAID</span></td><td class="week-cell">Wk of May 4</td><td><span class="priority"><span class="star on">★</span></span></td><td>60m</td></tr>
+
+            <tr class="group-header"><td colspan="7">Plymouth <span class="count">3 jobs</span><span class="quick">select all 3 →</span></td></tr>
+            <tr><td><span class="check"></span></td><td class="cust-cell"><b>Kaylee Traynor</b><div class="cust-sub">611 Vicksburg Ln</div></td><td><span class="job-type">spring_startup</span></td><td><span class="tag commercial">COMMERCIAL</span></td><td class="week-cell">Wk of Apr 27</td><td><span class="priority"><span class="star off">★</span></span></td><td>60m</td></tr>
+            <tr><td><span class="check"></span></td><td class="cust-cell"><b>Kaylee Traynor</b><div class="cust-sub">611 Vicksburg Ln</div></td><td><span class="job-type">fall_winterization</span></td><td><span class="tag commercial">COMMERCIAL</span></td><td class="week-cell">Wk of Oct 12</td><td><span class="priority"><span class="star off">★</span></span></td><td>60m</td></tr>
+            <tr><td><span class="check"></span></td><td class="cust-cell"><b>Michael Carey</b><div class="cust-sub">14220 34th Ave N</div></td><td><span class="job-type">mid_season_inspection</span></td><td><span class="tag hoa">HOA</span><span class="tag ladder">LADDER</span></td><td class="week-cell">Wk of Apr 27</td><td><span class="priority"><span class="star on">★</span></span></td><td>90m</td></tr>
+
+            <tr class="group-header"><td colspan="7">Wayzata <span class="count">1 job</span></td></tr>
+            <tr><td><span class="check"></span></td><td class="cust-cell"><b>Mike Funk</b><div class="cust-sub">220 Lake St E</div></td><td><span class="job-type">fall_winterization</span></td><td><span class="tag vip">VIP</span></td><td class="week-cell">Wk of Apr 27</td><td><span class="priority"><span class="star off">★</span></span></td><td>60m</td></tr>
+
+            <tr class="group-header muted"><td colspan="7" style="color: var(--ink-faint); font-style: italic;">Carver, Maple Grove, Minnetonka, Minneapolis, Eden Prairie, Hamel <span class="count">hidden · 8 jobs</span><span class="quick">+ include all →</span></td></tr>
+          </tbody>
+        </table>
+
+        <!-- Scheduling tray ============================================ -->
+        <div class="sched-tray">
+          <div class="sched-row">
+            <label class="sched-field">
+              <span>Date</span>
+              <input type="text" value="04 / 27 / 2026" />
+              <span class="sched-ic">📅</span>
+            </label>
+            <label class="sched-field">
+              <span>Staff Member</span>
+              <select>
+                <option>Select staff…</option>
+                <option>Maria Gonzalez</option>
+                <option selected>Jordan Reeves</option>
+                <option>Sam Chen</option>
+                <option>Ty Williams</option>
+              </select>
+            </label>
+            <label class="sched-field">
+              <span>Start Time</span>
+              <input type="text" value="08 : 00 AM" />
+            </label>
+            <label class="sched-field">
+              <span>Default Duration (min)</span>
+              <input type="number" value="60" />
+            </label>
+          </div>
+
+          <div class="sched-toggle" id="pjtToggle">
+            <span class="sched-chev">▾</span> Per-job time adjustments
+          </div>
+
+          <table class="pjt-table">
+            <thead>
+              <tr><th>Customer</th><th>Job Type</th><th>Start</th><th>End</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Cinda Baxter</td>
+                <td><span class="job-type">fall_winterization</span></td>
+                <td><span class="time-pill">08 : 00 AM</span></td>
+                <td><span class="time-pill">09 : 00 AM</span></td>
+              </tr>
+              <tr>
+                <td>Kaylee Traynor</td>
+                <td><span class="job-type">spring_startup</span></td>
+                <td><span class="time-pill">09 : 00 AM</span></td>
+                <td><span class="time-pill">10 : 00 AM</span></td>
+              </tr>
+              <tr>
+                <td>Mike Funk</td>
+                <td><span class="job-type">fall_winterization</span></td>
+                <td><span class="time-pill">10 : 00 AM</span></td>
+                <td><span class="time-pill">11 : 00 AM</span></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="sched-foot">
+            <span class="sched-count">3 jobs selected</span>
+            <button class="sched-assign">📅  Assign 3 Jobs</button>
+          </div>
+        </div>
+        <!-- /Scheduling tray =========================================== -->
+
+        <div class="callout" style="top: 238px; left: 395px;">
+          pick dimension→<br>narrow within it<br><span class="arr">↙</span>
+        </div>
+        <div class="callout" style="top: 332px; left: 620px; color: var(--blue);">
+          counts show→<br>how many jobs<br>each city has
+        </div>
+      </div>
+    </div>
+
+    <p class="caption-band">Why cascading</p>
+    <div class="change-grid" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="card"><b>One button, two jobs</b> Group + filter collapse into one control. The toolbar doesn't grow every time you add a dimension.</div>
+      <div class="card"><b>Counts shown inline</b> You see <em>3 jobs in Golden Valley</em> before committing. No empty groups ever.</div>
+      <div class="card"><b>Save as preset</b> "My west-metro route" = City grouped + 4 cities checked. Preset becomes a one-click chip for next time.</div>
+    </div>
+  </div>
+
+  <!-- ====================== OPTION B ======================= -->
+  <div class="sub-panel" id="sub-B">
+    <p class="sub-desc">
+      Keep the <b>Group</b> button simple (just picks a dimension). Beside it, a second control
+      <b>Filter · City / Tag / Type</b> opens multi-select pickers. Active picks render as chips
+      below. Clean separation: grouping reshapes, filtering hides.
+    </p>
+
+    <div class="app">
+      <aside class="side">
+        <div class="logo"><span class="dot">G</span>Grins CRM</div>
+        <ul>
+          <li>Dashboard</li><li>Leads</li><li>Sales</li><li>Customers</li>
+          <li>Jobs</li><li class="active">Schedule</li>
+        </ul>
+      </aside>
+      <div class="main">
+        <div class="crumb">Schedule / Pick Jobs</div>
+        <h2 class="h1">Pick Jobs to Schedule</h2>
+        <p class="h1-sub">Group and filter are separate, composable controls.</p>
+
+        <div class="toolbar">
+          <label class="search"><input placeholder="Search…" /></label>
+          <button class="mini-filter on">📂 Group: <b>City</b> ▾</button>
+          <button class="mini-filter on">🏙 City: <b>3</b> ▾</button>
+          <button class="mini-filter on">🏷 Tags: <b>2</b> ▾</button>
+          <button class="mini-filter">🛠 Type</button>
+          <button class="mini-filter">📅 Week</button>
+        </div>
+
+        <!-- Open multi-select for City -->
+        <div class="cascade-fly open" style="left: 372px; top: 196px; grid-template-columns: 1fr;">
+          <div class="casc-col secondary" style="border-left: none;">
+            <div class="casc-hd">Include cities <span class="casc-actions"><a>all</a> · <a>none</a></span></div>
+            <input class="casc-search" placeholder="🔍 filter…" />
+            <label class="casc-check on"><input type="checkbox" checked> Golden Valley <span class="casc-count">3</span></label>
+            <label class="casc-check on"><input type="checkbox" checked> Plymouth <span class="casc-count">3</span></label>
+            <label class="casc-check on"><input type="checkbox" checked> Wayzata <span class="casc-count">1</span></label>
+            <label class="casc-check"><input type="checkbox"> Carver <span class="casc-count">2</span></label>
+            <label class="casc-check"><input type="checkbox"> Maple Grove <span class="casc-count">1</span></label>
+            <label class="casc-check"><input type="checkbox"> Minnetonka <span class="casc-count">2</span></label>
+          </div>
+        </div>
+
+        <div class="chip-row" style="margin-top: 8px;">
+          <span class="filter-chip">🏙 <b>Golden Valley</b> <span class="x">✕</span></span>
+          <span class="filter-chip">🏙 <b>Plymouth</b> <span class="x">✕</span></span>
+          <span class="filter-chip">🏙 <b>Wayzata</b> <span class="x">✕</span></span>
+          <span class="filter-chip">🏷 Tag: <b>VIP</b> <span class="x">✕</span></span>
+          <span class="filter-chip">🏷 Tag: <b>Commercial</b> <span class="x">✕</span></span>
+          <span class="filter-chip clear">clear filters</span>
+          <span style="margin-left:auto; color:var(--ink-faint); font-size:12px;">
+            7 of 47 jobs · 3 groups
+          </span>
+        </div>
+
+        <table class="jobs">
+          <thead><tr><th style="width:28px;"><span class="check"></span></th><th>Customer</th><th>Job Type</th><th>Tags</th><th>Requested</th><th>Prio</th><th>Dur.</th></tr></thead>
+          <tbody>
+            <tr class="group-header"><td colspan="7">Golden Valley <span class="count">3 jobs</span></td></tr>
+            <tr><td><span class="check"></span></td><td class="cust-cell"><b>Cinda Baxter</b><div class="cust-sub">1842 Harold Ave</div></td><td><span class="job-type">fall_winterization</span></td><td><span class="tag vip">VIP</span><span class="tag prepaid">PREPAID</span></td><td class="week-cell">Apr 27</td><td><span class="priority"><span class="star on">★</span></span></td><td>60m</td></tr>
+            <tr><td><span class="check"></span></td><td class="cust-cell"><b>Cinda Baxter</b><div class="cust-sub">1842 Harold Ave</div></td><td><span class="job-type">mid_season_inspection</span></td><td><span class="tag vip">VIP</span><span class="tag prepaid">PREPAID</span></td><td class="week-cell">Apr 27</td><td><span class="priority"><span class="star on">★</span></span></td><td>60m</td></tr>
+            <tr class="group-header"><td colspan="7">Plymouth <span class="count">1 job matches filters</span></td></tr>
+            <tr><td><span class="check"></span></td><td class="cust-cell"><b>Kaylee Traynor</b><div class="cust-sub">611 Vicksburg Ln</div></td><td><span class="job-type">spring_startup</span></td><td><span class="tag commercial">COMMERCIAL</span></td><td class="week-cell">Apr 27</td><td><span class="priority"><span class="star off">★</span></span></td><td>60m</td></tr>
+            <tr class="group-header"><td colspan="7">Wayzata <span class="count">1 job</span></td></tr>
+            <tr><td><span class="check"></span></td><td class="cust-cell"><b>Mike Funk</b><div class="cust-sub">220 Lake St E</div></td><td><span class="job-type">fall_winterization</span></td><td><span class="tag vip">VIP</span></td><td class="week-cell">Apr 27</td><td><span class="priority"><span class="star off">★</span></span></td><td>60m</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="caption-band">Why split</p>
+    <div class="change-grid" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="card"><b>Conceptually cleaner</b> Group = reshape, Filter = hide. Two verbs, two buttons. Easy to teach.</div>
+      <div class="card"><b>Compose freely</b> Group by City, filter by Tag. Or group by Tag, filter by City. Any combination works.</div>
+      <div class="card"><b>Chips = audit trail</b> Active filters always visible. One-click to remove. No hidden state.</div>
+    </div>
+  </div>
+
+  <!-- ====================== OPTION C (LIVE) ======================= -->
+  <div class="sub-panel" id="sub-C-legacy" style="display:none;">
+    <p class="sub-desc">
+      Left <b>facet rail</b> — like email filters. Every dimension shown at once with counts:
+      Cities, Tags, Types, Priorities, Weeks. Click to narrow. Dimension with an active
+      <span style="color:var(--accent);">● group</span> marker controls grouping. Scales to
+      many cities.
+    </p>
+
+    <div class="app" style="grid-template-columns: 180px 220px 1fr;">
+      <aside class="side">
+        <div class="logo"><span class="dot">G</span>Grins CRM</div>
+        <ul>
+          <li>Dashboard</li><li>Leads</li><li>Sales</li><li>Customers</li>
+          <li>Jobs</li><li class="active">Schedule</li>
+        </ul>
+      </aside>
+
+      <aside class="facet-rail">
+        <div class="facet-sec">
+          <div class="facet-hd">
+            Cities <span class="group-mark on" title="grouping on">● group</span>
+          </div>
+          <input class="casc-search" placeholder="🔍 filter…" />
+          <label class="casc-check on"><input type="checkbox" checked> Golden Valley <span class="casc-count">3</span></label>
+          <label class="casc-check on"><input type="checkbox" checked> Plymouth <span class="casc-count">3</span></label>
+          <label class="casc-check"><input type="checkbox"> Carver <span class="casc-count">2</span></label>
+          <label class="casc-check on"><input type="checkbox" checked> Wayzata <span class="casc-count">1</span></label>
+          <label class="casc-check"><input type="checkbox"> Maple Grove <span class="casc-count">1</span></label>
+          <label class="casc-check"><input type="checkbox"> Minnetonka <span class="casc-count">2</span></label>
+          <a class="facet-more">+ 3 more</a>
+        </div>
+
+        <div class="facet-sec">
+          <div class="facet-hd">Tags <span class="group-mark">○ make group</span></div>
+          <label class="casc-check on"><input type="checkbox" checked> 🌟 VIP <span class="casc-count">4</span></label>
+          <label class="casc-check"><input type="checkbox"> Commercial <span class="casc-count">3</span></label>
+          <label class="casc-check"><input type="checkbox"> HOA <span class="casc-count">2</span></label>
+          <label class="casc-check"><input type="checkbox"> Needs ladder <span class="casc-count">2</span></label>
+          <label class="casc-check"><input type="checkbox"> Dog on site <span class="casc-count">2</span></label>
+          <label class="casc-check"><input type="checkbox"> Prepaid <span class="casc-count">3</span></label>
+          <label class="casc-check"><input type="checkbox"> Gated <span class="casc-count">2</span></label>
+        </div>
+
+        <div class="facet-sec">
+          <div class="facet-hd">Job type <span class="group-mark">○ make group</span></div>
+          <label class="casc-check"><input type="checkbox"> fall_winterization <span class="casc-count">9</span></label>
+          <label class="casc-check"><input type="checkbox"> mid_season_inspection <span class="casc-count">4</span></label>
+          <label class="casc-check"><input type="checkbox"> spring_startup <span class="casc-count">5</span></label>
+        </div>
+
+        <div class="facet-sec">
+          <div class="facet-hd">Priority</div>
+          <label class="casc-check"><input type="checkbox"> ★ High <span class="casc-count">6</span></label>
+          <label class="casc-check"><input type="checkbox"> Normal <span class="casc-count">8</span></label>
+        </div>
+      </aside>
+
+      <div class="main">
+        <div class="crumb">Schedule / Pick Jobs</div>
+        <h2 class="h1">Pick Jobs to Schedule</h2>
+        <p class="h1-sub">Facet rail on the left — narrow by clicking; click <em>○ make group</em> to reshape.</p>
+
+        <div class="toolbar" style="grid-template-columns: 1.5fr auto auto;">
+          <label class="search"><input placeholder="Search customer, address, notes…" /></label>
+          <button class="mini-filter">Save preset</button>
+          <button class="mini-filter">Reset</button>
+        </div>
+
+        <div class="chip-row" style="margin-top: 4px;">
+          <span style="color: var(--ink-faint); font-size:12px;">
+            Filters: <b style="color:var(--ink);">Cities</b> (3 of 8) · <b style="color:var(--ink);">Tags</b> (VIP) · <b style="color:var(--ink);">Group</b>: Cities
+          </span>
+          <span style="margin-left:auto; color:var(--ink-faint); font-size:12px;">5 of 47 jobs</span>
+        </div>
+
+        <table class="jobs">
+          <thead><tr><th style="width:28px;"><span class="check"></span></th><th>Customer</th><th>Job Type</th><th>Tags</th><th>Req.</th><th>Prio</th></tr></thead>
+          <tbody>
+            <tr class="group-header"><td colspan="6">Golden Valley <span class="count">3 jobs</span></td></tr>
+            <tr><td><span class="check"></span></td><td class="cust-cell"><b>Cinda Baxter</b></td><td><span class="job-type">fall_winterization</span></td><td><span class="tag vip">VIP</span><span class="tag prepaid">PREPAID</span></td><td>Apr 27</td><td>★</td></tr>
+            <tr><td><span class="check"></span></td><td class="cust-cell"><b>Cinda Baxter</b></td><td><span class="job-type">mid_season_inspection</span></td><td><span class="tag vip">VIP</span><span class="tag prepaid">PREPAID</span></td><td>Apr 27</td><td>★</td></tr>
+            <tr><td><span class="check"></span></td><td class="cust-cell"><b>Cinda Baxter</b></td><td><span class="job-type">spring_startup</span></td><td><span class="tag vip">VIP</span><span class="tag prepaid">PREPAID</span></td><td>May 4</td><td>★</td></tr>
+            <tr class="group-header"><td colspan="6">Plymouth <span class="count">1 job matches VIP filter</span></td></tr>
+            <tr><td><span class="check"></span></td><td class="cust-cell"><b>Kaylee Traynor</b></td><td><span class="job-type">spring_startup</span></td><td><span class="tag vip">VIP</span></td><td>Apr 27</td><td>★</td></tr>
+            <tr class="group-header"><td colspan="6">Wayzata <span class="count">1 job</span></td></tr>
+            <tr><td><span class="check"></span></td><td class="cust-cell"><b>Mike Funk</b></td><td><span class="job-type">fall_winterization</span></td><td><span class="tag vip">VIP</span></td><td>Apr 27</td><td>★</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="caption-band">Why a facet rail</p>
+    <div class="change-grid" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="card"><b>Everything visible</b> Nothing hidden in menus. Power users and new users both orient fast.</div>
+      <div class="card"><b>Scales to many cities</b> Long city lists scroll inside the rail without cluttering the top toolbar.</div>
+      <div class="card"><b>Group = one checkbox</b> The ○/● beside a dimension says "group by this one". Swap with one click.</div>
+    </div>
+  </div>
+
+  <!-- ==== LIVE sub-C ==== -->
+  <div class="sub-panel" id="sub-C">
+    <p class="sub-desc">
+      <b>Facet rail — live.</b> Click any checkbox to narrow. Click <em>○ make group</em>
+      beside a dimension to reshape the table. Counts update as you filter.
+    </p>
+
+    <div class="app" style="grid-template-columns: 180px 240px 1fr;">
+      <aside class="side">
+        <div class="logo"><span class="dot">G</span>Grins CRM</div>
+        <ul>
+          <li>Dashboard</li><li>Leads</li><li>Sales</li><li>Customers</li>
+          <li>Jobs</li><li class="active">Schedule</li>
+        </ul>
+      </aside>
+
+      <aside class="facet-rail" id="facetRail">
+        <!-- rendered by JS -->
+      </aside>
+
+      <div class="main">
+        <div class="crumb">Schedule / Pick Jobs</div>
+        <h2 class="h1">Pick Jobs to Schedule</h2>
+        <p class="h1-sub">Every facet visible at once. Group and filter live side-by-side.</p>
+
+        <div class="toolbar" style="grid-template-columns: 1.5fr auto auto auto;">
+          <label class="search"><input id="liveSearch" placeholder="Search customer, address, notes…" /></label>
+          <button class="mini-filter" id="liveReset">Reset</button>
+          <button class="mini-filter">Save preset</button>
+          <button class="primary-btn" id="liveSchedule">Schedule 0</button>
+        </div>
+
+        <div class="chip-row" id="liveChips" style="margin-top:4px; min-height:22px;"></div>
+
+        <table class="jobs" id="liveTable">
+          <thead>
+            <tr>
+              <th style="width:28px;"><span class="check"></span></th>
+              <th>Customer</th><th>City</th><th>Job Type</th><th>Tags</th><th>Req.</th><th>Prio</th>
+            </tr>
+          </thead>
+          <tbody id="liveBody"></tbody>
+        </table>
+        <p id="liveEmpty" style="display:none; font-family:'Kalam'; color:var(--ink-faint); text-align:center; padding: 24px;">
+          No jobs match. Uncheck a filter or click Reset.
+        </p>
+      </div>
+    </div>
+
+    <p class="caption-band">Why a facet rail</p>
+    <div class="change-grid" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="card"><b>Everything visible</b> Nothing hidden in menus. Power users and new users both orient fast.</div>
+      <div class="card"><b>Live counts</b> Each option shows how many jobs match — you see the shape of the data without clicking.</div>
+      <div class="card"><b>Group = one click</b> The ○/● beside a dimension swaps grouping in place. No separate control.</div>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    // ---- DATA ----
+    const JOBS = [
+      {id:1,  cust:'Cinda Baxter',    city:'Golden Valley', type:'fall_winterization',    tags:['vip','prepaid'],     prio:'high',   week:'Apr 27'},
+      {id:2,  cust:'Cinda Baxter',    city:'Golden Valley', type:'mid_season_inspection', tags:['vip','prepaid'],     prio:'high',   week:'Apr 27'},
+      {id:3,  cust:'Cinda Baxter',    city:'Golden Valley', type:'spring_startup',        tags:['vip','prepaid'],     prio:'high',   week:'May 4'},
+      {id:4,  cust:'Kaylee Traynor',  city:'Plymouth',      type:'spring_startup',        tags:['vip'],               prio:'high',   week:'Apr 27'},
+      {id:5,  cust:'Mike Funk',       city:'Wayzata',       type:'fall_winterization',    tags:['vip','ladder'],      prio:'high',   week:'Apr 27'},
+      {id:6,  cust:'Demir Koç',       city:'Plymouth',      type:'spring_startup',        tags:['hoa'],               prio:'normal', week:'May 4'},
+      {id:7,  cust:'Aarav Patel',     city:'Plymouth',      type:'mid_season_inspection', tags:['commercial'],        prio:'normal', week:'May 4'},
+      {id:8,  cust:'Jessie Han',      city:'Carver',        type:'fall_winterization',    tags:['dog','gate'],        prio:'normal', week:'May 11'},
+      {id:9,  cust:'Frank Okafor',    city:'Carver',        type:'spring_startup',        tags:['commercial','gate'], prio:'high',   week:'May 11'},
+      {id:10, cust:'Priya Shah',      city:'Maple Grove',   type:'mid_season_inspection', tags:['hoa'],               prio:'normal', week:'Apr 27'},
+      {id:11, cust:'Dan Ramos',       city:'Minnetonka',    type:'fall_winterization',    tags:['ladder'],            prio:'normal', week:'May 4'},
+      {id:12, cust:'Sarah Liu',       city:'Minnetonka',    type:'spring_startup',        tags:['dog'],               prio:'normal', week:'May 11'},
+      {id:13, cust:'Tom Becker',      city:'Edina',         type:'fall_winterization',    tags:['commercial'],        prio:'high',   week:'Apr 27'},
+      {id:14, cust:'Alma Reyes',      city:'Edina',         type:'mid_season_inspection', tags:[],                    prio:'normal', week:'May 4'},
+      {id:15, cust:'Nikhil Rao',      city:'St. Louis Park',type:'spring_startup',        tags:['prepaid'],           prio:'normal', week:'May 11'},
+      {id:16, cust:'Greta Johansson', city:'St. Louis Park',type:'fall_winterization',    tags:['vip'],               prio:'high',   week:'Apr 27'},
+      {id:17, cust:'Mei Tanaka',      city:'Hopkins',       type:'mid_season_inspection', tags:['gate'],              prio:'normal', week:'May 4'},
+    ];
+    const TAG_LABELS = {
+      vip:'🌟 VIP', commercial:'Commercial', hoa:'HOA',
+      ladder:'Needs ladder', dog:'Dog on site', prepaid:'Prepaid', gate:'Gated'
+    };
+    const TAG_CLASS = {vip:'vip', commercial:'commercial', hoa:'hoa', ladder:'ladder', dog:'dog', prepaid:'prepaid', gate:'gate'};
+    const TYPE_LABEL = {fall_winterization:'fall_winterization', mid_season_inspection:'mid_season_inspection', spring_startup:'spring_startup'};
+    const PRIO_LABEL = {high:'★ High', normal:'Normal'};
+
+    // ---- STATE ----
+    const state = {
+      search: '',
+      selected: new Set(),
+      // each filter dim: Set of values. Empty Set = "all" for that dim.
+      f: { city:new Set(), tag:new Set(), type:new Set(), prio:new Set(), week:new Set() },
+      groupBy: 'city',   // 'city'|'tag'|'type'|'prio'|'week'|'none'
+    };
+
+    // ---- FILTER LOGIC ----
+    function jobMatches(j, excludeDim) {
+      const q = state.search.toLowerCase();
+      if (q && !(j.cust.toLowerCase().includes(q) || j.city.toLowerCase().includes(q) || j.type.toLowerCase().includes(q))) return false;
+      if (excludeDim !== 'city' && state.f.city.size && !state.f.city.has(j.city)) return false;
+      if (excludeDim !== 'tag'  && state.f.tag.size  && !j.tags.some(t => state.f.tag.has(t))) return false;
+      if (excludeDim !== 'type' && state.f.type.size && !state.f.type.has(j.type)) return false;
+      if (excludeDim !== 'prio' && state.f.prio.size && !state.f.prio.has(j.prio)) return false;
+      if (excludeDim !== 'week' && state.f.week.size && !state.f.week.has(j.week)) return false;
+      return true;
+    }
+    function filteredJobs(){ return JOBS.filter(j => jobMatches(j)); }
+
+    // count jobs that would match if we also filtered by {dim:value}, keeping all OTHER filters active
+    function facetCount(dim, value) {
+      return JOBS.filter(j => {
+        if (!jobMatches(j, dim)) return false;
+        if (dim === 'tag') return j.tags.includes(value);
+        return j[dim] === value;
+      }).length;
+    }
+
+    // ---- RENDER RAIL ----
+    const rail = document.getElementById('facetRail');
+    function section(dim, title, values, labelFor) {
+      const isGroup = state.groupBy === dim;
+      const active  = state.f[dim];
+      const rows = values.map(v => {
+        const c = facetCount(dim, v);
+        const on = active.has(v);
+        const dim0 = dim; const v0 = v;
+        return `<label class="casc-check ${on?'on':''} ${c===0?'dim':''}" data-dim="${dim0}" data-val="${v0}">
+          <input type="checkbox" ${on?'checked':''} />
+          ${labelFor(v)} <span class="casc-count">${c}</span>
+        </label>`;
+      }).join('');
+      return `<div class="facet-sec">
+        <div class="facet-hd">
+          ${title}
+          <span class="group-mark ${isGroup?'on':''}" data-group="${dim}" title="${isGroup?'grouping on':'click to group'}">
+            ${isGroup ? '● group' : '○ make group'}
+          </span>
+        </div>
+        ${rows}
+      </div>`;
+    }
+
+    function renderRail() {
+      const cities = [...new Set(JOBS.map(j=>j.city))].sort();
+      const tags   = ['vip','commercial','hoa','ladder','dog','prepaid','gate'];
+      const types  = [...new Set(JOBS.map(j=>j.type))];
+      const prios  = ['high','normal'];
+      const weeks  = [...new Set(JOBS.map(j=>j.week))];
+
+      rail.innerHTML =
+        section('city','Cities',   cities, v=>v) +
+        section('tag', 'Tags',     tags,   v=>TAG_LABELS[v]) +
+        section('type','Job type', types,  v=>TYPE_LABEL[v]) +
+        section('prio','Priority', prios,  v=>PRIO_LABEL[v]) +
+        section('week','Week',     weeks,  v=>v);
+    }
+
+    // ---- RENDER TABLE ----
+    const body = document.getElementById('liveBody');
+    const empty = document.getElementById('liveEmpty');
+    const tableEl = document.getElementById('liveTable');
+
+    function tagPills(tags) {
+      return tags.map(t => `<span class="tag ${TAG_CLASS[t]||''}">${(TAG_LABELS[t]||t).replace(/^🌟 /,'')}</span>`).join('');
+    }
+    function rowHTML(j) {
+      const checked = state.selected.has(j.id);
+      return `<tr data-id="${j.id}" class="${checked?'row-sel':''}">
+        <td><span class="check ${checked?'on':''}"></span></td>
+        <td class="cust-cell"><b>${j.cust}</b></td>
+        <td>${j.city}</td>
+        <td><span class="job-type">${j.type}</span></td>
+        <td>${tagPills(j.tags)}</td>
+        <td>${j.week}</td>
+        <td>${j.prio==='high'?'★':''}</td>
+      </tr>`;
+    }
+    function groupHeader(label, n) {
+      return `<tr class="group-header"><td colspan="7">${label} <span class="count">${n} job${n===1?'':'s'}</span></td></tr>`;
+    }
+
+    function renderTable() {
+      const rows = filteredJobs();
+      empty.style.display = rows.length ? 'none' : 'block';
+      tableEl.style.display = rows.length ? '' : 'none';
+
+      if (state.groupBy === 'none') {
+        body.innerHTML = rows.map(rowHTML).join('');
+      } else {
+        const groups = new Map();
+        rows.forEach(j => {
+          const keys = state.groupBy === 'tag' ? (j.tags.length ? j.tags : ['(no tags)']) : [j[state.groupBy]];
+          keys.forEach(k => {
+            if (!groups.has(k)) groups.set(k, []);
+            groups.get(k).push(j);
+          });
+        });
+        const sorted = [...groups.entries()].sort((a,b)=> b[1].length - a[1].length);
+        body.innerHTML = sorted.map(([k, js]) => {
+          const label = state.groupBy === 'tag' ? (TAG_LABELS[k] || k)
+                      : state.groupBy === 'prio' ? PRIO_LABEL[k]
+                      : k;
+          return groupHeader(label, js.length) + js.map(rowHTML).join('');
+        }).join('');
+      }
+
+      // chips
+      const chips = [];
+      Object.entries(state.f).forEach(([dim, set]) => {
+        set.forEach(v => {
+          const label = dim==='tag' ? (TAG_LABELS[v]||v)
+                      : dim==='prio' ? PRIO_LABEL[v]
+                      : v;
+          chips.push(`<span class="chip on" data-chip-dim="${dim}" data-chip-val="${v}">${label} ×</span>`);
+        });
+      });
+      const groupLabel = state.groupBy === 'none' ? 'none' :
+        state.groupBy.charAt(0).toUpperCase() + state.groupBy.slice(1);
+      const chipHTML = chips.length
+        ? chips.join('') + `<span style="margin-left:8px; color:var(--ink-faint); font-size:12px;">Group: <b style="color:var(--ink);">${groupLabel}</b></span>`
+        : `<span style="color:var(--ink-faint); font-size:12px;">No filters · Group: <b style="color:var(--ink);">${groupLabel}</b></span>`;
+      document.getElementById('liveChips').innerHTML = chipHTML
+        + `<span style="margin-left:auto; color:var(--ink-faint); font-size:12px;">${rows.length} of ${JOBS.length} jobs</span>`;
+
+      document.getElementById('liveSchedule').textContent = `Schedule ${state.selected.size}`;
+    }
+
+    function renderAll(){ renderRail(); renderTable(); }
+
+    // ---- EVENTS ----
+    rail.addEventListener('click', (e) => {
+      const grp = e.target.closest('[data-group]');
+      if (grp) {
+        const dim = grp.dataset.group;
+        state.groupBy = state.groupBy === dim ? 'none' : dim;
+        renderAll();
+        return;
+      }
+      const chk = e.target.closest('.casc-check');
+      if (chk) {
+        const dim = chk.dataset.dim, val = chk.dataset.val;
+        const set = state.f[dim];
+        if (set.has(val)) set.delete(val); else set.add(val);
+        renderAll();
+      }
+    });
+
+    document.getElementById('liveSearch').addEventListener('input', (e) => {
+      state.search = e.target.value;
+      renderAll();
+    });
+
+    document.getElementById('liveReset').addEventListener('click', () => {
+      state.search = ''; state.selected.clear();
+      Object.values(state.f).forEach(s => s.clear());
+      document.getElementById('liveSearch').value = '';
+      renderAll();
+    });
+
+    document.getElementById('liveChips').addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-chip-dim]');
+      if (!chip) return;
+      state.f[chip.dataset.chipDim].delete(chip.dataset.chipVal);
+      renderAll();
+    });
+
+    body.addEventListener('click', (e) => {
+      const tr = e.target.closest('tr[data-id]');
+      if (!tr) return;
+      const id = Number(tr.dataset.id);
+      if (state.selected.has(id)) state.selected.delete(id); else state.selected.add(id);
+      renderAll();
+    });
+
+    renderAll();
+  })();
+
+  // Per-job-time toggle for sub-A tray
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('#pjtToggle');
+    if (t) t.classList.toggle('collapsed');
+  });
+  </script>
+</section>
+
+<!-- ============================================================ -->
+<!-- PANEL 1 — Enhanced table                                     -->
+<!-- ============================================================ -->
+<section class="panel" id="panel-table">
+  <h2 class="panel-caption">① Enhanced table — group, filter, see tags inline</h2>
+  <p class="panel-desc">
+    Same table, <em>much more muscle</em>. A <b>Group by</b> control reshapes the list by
+    week / city / customer / tag / type. Tag pills live in a dedicated column. A
+    <em>📝 note icon</em> next to customers with saved notes; click the row to expand them
+    inline. City filter auto-populates from the data — no typing.
+  </p>
+
+  <div class="app">
+    <aside class="side">
+      <div class="logo"><span class="dot">G</span>Grins CRM</div>
+      <ul>
+        <li>Dashboard</li>
+        <li>Leads</li>
+        <li>Sales</li>
+        <li>Customers</li>
+        <li>Jobs</li>
+        <li class="active">Schedule</li>
+        <li>Invoices</li>
+        <li>Renewals</li>
+      </ul>
+    </aside>
+
+    <div class="main callouts">
+      <div class="crumb">Schedule / <b style="color:var(--ink)">Pick Jobs to Schedule</b></div>
+      <h2 class="h1">Pick Jobs to Schedule</h2>
+      <p class="h1-sub">Search, filter, group, and bulk-assign jobs to a date and staff member.</p>
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <label class="search"><input placeholder="Search customer, address, phone, notes…" /></label>
+        <button class="mini-filter on" id="groupBtn">📂 Group: <b>City</b> ▾</button>
+        <button class="mini-filter">🏷 Tags <span class="count">2</span></button>
+        <button class="mini-filter">🛠 Type <span class="count">1</span></button>
+        <button class="mini-filter">📅 Week</button>
+      </div>
+
+      <!-- Grouping flyout -->
+      <div class="fly" id="groupFly" style="top:188px; left:290px;">
+        <div class="hd">Group by</div>
+        <label><input type="radio" name="grp" /> None (flat list)</label>
+        <label><input type="radio" name="grp" /> Requested week</label>
+        <label><input type="radio" name="grp" checked /> City</label>
+        <label><input type="radio" name="grp" /> Customer</label>
+        <label><input type="radio" name="grp" /> Job type</label>
+        <label><input type="radio" name="grp" /> Tag</label>
+        <label><input type="radio" name="grp" /> Priority</label>
+      </div>
+
+      <!-- Active filter chips -->
+      <div class="chip-row">
+        <span class="filter-chip">🏷 Tag: <b>VIP</b> <span class="x">✕</span></span>
+        <span class="filter-chip">🏷 Tag: <b>Needs ladder</b> <span class="x">✕</span></span>
+        <span class="filter-chip">🛠 Type: <b>fall_winterization</b> <span class="x">✕</span></span>
+        <span class="filter-chip clear">clear all</span>
+        <span style="margin-left:auto; color:var(--ink-faint); font-size:12px;">
+          Showing 14 of 47 jobs · grouped by city
+        </span>
+      </div>
+
+      <!-- Table -->
+      <table class="jobs">
+        <thead>
+          <tr>
+            <th style="width:28px;"><span class="check"></span></th>
+            <th>Customer</th>
+            <th>Job Type</th>
+            <th>Tags</th>
+            <th>Requested</th>
+            <th>Prio <span class="sort-arrow">▼</span></th>
+            <th>Dur.</th>
+            <th>Equip.</th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <tr class="group-header">
+            <td colspan="8">
+              Golden Valley
+              <span class="count">3 jobs · ~3h total · 12 mi from depot</span>
+              <span class="quick">select all 3 →</span>
+            </td>
+          </tr>
+          <tr class="selected">
+            <td><span class="check"></span></td>
+            <td class="cust-cell">
+              <b>Cinda Baxter</b><span class="note-icon" title="notes">📝</span>
+              <div class="cust-sub">1842 Harold Ave · (612) 555-0188</div>
+            </td>
+            <td><span class="job-type">fall_winterization</span></td>
+            <td>
+              <span class="tag vip">VIP</span>
+              <span class="tag prepaid">PREPAID</span>
+              <span class="tag recur">RECURRING 3Y</span>
+            </td>
+            <td class="week-cell">Wk of Apr 27<small>requested by customer</small></td>
+            <td><span class="priority"><span class="star on">★</span></span></td>
+            <td>60m</td>
+            <td>—</td>
+          </tr>
+          <tr class="note-row">
+            <td colspan="8">Gate code <b>4417</b>. Prefers morning. Small dog (Charlie) — friendly but let out to yard before we arrive.</td>
+          </tr>
+          <tr class="selected">
+            <td><span class="check"></span></td>
+            <td class="cust-cell">
+              <b>Cinda Baxter</b>
+              <div class="cust-sub">1842 Harold Ave · (612) 555-0188</div>
+            </td>
+            <td><span class="job-type">mid_season_inspection</span></td>
+            <td>
+              <span class="tag vip">VIP</span>
+              <span class="tag prepaid">PREPAID</span>
+            </td>
+            <td class="week-cell">Wk of Apr 27<small>bundle w/ above?</small></td>
+            <td><span class="priority"><span class="star on">★</span></span></td>
+            <td>60m</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="check"></span></td>
+            <td class="cust-cell">
+              <b>Cinda Baxter</b>
+              <div class="cust-sub">1842 Harold Ave · (612) 555-0188</div>
+            </td>
+            <td><span class="job-type">spring_startup</span></td>
+            <td>
+              <span class="tag vip">VIP</span>
+              <span class="tag prepaid">PREPAID</span>
+            </td>
+            <td class="week-cell">Wk of May 4</td>
+            <td><span class="priority"><span class="star on">★</span></span></td>
+            <td>60m</td>
+            <td>—</td>
+          </tr>
+
+          <tr class="group-header">
+            <td colspan="8">
+              Plymouth
+              <span class="count">3 jobs · ~3h total · 18 mi from depot</span>
+              <span class="quick">select all 3 →</span>
+            </td>
+          </tr>
+          <tr>
+            <td><span class="check"></span></td>
+            <td class="cust-cell">
+              <b>Kaylee Traynor</b><span class="note-icon">📝</span>
+              <div class="cust-sub">611 Vicksburg Ln · (763) 555-0211</div>
+            </td>
+            <td><span class="job-type">spring_startup</span></td>
+            <td><span class="tag commercial">COMMERCIAL</span></td>
+            <td class="week-cell">Wk of Apr 27</td>
+            <td><span class="priority"><span class="star off">★</span></span></td>
+            <td>60m</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="check"></span></td>
+            <td class="cust-cell">
+              <b>Kaylee Traynor</b>
+              <div class="cust-sub">611 Vicksburg Ln · (763) 555-0211</div>
+            </td>
+            <td><span class="job-type">fall_winterization</span></td>
+            <td><span class="tag commercial">COMMERCIAL</span></td>
+            <td class="week-cell">Wk of Oct 12<small>seasonal — defer</small></td>
+            <td><span class="priority"><span class="star off">★</span></span></td>
+            <td>60m</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="check"></span></td>
+            <td class="cust-cell">
+              <b>Michael Carey</b>
+              <div class="cust-sub">14220 34th Ave N · (612) 555-0440</div>
+            </td>
+            <td><span class="job-type">mid_season_inspection</span></td>
+            <td>
+              <span class="tag hoa">HOA</span>
+              <span class="tag ladder">NEEDS LADDER</span>
+            </td>
+            <td class="week-cell">Wk of Apr 27</td>
+            <td><span class="priority"><span class="star on">★</span></span></td>
+            <td>90m</td>
+            <td>6' ladder</td>
+          </tr>
+
+          <tr class="group-header">
+            <td colspan="8">
+              Carver
+              <span class="count">2 jobs · ~2h total · 24 mi from depot</span>
+              <span class="quick">select all 2 →</span>
+            </td>
+          </tr>
+          <tr>
+            <td><span class="check"></span></td>
+            <td class="cust-cell">
+              <b>Lisa Guille</b><span class="note-icon">📝</span>
+              <div class="cust-sub">310 Oak Ridge Rd · (952) 555-0733</div>
+            </td>
+            <td><span class="job-type">mid_season_inspection</span></td>
+            <td>
+              <span class="tag dog">DOG ON SITE</span>
+              <span class="tag gate">GATED</span>
+            </td>
+            <td class="week-cell">Wk of May 4</td>
+            <td><span class="priority"><span class="star off">★</span></span></td>
+            <td>60m</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="check"></span></td>
+            <td class="cust-cell">
+              <b>Lisa Guille</b>
+              <div class="cust-sub">310 Oak Ridge Rd · (952) 555-0733</div>
+            </td>
+            <td><span class="job-type">fall_winterization</span></td>
+            <td>
+              <span class="tag dog">DOG ON SITE</span>
+              <span class="tag gate">GATED</span>
+            </td>
+            <td class="week-cell">Wk of Oct 19</td>
+            <td><span class="priority"><span class="star on">★</span></span></td>
+            <td>60m</td>
+            <td>—</td>
+          </tr>
+
+          <tr class="group-header">
+            <td colspan="8">
+              Wayzata
+              <span class="count">1 job · 27 mi from depot</span>
+            </td>
+          </tr>
+          <tr>
+            <td><span class="check"></span></td>
+            <td class="cust-cell">
+              <b>Mike Funk</b>
+              <div class="cust-sub">220 Lake St E · (952) 555-0621</div>
+            </td>
+            <td><span class="job-type">fall_winterization</span></td>
+            <td><span class="tag vip">VIP</span></td>
+            <td class="week-cell">Wk of Apr 27</td>
+            <td><span class="priority"><span class="star off">★</span></span></td>
+            <td>60m</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Selection tray -->
+      <div class="tray">
+        <span class="count-pill">2 selected</span>
+        <span class="summary">Cinda Baxter (×2) · Golden Valley · ~2h total</span>
+        <span class="spacer"></span>
+        <span>Assign to:</span>
+        <select><option>— staff —</option><option>Jordan R.</option><option>Maya K.</option></select>
+        <input type="text" placeholder="📅 date or week" style="width:130px"/>
+        <button class="btn">Save for later</button>
+        <button class="btn primary">→ Assign 2 jobs</button>
+      </div>
+
+      <!-- Callouts -->
+      <div class="callout" style="top: 165px; right: -10px;">
+        auto-derived<br>from job data<br><span class="arr">↗</span>
+      </div>
+      <div class="callout" style="top: 420px; right: 4px; color: var(--blue)">
+        click row →<br>inline note<br>reveals
+      </div>
+    </div>
+  </div>
+
+  <p class="caption-band">What changed</p>
+  <div class="change-grid">
+    <div class="card">
+      <b>① Group by, 6 modes</b>
+      Week, city, customer, type, tag, priority. City is the scheduler's default
+      mental model — cluster visits = fewer miles.
+    </div>
+    <div class="card">
+      <b>② Tag pills, in a column</b>
+      VIP, Commercial, HOA, Prepaid, Needs Ladder, Dog on Site, Gated, Recurring.
+      Colored so the scheduler spots them while scanning.
+    </div>
+    <div class="card">
+      <b>③ Auto-filled city</b>
+      City no longer typed — it's a filterable dropdown populated from customer data.
+      The old free-text "City" field becomes a narrowing filter.
+    </div>
+    <div class="card">
+      <b>④ Notes inline, not hidden</b>
+      📝 icon on customers with notes; row click expands a highlighted note row.
+      Gate codes, dog warnings, access quirks surface exactly when routing.
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- PANEL 2 — Week board                                         -->
+<!-- ============================================================ -->
+<section class="panel" id="panel-board">
+  <h2 class="panel-caption">② Week board — see urgency at a glance, drag jobs to a week</h2>
+  <p class="panel-desc">
+    Same jobs, reshaped into <em>requested-week columns</em>. An overdue column on the far
+    left surfaces anything past its requested window. Each card shows customer + city + tags.
+    Drop zones make bulk-moving easy; the selection tray still handles staff assignment.
+  </p>
+
+  <div class="app">
+    <aside class="side">
+      <div class="logo"><span class="dot">G</span>Grins CRM</div>
+      <ul>
+        <li>Dashboard</li>
+        <li>Leads</li>
+        <li>Sales</li>
+        <li>Customers</li>
+        <li>Jobs</li>
+        <li class="active">Schedule</li>
+      </ul>
+    </aside>
+
+    <div class="main">
+      <div class="crumb">Schedule / <b style="color:var(--ink)">Pick Jobs to Schedule</b> · Week view</div>
+      <h2 class="h1">Jobs by requested week</h2>
+      <p class="h1-sub">Scroll →, click a card to select, drag to reassign weeks.</p>
+
+      <div class="toolbar">
+        <label class="search"><input placeholder="Search customer, city, notes…" /></label>
+        <div class="view-switch">
+          <button>Table</button>
+          <button class="on">Week board</button>
+          <button>Map</button>
+        </div>
+        <button class="mini-filter">🏙 City: <b>All</b></button>
+        <button class="mini-filter">🏷 Tags</button>
+        <button class="mini-filter">🛠 Type</button>
+      </div>
+
+      <div class="week-board">
+        <div class="week-col overdue">
+          <div class="wk-head">Overdue <small>requested &lt; this wk</small></div>
+          <div class="job-card">
+            <div class="row1">John Hayden<span class="prio">★</span></div>
+            <div class="row2">Hamel<span class="dot">·</span>fall_winterization<span class="dot">·</span>60m</div>
+            <div class="tags"><span class="tag vip">VIP</span></div>
+          </div>
+          <div class="job-card">
+            <div class="row1">Damon Smith</div>
+            <div class="row2">Minnetonka<span class="dot">·</span>fall_winterization</div>
+            <div class="tags"><span class="tag commercial">COMMERCIAL</span></div>
+          </div>
+        </div>
+
+        <div class="week-col">
+          <div class="wk-head">Apr 27 – May 3 <small>this week</small></div>
+          <div class="job-card selected">
+            <div class="row1">Cinda Baxter<span class="prio">★</span></div>
+            <div class="row2">Golden Valley<span class="dot">·</span>fall_winterization</div>
+            <div class="tags"><span class="tag vip">VIP</span><span class="tag prepaid">PREPAID</span></div>
+          </div>
+          <div class="job-card selected">
+            <div class="row1">Cinda Baxter<span class="prio">★</span></div>
+            <div class="row2">Golden Valley<span class="dot">·</span>mid_season_inspection</div>
+            <div class="tags"><span class="tag vip">VIP</span><span class="tag prepaid">PREPAID</span></div>
+          </div>
+          <div class="job-card">
+            <div class="row1">Kaylee Traynor</div>
+            <div class="row2">Plymouth<span class="dot">·</span>spring_startup</div>
+            <div class="tags"><span class="tag commercial">COMMERCIAL</span></div>
+          </div>
+          <div class="job-card">
+            <div class="row1">Mike Funk</div>
+            <div class="row2">Wayzata<span class="dot">·</span>fall_winterization</div>
+            <div class="tags"><span class="tag vip">VIP</span></div>
+          </div>
+          <div class="job-card">
+            <div class="row1">Michael Carey<span class="prio">★</span></div>
+            <div class="row2">Plymouth<span class="dot">·</span>mid_season_inspection</div>
+            <div class="tags"><span class="tag hoa">HOA</span><span class="tag ladder">LADDER</span></div>
+          </div>
+        </div>
+
+        <div class="week-col">
+          <div class="wk-head">May 4 – May 10</div>
+          <div class="job-card">
+            <div class="row1">Cinda Baxter<span class="prio">★</span></div>
+            <div class="row2">Golden Valley<span class="dot">·</span>spring_startup</div>
+            <div class="tags"><span class="tag vip">VIP</span><span class="tag prepaid">PREPAID</span></div>
+          </div>
+          <div class="job-card">
+            <div class="row1">Lisa Guille</div>
+            <div class="row2">Carver<span class="dot">·</span>mid_season_inspection</div>
+            <div class="tags"><span class="tag dog">DOG</span><span class="tag gate">GATED</span></div>
+          </div>
+          <div class="job-card">
+            <div class="row1">Kay Leonard</div>
+            <div class="row2">Minneapolis<span class="dot">·</span>fall_winterization</div>
+            <div class="tags"></div>
+          </div>
+          <div class="job-card">
+            <div class="row1">Marykay Langseth</div>
+            <div class="row2">Eden Prairie<span class="dot">·</span>fall_winterization</div>
+            <div class="tags"></div>
+          </div>
+        </div>
+
+        <div class="week-col">
+          <div class="wk-head">May 11 – May 17 <small>& later</small></div>
+          <div class="job-card">
+            <div class="row1">Kim Carlson</div>
+            <div class="row2">Maple Grove<span class="dot">·</span>fall_winterization</div>
+            <div class="tags"></div>
+          </div>
+          <div class="job-card">
+            <div class="row1">Lisa Guille<span class="prio">★</span></div>
+            <div class="row2">Carver<span class="dot">·</span>fall_winterization</div>
+            <div class="tags"><span class="tag dog">DOG</span><span class="tag gate">GATED</span></div>
+          </div>
+          <div class="job-card">
+            <div class="row1">Kaylee Traynor</div>
+            <div class="row2">Plymouth<span class="dot">·</span>fall_winterization</div>
+            <div class="tags"><span class="tag commercial">COMMERCIAL</span></div>
+          </div>
+          <div class="job-card" style="border-style: dotted; color: var(--ink-faint); text-align: center; padding: 10px;">
+            + 4 more · scroll →
+          </div>
+        </div>
+      </div>
+
+      <div class="tray">
+        <span class="count-pill">2 selected</span>
+        <span class="summary">Cinda Baxter (×2) · same address · bundle recommended</span>
+        <span class="spacer"></span>
+        <span>Assign to:</span>
+        <select><option>Jordan R. (Tue Apr 28)</option><option>Maya K.</option></select>
+        <button class="btn">Save for later</button>
+        <button class="btn primary">→ Assign 2 jobs</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="caption-band">Why a week board</p>
+  <div class="change-grid">
+    <div class="card">
+      <b>Urgency is spatial</b>
+      Overdue column on the left, future on the right. You <em>see</em> backlog
+      instead of reading a date column.
+    </div>
+    <div class="card">
+      <b>Drag to reschedule weeks</b>
+      If a customer calls to push out a visit, drag their card — no dialog, no typing.
+    </div>
+    <div class="card">
+      <b>Tags still visible</b>
+      Same colored pills. Commercial, VIP, Ladder-needed, Dog-on-site all visible at card scale.
+    </div>
+    <div class="card">
+      <b>Same tray</b>
+      Selection tray behaves identically across all three views. Muscle memory transfers.
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- PANEL 3 — Map split                                          -->
+<!-- ============================================================ -->
+<section class="panel" id="panel-map">
+  <h2 class="panel-caption">③ Map + list — the route is the interface</h2>
+  <p class="panel-desc">
+    For route-building days (spring startup, fall winterization — dozens of jobs), the map
+    becomes the primary surface. Click a city cluster, the side list filters to that city.
+    A <em>route distance</em> footer computes mileage for the current selection. Swap to
+    table/week board via the view switch.
+  </p>
+
+  <div class="app">
+    <aside class="side">
+      <div class="logo"><span class="dot">G</span>Grins CRM</div>
+      <ul>
+        <li>Dashboard</li>
+        <li>Leads</li>
+        <li>Sales</li>
+        <li>Customers</li>
+        <li>Jobs</li>
+        <li class="active">Schedule</li>
+      </ul>
+    </aside>
+
+    <div class="main">
+      <div class="crumb">Schedule / Pick Jobs · Map view</div>
+      <h2 class="h1">Route-aware scheduling</h2>
+      <p class="h1-sub">Click a city cluster to see its jobs · select jobs to build a route.</p>
+
+      <div class="toolbar">
+        <label class="search"><input placeholder="Search customer, city, tag…" /></label>
+        <div class="view-switch">
+          <button>Table</button>
+          <button>Week board</button>
+          <button class="on">Map</button>
+        </div>
+        <button class="mini-filter">📅 Wk: <b>Apr 27</b></button>
+        <button class="mini-filter">🏷 Tags</button>
+        <button class="mini-filter">🛠 Type</button>
+      </div>
+
+      <div class="map-split">
+        <div class="map-box">
+          <div class="map-label">West Metro · 47 jobs</div>
+
+          <!-- placeholder route line -->
+          <svg class="route-line" viewBox="0 0 600 520" preserveAspectRatio="none">
+            <path d="M 120 110 Q 180 180 230 280 T 420 380" fill="none"
+              stroke="#d4622a" stroke-width="2.5" stroke-dasharray="6 4" opacity=".7"/>
+          </svg>
+
+          <div class="city-cluster active" style="top: 26%; left: 22%;">
+            <div class="pulse"></div>
+            <div class="bubble">3</div>
+            <div class="cname">Golden Valley</div>
+          </div>
+          <div class="city-cluster" style="top: 18%; left: 44%;">
+            <div class="bubble">3</div>
+            <div class="cname">Plymouth</div>
+          </div>
+          <div class="city-cluster" style="top: 38%; left: 52%;">
+            <div class="bubble">1</div>
+            <div class="cname">Wayzata</div>
+          </div>
+          <div class="city-cluster" style="top: 32%; left: 70%;">
+            <div class="bubble">1</div>
+            <div class="cname">Maple Grove</div>
+          </div>
+          <div class="city-cluster" style="top: 55%; left: 62%;">
+            <div class="bubble">2</div>
+            <div class="cname">Minnetonka</div>
+          </div>
+          <div class="city-cluster" style="top: 74%; left: 40%;">
+            <div class="bubble">2</div>
+            <div class="cname">Carver</div>
+          </div>
+          <div class="city-cluster" style="top: 66%; left: 72%;">
+            <div class="bubble">1</div>
+            <div class="cname">Eden Prairie</div>
+          </div>
+          <div class="city-cluster" style="top: 48%; left: 18%;">
+            <div class="bubble">1</div>
+            <div class="cname">Hamel</div>
+          </div>
+        </div>
+
+        <div class="list-side">
+          <div class="sticky-head">
+            Golden Valley
+            <small>3 jobs · 12 mi from depot</small>
+          </div>
+          <div class="list-body">
+            <div class="job-card selected">
+              <div class="row1">Cinda Baxter<span class="prio">★</span></div>
+              <div class="row2">1842 Harold Ave<span class="dot">·</span>fall_winterization<span class="dot">·</span>60m</div>
+              <div class="tags">
+                <span class="tag vip">VIP</span>
+                <span class="tag prepaid">PREPAID</span>
+                <span class="tag recur">RECUR 3Y</span>
+              </div>
+            </div>
+            <div class="job-card selected">
+              <div class="row1">Cinda Baxter<span class="prio">★</span></div>
+              <div class="row2">1842 Harold Ave<span class="dot">·</span>mid_season_inspection</div>
+              <div class="tags">
+                <span class="tag vip">VIP</span>
+                <span class="tag prepaid">PREPAID</span>
+              </div>
+            </div>
+            <div class="job-card">
+              <div class="row1">Cinda Baxter<span class="prio">★</span></div>
+              <div class="row2">1842 Harold Ave<span class="dot">·</span>spring_startup<span class="dot">·</span>Wk May 4</div>
+              <div class="tags">
+                <span class="tag vip">VIP</span>
+                <span class="tag prepaid">PREPAID</span>
+              </div>
+            </div>
+            <div style="font-family:'Caveat'; font-size:17px; margin: 10px 4px 4px; color: var(--ink-faint); border-top: 1.5px dashed var(--ink-faint); padding-top: 8px;">
+              Nearby cities <small style="font-family:'Kalam';font-size:11px">(within 8 mi)</small>
+            </div>
+            <div class="job-card">
+              <div class="row1">Mike Funk</div>
+              <div class="row2">Wayzata<span class="dot">·</span>fall_winterization<span class="dot">·</span>7 mi</div>
+              <div class="tags"><span class="tag vip">VIP</span></div>
+            </div>
+            <div class="job-card">
+              <div class="row1">Kaylee Traynor</div>
+              <div class="row2">Plymouth<span class="dot">·</span>spring_startup<span class="dot">·</span>5 mi</div>
+              <div class="tags"><span class="tag commercial">COMMERCIAL</span></div>
+            </div>
+          </div>
+          <div class="route-footer">
+            <span>Route: <b>Depot → Baxter → Baxter</b></span>
+            <span><b>14 mi</b> · ~42 min drive</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="tray">
+        <span class="count-pill">2 selected</span>
+        <span class="summary">Golden Valley · same address · 14 mi round-trip</span>
+        <span class="spacer"></span>
+        <select><option>Jordan R. (Tue Apr 28, AM)</option></select>
+        <button class="btn">+ Add 1 more nearby</button>
+        <button class="btn primary">→ Assign as route</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="caption-band">Why a map view</p>
+  <div class="change-grid">
+    <div class="card">
+      <b>Cities cluster, naturally</b>
+      Instead of sorting by city string, see them geographically. Spot "three cities all near
+      each other" in a glance.
+    </div>
+    <div class="card">
+      <b>Nearby suggestions</b>
+      Select a job → side list surfaces jobs within 8 mi. Route-padding without leaving the
+      picker.
+    </div>
+    <div class="card">
+      <b>Route distance, live</b>
+      Footer totals mileage + drive time as selection changes. Staff can be given routes that
+      fit the clock.
+    </div>
+    <div class="card">
+      <b>Still just a picker</b>
+      Same toolbar, same tray. The map is a lens on the list — you don't lose grouping or
+      filtering.
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- PANEL 4 — Add/Edit Job form                                  -->
+<!-- ============================================================ -->
+<section class="panel" id="panel-form">
+  <h2 class="panel-caption">④ Add Job form — captures everything the picker needs</h2>
+  <p class="panel-desc">
+    The picker is only as good as the data feeding it. This is the form that creates (or edits)
+    a job. Customer section pulls from the Customers table when you pick an existing one —
+    address, phone, email, tags auto-fill. Job section adds type, duration, priority, requested
+    week, notes, and equipment.
+  </p>
+
+  <div class="form-grid">
+    <div class="form-card">
+      <h4>Customer <small>pick existing or add new</small></h4>
+      <div class="field">
+        <label>Customer <span class="req">*</span></label>
+        <input type="text" value="Cinda Baxter" />
+        <div class="hint">✓ matched existing customer — fields below auto-filled</div>
+      </div>
+      <div class="field">
+        <label>Address</label>
+        <input type="text" value="1842 Harold Ave" />
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>City</label>
+          <input type="text" value="Golden Valley" />
+        </div>
+        <div class="field">
+          <label>ZIP</label>
+          <input type="text" value="55416" />
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Phone</label>
+          <input type="text" value="(612) 555-0188" />
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="text" value="cinda.b@example.com" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Customer tags</label>
+        <div class="tag-picker">
+          <span class="tag vip on">VIP</span>
+          <span class="tag prepaid on">PREPAID</span>
+          <span class="tag recur on">RECURRING 3Y</span>
+          <span class="tag commercial">COMMERCIAL</span>
+          <span class="tag hoa">HOA</span>
+          <span class="tag dog">DOG ON SITE</span>
+          <span class="tag gate">GATED</span>
+          <span class="tag ladder">NEEDS LADDER</span>
+          <span class="add">+ add tag</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Customer notes <small style="font-family:'Kalam';color:var(--ink-faint);text-transform:none;font-size:11px;">(visible in picker 📝)</small></label>
+        <textarea class="dashed">Gate code 4417. Prefers morning. Small dog (Charlie) — friendly but let out to yard before we arrive.</textarea>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <h4>Job <small>what work, when, who</small></h4>
+      <div class="field">
+        <label>Job type <span class="req">*</span></label>
+        <select>
+          <option>fall_winterization</option>
+          <option>mid_season_inspection</option>
+          <option>spring_startup</option>
+          <option>leak_diagnostic</option>
+          <option>install_new_system</option>
+          <option>backflow_testing</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Est. duration</label>
+          <input type="text" value="60m" />
+        </div>
+        <div class="field">
+          <label>Priority</label>
+          <select>
+            <option>★ High</option>
+            <option selected>★ Normal</option>
+            <option>– Low</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Requested week</label>
+        <div class="week-picker">
+          <button>Apr 20<small>this wk</small></button>
+          <button class="on">Apr 27<small>+1 wk</small></button>
+          <button>May 4<small>+2 wk</small></button>
+          <button>May 11<small>+3 wk</small></button>
+          <button>May 18<small>+4 wk</small></button>
+          <button>custom…<small>date or range</small></button>
+        </div>
+        <div class="hint">Leave blank for "any week" — this feeds the Week board.</div>
+      </div>
+      <div class="field">
+        <label>Equipment needed</label>
+        <input type="text" placeholder="e.g. 6' ladder, blower, pressure tester" class="dashed" />
+      </div>
+      <div class="field">
+        <label>Job-specific notes</label>
+        <textarea class="dashed" placeholder="Anything the tech needs for THIS visit (customer notes appear separately)"></textarea>
+      </div>
+      <div class="field">
+        <label>Job tags</label>
+        <div class="tag-picker">
+          <span class="tag recur on">RECURRING</span>
+          <span class="tag ladder">LADDER REQ</span>
+          <span class="tag">REVISIT</span>
+          <span class="tag">WARRANTY</span>
+          <span class="add">+ add tag</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-foot">
+    <span style="font-family:'Kalam'; color:var(--ink-faint); font-size:13px;">
+      All fields above are visible/filterable in the picker. Required fields marked <span style="color:var(--red)">*</span>.
+    </span>
+    <div style="display:flex; gap: 8px;">
+      <button class="btn">Cancel</button>
+      <button class="btn">Save &amp; add another</button>
+      <button class="btn primary">Save job</button>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== Tweaks ====================== -->
+<div id="tweaks">
+  <h4>Tweaks</h4>
+  <div class="tw-row">
+    <span>Group mode (tab ①)</span>
+    <select id="groupModeSel">
+      <option>None</option>
+      <option>Week</option>
+      <option selected>City</option>
+      <option>Customer</option>
+      <option>Type</option>
+      <option>Tag</option>
+      <option>Priority</option>
+    </select>
+  </div>
+  <div class="tw-row">
+    <span>Tag style</span>
+    <select id="tagStyleSel">
+      <option selected>Colored pills</option>
+      <option>Mono badges</option>
+      <option>Icons only</option>
+    </select>
+  </div>
+  <div class="tw-row">
+    <span>Show note icons</span>
+    <input type="checkbox" id="noteIconChk" checked />
+  </div>
+  <div class="tw-row">
+    <span>Tray color</span>
+    <select id="trayColorSel">
+      <option selected>Ink (default)</option>
+      <option>Accent (orange)</option>
+      <option>Paper (light)</option>
+    </select>
+  </div>
+  <div class="tw-row">
+    <span>Density</span>
+    <select id="densitySel">
+      <option>Compact</option>
+      <option selected>Comfortable</option>
+      <option>Rich</option>
+    </select>
+  </div>
+</div>
+
+<script>
+  // ---- v2: Sub-tab switching (cascade panel) ----
+  document.querySelectorAll('#subTabs .sub-tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('#subTabs .sub-tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      document.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
+      document.getElementById('sub-' + t.dataset.sub).classList.add('active');
+    });
+  });
+
+  // ---- Tabs ----
+  const tabs = document.querySelectorAll('#tabs .tab');
+  const panels = document.querySelectorAll('.panel');
+  tabs.forEach(t => t.addEventListener('click', () => {
+    tabs.forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    panels.forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + t.dataset.panel).classList.add('active');
+    localStorage.setItem('schedulePickerPanelV2', t.dataset.panel);
+  }));
+  const savedPanel = localStorage.getItem('schedulePickerPanelV2');
+  if (savedPanel) {
+    const t = document.querySelector(`#tabs .tab[data-panel="${savedPanel}"]`);
+    if (t) t.click();
+  }
+
+  // ==========================================================
+  // COMBO 1 + COMBO 3 — live, data-driven
+  // ==========================================================
+  (function(){
+    const JOBS = [
+      {id:1,  cust:'Cinda Baxter',    addr:'1842 Harold Ave',      city:'Golden Valley', type:'fall_winterization',    tags:['vip','prepaid'],     prio:'high',   week:'Apr 27', dur:60, equip:'ladder 20ft', note:'Gate code 4412. Owner prefers mornings before 10am. Dog is friendly but skittish.'},
+      {id:2,  cust:'Cinda Baxter',    addr:'1842 Harold Ave',      city:'Golden Valley', type:'mid_season_inspection', tags:['vip','prepaid'],     prio:'high',   week:'Apr 27', dur:60, equip:'—',          note:''},
+      {id:3,  cust:'Cinda Baxter',    addr:'1842 Harold Ave',      city:'Golden Valley', type:'spring_startup',        tags:['vip','prepaid'],     prio:'high',   week:'May 4',  dur:60, equip:'—',          note:''},
+      {id:4,  cust:'Kaylee Traynor',  addr:'611 Vicksburg Ln',     city:'Plymouth',      type:'spring_startup',        tags:['commercial'],        prio:'high',   week:'Apr 27', dur:60, equip:'—',          note:'Commercial property, check-in with front desk.'},
+      {id:5,  cust:'Mike Funk',       addr:'220 Lake St E',        city:'Wayzata',       type:'fall_winterization',    tags:['vip','ladder'],      prio:'high',   week:'Apr 27', dur:60, equip:'ladder 28ft', note:'3-story, access from back deck only.'},
+      {id:6,  cust:'Demir Koç',       addr:'14220 34th Ave N',     city:'Plymouth',      type:'spring_startup',        tags:['hoa'],               prio:'normal', week:'May 4',  dur:60, equip:'—',          note:''},
+      {id:7,  cust:'Aarav Patel',     addr:'8000 Xerxes Ave N',    city:'Plymouth',      type:'mid_season_inspection', tags:['commercial'],        prio:'normal', week:'May 4',  dur:90, equip:'—',          note:''},
+      {id:8,  cust:'Jessie Han',      addr:'102 Willow Ln',        city:'Carver',        type:'fall_winterization',    tags:['dog','gate'],        prio:'normal', week:'May 11', dur:60, equip:'—',          note:'Gate code #2205. Large dog confined to garage during job.'},
+      {id:9,  cust:'Frank Okafor',    addr:'780 Main St',          city:'Carver',        type:'spring_startup',        tags:['commercial','gate'], prio:'high',   week:'May 11', dur:90, equip:'ladder 20ft', note:''},
+      {id:10, cust:'Priya Shah',      addr:'12 Maple Ct',          city:'Maple Grove',   type:'mid_season_inspection', tags:['hoa'],               prio:'normal', week:'Apr 27', dur:60, equip:'—',          note:''},
+      {id:11, cust:'Dan Ramos',       addr:'5505 Cedar Dr',        city:'Minnetonka',    type:'fall_winterization',    tags:['ladder'],            prio:'normal', week:'May 4',  dur:90, equip:'ladder 28ft', note:'Steep roof pitch — 2-person job.'},
+      {id:12, cust:'Sarah Liu',       addr:'9301 Shady Oak',       city:'Minnetonka',    type:'spring_startup',        tags:['dog'],               prio:'normal', week:'May 11', dur:60, equip:'—',          note:''},
+      {id:13, cust:'Tom Becker',      addr:'4401 France Ave',      city:'Edina',         type:'fall_winterization',    tags:['commercial'],        prio:'high',   week:'Apr 27', dur:60, equip:'—',          note:''},
+      {id:14, cust:'Alma Reyes',      addr:'6100 Vernon Ave',      city:'Edina',         type:'mid_season_inspection', tags:[],                    prio:'normal', week:'May 4',  dur:60, equip:'—',          note:''},
+      {id:15, cust:'Nikhil Rao',      addr:'3100 Excelsior Blvd',  city:'St. Louis Park',type:'spring_startup',        tags:['prepaid'],           prio:'normal', week:'May 11', dur:60, equip:'—',          note:''},
+      {id:16, cust:'Greta Johansson', addr:'2840 Louisiana',       city:'St. Louis Park',type:'fall_winterization',    tags:['vip'],               prio:'high',   week:'Apr 27', dur:60, equip:'—',          note:'VIP — follow up call after job.'},
+      {id:17, cust:'Mei Tanaka',      addr:'1109 Mainstreet',      city:'Hopkins',       type:'mid_season_inspection', tags:['gate'],              prio:'normal', week:'May 4',  dur:60, equip:'—',          note:''},
+    ];
+    const TAG_LABELS = {vip:'VIP', commercial:'COMMERCIAL', hoa:'HOA', ladder:'LADDER', dog:'DOG', prepaid:'PREPAID', gate:'GATED'};
+    const TAG_CLASS  = {vip:'vip', commercial:'commercial', hoa:'hoa', ladder:'ladder', dog:'dog', prepaid:'prepaid', gate:'gate'};
+    const PRIO_LABEL = {high:'★ High', normal:'Normal'};
+    const STAFF = ['Maria Gonzalez','Jordan Reeves','Sam Chen','Ty Williams'];
+
+    // Setup one instance (combo1 or combo3)
+    function setup(prefix, opts) {
+      opts = opts || {};
+      const state = {
+        search:'',
+        selected: new Set(),
+        expandedNotes: new Set(),
+        groupBy: 'none',
+        f: { city:new Set(), tag:new Set(), type:new Set(), prio:new Set(), week:new Set() },
+        date: new Date(2026, 3, 27), // Apr 27 2026
+        startMin: 8*60,  // 08:00
+        dur: 60,
+        perJob: {}, // id -> {startMin, endMin} overrides
+      };
+
+      const $ = sel => document.querySelector(sel);
+      const els = {
+        search:   $(`#${prefix}Search`),
+        groupBtn: $(`#${prefix}GroupBtn`),
+        groupLbl: $(`#${prefix}GroupLbl`),
+        reset:    $(`#${prefix}Reset`),
+        expand:   $(`#${prefix}ExpandAll`),
+        cascade:  $(`#${prefix}Cascade`),
+        rail:     $(`#${prefix}Rail`),
+        chips:    $(`#${prefix}Chips`),
+        body:     $(`#${prefix}Body`),
+        dateBtn:  $(`#${prefix}DateBtn`),
+        dateLbl:  $(`#${prefix}DateLbl`),
+        calPop:   $(`#${prefix}CalPop`),
+        staff:    $(`#${prefix}Staff`),
+        start:    $(`#${prefix}Start`),
+        dur:      $(`#${prefix}Dur`),
+        pjtToggle:$(`#${prefix}PjtToggle`),
+        pjtBody:  $(`#${prefix}PjtBody`),
+        pjtTable: $(`#${prefix}Pjt`),
+        count:    $(`#${prefix}Count`),
+        assign:   $(`#${prefix}Assign`),
+        drawer:   $(`#${prefix}Drawer`),
+        drawerClose: $(`#${prefix}DrawerClose`),
+        drawerCount: $(`#${prefix}DrawerCount`),
+      };
+
+      // ----- helpers
+      const pad = n => String(n).padStart(2,'0');
+      function fmtDate(d){ return `${pad(d.getMonth()+1)} / ${pad(d.getDate())} / ${d.getFullYear()}`; }
+      function fmtTime(mins){
+        let h = Math.floor(mins/60), m = mins%60;
+        const ap = h >= 12 ? 'PM' : 'AM';
+        h = ((h + 11) % 12) + 1;
+        return `${pad(h)} : ${pad(m)} ${ap}`;
+      }
+
+      // ----- filter + sort jobs
+      function jobMatches(j, excludeDim){
+        const q = state.search.toLowerCase();
+        if (q && !(`${j.cust} ${j.addr} ${j.city} ${j.type} ${j.note}`.toLowerCase().includes(q))) return false;
+        if (excludeDim !== 'city' && state.f.city.size && !state.f.city.has(j.city)) return false;
+        if (excludeDim !== 'tag'  && state.f.tag.size  && !j.tags.some(t => state.f.tag.has(t))) return false;
+        if (excludeDim !== 'type' && state.f.type.size && !state.f.type.has(j.type)) return false;
+        if (excludeDim !== 'prio' && state.f.prio.size && !state.f.prio.has(j.prio)) return false;
+        if (excludeDim !== 'week' && state.f.week.size && !state.f.week.has(j.week)) return false;
+        return true;
+      }
+      function filteredJobs(){ return JOBS.filter(j => jobMatches(j)); }
+      function facetCount(dim, value){
+        return JOBS.filter(j => {
+          if (!jobMatches(j, dim)) return false;
+          if (dim === 'tag') return j.tags.includes(value);
+          return j[dim] === value;
+        }).length;
+      }
+
+      // ----- render table
+      function tagPills(tags){
+        return tags.map(t => `<span class="tag ${TAG_CLASS[t]||''}">${TAG_LABELS[t]||t}</span>`).join('');
+      }
+      function rowHTML(j){
+        const selected = state.selected.has(j.id);
+        const hasNote = !!j.note;
+        const pillsTD = `<td>${tagPills(j.tags)}</td>`;
+        const mainRow = `<tr data-id="${j.id}" class="${selected?'row-sel':''} ${hasNote?'has-note':''}">
+          <td><span class="check"></span></td>
+          <td class="cust-cell"><b>${j.cust}</b><div class="cust-sub">${j.addr}</div></td>
+          <td><span class="job-type">${j.type}</span></td>
+          ${pillsTD}
+          <td>${j.city}</td>
+          <td class="week-cell">Wk of ${j.week}</td>
+          <td><span class="priority"><span class="star ${j.prio==='high'?'on':'off'}">★</span></span></td>
+          <td>${j.dur}m</td>
+          <td>${j.equip}</td>
+        </tr>`;
+        const noteRow = hasNote
+          ? `<tr class="note-row-inline" data-for="${j.id}"><td></td><td colspan="8"><span class="note-bubble">📝 ${j.note}</span></td></tr>`
+          : '';
+        return mainRow + noteRow;
+      }
+      function groupHeader(label, n){
+        return `<tr class="group-header"><td colspan="9">${label} <span class="count">${n} job${n===1?'':'s'}</span></td></tr>`;
+      }
+
+      function renderTable(){
+        const rows = filteredJobs();
+        if (state.groupBy === 'none') {
+          els.body.innerHTML = rows.map(rowHTML).join('');
+        } else {
+          const groups = new Map();
+          rows.forEach(j => {
+            const keys = state.groupBy === 'tag' ? (j.tags.length ? j.tags : ['(no tags)']) : [j[state.groupBy]];
+            keys.forEach(k => {
+              if (!groups.has(k)) groups.set(k, []);
+              groups.get(k).push(j);
+            });
+          });
+          const sorted = [...groups.entries()].sort((a,b)=> b[1].length - a[1].length);
+          els.body.innerHTML = sorted.map(([k, js]) => {
+            const label = state.groupBy === 'tag' ? (TAG_LABELS[k] || k)
+                        : state.groupBy === 'prio' ? PRIO_LABEL[k]
+                        : k;
+            return groupHeader(label, js.length) + js.map(rowHTML).join('');
+          }).join('');
+        }
+
+        // chips
+        const selCount = state.selected.size;
+        const groupLabel = state.groupBy === 'none' ? 'None'
+                        : state.groupBy === 'city' ? 'City'
+                        : state.groupBy === 'tag' ? 'Tags'
+                        : state.groupBy === 'type' ? 'Job type'
+                        : state.groupBy === 'prio' ? 'Priority'
+                        : state.groupBy === 'week' ? 'Week' : 'None';
+        els.groupLbl && (els.groupLbl.textContent = groupLabel);
+        els.chips && (els.chips.innerHTML = `<span style="color:var(--ink-faint); font-size:12px;">
+          ${rows.length} of ${JOBS.length} jobs${state.groupBy !== 'none' ? ` · grouped by ${groupLabel.toLowerCase()}` : ''}
+          </span>
+          <span style="margin-left:auto; color:var(--ink-faint); font-size:12px;">${selCount} selected</span>`);
+      }
+
+      // ----- render per-job table + footer
+      function renderPjt(){
+        const sel = JOBS.filter(j => state.selected.has(j.id));
+        let cursor = state.startMin;
+        els.pjtBody.innerHTML = sel.map(j => {
+          const over = state.perJob[j.id];
+          const sm = over?.startMin ?? cursor;
+          const em = over?.endMin ?? (sm + state.dur);
+          if (!over) cursor = em;
+          return `<tr data-id="${j.id}">
+            <td>${j.cust}</td>
+            <td><span class="job-type">${j.type}</span></td>
+            <td><span class="time-pill">${fmtTime(sm)}</span></td>
+            <td><span class="time-pill">${fmtTime(em)}</span></td>
+          </tr>`;
+        }).join('') || `<tr><td colspan="4" style="text-align:center; color:var(--ink-faint); padding:12px;">No jobs selected.</td></tr>`;
+
+        els.count.textContent = `${sel.length} job${sel.length===1?'':'s'} selected`;
+        els.assign.textContent = `📅 Assign ${sel.length} Job${sel.length===1?'':'s'}`;
+        if (els.drawerCount) els.drawerCount.textContent = sel.length;
+
+        // drawer always visible in combo3
+        if (els.drawer) {
+          els.drawer.classList.add('open');
+        }
+      }
+
+      function renderRail(){
+        if (!els.rail) return;
+        const TAG_FACET = {vip:'🌟 VIP', commercial:'Commercial', hoa:'HOA', ladder:'Needs ladder', dog:'Dog on site', prepaid:'Prepaid', gate:'Gated'};
+        const PRIO_FACET = {high:'★ High', normal:'Normal'};
+        const section = (dim, title, values, labelFor) => {
+          const isGroup = state.groupBy === dim;
+          const active = state.f[dim];
+          const rows = values.map(v => {
+            const c = facetCount(dim, v);
+            const on = active.has(v);
+            return `<label class="casc-check ${on?'on':''} ${c===0?'dim':''}" data-dim="${dim}" data-val="${v}">
+              <input type="checkbox" ${on?'checked':''}/>
+              ${labelFor(v)} <span class="casc-count">${c}</span>
+            </label>`;
+          }).join('');
+          return `<div class="facet-sec">
+            <div class="facet-hd">${title}
+              <span class="group-mark ${isGroup?'on':''}" data-group="${dim}" title="${isGroup?'grouping on':'click to group'}">
+                ${isGroup ? '● group' : '○ make group'}
+              </span>
+            </div>
+            ${rows}
+          </div>`;
+        };
+        const cities = [...new Set(JOBS.map(j=>j.city))].sort();
+        const tags   = ['vip','commercial','hoa','ladder','dog','prepaid','gate'];
+        const types  = [...new Set(JOBS.map(j=>j.type))];
+        const prios  = ['high','normal'];
+        const weeks  = [...new Set(JOBS.map(j=>j.week))];
+        els.rail.innerHTML =
+          section('city','Cities',   cities, v=>v) +
+          section('tag', 'Tags',     tags,   v=>TAG_FACET[v]) +
+          section('type','Job type', types,  v=>v) +
+          section('prio','Priority', prios,  v=>PRIO_FACET[v]) +
+          section('week','Week',     weeks,  v=>v);
+      }
+
+      function renderAll(){ renderRail(); renderTable(); renderPjt(); }
+
+      // ----- calendar popover
+      function renderCalendar(year, month, sel){
+        const today = new Date();
+        const first = new Date(year, month, 1);
+        const startDow = first.getDay();
+        const daysInMonth = new Date(year, month+1, 0).getDate();
+        const prevDays = new Date(year, month, 0).getDate();
+        const monthName = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month];
+
+        const dows = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        const cells = [];
+        // leading muted days
+        for (let i = startDow-1; i >= 0; i--) {
+          const d = prevDays - i;
+          cells.push({n:d, muted:true, dow:(6-i+(7-startDow))%7});
+        }
+        for (let d=1; d<=daysInMonth; d++) {
+          const dt = new Date(year, month, d);
+          const dow = dt.getDay();
+          cells.push({n:d, muted:false, dow, isToday: sameDay(dt, today), isSel: sameDay(dt, sel)});
+        }
+        // trailing muted to fill grid to 42
+        let next = 1;
+        while (cells.length < 42) {
+          const dow = (cells.length) % 7;
+          cells.push({n:next++, muted:true, dow});
+        }
+
+        function sameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
+
+        const dowHTML = dows.map((d,i) => `<div class="cal-dow ${i===0?'sun':''} ${i===6?'sat':''}">${d}</div>`).join('');
+        const cellHTML = cells.map((c,i) => {
+          const dow = i%7;
+          const cls = [
+            'cal-cell',
+            c.muted?'muted':'',
+            dow===0?'sun':'',
+            dow===6?'sat':'',
+            c.isToday?'today':'',
+            c.isSel?'selected':'',
+          ].filter(Boolean).join(' ');
+          return `<div class="${cls}" data-day="${c.n}" data-muted="${c.muted?1:0}">${c.n}</div>`;
+        }).join('');
+
+        return `
+          <div class="cal-head">
+            <button class="cal-nav" data-nav="-1">‹</button>
+            <button class="cal-month" data-nav="0">${monthName} ${year} ▾</button>
+            <button class="cal-nav" data-nav="1">›</button>
+          </div>
+          <div class="cal-grid">${dowHTML}${cellHTML}</div>
+          <div class="cal-foot"><button class="cal-clear">Clear</button></div>
+        `;
+      }
+
+      let calYear = state.date.getFullYear();
+      let calMonth = state.date.getMonth();
+      function openCal(){
+        els.calPop.innerHTML = renderCalendar(calYear, calMonth, state.date);
+        els.calPop.style.display = 'block';
+      }
+      function closeCal(){ els.calPop.style.display = 'none'; }
+
+      els.dateBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (els.calPop.style.display === 'block') closeCal();
+        else { calYear = state.date.getFullYear(); calMonth = state.date.getMonth(); openCal(); }
+      });
+      document.addEventListener('click', e => {
+        if (!els.calPop.contains(e.target) && e.target !== els.dateBtn && !els.dateBtn.contains(e.target)) closeCal();
+      });
+      els.calPop.addEventListener('click', e => {
+        e.stopPropagation();
+        const nav = e.target.closest('[data-nav]');
+        if (nav) {
+          const d = parseInt(nav.dataset.nav,10);
+          if (d === 0) return; // month picker stub
+          calMonth += d;
+          if (calMonth < 0) { calMonth = 11; calYear--; }
+          if (calMonth > 11) { calMonth = 0; calYear++; }
+          els.calPop.innerHTML = renderCalendar(calYear, calMonth, state.date);
+          return;
+        }
+        const cell = e.target.closest('.cal-cell');
+        if (cell) {
+          const day = parseInt(cell.dataset.day,10);
+          const muted = cell.dataset.muted === '1';
+          const y = calYear, m = calMonth;
+          const picked = muted
+            ? new Date(y, m + (day < 15 ? 1 : -1), day) // rough muted handling
+            : new Date(y, m, day);
+          state.date = picked;
+          els.dateLbl.textContent = fmtDate(picked);
+          closeCal();
+          return;
+        }
+        if (e.target.classList.contains('cal-clear')) {
+          state.date = new Date();
+          els.dateLbl.textContent = fmtDate(state.date);
+          closeCal();
+        }
+      });
+
+      // ----- search
+      els.search.addEventListener('input', e => { state.search = e.target.value; renderAll(); });
+      els.reset.addEventListener('click', () => {
+        state.search=''; state.selected.clear(); state.expandedNotes.clear();
+        state.groupBy='none'; state.perJob={};
+        Object.values(state.f).forEach(s => s.clear());
+        els.search.value=''; renderAll();
+      });
+
+      // ----- expand all notes (legacy — no-op when button absent)
+      if (els.expand) {
+        els.expand.addEventListener('click', () => {
+          const jobsWithNotes = JOBS.filter(j => j.note).map(j => j.id);
+          const allExpanded = jobsWithNotes.every(id => state.expandedNotes.has(id));
+          if (allExpanded) state.expandedNotes.clear();
+          else jobsWithNotes.forEach(id => state.expandedNotes.add(id));
+          renderTable();
+        });
+      }
+
+      // ----- row click (toggle selection)
+      els.body.addEventListener('click', e => {
+        const tr = e.target.closest('tr[data-id]');
+        if (!tr) return;
+        const id = Number(tr.dataset.id);
+        if (state.selected.has(id)) state.selected.delete(id);
+        else state.selected.add(id);
+        renderAll();
+      });
+
+      // ----- group button flyout (only if cascade flyout present)
+      if (els.groupBtn && els.cascade) {
+        els.cascade.style.display = '';
+        els.groupBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          els.cascade.classList.toggle('open');
+        });
+        document.addEventListener('click', e => {
+          if (!els.cascade.contains(e.target) && e.target !== els.groupBtn && !els.groupBtn.contains(e.target)) {
+            els.cascade.classList.remove('open');
+          }
+        });
+        els.cascade.addEventListener('click', e => e.stopPropagation());
+      }
+
+      // ----- facet rail (only if present)
+      if (els.rail) {
+        els.rail.addEventListener('click', e => {
+          const grp = e.target.closest('[data-group]');
+          if (grp) {
+            const dim = grp.dataset.group;
+            state.groupBy = state.groupBy === dim ? 'none' : dim;
+            renderAll();
+            return;
+          }
+          const chk = e.target.closest('.casc-check');
+          if (chk) {
+            const dim = chk.dataset.dim, val = chk.dataset.val;
+            const set = state.f[dim];
+            if (set.has(val)) set.delete(val); else set.add(val);
+            renderAll();
+          }
+        });
+      }
+
+      function renderCascade(){
+        if (!els.cascade) return;
+        const dims = [
+          {k:'none', lbl:'None (flat list)'},
+          {k:'week', lbl:'Requested week'},
+          {k:'city', lbl:'City'},
+          {k:'cust', lbl:'Customer'},
+          {k:'type', lbl:'Job type'},
+          {k:'tag',  lbl:'Tag'},
+          {k:'prio', lbl:'Priority'},
+        ];
+        els.cascade.innerHTML = `
+          <div class="casc-col primary">
+            <div class="casc-hd">Group by</div>
+            ${dims.map(d => `<div class="casc-opt ${state.groupBy===d.k?'on':''}" data-dim="${d.k}">${d.lbl}</div>`).join('')}
+          </div>`;
+      }
+      renderCascade();
+      if (els.cascade) {
+        els.cascade.addEventListener('click', e => {
+          const opt = e.target.closest('[data-dim]');
+          if (!opt) return;
+          state.groupBy = opt.dataset.dim;
+          renderCascade();
+          renderAll();
+          els.cascade.classList.remove('open');
+        });
+      }
+
+      // ----- staff / start / dur / pjt toggle
+      els.staff.addEventListener('change', renderPjt);
+      els.start.addEventListener('change', e => {
+        // naive parse HH:MM AM/PM
+        const m = e.target.value.match(/(\d{1,2})\s*:\s*(\d{1,2})\s*(AM|PM)/i);
+        if (m) {
+          let h = +m[1], min = +m[2], ap = m[3].toUpperCase();
+          if (ap === 'PM' && h < 12) h += 12;
+          if (ap === 'AM' && h === 12) h = 0;
+          state.startMin = h*60 + min;
+          renderPjt();
+        }
+      });
+      els.dur.addEventListener('input', e => { state.dur = Math.max(15, parseInt(e.target.value)||60); renderPjt(); });
+      els.pjtToggle.addEventListener('click', () => els.pjtToggle.classList.toggle('collapsed'));
+
+      // ----- assign
+      els.assign.addEventListener('click', () => {
+        const n = state.selected.size;
+        if (!n) return alert('No jobs selected.');
+        const staff = els.staff.value || '(no staff)';
+        alert(`Would assign ${n} job${n===1?'':'s'} to ${staff} on ${fmtDate(state.date)} starting ${fmtTime(state.startMin)}.`);
+      });
+
+      // ----- combo3 drawer close
+      if (els.drawerClose) {
+        els.drawerClose.addEventListener('click', () => {
+          state.selected.clear(); renderAll();
+        });
+      }
+
+      // initial
+      els.dateLbl.textContent = fmtDate(state.date);
+      renderAll();
+    }
+
+    setup('c1', {});
+    setup('c3', {});
+  })();
+
+  // ---- Grouping flyout ----
+  const groupBtn = document.getElementById('groupBtn');
+  const groupFly = document.getElementById('groupFly');
+  if (groupBtn) {
+    groupBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      groupFly.classList.toggle('open');
+    });
+    document.addEventListener('click', () => groupFly.classList.remove('open'));
+    groupFly.addEventListener('click', e => e.stopPropagation());
+  }
+
+  // ---- Row click → toggle selection and note expansion ----
+  document.querySelectorAll('table.jobs tbody tr:not(.group-header):not(.note-row)').forEach(tr => {
+    tr.addEventListener('click', (e) => {
+      if (e.target.tagName === 'SPAN' && e.target.classList.contains('note-icon')) return;
+      tr.classList.toggle('selected');
+    });
+  });
+
+  // ---- Card click selection in board / map ----
+  document.querySelectorAll('.job-card').forEach(c => {
+    c.addEventListener('click', () => c.classList.toggle('selected'));
+  });
+
+  // ---- City cluster click ----
+  document.querySelectorAll('.city-cluster').forEach(c => {
+    c.addEventListener('click', () => {
+      document.querySelectorAll('.city-cluster').forEach(x => x.classList.remove('active'));
+      c.classList.add('active');
+    });
+  });
+
+  // ---- Tweaks ----
+  const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "groupMode": "City",
+    "tagStyle": "Colored pills",
+    "showNoteIcons": true,
+    "trayColor": "Ink (default)",
+    "density": "Comfortable"
+  }/*EDITMODE-END*/;
+
+  const tweaksPanel = document.getElementById('tweaks');
+  window.addEventListener('message', e => {
+    if (!e.data || !e.data.type) return;
+    if (e.data.type === '__activate_edit_mode')   tweaksPanel.classList.add('active');
+    if (e.data.type === '__deactivate_edit_mode') tweaksPanel.classList.remove('active');
+  });
+  window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+
+  function applyTweaks(t) {
+    // Group mode label in table toolbar
+    const gb = document.querySelector('#groupBtn b');
+    if (gb) gb.textContent = t.groupMode;
+
+    // Note icons
+    document.querySelectorAll('.note-icon').forEach(n => {
+      n.style.display = t.showNoteIcons ? '' : 'none';
+    });
+
+    // Tag style
+    document.body.classList.remove('tag-mono', 'tag-icons');
+    if (t.tagStyle === 'Mono badges') document.body.classList.add('tag-mono');
+    if (t.tagStyle === 'Icons only')  document.body.classList.add('tag-icons');
+
+    // Tray color
+    document.querySelectorAll('.tray').forEach(tr => {
+      tr.style.background = t.trayColor === 'Accent (orange)' ? 'var(--accent)' :
+                            t.trayColor === 'Paper (light)'    ? '#efece0' : '';
+      tr.style.color      = t.trayColor === 'Paper (light)'    ? 'var(--ink)' : '';
+    });
+
+    // Density
+    document.body.classList.remove('d-compact','d-rich');
+    if (t.density === 'Compact') document.body.classList.add('d-compact');
+    if (t.density === 'Rich')    document.body.classList.add('d-rich');
+  }
+
+  const bindings = [
+    ['groupModeSel', 'groupMode'],
+    ['tagStyleSel', 'tagStyle'],
+    ['trayColorSel', 'trayColor'],
+    ['densitySel', 'density'],
+  ];
+  bindings.forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = TWEAK_DEFAULTS[key];
+    el.addEventListener('change', () => {
+      TWEAK_DEFAULTS[key] = el.value;
+      applyTweaks(TWEAK_DEFAULTS);
+      window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [key]: el.value } }, '*');
+    });
+  });
+  const noteIconChk = document.getElementById('noteIconChk');
+  noteIconChk.checked = TWEAK_DEFAULTS.showNoteIcons;
+  noteIconChk.addEventListener('change', () => {
+    TWEAK_DEFAULTS.showNoteIcons = noteIconChk.checked;
+    applyTweaks(TWEAK_DEFAULTS);
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { showNoteIcons: noteIconChk.checked } }, '*');
+  });
+
+  applyTweaks(TWEAK_DEFAULTS);
+</script>
+
+<style>
+  /* Density + tag-style variants (reactive to tweaks) */
+  body.d-compact table.jobs td { padding: 5px 8px; font-size: 12px; }
+  body.d-compact .job-card { padding: 5px 6px; font-size: 11.5px; margin-bottom: 4px; }
+  body.d-compact .cust-sub { display: none; }
+
+  body.d-rich table.jobs td { padding: 13px 12px; }
+  body.d-rich .job-card { padding: 10px 11px; }
+
+  body.tag-mono .tag {
+    background: #fff !important; color: var(--ink) !important;
+    border-color: var(--ink) !important; border-style: solid !important;
+    font-family: 'JetBrains Mono', monospace; font-size: 9.5px;
+  }
+  body.tag-icons .tag {
+    font-size: 0; padding: 1px 2px; min-width: 14px;
+  }
+  body.tag-icons .tag::before {
+    font-size: 11px; font-family: 'Kalam';
+  }
+  body.tag-icons .tag.vip::before { content: "★"; }
+  body.tag-icons .tag.commercial::before { content: "C"; }
+  body.tag-icons .tag.hoa::before { content: "H"; }
+  body.tag-icons .tag.prepaid::before { content: "$"; }
+  body.tag-icons .tag.ladder::before { content: "≡"; }
+  body.tag-icons .tag.dog::before { content: "🐾"; }
+  body.tag-icons .tag.recur::before { content: "↻"; }
+  body.tag-icons .tag.gate::before { content: "#"; }
+
+  /* Live facet rail — sub-C */
+  #sub-C .casc-check.dim { opacity: .4; }
+  #sub-C .casc-check { cursor: pointer; }
+  #sub-C tr[data-id] { cursor: pointer; }
+  #sub-C tr.row-sel { background: #fff3d6; }
+  #sub-C tr.row-sel .check { background: var(--ink); border-color: var(--ink); }
+  #sub-C tr.row-sel .check::after {
+    content: "✓"; color: #fff; font-size: 10px;
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; height: 100%;
+  }
+  #sub-C .primary-btn {
+    font-family: 'Kalam'; font-weight: 700; font-size: 13px;
+    background: var(--accent); color: #fff;
+    border: 1.5px solid var(--ink); padding: 5px 12px;
+    border-radius: 6px; cursor: pointer;
+    box-shadow: 2px 2px 0 rgba(0,0,0,.15);
+  }
+  #sub-C .facet-rail { max-height: 640px; overflow-y: auto; }
+  #sub-C .group-mark { cursor: pointer; user-select: none; }
+  #sub-C .chip.on { cursor: pointer; }
+
+  /* ---- Scheduling tray (sub-A) ---- */
+  .sched-tray {
+    margin-top: 14px;
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 6px 5px 7px 6px;
+    box-shadow: 3px 3px 0 rgba(0,0,0,.08);
+    padding: 12px 14px 10px;
+  }
+  .sched-row {
+    display: grid;
+    grid-template-columns: 1.2fr 1.4fr 1fr 1.2fr;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .sched-field {
+    display: flex; flex-direction: column; position: relative;
+  }
+  .sched-field > span:first-child {
+    font-family: 'Kalam'; font-size: 11px; color: var(--ink-faint);
+    text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px;
+  }
+  .sched-field input, .sched-field select {
+    font-family: 'Kalam'; font-size: 13px;
+    border: 1.5px solid var(--ink); border-radius: 4px;
+    padding: 6px 10px; background: #fff;
+    color: var(--ink);
+  }
+  .sched-field input[type="number"] { width: 100%; }
+  .sched-ic {
+    position: absolute; right: 8px; bottom: 7px;
+    font-size: 13px; pointer-events: none; color: var(--ink-faint);
+  }
+
+  .sched-toggle {
+    font-family: 'Kalam'; font-size: 12.5px;
+    color: var(--accent); cursor: pointer;
+    padding: 8px 0 6px;
+    border-top: 1px dashed var(--ink-faint);
+    margin-top: 4px;
+    user-select: none;
+  }
+  .sched-chev {
+    display: inline-block; transition: transform .15s;
+    margin-right: 4px;
+  }
+  .sched-toggle.collapsed .sched-chev { transform: rotate(-90deg); }
+  .sched-toggle.collapsed + .pjt-table { display: none; }
+
+  .pjt-table {
+    width: 100%; border-collapse: collapse;
+    font-family: 'Kalam'; font-size: 13px;
+    margin-bottom: 6px;
+  }
+  .pjt-table th {
+    font-family: 'Kalam'; font-weight: 700; font-size: 11px;
+    color: var(--ink-faint); text-transform: uppercase; letter-spacing: .06em;
+    text-align: left; padding: 5px 8px;
+    border-bottom: 1px solid var(--ink);
+  }
+  .pjt-table td {
+    padding: 7px 8px;
+    border-bottom: 1px dotted var(--ink-faint);
+  }
+  .pjt-table td:first-child { font-weight: 700; }
+  .time-pill {
+    display: inline-block;
+    font-family: 'Kalam'; font-size: 12.5px;
+    border: 1.5px solid var(--ink); border-radius: 999px;
+    padding: 2px 12px; background: #fff;
+    min-width: 86px; text-align: center;
+  }
+
+  .sched-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-top: 8px;
+    border-top: 1px dashed var(--ink-faint);
+  }
+  .sched-count {
+    font-family: 'Kalam'; font-size: 13px; color: var(--ink-soft);
+  }
+  .sched-assign {
+    font-family: 'Kalam'; font-weight: 700; font-size: 14px;
+    background: #7fb5b0; color: var(--ink);
+    border: 1.5px solid var(--ink); padding: 8px 18px;
+    border-radius: 6px; cursor: pointer;
+    box-shadow: 2px 2px 0 rgba(0,0,0,.15);
+  }
+  .sched-assign:hover { background: #8ec3be; }
+
+  /* ---- Combo 1 + 3: date button + calendar popover ---- */
+  .date-btn {
+    font-family: 'Kalam'; font-size: 13px;
+    border: 1.5px solid var(--ink); border-radius: 4px;
+    padding: 6px 10px; background: #fff; color: var(--ink);
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 6px; cursor: pointer; text-align: left;
+  }
+  .date-btn:hover { background: var(--paper); }
+  .cal-pop {
+    position: absolute; z-index: 100;
+    top: calc(100% + 6px); left: 0;
+    background: #1c1c1f; color: #fff;
+    border: 1.5px solid var(--ink); border-radius: 10px;
+    padding: 12px 14px 10px;
+    box-shadow: 4px 4px 0 rgba(0,0,0,.15);
+    font-family: 'Kalam'; font-size: 13px;
+    width: 240px;
+  }
+  .cal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .cal-nav {
+    background: transparent; color: #fff; border: none;
+    cursor: pointer; font-size: 16px; padding: 2px 8px;
+  }
+  .cal-nav:hover { color: var(--accent); }
+  .cal-month {
+    background: #2a2a2e; color: #fff;
+    border: 1px solid #444; border-radius: 6px;
+    font-family: 'Kalam'; font-size: 13px; padding: 2px 10px;
+  }
+  .cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 2px; text-align: center;
+  }
+  .cal-dow {
+    font-size: 10px; color: #9a9aa0;
+    text-transform: uppercase; padding: 2px 0;
+  }
+  .cal-dow.sat, .cal-dow.sun { color: var(--accent); opacity: .8; }
+  .cal-cell {
+    font-family: 'Kalam'; font-size: 12.5px;
+    padding: 4px 0; border-radius: 4px;
+    cursor: pointer; color: #dcdce0;
+  }
+  .cal-cell:hover { background: #2a2a2e; }
+  .cal-cell.muted { color: #5a5a60; }
+  .cal-cell.sat, .cal-cell.sun { color: #e08060; }
+  .cal-cell.muted.sat, .cal-cell.muted.sun { color: #6a4a3a; }
+  .cal-cell.today { outline: 1px solid #5a7fbf; }
+  .cal-cell.selected { background: #4a7fd9; color: #fff !important; font-weight: 700; }
+  .cal-foot {
+    margin-top: 8px; padding-top: 6px;
+    border-top: 1px solid #2a2a2e;
+    display: flex; justify-content: flex-start;
+  }
+  .cal-clear {
+    font-family: 'Kalam'; font-size: 12px;
+    background: #2a2a2e; color: #dcdce0;
+    border: 1px solid #444; border-radius: 4px;
+    padding: 3px 10px; cursor: pointer;
+  }
+  .cal-clear:hover { background: #3a3a3e; }
+
+  /* Note expansion row inside combo tables */
+  .note-row td {
+    background: #fff9e0 !important;
+    font-family: 'Kalam'; font-size: 12.5px;
+    color: var(--ink-soft); font-style: italic;
+    padding: 6px 12px 8px 44px !important;
+    border-top: 1px dashed var(--ink-faint);
+  }
+
+  /* Combo 3 drawer */
+  .drawer {
+    position: sticky; bottom: 0;
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 10px 10px 0 0;
+    box-shadow: 0 -4px 0 rgba(0,0,0,.05), 4px 0 0 rgba(0,0,0,.06);
+    padding: 10px 14px 12px;
+    margin-top: 14px;
+    max-height: 0; overflow: hidden;
+    transition: max-height .28s ease, padding .2s ease, opacity .2s ease;
+    opacity: 0;
+  }
+  .drawer.open {
+    max-height: 520px; opacity: 1;
+    padding: 10px 14px 12px;
+  }
+  .drawer-handle {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed var(--ink-faint);
+    margin-bottom: 10px;
+  }
+  .drawer-title {
+    font-family: 'Caveat'; font-size: 22px; font-weight: 700;
+  }
+  .drawer-close {
+    background: transparent; border: 1.5px solid var(--ink);
+    border-radius: 50%; width: 26px; height: 26px;
+    font-size: 18px; line-height: 1; cursor: pointer;
+    color: var(--ink);
+  }
+  .drawer-close:hover { background: var(--red-soft); }
+
+  /* Combo tables — sticky header while long */
+  .c1-table-wrap, .c3-table-wrap {
+    max-height: 440px; overflow-y: auto;
+    border: 1px dashed var(--ink-faint);
+    border-radius: 4px;
+  }
+  #c1Table, #c3Table { margin: 0; }
+  #c1Table thead th, #c3Table thead th {
+    position: sticky; top: 0;
+    background: var(--paper);
+    z-index: 2;
+  }
+
+  .note-icon.clickable { cursor: pointer; }  /* Inline note row (always visible, full-width under its customer row) */
+  tr.note-row-inline td {
+    background: #fffbe8 !important;
+    padding: 3px 8px 7px !important;
+    border-top: 0 !important;
+  }
+  tr.has-note + tr.note-row-inline td:first-child {
+    background: transparent !important;
+  }
+  .note-bubble {
+    display: inline-block;
+    font-family: 'Kalam'; font-size: 12.5px;
+    color: var(--ink-soft); font-style: italic;
+    line-height: 1.4;
+    padding: 3px 10px;
+    background: #fff6cf;
+    border-left: 2px solid var(--amber);
+    border-radius: 2px;
+  }
+  tr.row-sel td { background: #fff6d0 !important; }
+  tr.row-sel .check { background: var(--ink) !important; border-color: var(--ink); position: relative; }
+  tr.row-sel .check::after {
+    content: "✓"; position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 10px;
+  }
+</style>
+
+</body>
+</html>

@@ -399,16 +399,37 @@ export function LeadDetail() {
     setShowDeleteDialog(true);
   };
 
+  const handleMarkLost = useCallback(async () => {
+    if (!lead) return;
+    try {
+      await updateMutation.mutateAsync({ id: lead.id, data: { status: 'lost' as LeadStatus } });
+      toast.success('Lead marked as lost');
+    } catch (err: unknown) {
+      toast.error('Failed to mark as lost', { description: err instanceof Error ? err.message : 'Unknown error' });
+    }
+  }, [lead, updateMutation]);
+
+  const handleMarkSpam = useCallback(async () => {
+    if (!lead) return;
+    try {
+      await updateMutation.mutateAsync({ id: lead.id, data: { status: 'spam' as LeadStatus } });
+      toast.success('Lead marked as spam');
+    } catch (err: unknown) {
+      toast.error('Failed to mark as spam', { description: err instanceof Error ? err.message : 'Unknown error' });
+    }
+  }, [lead, updateMutation]);
+
   if (isLoading) return <LoadingPage message="Loading lead..." />;
   if (error) return <ErrorMessage error={error} onRetry={() => refetch()} />;
   if (!lead) return <ErrorMessage error={new Error('Lead not found')} />;
 
   const isTerminal = lead.status === 'converted' || lead.status === 'spam';
-  // H-1 / L-3: keep Mark Contacted visible on new, contacted so
+  // H-1 / L-3: keep Mark Contacted visible on new, contacted, qualified so
   // admins can re-stamp on follow-up contact attempts.
   const canMarkContacted =
     lead.status === 'new' ||
-    lead.status === 'contacted';
+    lead.status === 'contacted' ||
+    lead.status === 'qualified';
   const canRoute = !isTerminal && lead.status !== 'lost';
   const availableTransitions = VALID_TRANSITIONS[lead.status] ?? [];
   const assignedStaff = staffData?.items?.find((s) => s.id === lead.assigned_to);
@@ -447,6 +468,22 @@ export function LeadDetail() {
                 Mark as Contacted
               </Button>
             )}
+            {lead.status === 'qualified' && (
+              <Button
+                variant="outline"
+                onClick={handleMoveToJobs}
+                disabled={moveToJobsMutation.isPending}
+                data-testid="convert-lead-btn"
+                className="text-green-700 border-green-200 hover:bg-green-50"
+              >
+                {moveToJobsMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Briefcase className="mr-2 h-4 w-4" />
+                )}
+                Convert to Customer
+              </Button>
+            )}
             {canRoute && (
               <>
                 <Button
@@ -476,6 +513,28 @@ export function LeadDetail() {
                     <ShoppingCart className="mr-2 h-4 w-4" />
                   )}
                   Move to Sales
+                </Button>
+              </>
+            )}
+            {!isTerminal && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => void handleMarkLost()}
+                  disabled={updateMutation.isPending}
+                  data-testid="mark-lost-btn"
+                  className="text-slate-700 border-slate-200 hover:bg-slate-50"
+                >
+                  Mark as Lost
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => void handleMarkSpam()}
+                  disabled={updateMutation.isPending}
+                  data-testid="mark-spam-btn"
+                  className="text-slate-700 border-slate-200 hover:bg-slate-50"
+                >
+                  Mark as Spam
                 </Button>
               </>
             )}
@@ -767,7 +826,7 @@ export function LeadDetail() {
                     </div>
                   )}
                   {lead.intake_tag && (
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3" data-testid={`intake-tag-${lead.intake_tag}`}>
                       <div className="p-2 bg-slate-100 rounded-lg"><Globe className="h-5 w-5 text-slate-600" /></div>
                       <div>
                         <p className="text-xs text-slate-400">Intake Tag</p>
@@ -887,7 +946,7 @@ export function LeadDetail() {
               <>
                 <Separator className="bg-slate-100" />
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Conversion Details</h3>
+                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Converted</h3>
                   <div className="space-y-3">
                     {lead.customer_id && (
                       <Link

@@ -140,14 +140,14 @@ export function CampaignResponsesView({
               <CardTitle className="text-base font-semibold">
                 Response Buckets
               </CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
+              <a
+                href={`/api/v1/campaigns/${campaign.id}/responses/export.csv`}
+                download
                 data-testid="export-all-csv-btn"
-                onClick={() => downloadCsv(campaign.id)}
+                className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
               >
                 <Download className="h-4 w-4 mr-1" /> Export all CSV
-              </Button>
+              </a>
             </CardHeader>
             <CardContent className="space-y-2">
               {parsedBuckets.map((b) => (
@@ -276,14 +276,14 @@ function BucketRow({
         >
           View
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
+        <a
+          href={`/api/v1/campaigns/${campaignId}/responses/export.csv?option_key=${bucket.option_key}`}
+          download
           data-testid={`csv-option-${bucket.option_key}-btn`}
-          onClick={() => downloadCsv(campaignId, bucket.option_key ?? undefined)}
+          className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
         >
           CSV
-        </Button>
+        </a>
       </div>
     </div>
   );
