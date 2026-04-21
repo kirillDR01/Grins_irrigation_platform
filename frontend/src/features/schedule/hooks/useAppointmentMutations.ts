@@ -23,6 +23,10 @@ export function useCreateAppointment() {
     onSuccess: () => {
       // Invalidate all appointment lists and schedules
       queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
+      // Invalidate jobs ready to schedule (job is now assigned)
+      queryClient.invalidateQueries({ queryKey: ['jobs-ready-to-schedule'] });
+      // Invalidate dashboard today schedule
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'today-schedule'] });
     },
   });
 }

@@ -372,6 +372,15 @@ export interface JobReadyToSchedule {
   estimated_duration_minutes: number;
   requires_equipment: string[];
   status: string;
+  // Extended fields for pick-jobs page (Requirements: 4.1, 4.8, 4.9, 4.10)
+  address?: string;
+  customer_tags?: import('@/features/jobs/types').CustomerTag[];
+  property_type?: 'residential' | 'commercial' | null;
+  property_is_hoa?: boolean;
+  property_is_subscription?: boolean;
+  requested_week?: string;
+  notes?: string;
+  priority_level?: number;
 }
 
 export interface JobsReadyToScheduleResponse {

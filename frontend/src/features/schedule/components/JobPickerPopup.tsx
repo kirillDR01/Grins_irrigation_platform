@@ -1,4 +1,6 @@
 /**
+ * @deprecated Use /schedule/pick-jobs
+ *
  * Job picker popup for manual schedule assignment (Req 22, 23).
  * Mirrors Jobs tab columns/filters/search. Supports bulk assignment
  * with date + staff + global time allocation and per-job time adjustments.

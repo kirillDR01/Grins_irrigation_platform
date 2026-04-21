@@ -22,6 +22,11 @@ const ScheduleGeneratePage = lazy(() =>
     default: m.ScheduleGeneratePage,
   }))
 );
+const PickJobsPage = lazy(() =>
+  import('@/features/schedule/pages/PickJobsPage').then((m) => ({
+    default: m.PickJobsPage,
+  }))
+);
 const StaffPage = lazy(() =>
   import('@/pages/Staff').then((m) => ({ default: m.StaffPage }))
 );
@@ -201,6 +206,10 @@ export const router = createBrowserRouter([
       {
         path: 'schedule/generate',
         element: <ScheduleGeneratePage />,
+      },
+      {
+        path: 'schedule/pick-jobs',
+        element: <PickJobsPage />,
       },
       {
         path: 'staff',

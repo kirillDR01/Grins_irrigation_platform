@@ -6,7 +6,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { format, startOfWeek, isSameDay } from 'date-fns';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { PageHeader } from '@/shared/components/PageHeader';
@@ -32,7 +32,6 @@ import { NoReplyReviewQueue } from './NoReplyReviewQueue';
 import { DaySelector } from './DaySelector';
 import { LeadTimeIndicator } from './LeadTimeIndicator';
 import { JobSelector } from './JobSelector';
-import { JobPickerPopup } from './JobPickerPopup';
 import { InlineCustomerPanel } from './InlineCustomerPanel';
 import { SendAllConfirmationsButton } from './SendAllConfirmationsButton';
 import { scheduleGenerationApi } from '../api/scheduleGenerationApi';
@@ -58,10 +57,11 @@ export function SchedulePage() {
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
   const [showJobSelector, setShowJobSelector] = useState(false);
-  const [showJobPicker, setShowJobPicker] = useState(false);
   const [inlinePanelAppointmentId, setInlinePanelAppointmentId] = useState<string | null>(null);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   
+  const navigate = useNavigate();
+
   // Pre-fill job from query param (Req 11.7 — "Schedule" button on Jobs tab)
   const [searchParams, setSearchParams] = useSearchParams();
   const [preSelectedJobId, setPreSelectedJobId] = useState<string | null>(null);
@@ -359,13 +359,26 @@ export function SchedulePage() {
               </TabsList>
             </Tabs>
             <Button
-              onClick={() => setShowJobPicker(true)}
+              onClick={() => {
+                const params = new URLSearchParams();
+                if (selectedDate) params.set('date', format(selectedDate, 'yyyy-MM-dd'));
+                navigate(`/schedule/pick-jobs${params.toString() ? `?${params}` : ''}`);
+              }}
               variant="outline"
               data-testid="add-jobs-btn"
               className="border-teal-200 text-teal-600 hover:bg-teal-50"
             >
               <CalendarPlus className="mr-2 h-4 w-4" />
               Add Jobs
+            </Button>
+            <Button
+              onClick={() => navigate('/schedule/pick-jobs')}
+              variant="outline"
+              data-testid="pick-jobs-btn"
+              className="border-teal-200 text-teal-600 hover:bg-teal-50"
+            >
+              <CalendarPlus className="mr-2 h-4 w-4" />
+              Pick jobs to schedule
             </Button>
             {draftCount > 0 && (
               <SendAllConfirmationsButton draftAppointments={draftAppointments} />
@@ -526,13 +539,6 @@ export function SchedulePage() {
         open={showRestoreDialog}
         onOpenChange={setShowRestoreDialog}
         auditId={selectedAuditId}
-      />
-
-      {/* Job Picker Popup (Req 22, 23) — bulk assignment with per-job time adjustments */}
-      <JobPickerPopup
-        open={showJobPicker}
-        onOpenChange={setShowJobPicker}
-        defaultDate={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined}
       />
 
       {/* Legacy Job Selector Modal (Req 26) */}
