@@ -331,7 +331,7 @@ export function PickJobsPage() {
       </header>
 
       {/* Facet rail */}
-      <aside className="hidden lg:block overflow-y-auto pl-6">
+      <aside className="overflow-y-auto pl-6">
         <FacetRail
           jobs={jobs}
           facets={facets}
