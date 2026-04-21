@@ -6,11 +6,20 @@
  */
 
 import { useState } from 'react';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { parseLocalDate } from '@/shared/utils/dateUtils';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Calendar,
   User,
@@ -29,16 +38,31 @@ import {
   FileText,
   Timer,
   ChevronDown,
+  CalendarClock,
+  Check,
+  Ban,
+  RefreshCw,
+  Send,
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { useAppointment } from '../hooks/useAppointments';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getErrorMessage } from '@/core/api/client';
+import { appointmentKeys, useAppointment } from '../hooks/useAppointments';
+import { useAppointmentTimeline } from '../hooks/useAppointmentTimeline';
 import {
   useConfirmAppointment,
   useCancelAppointment,
   useMarkAppointmentNoShow,
+  useRescheduleFromRequest,
 } from '../hooks/useAppointmentMutations';
+import { useResolveRescheduleRequest } from '../hooks/useRescheduleRequests';
+import {
+  useMarkContacted,
+  useSendReminder,
+} from '../hooks/useNoReplyReview';
 import { appointmentStatusConfig } from '../types';
-import type { Appointment } from '../types';
+import type { Appointment, PendingRescheduleRequest } from '../types';
+import { AppointmentCommunicationTimeline } from './AppointmentCommunicationTimeline';
+import { AppointmentForm } from './AppointmentForm';
 import { jobApi } from '@/features/jobs/api/jobApi';
 import { customerApi } from '@/features/customers/api/customerApi';
 import { LoadingSpinner } from '@/shared/components/LoadingSpinner';
@@ -63,11 +87,33 @@ export function AppointmentDetail({
   onEdit,
 }: AppointmentDetailProps) {
   const { data: appointment, isLoading, error } = useAppointment(appointmentId);
+  const {
+    data: timeline,
+    isLoading: timelineLoading,
+    error: timelineError,
+  } = useAppointmentTimeline(appointmentId);
 
+  const queryClient = useQueryClient();
   const confirmMutation = useConfirmAppointment();
   const cancelMutation = useCancelAppointment();
   const noShowMutation = useMarkAppointmentNoShow();
+  const resolveRescheduleMutation = useResolveRescheduleRequest();
+  const rescheduleFromRequestMutation = useRescheduleFromRequest();
+  const markContactedMutation = useMarkContacted();
+  const sendReminderMutation = useSendReminder();
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [rescheduleTarget, setRescheduleTarget] =
+    useState<PendingRescheduleRequest | null>(null);
+  const [reminderConfirmOpen, setReminderConfirmOpen] = useState(false);
+
+  const invalidateTimeline = () => {
+    queryClient.invalidateQueries({
+      queryKey: appointmentKeys.timeline(appointmentId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: appointmentKeys.detail(appointmentId),
+    });
+  };
 
   // Fetch job details for enrichment (Req 40)
   const { data: job } = useQuery({
@@ -175,6 +221,87 @@ export function AppointmentDetail({
     'in_progress',
   ].includes(appointment.status);
 
+  const pendingReschedule = timeline?.pending_reschedule_request ?? null;
+  const needsReviewNoReply =
+    timeline?.needs_review_reason === 'no_confirmation_response';
+  const isOptedOut = timeline?.opt_out?.consent_given === false;
+
+  const handleResolveReschedule = async () => {
+    if (!pendingReschedule) return;
+    try {
+      await resolveRescheduleMutation.mutateAsync({ id: pendingReschedule.id });
+      invalidateTimeline();
+      toast.success('Reschedule request resolved');
+    } catch (err) {
+      toast.error('Failed to resolve request', {
+        description: getErrorMessage(err),
+      });
+    }
+  };
+
+  const handleRescheduleSubmit = async (payload: {
+    scheduled_date: string;
+    time_window_start: string;
+    time_window_end: string;
+    staff_id: string;
+    notes?: string;
+  }) => {
+    if (!rescheduleTarget) throw new Error('No reschedule target');
+    const iso = `${payload.scheduled_date}T${payload.time_window_start}:00`;
+    try {
+      await rescheduleFromRequestMutation.mutateAsync({
+        id: rescheduleTarget.appointment_id,
+        new_scheduled_at: iso,
+      });
+    } catch (err) {
+      toast.error('Failed to send reschedule', {
+        description: getErrorMessage(err),
+      });
+      throw err;
+    }
+  };
+
+  const handleRescheduleSuccess = () => {
+    if (rescheduleTarget) {
+      resolveRescheduleMutation.mutate({ id: rescheduleTarget.id });
+    }
+    setRescheduleTarget(null);
+    invalidateTimeline();
+    toast.success(
+      'Reschedule sent — customer will receive a new confirmation request.',
+    );
+  };
+
+  const handleMarkContacted = async () => {
+    try {
+      await markContactedMutation.mutateAsync(appointmentId);
+      invalidateTimeline();
+      toast.success('Marked as contacted');
+    } catch (err) {
+      toast.error('Failed to mark as contacted', {
+        description: getErrorMessage(err),
+      });
+    }
+  };
+
+  const handleSendReminder = async () => {
+    setReminderConfirmOpen(false);
+    try {
+      await sendReminderMutation.mutateAsync(appointmentId);
+      invalidateTimeline();
+      toast.success('Reminder SMS sent');
+    } catch (err) {
+      toast.error('Failed to send reminder', {
+        description: getErrorMessage(err),
+      });
+    }
+  };
+
+  const optOutMethodLabel = timeline?.opt_out?.method ?? 'unknown';
+  const optOutDateLabel = timeline?.opt_out?.recorded_at
+    ? format(new Date(timeline.opt_out.recorded_at), 'MMM d, yyyy')
+    : '';
+
   return (
     <div data-testid="appointment-detail" className="bg-white">
       {/* Header Section - Date & Status */}
@@ -199,14 +326,126 @@ export function AppointmentDetail({
               </div>
             </div>
           </div>
-          <Badge
-            className={`${statusConfig.bgColor} ${statusConfig.color} px-2 py-0.5 rounded-full text-xs font-medium`}
-            data-testid={`status-${appointment.status}`}
-          >
-            {statusConfig.label}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {isOptedOut && (
+              <Badge
+                className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1"
+                data-testid={`opt-out-badge-${appointmentId}`}
+                title={`Opted out via ${optOutMethodLabel}${optOutDateLabel ? ` on ${optOutDateLabel}` : ''}`}
+              >
+                <Ban className="h-3 w-3" />
+                Opted out
+              </Badge>
+            )}
+            <Badge
+              className={`${statusConfig.bgColor} ${statusConfig.color} px-2 py-0.5 rounded-full text-xs font-medium`}
+              data-testid={`status-${appointment.status}`}
+            >
+              {statusConfig.label}
+            </Badge>
+          </div>
         </div>
       </div>
+
+      {/* Gap 11 — Communication banners */}
+      {pendingReschedule && (
+        <div
+          className="px-4 py-3 border-b border-amber-100 bg-amber-50"
+          data-testid={`reschedule-banner-${appointmentId}`}
+        >
+          <div className="flex items-start gap-2">
+            <CalendarClock className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-amber-900">
+                Customer requested reschedule{' '}
+                <span className="text-xs text-amber-700">
+                  {formatDistanceToNow(new Date(pendingReschedule.created_at), {
+                    addSuffix: true,
+                  })}
+                </span>
+              </p>
+              {pendingReschedule.raw_alternatives_text && (
+                <p className="text-xs text-amber-800 mt-0.5">
+                  &quot;{pendingReschedule.raw_alternatives_text}&quot;
+                </p>
+              )}
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-teal-200 text-teal-700 hover:bg-teal-50"
+                  onClick={() => setRescheduleTarget(pendingReschedule)}
+                  data-testid={`reschedule-to-alternative-${appointmentId}-btn`}
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Reschedule to Alternative
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleResolveReschedule}
+                  disabled={resolveRescheduleMutation.isPending}
+                  data-testid={`resolve-reschedule-${appointmentId}-btn`}
+                >
+                  <Check className="h-3 w-3 mr-1" />
+                  Resolve without reschedule
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {needsReviewNoReply && (
+        <div
+          className="px-4 py-3 border-b border-slate-200 bg-slate-100"
+          data-testid={`no-reply-banner-${appointmentId}`}
+        >
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 text-orange-500 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-slate-800">
+                No reply received yet.
+              </p>
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                {customer?.phone && (
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="border-teal-200 text-teal-600 hover:bg-teal-50"
+                    data-testid={`call-customer-${appointmentId}-btn`}
+                  >
+                    <a href={`tel:${customer.phone}`}>
+                      <Phone className="h-3 w-3 mr-1" />
+                      Call Customer
+                    </a>
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setReminderConfirmOpen(true)}
+                  data-testid={`send-reminder-${appointmentId}-btn`}
+                >
+                  <Send className="h-3 w-3 mr-1" />
+                  Send Reminder
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleMarkContacted}
+                  disabled={markContactedMutation.isPending}
+                  data-testid={`mark-contacted-${appointmentId}-btn`}
+                >
+                  <Check className="h-3 w-3 mr-1" />
+                  Mark Contacted
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Content Section */}
       <div className="p-4 space-y-3">
@@ -359,6 +598,13 @@ export function AppointmentDetail({
             <p className="text-xs text-slate-600 pl-5 line-clamp-3">{appointment.notes}</p>
           </div>
         )}
+
+        {/* Communication Timeline (Gap 11) */}
+        <AppointmentCommunicationTimeline
+          data={timeline}
+          isLoading={timelineLoading}
+          error={timelineError}
+        />
 
         {/* Timeline Section - Inline */}
         {(appointment.en_route_at || appointment.arrived_at || appointment.completed_at) && (
@@ -521,6 +767,87 @@ export function AppointmentDetail({
         onConfirm={handleCancelConfirmed}
         isLoading={cancelMutation.isPending}
       />
+
+      {/* Reschedule-from-request dialog (Gap 11) */}
+      <Dialog
+        open={!!rescheduleTarget}
+        onOpenChange={(open) => {
+          if (!open) setRescheduleTarget(null);
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Reschedule Appointment</DialogTitle>
+            {rescheduleTarget?.raw_alternatives_text && (
+              <p className="text-sm text-amber-600">
+                Customer requested: {rescheduleTarget.raw_alternatives_text}
+              </p>
+            )}
+          </DialogHeader>
+          {rescheduleTarget && (
+            <AppointmentForm
+              appointment={appointment}
+              onSuccess={handleRescheduleSuccess}
+              onCancel={() => setRescheduleTarget(null)}
+              submitOverride={handleRescheduleSubmit}
+              submitLabel="Send Reschedule"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Send-reminder confirmation dialog (Gap 11) */}
+      <Dialog
+        open={reminderConfirmOpen}
+        onOpenChange={setReminderConfirmOpen}
+      >
+        <DialogContent
+          className="sm:max-w-md"
+          data-testid={`send-reminder-confirm-dialog-${appointmentId}`}
+        >
+          <DialogHeader>
+            <DialogTitle>Send reminder SMS?</DialogTitle>
+            <DialogDescription>
+              This will re-fire the Y/R/C confirmation prompt to the customer.
+              Confirm the recipient before sending — on dev, only{' '}
+              <strong>+19527373312</strong> may receive real SMS.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="bg-slate-50 rounded-lg p-4 space-y-1 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Customer</span>
+              <span className="font-medium text-slate-800">
+                {customer
+                  ? `${customer.first_name} ${customer.last_name}`
+                  : 'Unknown customer'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Phone</span>
+              <span className="font-mono text-slate-800">
+                {customer?.phone ?? '—'}
+              </span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setReminderConfirmOpen(false)}
+              disabled={sendReminderMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendReminder}
+              disabled={sendReminderMutation.isPending}
+              data-testid={`confirm-send-reminder-${appointmentId}-btn`}
+            >
+              <Send className="h-3 w-3 mr-1" />
+              Send reminder
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

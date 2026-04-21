@@ -87,3 +87,37 @@ class SmsConsentRepository(LoggerMixin):
             opted_out_count=len(opted_out),
         )
         return opted_out
+
+    async def get_latest_for_customer(
+        self,
+        customer_id: UUID,
+    ) -> SmsConsentRecord | None:
+        """Return the most recent SmsConsentRecord for a customer.
+
+        The consent table is INSERT-ONLY so the "current" state for a
+        customer is the row with the newest ``created_at``. Callers decide
+        whether to interpret ``consent_given=False`` as opted-out; this
+        repo does not filter.
+
+        Args:
+            customer_id: The customer UUID.
+
+        Returns:
+            The newest SmsConsentRecord or None if the customer has no rows.
+        """
+        self.log_started(
+            "get_latest_for_customer",
+            customer_id=str(customer_id),
+        )
+        result = await self.session.execute(
+            select(SmsConsentRecord)
+            .where(SmsConsentRecord.customer_id == customer_id)
+            .order_by(SmsConsentRecord.created_at.desc())
+            .limit(1),
+        )
+        row: SmsConsentRecord | None = result.scalar_one_or_none()
+        self.log_completed(
+            "get_latest_for_customer",
+            found=row is not None,
+        )
+        return row

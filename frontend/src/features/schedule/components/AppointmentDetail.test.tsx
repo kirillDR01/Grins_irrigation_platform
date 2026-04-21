@@ -63,9 +63,14 @@ const mockCustomer = {
 // ── Mock hooks ───────────────────────────────────────────────────────────────
 
 const mockUseAppointment = vi.fn();
+const mockUseAppointmentTimeline = vi.fn();
 const mockConfirmMutateAsync = vi.fn();
 const mockCancelMutateAsync = vi.fn();
 const mockNoShowMutateAsync = vi.fn();
+const mockResolveRescheduleMutateAsync = vi.fn();
+const mockRescheduleFromRequestMutateAsync = vi.fn();
+const mockMarkContactedMutateAsync = vi.fn();
+const mockSendReminderMutateAsync = vi.fn();
 
 vi.mock('../hooks/useAppointments', () => ({
   useAppointment: (...args: unknown[]) => mockUseAppointment(...args),
@@ -77,7 +82,32 @@ vi.mock('../hooks/useAppointments', () => ({
     detail: (id: string) => ['appointments', 'detail', id] as const,
     daily: (date: string) => ['appointments', 'daily', date] as const,
     weekly: (s?: string, e?: string) => ['appointments', 'weekly', s, e] as const,
+    timeline: (id: string) => ['appointments', 'timeline', id] as const,
   },
+}));
+
+vi.mock('../hooks/useAppointmentTimeline', () => ({
+  useAppointmentTimeline: (...args: unknown[]) =>
+    mockUseAppointmentTimeline(...args),
+}));
+
+vi.mock('../hooks/useRescheduleRequests', () => ({
+  useResolveRescheduleRequest: () => ({
+    mutateAsync: mockResolveRescheduleMutateAsync,
+    mutate: mockResolveRescheduleMutateAsync,
+    isPending: false,
+  }),
+}));
+
+vi.mock('../hooks/useNoReplyReview', () => ({
+  useMarkContacted: () => ({
+    mutateAsync: mockMarkContactedMutateAsync,
+    isPending: false,
+  }),
+  useSendReminder: () => ({
+    mutateAsync: mockSendReminderMutateAsync,
+    isPending: false,
+  }),
 }));
 
 vi.mock('../hooks/useAppointmentMutations', () => ({
@@ -95,6 +125,10 @@ vi.mock('../hooks/useAppointmentMutations', () => ({
   }),
   useSendConfirmation: () => ({
     mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useRescheduleFromRequest: () => ({
+    mutateAsync: mockRescheduleFromRequestMutateAsync,
     isPending: false,
   }),
 }));
@@ -153,6 +187,14 @@ vi.mock('./AppointmentNotes', () => ({
 vi.mock('./ReviewRequest', () => ({
   ReviewRequest: () => <div data-testid="review-request" />,
 }));
+vi.mock('./AppointmentForm', () => ({
+  AppointmentForm: () => <div data-testid="appointment-form" />,
+}));
+vi.mock('./AppointmentCommunicationTimeline', () => ({
+  AppointmentCommunicationTimeline: () => (
+    <div data-testid="appointment-communication-timeline" />
+  ),
+}));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -172,6 +214,18 @@ function createWrapper() {
 function setupDefaultMocks() {
   mockUseAppointment.mockReturnValue({
     data: mockAppointment,
+    isLoading: false,
+    error: null,
+  });
+  mockUseAppointmentTimeline.mockReturnValue({
+    data: {
+      appointment_id: 'appt-001',
+      events: [],
+      pending_reschedule_request: null,
+      needs_review_reason: null,
+      opt_out: null,
+      last_event_at: null,
+    },
     isLoading: false,
     error: null,
   });
@@ -443,5 +497,129 @@ describe('AppointmentDetail — Send Confirmation button (bughunt M-1)', () => {
     expect(
       screen.queryByTestId('send-confirmation-btn-appt-001'),
     ).not.toBeInTheDocument();
+  });
+});
+
+// Gap 11 — Communication timeline, banners, opt-out badge.
+describe('AppointmentDetail — Communication (Gap 11)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupDefaultMocks();
+  });
+
+  it('renders the communication timeline section', async () => {
+    render(<AppointmentDetail appointmentId="appt-001" />, {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('appointment-communication-timeline'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('renders opt-out badge when consent is revoked', async () => {
+    mockUseAppointmentTimeline.mockReturnValue({
+      data: {
+        appointment_id: 'appt-001',
+        events: [],
+        pending_reschedule_request: null,
+        needs_review_reason: null,
+        opt_out: {
+          consent_given: false,
+          recorded_at: '2026-04-20T10:00:00Z',
+          method: 'text_stop',
+        },
+        last_event_at: null,
+      },
+      isLoading: false,
+      error: null,
+    });
+
+    render(<AppointmentDetail appointmentId="appt-001" />, {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('opt-out-badge-appt-001'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('renders reschedule banner and calls resolve mutation', async () => {
+    mockUseAppointmentTimeline.mockReturnValue({
+      data: {
+        appointment_id: 'appt-001',
+        events: [],
+        pending_reschedule_request: {
+          id: 'rr-1',
+          job_id: 'job-001',
+          appointment_id: 'appt-001',
+          customer_id: 'cust-001',
+          original_reply_id: null,
+          requested_alternatives: null,
+          raw_alternatives_text: 'Tuesday at 3',
+          status: 'open',
+          created_at: '2026-04-20T12:00:00Z',
+          resolved_at: null,
+        },
+        needs_review_reason: null,
+        opt_out: null,
+        last_event_at: '2026-04-20T12:00:00Z',
+      },
+      isLoading: false,
+      error: null,
+    });
+    mockResolveRescheduleMutateAsync.mockResolvedValue({});
+
+    const user = userEvent.setup();
+    render(<AppointmentDetail appointmentId="appt-001" />, {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('reschedule-banner-appt-001'),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId('resolve-reschedule-appt-001-btn'));
+
+    expect(mockResolveRescheduleMutateAsync).toHaveBeenCalledWith({
+      id: 'rr-1',
+    });
+  });
+
+  it('renders no-reply banner and calls mark-contacted mutation', async () => {
+    mockUseAppointmentTimeline.mockReturnValue({
+      data: {
+        appointment_id: 'appt-001',
+        events: [],
+        pending_reschedule_request: null,
+        needs_review_reason: 'no_confirmation_response',
+        opt_out: null,
+        last_event_at: null,
+      },
+      isLoading: false,
+      error: null,
+    });
+    mockMarkContactedMutateAsync.mockResolvedValue({});
+
+    const user = userEvent.setup();
+    render(<AppointmentDetail appointmentId="appt-001" />, {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('no-reply-banner-appt-001'),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId('mark-contacted-appt-001-btn'));
+
+    expect(mockMarkContactedMutateAsync).toHaveBeenCalledWith('appt-001');
   });
 });

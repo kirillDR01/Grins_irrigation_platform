@@ -10,6 +10,7 @@ import type {
   AppointmentUpdate,
   AppointmentListParams,
   AppointmentPaginatedResponse,
+  AppointmentTimelineResponse,
   DailyScheduleResponse,
   NeedsReviewAppointment,
   StaffDailyScheduleResponse,
@@ -68,6 +69,20 @@ export const appointmentApi = {
    */
   async getById(id: string): Promise<Appointment> {
     const response = await apiClient.get<Appointment>(`${BASE_URL}/${id}`);
+    return response.data;
+  },
+
+  /**
+   * Get the communication timeline for an appointment (Gap 11).
+   *
+   * Returns chronologically-sorted outbound SMS, inbound replies,
+   * reschedule-request transitions, and the customer's latest SMS
+   * consent state.
+   */
+  async getTimeline(id: string): Promise<AppointmentTimelineResponse> {
+    const response = await apiClient.get<AppointmentTimelineResponse>(
+      `${BASE_URL}/${id}/timeline`,
+    );
     return response.data;
   },
 

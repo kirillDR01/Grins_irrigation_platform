@@ -19,6 +19,7 @@ export const appointmentKeys = {
     [...appointmentKeys.all, 'staffDaily', staffId, date] as const,
   weekly: (startDate?: string, endDate?: string) =>
     [...appointmentKeys.all, 'weekly', startDate, endDate] as const,
+  timeline: (id: string) => [...appointmentKeys.all, 'timeline', id] as const,
 };
 
 /**

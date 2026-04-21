@@ -34,6 +34,7 @@ from grins_platform.api.v1.auth_dependencies import (
 )
 from grins_platform.api.v1.dependencies import (
     get_appointment_service,
+    get_appointment_timeline_service,
     get_db_session,
     get_full_appointment_service,
 )
@@ -70,6 +71,7 @@ from grins_platform.schemas.appointment_ops import (
     RescheduleRequest,
     ReviewRequestResult,
 )
+from grins_platform.schemas.appointment_timeline import AppointmentTimelineResponse
 from grins_platform.schemas.estimate import (
     EstimateCreate,
     EstimateResponse,
@@ -79,6 +81,9 @@ from grins_platform.schemas.invoice import (
 )
 from grins_platform.services.appointment_service import (
     AppointmentService,  # noqa: TC001 - Required at runtime for FastAPI DI
+)
+from grins_platform.services.appointment_timeline_service import (
+    AppointmentTimelineService,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
 from grins_platform.services.photo_service import PhotoService, UploadContext
 
@@ -801,6 +806,54 @@ async def get_appointment(
 
     _endpoints.log_completed("get_appointment", appointment_id=str(appointment_id))
     return AppointmentResponse.model_validate(result)  # type: ignore[no-any-return]
+
+
+# =============================================================================
+# GET /api/v1/appointments/{id}/timeline - Communication Timeline (Gap 11)
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/{appointment_id}/timeline",
+    response_model=AppointmentTimelineResponse,
+    summary="Get appointment communication timeline",
+    description=(
+        "Returns a chronologically-sorted communication timeline for an "
+        "appointment: outbound SMS, inbound replies, reschedule requests, "
+        "and opt-out state. Backs Gap 11 AppointmentDetail enhancement."
+    ),
+)
+async def get_appointment_timeline(
+    appointment_id: UUID,
+    service: Annotated[
+        AppointmentTimelineService,
+        Depends(get_appointment_timeline_service),
+    ],
+) -> AppointmentTimelineResponse:
+    """Get appointment communication timeline.
+
+    Validates: Gap 11.
+    """
+    _endpoints.log_started(
+        "get_appointment_timeline",
+        appointment_id=str(appointment_id),
+    )
+
+    try:
+        result = await service.get_timeline(appointment_id)
+    except AppointmentNotFoundError as e:
+        _endpoints.log_rejected("get_appointment_timeline", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Appointment not found: {e.appointment_id}",
+        ) from e
+
+    _endpoints.log_completed(
+        "get_appointment_timeline",
+        appointment_id=str(appointment_id),
+        event_count=len(result.events),
+    )
+    return result
 
 
 # =============================================================================

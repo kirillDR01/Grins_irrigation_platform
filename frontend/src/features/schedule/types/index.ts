@@ -563,3 +563,52 @@ export interface StaffTimeAnalytics {
   avg_total_time: number;
   flagged: boolean;
 }
+
+// =============================================================================
+// Appointment Communication Timeline (Gap 11)
+// =============================================================================
+
+export type TimelineEventKind =
+  | 'outbound_sms'
+  | 'inbound_reply'
+  | 'reschedule_opened'
+  | 'reschedule_resolved'
+  | 'opt_out'
+  | 'opt_in';
+
+export interface TimelineEvent {
+  id: string;
+  kind: TimelineEventKind;
+  occurred_at: string;
+  summary: string;
+  details: Record<string, unknown>;
+  source_id: string | null;
+}
+
+export interface OptOutState {
+  consent_given: boolean;
+  recorded_at: string | null;
+  method: string | null;
+}
+
+export interface PendingRescheduleRequest {
+  id: string;
+  job_id: string;
+  appointment_id: string;
+  customer_id: string;
+  original_reply_id: string | null;
+  requested_alternatives: Record<string, unknown> | null;
+  raw_alternatives_text: string | null;
+  status: string;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+export interface AppointmentTimelineResponse {
+  appointment_id: string;
+  events: TimelineEvent[];
+  pending_reschedule_request: PendingRescheduleRequest | null;
+  needs_review_reason: string | null;
+  opt_out: OptOutState | null;
+  last_event_at: string | null;
+}

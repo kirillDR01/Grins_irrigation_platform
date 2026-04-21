@@ -266,6 +266,41 @@ class SentMessageRepository(LoggerMixin):
         message: SentMessage | None = result.scalar_one_or_none()
         return message
 
+    async def list_by_appointment(
+        self,
+        appointment_id: UUID,
+        include_superseded: bool = False,
+    ) -> list[SentMessage]:
+        """List outbound messages for an appointment, newest first.
+
+        Args:
+            appointment_id: The appointment UUID
+            include_superseded: If False (default), filter out rows whose
+                ``superseded_at`` is set (stale confirmations).
+
+        Returns:
+            Messages ordered by ``sent_at`` desc with ``created_at`` as
+            fallback so unsent (pending) rows still appear at the top.
+        """
+        self.log_started(
+            "list_by_appointment",
+            appointment_id=str(appointment_id),
+        )
+        conditions = [SentMessage.appointment_id == appointment_id]
+        if not include_superseded:
+            conditions.append(SentMessage.superseded_at.is_(None))
+        result = await self.session.execute(
+            select(SentMessage)
+            .where(and_(*conditions))
+            .order_by(
+                SentMessage.sent_at.desc().nulls_last(),
+                SentMessage.created_at.desc(),
+            ),
+        )
+        messages = list(result.scalars().all())
+        self.log_completed("list_by_appointment", count=len(messages))
+        return messages
+
     async def delete(self, message_id: UUID) -> bool:
         """Delete a message (only if pending or scheduled).
 

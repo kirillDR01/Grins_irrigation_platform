@@ -47,6 +47,9 @@ export function useMarkContacted() {
       qc.invalidateQueries({
         queryKey: appointmentKeys.detail(appointmentId),
       });
+      qc.invalidateQueries({
+        queryKey: appointmentKeys.timeline(appointmentId),
+      });
     },
   });
 }
@@ -63,8 +66,11 @@ export function useSendReminder() {
   return useMutation({
     mutationFn: (appointmentId: string) =>
       appointmentApi.sendReminder(appointmentId),
-    onSuccess: () => {
+    onSuccess: (_, appointmentId) => {
       qc.invalidateQueries({ queryKey: noReplyReviewKeys.all });
+      qc.invalidateQueries({
+        queryKey: appointmentKeys.timeline(appointmentId),
+      });
     },
   });
 }

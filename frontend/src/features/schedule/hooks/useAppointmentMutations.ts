@@ -85,6 +85,9 @@ export function useCancelAppointment() {
       queryClient.invalidateQueries({
         queryKey: [...appointmentKeys.all, 'staffDaily'],
       });
+      queryClient.invalidateQueries({
+        queryKey: appointmentKeys.timeline(id),
+      });
     },
   });
 }
@@ -105,6 +108,9 @@ export function useConfirmAppointment() {
       });
       queryClient.invalidateQueries({
         queryKey: [...appointmentKeys.all, 'weekly'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: appointmentKeys.timeline(id),
       });
     },
   });

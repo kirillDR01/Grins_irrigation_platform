@@ -49,3 +49,5 @@ export {
   useRescheduleRequests,
   useResolveRescheduleRequest,
 } from './useRescheduleRequests';
+
+export { useAppointmentTimeline } from './useAppointmentTimeline';

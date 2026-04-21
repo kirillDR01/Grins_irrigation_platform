@@ -1358,3 +1358,52 @@ class JobConfirmationService(LoggerMixin):
     # to :meth:`find_confirmation_message`. Remove in a follow-up once unit
     # tests targeting the private name are updated.
     _find_confirmation_message = find_confirmation_message
+
+    # ------------------------------------------------------------------
+    # Gap 11 — appointment-scoped listings for the timeline aggregator
+    # ------------------------------------------------------------------
+
+    async def list_responses_by_appointment(
+        self,
+        appointment_id: UUID,
+    ) -> list[JobConfirmationResponse]:
+        """List all inbound Y/R/C replies for an appointment, newest first.
+
+        Validates: Gap 11.
+        """
+        self.log_started(
+            "list_responses_by_appointment",
+            appointment_id=str(appointment_id),
+        )
+        result = await self.db.execute(
+            select(JobConfirmationResponse)
+            .where(JobConfirmationResponse.appointment_id == appointment_id)
+            .order_by(JobConfirmationResponse.received_at.desc()),
+        )
+        rows = list(result.scalars().all())
+        self.log_completed("list_responses_by_appointment", count=len(rows))
+        return rows
+
+    async def list_reschedule_requests_by_appointment(
+        self,
+        appointment_id: UUID,
+    ) -> list[RescheduleRequest]:
+        """List all reschedule requests for an appointment, newest first.
+
+        Validates: Gap 11.
+        """
+        self.log_started(
+            "list_reschedule_requests_by_appointment",
+            appointment_id=str(appointment_id),
+        )
+        result = await self.db.execute(
+            select(RescheduleRequest)
+            .where(RescheduleRequest.appointment_id == appointment_id)
+            .order_by(RescheduleRequest.created_at.desc()),
+        )
+        rows = list(result.scalars().all())
+        self.log_completed(
+            "list_reschedule_requests_by_appointment",
+            count=len(rows),
+        )
+        return rows

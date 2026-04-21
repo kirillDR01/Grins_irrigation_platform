@@ -35,6 +35,9 @@ from grins_platform.repositories.service_offering_repository import (
 )
 from grins_platform.repositories.staff_repository import StaffRepository
 from grins_platform.services.appointment_service import AppointmentService
+from grins_platform.services.appointment_timeline_service import (
+    AppointmentTimelineService,
+)
 from grins_platform.services.campaign_service import CampaignService
 from grins_platform.services.customer_merge_service import CustomerMergeService
 from grins_platform.services.customer_service import CustomerService
@@ -200,6 +203,13 @@ async def get_appointment_service(
         job_repository=job_repository,
         staff_repository=staff_repository,
     )
+
+
+async def get_appointment_timeline_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> AppointmentTimelineService:
+    """Provide an AppointmentTimelineService for Gap 11."""
+    return AppointmentTimelineService(session=session)
 
 
 async def get_full_appointment_service(
