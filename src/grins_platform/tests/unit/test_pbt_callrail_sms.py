@@ -31,7 +31,9 @@ from pydantic import ValidationError
 
 from grins_platform.api.v1.callrail_webhooks import (
     _REDIS_KEY_PREFIX,
+    _REDIS_MSGID_KEY_PREFIX,
     _is_duplicate,
+    _mark_processed,
 )
 from grins_platform.models.campaign import Campaign
 from grins_platform.models.customer import Customer
@@ -2907,90 +2909,111 @@ _iso_ts = st.from_regex(
 )
 
 
+def _stub_db_with_exists(found: bool) -> MagicMock:
+    """Build a MagicMock ``db`` so ``WebhookProcessedLogRepository.exists``
+    resolves to ``found``. ``exists`` runs ``session.execute(...).scalar_one_or_none``.
+    """
+    exec_result = MagicMock()
+    exec_result.scalar_one_or_none.return_value = True if found else None
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=exec_result)
+    db.flush = AsyncMock()
+    return db
+
+
 @pytest.mark.unit
 class TestProperty43WebhookIdempotency:
-    """_is_duplicate uses Redis SETNX to deduplicate webhooks."""
+    """_is_duplicate deduplicates webhooks via Redis (primary + msg-id)."""
 
-    @given(conv_id=callrail_id, created_at=_iso_ts)
+    @given(conv_id=callrail_id, created_at=_iso_ts, msgid=callrail_id)
     @settings(max_examples=50, deadline=None)
     def test_first_call_returns_false(
         self,
         conv_id: str,
         created_at: str,
+        msgid: str,
     ) -> None:
         """First call returns False (not duplicate)."""
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=None)
+        db = _stub_db_with_exists(False)
 
         result = asyncio.run(
-            _is_duplicate(mock_redis, conv_id, created_at),
+            _is_duplicate(mock_redis, db, "callrail", conv_id, created_at, msgid),
         )
         assert result is False
 
-    @given(conv_id=callrail_id, created_at=_iso_ts)
+    @given(conv_id=callrail_id, created_at=_iso_ts, msgid=callrail_id)
     @settings(max_examples=50, deadline=None)
     def test_second_call_returns_true(
         self,
         conv_id: str,
         created_at: str,
+        msgid: str,
     ) -> None:
-        """Second call for same key returns True (duplicate)."""
+        """Second call for same primary key returns True (duplicate)."""
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=b"1")
+        db = _stub_db_with_exists(False)
 
         result = asyncio.run(
-            _is_duplicate(mock_redis, conv_id, created_at),
+            _is_duplicate(mock_redis, db, "callrail", conv_id, created_at, msgid),
         )
         assert result is True
 
     @given(conv_id=callrail_id, created_at=_iso_ts)
     @settings(max_examples=30, deadline=None)
-    def test_redis_none_returns_false(
+    def test_redis_none_with_no_msgid_returns_false(
         self,
         conv_id: str,
         created_at: str,
     ) -> None:
-        """Redis=None → False (allow processing)."""
+        """Redis=None AND no message_id → False (DB fallback is skipped)."""
+        db = _stub_db_with_exists(False)
         result = asyncio.run(
-            _is_duplicate(None, conv_id, created_at),
+            _is_duplicate(None, db, "callrail", conv_id, created_at, ""),
         )
         assert result is False
 
-    @given(conv_id=callrail_id, created_at=_iso_ts)
+    @given(conv_id=callrail_id, created_at=_iso_ts, msgid=callrail_id)
     @settings(max_examples=30, deadline=None)
-    def test_redis_error_returns_false(
+    def test_redis_error_falls_back_to_db(
         self,
         conv_id: str,
         created_at: str,
+        msgid: str,
     ) -> None:
-        """Redis exception → False (fail-open)."""
+        """Redis exception → fall through to DB. Not-in-DB → False."""
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(
             side_effect=ConnectionError("Redis down"),
         )
+        db = _stub_db_with_exists(False)
 
         result = asyncio.run(
-            _is_duplicate(mock_redis, conv_id, created_at),
+            _is_duplicate(mock_redis, db, "callrail", conv_id, created_at, msgid),
         )
         assert result is False
 
-    @given(conv_id=callrail_id, created_at=_iso_ts)
+    @given(conv_id=callrail_id, created_at=_iso_ts, msgid=callrail_id)
     @settings(max_examples=30, deadline=None)
-    def test_redis_key_format(
+    def test_redis_key_format_primary(
         self,
         conv_id: str,
         created_at: str,
+        msgid: str,
     ) -> None:
-        """Redis key is prefix:conv_id:created_at."""
+        """First Redis lookup targets prefix:conv_id:created_at."""
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=None)
+        db = _stub_db_with_exists(False)
 
         asyncio.run(
-            _is_duplicate(mock_redis, conv_id, created_at),
+            _is_duplicate(mock_redis, db, "callrail", conv_id, created_at, msgid),
         )
-
-        expected = f"{_REDIS_KEY_PREFIX}:{conv_id}:{created_at}"
-        mock_redis.get.assert_called_once_with(expected)
+        expected_primary = f"{_REDIS_KEY_PREFIX}:{conv_id}:{created_at}"
+        first_call = mock_redis.get.await_args_list[0]
+        assert first_call.args[0] == expected_primary
 
 
 # ---------------------------------------------------------------------------
@@ -4310,3 +4333,131 @@ class TestProperty34CsvStaffAttestationCreatesConsentRecords:
             ),
         )
         session.flush.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# Property: Dual-key webhook dedup invariant (Gap 07.A / 7.B)
+#
+# Given an arbitrary stream of payloads, the set of payloads that
+# ``_is_duplicate`` ever reports as "not seen yet" must equal the set of
+# unique ``resource_id`` values in the stream. Equivalently: once a
+# ``resource_id`` has been marked processed, every subsequent payload
+# bearing that same ``resource_id`` returns True, even if its
+# ``conversation_id`` / ``created_at`` differ (a hostile replay that
+# tampered with those fields but left ``resource_id`` intact).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestDualKeyDedupInvariant:
+    """_is_duplicate is keyed on both (conv_id, created_at) and resource_id."""
+
+    @given(
+        payloads=st.lists(
+            st.tuples(callrail_id, _iso_ts, callrail_id),
+            min_size=1,
+            max_size=20,
+        ),
+    )
+    @settings(max_examples=30, deadline=None)
+    def test_processed_set_matches_first_key_seen_invariant(
+        self,
+        payloads: list[tuple[str, str, str]],
+    ) -> None:
+        """Every key triple is seen at most once as 'new'.
+
+        Invariant: a payload is processed as new iff NEITHER the
+        ``(conv_id, created_at)`` pair NOR the ``resource_id`` has
+        already been recorded on a prior iteration of the stream.
+        """
+
+        class _FakeRedis:
+            """Tiny in-memory substitute for the Redis client."""
+
+            def __init__(self) -> None:
+                self.store: dict[str, str] = {}
+
+            async def get(self, key: str) -> str | None:
+                return self.store.get(key)
+
+            async def set(
+                self,
+                key: str,
+                value: str,
+                *,
+                nx: bool = False,
+                ex: int | None = None,
+            ) -> bool:
+                if nx and key in self.store:
+                    return False
+                self.store[key] = value
+                return True
+
+        async def _run() -> tuple[list[bool], list[bool]]:
+            actual_new: list[bool] = []
+            expected_new: list[bool] = []
+            seen_primary: set[tuple[str, str]] = set()
+            seen_msgids: set[str] = set()
+            redis = _FakeRedis()
+            db = _stub_db_with_exists(False)
+            for conv_id, created_at, msgid in payloads:
+                primary = (conv_id, created_at)
+                is_expected_new = (
+                    primary not in seen_primary and msgid not in seen_msgids
+                )
+                expected_new.append(is_expected_new)
+
+                duplicate = await _is_duplicate(
+                    redis,  # type: ignore[arg-type]
+                    db,
+                    "callrail",
+                    conv_id,
+                    created_at,
+                    msgid,
+                )
+                actual_new.append(not duplicate)
+                if not duplicate:
+                    await _mark_processed(
+                        redis,  # type: ignore[arg-type]
+                        db,
+                        "callrail",
+                        conv_id,
+                        created_at,
+                        msgid,
+                    )
+                seen_primary.add(primary)
+                seen_msgids.add(msgid)
+            return actual_new, expected_new
+
+        actual_new, expected_new = asyncio.run(_run())
+        # The dedup layer reports 'new' exactly when no prior payload
+        # shared either the primary key or the resource_id.
+        assert actual_new == expected_new
+
+    @given(msgid=callrail_id, conv_id=callrail_id, created_at=_iso_ts)
+    @settings(max_examples=30, deadline=None)
+    def test_msgid_key_marked_alongside_primary_key(
+        self,
+        msgid: str,
+        conv_id: str,
+        created_at: str,
+    ) -> None:
+        """``_mark_processed`` writes both Redis keys (primary + msgid)."""
+        mock_redis = AsyncMock()
+        mock_redis.set = AsyncMock()
+        db = _stub_db_with_exists(False)
+
+        asyncio.run(
+            _mark_processed(
+                mock_redis,
+                db,
+                "callrail",
+                conv_id,
+                created_at,
+                msgid,
+            ),
+        )
+
+        keys = [call.args[0] for call in mock_redis.set.await_args_list]
+        assert f"{_REDIS_KEY_PREFIX}:{conv_id}:{created_at}" in keys
+        assert f"{_REDIS_MSGID_KEY_PREFIX}:{msgid}" in keys

@@ -40,27 +40,45 @@ PUBLIC_LIMIT = "10/minute"
 UPLOAD_LIMIT = "20/minute"
 PORTAL_LIMIT = "20/minute"
 AUTHENTICATED_LIMIT = "200/minute"
+# Gap 07: inbound webhook per-client-IP limit. Generous enough that legitimate
+# provider retries are not penalised.
+WEBHOOK_LIMIT = "60/minute"
 
 
 def rate_limit_exceeded_handler(
     request: Request,
     _exc: RateLimitExceeded,
 ) -> JSONResponse:
-    """Return 429 with Retry-After header."""
+    """Return 429 for typical routes, 503 for /api/v1/webhooks/ paths.
+
+    Webhook providers interpret 429 as a client-side bug; 503 cues them
+    to retry on the documented cadence. We return the same JSON shape
+    for both so downstream error parsers don't need to branch on path.
+    """
     retry_after = 60
+    path = request.url.path
+    is_webhook = path.startswith("/api/v1/webhooks/")
+    status_code = 503 if is_webhook else 429
+    error_code = "WEBHOOK_RATE_LIMITED" if is_webhook else "RATE_LIMIT_EXCEEDED"
+    message = (
+        "Webhook endpoint is throttled. Please retry after the Retry-After window."
+        if is_webhook
+        else "Too many requests. Please try again later."
+    )
     logger.warning(
         "security.rate_limit.exceeded",
-        path=request.url.path,
+        path=path,
         client=get_remote_address(request),
         retry_after=retry_after,
+        status_code=status_code,
     )
     return JSONResponse(
-        status_code=429,
+        status_code=status_code,
         content={
             "success": False,
             "error": {
-                "code": "RATE_LIMIT_EXCEEDED",
-                "message": "Too many requests. Please try again later.",
+                "code": error_code,
+                "message": message,
                 "retry_after": retry_after,
             },
         },
@@ -80,3 +98,24 @@ def setup_rate_limiting(app: FastAPI) -> None:
         storage=_storage_uri.split("://")[0],
         default_limit=AUTHENTICATED_LIMIT,
     )
+
+
+# Re-export the trusted-proxy-aware key func for webhook route decorators.
+# Imported at the bottom of the module so `services.sms.webhook_security`
+# never has to import from `middleware.rate_limit` (no circular arrow).
+from grins_platform.services.sms.webhook_security import (  # noqa: E402
+    webhook_client_key,
+)
+
+__all__ = [
+    "AUTHENTICATED_LIMIT",
+    "AUTH_LIMIT",
+    "PORTAL_LIMIT",
+    "PUBLIC_LIMIT",
+    "UPLOAD_LIMIT",
+    "WEBHOOK_LIMIT",
+    "limiter",
+    "rate_limit_exceeded_handler",
+    "setup_rate_limiting",
+    "webhook_client_key",
+]

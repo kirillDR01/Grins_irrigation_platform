@@ -823,22 +823,18 @@ class NoReplyConfirmationFlagger(LoggerMixin):
             select(func.max(SentMessage.sent_at))
             .where(
                 SentMessage.appointment_id == Appointment.id,
-                SentMessage.message_type
-                == MessageType.APPOINTMENT_CONFIRMATION.value,
+                SentMessage.message_type == MessageType.APPOINTMENT_CONFIRMATION.value,
                 SentMessage.sent_at.is_not(None),
             )
             .correlate(Appointment)
             .scalar_subquery()
         )
 
-        stmt = (
-            select(Appointment)
-            .where(
-                Appointment.status == AppointmentStatus.SCHEDULED.value,
-                Appointment.needs_review_reason.is_(None),
-                latest_confirmation_subq.is_not(None),
-                latest_confirmation_subq < cutoff,
-            )
+        stmt = select(Appointment).where(
+            Appointment.status == AppointmentStatus.SCHEDULED.value,
+            Appointment.needs_review_reason.is_(None),
+            latest_confirmation_subq.is_not(None),
+            latest_confirmation_subq < cutoff,
         )
         result = await session.execute(stmt)
         candidates = list(result.scalars().all())
@@ -852,8 +848,7 @@ class NoReplyConfirmationFlagger(LoggerMixin):
             # the alert message).
             sent_at_stmt = select(func.max(SentMessage.sent_at)).where(
                 SentMessage.appointment_id == appt.id,
-                SentMessage.message_type
-                == MessageType.APPOINTMENT_CONFIRMATION.value,
+                SentMessage.message_type == MessageType.APPOINTMENT_CONFIRMATION.value,
                 SentMessage.sent_at.is_not(None),
             )
             sent_at_result = await session.execute(sent_at_stmt)
@@ -892,9 +887,7 @@ class NoReplyConfirmationFlagger(LoggerMixin):
                     severity=AlertSeverity.INFO.value,
                     entity_type="appointment",
                     entity_id=appt.id,
-                    message=(
-                        f"No reply from {customer_name} after {days} days"
-                    ),
+                    message=(f"No reply from {customer_name} after {days} days"),
                 )
                 await alert_repo.create(alert)
                 flagged += 1
@@ -968,6 +961,26 @@ async def flag_no_reply_confirmations() -> None:
     Validates: bughunt 2026-04-16 finding H-7.
     """
     await _no_reply_flagger.run()
+
+
+async def prune_webhook_processed_logs_job() -> None:
+    """Delete ``webhook_processed_logs`` rows older than 30 days.
+
+    Validates: Gap 07 — Webhook Security & Dedup (7.B) retention.
+    """
+    from grins_platform.repositories.webhook_processed_log_repository import (  # noqa: PLC0415
+        WebhookProcessedLogRepository,
+    )
+
+    db_manager = get_database_manager()
+    async for session in db_manager.get_session():
+        repo = WebhookProcessedLogRepository(session)
+        deleted = await repo.prune_older_than(days=30)
+        await session.commit()
+        logger.info(
+            "scheduler.webhook_processed_logs.pruned",
+            deleted=deleted,
+        )
 
 
 def register_scheduled_jobs(scheduler: BackgroundScheduler) -> None:
@@ -1048,6 +1061,16 @@ def register_scheduled_jobs(scheduler: BackgroundScheduler) -> None:
         replace_existing=True,
     )
 
+    # Gap 07 — daily prune of fallback-dedup rows older than 30 days.
+    scheduler.add_job(
+        prune_webhook_processed_logs_job,
+        "cron",
+        hour=3,
+        minute=30,
+        id="prune_webhook_processed_logs",
+        replace_existing=True,
+    )
+
     logger.info(
         "scheduler.jobs.registered",
         jobs=[
@@ -1059,5 +1082,6 @@ def register_scheduled_jobs(scheduler: BackgroundScheduler) -> None:
             "process_pending_campaign_recipients",
             "duplicate_detection_sweep",
             "flag_no_reply_confirmations",
+            "prune_webhook_processed_logs",
         ],
     )

@@ -10,6 +10,7 @@ Validates: Requirements 1.5, 1.6, 4.5, 4.6, 8.1-8.6, 9.1-9.5, 11.2, 11.3,
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import time as _time_mod
@@ -41,6 +42,11 @@ from grins_platform.services.sms.audit import (
 )
 from grins_platform.services.sms.consent import ConsentType, check_sms_consent
 from grins_platform.services.sms.templating import render_template
+from grins_platform.services.sms.webhook_security import (
+    autoreply_circuit_open,
+    autoreply_phone_throttled,
+    emit_circuit_open_alert,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -136,6 +142,19 @@ def _mask_phone(phone: str) -> str:
     if len(phone) >= 10:
         return phone[:4] + "***" + phone[-4:]
     return "***"
+
+
+async def _autoreply_redis_client() -> Any:  # noqa: ANN401
+    """Return a short-lived Redis client for auto-reply throttling, or None."""
+    redis_url = os.environ.get("REDIS_URL")
+    if not redis_url:
+        return None
+    try:
+        from redis.asyncio import Redis as _Redis  # noqa: PLC0415
+
+        return _Redis.from_url(redis_url, decode_responses=True)
+    except Exception:
+        return None
 
 
 class SMSError(Exception):
@@ -725,6 +744,32 @@ class SMSService(LoggerMixin):
         # Delegate to existing webhook handler for other messages
         return await self.handle_webhook(from_phone, body, provider_sid)
 
+    async def _autoreply_suppressed(self, reply_phone: str) -> str | None:
+        """Return a short suppression reason, or ``None`` to send normally.
+
+        Gates the outbound auto-reply acknowledgement with:
+
+        * a global sliding-window circuit breaker (Gap 07.C), and
+        * a per-phone throttle (one auto-reply per 60s by default).
+
+        Fails open on Redis errors so a Redis outage never drops legitimate
+        auto-replies — dedup correctness is covered by the DB-fallback layer
+        in :mod:`callrail_webhooks`.
+        """
+        redis = await _autoreply_redis_client()
+        try:
+            if await autoreply_circuit_open(redis):
+                with contextlib.suppress(Exception):
+                    await emit_circuit_open_alert(self.session, redis, 0)
+                return "circuit_open"
+            if await autoreply_phone_throttled(redis, reply_phone):
+                return "phone_throttled"
+        finally:
+            if redis is not None:
+                with contextlib.suppress(Exception):
+                    await redis.aclose()
+        return None
+
     async def _record_opt_out_bookkeeping(
         self,
         from_phone: str,
@@ -795,28 +840,37 @@ class SMSService(LoggerMixin):
             # Send auto-reply confirmation to the real E.164 phone
             # (row.phone is resolved from the outbound sent_message, not the
             # masked inbound from_phone).
-            try:
-                if row.status == "parsed":
-                    confirmation_msg = POLL_REPLY_CONFIRMED_MSG.format(
-                        option_label=row.selected_option_label
-                        or row.selected_option_key,
-                    )
-                else:
-                    confirmation_msg = POLL_REPLY_UNCLEAR_MSG
-
-                await self.provider.send_text(row.phone, confirmation_msg)
+            suppressed = await self._autoreply_suppressed(row.phone)
+            if suppressed:
                 logger.info(
-                    "sms.poll_reply.auto_reply_sent",
+                    "sms.poll_reply.auto_reply_suppressed",
                     status=row.status,
                     phone=_mask_phone(row.phone),
+                    reason=suppressed,
                 )
-            except Exception:
-                logger.warning(
-                    "sms.poll_reply.auto_reply_failed",
-                    status=row.status,
-                    phone=_mask_phone(row.phone),
-                    exc_info=True,
-                )
+            else:
+                try:
+                    if row.status == "parsed":
+                        confirmation_msg = POLL_REPLY_CONFIRMED_MSG.format(
+                            option_label=row.selected_option_label
+                            or row.selected_option_key,
+                        )
+                    else:
+                        confirmation_msg = POLL_REPLY_UNCLEAR_MSG
+
+                    await self.provider.send_text(row.phone, confirmation_msg)
+                    logger.info(
+                        "sms.poll_reply.auto_reply_sent",
+                        status=row.status,
+                        phone=_mask_phone(row.phone),
+                    )
+                except Exception:
+                    logger.warning(
+                        "sms.poll_reply.auto_reply_failed",
+                        status=row.status,
+                        phone=_mask_phone(row.phone),
+                        exc_info=True,
+                    )
 
             # Update lead Last Contacted using the correlated real phone
             # (bughunt L-7 / L-11).
@@ -923,21 +977,29 @@ class SMSService(LoggerMixin):
 
         auto_reply = result.get("auto_reply")
         if auto_reply:
-            try:
-                _ = await self.send_message(
-                    recipient=reply_recipient,
-                    message=auto_reply,
-                    message_type=MessageType.APPOINTMENT_CONFIRMATION_REPLY,
-                    consent_type="transactional",
-                    job_id=job_id,
-                    appointment_id=appointment_id,
-                )
-            except Exception:
-                logger.warning(
-                    "sms.confirmation.auto_reply_failed",
+            suppressed = await self._autoreply_suppressed(reply_phone)
+            if suppressed:
+                logger.info(
+                    "sms.confirmation.auto_reply_suppressed",
                     phone=_mask_phone(reply_phone),
-                    exc_info=True,
+                    reason=suppressed,
                 )
+            else:
+                try:
+                    _ = await self.send_message(
+                        recipient=reply_recipient,
+                        message=auto_reply,
+                        message_type=MessageType.APPOINTMENT_CONFIRMATION_REPLY,
+                        consent_type="transactional",
+                        job_id=job_id,
+                        appointment_id=appointment_id,
+                    )
+                except Exception:
+                    logger.warning(
+                        "sms.confirmation.auto_reply_failed",
+                        phone=_mask_phone(reply_phone),
+                        exc_info=True,
+                    )
 
         # Reschedule follow-up SMS (Req 14.1)
         follow_up_sms = result.get("follow_up_sms")
@@ -1118,10 +1180,7 @@ class SMSService(LoggerMixin):
                 severity=AlertSeverity.WARNING.value,
                 entity_type=entity_type,
                 entity_id=entity_id,
-                message=(
-                    f"Possible opt-out from {phone_masked}: "
-                    f"'{body_snippet}'"
-                ),
+                message=(f"Possible opt-out from {phone_masked}: '{body_snippet}'"),
             )
             saved = await AlertRepository(self.session).create(alert)
             alert_id = saved.id
@@ -1210,16 +1269,13 @@ class SMSService(LoggerMixin):
         Validates: Gap 06 edge case — informal → STOP sequence.
         """
         try:
-            stmt = (
-                select(Alert)
-                .where(
-                    and_(
-                        Alert.type == AlertType.INFORMAL_OPT_OUT.value,
-                        Alert.entity_type == "customer",
-                        Alert.entity_id == customer_id,
-                        Alert.acknowledged_at.is_(None),
-                    ),
-                )
+            stmt = select(Alert).where(
+                and_(
+                    Alert.type == AlertType.INFORMAL_OPT_OUT.value,
+                    Alert.entity_type == "customer",
+                    Alert.entity_id == customer_id,
+                    Alert.acknowledged_at.is_(None),
+                ),
             )
             result = await self.session.execute(stmt)
             open_alerts = list(result.scalars().all())
@@ -1276,9 +1332,7 @@ class SMSService(LoggerMixin):
             )
             raise ValueError(msg)
 
-        cust_stmt = (
-            select(Customer).where(Customer.id == alert.entity_id).limit(1)
-        )
+        cust_stmt = select(Customer).where(Customer.id == alert.entity_id).limit(1)
         cust_result = await self.session.execute(cust_stmt)
         customer: Customer | None = cust_result.scalar_one_or_none()
         if customer is None:

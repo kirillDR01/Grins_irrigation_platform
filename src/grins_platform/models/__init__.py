@@ -116,6 +116,7 @@ from grins_platform.models.staff import Staff
 from grins_platform.models.staff_availability import StaffAvailability
 from grins_platform.models.staff_break import StaffBreak
 from grins_platform.models.stripe_webhook_event import StripeWebhookEvent
+from grins_platform.models.webhook_processed_log import WebhookProcessedLog
 
 __all__ = [
     # Phase 6: AI Assistant
@@ -230,5 +231,6 @@ __all__ = [
     "StaffRole",
     "StripeWebhookEvent",
     "SystemType",
+    "WebhookProcessedLog",
     "WebhookProcessingStatus",
 ]
