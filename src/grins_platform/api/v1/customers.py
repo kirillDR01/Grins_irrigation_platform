@@ -2048,3 +2048,145 @@ async def delete_customer_document(
         customer_id=str(customer_id),
         document_id=str(document_id),
     )
+
+
+# =============================================================================
+# SMS Consent — Gap 06 Opt-Out Management & Visibility
+# =============================================================================
+
+
+@router.get(
+    "/{customer_id}/consent-status",
+    summary="Get derived SMS consent status for a customer",
+    description=(
+        "Returns is_opted_out, opt_out_method, opt_out_timestamp, and "
+        "pending_informal_opt_out_alert_id — the minimal snapshot the "
+        "OptOutBadge + disabled-button logic needs."
+    ),
+)
+async def get_customer_consent_status(
+    customer_id: UUID,
+    _user: CurrentActiveUser,
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict[str, Any]:
+    """Return derived consent status. Validates: Gap 06."""
+    from sqlalchemy import and_, select  # noqa: PLC0415
+
+    from grins_platform.models.alert import Alert  # noqa: PLC0415
+    from grins_platform.models.customer import Customer  # noqa: PLC0415
+    from grins_platform.models.enums import AlertType  # noqa: PLC0415
+    from grins_platform.repositories.sms_consent_repository import (  # noqa: PLC0415
+        SmsConsentRepository,
+    )
+    from grins_platform.schemas.consent import (  # noqa: PLC0415
+        ConsentStatusResponse,
+    )
+
+    _endpoints.log_started(
+        "get_customer_consent_status",
+        customer_id=str(customer_id),
+    )
+
+    cust_result = await db.execute(
+        select(Customer).where(Customer.id == customer_id).limit(1),
+    )
+    customer: Customer | None = cust_result.scalar_one_or_none()
+    if customer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer {customer_id} not found",
+        )
+
+    latest = await SmsConsentRepository(db).get_latest_for_customer(customer_id)
+    is_opted_out = latest is not None and latest.consent_given is False
+    opt_out_method = latest.opt_out_method if latest else None
+    opt_out_timestamp = latest.opt_out_timestamp if latest else None
+
+    alert_stmt = (
+        select(Alert.id)
+        .where(
+            and_(
+                Alert.type == AlertType.INFORMAL_OPT_OUT.value,
+                Alert.entity_type == "customer",
+                Alert.entity_id == customer_id,
+                Alert.acknowledged_at.is_(None),
+            ),
+        )
+        .order_by(Alert.created_at.desc())
+        .limit(1)
+    )
+    alert_result = await db.execute(alert_stmt)
+    pending_alert_id: UUID | None = alert_result.scalar_one_or_none()
+
+    response = ConsentStatusResponse(
+        customer_id=customer_id,
+        phone=customer.phone,
+        is_opted_out=is_opted_out,
+        opt_out_method=opt_out_method,
+        opt_out_timestamp=opt_out_timestamp,
+        pending_informal_opt_out_alert_id=pending_alert_id,
+    )
+
+    _endpoints.log_completed(
+        "get_customer_consent_status",
+        customer_id=str(customer_id),
+        is_opted_out=is_opted_out,
+        has_pending_alert=pending_alert_id is not None,
+    )
+    return response.model_dump(mode="json")
+
+
+@router.get(
+    "/{customer_id}/consent-history",
+    summary="Paginated chronological SMS consent history",
+    description=(
+        "Returns SmsConsentRecord rows for the customer newest-first. "
+        "Drives the ConsentHistoryPanel on CustomerDetail."
+    ),
+)
+async def get_customer_consent_history(
+    customer_id: UUID,
+    _user: CurrentActiveUser,
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    limit: int = Query(default=50, ge=1, le=200),
+) -> dict[str, Any]:
+    """Return chronological consent history. Validates: Gap 06."""
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from grins_platform.models.customer import Customer  # noqa: PLC0415
+    from grins_platform.repositories.sms_consent_repository import (  # noqa: PLC0415
+        SmsConsentRepository,
+    )
+    from grins_platform.schemas.consent import (  # noqa: PLC0415
+        ConsentHistoryEntry,
+        ConsentHistoryResponse,
+    )
+
+    _endpoints.log_started(
+        "get_customer_consent_history",
+        customer_id=str(customer_id),
+        limit=limit,
+    )
+
+    cust_result = await db.execute(
+        select(Customer.id).where(Customer.id == customer_id).limit(1),
+    )
+    if cust_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer {customer_id} not found",
+        )
+
+    rows = await SmsConsentRepository(db).list_by_customer(
+        customer_id,
+        limit=limit,
+    )
+    items = [ConsentHistoryEntry.model_validate(r) for r in rows]
+
+    response = ConsentHistoryResponse(items=items, total=len(items))
+    _endpoints.log_completed(
+        "get_customer_consent_history",
+        customer_id=str(customer_id),
+        count=len(items),
+    )
+    return response.model_dump(mode="json")

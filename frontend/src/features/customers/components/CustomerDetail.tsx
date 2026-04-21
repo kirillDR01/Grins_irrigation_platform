@@ -36,7 +36,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { StatusBadge, LoadingPage, ErrorMessage, PageHeader, InternalNotesCard } from '@/shared/components';
+import { StatusBadge, LoadingPage, ErrorMessage, PageHeader, InternalNotesCard, OptOutBadge } from '@/shared/components';
+import { ConsentHistoryPanel } from '@/features/customers/components/ConsentHistoryPanel';
 import {
   useCustomer,
   useDeleteCustomer,
@@ -373,7 +374,12 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
 
       <PageHeader
         title={getCustomerFullName(customer)}
-        description={`Customer since ${new Date(customer.created_at).toLocaleDateString()}`}
+        description={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <span>{`Customer since ${new Date(customer.created_at).toLocaleDateString()}`}</span>
+            <OptOutBadge customerId={customer.id} />
+          </span>
+        }
         action={
           <div className="flex gap-2">
             {onEdit && (
@@ -655,6 +661,11 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
             )}
           </CardContent>
         </Card>
+      </div>
+
+      {/* Gap 06: SMS consent history timeline */}
+      <div className="mt-6">
+        <ConsentHistoryPanel customerId={customer.id} />
       </div>
 
       {/* Tabbed Content Section */}

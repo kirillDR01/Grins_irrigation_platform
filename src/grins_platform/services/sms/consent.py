@@ -21,7 +21,9 @@ from sqlalchemy import and_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from grins_platform.log_config import get_logger
+from grins_platform.models.alert import Alert
 from grins_platform.models.customer import Customer
+from grins_platform.models.enums import AlertType
 from grins_platform.models.lead import Lead
 from grins_platform.models.sms_consent_record import SmsConsentRecord
 from grins_platform.services.sms.phone_normalizer import normalize_to_e164
@@ -38,6 +40,8 @@ async def check_sms_consent(
     session: AsyncSession,
     phone: str,
     consent_type: ConsentType = "transactional",
+    *,
+    require_no_pending_informal: bool = False,
 ) -> bool:
     """Check SMS consent for a phone number with type-scoped semantics.
 
@@ -45,6 +49,11 @@ async def check_sms_consent(
         session: DB session.
         phone: Phone number (any format, normalized internally).
         consent_type: One of marketing/transactional/operational.
+        require_no_pending_informal: When True, an unacknowledged
+            INFORMAL_OPT_OUT alert for the customer tied to ``phone``
+            blocks the send. Used for marketing + non-urgent transactional
+            (reminders, review requests, campaigns). Urgent transactional
+            (confirmation, on-the-way, completion) leave this False.
 
     Returns:
         True if sending is allowed, False otherwise.
@@ -58,6 +67,14 @@ async def check_sms_consent(
     hard_stop = await _has_hard_stop(session, e164)
     if hard_stop:
         return False
+
+    if require_no_pending_informal:
+        customer_id = await _resolve_customer_id_by_phone(session, e164)
+        if customer_id is not None and await _has_open_informal_opt_out_alert(
+            session,
+            customer_id,
+        ):
+            return False
 
     if consent_type == "transactional":
         # EBR exemption: allowed unless hard-STOP (already checked above)
@@ -107,6 +124,43 @@ def _phone_variants(phone: str) -> list[str]:
         f"({area}) {prefix}-{line}",  # (612) 738-5301
         f"1-{area}-{prefix}-{line}",  # 1-612-738-5301
     ]
+
+
+async def _resolve_customer_id_by_phone(
+    session: AsyncSession,
+    e164: str,
+) -> UUID | None:
+    """Return the first customer_id whose phone matches any variant of e164."""
+    variants = _phone_variants(e164)
+    stmt = (
+        select(Customer.id)
+        .where(Customer.phone.in_(variants))
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    row: UUID | None = result.scalar_one_or_none()
+    return row
+
+
+async def _has_open_informal_opt_out_alert(
+    session: AsyncSession,
+    customer_id: UUID,
+) -> bool:
+    """Check for an unacknowledged INFORMAL_OPT_OUT alert for the customer."""
+    stmt = (
+        select(Alert.id)
+        .where(
+            and_(
+                Alert.type == AlertType.INFORMAL_OPT_OUT.value,
+                Alert.entity_type == "customer",
+                Alert.entity_id == customer_id,
+                Alert.acknowledged_at.is_(None),
+            ),
+        )
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none() is not None
 
 
 async def _has_hard_stop(session: AsyncSession, e164: str) -> bool:

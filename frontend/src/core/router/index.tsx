@@ -63,6 +63,11 @@ const CommunicationsPage = lazy(() =>
     default: m.CommunicationsPage,
   }))
 );
+const InformalOptOutQueuePage = lazy(() =>
+  import('@/pages/InformalOptOutQueue').then((m) => ({
+    default: m.InformalOptOutQueuePage,
+  }))
+);
 const EstimateDetailPage = lazy(() =>
   import('@/pages/EstimateDetail').then((m) => ({
     default: m.EstimateDetailPage,
@@ -254,6 +259,10 @@ export const router = createBrowserRouter([
       {
         path: 'communications',
         element: <CommunicationsPage />,
+      },
+      {
+        path: 'alerts/informal-opt-out',
+        element: <InformalOptOutQueuePage />,
       },
       {
         path: 'estimates/:id',

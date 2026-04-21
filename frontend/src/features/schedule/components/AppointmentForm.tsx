@@ -42,6 +42,7 @@ import { useJobsReadyToSchedule } from '@/features/jobs/hooks';
 import { useStaff } from '@/features/staff/hooks';
 import { jobApi } from '@/features/jobs/api/jobApi';
 import { customerApi } from '@/features/customers/api/customerApi';
+import { useCustomerConsentStatus } from '@/features/customers/hooks/useConsentStatus';
 import { JobSelectorCombobox } from './JobSelectorCombobox';
 import type { Appointment, AppointmentCreate, AppointmentUpdate } from '../types';
 
@@ -242,6 +243,8 @@ export function AppointmentForm({
         className="p-6 space-y-6"
         data-testid="appointment-form"
       >
+        <OptOutBanner customerId={selectedCustomer?.id ?? null} />
+
         {/* Customer Context Block — Req 10A */}
         {selectedCustomer && (
           <CustomerContextBlock
@@ -492,5 +495,23 @@ export function AppointmentForm({
         </div>
       </form>
     </Form>
+  );
+}
+
+function OptOutBanner({ customerId }: { customerId: string | null }) {
+  const { data } = useCustomerConsentStatus(customerId);
+  if (!data?.is_opted_out && !data?.pending_informal_opt_out_alert_id) {
+    return null;
+  }
+  const message = data.is_opted_out
+    ? 'This customer has opted out of SMS. Confirmation texts will not be sent.'
+    : 'This customer has a pending informal-opt-out alert. Reminder and marketing SMS are suppressed until an admin resolves it.';
+  return (
+    <div
+      className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+      data-testid="opt-out-banner"
+    >
+      {message}
+    </div>
   );
 }

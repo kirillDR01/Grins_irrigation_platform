@@ -121,3 +121,35 @@ class SmsConsentRepository(LoggerMixin):
             found=row is not None,
         )
         return row
+
+    async def list_by_customer(
+        self,
+        customer_id: UUID,
+        limit: int = 50,
+    ) -> list[SmsConsentRecord]:
+        """Return a customer's consent rows newest-first.
+
+        Drives the consent-history timeline on the frontend. Ordered by
+        ``consent_timestamp`` DESC so the current state sits at the top.
+
+        Args:
+            customer_id: Customer UUID.
+            limit: Maximum number of rows to return (default 50).
+
+        Returns:
+            List of :class:`SmsConsentRecord` rows, newest first.
+        """
+        self.log_started(
+            "list_by_customer",
+            customer_id=str(customer_id),
+            limit=limit,
+        )
+        result = await self.session.execute(
+            select(SmsConsentRecord)
+            .where(SmsConsentRecord.customer_id == customer_id)
+            .order_by(SmsConsentRecord.consent_timestamp.desc())
+            .limit(limit),
+        )
+        rows = list(result.scalars().all())
+        self.log_completed("list_by_customer", count=len(rows))
+        return rows

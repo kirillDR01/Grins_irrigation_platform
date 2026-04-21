@@ -13,3 +13,5 @@ export { InternalNotesCard } from './InternalNotesCard';
 export type { InternalNotesCardProps } from './InternalNotesCard';
 export { CustomerContextBlock } from './CustomerContextBlock';
 export { AppointmentAttachments } from './AppointmentAttachments';
+export { OptOutBadge } from './OptOutBadge';
+export type { OptOutBadgeProps } from './OptOutBadge';

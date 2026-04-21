@@ -74,6 +74,7 @@ import { AppointmentNotes } from './AppointmentNotes';
 import { ReviewRequest } from './ReviewRequest';
 import { CancelAppointmentDialog } from './CancelAppointmentDialog';
 import { SendConfirmationButton } from './SendConfirmationButton';
+import { OptOutBadge } from '@/shared/components';
 
 interface AppointmentDetailProps {
   appointmentId: string;
@@ -456,10 +457,11 @@ export function AppointmentDetail({
               <div className="w-7 h-7 rounded-full bg-teal-100 flex items-center justify-center">
                 <User className="h-4 w-4 text-teal-600" />
               </div>
-              <div className="flex-1">
+              <div className="flex-1 flex items-center gap-2 flex-wrap">
                 <p className="text-sm font-medium text-slate-800">
                   {customer.first_name} {customer.last_name}
                 </p>
+                <OptOutBadge customerId={customer.id} compact />
               </div>
               <ChevronDown className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180 md:hidden" />
             </summary>
@@ -691,7 +693,7 @@ export function AppointmentDetail({
               // bughunt M-1: use the canonical SendConfirmationButton so the
               // detail modal shares the calendar card's send behavior
               // (toast feedback, hook wiring, disabled state).
-              <SendConfirmationButton appointment={appointment} />
+              <SendConfirmationButton appointment={appointment} customerId={customer?.id} />
             )}
             {isPending && (
               <Button

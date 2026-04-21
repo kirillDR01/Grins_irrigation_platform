@@ -135,3 +135,87 @@ async def log_consent_hard_stop(
         resource_type="sms_consent",
         details={"phone": phone_masked},
     )
+
+
+async def log_informal_opt_out_flagged(
+    db: AsyncSession,
+    *,
+    phone_masked: str,
+    alert_id: UUID,
+    customer_id: UUID | None = None,
+) -> None:
+    """Emit ``sms.informal_opt_out.flagged`` audit event."""
+    details: dict[str, Any] = {
+        "phone": phone_masked,
+        "alert_id": str(alert_id),
+    }
+    if customer_id is not None:
+        details["customer_id"] = str(customer_id)
+    _ = await _audit.log_action(
+        db,
+        action="sms.informal_opt_out.flagged",
+        resource_type="alert",
+        resource_id=alert_id,
+        details=details,
+    )
+
+
+async def log_informal_opt_out_confirmed(
+    db: AsyncSession,
+    *,
+    alert_id: UUID,
+    customer_id: UUID,
+    actor_id: UUID | None = None,
+    actor_role: str | None = None,
+) -> None:
+    """Emit ``sms.informal_opt_out.confirmed`` audit event."""
+    _ = await _audit.log_action(
+        db,
+        action="sms.informal_opt_out.confirmed",
+        resource_type="alert",
+        resource_id=alert_id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        details={
+            "alert_id": str(alert_id),
+            "customer_id": str(customer_id),
+        },
+    )
+
+
+async def log_informal_opt_out_dismissed(
+    db: AsyncSession,
+    *,
+    alert_id: UUID,
+    actor_id: UUID | None = None,
+    actor_role: str | None = None,
+) -> None:
+    """Emit ``sms.informal_opt_out.dismissed`` audit event."""
+    _ = await _audit.log_action(
+        db,
+        action="sms.informal_opt_out.dismissed",
+        resource_type="alert",
+        resource_id=alert_id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        details={"alert_id": str(alert_id)},
+    )
+
+
+async def log_informal_opt_out_auto_acknowledged(
+    db: AsyncSession,
+    *,
+    alert_id: UUID,
+    customer_id: UUID | None = None,
+) -> None:
+    """Emit ``sms.informal_opt_out.auto_acknowledged`` audit event."""
+    details: dict[str, Any] = {"alert_id": str(alert_id)}
+    if customer_id is not None:
+        details["customer_id"] = str(customer_id)
+    _ = await _audit.log_action(
+        db,
+        action="sms.informal_opt_out.auto_acknowledged",
+        resource_type="alert",
+        resource_id=alert_id,
+        details=details,
+    )

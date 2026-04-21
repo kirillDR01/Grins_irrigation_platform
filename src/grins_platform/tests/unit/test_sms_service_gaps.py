@@ -104,12 +104,14 @@ class TestInformalOptOut:
         ],
     )
     async def test_informal_phrase_flags_for_review(self, phrase: str) -> None:
-        """Informal phrases flag for admin review, no auto opt-out."""
+        """Informal phrases flag for admin review and write an Alert row (Gap 06)."""
         service = _make_service()
         result = await service.handle_inbound("+16125551234", phrase, "SM123")
 
         assert result["action"] == "informal_opt_out_flagged"
-        service.session.add.assert_not_called()
+        # Gap 06: alert row is created instead of just logging.
+        assert "alert_id" in result
+        assert service.session.add.called
 
     @pytest.mark.asyncio
     async def test_informal_phrase_in_longer_message(self) -> None:

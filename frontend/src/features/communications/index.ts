@@ -80,4 +80,15 @@ export type {
 // API
 export { communicationsApi } from './api/communicationsApi';
 export { campaignsApi } from './api/campaignsApi';
+export { alertsApi } from './api/alertsApi';
+export type { AdminAlert, AdminAlertListResponse } from './api/alertsApi';
 export type { CampaignResponseListParams } from './hooks';
+
+// Gap 06 — informal opt-out review
+export { InformalOptOutQueue } from './components/InformalOptOutQueue';
+export {
+  useInformalOptOutQueue,
+  useConfirmInformalOptOut,
+  useDismissInformalOptOut,
+  informalOptOutQueueKeys,
+} from './hooks/useInformalOptOutQueue';

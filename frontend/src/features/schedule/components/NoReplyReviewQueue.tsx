@@ -40,6 +40,8 @@ import {
   useSendReminder,
 } from '../hooks/useNoReplyReview';
 import type { NeedsReviewAppointment } from '../types';
+import { OptOutBadge } from '@/shared/components';
+import { useCustomerConsentStatus } from '@/features/customers/hooks/useConsentStatus';
 
 interface NoReplyReviewQueueProps {
   onAppointmentClick?: (appointmentId: string) => void;
@@ -263,6 +265,8 @@ function NoReplyRow({
     new Date(row.scheduled_date),
     'MMM d, yyyy'
   )} • ${row.time_window_start.slice(0, 5)}–${row.time_window_end.slice(0, 5)}`;
+  const { data: consentStatus } = useCustomerConsentStatus(row.customer_id);
+  const optedOut = consentStatus?.is_opted_out === true;
 
   return (
     <div
@@ -270,13 +274,16 @@ function NoReplyRow({
       data-testid={`no-reply-row-${row.id}`}
     >
       <div className="flex flex-col gap-1 min-w-0 flex-1">
-        <button
-          className="font-medium text-slate-700 text-left hover:text-teal-600 truncate"
-          onClick={() => onAppointmentClick?.(row.id)}
-          data-testid="no-reply-customer-name"
-        >
-          {row.customer_name ?? 'Unknown customer'}
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            className="font-medium text-slate-700 text-left hover:text-teal-600 truncate"
+            onClick={() => onAppointmentClick?.(row.id)}
+            data-testid="no-reply-customer-name"
+          >
+            {row.customer_name ?? 'Unknown customer'}
+          </button>
+          <OptOutBadge customerId={row.customer_id} compact />
+        </div>
         <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
           {row.customer_phone && (
             <span className="font-mono">{row.customer_phone}</span>
@@ -315,6 +322,12 @@ function NoReplyRow({
           size="sm"
           variant="outline"
           onClick={onSendReminder}
+          disabled={optedOut}
+          title={
+            optedOut
+              ? 'Customer has opted out of SMS — reminder blocked'
+              : 'Re-send the confirmation SMS as a reminder'
+          }
           data-testid={`send-reminder-btn-${row.id}`}
         >
           <Send className="h-3 w-3 mr-1" />

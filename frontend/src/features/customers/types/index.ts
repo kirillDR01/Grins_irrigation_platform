@@ -251,3 +251,30 @@ export function getCustomerFlags(customer: Customer): CustomerFlag[] {
 export function getCustomerFullName(customer: Customer): string {
   return `${customer.first_name} ${customer.last_name}`;
 }
+
+// Gap 06: SMS consent status + history (drives OptOutBadge + ConsentHistoryPanel).
+export interface ConsentStatus {
+  customer_id: string;
+  phone: string | null;
+  is_opted_out: boolean;
+  opt_out_method: string | null;
+  opt_out_timestamp: string | null;
+  pending_informal_opt_out_alert_id: string | null;
+}
+
+export interface ConsentHistoryEntry {
+  id: string;
+  consent_given: boolean;
+  consent_type: string;
+  consent_method: string;
+  consent_timestamp: string;
+  opt_out_method: string | null;
+  opt_out_timestamp: string | null;
+  created_by_staff_id: string | null;
+  consent_language_shown: string;
+}
+
+export interface ConsentHistoryResponse {
+  items: ConsentHistoryEntry[];
+  total: number;
+}

@@ -13,25 +13,33 @@ import { Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useSendConfirmation } from '../hooks/useAppointmentMutations';
+import { useCustomerConsentStatus } from '@/features/customers/hooks/useConsentStatus';
 import type { Appointment } from '../types';
 
 interface SendConfirmationButtonProps {
   appointment: Appointment;
   /** Compact mode for inline calendar card display */
   compact?: boolean;
+  /** Customer id enables Gap 06 opt-out-aware disable + tooltip. */
+  customerId?: string | null;
 }
 
 export function SendConfirmationButton({
   appointment,
   compact = false,
+  customerId,
 }: SendConfirmationButtonProps) {
   const sendMutation = useSendConfirmation();
   const isDraft = appointment.status === 'draft';
   const customerName = appointment.customer_name || 'customer';
-  const tooltip = isDraft
-    ? `Send confirmation SMS to ${customerName}`
-    : 'Confirmation already sent';
-  const disabled = sendMutation.isPending || !isDraft;
+  const { data: consentStatus } = useCustomerConsentStatus(customerId);
+  const isOptedOut = consentStatus?.is_opted_out === true;
+  const tooltip = isOptedOut
+    ? 'Customer has opted out of SMS — confirmation blocked'
+    : isDraft
+      ? `Send confirmation SMS to ${customerName}`
+      : 'Confirmation already sent';
+  const disabled = sendMutation.isPending || !isDraft || isOptedOut;
 
   const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent event click from opening detail modal

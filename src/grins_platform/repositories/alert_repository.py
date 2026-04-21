@@ -9,7 +9,9 @@ Validates: bughunt 2026-04-16 finding H-5
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from sqlalchemy import select
 
@@ -66,6 +68,22 @@ class AlertRepository(LoggerMixin):
         self.log_completed("create", alert_id=str(alert.id))
         return alert
 
+    async def get(self, alert_id: UUID) -> Alert | None:
+        """Fetch a single :class:`Alert` row by primary key.
+
+        Args:
+            alert_id: Alert UUID.
+
+        Returns:
+            The Alert or None if no row matches.
+        """
+        self.log_started("get", alert_id=str(alert_id))
+        stmt = select(Alert).where(Alert.id == alert_id).limit(1)
+        result = await self.session.execute(stmt)
+        row: Alert | None = result.scalar_one_or_none()
+        self.log_completed("get", found=row is not None)
+        return row
+
     async def list_unacknowledged(self, limit: int = 100) -> list[Alert]:
         """Return the oldest-first list of unacknowledged alerts.
 
@@ -89,3 +107,74 @@ class AlertRepository(LoggerMixin):
 
         self.log_completed("list_unacknowledged", count=len(alerts))
         return alerts
+
+    async def list_unacknowledged_by_type(
+        self,
+        alert_type: str,
+        limit: int = 100,
+    ) -> list[Alert]:
+        """Return unacknowledged alerts filtered by :attr:`Alert.type`.
+
+        Args:
+            alert_type: Alert type string (e.g. ``"informal_opt_out"``).
+            limit: Maximum number of rows to return (default 100).
+
+        Returns:
+            List of matching :class:`Alert` rows in ascending created_at order.
+        """
+        self.log_started(
+            "list_unacknowledged_by_type",
+            alert_type=alert_type,
+            limit=limit,
+        )
+        stmt = (
+            select(Alert)
+            .where(
+                Alert.type == alert_type,
+                Alert.acknowledged_at.is_(None),
+            )
+            .order_by(Alert.created_at.asc())
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        alerts = list(result.scalars().all())
+        self.log_completed(
+            "list_unacknowledged_by_type",
+            alert_type=alert_type,
+            count=len(alerts),
+        )
+        return alerts
+
+    async def acknowledge(self, alert_id: UUID) -> Alert | None:
+        """Mark an alert as acknowledged.
+
+        Idempotent: if the row is already acknowledged, the existing
+        ``acknowledged_at`` is preserved and returned unchanged.
+
+        Args:
+            alert_id: Alert UUID.
+
+        Returns:
+            The refreshed :class:`Alert` row, or None if no row matches.
+        """
+        self.log_started("acknowledge", alert_id=str(alert_id))
+        row = await self.get(alert_id)
+        if row is None:
+            self.log_completed("acknowledge", alert_id=str(alert_id), found=False)
+            return None
+        if row.acknowledged_at is not None:
+            self.log_completed(
+                "acknowledge",
+                alert_id=str(alert_id),
+                already_acknowledged=True,
+            )
+            return row
+        row.acknowledged_at = datetime.now(tz=timezone.utc)
+        await self.session.flush()
+        await self.session.refresh(row)
+        self.log_completed(
+            "acknowledge",
+            alert_id=str(alert_id),
+            acknowledged_at=row.acknowledged_at.isoformat(),
+        )
+        return row

@@ -1,6 +1,7 @@
 import { Mail, MessageSquare, Phone } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { OptOutBadge } from '@/shared/components';
 import { useCustomerSentMessages } from '../hooks';
 
 const channelIcons: Record<string, React.ReactNode> = {
@@ -25,6 +26,12 @@ export function CustomerMessages({ customerId }: CustomerMessagesProps) {
   const { data: rawMessages, isLoading, error } = useCustomerSentMessages(customerId);
   // API may return paginated {items: [...]} or plain array
   const messages = Array.isArray(rawMessages) ? rawMessages : (rawMessages as any)?.items ?? [];
+
+  const header = (
+    <div className="mb-3">
+      <OptOutBadge customerId={customerId} />
+    </div>
+  );
 
   if (isLoading) {
     return (
@@ -56,6 +63,7 @@ export function CustomerMessages({ customerId }: CustomerMessagesProps) {
 
   return (
     <div data-testid="customer-messages" className="space-y-3">
+      {header}
       {sorted.map((msg) => {
         const channel = msg.message_type?.includes('sms') || msg.recipient_phone ? 'sms' : 'email';
         return (

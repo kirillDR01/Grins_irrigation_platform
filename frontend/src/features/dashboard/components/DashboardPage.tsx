@@ -26,6 +26,7 @@ import { RecentActivity } from './RecentActivity';
 import { TechnicianAvailability } from './TechnicianAvailability';
 import { SubscriptionDashboardWidgets } from './SubscriptionDashboardWidgets';
 import { JobStatusGrid } from './JobStatusGrid';
+import { InformalOptOutAlertCard } from './InformalOptOutAlertCard';
 import { AIQueryChat } from '@/features/ai/components/AIQueryChat';
 import { MorningBriefing } from '@/features/ai/components/MorningBriefing';
 import { OverdueInvoicesWidget, LienDeadlinesWidget } from '@/features/invoices';
@@ -99,6 +100,9 @@ export function DashboardPage() {
 
           {/* Job Status Grid */}
           <JobStatusGrid />
+
+          {/* Gap 06: Informal opt-out review queue card */}
+          <InformalOptOutAlertCard />
 
           {/* Today's Schedule Summary */}
           <Card data-testid="today-schedule-card">

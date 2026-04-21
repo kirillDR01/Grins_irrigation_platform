@@ -7,3 +7,4 @@ export { StaffPage } from './Staff';
 export { InvoicesPage } from './Invoices';
 export { SettingsPage } from './Settings';
 export { WorkRequestsPage } from './WorkRequests';
+export { InformalOptOutQueuePage } from './InformalOptOutQueue';

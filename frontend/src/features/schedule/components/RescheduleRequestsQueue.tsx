@@ -27,6 +27,7 @@ import {
   useResolveRescheduleRequest,
 } from '../hooks/useRescheduleRequests';
 import type { RescheduleRequestDetail } from '../types';
+import { OptOutBadge } from '@/shared/components';
 
 interface RescheduleRequestsQueueProps {
   onAppointmentClick?: (appointmentId: string) => void;
@@ -239,13 +240,16 @@ function RescheduleRequestItem({
       data-testid="reschedule-request-item"
     >
       <div className="flex flex-col gap-1 min-w-0 flex-1">
-        <button
-          className="font-medium text-slate-700 text-left hover:text-teal-600 truncate"
-          onClick={() => onAppointmentClick?.(request.appointment_id)}
-          data-testid="reschedule-customer-name"
-        >
-          {request.customer_name || 'Unknown Customer'}
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            className="font-medium text-slate-700 text-left hover:text-teal-600 truncate"
+            onClick={() => onAppointmentClick?.(request.appointment_id)}
+            data-testid="reschedule-customer-name"
+          >
+            {request.customer_name || 'Unknown Customer'}
+          </button>
+          <OptOutBadge customerId={request.customer_id} compact />
+        </div>
         <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
           {request.original_appointment_date && (
             <span>

@@ -108,3 +108,107 @@ class TestAlertRepository:
         listed = await repository.list_unacknowledged()
 
         assert listed == []
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_returns_row(
+        self,
+        repository: AlertRepository,
+        mock_session: AsyncMock,
+    ) -> None:
+        """``get`` returns the matching row."""
+        alert = MagicMock(spec=Alert)
+        alert.id = uuid4()
+        exec_result = MagicMock()
+        exec_result.scalar_one_or_none.return_value = alert
+        mock_session.execute = AsyncMock(return_value=exec_result)
+
+        result = await repository.get(alert.id)
+        assert result is alert
+
+    @pytest.mark.asyncio
+    async def test_list_unacknowledged_by_type_filters(
+        self,
+        repository: AlertRepository,
+        mock_session: AsyncMock,
+    ) -> None:
+        """``list_unacknowledged_by_type`` returns only matching type rows."""
+        matching = MagicMock(spec=Alert)
+        matching.id = uuid4()
+        matching.type = AlertType.INFORMAL_OPT_OUT.value
+        matching.acknowledged_at = None
+
+        scalars_result = MagicMock()
+        scalars_result.all.return_value = [matching]
+        exec_result = MagicMock()
+        exec_result.scalars.return_value = scalars_result
+        mock_session.execute = AsyncMock(return_value=exec_result)
+
+        rows = await repository.list_unacknowledged_by_type(
+            alert_type="informal_opt_out",
+            limit=10,
+        )
+        assert rows == [matching]
+
+    @pytest.mark.asyncio
+    async def test_acknowledge_sets_timestamp_when_pending(
+        self,
+        repository: AlertRepository,
+        mock_session: AsyncMock,
+    ) -> None:
+        """First acknowledge stamps acknowledged_at."""
+        alert = Alert(
+            type=AlertType.INFORMAL_OPT_OUT.value,
+            severity=AlertSeverity.WARNING.value,
+            entity_type="customer",
+            entity_id=uuid4(),
+            message="stop texting me",
+        )
+        alert.id = uuid4()
+        alert.acknowledged_at = None
+        exec_result = MagicMock()
+        exec_result.scalar_one_or_none.return_value = alert
+        mock_session.execute = AsyncMock(return_value=exec_result)
+
+        result = await repository.acknowledge(alert.id)
+        assert result is alert
+        assert alert.acknowledged_at is not None
+
+    @pytest.mark.asyncio
+    async def test_acknowledge_is_idempotent(
+        self,
+        repository: AlertRepository,
+        mock_session: AsyncMock,
+    ) -> None:
+        """Acknowledging an already-acknowledged row preserves the timestamp."""
+        prior = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        alert = Alert(
+            type=AlertType.INFORMAL_OPT_OUT.value,
+            severity=AlertSeverity.WARNING.value,
+            entity_type="customer",
+            entity_id=uuid4(),
+            message="stop texting me",
+        )
+        alert.id = uuid4()
+        alert.acknowledged_at = prior
+        exec_result = MagicMock()
+        exec_result.scalar_one_or_none.return_value = alert
+        mock_session.execute = AsyncMock(return_value=exec_result)
+
+        result = await repository.acknowledge(alert.id)
+        assert result is alert
+        assert alert.acknowledged_at == prior
+        mock_session.flush.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_acknowledge_missing_returns_none(
+        self,
+        repository: AlertRepository,
+        mock_session: AsyncMock,
+    ) -> None:
+        """Missing row → None."""
+        exec_result = MagicMock()
+        exec_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(return_value=exec_result)
+
+        result = await repository.acknowledge(uuid4())
+        assert result is None

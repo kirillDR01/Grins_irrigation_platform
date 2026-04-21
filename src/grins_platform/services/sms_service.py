@@ -15,20 +15,30 @@ import re
 import time as _time_mod
 from datetime import datetime, time, timedelta, timezone
 from typing import TYPE_CHECKING, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import (
+    and_,
     select,
     update as sa_update,
 )
 
 from grins_platform.log_config import LoggerMixin, get_logger
+from grins_platform.models.alert import Alert
+from grins_platform.models.enums import AlertSeverity, AlertType
 from grins_platform.models.sent_message import SentMessage
 from grins_platform.models.sms_consent_record import SmsConsentRecord
+from grins_platform.repositories.alert_repository import AlertRepository
 from grins_platform.repositories.sent_message_repository import SentMessageRepository
 from grins_platform.schemas.ai import DeliveryStatus, MessageType
-from grins_platform.services.sms.audit import log_consent_hard_stop
+from grins_platform.services.sms.audit import (
+    log_consent_hard_stop,
+    log_informal_opt_out_auto_acknowledged,
+    log_informal_opt_out_confirmed,
+    log_informal_opt_out_dismissed,
+    log_informal_opt_out_flagged,
+)
 from grins_platform.services.sms.consent import ConsentType, check_sms_consent
 from grins_platform.services.sms.templating import render_template
 
@@ -81,6 +91,20 @@ _SUPERSEDABLE_MESSAGE_TYPES: frozenset[str] = frozenset(
         MessageType.APPOINTMENT_RESCHEDULE.value,
         MessageType.APPOINTMENT_CANCELLATION.value,
         MessageType.APPOINTMENT_REMINDER.value,
+    }
+)
+
+# Gap 06 — message types suppressed while an INFORMAL_OPT_OUT alert is
+# unacknowledged. Urgent transactional (CONFIRMATION, ON_THE_WAY, ARRIVAL,
+# COMPLETION, CONFIRMATION_REPLY, RESCHEDULE_FOLLOWUP) are excluded so the
+# day-of appointment can still be honored while an admin decides.
+_RESPECTS_PENDING_INFORMAL_OPT_OUT: frozenset[MessageType] = frozenset(
+    {
+        MessageType.APPOINTMENT_REMINDER,
+        MessageType.REVIEW_REQUEST,
+        MessageType.GOOGLE_REVIEW_REQUEST,
+        MessageType.CAMPAIGN,
+        MessageType.PAYMENT_REMINDER,
     }
 )
 
@@ -218,16 +242,19 @@ class SMSService(LoggerMixin):
         )
 
         # S11: Type-scoped consent check
+        respects_pending = message_type in _RESPECTS_PENDING_INFORMAL_OPT_OUT
         has_consent = await check_sms_consent(
             self.session,
             recipient.phone,
             consent_type,
+            require_no_pending_informal=respects_pending,
         )
         if not has_consent:
             logger.info(
                 "sms.consent.denied",
                 phone=masked,
                 consent_type=consent_type,
+                respects_pending_informal=respects_pending,
             )
             self.log_rejected("send_message", reason="consent_denied")
             msg = f"Consent denied for {masked} (type={consent_type})"
@@ -1021,6 +1048,14 @@ class SMSService(LoggerMixin):
             phone_masked=_mask_phone(formatted_phone),
         )
 
+        # Gap 06: auto-acknowledge any pending informal-opt-out alerts for
+        # this customer (edge case: informal phrase followed by STOP).
+        resolved_customer_id = await self._resolve_customer_id_by_phone(
+            formatted_phone,
+        )
+        if resolved_customer_id is not None:
+            await self._auto_ack_pending_informal_alerts(resolved_customer_id)
+
         # Send confirmation SMS (Req 8.3)
         _ = await self.provider.send_text(formatted_phone, OPT_OUT_CONFIRMATION_MSG)
 
@@ -1058,37 +1093,294 @@ class SMSService(LoggerMixin):
         phone: str,
         body: str,
     ) -> dict[str, Any]:
-        """Flag informal opt-out for admin review without auto-processing.
+        """Flag informal opt-out for admin review.
 
-        Args:
-            phone: Sender phone number
-            body: Original message body
+        Creates an :class:`Alert` row so the dashboard / queue page can
+        surface the signal, emits a ``sms.informal_opt_out.flagged`` audit
+        event, and attempts to attach the alert to the resolved customer.
+        Alert creation failure is swallowed so the inbound still returns.
 
-        Returns:
-            Processing result
-
-        Validates: Requirements 8.5
+        Validates: Requirements 8.5, Gap 06
         """
-        self.log_started(
-            "flag_informal_opt_out",
-            phone=_mask_phone(phone),
-        )
-        logger.warning(
-            "sms.informal_opt_out.flagged",
-            phone=_mask_phone(phone),
-            action="admin_review_required",
-        )
+        phone_masked = _mask_phone(phone)
+        self.log_started("flag_informal_opt_out", phone=phone_masked)
+
+        # Resolve customer via phone (E.164 normalization + variant lookup).
+        customer_id = await self._resolve_customer_id_by_phone(phone)
+
+        alert_id: UUID | None = None
+        try:
+            entity_type = "customer" if customer_id else "phone"
+            entity_id = customer_id if customer_id else uuid4()
+            body_snippet = body[:200]
+            alert = Alert(
+                type=AlertType.INFORMAL_OPT_OUT.value,
+                severity=AlertSeverity.WARNING.value,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                message=(
+                    f"Possible opt-out from {phone_masked}: "
+                    f"'{body_snippet}'"
+                ),
+            )
+            saved = await AlertRepository(self.session).create(alert)
+            alert_id = saved.id
+
+            await log_informal_opt_out_flagged(
+                self.session,
+                phone_masked=phone_masked,
+                customer_id=customer_id,
+                alert_id=saved.id,
+            )
+
+            logger.warning(
+                "sms.informal_opt_out.flagged",
+                phone=phone_masked,
+                customer_id=str(customer_id) if customer_id else None,
+                alert_id=str(saved.id),
+                action="admin_review_required",
+            )
+        except Exception:
+            logger.warning(
+                "sms.informal_opt_out.alert_creation_failed",
+                phone=phone_masked,
+                exc_info=True,
+            )
+
         self.log_completed(
             "handle_inbound",
             webhook_action="informal_opt_out_flagged",
-            phone=_mask_phone(phone),
+            phone=phone_masked,
+            alert_id=str(alert_id) if alert_id else None,
         )
         return {
             "action": "informal_opt_out_flagged",
             "phone": phone,
             "body": body,
+            "alert_id": str(alert_id) if alert_id else None,
             "message": "Informal opt-out detected. Flagged for admin review.",
         }
+
+    async def _resolve_customer_id_by_phone(self, phone: str) -> UUID | None:
+        """Look up the first Customer whose phone matches any variant of ``phone``.
+
+        Mirrors the lookup pattern used inside ``services/sms/consent.py``.
+        Returns None when no Customer row matches (lead-only phone, or not
+        yet onboarded).
+        """
+        from grins_platform.models.customer import Customer  # noqa: PLC0415
+        from grins_platform.services.sms.consent import (  # noqa: PLC0415
+            _phone_variants,
+        )
+        from grins_platform.services.sms.phone_normalizer import (  # noqa: PLC0415
+            PhoneNormalizationError,
+            normalize_to_e164,
+        )
+
+        try:
+            e164 = normalize_to_e164(phone)
+        except PhoneNormalizationError:
+            return None
+
+        try:
+            stmt = (
+                select(Customer.id)
+                .where(Customer.phone.in_(_phone_variants(e164)))
+                .limit(1)
+            )
+            result = await self.session.execute(stmt)
+            return result.scalar_one_or_none()
+        except Exception:
+            logger.warning(
+                "sms.informal_opt_out.customer_resolution_failed",
+                phone=_mask_phone(phone),
+                exc_info=True,
+            )
+            return None
+
+    async def _auto_ack_pending_informal_alerts(
+        self,
+        customer_id: UUID,
+    ) -> None:
+        """Acknowledge any open INFORMAL_OPT_OUT alerts for ``customer_id``.
+
+        Invoked after an exact STOP is received from a customer who had
+        previously sent an informal opt-out phrase.
+
+        Validates: Gap 06 edge case — informal → STOP sequence.
+        """
+        try:
+            stmt = (
+                select(Alert)
+                .where(
+                    and_(
+                        Alert.type == AlertType.INFORMAL_OPT_OUT.value,
+                        Alert.entity_type == "customer",
+                        Alert.entity_id == customer_id,
+                        Alert.acknowledged_at.is_(None),
+                    ),
+                )
+            )
+            result = await self.session.execute(stmt)
+            open_alerts = list(result.scalars().all())
+            if not open_alerts:
+                return
+            repo = AlertRepository(self.session)
+            for alert in open_alerts:
+                ack = await repo.acknowledge(alert.id)
+                if ack is not None:
+                    await log_informal_opt_out_auto_acknowledged(
+                        self.session,
+                        alert_id=ack.id,
+                        customer_id=customer_id,
+                    )
+        except Exception:
+            logger.warning(
+                "sms.informal_opt_out.auto_ack_failed",
+                customer_id=str(customer_id),
+                exc_info=True,
+            )
+
+    async def confirm_informal_opt_out(
+        self,
+        alert_id: UUID,
+        *,
+        actor_id: UUID | None,
+    ) -> Alert:
+        """Admin-confirm an informal opt-out alert.
+
+        Writes a hard-stop-equivalent :class:`SmsConsentRecord`, acknowledges
+        the alert, sends ``OPT_OUT_CONFIRMATION_MSG`` to the customer, and
+        emits both ``sms.informal_opt_out.confirmed`` and
+        ``sms.consent.hard_stop_received`` audit events.
+
+        Validates: Gap 06 admin-confirmation path.
+        """
+        from grins_platform.models.customer import Customer  # noqa: PLC0415
+
+        repo = AlertRepository(self.session)
+        alert = await repo.get(alert_id)
+        if alert is None:
+            msg = f"Alert {alert_id} not found"
+            raise ValueError(msg)
+        if alert.type != AlertType.INFORMAL_OPT_OUT.value:
+            msg = f"Alert {alert_id} is not an informal_opt_out"
+            raise ValueError(msg)
+        if alert.acknowledged_at is not None:
+            msg = f"Alert {alert_id} is already acknowledged"
+            raise ValueError(msg)
+        if alert.entity_type != "customer":
+            msg = (
+                f"Alert {alert_id} has entity_type={alert.entity_type}; "
+                "customer attachment required before confirmation"
+            )
+            raise ValueError(msg)
+
+        cust_stmt = (
+            select(Customer).where(Customer.id == alert.entity_id).limit(1)
+        )
+        cust_result = await self.session.execute(cust_stmt)
+        customer: Customer | None = cust_result.scalar_one_or_none()
+        if customer is None:
+            msg = f"Customer {alert.entity_id} not found for alert {alert_id}"
+            raise ValueError(msg)
+
+        from grins_platform.services.sms.phone_normalizer import (  # noqa: PLC0415
+            PhoneNormalizationError,
+            normalize_to_e164,
+        )
+
+        try:
+            formatted_phone = normalize_to_e164(customer.phone or "")
+        except PhoneNormalizationError:
+            formatted_phone = self._format_phone(customer.phone or "")
+
+        now = datetime.now(timezone.utc)
+        record = SmsConsentRecord(
+            customer_id=customer.id,
+            phone_number=formatted_phone,
+            consent_type="marketing",
+            consent_given=False,
+            consent_timestamp=now,
+            consent_method="admin_confirmed_informal",
+            consent_language_shown=alert.message,
+            opt_out_timestamp=now,
+            opt_out_method="admin_confirmed_informal",
+            opt_out_processed_at=now,
+            opt_out_confirmation_sent=True,
+            created_by_staff_id=actor_id,
+        )
+        self.session.add(record)
+        await self.session.flush()
+
+        # Audit: admin-confirmed informal + hard-stop equivalent
+        await log_informal_opt_out_confirmed(
+            self.session,
+            alert_id=alert.id,
+            customer_id=customer.id,
+            actor_id=actor_id,
+        )
+        await log_consent_hard_stop(
+            self.session,
+            phone_masked=_mask_phone(formatted_phone),
+        )
+
+        acknowledged = await repo.acknowledge(alert.id)
+        if acknowledged is None:
+            msg = f"Failed to acknowledge alert {alert_id}"
+            raise ValueError(msg)
+
+        # Best-effort confirmation SMS — never block on provider failure.
+        try:
+            _ = await self.provider.send_text(
+                formatted_phone,
+                OPT_OUT_CONFIRMATION_MSG,
+            )
+        except Exception:
+            logger.warning(
+                "sms.informal_opt_out.confirmation_send_failed",
+                phone=_mask_phone(formatted_phone),
+                alert_id=str(alert_id),
+                exc_info=True,
+            )
+
+        return acknowledged
+
+    async def dismiss_informal_opt_out(
+        self,
+        alert_id: UUID,
+        *,
+        actor_id: UUID | None,
+    ) -> Alert:
+        """Admin-dismiss an informal opt-out alert.
+
+        Acknowledges the alert without writing any consent record. Emits
+        ``sms.informal_opt_out.dismissed``. Clearing the pending alert
+        re-enables marketing / reminder sends for the customer.
+        """
+        repo = AlertRepository(self.session)
+        alert = await repo.get(alert_id)
+        if alert is None:
+            msg = f"Alert {alert_id} not found"
+            raise ValueError(msg)
+        if alert.type != AlertType.INFORMAL_OPT_OUT.value:
+            msg = f"Alert {alert_id} is not an informal_opt_out"
+            raise ValueError(msg)
+        if alert.acknowledged_at is not None:
+            msg = f"Alert {alert_id} is already acknowledged"
+            raise ValueError(msg)
+
+        acknowledged = await repo.acknowledge(alert.id)
+        if acknowledged is None:
+            msg = f"Failed to acknowledge alert {alert_id}"
+            raise ValueError(msg)
+
+        await log_informal_opt_out_dismissed(
+            self.session,
+            alert_id=alert.id,
+            actor_id=actor_id,
+        )
+        return acknowledged
 
     async def check_sms_consent_legacy(self, phone: str) -> bool:
         """Check most recent consent record for a phone number.

@@ -597,6 +597,7 @@ class AlertType(str, Enum):
     CONFIRMATION_NO_REPLY = "confirmation_no_reply"
     LATE_RESCHEDULE_ATTEMPT = "late_reschedule_attempt"
     CUSTOMER_RECONSIDER_CANCELLATION = "customer_reconsider_cancellation"
+    INFORMAL_OPT_OUT = "informal_opt_out"
 
 
 # =============================================================================

@@ -1,6 +1,8 @@
 import { apiClient } from '@/core/api';
 import type { PaginatedResponse } from '@/core/api';
 import type {
+  ConsentHistoryResponse,
+  ConsentStatus,
   Customer,
   CustomerCreate,
   CustomerUpdate,
@@ -153,6 +155,23 @@ export const customerApi = {
   // --- Sent Messages (Req 82) ---
   listSentMessages: async (id: string): Promise<SentMessage[]> => {
     const response = await apiClient.get<SentMessage[]>(`${BASE_PATH}/${id}/sent-messages`);
+    return response.data;
+  },
+
+  // --- SMS Consent (Gap 06) ---
+  getConsentStatus: async (id: string): Promise<ConsentStatus> => {
+    const response = await apiClient.get<ConsentStatus>(`${BASE_PATH}/${id}/consent-status`);
+    return response.data;
+  },
+
+  getConsentHistory: async (
+    id: string,
+    params?: { limit?: number }
+  ): Promise<ConsentHistoryResponse> => {
+    const response = await apiClient.get<ConsentHistoryResponse>(
+      `${BASE_PATH}/${id}/consent-history`,
+      { params }
+    );
     return response.data;
   },
 

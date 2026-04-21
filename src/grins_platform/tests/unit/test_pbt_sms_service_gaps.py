@@ -92,13 +92,14 @@ class TestProperty13InformalOptOut:
     @settings(max_examples=30)
     @pytest.mark.asyncio
     async def test_informal_phrase_flags_for_review(self, phrase: str) -> None:
-        """Informal phrases flag for admin review, no opt-out record created."""
+        """Informal phrases flag for admin review (Gap 06: Alert row is created)."""
         service = _make_service()
         result = await service.handle_inbound("+16125551234", phrase, "SM123")
 
         assert result["action"] == "informal_opt_out_flagged"
-        # No SmsConsentRecord should be added
-        service.session.add.assert_not_called()
+        # Gap 06: an Alert row is now created for every informal phrase.
+        assert service.session.add.called
+        assert "alert_id" in result
 
 
 # --- Property 14: Consent check blocks sending to opted-out numbers ---
