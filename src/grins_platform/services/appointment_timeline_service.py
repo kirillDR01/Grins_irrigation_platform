@@ -242,8 +242,9 @@ class AppointmentTimelineService(LoggerMixin):
 
     @staticmethod
     def _consent_recorded_at(consent: SmsConsentRecord) -> datetime | None:
+        ts: datetime | None
         if not consent.consent_given and consent.opt_out_timestamp is not None:
-            value: datetime | None = consent.opt_out_timestamp
-            return value
-        value = consent.consent_timestamp
-        return value
+            ts = consent.opt_out_timestamp
+        else:
+            ts = consent.consent_timestamp
+        return ts
