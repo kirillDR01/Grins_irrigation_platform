@@ -1,0 +1,1935 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Sales Pipeline UX v4 — modals, dropzones, weekly A/R replies</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Kalam:wght@400;700&family=Architects+Daughter&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --ink-soft: #4a4a4a;
+    --ink-faint: #8a8a8a;
+    --paper: #fafaf6;
+    --rule: #1a1a1a;
+    --accent: #d4622a;
+    --highlight: #ffe066;
+    --blue: #3a6ea8;
+    --green: #4a8a5a;
+    --green-soft: #e6f2dc;
+    --red: #c44a3a;
+    --amber: #d89730;
+    --amber-soft: #fff2d0;
+    --red-soft: #fbe1dc;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #efece4;
+    color: var(--ink);
+    font-family: 'Kalam', 'Architects Daughter', sans-serif;
+  }
+  body {
+    min-height: 100vh;
+    padding: 24px 32px 80px;
+  }
+
+  /* ----------- top matter ----------- */
+  .page-header {
+    max-width: 1280px;
+    margin: 0 auto 14px;
+  }
+  .eyebrow {
+    font-family: 'Kalam';
+    font-size: 13px;
+    color: var(--ink-faint);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin: 0 0 2px;
+  }
+  .page-title {
+    font-family: 'Caveat', cursive;
+    font-size: 44px;
+    font-weight: 700;
+    margin: 0 0 4px;
+    line-height: 1;
+  }
+  .page-title em {
+    background: var(--highlight);
+    font-style: normal;
+    padding: 0 6px;
+    box-shadow: -1px 1px 0 rgba(0,0,0,.08);
+  }
+  .page-sub {
+    font-family: 'Kalam';
+    color: var(--ink-soft);
+    font-size: 15px;
+    margin: 0;
+    max-width: 920px;
+    line-height: 1.5;
+  }
+
+  /* ----------- tabs ----------- */
+  .tabs {
+    max-width: 1280px;
+    margin: 16px auto 18px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    border-bottom: 2px dashed var(--ink);
+    padding-bottom: 10px;
+  }
+  .tab {
+    font-family: 'Kalam';
+    font-size: 15px;
+    font-weight: 700;
+    padding: 9px 16px;
+    border: 2px solid var(--ink);
+    background: var(--paper);
+    cursor: pointer;
+    border-radius: 14px 18px 12px 20px;
+    transform: rotate(-0.3deg);
+    box-shadow: 2px 2px 0 rgba(0,0,0,.15);
+    transition: all .1s;
+    color: var(--ink);
+  }
+  .tab:nth-child(even) { transform: rotate(0.4deg); }
+  .tab:hover { background: #fff7d6; }
+  .tab.active { background: var(--ink); color: var(--paper); }
+  .tab small {
+    display: block;
+    font-weight: 400;
+    font-size: 11px;
+    opacity: .75;
+    margin-top: 1px;
+  }
+
+  .panel { display: none; max-width: 1280px; margin: 0 auto; }
+  .panel.active { display: block; }
+
+  .panel-caption {
+    font-family: 'Caveat';
+    font-size: 28px;
+    margin: 0 0 4px;
+  }
+  .panel-desc {
+    font-family: 'Kalam';
+    color: var(--ink-soft);
+    margin: 0 0 18px;
+    max-width: 900px;
+    line-height: 1.45;
+  }
+  .panel-desc em {
+    background: var(--highlight);
+    font-style: normal;
+    padding: 0 3px;
+  }
+
+  /* ----------- app frame ----------- */
+  .app {
+    background: var(--paper);
+    border: 2.5px solid var(--ink);
+    border-radius: 6px;
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    min-height: 700px;
+    box-shadow: 4px 4px 0 rgba(0,0,0,.12);
+    overflow: hidden;
+  }
+  .side {
+    border-right: 2px dashed var(--ink);
+    padding: 14px 10px;
+    background: #f4f1e8;
+  }
+  .side .logo {
+    font-family: 'Caveat';
+    font-weight: 700;
+    font-size: 22px;
+    display: flex; align-items: center; gap: 6px;
+    padding: 2px 6px 10px;
+    border-bottom: 1.5px dashed var(--ink);
+    margin-bottom: 10px;
+  }
+  .side .logo .dot {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--ink); color: var(--paper);
+    font-size: 12px; display: grid; place-items: center;
+  }
+  .side ul { list-style: none; margin: 0; padding: 0; font-family: 'Kalam'; font-size: 14px; }
+  .side li {
+    padding: 5px 8px; border-radius: 4px; color: var(--ink-soft);
+    display: flex; align-items: center; gap: 7px;
+  }
+  .side li::before { content: "▢"; font-size: 10px; opacity: .6; }
+  .side li.active {
+    background: #ffe7a8;
+    color: var(--ink);
+    font-weight: 700;
+    border: 1.5px solid var(--ink);
+    transform: rotate(-0.3deg);
+  }
+  .side li.active::before { content: "▶"; color: var(--accent); }
+  .main {
+    padding: 16px 22px;
+    overflow: hidden;
+  }
+  .crumb { font-family: 'Kalam'; font-size: 13px; color: var(--ink-faint); margin-bottom: 6px; }
+  .crumb .back { cursor: pointer; }
+  .h1 { font-family: 'Caveat'; font-size: 36px; margin: 0 0 12px; line-height: 1; }
+
+  /* ----------- cards ----------- */
+  .card {
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+    position: relative;
+  }
+  .card.wavy {
+    border-radius: 6px 4px 8px 5px;
+    box-shadow: 3px 3px 0 rgba(0,0,0,.08);
+  }
+  .card-title {
+    font-family: 'Caveat';
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    display: flex; align-items: center; gap: 8px;
+    justify-content: space-between;
+  }
+  .card-title small {
+    font-family: 'Kalam';
+    font-size: 12px;
+    color: var(--ink-faint);
+    font-weight: 400;
+    letter-spacing: .04em;
+  }
+
+  /* ----------- STEPPER ON DETAIL PAGE ----------- */
+  .stepper-wrap {
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 6px 4px 8px 5px;
+    padding: 10px 18px 16px;
+    margin-bottom: 14px;
+    position: relative;
+    box-shadow: 3px 3px 0 rgba(0,0,0,.08);
+  }
+  .stepper-phases {
+    display: grid;
+    grid-template-columns: 1fr 2fr 2fr;
+    gap: 0;
+    font-family: 'Caveat';
+    font-size: 15px;
+    color: var(--ink-faint);
+    margin: 4px 2px 6px;
+    letter-spacing: .02em;
+  }
+  .stepper-phases span {
+    text-align: center;
+    border-bottom: 1.5px dotted var(--ink-faint);
+    padding-bottom: 3px;
+  }
+  .stepper-phases span + span { margin-left: 6px; }
+
+  .stepper {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+    position: relative;
+    padding-top: 4px;
+  }
+  .step {
+    text-align: center;
+    position: relative;
+    cursor: pointer;
+  }
+  .step::before {
+    content: "";
+    position: absolute;
+    top: 16px; left: -50%;
+    width: 100%;
+    border-top: 2.5px dashed var(--ink);
+    z-index: 0;
+  }
+  .step:first-child::before { display: none; }
+  .step.done::before { border-top-style: solid; border-color: var(--green); }
+  .step.active::before { border-top-color: var(--ink); }
+
+  .step .dot {
+    position: relative; z-index: 1;
+    width: 34px; height: 34px;
+    border: 2.5px solid var(--ink);
+    background: var(--paper);
+    border-radius: 50%;
+    margin: 0 auto 4px;
+    display: grid; place-items: center;
+    font-family: 'Kalam'; font-weight: 700;
+    font-size: 14px;
+    transform: rotate(-1deg);
+  }
+  .step.done .dot {
+    background: var(--green);
+    border-color: var(--green);
+    color: #fff;
+  }
+  .step.active .dot {
+    background: var(--accent);
+    border-color: var(--ink);
+    color: #fff;
+    transform: rotate(2deg) scale(1.08);
+    box-shadow: 2px 2px 0 rgba(0,0,0,.2);
+  }
+  .step.active.waiting .dot {
+    background: var(--amber);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { box-shadow: 2px 2px 0 rgba(0,0,0,.2); }
+    50%     { box-shadow: 2px 2px 0 rgba(0,0,0,.2), 0 0 0 6px rgba(216,151,48,.25); }
+  }
+  .step.lost .dot {
+    background: #f4e2df;
+    border: 2px dashed var(--red);
+    color: var(--red);
+  }
+  .step .label {
+    font-family: 'Kalam';
+    font-size: 12.5px;
+    line-height: 1.15;
+    color: var(--ink-soft);
+  }
+  .step.active .label { color: var(--ink); font-weight: 700; }
+  .step.done .label { color: var(--ink-soft); }
+
+  .stepper-foot {
+    margin-top: 10px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'Kalam'; font-size: 13px;
+    color: var(--ink-faint);
+  }
+  .stepper-foot .mark-lost {
+    font-family: 'Kalam'; font-size: 13px;
+    color: var(--red);
+    border: 1.5px dashed var(--red);
+    background: transparent;
+    padding: 3px 10px;
+    border-radius: 14px;
+    cursor: pointer;
+  }
+  .stepper-foot .mark-lost:hover { background: var(--red-soft); }
+  .stepper-foot .override {
+    font-family: 'Kalam'; font-size: 13px;
+    color: var(--ink-faint);
+    cursor: pointer;
+    text-decoration: underline dotted;
+  }
+
+  /* ----------- NOW CARD ----------- */
+  .now-card {
+    background: var(--paper);
+    border: 2.5px solid var(--ink);
+    border-radius: 5px 8px 4px 7px;
+    padding: 16px 20px;
+    margin-bottom: 14px;
+    position: relative;
+    box-shadow: 4px 4px 0 rgba(0,0,0,.10);
+  }
+  .now-card::before {
+    content: "";
+    position: absolute; inset: -2.5px;
+    border: 2.5px solid var(--accent);
+    border-radius: 5px 8px 4px 7px;
+    transform: rotate(-0.4deg);
+    z-index: -1;
+    pointer-events: none;
+  }
+  .now-head {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 6px;
+  }
+  .now-pill {
+    font-family: 'Kalam';
+    font-weight: 700;
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  .now-pill.you  { background: var(--green); color: #fff; }
+  .now-pill.cust { background: var(--amber); color: #fff; }
+  .now-pill.sys  { background: var(--blue); color: #fff; }
+  .now-pill.done { background: var(--ink-soft); color: #fff; }
+
+  .now-title {
+    font-family: 'Caveat';
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0;
+    line-height: 1.05;
+  }
+  .now-copy {
+    font-family: 'Kalam';
+    color: var(--ink-soft);
+    margin: 4px 0 14px;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .now-copy em { background: var(--highlight); font-style: normal; padding: 0 3px; }
+  .now-actions {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  }
+  .btn {
+    font-family: 'Kalam';
+    font-weight: 700;
+    border: 2px solid var(--ink);
+    background: var(--paper);
+    padding: 8px 16px;
+    border-radius: 12px 18px 10px 22px;
+    cursor: pointer;
+    font-size: 14px;
+    transform: rotate(-0.2deg);
+    box-shadow: 2px 2px 0 rgba(0,0,0,.12);
+    transition: all .1s;
+  }
+  .btn:nth-child(even) { transform: rotate(0.3deg); }
+  .btn:hover { background: #fff7d6; }
+  .btn.primary {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .btn.primary:hover { background: #333; }
+  .btn.ghost {
+    background: transparent;
+    border: 1.5px dashed var(--ink);
+    box-shadow: none;
+    font-weight: 400;
+  }
+  .btn.danger { background: var(--red); color: #fff; border-color: var(--red); }
+  .btn.disabled {
+    opacity: .55;
+    cursor: not-allowed;
+    background: #e9e5d8;
+    color: var(--ink-faint);
+    box-shadow: none;
+  }
+  .btn .lock {
+    display: inline-block;
+    margin-right: 4px;
+    font-size: 12px;
+    transform: translateY(-1px);
+  }
+  .btn-stack {
+    display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+  }
+  .btn-stack .lock-reason {
+    font-family: 'Kalam';
+    font-size: 12px;
+    color: var(--red);
+    margin-left: 6px;
+    font-style: italic;
+  }
+
+  /* ----------- LOCK / EMPTY-STATE BANNER ----------- */
+  .lock-banner {
+    margin-top: 12px;
+    background: var(--amber-soft);
+    border: 2px dashed var(--amber);
+    border-radius: 6px 4px 8px 5px;
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    align-items: center;
+    font-family: 'Kalam';
+    font-size: 14px;
+    color: var(--ink);
+  }
+  .lock-banner .icon {
+    font-size: 22px;
+  }
+  .lock-banner b { font-weight: 700; }
+  .lock-banner .jump-link {
+    font-family: 'Kalam';
+    font-weight: 700;
+    color: var(--accent);
+    text-decoration: underline dotted;
+    cursor: pointer;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  /* ----------- header card ----------- */
+  .cust-head {
+    display: flex; justify-content: space-between; gap: 20px; align-items: flex-start;
+  }
+  .cust-name {
+    font-family: 'Caveat';
+    font-size: 36px;
+    margin: 0 0 2px;
+    line-height: 1;
+  }
+  .cust-meta {
+    font-family: 'Kalam';
+    color: var(--ink-soft);
+    font-size: 14px;
+    display: flex; gap: 16px; flex-wrap: wrap;
+    margin-top: 4px;
+  }
+  .cust-meta .ico { color: var(--ink-faint); margin-right: 3px; }
+
+  .status-pill {
+    font-family: 'Kalam';
+    font-weight: 700;
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    letter-spacing: .04em;
+    border: 1.5px solid var(--ink);
+  }
+    .status-pill.s-schedule_estimate { background: #fde4d3; }
+  .status-pill.s-send_estimate     { background: #e7dff2; }
+  .status-pill.s-pending_approval  { background: var(--amber-soft); }
+  .status-pill.s-convert_to_job    { background: #d9ece3; }
+  .status-pill.s-closed_won         { background: var(--green-soft); border-color: var(--green); color: var(--green); }
+  .status-pill.s-closed_lost        { background: var(--red-soft); border-color: var(--red); color: var(--red); }
+
+  /* ----------- auto-nudge schedule (pending_approval) ----------- */
+  .nudge-schedule {
+    background: #fffaf0;
+    border: 1.5px dashed var(--amber);
+    border-radius: 4px;
+    padding: 10px 14px;
+    margin: 10px 0 4px;
+    font-family: 'Kalam';
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .nudge-schedule .nudge-head { margin-bottom: 6px; color: var(--ink); }
+  .nudge-schedule .nudge-sub  { color: var(--ink-faint); font-weight: 400; }
+  .nudge-schedule .nudge-row {
+    padding: 4px 0 4px 22px;
+    border-top: 1px dotted var(--ink-faint);
+    position: relative;
+    opacity: .7;
+  }
+  .nudge-schedule .nudge-row:first-of-type { border-top: none; }
+  .nudge-schedule .nudge-row.done { color: var(--green); opacity: 1; }
+  .nudge-schedule .nudge-row.next { color: var(--amber); font-weight: 700; opacity: 1; background: rgba(217,154,35,.08); }
+
+  /* ----------- Week Of picker (convert_to_job) ----------- */
+  .weekof-picker {
+    background: #f4f1e3;
+    border: 2px solid var(--ink);
+    border-radius: 5px;
+    padding: 10px 12px 12px;
+    margin: 10px 0 4px;
+    font-family: 'Kalam';
+    box-shadow: 2px 2px 0 rgba(0,0,0,.06);
+  }
+  .weekof-picker .weekof-label { font-size: 14px; margin-bottom: 8px; }
+  .weekof-picker .weekof-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .weekof-picker .week-chip {
+    font-family: 'Kalam';
+    font-weight: 600;
+    font-size: 12.5px;
+    padding: 5px 11px;
+    border: 1.5px solid var(--ink);
+    border-radius: 999px;
+    background: #fff;
+    cursor: pointer;
+    transition: transform .08s ease;
+  }
+  .weekof-picker .week-chip:hover { transform: translate(-1px,-1px); box-shadow: 2px 2px 0 rgba(0,0,0,.12); }
+  .weekof-picker .week-chip.on { background: var(--accent); color: #fff; }
+  .weekof-picker .week-chip.more { border-style: dashed; color: var(--ink-soft); }
+  .weekof-picker .weekof-hint { font-size: 12px; color: var(--ink-faint); margin-top: 4px; }
+
+  /* ----------- dropzone ----------- */
+  .dropzone {
+    border: 2px dashed var(--ink);
+    border-radius: 5px;
+    background: #fefbf2;
+    padding: 18px 14px;
+    margin: 10px 0 8px;
+    text-align: center;
+    font-family: 'Kalam';
+    cursor: pointer;
+    transition: background .12s ease, transform .08s ease;
+  }
+  .dropzone:hover { background: #fcf3dd; transform: translate(-1px,-1px); box-shadow: 2px 2px 0 rgba(0,0,0,.08); }
+  .dropzone.empty .dz-icon { font-size: 26px; line-height: 1; margin-bottom: 4px; color: var(--accent); }
+  .dropzone.empty .dz-title { font-size: 15px; font-weight: 700; }
+  .dropzone.empty .dz-sub { font-size: 12.5px; color: var(--ink-faint); margin-top: 2px; }
+  .dropzone.filled { border-style: solid; border-color: var(--accent); background: #fef6ef; text-align: left; }
+  .dropzone .dz-file { display: flex; gap: 10px; align-items: center; }
+  .dropzone .dz-fileicon { font-size: 28px; }
+  .dropzone .dz-filename { font-weight: 700; font-size: 14px; }
+  .dropzone .dz-filesub { font-size: 12px; color: var(--ink-faint); }
+
+  /* ----------- modal ----------- */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(40,30,15,.35);
+    display: none; align-items: center; justify-content: center;
+    z-index: 500;
+  }
+  .modal-overlay.on { display: flex; }
+  .modal {
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 6px;
+    box-shadow: 6px 6px 0 rgba(0,0,0,.2);
+    width: 520px; max-width: 92vw;
+    max-height: 88vh; overflow: auto;
+    padding: 20px 22px;
+    font-family: 'Kalam';
+  }
+  .modal.wide { width: 1100px; max-width: 96vw; padding: 20px 24px; }
+  .modal .split {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 22px;
+    align-items: start;
+  }
+  .modal .split .col-fields { min-width: 0; }
+  .modal .split .col-cal    { min-width: 0; }
+
+  /* ------- week calendar ------- */
+  .wkcal {
+    border: 2px solid var(--ink);
+    border-radius: 6px;
+    background: #fffef8;
+    box-shadow: 4px 4px 0 rgba(0,0,0,.12);
+    overflow: hidden;
+  }
+  .wkcal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 8px 10px;
+    border-bottom: 1.5px dashed var(--ink);
+    background: #f8f5ec;
+  }
+  .wkcal-head .wk-label {
+    font-family: 'Caveat'; font-size: 22px; font-weight: 700;
+    line-height: 1;
+  }
+  .wkcal-head .wk-range { color: var(--ink-soft); font-size: 12px; margin-left: 8px; }
+  .wkcal-nav { display: flex; gap: 6px; }
+  .wkcal-nav button {
+    font-family: 'Kalam'; font-size: 13px; font-weight: 700;
+    padding: 4px 10px; border: 1.5px solid var(--ink);
+    background: var(--paper); border-radius: 999px; cursor: pointer;
+  }
+  .wkcal-nav button:hover { background: var(--highlight); }
+  .wkcal-nav button.today { background: var(--paper); }
+
+  .wkcal-grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: 56px repeat(7, 1fr);
+    font-size: 11px;
+    user-select: none;
+  }
+  .wkcal-corner { border-right: 1px solid #d8d2c2; border-bottom: 1.5px dashed #b6ae9c; background: #f8f5ec; }
+  .wkcal-daycol-head {
+    padding: 6px 4px; text-align: center;
+    border-right: 1px solid #d8d2c2;
+    border-bottom: 1.5px dashed #b6ae9c;
+    background: #f8f5ec;
+    font-family: 'Kalam'; font-weight: 700;
+  }
+  .wkcal-daycol-head .dow { color: var(--ink-faint); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+  .wkcal-daycol-head .dnum { font-size: 16px; color: var(--ink); }
+  .wkcal-daycol-head.today .dnum {
+    display: inline-block;
+    background: var(--highlight);
+    padding: 0 6px; border-radius: 999px;
+  }
+  .wkcal-timecell {
+    padding: 1px 4px 0 6px;
+    text-align: right;
+    color: var(--ink-faint);
+    font-size: 9.5px;
+    border-right: 1px solid #d8d2c2;
+    border-bottom: 1px solid #ece7d8;
+    height: 22px; /* one 30-min slot */
+    position: relative;
+    top: -6px;
+  }
+  .wkcal-timecell.hour { border-bottom-style: solid; border-bottom-color: #d8d2c2; }
+  .wkcal-slot {
+    border-right: 1px solid #d8d2c2;
+    border-bottom: 1px dotted #ece7d8;
+    height: 22px;
+    cursor: crosshair;
+    position: relative;
+  }
+  .wkcal-slot.hour { border-bottom: 1px solid #d8d2c2; }
+  .wkcal-slot.past { background: repeating-linear-gradient(135deg, transparent 0 4px, rgba(0,0,0,.025) 4px 5px); }
+  .wkcal-slot:hover { background: rgba(255,224,102,.25); }
+  .wkcal-daycol.today-col .wkcal-slot { background-color: rgba(255,224,102,.06); }
+
+  /* now-line */
+  .wkcal-now {
+    position: absolute; left: 56px; right: 0; height: 0;
+    border-top: 2px solid var(--red);
+    pointer-events: none;
+    z-index: 3;
+  }
+  .wkcal-now::before {
+    content: ''; position: absolute; left: -4px; top: -5px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--red);
+  }
+
+  /* estimate blocks (read-only) */
+  .wkcal-evt {
+    position: absolute; left: 2px; right: 2px;
+    background: repeating-linear-gradient(135deg, #e2d4c2 0 5px, #d8c8b4 5px 10px);
+    border: 1.5px solid #9d8972;
+    border-radius: 3px;
+    color: #3a2e20;
+    font-family: 'Kalam'; font-size: 10.5px; line-height: 1.15;
+    padding: 2px 5px;
+    overflow: hidden;
+    pointer-events: none;
+    box-shadow: 1px 1px 0 rgba(0,0,0,.08);
+  }
+  .wkcal-evt .evt-name { font-weight: 700; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+  .wkcal-evt .evt-meta { color: #5a4a36; font-size: 9.5px; }
+  .wkcal-evt.conflict { border-color: var(--red); background: repeating-linear-gradient(135deg, #fbe1dc 0 5px, #f6ccc3 5px 10px); }
+
+  /* pick-block (user's selection) */
+  .wkcal-pick {
+    position: absolute; left: 2px; right: 2px;
+    background: var(--accent);
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    color: #fff;
+    font-family: 'Kalam'; font-weight: 700; font-size: 11px; line-height: 1.15;
+    padding: 3px 6px;
+    box-shadow: 2px 2px 0 rgba(0,0,0,.2);
+    z-index: 2;
+    pointer-events: none;
+  }
+  .wkcal-pick .pick-dur { font-weight: 400; font-size: 10px; opacity: .9; display: block; }
+  .wkcal-pick.warn { background: var(--red); }
+
+  /* drag preview */
+  .wkcal-drag {
+    position: absolute; left: 2px; right: 2px;
+    background: rgba(212,98,42,.22);
+    border: 2px dashed var(--accent);
+    border-radius: 4px;
+    pointer-events: none; z-index: 2;
+  }
+
+  /* legend */
+  .wkcal-legend {
+    display: flex; align-items: center; gap: 14px;
+    padding: 6px 10px;
+    border-top: 1.5px dashed var(--ink);
+    background: #f8f5ec;
+    font-size: 11px; color: var(--ink-soft);
+  }
+  .wkcal-legend .sw {
+    display: inline-block; width: 16px; height: 11px;
+    border: 1.5px solid #9d8972; border-radius: 2px;
+    background: repeating-linear-gradient(135deg, #e2d4c2 0 4px, #d8c8b4 4px 8px);
+    vertical-align: middle; margin-right: 4px;
+  }
+  .wkcal-legend .sw.pick {
+    background: var(--accent); border-color: var(--ink);
+  }
+
+  /* conflict warning banner */
+  .conflict-warn {
+    margin-top: 10px;
+    background: var(--red-soft);
+    border: 1.5px solid var(--red);
+    border-radius: 4px;
+    padding: 8px 10px;
+    display: none;
+    font-size: 13px; color: #5a1a12;
+  }
+  .conflict-warn.on { display: block; }
+  .conflict-warn b { color: var(--red); }
+  .pick-summary {
+    margin-top: 8px; padding: 8px 10px;
+    background: var(--amber-soft); border: 1.5px dashed var(--amber);
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .pick-summary .none { color: var(--ink-faint); font-style: italic; }
+  .modal h3 { font-family: 'Caveat'; font-size: 30px; margin: 0 0 4px; line-height: 1.1; }
+  .modal .msub { color: var(--ink-soft); font-size: 13px; margin-bottom: 14px; }
+  .modal label.fl { display: block; font-size: 12px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .06em; margin: 10px 0 4px; font-weight: 700; }
+  .modal input[type=text], .modal input[type=date], .modal input[type=time], .modal select, .modal textarea {
+    width: 100%; font-family: 'Kalam'; font-size: 14px;
+    padding: 7px 9px; border: 1.5px solid var(--ink); border-radius: 4px; background: #fff; box-sizing: border-box;
+  }
+  .modal textarea { min-height: 72px; resize: vertical; }
+  .modal .prefilled {
+    background: #f4f1e3; border: 1.5px dashed var(--ink); border-radius: 4px; padding: 8px 10px;
+    font-size: 13px; line-height: 1.5;
+  }
+  .modal .prefilled .pf-label { color: var(--ink-faint); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin-right: 4px; }
+  .modal .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .modal .jtype-chip { font-family: 'Kalam'; font-size: 12.5px; font-weight: 600; padding: 5px 11px; border: 1.5px solid var(--ink); border-radius: 999px; background: #fff; cursor: pointer; }
+  .modal .jtype-chip.on { background: var(--accent); color: #fff; }
+  .modal .jtype-chip.more { border-style: dashed; color: var(--ink-soft); }
+  .modal .m-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--ink-faint); }
+
+  /* ----------- activity strip ----------- */
+  .activity {
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    font-family: 'Kalam';
+    font-size: 13px;
+    display: flex; gap: 14px; flex-wrap: wrap; align-items: center;
+    color: var(--ink-soft);
+  }
+  .activity .evt { display: flex; align-items: center; gap: 4px; }
+  .activity .evt.done  { color: var(--green); }
+  .activity .evt.wait  { color: var(--amber); font-weight: 700; }
+  .activity .sep { color: var(--ink-faint); opacity: .5; }
+
+  /* ----------- documents mini ----------- */
+  .docs-mini .doc-row {
+    display: grid; grid-template-columns: auto 1fr auto auto;
+    gap: 8px; align-items: center;
+    padding: 8px 10px;
+    border: 1.5px dashed var(--ink);
+    border-radius: 4px;
+    background: #fff;
+    font-family: 'Kalam';
+    font-size: 13.5px;
+    margin-bottom: 6px;
+  }
+  .docs-mini .doc-row.signing {
+    border-style: solid;
+    border-color: var(--accent);
+    background: #fef6ef;
+  }
+  .docs-mini .doc-row.empty {
+    color: var(--ink-faint);
+    font-style: italic;
+    border-style: dotted;
+    justify-items: start;
+    display: block;
+    text-align: center;
+    padding: 18px 10px;
+  }
+  .docs-mini .chip {
+    font-family: 'Kalam';
+    font-weight: 700;
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    letter-spacing: .08em;
+  }
+  .doc-actions { display: flex; gap: 4px; color: var(--ink-faint); }
+  .doc-actions span { cursor: pointer; padding: 2px 4px; }
+
+  /* ----------- PIPELINE LIST w/ age chips ----------- */
+  table.pipeline {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    font-family: 'Kalam';
+    font-size: 13.5px;
+    overflow: hidden;
+  }
+  table.pipeline th {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 2px dashed var(--ink);
+    background: #efece0;
+    font-family: 'Kalam';
+    font-size: 12px;
+    color: var(--ink-soft);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  table.pipeline td {
+    padding: 10px 12px;
+    border-bottom: 1px dashed var(--ink-faint);
+    vertical-align: top;
+  }
+  table.pipeline tr:last-child td { border-bottom: none; }
+  table.pipeline tr:hover td { background: #fffaf0; }
+
+  .age-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: 'Kalam';
+    font-weight: 700;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: .04em;
+    margin-left: 6px;
+    border: 1.5px solid;
+  }
+  .age-chip.green { background: var(--green-soft); color: var(--green); border-color: var(--green); }
+  .age-chip.amber { background: var(--amber-soft); color: var(--amber); border-color: var(--amber); }
+  .age-chip.red   { background: var(--red-soft);   color: var(--red);   border-color: var(--red); }
+  .age-chip .bolt { font-size: 11px; }
+
+  .row-actions { display: flex; gap: 6px; }
+  .row-actions .btn { padding: 4px 10px; font-size: 12px; transform: none; }
+
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .summary-card {
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 5px 4px 6px 5px;
+    padding: 12px 14px;
+    box-shadow: 2px 2px 0 rgba(0,0,0,.08);
+  }
+  .summary-card .label {
+    font-family: 'Kalam';
+    font-size: 12px;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 2px;
+  }
+  .summary-card .val {
+    font-family: 'Caveat';
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .summary-card.followup { background: var(--amber-soft); }
+  .summary-card .delta {
+    font-family: 'Kalam';
+    font-size: 11px;
+    color: var(--red);
+    margin-top: 3px;
+  }
+
+  /* ----------- stage picker (panel 3) ----------- */
+  .stage-picker {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    background: #f2efe2;
+    border: 2px solid var(--ink);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+  }
+  .stage-btn {
+    font-family: 'Kalam';
+    font-size: 13px;
+    padding: 5px 12px;
+    border: 1.5px dashed var(--ink);
+    background: var(--paper);
+    border-radius: 14px 18px 12px 20px;
+    cursor: pointer;
+    transform: rotate(-0.3deg);
+  }
+  .stage-btn:nth-child(even) { transform: rotate(0.3deg); }
+  .stage-btn.on {
+    background: var(--ink); color: var(--paper);
+    border-style: solid;
+  }
+
+  /* ----------- annotation callouts ----------- */
+  .callout {
+    position: absolute;
+    font-family: 'Caveat';
+    font-size: 15px;
+    color: var(--accent);
+    line-height: 1.1;
+    pointer-events: none;
+  }
+  .callout .arr {
+    display: block;
+    font-size: 22px;
+    margin-top: -2px;
+  }
+  .caption-band {
+    font-family: 'Kalam';
+    font-size: 13px;
+    color: var(--ink-faint);
+    margin: 14px 0 6px;
+    letter-spacing: .04em;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .caption-band::before, .caption-band::after {
+    content: "";
+    flex: 1;
+    border-top: 1px dashed var(--ink-faint);
+  }
+
+  /* ----------- tweaks panel ----------- */
+  #tweaks {
+    position: fixed; bottom: 16px; right: 16px;
+    width: 260px;
+    background: var(--paper);
+    border: 2.5px solid var(--ink);
+    border-radius: 8px;
+    padding: 12px 14px;
+    box-shadow: 4px 4px 0 rgba(0,0,0,.15);
+    display: none;
+    z-index: 999;
+    font-family: 'Kalam';
+    font-size: 13px;
+  }
+  #tweaks.active { display: block; }
+  #tweaks h4 { font-family: 'Caveat'; font-size: 22px; margin: 0 0 8px; }
+  .tw-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-top: 1px dashed var(--ink-faint); }
+  .tw-row:first-of-type { border-top: none; }
+  .tw-row select, .tw-row input[type="checkbox"] {
+    font-family: 'Kalam'; font-size: 13px; border: 1.5px solid var(--ink); border-radius: 4px; padding: 2px 4px; background: var(--paper);
+  }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div class="eyebrow">Claude Code handoff · visual reference</div>
+  <h1 class="page-title">Pipeline List + <em>Stage Walkthrough</em></h1>
+  <p class="page-sub">These are the two panels going out in the handoff. ② shows age chips on the list; ③ steps through the seven Now-card states. All markup + styles pulled straight from <code>Sales Entry Wireframes v5.html</code> so the scaffold matches pixel-for-pixel.</p>
+</div>
+
+<div class="tabs" id="tabs">
+  <button class="tab active" data-panel="list">② Pipeline list<small>age chips + health</small></button>
+  <button class="tab" data-panel="walk">③ Stage walkthrough<small>all 5 nodes · 7 states</small></button>
+</div>
+
+<!-- ========================================================== -->
+<!-- PANEL 1 — DETAIL PAGE                                       -->
+<!-- panel-detail removed for handoff reference -->
+
+<!-- ========================================================== -->
+<!-- PANEL 2 — LIST                                              -->
+<!-- ========================================================== -->
+<section class="panel active" id="panel-list">
+  <h2 class="panel-caption">② Pipeline list — age chips turn "stuck" into a visible pattern</h2>
+  <p class="panel-desc">
+    The current list has no health signal — every row looks the same. The only hint of trouble is the
+    "Needs Follow-Up" count at the top. <em>Age-in-stage chips</em> next to the status pill surface
+    stuck entries inline, with thresholds tuned per stage (pending_approval gets a longer leash since
+    customer waits are normal).
+  </p>
+
+  <div class="app" style="min-height:auto;">
+    <aside class="side">
+      <div class="logo"><span class="dot">G</span>Grins CRM</div>
+      <ul>
+        <li>Dashboard</li>
+        <li>Leads</li>
+        <li class="active">Sales</li>
+        <li>Customers</li>
+        <li>Jobs</li>
+        <li>Schedule</li>
+        <li>Invoices</li>
+      </ul>
+    </aside>
+    <div class="main">
+      <div class="crumb">Sales / Pipeline</div>
+      <div class="summary-grid">
+        <div class="summary-card"><div class="label">Needs Estimate</div><div class="val">7</div></div>
+        <div class="summary-card"><div class="label">Pending Approval</div><div class="val">4</div></div>
+        <div class="summary-card followup"><div class="label">Needs Follow-Up</div><div class="val">3</div><div class="delta">▲ 2 since last week</div></div>
+        <div class="summary-card"><div class="label">Revenue Pipeline</div><div class="val">$42,700</div></div>
+      </div>
+
+      <table class="pipeline">
+        <thead>
+          <tr>
+            <th>Customer</th>
+            <th>Phone</th>
+            <th>Job Type</th>
+            <th>Status</th>
+            <th>Last Contact</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="pipelineBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="caption-band">Age thresholds</p>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;font-family:'Kalam';font-size:13.5px;">
+    <div class="card" style="margin:0;">
+      <span class="age-chip green">● FRESH</span>
+      <p style="margin:8px 0 0;">≤ 3 days in stage. Healthy.</p>
+    </div>
+    <div class="card" style="margin:0;">
+      <span class="age-chip amber">⚡ STALE 5d</span>
+      <p style="margin:8px 0 0;">4–7 days in stage. Time to follow up.
+      <em style="background:var(--highlight);padding:0 3px;">Pending Approval</em> uses 5-10d.</p>
+    </div>
+    <div class="card" style="margin:0;">
+      <span class="age-chip red">⚡ STUCK 12d</span>
+      <p style="margin:8px 0 0;">&gt; 7 days (or &gt;10d for pending). Auto-populates the "Needs Follow-Up" count.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================== -->
+<!-- PANEL 3 — STAGE WALKTHROUGH                                 -->
+<!-- ========================================================== -->
+<section class="panel" id="panel-walk">
+  <h2 class="panel-caption">③ Stage walkthrough — how the Now card adapts to each stage</h2>
+  <p class="panel-desc">
+    Click a stage to see how the stepper, Now card, and signing lock state change. Same component —
+    different content, different blocker, different primary action. This is the contract with the user:
+    <em>the Now card is always the truth about what to do next</em>.
+  </p>
+
+  <div class="stage-picker" id="stagePicker"></div>
+
+  <div class="app">
+    <aside class="side">
+      <div class="logo"><span class="dot">G</span>Grins CRM</div>
+      <ul>
+        <li>Dashboard</li>
+        <li>Leads</li>
+        <li class="active">Sales</li>
+        <li>Customers</li>
+        <li>Jobs</li>
+        <li>Schedule</li>
+      </ul>
+    </aside>
+    <div class="main">
+      <div class="crumb"><span class="back">← Back to Pipeline</span> · Sales / Viktor Petrov</div>
+
+      <div class="stepper-wrap">
+        <div class="stepper-phases"><span>Plan</span><span>Sign</span><span>Close</span></div>
+        <div class="stepper" id="stepperWalk"></div>
+        <div class="stepper-foot">
+          <span class="override">⋯ change stage manually</span>
+          <button class="mark-lost">✕ Mark Lost</button>
+        </div>
+      </div>
+
+      <div class="now-card" id="nowCardWalk"></div>
+
+      <div class="activity" id="activityWalk"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================== -->
+<!-- MODALS                                                      -->
+<!-- ========================================================== -->
+<div class="modal-overlay" id="schedModal">
+  <div class="modal wide">
+    <h3>Schedule estimate visit</h3>
+    <div class="msub">Auto-populated from the lead record. Pick a time on the calendar — click a slot for a start time, or drag to set both start &amp; duration.</div>
+
+    <div class="split">
+      <!-- LEFT: fields -->
+      <div class="col-fields">
+        <label class="fl">Customer</label>
+        <div class="prefilled">
+          <div><b>Viktor Petrov</b> · <span class="pf-label">from</span> Leads tab</div>
+          <div><span class="pf-label">Phone</span> (555) 234-9918</div>
+          <div><span class="pf-label">Email</span> viktor.p@example.com</div>
+          <div><span class="pf-label">Address</span> 1428 Maple Dr, Ann Arbor, MI 48103</div>
+          <div><span class="pf-label">Job</span> Sprinkler install</div>
+        </div>
+
+        <div class="two-col" style="margin-top:10px">
+          <div><label class="fl">Date</label><input type="date" id="sm-date" value="2026-04-23" /></div>
+          <div><label class="fl">Start time</label><input type="time" id="sm-time" value="14:00" /></div>
+        </div>
+        <div class="two-col">
+          <div>
+            <label class="fl">Assigned to</label>
+            <select id="sm-assignee"><option>Kirill (me)</option><option>Mike R.</option><option>Team — any avail.</option></select>
+          </div>
+          <div>
+            <label class="fl">Duration</label>
+            <select id="sm-dur">
+              <option value="30">30 min</option>
+              <option value="60" selected>1 hr</option>
+              <option value="90">1.5 hr</option>
+              <option value="120">2 hr</option>
+            </select>
+          </div>
+        </div>
+        <label class="fl">Internal notes (optional)</label>
+        <textarea placeholder="Gate code 4412. Large corner lot, sketched zones in intake call…"></textarea>
+
+        <div class="pick-summary" id="sm-summary">
+          <span class="none">No time picked yet — click or drag on the calendar →</span>
+        </div>
+        <div class="conflict-warn" id="sm-warn">
+          ⚠ <b>Overlaps</b> with an existing estimate. You can still proceed, but double-check.
+        </div>
+      </div>
+
+      <!-- RIGHT: week calendar -->
+      <div class="col-cal">
+        <div class="wkcal" id="sm-cal">
+          <div class="wkcal-head">
+            <div>
+              <span class="wk-label" id="sm-wkLabel">Week of Apr 20</span>
+              <span class="wk-range" id="sm-wkRange">Mon Apr 20 – Sun Apr 26, 2026</span>
+            </div>
+            <div class="wkcal-nav">
+              <button id="sm-wkPrev">← Prev week</button>
+              <button class="today" id="sm-wkToday">Today</button>
+              <button id="sm-wkNext">Next week →</button>
+            </div>
+          </div>
+          <div class="wkcal-grid" id="sm-grid"><!-- filled by JS --></div>
+          <div class="wkcal-legend">
+            <span><span class="sw"></span>Existing estimate (read-only)</span>
+            <span><span class="sw pick"></span>Your pick</span>
+            <span style="margin-left:auto; color:var(--ink-faint);">Click to pin · Drag to set range · 6 AM – 8 PM · 30-min slots</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="m-actions">
+      <button class="btn ghost" data-close>Cancel</button>
+      <button class="btn primary" id="sm-confirm" data-close>📅 Confirm &amp; advance to Send Estimate</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="convertModal">
+  <div class="modal">
+    <h3>Convert to Job</h3>
+    <div class="msub">Creates a Job + Customer record, closes this lead. Fill in what we know; rest can be edited in the Jobs tab.</div>
+
+    <label class="fl">Job type</label>
+    <div class="chip-row">
+      <button class="jtype-chip on">Sprinkler install</button>
+      <button class="jtype-chip">Spring startup</button>
+      <button class="jtype-chip">Winterization</button>
+      <button class="jtype-chip">Leak diagnostic</button>
+      <button class="jtype-chip">Backflow testing</button>
+      <button class="jtype-chip">System upgrade</button>
+      <button class="jtype-chip more">+ custom…</button>
+    </div>
+
+    <label class="fl">Week of (from pipeline)</label>
+    <input type="text" value="Week of Apr 27" readonly />
+
+    <label class="fl">Job details</label>
+    <textarea placeholder="Full 7-zone install, backyard + both sides. Customer prefers Rain Bird heads. Access through side gate (code 4412).">Full 7-zone install, backyard + both sides. Customer prefers Rain Bird heads. Access through side gate (code 4412).</textarea>
+
+    <div class="two-col">
+      <div><label class="fl">Estimated hours</label><input type="text" value="16 hrs" /></div>
+      <div><label class="fl">Crew size needed</label><select><option>1 tech</option><option selected>2 techs</option><option>3+ techs</option></select></div>
+    </div>
+
+    <div class="prefilled" style="margin-top:12px">
+      ✨ On confirm: lead is removed from Sales · Customer record created · <b>Job #4821</b> lands in Jobs tab with status <em>To Be Scheduled</em>.
+    </div>
+
+    <div class="m-actions">
+      <button class="btn ghost" data-close>Cancel</button>
+      <button class="btn primary" data-close>🛠 Create Job & close lead</button>
+    </div>
+  </div>
+</div>
+
+<div id="tweaks">
+  <h4>Tweaks</h4>
+  <div class="tw-row">
+    <span>Detail stage</span>
+    <select id="detailStageSel">
+      <option value="schedule_estimate">1 · Schedule</option>
+      <option value="send_estimate" selected>2 · Send Est.</option>
+      <option value="pending_approval">3 · Pending</option>
+      <option value="convert_to_job">4 · Convert</option>
+      <option value="closed_won">5 · Won</option>
+    </select>
+  </div>
+  <div class="tw-row">
+    <span>Estimate PDF uploaded?</span>
+    <input type="checkbox" id="hasDocChk" checked />
+  </div>
+  <div class="tw-row">
+    <span>Agreement uploaded? (node 4)</span>
+    <input type="checkbox" id="hasAgrChk" />
+  </div>
+  <div class="tw-row">
+    <span>Customer has email?</span>
+    <input type="checkbox" id="hasEmailChk" checked />
+  </div>
+</div>
+
+<script>
+  // ============ STAGES ============
+  const STAGES = [
+    { key:'schedule_estimate', short:'Schedule\u00A0Estimate',  phase:'plan' },
+    { key:'send_estimate',     short:'Send\u00A0Estimate',      phase:'sign' },
+    { key:'pending_approval',  short:'Pending\u00A0Approval',   phase:'sign' },
+    { key:'convert_to_job',    short:'Convert\u00A0to\u00A0Job', phase:'close' },
+    { key:'closed_won',        short:'Closed\u00A0Won',         phase:'close' },
+  ];
+  const STAGE_INDEX = Object.fromEntries(STAGES.map((s,i) => [s.key, i]));
+
+  const STAGE_PILL = {
+    schedule_estimate: 'Schedule Estimate',
+    send_estimate:     'Send Estimate',
+    pending_approval:  'Pending Approval',
+    convert_to_job:    'Convert to Job',
+    closed_won:        'Closed Won',
+    closed_lost:       'Closed Lost',
+  };
+
+  // ============ NOW CARD CONTENT per stage ============
+  function nowContent(stage, { hasDoc = true, hasEmail = true, hasAgreement = false, weekOf = '' } = {}) {
+    const content = {
+      schedule_estimate: {
+        pill: 'you', pillLabel: 'Your move',
+        title: 'Call Viktor — agree on a date, then drop him on the schedule.',
+        copy: '“Schedule visit” opens the calendar with Viktor’s info pre-filled from the lead record. Once he’s booked, “Text appointment confirmation” sends him a confirm with an <em>R-to-reschedule</em> reply option.',
+        actions: `
+          <button class="btn primary" data-modal="schedModal">📅 Schedule visit</button>
+          <button class="btn">✉ Text appointment confirmation</button>
+        `,
+      },
+      send_estimate_empty: {
+        pill: 'you', pillLabel: 'Your move',
+        title: 'Drop the estimate PDF below, then send.',
+        copy: 'Build the estimate in Google Sheets, save as PDF, drag it into the box below. The “Upload & send” button emails Viktor the PDF with an Approve button and auto-advances this entry to <em>Pending Approval</em>.',
+        dropzone: { kind: 'estimate', empty: true },
+        actions: `
+          <button class="btn primary disabled"><span class="lock">🔒</span>Upload & send estimate</button>
+          <button class="btn ghost">Skip — advance manually</button>
+        `,
+        banner: {
+          text: `<b>No estimate PDF yet.</b> Drag-and-drop a PDF into the box above, or click to browse.`,
+          link: '',
+        },
+      },
+      send_estimate_ready: {
+        pill: 'you', pillLabel: 'Your move',
+        title: 'estimate_viktor_v2.pdf is ready — send it.',
+        copy: 'Click the PDF below to review it. Hit “Upload & send” to email Viktor the estimate with an Approve button; he’ll also get an SMS with the PDF link.',
+        dropzone: { kind: 'estimate', empty: false },
+        actions: hasEmail ? `
+          <button class="btn primary">✉ Upload & send estimate to Viktor</button>
+          <button class="btn ghost">Skip — advance manually</button>
+        ` : `
+          <div class="btn-stack">
+            <button class="btn disabled"><span class="lock">🔒</span>Upload & send estimate</button>
+            <span class="lock-reason">no email on file — add one to send</span>
+          </div>
+          <button class="btn primary">✏ Add customer email</button>
+        `,
+      },
+      pending_approval: {
+        pill: 'cust', pillLabel: 'Waiting on customer',
+        title: 'Waiting on Viktor to approve or decline.',
+        copy: 'Sent Apr 11, 3:42 PM. Auto follow-up runs on day 2, 5, 8 — then every Monday it sends a one-tap SMS: <em>“Reply A to approve, R to reject”</em>. Matching replies update the pipeline automatically.',
+        actions: `
+          <button class="btn primary">✅ Client approved (manual)</button>
+          <button class="btn">🔄 Resend estimate</button>
+          <button class="btn">✏ Pause auto-follow-up</button>
+          <button class="btn ghost danger">Client declined</button>
+        `,
+        schedule: true,
+      },
+      convert_to_job: {
+        pill: 'you', pillLabel: 'Your move',
+        title: 'Viktor approved — upload the signed agreement, then convert.',
+        copy: 'Viktor already signed via SignWell; drop the <em>counter-signed PDF</em> below for our records. Pick a <em>rough Week Of</em> target, then “Convert to Job” opens a quick prompt for job type & details — once you confirm, this lead closes and a real Job + Customer record are created.',
+        dropzone: { kind: 'agreement', empty: !hasAgreement },
+        actions: hasAgreement ? `
+          <button class="btn primary" data-modal="convertModal">🛠 Convert to Job →</button>
+        ` : `
+          <div class="btn-stack">
+            <button class="btn disabled"><span class="lock">🔒</span>Convert to Job</button>
+            <span class="lock-reason">upload signed agreement first</span>
+          </div>
+        `,
+        weekOf: true,
+      },
+      closed_won: {
+        pill: 'done', pillLabel: 'Complete',
+        title: `Job #4821 created — targeted for ${weekOf || 'Week of Apr 27'}.`,
+        copy: 'Viktor is now a <em>Customer</em>; this entry has moved out of the Sales tab. The job sits in <em>Jobs</em> with status <em>To Be Scheduled</em> — pin a day and crew on the calendar when you’re ready.',
+        actions: `
+          <button class="btn primary">→ View Job #4821</button>
+          <button class="btn">👤 View Customer profile</button>
+          <button class="btn">📅 Jump to Schedule</button>
+        `,
+      },
+    };
+    if (stage === 'send_estimate') return hasDoc ? content.send_estimate_ready : content.send_estimate_empty;
+    return content[stage];
+  }
+
+  // ============ ACTIVITY STRIP per stage ============
+  function activityHtml(stage) {
+    const A = {
+      schedule_estimate: `<span class="evt">🆕 Moved from Leads 6d ago</span><span class="sep">·</span><span class="evt wait">⏳ Call Viktor to agree on a date</span>`,
+      send_estimate:     `<span class="evt done">📅 Visit Apr 19 ✓</span><span class="sep">·</span><span class="evt wait">⏳ Build & upload estimate</span>`,
+      pending_approval:  `<span class="evt done">✉ Emailed Viktor Apr 11, 3:42 PM</span><span class="sep">·</span><span class="evt done">👁 Viewed Apr 12, 9:15 AM</span><span class="sep">·</span><span class="evt wait">⏰ Next auto-nudge tomorrow 9 AM</span>`,
+      convert_to_job:    `<span class="evt done">✅ Client approved Apr 13, 2:04 PM</span><span class="sep">·</span><span class="evt wait">⏳ Send agreement + pick Week Of</span>`,
+      closed_won:        `<span class="evt done">🛠 Converted Apr 14</span><span class="sep">·</span><span class="evt done">📄 Job #4821 created</span><span class="sep">·</span><span class="evt done">👤 Customer record created</span>`,
+    };
+    return A[stage] || '';
+  }
+
+  // ============ RENDER STEPPER ============
+  function renderStepper(host, currentKey, opts={}) {
+    const cur = STAGE_INDEX[currentKey];
+    host.innerHTML = STAGES.map((s, i) => {
+      const done = i < cur;
+      const active = i === cur;
+      const waiting = active && s.key === 'pending_approval';
+      const cls = [done && 'done', active && 'active', waiting && 'waiting'].filter(Boolean).join(' ');
+      const dotChar = done ? '✓' : (i+1);
+      return `
+        <div class="step ${cls}">
+          <div class="dot">${dotChar}</div>
+          <div class="label">${s.short}</div>
+        </div>`;
+    }).join('');
+  }
+
+  // ============ RENDER NOW CARD ============
+  function renderNow(host, stage, hostActivity, { hasDoc = true, hasEmail = true, hasAgreement = false, weekOf = '' } = {}) {
+    const c = nowContent(stage, { hasDoc, hasEmail, hasAgreement, weekOf });
+    if (!c) { host.innerHTML = ''; return; }
+    host.innerHTML = `
+      <div class="now-head">
+        <span class="now-pill ${c.pill}">${c.pillLabel}</span>
+      </div>
+      <h3 class="now-title">${c.title}</h3>
+      <p class="now-copy">${c.copy}</p>
+      ${c.dropzone ? dropzoneHtml(c.dropzone) : ''}
+      ${c.schedule ? `
+        <div class="nudge-schedule">
+          <div class="nudge-head">⏰ <b>Auto follow-up schedule</b> · <span class="nudge-sub">SMS + email</span></div>
+          <div class="nudge-row done">✓ Day 0 · Apr 11 · Initial estimate sent</div>
+          <div class="nudge-row next">⏰ Day 2 · Tomorrow 9 AM · “Did you receive the estimate? Any questions?”</div>
+          <div class="nudge-row">· Day 5 · Apr 16 9 AM · “Just checking in on the estimate”</div>
+          <div class="nudge-row">· Day 8 · Apr 19 9 AM · “Following up one more time”</div>
+          <div class="nudge-row nudge-loop">🔁 Then <b>every Monday</b> · 9 AM · <em>“Reply A to approve, R to reject”</em> — one-letter reply auto-updates the pipeline</div>
+        </div>
+      ` : ''}
+      ${c.weekOf ? `
+        <div class="weekof-picker">
+          <div class="weekof-label">📅 Rough <b>Week Of</b> for this job</div>
+          <div class="weekof-row">
+            <button class="week-chip" data-w="Apr 20">Week of Apr 20</button>
+            <button class="week-chip on" data-w="Apr 27">Week of Apr 27</button>
+            <button class="week-chip" data-w="May 4">Week of May 4</button>
+            <button class="week-chip" data-w="May 11">Week of May 11</button>
+            <button class="week-chip" data-w="May 18">Week of May 18</button>
+            <button class="week-chip more">+ pick date…</button>
+          </div>
+          <div class="weekof-hint">Used only as a target — pin the exact day + crew later in the Jobs tab.</div>
+        </div>
+      ` : ''}
+      <div class="now-actions">${c.actions}</div>
+      ${c.banner ? `
+        <div class="lock-banner">
+          <span class="icon">🔒</span>
+          <span>${c.banner.text}</span>
+        </div>` : ''}
+    `;
+    if (hostActivity) hostActivity.innerHTML = activityHtml(stage);
+  }
+
+  function dropzoneHtml({ kind, empty }) {
+    const name = kind === 'agreement' ? 'signed_agreement_viktor.pdf' : 'estimate_viktor_v2.pdf';
+    const label = kind === 'agreement' ? 'signed agreement PDF' : 'estimate PDF';
+    const size = kind === 'agreement' ? '184 KB' : '212 KB';
+    if (empty) {
+      return `
+        <div class="dropzone empty">
+          <div class="dz-icon">↓</div>
+          <div class="dz-title">Drag the ${label} here</div>
+          <div class="dz-sub">or <u>click to browse</u> · PDF only</div>
+        </div>`;
+    }
+    return `
+      <div class="dropzone filled">
+        <div class="dz-file">
+          <span class="dz-fileicon">📄</span>
+          <div class="dz-filemeta">
+            <div class="dz-filename">${name}</div>
+            <div class="dz-filesub">${size} · click to preview · <u>replace</u> · <u>remove</u></div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // ============ PANEL 1 DETAIL — removed from handoff reference ============
+
+  // ============ PANEL 2 PIPELINE LIST ============
+    const PIPELINE_ROWS = [
+    { name:'Viktor Petrov',       phone:'(555) 234-9918', job:'Sprinkler install',      stage:'pending_approval',  lastContact:'2d ago',  age:12, ageKind:'red'   },
+    { name:'Marcella Ortiz',      phone:'(555) 818-2201', job:'Spring startup',         stage:'schedule_estimate', lastContact:'5d ago',  age:5,  ageKind:'amber' },
+    { name:'Andrew Kim',          phone:'(555) 612-0045', job:'System upgrade',         stage:'send_estimate',     lastContact:'just now',age:1,  ageKind:'green' },
+    { name:'Roberts HOA — Unit 7',phone:'(555) 334-7781', job:'Winterization',          stage:'schedule_estimate', lastContact:'3d ago',  age:3,  ageKind:'green' },
+    { name:'Jerome Whitaker',     phone:'(555) 777-1120', job:'Leak diagnostic',        stage:'convert_to_job',    lastContact:'yesterday',age:2, ageKind:'green' },
+    { name:'Lana Soto',           phone:'(555) 202-4412', job:'Backflow testing',       stage:'pending_approval',  lastContact:'8d ago',  age:9,  ageKind:'amber' },
+    { name:'Finch Property Mgmt', phone:'(555) 114-9908', job:'Full system estimate',   stage:'send_estimate',     lastContact:'2 wk ago',age:14, ageKind:'red'   },
+  ];
+
+  function pipelineAgeChip(r) {
+    return `<span class="age-chip ${r.ageKind}">${r.ageKind==='green'?'●':'⚡'} ${r.age}d</span>`;
+  }
+
+  function renderPipeline() {
+    const body = document.getElementById('pipelineBody');
+    body.innerHTML = PIPELINE_ROWS.map(r => `
+      <tr>
+        <td><b>${r.name}</b></td>
+        <td>${r.phone}</td>
+        <td>${r.job}</td>
+        <td>
+          <span class="status-pill s-${r.stage}">${STAGE_PILL[r.stage]}</span>
+          ${pipelineAgeChip(r)}
+        </td>
+        <td>${r.lastContact}</td>
+        <td>
+          <div class="row-actions">
+            <button class="btn primary">${actionLabel(r.stage)}</button>
+            <button class="btn ghost">✕</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+  function actionLabel(stage) {
+    return ({
+      schedule_estimate: 'Schedule',
+      send_estimate:     'Send',
+      pending_approval:  'Nudge',
+      convert_to_job:    'Convert',
+      closed_won:        'View job',
+    })[stage] || '—';
+  }
+  renderPipeline();
+
+  // ============ PANEL 3 WALKTHROUGH ============
+    const walkSteps = [
+    { key:'schedule_estimate', label:'1 · Schedule' },
+    { key:'send_estimate',     label:'2 · Send Est. (no doc)', hasDoc:false },
+    { key:'send_estimate',     label:'2 · Send Est. (doc ✓)',  hasDoc:true  },
+    { key:'pending_approval',  label:'3 · Pending' },
+    { key:'convert_to_job',    label:'4 · Convert (no agr)',  hasAgreement:false },
+    { key:'convert_to_job',    label:'4 · Convert (agr ✓)',   hasAgreement:true  },
+    { key:'closed_won',        label:'5 · Won' },
+  ];
+  let walkIdx = 1; // default to Send Est. (no doc) to show banner
+  const stagePicker = document.getElementById('stagePicker');
+  const stepperWalk = document.getElementById('stepperWalk');
+  const nowCardWalk = document.getElementById('nowCardWalk');
+  const activityWalk = document.getElementById('activityWalk');
+
+  function renderPicker() {
+    stagePicker.innerHTML = walkSteps.map((s, i) => `
+      <button class="stage-btn ${i===walkIdx?'on':''}" data-idx="${i}">${s.label}</button>
+    `).join('');
+    [...stagePicker.querySelectorAll('.stage-btn')].forEach(b => {
+      b.addEventListener('click', () => {
+        walkIdx = parseInt(b.dataset.idx);
+        renderPicker();
+        renderWalk();
+      });
+    });
+  }
+  function renderWalk() {
+    const cur = walkSteps[walkIdx];
+    renderStepper(stepperWalk, cur.key);
+    renderNow(nowCardWalk, cur.key, activityWalk, {
+      hasDoc: cur.hasDoc !== false,
+      hasAgreement: cur.hasAgreement === true,
+    });
+    // Wire Week Of chips in walk card
+    nowCardWalk.querySelectorAll('.week-chip[data-w]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        nowCardWalk.querySelectorAll('.week-chip').forEach(b => b.classList.remove('on'));
+        btn.classList.add('on');
+      });
+    });
+  }
+  renderPicker();
+  renderWalk();
+
+  // ============ TAB SWITCHER ============
+  document.querySelectorAll('#tabs .tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('#tabs .tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.getElementById('panel-' + t.dataset.panel).classList.add('active');
+      localStorage.setItem('salesV2Panel', t.dataset.panel);
+    });
+  });
+  const savedPanel = localStorage.getItem('salesV2Panel');
+  if (savedPanel) {
+    const t = document.querySelector(`#tabs .tab[data-panel="${savedPanel}"]`);
+    if (t) t.click();
+  }
+
+  // ============ MODALS ============
+  document.addEventListener('click', e => {
+    const opener = e.target.closest('[data-modal]');
+    if (opener) { document.getElementById(opener.dataset.modal)?.classList.add('on'); return; }
+    if (e.target.matches('[data-close]') || e.target.classList.contains('modal-overlay')) {
+      document.querySelectorAll('.modal-overlay.on').forEach(m => m.classList.remove('on'));
+    }
+    // Job-type chips within modal
+    const jt = e.target.closest('.jtype-chip');
+    if (jt) {
+      jt.parentElement.querySelectorAll('.jtype-chip').forEach(c => c.classList.remove('on'));
+      jt.classList.add('on');
+    }
+  });
+
+  // ============ TWEAKS HOOK ============
+  const tweaks = document.getElementById('tweaks');
+  window.addEventListener('message', e => {
+    if (!e.data || !e.data.type) return;
+    if (e.data.type === '__activate_edit_mode')   tweaks.classList.add('active');
+    if (e.data.type === '__deactivate_edit_mode') tweaks.classList.remove('active');
+  });
+  window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+
+  // ============ SCHED MODAL CALENDAR ============
+  (function schedCal(){
+    const TODAY = new Date(2026, 3, 21); // Apr 21, 2026 (Tue)
+    const NOW_MIN = 10 * 60 + 35;        // "now" = 10:35 AM for demo
+
+    // Existing estimates (read-only). Dates are YYYY-MM-DD strings.
+    const ESTIMATES = [
+      { date:'2026-04-20', start: 9*60,    end: 10*60,     name:'M. Ortiz',     meta:'Spring startup' },
+      { date:'2026-04-20', start: 13*60+30,end: 15*60,     name:'Roberts HOA',  meta:'Winterization' },
+      { date:'2026-04-21', start: 8*60,    end: 9*60+30,   name:'D. Chen',      meta:'Leak diag.' },
+      { date:'2026-04-22', start: 11*60,   end: 12*60+30,  name:'K. Nakamura',  meta:'Backflow test' },
+      { date:'2026-04-22', start: 15*60,   end: 16*60,     name:'T. Alvarez',   meta:'Sprinkler add-on' },
+      { date:'2026-04-23', start: 10*60,   end: 11*60+30,  name:'L. Greenwood', meta:'Spring startup' },
+      { date:'2026-04-23', start: 14*60,   end: 15*60,     name:'Viktor P. ←',  meta:'(this lead, tentative)' },
+      { date:'2026-04-24', start: 9*60+30, end: 11*60,     name:'S. Patel',     meta:'Install' },
+      { date:'2026-04-24', start: 13*60,   end: 14*60,     name:'R. Okafor',    meta:'Winterization' },
+      { date:'2026-04-25', start: 10*60,   end: 11*60,     name:'Cinda B.',     meta:'Spring startup' },
+    ];
+
+    const DAY_MS = 86400000;
+    const HOUR_START = 6;   // 6am
+    const HOUR_END   = 20;  // 8pm
+    const SLOT_MIN   = 30;
+    const SLOT_PX    = 22;
+    const SLOTS_PER_DAY = (HOUR_END - HOUR_START) * 60 / SLOT_MIN;
+
+    const fmtMonD = d => d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+    const fmtLongDate = d => d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' });
+    const iso = d => {
+      const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${dd}`;
+    };
+    const startOfWeek = d => {
+      const nd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const day = nd.getDay();            // 0=Sun .. 6=Sat
+      const diff = (day === 0 ? -6 : 1 - day); // make Monday the start
+      nd.setDate(nd.getDate() + diff);
+      return nd;
+    };
+    const fmtHM = mins => {
+      const h = Math.floor(mins/60), m = mins%60;
+      const ap = h >= 12 ? 'PM' : 'AM';
+      const h12 = ((h+11)%12)+1;
+      return `${h12}:${String(m).padStart(2,'0')} ${ap}`;
+    };
+    const fmtDur = mins => {
+      if (mins < 60) return mins + ' min';
+      const h = Math.floor(mins/60), m = mins%60;
+      return m === 0 ? `${h} hr` : `${h}h ${m}m`;
+    };
+    const snapSlot = mins => Math.round(mins / SLOT_MIN) * SLOT_MIN;
+
+    // ----- state
+    let weekStart = startOfWeek(TODAY);
+    let pick = null;  // { date:'YYYY-MM-DD', start: mins, end: mins }
+    let drag = null;  // { dayIdx, startSlotIdx, curSlotIdx }
+
+    const el = {
+      grid:   document.getElementById('sm-grid'),
+      label:  document.getElementById('sm-wkLabel'),
+      range:  document.getElementById('sm-wkRange'),
+      prev:   document.getElementById('sm-wkPrev'),
+      next:   document.getElementById('sm-wkNext'),
+      today:  document.getElementById('sm-wkToday'),
+      date:   document.getElementById('sm-date'),
+      time:   document.getElementById('sm-time'),
+      dur:    document.getElementById('sm-dur'),
+      summary:document.getElementById('sm-summary'),
+      warn:   document.getElementById('sm-warn'),
+    };
+
+    function buildGrid() {
+      const g = el.grid;
+      g.innerHTML = '';
+      // header row
+      const corner = document.createElement('div');
+      corner.className = 'wkcal-corner';
+      g.appendChild(corner);
+
+      const days = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(weekStart); d.setDate(d.getDate() + i);
+        days.push(d);
+        const h = document.createElement('div');
+        h.className = 'wkcal-daycol-head';
+        const isToday = iso(d) === iso(TODAY);
+        if (isToday) h.classList.add('today');
+        h.innerHTML = `<div class="dow">${d.toLocaleDateString('en-US',{weekday:'short'})}</div>
+                       <div class="dnum">${d.getDate()}</div>`;
+        g.appendChild(h);
+      }
+
+      // body rows: one row per 30-min slot
+      for (let s = 0; s < SLOTS_PER_DAY; s++) {
+        const mins = HOUR_START*60 + s*SLOT_MIN;
+        const isHour = mins % 60 === 0;
+        const tc = document.createElement('div');
+        tc.className = 'wkcal-timecell' + (isHour ? ' hour' : '');
+        tc.textContent = (mins % 60 === 0) ? fmtHM(mins) : '';
+        g.appendChild(tc);
+        for (let d = 0; d < 7; d++) {
+          const cell = document.createElement('div');
+          cell.className = 'wkcal-slot' + (isHour ? ' hour' : '');
+          cell.dataset.day = d;
+          cell.dataset.slot = s;
+          const dayDate = days[d];
+          const isToday = iso(dayDate) === iso(TODAY);
+          if (isToday) cell.classList.add('today-col-slot');
+          // past shading
+          if (dayDate < new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate())) {
+            cell.classList.add('past');
+          } else if (isToday && mins < NOW_MIN) {
+            cell.classList.add('past');
+          }
+          g.appendChild(cell);
+        }
+      }
+
+      // Update week label
+      const wkEnd = new Date(weekStart); wkEnd.setDate(wkEnd.getDate() + 6);
+      el.label.textContent = `Week of ${fmtMonD(weekStart)}`;
+      el.range.textContent = `${fmtLongDate(weekStart)} – ${fmtLongDate(wkEnd)}`;
+
+      // Paint estimates + now-line + pick
+      paintOverlays(days);
+    }
+
+    function paintOverlays(days) {
+      const g = el.grid;
+      // Remove any existing overlays
+      g.querySelectorAll('.wkcal-evt, .wkcal-pick, .wkcal-drag, .wkcal-now').forEach(n => n.remove());
+
+      const colLeftPct = i => `calc(56px + ${i} * ((100% - 56px) / 7))`;
+      const colWidthPct = `calc((100% - 56px) / 7)`;
+
+      // Now-line (if today is in week)
+      const todayIdx = days.findIndex(d => iso(d) === iso(TODAY));
+      if (todayIdx >= 0 && NOW_MIN >= HOUR_START*60 && NOW_MIN <= HOUR_END*60) {
+        const now = document.createElement('div');
+        now.className = 'wkcal-now';
+        const topPx = 29 + ((NOW_MIN - HOUR_START*60) / SLOT_MIN) * SLOT_PX; // 29 = approx header height
+        now.style.top = topPx + 'px';
+        now.style.left = colLeftPct(todayIdx);
+        now.style.width = colWidthPct;
+        now.style.right = 'auto';
+        g.appendChild(now);
+      }
+
+      // Estimates
+      days.forEach((d, di) => {
+        const dISO = iso(d);
+        ESTIMATES.filter(e => e.date === dISO).forEach(e => {
+          const evt = document.createElement('div');
+          evt.className = 'wkcal-evt';
+          const startSlot = (e.start - HOUR_START*60) / SLOT_MIN;
+          const durSlots = (e.end - e.start) / SLOT_MIN;
+          const topPx = 29 + startSlot * SLOT_PX;
+          const hPx   = durSlots * SLOT_PX - 2;
+          evt.style.top = topPx + 'px';
+          evt.style.height = hPx + 'px';
+          evt.style.left = `calc(${colLeftPct(di)} + 2px)`;
+          evt.style.width = `calc(${colWidthPct} - 4px)`;
+          evt.innerHTML = `<div class="evt-name">${e.name}</div>
+                           <div class="evt-meta">${fmtHM(e.start)} · ${e.meta}</div>`;
+          // Mark conflict if this estimate overlaps the user's pick
+          if (pick && pick.date === dISO && !(e.end <= pick.start || e.start >= pick.end)) {
+            evt.classList.add('conflict');
+          }
+          g.appendChild(evt);
+        });
+      });
+
+      // Pick block
+      if (pick) {
+        const di = days.findIndex(d => iso(d) === pick.date);
+        if (di >= 0) {
+          const p = document.createElement('div');
+          p.className = 'wkcal-pick';
+          const startSlot = (pick.start - HOUR_START*60) / SLOT_MIN;
+          const durSlots = (pick.end - pick.start) / SLOT_MIN;
+          const topPx = 29 + startSlot * SLOT_PX;
+          const hPx   = durSlots * SLOT_PX - 2;
+          p.style.top = topPx + 'px';
+          p.style.height = hPx + 'px';
+          p.style.left = `calc(${colLeftPct(di)} + 2px)`;
+          p.style.width = `calc(${colWidthPct} - 4px)`;
+          p.innerHTML = `<div>Viktor P. · ${fmtHM(pick.start)}</div>
+                         <span class="pick-dur">${fmtDur(pick.end - pick.start)}</span>`;
+          if (hasConflict()) p.classList.add('warn');
+          g.appendChild(p);
+        }
+      }
+
+      // Drag preview
+      if (drag) {
+        const di = drag.dayIdx;
+        const s1 = Math.min(drag.startSlotIdx, drag.curSlotIdx);
+        const s2 = Math.max(drag.startSlotIdx, drag.curSlotIdx) + 1;
+        const dragEl = document.createElement('div');
+        dragEl.className = 'wkcal-drag';
+        const topPx = 29 + s1 * SLOT_PX;
+        const hPx   = (s2 - s1) * SLOT_PX - 2;
+        dragEl.style.top = topPx + 'px';
+        dragEl.style.height = hPx + 'px';
+        dragEl.style.left = `calc(${colLeftPct(di)} + 2px)`;
+        dragEl.style.width = `calc(${colWidthPct} - 4px)`;
+        g.appendChild(dragEl);
+      }
+    }
+
+    function hasConflict() {
+      if (!pick) return false;
+      return ESTIMATES.some(e =>
+        e.date === pick.date &&
+        !(e.end <= pick.start || e.start >= pick.end) &&
+        !e.name.startsWith('Viktor') // don't conflict with the tentative viktor block
+      );
+    }
+
+    function syncFieldsFromPick() {
+      if (!pick) return;
+      el.date.value = pick.date;
+      el.time.value = String(Math.floor(pick.start/60)).padStart(2,'0') + ':' + String(pick.start%60).padStart(2,'0');
+      const dur = pick.end - pick.start;
+      // find closest option
+      const opts = [...el.dur.options].map(o => +o.value);
+      let best = opts.reduce((a,b) => Math.abs(b-dur) < Math.abs(a-dur) ? b : a);
+      el.dur.value = String(best);
+      el.summary.innerHTML = `<b>${fmtLongDate(new Date(pick.date+'T12:00'))}</b> · ${fmtHM(pick.start)} – ${fmtHM(pick.end)} · <b>${fmtDur(pick.end-pick.start)}</b>`;
+      el.warn.classList.toggle('on', hasConflict());
+    }
+
+    function syncPickFromFields() {
+      // If user edits date/time/duration manually, reflect on calendar
+      const d = el.date.value;
+      const [hh, mm] = el.time.value.split(':').map(Number);
+      if (!d || isNaN(hh)) return;
+      const startMin = hh*60 + mm;
+      const durMin = +el.dur.value;
+      pick = { date: d, start: startMin, end: startMin + durMin };
+      // If picked day is outside current week, shift the week
+      const picked = new Date(d + 'T12:00');
+      const ws = startOfWeek(picked);
+      if (iso(ws) !== iso(weekStart)) weekStart = ws;
+      buildGrid();
+      syncFieldsFromPick();
+    }
+
+    // ----- nav
+    el.prev.addEventListener('click', () => { weekStart.setDate(weekStart.getDate()-7); buildGrid(); });
+    el.next.addEventListener('click', () => { weekStart.setDate(weekStart.getDate()+7); buildGrid(); });
+    el.today.addEventListener('click', () => { weekStart = startOfWeek(TODAY); buildGrid(); });
+
+    // ----- click & drag on grid
+    el.grid.addEventListener('mousedown', (ev) => {
+      const slot = ev.target.closest('.wkcal-slot');
+      if (!slot) return;
+      ev.preventDefault();
+      const dayIdx = +slot.dataset.day;
+      const slotIdx = +slot.dataset.slot;
+      drag = { dayIdx, startSlotIdx: slotIdx, curSlotIdx: slotIdx, moved: false };
+      const onMove = (e2) => {
+        const s = e2.target.closest && e2.target.closest('.wkcal-slot');
+        if (!s) return;
+        const di = +s.dataset.day;
+        const si = +s.dataset.slot;
+        if (di !== drag.dayIdx) return; // constrain to the starting day
+        if (si !== drag.curSlotIdx) {
+          drag.curSlotIdx = si;
+          drag.moved = true;
+          // re-paint overlays only
+          const days = [];
+          for (let i = 0; i < 7; i++) { const d = new Date(weekStart); d.setDate(d.getDate()+i); days.push(d); }
+          paintOverlays(days);
+        }
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (!drag) return;
+        const dayDate = new Date(weekStart); dayDate.setDate(dayDate.getDate() + drag.dayIdx);
+        const s1 = Math.min(drag.startSlotIdx, drag.curSlotIdx);
+        const s2 = Math.max(drag.startSlotIdx, drag.curSlotIdx) + 1;
+        const startMin = HOUR_START*60 + s1 * SLOT_MIN;
+        const endMin   = HOUR_START*60 + s2 * SLOT_MIN;
+        if (drag.moved) {
+          // drag → set both
+          pick = { date: iso(dayDate), start: startMin, end: endMin };
+        } else {
+          // click → use current duration select
+          const durMin = +el.dur.value;
+          pick = { date: iso(dayDate), start: startMin, end: startMin + durMin };
+        }
+        drag = null;
+        buildGrid();
+        syncFieldsFromPick();
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+
+    // ----- field → calendar
+    ['sm-date','sm-time','sm-dur'].forEach(id => {
+      document.getElementById(id).addEventListener('change', syncPickFromFields);
+    });
+
+    // ----- build on open
+    const modal = document.getElementById('schedModal');
+    new MutationObserver(() => {
+      if (modal.classList.contains('on')) {
+        // If fields have values, build pick from them so user sees where it lands
+        syncPickFromFields();
+        if (!pick) buildGrid();
+      }
+    }).observe(modal, { attributes: true, attributeFilter: ['class'] });
+
+    // initial build (in case modal opens without the observer firing)
+    buildGrid();
+  })();
+</script>
+</body>
+</html>

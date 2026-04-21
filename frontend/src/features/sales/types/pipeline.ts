@@ -1,4 +1,5 @@
 // Sales pipeline types — CRM Changes Update 2 Req 14.1, 14.2
+// Extended with stage walkthrough types — Req 1.1, 1.2, 1.3, 1.4
 
 export type SalesEntryStatus =
   | 'schedule_estimate'
@@ -65,7 +66,7 @@ export const SALES_STATUS_CONFIG: Record<
     action: 'Send Contract',
   },
   send_contract: {
-    label: 'Send Contract',
+    label: 'Convert to Job',
     className: 'bg-teal-100 text-teal-700',
     action: 'Convert to Job',
   },
@@ -126,3 +127,190 @@ export interface SalesCalendarEventUpdate {
   end_time?: string | null;
   notes?: string | null;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stage walkthrough types — Req 1.1, 1.2, 1.3, 1.4
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The 5 canonical pipeline stages (excludes estimate_scheduled alias). */
+export type StageKey =
+  | 'schedule_estimate'
+  | 'send_estimate'
+  | 'pending_approval'
+  | 'send_contract'
+  | 'closed_won';
+
+export type StagePhase = 'plan' | 'sign' | 'close';
+
+export interface StageDef {
+  key: StageKey;
+  shortLabel: string;
+  phase: StagePhase;
+}
+
+export const STAGES: StageDef[] = [
+  { key: 'schedule_estimate', shortLabel: 'Schedule',  phase: 'plan'  },
+  { key: 'send_estimate',     shortLabel: 'Estimate',  phase: 'sign'  },
+  { key: 'pending_approval',  shortLabel: 'Approval',  phase: 'sign'  },
+  { key: 'send_contract',     shortLabel: 'Contract',  phase: 'close' },
+  { key: 'closed_won',        shortLabel: 'Closed',    phase: 'close' },
+];
+
+/** Lookup: StageKey → 0-based index in STAGES */
+export const STAGE_INDEX: Record<StageKey, number> = Object.fromEntries(
+  STAGES.map((s, i) => [s.key, i]),
+) as Record<StageKey, number>;
+
+/**
+ * Map a SalesEntryStatus to its canonical StageKey.
+ * `estimate_scheduled` is an alias for `schedule_estimate`.
+ * `closed_lost` has no stage → null.
+ */
+export function statusToStageKey(status: SalesEntryStatus): StageKey | null {
+  if (status === 'closed_lost') return null;
+  if (status === 'estimate_scheduled') return 'schedule_estimate';
+  return status as StageKey;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Age / health signal types — Req 1.2
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type AgeBucket = 'fresh' | 'stale' | 'stuck';
+
+export interface AgeThresholds {
+  /** Days until entry becomes stale (exclusive upper bound for fresh). */
+  freshMax: number;
+  /** Days until entry becomes stuck (exclusive upper bound for stale). */
+  staleMax: number;
+}
+
+/** Per-stage age thresholds (days). */
+export const AGE_THRESHOLDS: Record<StageKey, AgeThresholds> = {
+  schedule_estimate: { freshMax: 3,   staleMax: 7   },
+  send_estimate:     { freshMax: 3,   staleMax: 7   },
+  pending_approval:  { freshMax: 4,   staleMax: 10  },
+  send_contract:     { freshMax: 3,   staleMax: 7   },
+  closed_won:        { freshMax: 999, staleMax: 999 },
+};
+
+export interface StageAge {
+  days: number;
+  bucket: AgeBucket;
+  needsFollowup: boolean;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Activity strip types — Req 1.3
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ActivityEventKind =
+  | 'moved_from_leads'
+  | 'visit_scheduled'
+  | 'visit_completed'
+  | 'estimate_sent'
+  | 'estimate_viewed'
+  | 'nudge_sent'
+  | 'nudge_next'
+  | 'approved'
+  | 'declined'
+  | 'agreement_uploaded'
+  | 'converted'
+  | 'job_created'
+  | 'customer_created';
+
+export interface ActivityEvent {
+  kind: ActivityEventKind;
+  label: string;
+  tone: 'done' | 'wait' | 'neutral';
+  at?: string; // ISO timestamp
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NowCard types — Req 1.3
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type LucideIconName =
+  | 'Calendar'
+  | 'Mail'
+  | 'MessageSquare'
+  | 'Upload'
+  | 'CheckCircle2'
+  | 'XCircle'
+  | 'RotateCw'
+  | 'PauseCircle'
+  | 'ArrowRight'
+  | 'User'
+  | 'Edit3'
+  | 'Lock';
+
+export type NowActionId =
+  | 'schedule_visit'
+  | 'text_confirmation'
+  | 'send_estimate_email'
+  | 'add_customer_email'
+  | 'skip_advance'
+  | 'mark_approved_manual'
+  | 'resend_estimate'
+  | 'pause_nudges'
+  | 'mark_declined'
+  | 'convert_to_job'
+  | 'view_job'
+  | 'view_customer'
+  | 'jump_to_schedule';
+
+export type NowPill = {
+  tone: 'you' | 'cust' | 'done';
+  label: string;
+};
+
+export type NowAction =
+  | {
+      kind: 'primary' | 'outline' | 'ghost' | 'danger';
+      label: string;
+      testId: string;
+      onClickId: NowActionId;
+      icon?: LucideIconName;
+      disabled?: boolean;
+    }
+  | {
+      kind: 'locked';
+      label: string;
+      testId: string;
+      reason: string;
+    };
+
+export interface NowCardContent {
+  pill: NowPill;
+  title: string;
+  copyHtml: string;
+  actions: NowAction[];
+  dropzone?: { kind: 'estimate' | 'agreement'; filled: boolean };
+  showNudgeSchedule?: boolean;
+  showWeekOfPicker?: boolean;
+  lockBanner?: { textHtml: string };
+}
+
+export interface NowCardInputs {
+  stage: StageKey;
+  hasEstimateDoc: boolean;
+  hasSignedAgreement: boolean;
+  hasCustomerEmail: boolean;
+  weekOf?: string | null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Auto-nudge types — Req 1.3
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type NudgeStepState = 'done' | 'next' | 'future' | 'loop';
+
+export interface NudgeStep {
+  dayOffset: number; // -1 = weekly loop sentinel
+  state: NudgeStepState;
+  when: string;
+  message: string;
+}
+
+/** Day offsets for the auto-nudge cadence (excluding the weekly loop). */
+export const NUDGE_CADENCE_DAYS: readonly number[] = [0, 2, 5, 8] as const;

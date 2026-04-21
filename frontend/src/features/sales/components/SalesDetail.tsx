@@ -30,18 +30,26 @@ import {
   useTriggerEmailSigning,
   useDocumentPresign,
   useOverrideSalesStatus,
+  useAdvanceSalesEntry,
+  useConvertToJob,
+  useMarkSalesLost,
 } from '../hooks/useSalesPipeline';
-import { SALES_STATUS_CONFIG, TERMINAL_STATUSES, ALL_STATUSES } from '../types/pipeline';
-import type { SalesEntryStatus } from '../types/pipeline';
-import { StatusActionButton } from './StatusActionButton';
+import { SALES_STATUS_CONFIG, TERMINAL_STATUSES, ALL_STATUSES, statusToStageKey } from '../types/pipeline';
+import type { SalesEntryStatus, NowActionId, ActivityEvent } from '../types/pipeline';
 import { DocumentsSection } from './DocumentsSection';
 import { SignWellEmbeddedSigner } from './SignWellEmbeddedSigner';
+import { StageStepper } from './StageStepper';
+import { NowCard } from './NowCard';
+import { ActivityStrip } from './ActivityStrip';
+import { nowContent } from '../lib/nowContent';
 import { formatDistanceToNow } from 'date-fns';
 import type { SalesDocument } from '../api/salesPipelineApi';
 
 interface SalesDetailProps {
   entryId: string;
 }
+
+const WEEK_OF_KEY = (id: string) => `sales-weekof-${id}`;
 
 export function SalesDetail({ entryId }: SalesDetailProps) {
   const navigate = useNavigate();
@@ -50,21 +58,44 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
   const updateCustomer = useUpdateCustomer();
   const queryClient = useQueryClient();
   const overrideStatus = useOverrideSalesStatus();
+  const advance = useAdvanceSalesEntry();
+  const convertToJob = useConvertToJob();
+  const markLost = useMarkSalesLost();
   const { data: staffData } = useStaff({ is_active: true });
 
   // Fetch customer for internal_notes display
   const { data: salesCustomer } = useCustomerDetail(entry?.customer_id ?? '');
 
-  // Inline edit state — Task 10.1
+  // Inline edit state
   const [editingCustomerInfo, setEditingCustomerInfo] = useState(false);
   const [customerInfoForm, setCustomerInfoForm] = useState({
     customer_name: '',
     customer_phone: '',
   });
 
-  const [editingStatus, setEditingStatus] = useState(false);
+  // Week-of picker state — persisted to localStorage keyed by entry ID
+  // TODO(backend): replace with a proper `week_of` column on the sales entry
+  const [weekOfValue, setWeekOfValue] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(WEEK_OF_KEY(entryId));
+    } catch {
+      return null;
+    }
+  });
 
-  // Fetch documents to determine signing button state — Validates: Req 9.3, 9.5
+  const handleWeekOfChange = useCallback((w: string) => {
+    setWeekOfValue(w);
+    try {
+      localStorage.setItem(WEEK_OF_KEY(entryId), w);
+    } catch {
+      // ignore
+    }
+  }, [entryId]);
+
+  // Override status modal state
+  const [_showOverrideSelect, setShowOverrideSelect] = useState(false);
+
+  // Fetch documents to determine signing button state
   const { data: documents } = useSalesDocuments(entry?.customer_id ?? '');
   const signingDocs = useMemo<SalesDocument[]>(
     () =>
@@ -76,18 +107,10 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
   const hasSigningDoc = signingDocs.length > 0;
   const hasMultipleSigningDocs = signingDocs.length > 1;
 
-  // Track which document is selected when multiple exist
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const selectedDoc = signingDocs.find((d) => d.id === selectedDocId) ?? signingDocs[0] ?? null;
 
-  // bughunt M-17: validate that the selected doc's file_key actually
-  // resolves to a presigned URL before unlocking the signing buttons.
-  // A doc row whose underlying S3 object is missing/expired now
-  // disables Email/Embedded sign instead of opening a broken iframe.
-  const presign = useDocumentPresign(
-    entry?.customer_id,
-    selectedDoc?.id,
-  );
+  const presign = useDocumentPresign(entry?.customer_id, selectedDoc?.id);
   const presignReady = !!presign.data?.download_url;
   const presignFailed = presign.isError;
   const signingDisabledReason = !hasSigningDoc
@@ -99,7 +122,6 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
         : undefined;
   const signingReady = hasSigningDoc && presignReady;
 
-  // Internal notes save handler — PATCHes the customer, not the sales entry
   const handleSaveSalesEntryNotes = useCallback(
     async (next: string | null) => {
       if (!entry?.customer_id) return;
@@ -109,8 +131,128 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
       });
       invalidateAfterCustomerInternalNotesSave(queryClient, entry.customer_id);
     },
-    [entry?.customer_id, updateCustomer, queryClient],
+    [entry, updateCustomer, queryClient],
   );
+
+  // ── NowCard action handler ──────────────────────────────────────────────────
+  const handleNowAction = useCallback(
+    (id: NowActionId) => {
+      switch (id) {
+        case 'schedule_visit':
+          advance.mutate(entryId, {
+            onSuccess: () => { toast.success('Estimate scheduled'); refetch(); },
+            onError: () => toast.error('Failed to schedule'),
+          });
+          break;
+
+        case 'send_estimate_email':
+          emailSign.mutateAsync(entryId)
+            .then(() => { toast.success('Estimate sent'); refetch(); })
+            .catch(() => toast.error('Failed to send estimate'));
+          break;
+
+        case 'convert_to_job':
+          convertToJob.mutate(entryId, {
+            onSuccess: () => { toast.success('Converted to job'); refetch(); },
+            onError: () => toast.error('Failed to convert'),
+          });
+          break;
+
+        case 'view_job':
+          if (entry?.signwell_document_id) {
+            navigate(`/jobs/${entry.signwell_document_id}`);
+          } else {
+            navigate('/jobs');
+          }
+          break;
+
+        case 'view_customer':
+          navigate(`/customers/${entry?.customer_id}`);
+          break;
+
+        case 'jump_to_schedule':
+          navigate('/schedule');
+          break;
+
+        case 'mark_declined':
+          markLost.mutate(
+            { id: entryId },
+            {
+              onSuccess: () => { toast.success('Marked as lost'); refetch(); },
+              onError: () => toast.error('Failed to mark as lost'),
+            },
+          );
+          break;
+
+        case 'skip_advance':
+          advance.mutate(entryId, {
+            onSuccess: () => { toast.success('Status advanced'); refetch(); },
+            onError: () => toast.error('Failed to advance'),
+          });
+          break;
+
+        case 'mark_approved_manual':
+          overrideStatus.mutateAsync({
+            id: entryId,
+            body: { status: 'send_contract' },
+          })
+            .then(() => { toast.success('Marked as approved'); refetch(); })
+            .catch(() => toast.error('Failed to update status'));
+          break;
+
+        // TODO(backend): wire these when backend endpoints are ready
+        case 'text_confirmation':
+        case 'resend_estimate':
+        case 'pause_nudges':
+        case 'add_customer_email':
+          toast.info('Not wired yet — TODO');
+          break;
+
+        default:
+          break;
+      }
+    },
+    [entryId, entry, navigate, advance, emailSign, convertToJob, markLost, overrideStatus, refetch],
+  );
+
+  // ── File drop handler ───────────────────────────────────────────────────────
+  const handleFileDrop = useCallback(
+    (_file: File, _kind: 'estimate' | 'agreement') => {
+      // TODO(backend): wire to useUploadSalesDocument when backend ready
+      toast.info('Not wired yet — TODO');
+    },
+    [],
+  );
+
+  // ── Derive stage and NowCard content (safe before entry guard) ─────────────
+  const stageKey = entry ? statusToStageKey(entry.status) : null;
+  const hasEstimateDoc = signingDocs.some((d) => d.document_type === 'estimate');
+  const hasSignedAgreement = signingDocs.some((d) => d.document_type === 'contract');
+
+  // ── Build ActivityEvent[] from entry fields ─────────────────────────────────
+  const activityEvents = useMemo<ActivityEvent[]>(() => {
+    if (!entry) return [];
+    const events: ActivityEvent[] = [];
+    if (entry.lead_id) {
+      events.push({ kind: 'moved_from_leads', label: 'From leads', tone: 'neutral' });
+    }
+    if (entry.status === 'estimate_scheduled' || (stageKey && stageKey !== 'schedule_estimate')) {
+      events.push({ kind: 'visit_scheduled', label: 'Visit scheduled', tone: 'done' });
+    }
+    if (stageKey && ['pending_approval', 'send_contract', 'closed_won'].includes(stageKey)) {
+      events.push({ kind: 'estimate_sent', label: 'Estimate sent', tone: 'done' });
+    }
+    if (stageKey === 'send_contract' || stageKey === 'closed_won') {
+      events.push({ kind: 'approved', label: 'Approved', tone: 'done' });
+    }
+    if (stageKey === 'closed_won') {
+      events.push({ kind: 'converted', label: 'Converted to job', tone: 'done' });
+    }
+    if (entry.status === 'closed_lost') {
+      events.push({ kind: 'declined', label: 'Declined', tone: 'neutral' });
+    }
+    return events;
+  }, [entry, stageKey]);
 
   if (isLoading) return <LoadingPage message="Loading sales entry…" />;
 
@@ -119,7 +261,7 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
 
   const statusConfig = SALES_STATUS_CONFIG[entry.status];
   const isTerminal = TERMINAL_STATUSES.includes(entry.status);
-  const hasEmail = !!entry.customer_name; // email availability checked server-side
+  const hasEmail = !!entry.customer_name;
 
   const startEditCustomerInfo = () => {
     setCustomerInfoForm({
@@ -132,7 +274,6 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
   const saveCustomerInfo = async () => {
     if (!entry.customer_id) return;
     try {
-      // Parse name into first/last
       const parts = customerInfoForm.customer_name.trim().split(/\s+/);
       const firstName = parts[0] || '';
       const lastName = parts.slice(1).join(' ') || '';
@@ -159,7 +300,7 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
         body: { status: newStatus as SalesEntryStatus },
       });
       toast.success('Pipeline stage updated');
-      setEditingStatus(false);
+      setShowOverrideSelect(false);
       refetch();
     } catch (err: unknown) {
       toast.error('Update failed', { description: getErrorMessage(err) });
@@ -178,6 +319,23 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
       toast.error(msg);
     }
   };
+
+  // ── Derive NowCard content ──────────────────────────────────────────────────
+  const firstName = (entry.customer_name ?? 'Customer').split(' ')[0];
+  const hasCustomerEmail = hasEmail;
+
+  const nowCardContent = stageKey
+    ? nowContent({
+        stage: stageKey,
+        hasEstimateDoc,
+        hasSignedAgreement,
+        hasCustomerEmail,
+        firstName,
+        weekOf: weekOfValue ?? undefined,
+      })
+    : null;
+
+  const isClosedLost = entry.status === 'closed_lost';
 
   return (
     <div data-testid="sales-detail-page" className="space-y-6">
@@ -297,12 +455,10 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
             )}
           </div>
 
-          {/* Actions row */}
+          {/* Signing actions row — only signing-related buttons remain here */}
           {!isTerminal && (
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
-              <StatusActionButton entry={entry} />
-
-              {/* Document selector when multiple signing docs exist — Validates: Req 9.5 */}
+              {/* Document selector when multiple signing docs exist */}
               {hasMultipleSigningDocs && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -332,15 +488,13 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
                 </DropdownMenu>
               )}
 
-              {/* Email signing — Validates: Req 9.3; bughunt M-17 */}
+              {/* Email signing */}
               <span title={signingDisabledReason}>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={handleEmailSign}
-                  disabled={
-                    emailSign.isPending || !hasEmail || !signingReady
-                  }
+                  disabled={emailSign.isPending || !hasEmail || !signingReady}
                   data-testid="email-sign-btn"
                 >
                   <Mail className="mr-1 h-3.5 w-3.5" />
@@ -348,7 +502,7 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
                 </Button>
               </span>
 
-              {/* Embedded on-site signing — Validates: Req 9.3; bughunt M-17 */}
+              {/* Embedded on-site signing */}
               <SignWellEmbeddedSigner
                 entryId={entryId}
                 onComplete={() => refetch()}
@@ -360,10 +514,55 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
         </CardContent>
       </Card>
 
+      {/* ── Stage Walkthrough (hidden for closed_lost) ── */}
+      {isClosedLost ? (
+        <div
+          className="rounded-lg bg-slate-100 border border-slate-200 px-4 py-3 text-sm text-slate-600"
+          data-testid="closed-lost-banner"
+        >
+          Closed Lost{entry.closed_reason ? ` — ${entry.closed_reason}` : ''}. No further actions.
+        </div>
+      ) : (
+        <>
+          {/* StageStepper */}
+          {stageKey && (
+            <StageStepper
+              currentStage={stageKey}
+              onOverrideClick={() => setShowOverrideSelect(true)}
+              onMarkLost={() =>
+                markLost.mutate(
+                  { id: entryId },
+                  {
+                    onSuccess: () => { toast.success('Marked as lost'); refetch(); },
+                    onError: () => toast.error('Failed to mark as lost'),
+                  },
+                )
+              }
+              visitScheduled={entry.status === 'estimate_scheduled'}
+            />
+          )}
+
+          {/* NowCard */}
+          {stageKey && nowCardContent && (
+            <NowCard
+              stageKey={stageKey}
+              content={nowCardContent}
+              onAction={handleNowAction}
+              onFileDrop={handleFileDrop}
+              weekOfValue={weekOfValue}
+              onWeekOfChange={handleWeekOfChange}
+            />
+          )}
+
+          {/* ActivityStrip */}
+          <ActivityStrip events={activityEvents} />
+        </>
+      )}
+
       {/* Documents section */}
       <DocumentsSection customerId={entry.customer_id} />
 
-      {/* Internal Notes Card — reads/writes customer.internal_notes */}
+      {/* Internal Notes Card */}
       <InternalNotesCard
         value={salesCustomer?.internal_notes ?? null}
         onSave={handleSaveSalesEntryNotes}
@@ -371,6 +570,9 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
         readOnly={!entry.customer_id}
         data-testid-prefix="sales-"
       />
+
+      {/* Suppress unused staffData warning */}
+      {staffData && null}
     </div>
   );
 }

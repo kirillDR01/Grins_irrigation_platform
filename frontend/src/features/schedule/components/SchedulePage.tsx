@@ -75,6 +75,7 @@ export function SchedulePage() {
   useEffect(() => {
     const jobId = searchParams.get('scheduleJobId');
     if (jobId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPreSelectedJobId(jobId);
       setShowCreateDialog(true);
       // Clean up the URL param so it doesn't re-trigger

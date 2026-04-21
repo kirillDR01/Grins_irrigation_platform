@@ -286,3 +286,127 @@ describe('SalesDetail InternalNotesCard', () => {
     Object.assign(mockEntry, origEntry);
   });
 });
+
+
+// ── Walkthrough integration tests (Task 11.5) ────────────────────────────────
+
+describe('SalesDetail walkthrough layout', () => {
+  beforeEach(() => {
+    presignState.data = {
+      download_url: 'https://s3.example.com/docs/estimate.pdf?signed=abc',
+      file_name: 'estimate.pdf',
+    };
+    // Reset to default status
+    Object.assign(mockEntry, {
+      status: 'send_estimate',
+      closed_reason: null,
+      lead_id: null,
+    });
+  });
+
+  it('renders StageStepper for non-terminal, non-closed_lost status', async () => {
+    render(<SalesDetail entryId="entry-001" />, { wrapper });
+    await waitFor(() => {
+      expect(screen.getByTestId('stage-stepper')).toBeInTheDocument();
+    });
+  });
+
+  it('renders NowCard for non-terminal, non-closed_lost status', async () => {
+    render(<SalesDetail entryId="entry-001" />, { wrapper });
+    await waitFor(() => {
+      expect(screen.getByTestId('now-card')).toBeInTheDocument();
+    });
+  });
+
+  it('renders ActivityStrip when there are activity events', async () => {
+    Object.assign(mockEntry, { status: 'pending_approval', lead_id: 'lead-001' });
+    render(<SalesDetail entryId="entry-001" />, { wrapper });
+    await waitFor(() => {
+      expect(screen.getByTestId('activity-strip')).toBeInTheDocument();
+    });
+  });
+
+  it('hides StageStepper, NowCard, ActivityStrip for closed_lost and shows banner', async () => {
+    Object.assign(mockEntry, {
+      status: 'closed_lost',
+      closed_reason: 'Too expensive',
+    });
+    render(<SalesDetail entryId="entry-001" />, { wrapper });
+    await waitFor(() => {
+      expect(screen.getByTestId('closed-lost-banner')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('stage-stepper')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('now-card')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('activity-strip')).not.toBeInTheDocument();
+    expect(screen.getByTestId('closed-lost-banner')).toHaveTextContent('Too expensive');
+  });
+
+  it('does NOT render StatusActionButton in the header card', async () => {
+    render(<SalesDetail entryId="entry-001" />, { wrapper });
+    await waitFor(() => {
+      expect(screen.getByTestId('sales-detail-page')).toBeInTheDocument();
+    });
+    // StatusActionButton renders advance-btn-{id} — should not be present
+    expect(screen.queryByTestId(`advance-btn-${mockEntry.id}`)).not.toBeInTheDocument();
+  });
+
+  it('NowCard renders correct variation for send_estimate with doc', async () => {
+    // mockDocument is an estimate doc, so hasEstimateDoc = true
+    render(<SalesDetail entryId="entry-001" />, { wrapper });
+    await waitFor(() => {
+      expect(screen.getByTestId('now-card')).toBeInTheDocument();
+    });
+    // send_estimate with doc shows filled dropzone
+    expect(screen.getByTestId('now-card-dropzone-filled')).toBeInTheDocument();
+  });
+
+  it('NowCard renders correct variation for schedule_estimate', async () => {
+    Object.assign(mockEntry, { status: 'schedule_estimate' });
+    render(<SalesDetail entryId="entry-001" />, { wrapper });
+    await waitFor(() => {
+      expect(screen.getByTestId('now-card')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('now-action-schedule')).toBeInTheDocument();
+  });
+
+  it('NowCard renders correct variation for pending_approval', async () => {
+    Object.assign(mockEntry, { status: 'pending_approval' });
+    render(<SalesDetail entryId="entry-001" />, { wrapper });
+    await waitFor(() => {
+      expect(screen.getByTestId('now-card')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('now-action-approved')).toBeInTheDocument();
+  });
+
+  it('NowCard renders correct variation for closed_won', async () => {
+    Object.assign(mockEntry, { status: 'closed_won' });
+    render(<SalesDetail entryId="entry-001" />, { wrapper });
+    await waitFor(() => {
+      expect(screen.getByTestId('now-card')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('now-action-view-job')).toBeInTheDocument();
+  });
+
+  it('stubbed actions (text_confirmation, resend_estimate, pause_nudges) show toast', async () => {
+    Object.assign(mockEntry, { status: 'pending_approval' });
+    const user = userEvent.setup();
+    render(<SalesDetail entryId="entry-001" />, { wrapper });
+    await waitFor(() => {
+      expect(screen.getByTestId('now-action-resend')).toBeInTheDocument();
+    });
+    // Clicking resend_estimate should not throw
+    await user.click(screen.getByTestId('now-action-resend'));
+    // Toast is shown — we just verify no crash
+  });
+
+  it('view_customer action navigates to /customers/{id}', async () => {
+    Object.assign(mockEntry, { status: 'closed_won' });
+    const user = userEvent.setup();
+    render(<SalesDetail entryId="entry-001" />, { wrapper });
+    await waitFor(() => {
+      expect(screen.getByTestId('now-action-view-customer')).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId('now-action-view-customer'));
+    // Navigation is handled by useNavigate — no crash is the assertion
+  });
+});

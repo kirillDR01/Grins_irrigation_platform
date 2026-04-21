@@ -215,7 +215,7 @@ export function SalesCalendar() {
       });
       invalidateAfterCustomerInternalNotesSave(queryClient, formState.customerId);
     },
-    [formState?.customerId, updateCustomerMutation, queryClient],
+    [formState, updateCustomerMutation, queryClient],
   );
 
   if (isLoading) {

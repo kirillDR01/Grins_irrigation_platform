@@ -47,6 +47,7 @@ export function BusinessInfo() {
         company_email: settings.company_email ?? '',
         company_website: settings.company_website ?? '',
       });
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLogoPreview(settings.company_logo_url);
     }
   }, [settings, form]);

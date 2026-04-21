@@ -1,10 +1,9 @@
 // ============================================================
-// SalesPipeline.tsx — Pipeline List (replaces old SalesPipeline)
-// Adapted from scaffold/PipelineList.tsx
+// PipelineList.tsx — replaces SalesPipeline.tsx
+// Drop at: frontend/src/features/sales/components/SalesPipeline.tsx
 // ============================================================
 
 import { useState, useMemo, useCallback } from 'react';
-import type React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Phone, Inbox, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -13,13 +12,14 @@ import { Button } from '@/components/ui/button';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { LoadingPage, ErrorMessage } from '@/shared/components';
-import { useSalesPipeline } from '../hooks/useSalesPipeline';
-import { useSalesMetrics } from '../hooks';
+import { useSalesPipeline, useSalesMetrics } from '../hooks';
 import { useStageAge, countStuck } from '../hooks/useStageAge';
 import { AgeChip } from './AgeChip';
 import {
-  AGE_THRESHOLDS,
   SALES_STATUS_CONFIG,
   type SalesEntry,
   type SalesEntryStatus,
@@ -49,24 +49,17 @@ export function SalesPipeline() {
     status: statusFilter,
   });
 
-  const rows = useMemo(() => data?.items ?? [], [data?.items]);
+  const rows = data?.items ?? [];
   const followupCount = useMemo(() => countStuck(rows), [rows]);
-
-  // stuckFilter: show only entries whose computed bucket is 'stuck'
-  // Date.now() is captured outside useMemo to satisfy the react-compiler purity rule
-  const nowRef = Date.now();
-  const visibleRows = useMemo(() => {
-    if (!stuckFilter) return rows;
-    return rows.filter(r => {
-      if (r.status === 'closed_won' || r.status === 'closed_lost') return false;
-      const stageKey = r.status === 'estimate_scheduled' ? 'schedule_estimate' : r.status;
-      const thresholds = AGE_THRESHOLDS[stageKey as keyof typeof AGE_THRESHOLDS];
-      const ref = r.updated_at ?? r.created_at;
-      const days = Math.floor((nowRef - new Date(ref).getTime()) / 86_400_000);
-      return days > thresholds.staleMax;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, stuckFilter]);
+  const visibleRows = useMemo(
+    () => (stuckFilter
+      ? rows.filter(r => {
+          const stageKey = r.status === 'estimate_scheduled' ? 'schedule_estimate' : r.status;
+          return stageKey !== 'closed_won' && stageKey !== 'closed_lost';
+        })
+      : rows),
+    [rows, stuckFilter],
+  );
 
   const handleRowClick = useCallback(
     (entry: SalesEntry) => navigate(`/sales/${entry.id}`),
@@ -106,9 +99,8 @@ export function SalesPipeline() {
       title: 'Revenue Pipeline',
       value: `$${(metrics?.total_pipeline_revenue ?? 0).toLocaleString()}`,
       testId: 'pipeline-summary-revenue',
-      onClick: undefined as (() => void) | undefined,
+      onClick: undefined,
       bg: '',
-      delta: undefined as React.ReactNode,
     },
   ];
 
@@ -228,7 +220,7 @@ export function SalesPipeline() {
   );
 }
 
-// ────────── Row component ──────────
+// ────────── Row component (own memo target) ──────────
 
 function PipelineRow({
   entry,
@@ -250,12 +242,22 @@ function PipelineRow({
       onClick={() => onRowClick(entry)}
     >
       <TableCell className="px-6 py-4">
-        <span
-          className="text-sm font-semibold text-slate-700"
-          title={entry.property_address ?? undefined}
-        >
-          {entry.customer_name ?? <i className="text-slate-400">Unknown</i>}
-        </span>
+        {entry.property_address ? (
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-sm font-semibold text-slate-700">
+                  {entry.customer_name ?? <i className="text-slate-400">Unknown</i>}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{entry.property_address}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : (
+          <span className="text-sm font-semibold text-slate-700">
+            {entry.customer_name ?? <i className="text-slate-400">Unknown</i>}
+          </span>
+        )}
       </TableCell>
 
       <TableCell className="px-6 py-4">
@@ -340,6 +342,7 @@ function FollowupDelta({ count }: { count: number }) {
   const prev = (() => {
     const storedWeek = localStorage.getItem(weekKey);
     if (storedWeek !== isoWeek) {
+      // Roll the counter once per week
       localStorage.setItem(weekKey, isoWeek);
       localStorage.setItem(key, String(count));
       return count;

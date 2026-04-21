@@ -25,7 +25,7 @@ interface CustomerMessagesProps {
 export function CustomerMessages({ customerId }: CustomerMessagesProps) {
   const { data: rawMessages, isLoading, error } = useCustomerSentMessages(customerId);
   // API may return paginated {items: [...]} or plain array
-  const messages = Array.isArray(rawMessages) ? rawMessages : (rawMessages as any)?.items ?? [];
+  const messages = Array.isArray(rawMessages) ? rawMessages : (rawMessages as { items?: typeof rawMessages })?.items ?? [];
 
   const header = (
     <div className="mb-3">

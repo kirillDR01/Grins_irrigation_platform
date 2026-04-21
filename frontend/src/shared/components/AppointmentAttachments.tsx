@@ -44,7 +44,7 @@ function AttachmentPreview({
   onDelete: () => void;
   isDeleting: boolean;
 }) {
-  const Icon = getFileIcon(attachment.content_type);
+  const IconComponent = getFileIcon(attachment.content_type);
   const isImage = attachment.content_type.startsWith('image/');
 
   return (
@@ -67,7 +67,8 @@ function AttachmentPreview({
         </a>
       ) : (
         <div className="h-10 w-10 rounded bg-slate-100 flex items-center justify-center flex-shrink-0">
-          <Icon className="h-5 w-5 text-slate-500" />
+          {/* eslint-disable-next-line react-hooks/static-components */}
+          <IconComponent className="h-5 w-5 text-slate-500" />
         </div>
       )}
       <div className="flex-1 min-w-0">
