@@ -77,6 +77,17 @@ _AUTO_REPLIES: dict[ConfirmationKeyword, str] = {
     ),
 }
 
+# Gap 03.A — message types that should resolve to the primary confirmation
+# handler. Cancellation notifications are intentionally excluded: a Y/R reply
+# to a cancellation SMS routes through ``handle_post_cancellation_reply``.
+_CONFIRMATION_LIKE_TYPES: frozenset[str] = frozenset(
+    {
+        MessageType.APPOINTMENT_CONFIRMATION.value,
+        MessageType.APPOINTMENT_RESCHEDULE.value,
+        MessageType.APPOINTMENT_REMINDER.value,
+    }
+)
+
 
 def parse_confirmation_reply(body: str) -> ConfirmationKeyword | None:
     """Parse a Y/R/C keyword from an SMS body.
@@ -134,6 +145,24 @@ class JobConfirmationService(LoggerMixin):
             # avoid a numeric body on a follow-up thread (e.g. "2pm")
             # being parsed as RESCHEDULE.
             if keyword is not None:
+                # Gap 03.B — a Y/R/C on a thread whose only
+                # confirmation-like row is superseded is a stale-thread
+                # reply: write an audit row + return a courteous
+                # auto-reply instead of a silent no_match.
+                stale_result = await self._handle_stale_thread_reply(
+                    thread_id=thread_id,
+                    keyword=keyword,
+                    raw_body=raw_body,
+                    from_phone=from_phone,
+                    provider_sid=provider_sid,
+                )
+                if stale_result is not None:
+                    self.log_completed(
+                        "handle_confirmation",
+                        result_action=stale_result.get("action"),
+                        thread_id=thread_id,
+                    )
+                    return stale_result
                 self.log_rejected(
                     "handle_confirmation",
                     reason="no_matching_confirmation",
@@ -847,6 +876,344 @@ class JobConfirmationService(LoggerMixin):
         return {"action": "needs_review", "response_id": str(response.id)}
 
     # ------------------------------------------------------------------
+    # Post-cancellation reply handling (gap-03 3.A)
+    # ------------------------------------------------------------------
+
+    async def handle_post_cancellation_reply(
+        self,
+        thread_id: str,
+        keyword: ConfirmationKeyword | None,
+        raw_body: str,
+        from_phone: str,
+        provider_sid: str | None = None,
+    ) -> dict[str, Any]:
+        """Route an inbound reply to a cancellation-notification SMS.
+
+        Fired from :meth:`SMSService._try_confirmation_reply` when the
+        primary confirmation-like lookup AND the reschedule-followup
+        lookup both miss and :meth:`find_cancellation_thread` matches.
+
+        - R → create a new :class:`RescheduleRequest` in ``open`` state
+          so the admin resolve path can bring the appointment back.
+        - Y → raise a ``CUSTOMER_RECONSIDER_CANCELLATION`` admin alert
+          (no auto-transition; admin must manually reactivate).
+        - Any other keyword / free text → log as ``needs_review``.
+
+        Validates: gap-03 (3.A post-cancellation reply).
+        """
+        self.log_started(
+            "handle_post_cancellation_reply",
+            thread_id=thread_id,
+            keyword=keyword.value if keyword else None,
+        )
+
+        original = await self.find_cancellation_thread(thread_id)
+        if original is None:
+            self.log_rejected(
+                "handle_post_cancellation_reply",
+                reason="no_matching_thread",
+                thread_id=thread_id,
+            )
+            return {"action": "no_match", "thread_id": thread_id}
+
+        appointment_id: UUID = original.appointment_id  # type: ignore[assignment]
+        job_id: UUID = original.job_id  # type: ignore[assignment]
+        customer_id: UUID = original.customer_id  # type: ignore[assignment]
+
+        response = JobConfirmationResponse(
+            job_id=job_id,
+            appointment_id=appointment_id,
+            sent_message_id=original.id,
+            customer_id=customer_id,
+            from_phone=from_phone,
+            reply_keyword=keyword.value if keyword else None,
+            raw_reply_body=raw_body,
+            provider_sid=provider_sid,
+            status="pending",
+        )
+        self.db.add(response)
+        await self.db.flush()
+
+        if keyword == ConfirmationKeyword.RESCHEDULE:
+            result = await self._handle_post_cancel_reschedule(
+                response=response,
+                appointment_id=appointment_id,
+                job_id=job_id,
+                customer_id=customer_id,
+                raw_body=raw_body,
+            )
+        elif keyword == ConfirmationKeyword.CONFIRM:
+            result = await self._handle_post_cancel_reconsider(
+                response=response,
+                appointment_id=appointment_id,
+                customer_id=customer_id,
+            )
+        else:
+            # CANCEL reply on a cancellation thread is redundant; free
+            # text is ambiguous — both route to needs_review so an admin
+            # can triage the intent manually.
+            response.status = "needs_review"
+            response.processed_at = datetime.now(tz=timezone.utc)
+            await self.db.flush()
+            logger.warning(
+                "post_cancellation.needs_review",
+                response_id=str(response.id),
+                raw_body=response.raw_reply_body,
+            )
+            result = {
+                "action": "needs_review",
+                "response_id": str(response.id),
+            }
+
+        result["recipient_phone"] = original.recipient_phone
+
+        self.log_completed(
+            "handle_post_cancellation_reply",
+            result_action=result.get("action"),
+            appointment_id=str(appointment_id),
+        )
+        return result
+
+    async def _handle_post_cancel_reschedule(
+        self,
+        *,
+        response: JobConfirmationResponse,
+        appointment_id: UUID,
+        job_id: UUID,
+        customer_id: UUID,
+        raw_body: str,
+    ) -> dict[str, Any]:
+        """Create a new open reschedule request for a CANCELLED appointment.
+
+        Mirrors :meth:`_handle_reschedule`'s SAVEPOINT + dedup pattern
+        but skips the blocked-state guard — the appointment is (by
+        construction) CANCELLED here, which the guard would otherwise
+        reject. Admin must reactivate the appointment before resolving
+        the queued request (tracked as a follow-up gap).
+        """
+        # Application-level dedup against the partial unique index
+        # ``uq_reschedule_requests_open_per_appointment``. A prior open
+        # request for this appointment folds the new reply into the
+        # existing row so the admin sees the full history.
+        open_stmt = (
+            select(RescheduleRequest)
+            .where(
+                RescheduleRequest.appointment_id == appointment_id,
+                RescheduleRequest.status == "open",
+            )
+            .order_by(RescheduleRequest.created_at.asc())
+            .limit(1)
+        )
+        existing = (await self.db.execute(open_stmt)).scalar_one_or_none()
+        if existing is not None:
+            return await self._append_duplicate_open_request(
+                response=response,
+                existing=existing,
+                raw_body=raw_body,
+                appointment_id=appointment_id,
+                reason="post_cancel_duplicate_open_request",
+            )
+
+        reschedule = RescheduleRequest(
+            job_id=job_id,
+            appointment_id=appointment_id,
+            customer_id=customer_id,
+            original_reply_id=response.id,
+            raw_alternatives_text=raw_body,
+            status="open",
+        )
+        try:
+            async with self.db.begin_nested():
+                self.db.add(reschedule)
+                await self.db.flush()
+        except IntegrityError:
+            existing = (await self.db.execute(open_stmt)).scalar_one_or_none()
+            if existing is None:
+                raise
+            return await self._append_duplicate_open_request(
+                response=response,
+                existing=existing,
+                raw_body=raw_body,
+                appointment_id=appointment_id,
+                reason="post_cancel_duplicate_open_request_race",
+            )
+
+        response.status = "reschedule_requested"
+        response.processed_at = datetime.now(tz=timezone.utc)
+        await self.db.flush()
+
+        follow_up_text = (
+            "We'd be happy to reschedule. Please reply with 2-3 dates "
+            "and times that work for you and we'll get you set up."
+        )
+
+        return {
+            "action": "post_cancel_reschedule_requested",
+            "appointment_id": str(appointment_id),
+            "reschedule_request_id": str(reschedule.id),
+            "auto_reply": ("Thanks — we'll be in touch with new time options."),
+            "follow_up_sms": follow_up_text,
+        }
+
+    async def _handle_post_cancel_reconsider(
+        self,
+        *,
+        response: JobConfirmationResponse,
+        appointment_id: UUID,
+        customer_id: UUID,
+    ) -> dict[str, Any]:
+        """Record a Y reply on a cancellation thread + raise admin alert.
+
+        Intentionally does NOT transition the appointment back to
+        ``SCHEDULED`` — reactivation is a manual admin step so a stray
+        Y can't silently undo a cancellation. The alert surfaces the
+        customer's intent to the admin dashboard.
+        """
+        from grins_platform.models.appointment import Appointment  # noqa: PLC0415
+
+        appt = await self.db.get(Appointment, appointment_id)
+
+        response.status = "cancel_reconsider_pending"
+        response.processed_at = datetime.now(tz=timezone.utc)
+        await self.db.flush()
+
+        await self._dispatch_reconsider_cancellation_alert(
+            appointment_id=appointment_id,
+            customer_id=customer_id,
+            appt=appt,
+        )
+
+        business_phone = os.environ.get("BUSINESS_PHONE_NUMBER", "")
+        call_clause = (
+            f" Please call us at {business_phone} to confirm a new time."
+            if business_phone
+            else " Please contact us to confirm a new time."
+        )
+        auto_reply = f"Got it — we've flagged this for a callback.{call_clause}"
+
+        return {
+            "action": "post_cancel_reconsider_pending",
+            "appointment_id": str(appointment_id),
+            "auto_reply": auto_reply,
+        }
+
+    async def _dispatch_reconsider_cancellation_alert(
+        self,
+        *,
+        appointment_id: UUID,
+        customer_id: UUID,
+        appt: Appointment | None,
+    ) -> None:
+        """Notify admin that a customer texted "Y" to a cancellation SMS.
+
+        Mirrors :meth:`_dispatch_late_reschedule_alert`. Per-spec
+        contract: exceptions are logged and swallowed so admin
+        notification never blocks the customer-facing reply.
+
+        Validates: gap-03 (3.A cancel-reconsider alert).
+        """
+        from grins_platform.models.customer import Customer  # noqa: PLC0415
+        from grins_platform.services.notification_service import (  # noqa: PLC0415
+            NotificationService,
+        )
+
+        try:
+            customer = await self.db.get(Customer, customer_id)
+            if customer is None:
+                self.log_rejected(
+                    "handle_post_cancellation_reply.reconsider_alert",
+                    reason="customer_not_found",
+                    customer_id=str(customer_id),
+                )
+                return
+
+            notification_svc = NotificationService(
+                email_service=self._build_email_service(),
+            )
+            await notification_svc.send_admin_reconsider_cancellation_alert(
+                self.db,
+                appointment_id=appointment_id,
+                customer_id=customer_id,
+                customer_name=customer.full_name,
+                scheduled_at=self._resolve_scheduled_at(appt),
+            )
+        except Exception as exc:
+            self.log_failed(
+                "handle_post_cancellation_reply.reconsider_alert_failed",
+                error=exc,
+                appointment_id=str(appointment_id),
+            )
+
+    async def _handle_stale_thread_reply(
+        self,
+        *,
+        thread_id: str,
+        keyword: ConfirmationKeyword | None,
+        raw_body: str,
+        from_phone: str,
+        provider_sid: str | None,
+    ) -> dict[str, Any] | None:
+        """Audit a keyword reply on a superseded confirmation thread.
+
+        Gap 03.B: once a newer confirmation-like SMS is sent for the
+        same appointment, the prior row is stamped with ``superseded_at``.
+        A customer replying ``Y`` to that stale thread must NOT
+        silently confirm the new date they never saw — route to an
+        audit row + courteous auto-reply instead.
+
+        Returns ``None`` when no superseded row matches (caller falls
+        through to the ``no_match`` path).
+
+        Validates: gap-03 (3.B telemetry).
+        """
+        superseded = await self._find_superseded_confirmation_for_thread(
+            thread_id,
+        )
+        if superseded is None:
+            return None
+
+        response = JobConfirmationResponse(
+            job_id=superseded.job_id,
+            appointment_id=superseded.appointment_id,
+            sent_message_id=superseded.id,
+            customer_id=superseded.customer_id,
+            from_phone=from_phone,
+            reply_keyword=keyword.value if keyword else None,
+            raw_reply_body=raw_body,
+            provider_sid=provider_sid,
+            status="stale_thread_reply",
+            processed_at=datetime.now(tz=timezone.utc),
+        )
+        self.db.add(response)
+        await self.db.flush()
+
+        logger.info(
+            "handle_confirmation.stale_thread",
+            thread_id=thread_id,
+            appointment_id=str(superseded.appointment_id),
+            response_id=str(response.id),
+        )
+
+        business_phone = os.environ.get("BUSINESS_PHONE_NUMBER", "")
+        call_clause = (
+            f", or call us at {business_phone} for help"
+            if business_phone
+            else ", or call us for help"
+        )
+        auto_reply = (
+            "Your appointment was updated — please reply to the most "
+            f"recent message from us{call_clause}."
+        )
+
+        return {
+            "action": "stale_thread_reply",
+            "thread_id": thread_id,
+            "appointment_id": str(superseded.appointment_id),
+            "auto_reply": auto_reply,
+            "recipient_phone": superseded.recipient_phone,
+        }
+
+    # ------------------------------------------------------------------
     # Correlation helper
     # ------------------------------------------------------------------
 
@@ -854,20 +1221,30 @@ class JobConfirmationService(LoggerMixin):
         self,
         thread_id: str,
     ) -> SentMessage | None:
-        """Find the original APPOINTMENT_CONFIRMATION SMS by thread_id.
+        """Find the authoritative confirmation-like SMS for a thread_id.
 
-        Public entry point used by :class:`SMSService` to correlate an
-        inbound reply back to the outbound confirmation message (bughunt
-        L-14: the SMS router previously reached into ``_find_confirmation_message``
-        — an encapsulation leak flagged by lint).
+        Gap 03:
+        - Widened from ``APPOINTMENT_CONFIRMATION`` only to the
+          confirmation-like set (confirmation / reschedule notification /
+          reminder). A reply to any of these solicits Y/R/C and should
+          route through the same handler tree.
+        - Filters rows with a non-null ``superseded_at`` so a stale-thread
+          reply does not accidentally route to an appointment whose state
+          has moved on.
 
-        Validates: CRM Changes Update 2 Req 24.7; bughunt L-14.
+        Cancellation notifications are intentionally NOT included here —
+        :meth:`find_cancellation_thread` handles that separately through
+        ``handle_post_cancellation_reply``.
+
+        Validates: CRM Changes Update 2 Req 24.7; bughunt L-14; gap-03
+        (3.A, 3.B).
         """
         stmt = (
             select(SentMessage)
             .where(
                 SentMessage.provider_thread_id == thread_id,
-                SentMessage.message_type == MessageType.APPOINTMENT_CONFIRMATION.value,
+                SentMessage.message_type.in_(_CONFIRMATION_LIKE_TYPES),
+                SentMessage.superseded_at.is_(None),
             )
             .order_by(SentMessage.created_at.desc())
             .limit(1)
@@ -907,6 +1284,68 @@ class JobConfirmationService(LoggerMixin):
                         MessageType.RESCHEDULE_FOLLOWUP.value,
                     ],
                 ),
+            )
+            .order_by(SentMessage.created_at.desc())
+            .limit(1)
+        )
+        result = await self.db.execute(stmt)
+        row: SentMessage | None = result.scalar_one_or_none()
+        return row
+
+    async def find_cancellation_thread(
+        self,
+        thread_id: str,
+    ) -> SentMessage | None:
+        """Find the most recent cancellation SMS for a thread_id.
+
+        Used to attribute inbound replies to a cancellation notification
+        (Y = reconsideration, R = new reschedule request, free text =
+        needs_review). Separate from :meth:`find_confirmation_message` so
+        confirmation-like Y/R/C routing never accidentally transitions a
+        CANCELLED appointment.
+
+        Filters rows whose ``superseded_at`` is non-null — a cancellation
+        that was itself superseded (e.g. admin reactivated the appointment
+        and a new reschedule SMS went out) no longer owns the thread.
+
+        Validates: gap-03 (3.A post-cancellation reply).
+        """
+        stmt = (
+            select(SentMessage)
+            .where(
+                SentMessage.provider_thread_id == thread_id,
+                SentMessage.message_type == MessageType.APPOINTMENT_CANCELLATION.value,
+                SentMessage.superseded_at.is_(None),
+            )
+            .order_by(SentMessage.created_at.desc())
+            .limit(1)
+        )
+        result = await self.db.execute(stmt)
+        row: SentMessage | None = result.scalar_one_or_none()
+        return row
+
+    async def _find_superseded_confirmation_for_thread(
+        self,
+        thread_id: str,
+    ) -> SentMessage | None:
+        """Find the most recent confirmation-like row for the thread_id,
+        ignoring the ``superseded_at`` filter.
+
+        Used only by the stale-thread-reply telemetry branch in
+        :meth:`handle_confirmation` — callers must NOT use the returned
+        row to drive a status transition. The row is a tombstone that
+        tells us *which* appointment this thread used to authoritatively
+        reference so we can write a stale-reply audit and return a
+        courteous auto-reply.
+
+        Validates: gap-03 (3.B telemetry).
+        """
+        stmt = (
+            select(SentMessage)
+            .where(
+                SentMessage.provider_thread_id == thread_id,
+                SentMessage.message_type.in_(_CONFIRMATION_LIKE_TYPES),
+                SentMessage.superseded_at.is_not(None),
             )
             .order_by(SentMessage.created_at.desc())
             .limit(1)

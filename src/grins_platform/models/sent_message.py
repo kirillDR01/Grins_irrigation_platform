@@ -8,7 +8,7 @@ Validates: AI Assistant Requirements 7.8, 12.4
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import (
     TIMESTAMP,
     UUID as PGUUID,
@@ -83,6 +83,10 @@ class SentMessage(Base):
         PGUUID(as_uuid=True),
         nullable=True,
     )
+    superseded_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
@@ -147,6 +151,12 @@ class SentMessage(Base):
         Index("idx_sent_messages_scheduled_for", "scheduled_for"),
         Index("ix_sent_messages_campaign_id", "campaign_id"),
         Index("ix_sent_messages_provider_thread_id", "provider_thread_id"),
+        Index(
+            "ix_sent_messages_active_confirmation_by_appointment",
+            "appointment_id",
+            "message_type",
+            postgresql_where=text("superseded_at IS NULL"),
+        ),
     )
 
     def __repr__(self) -> str:

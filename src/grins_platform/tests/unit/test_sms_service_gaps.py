@@ -769,3 +769,170 @@ class TestHandleWebhookFallbackStopWritesConsent:
         record = service.session.add.call_args_list[0][0][0]
         assert record.consent_given is False
         assert record.opt_out_method == "text_stop"
+
+
+# --- Gap 03.A — third-rung fallback for post-cancellation replies ---
+
+
+@pytest.mark.unit
+class TestTryConfirmationReplyPostCancelFallback:
+    """``_try_confirmation_reply`` falls through to ``find_cancellation_thread``
+    only when the confirmation AND reschedule-followup lookups both miss."""
+
+    @pytest.mark.asyncio
+    async def test_falls_through_to_post_cancel_when_only_cancellation_matches(
+        self,
+    ) -> None:
+        from uuid import uuid4
+
+        from grins_platform.schemas.ai import MessageType
+
+        service = _make_service()
+        service.provider = AsyncMock()
+
+        cust_id = uuid4()
+        appt_id = uuid4()
+        job_id = uuid4()
+        cancel_original = SimpleNamespace(
+            recipient_phone="+19527373312",
+            customer_id=cust_id,
+            appointment_id=appt_id,
+            job_id=job_id,
+        )
+        post_cancel_result = {
+            "action": "post_cancel_reschedule_requested",
+            "appointment_id": str(appt_id),
+            "reschedule_request_id": "rr-9",
+            "auto_reply": "Thanks — we'll be in touch.",
+            "follow_up_sms": "Please reply with 2-3 dates.",
+            "recipient_phone": "+19527373312",
+        }
+
+        send_message_mock = AsyncMock(
+            return_value={"success": True, "message_id": "SM-auto"},
+        )
+
+        with (
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.find_confirmation_message",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.find_reschedule_thread",
+                new=AsyncMock(return_value=None),
+            ) as reschedule_mock,
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.find_cancellation_thread",
+                new=AsyncMock(return_value=cancel_original),
+            ),
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.handle_post_cancellation_reply",
+                new=AsyncMock(return_value=post_cancel_result),
+            ) as post_cancel_mock,
+            patch.object(service, "send_message", send_message_mock),
+        ):
+            out = await service._try_confirmation_reply(
+                from_phone="***3312",
+                body="R",
+                provider_sid="SM-in",
+                thread_id="THR-CANCEL",
+            )
+
+        assert out is not None
+        # The post-cancel handler's result dict is spread over the
+        # wrapper action, so the returned action reflects the specific
+        # branch taken.
+        assert out["action"] == "post_cancel_reschedule_requested"
+        post_cancel_mock.assert_awaited_once()
+        # For free-text keywords, reschedule-followup IS consulted; for
+        # keyword replies (here "R"), followup is skipped.
+        reschedule_mock.assert_not_awaited()
+        # Auto-reply and follow-up both dispatched via send_message.
+        assert send_message_mock.await_count == 2
+        message_types = [
+            c.kwargs["message_type"] for c in send_message_mock.await_args_list
+        ]
+        assert MessageType.APPOINTMENT_CONFIRMATION_REPLY in message_types
+        assert MessageType.RESCHEDULE_FOLLOWUP in message_types
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_no_threads_match(self) -> None:
+        service = _make_service()
+        service.provider = AsyncMock()
+
+        with (
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.find_confirmation_message",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.find_reschedule_thread",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.find_cancellation_thread",
+                new=AsyncMock(return_value=None),
+            ),
+        ):
+            out = await service._try_confirmation_reply(
+                from_phone="***3312",
+                body="Y",
+                provider_sid="SM-in",
+                thread_id="THR-NOWHERE",
+            )
+
+        assert out is None
+
+    @pytest.mark.asyncio
+    async def test_does_not_call_find_cancellation_when_confirmation_matches(
+        self,
+    ) -> None:
+        """Happy path: confirmation match short-circuits cancellation lookup."""
+        from uuid import uuid4
+
+        cust_id = uuid4()
+        appt_id = uuid4()
+        job_id = uuid4()
+        original = SimpleNamespace(
+            recipient_phone="+19527373312",
+            customer_id=cust_id,
+            appointment_id=appt_id,
+            job_id=job_id,
+        )
+        handle_result = {
+            "action": "confirmed",
+            "appointment_id": str(appt_id),
+            "auto_reply": "Confirmed.",
+            "recipient_phone": "+19527373312",
+        }
+
+        service = _make_service()
+        service.provider = AsyncMock()
+        send_message_mock = AsyncMock(
+            return_value={"success": True, "message_id": "SM-ok"},
+        )
+
+        with (
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.find_confirmation_message",
+                new=AsyncMock(return_value=original),
+            ),
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.find_cancellation_thread",
+                new=AsyncMock(return_value=None),
+            ) as cancel_mock,
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.handle_confirmation",
+                new=AsyncMock(return_value=handle_result),
+            ),
+            patch.object(service, "send_message", send_message_mock),
+        ):
+            out = await service._try_confirmation_reply(
+                from_phone="***3312",
+                body="Y",
+                provider_sid="SM-in",
+                thread_id="THR-1",
+            )
+
+        assert out is not None
+        cancel_mock.assert_not_awaited()

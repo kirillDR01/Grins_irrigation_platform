@@ -20,6 +20,7 @@ from hypothesis import (
     strategies as st,
 )
 
+from grins_platform.models.enums import MessageType
 from grins_platform.services.campaign_response_service import (
     CampaignResponseService,
 )
@@ -207,3 +208,115 @@ class TestCorrelationProperty5:
 
         assert r1.sent_message is r2.sent_message
         assert (r1.campaign is None) == (r2.campaign is None)
+
+
+# ---------------------------------------------------------------------------
+# Gap 03.B — supersession invariants
+# ---------------------------------------------------------------------------
+
+
+_SUPERSEDABLE = (
+    MessageType.APPOINTMENT_CONFIRMATION.value,
+    MessageType.APPOINTMENT_RESCHEDULE.value,
+    MessageType.APPOINTMENT_CANCELLATION.value,
+    MessageType.APPOINTMENT_REMINDER.value,
+)
+
+
+def _simulate_supersession(rows: list[MagicMock]) -> list[MagicMock]:
+    """Pure-Python simulation of the in-service supersession marker.
+
+    For each new row (in send order), stamp any earlier rows for the
+    same ``appointment_id`` and message_type in
+    ``_SUPERSEDABLE_MESSAGE_TYPES`` with ``superseded_at``.
+    """
+    for i, row in enumerate(rows):
+        for earlier in rows[:i]:
+            if (
+                earlier.appointment_id == row.appointment_id
+                and earlier.message_type in _SUPERSEDABLE
+                and row.message_type in _SUPERSEDABLE
+                and earlier.superseded_at is None
+            ):
+                earlier.superseded_at = datetime.now(timezone.utc) + timedelta(
+                    microseconds=i,
+                )
+    return rows
+
+
+def _row(
+    *,
+    appointment_id,
+    message_type: str,
+    created_at: datetime,
+) -> MagicMock:
+    m = MagicMock()
+    m.id = uuid4()
+    m.appointment_id = appointment_id
+    m.message_type = message_type
+    m.superseded_at = None
+    m.created_at = created_at
+    return m
+
+
+class TestSupersessionInvariants:
+    """Property-level invariants for the supersession marker."""
+
+    @settings(max_examples=40, deadline=2000)
+    @given(
+        types=st.lists(
+            st.sampled_from(_SUPERSEDABLE),
+            min_size=2,
+            max_size=5,
+        ),
+    )
+    def test_at_most_one_active_confirmation_like_row_per_appointment(
+        self,
+        types: list[str],
+    ) -> None:
+        """After a sequence of sends, exactly one row stays active."""
+        appt_id = uuid4()
+        base = datetime.now(timezone.utc)
+        rows = [
+            _row(
+                appointment_id=appt_id,
+                message_type=mt,
+                created_at=base + timedelta(microseconds=i),
+            )
+            for i, mt in enumerate(types)
+        ]
+        _simulate_supersession(rows)
+
+        active = [r for r in rows if r.superseded_at is None]
+        assert len(active) == 1
+        # The single active row is the most recent.
+        assert active[0] is rows[-1]
+
+    @settings(max_examples=40, deadline=2000)
+    @given(
+        types=st.lists(
+            st.sampled_from(_SUPERSEDABLE),
+            min_size=2,
+            max_size=5,
+        ),
+    )
+    def test_superseded_rows_excluded_from_active_filter(
+        self,
+        types: list[str],
+    ) -> None:
+        """``superseded_at IS NULL`` picks exactly the still-active row."""
+        appt_id = uuid4()
+        base = datetime.now(timezone.utc)
+        rows = [
+            _row(
+                appointment_id=appt_id,
+                message_type=mt,
+                created_at=base + timedelta(microseconds=i),
+            )
+            for i, mt in enumerate(types)
+        ]
+        _simulate_supersession(rows)
+
+        active = [r for r in rows if r.superseded_at is None]
+        assert rows[-1] in active
+        assert all(r.superseded_at is not None for r in rows[:-1])

@@ -384,8 +384,9 @@ class TestHandleConfirmation:
             from_phone="+16125551234",
         )
 
-        # Should have queried the DB for the thread
-        mock_db.execute.assert_awaited_once()
+        # Should have queried the DB: confirmation lookup + stale-thread
+        # telemetry lookup (gap-03). Both miss → ``no_match``.
+        assert mock_db.execute.await_count == 2
         assert result["action"] == "no_match"
         assert result["thread_id"] == "nonexistent-thread"
 

@@ -1391,6 +1391,120 @@ class NotificationService(LoggerMixin):
             appointment_id=str(appointment_id),
         )
 
+    async def send_admin_reconsider_cancellation_alert(
+        self,
+        db: AsyncSession,
+        *,
+        appointment_id: UUID,
+        customer_id: UUID,
+        customer_name: str,
+        scheduled_at: datetime,
+    ) -> None:
+        """Notify admin that a customer texted "Y" to a cancellation SMS.
+
+        Fired from
+        :meth:`JobConfirmationService._dispatch_reconsider_cancellation_alert`
+        when a customer replies ``Y`` to their own cancellation notice —
+        they want to un-cancel. No automatic status transition happens;
+        the admin reviews and reactivates manually via the existing
+        ``update_appointment`` path. Mirrors the email + dashboard-alert
+        channels of :meth:`send_admin_late_reschedule_alert`; failures
+        are logged and swallowed so admin notification never blocks the
+        customer-facing SMS reply.
+
+        Validates: gap-03 (3.A cancel-reconsider alert).
+        """
+        self.log_started(
+            "send_admin_reconsider_cancellation_alert",
+            appointment_id=str(appointment_id),
+            customer_id=str(customer_id),
+        )
+
+        message = (
+            f"{customer_name} replied 'Y' to a cancellation SMS — wants to "
+            f"reactivate appointment for {scheduled_at:%Y-%m-%d %H:%M}"
+        )
+
+        # --- Email dispatch ---
+        try:
+            recipient = self._get_admin_notification_email()
+            if recipient and self.email_service is not None:
+                from grins_platform.models.enums import (  # noqa: PLC0415
+                    EmailType,
+                )
+
+                subject = (
+                    f"Customer wants to un-cancel — {customer_name} "
+                    f"({scheduled_at:%Y-%m-%d %H:%M})"
+                )
+                html_body = (
+                    f"<p><strong>{customer_name}</strong> replied 'Y' to "
+                    f"their cancellation notice.</p>"
+                    f"<p><strong>Scheduled for:</strong> "
+                    f"{scheduled_at:%Y-%m-%d %H:%M}</p>"
+                    f"<p><strong>Appointment ID:</strong> "
+                    f"{appointment_id}</p>"
+                    f"<p><strong>Customer ID:</strong> {customer_id}</p>"
+                    f"<p>The appointment remains cancelled — review the "
+                    f"customer's intent and reactivate manually if "
+                    f"appropriate.</p>"
+                )
+                self.email_service._send_email(  # noqa: SLF001
+                    to_email=recipient,
+                    subject=subject,
+                    html_body=html_body,
+                    email_type=NotificationType.CAMPAIGN.value,
+                    classification=EmailType.TRANSACTIONAL,
+                )
+            elif not recipient:
+                self.logger.warning(
+                    "notification.admin_reconsider_cancellation_alert.no_recipient",
+                    appointment_id=str(appointment_id),
+                    message=(
+                        "ADMIN_NOTIFICATION_EMAIL not configured — "
+                        "skipping email dispatch"
+                    ),
+                )
+        except Exception as exc:
+            self.log_failed(
+                "send_admin_reconsider_cancellation_alert.email",
+                error=exc,
+                appointment_id=str(appointment_id),
+            )
+
+        # --- Alert row persistence (dashboard surface) ---
+        try:
+            from grins_platform.models.alert import Alert  # noqa: PLC0415
+            from grins_platform.models.enums import (  # noqa: PLC0415
+                AlertSeverity,
+                AlertType,
+            )
+            from grins_platform.repositories.alert_repository import (  # noqa: PLC0415
+                AlertRepository,
+            )
+
+            alert_repo = AlertRepository(db)
+            alert = Alert(
+                type=AlertType.CUSTOMER_RECONSIDER_CANCELLATION.value,
+                severity=AlertSeverity.WARNING.value,
+                entity_type="appointment",
+                entity_id=appointment_id,
+                message=message,
+            )
+            await alert_repo.create(alert)
+        except Exception as exc:
+            self.log_failed(
+                "send_admin_reconsider_cancellation_alert.alert_row",
+                error=exc,
+                appointment_id=str(appointment_id),
+            )
+            return
+
+        self.log_completed(
+            "send_admin_reconsider_cancellation_alert",
+            appointment_id=str(appointment_id),
+        )
+
     def _get_admin_notification_email(self) -> str:
         """Return the configured admin recipient, if any.
 

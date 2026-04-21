@@ -490,9 +490,12 @@ class TestFollowupCorrelation:
         mock_db: AsyncMock,
     ) -> None:
         """Y/R/C keywords must not reopen through the follow-up thread."""
-        # First execute returns None (no confirmation row). With keyword set,
-        # handle_confirmation must not even consult find_reschedule_thread.
-        mock_db.execute = _make_execute_side_effect(None)
+        # Execute order (gap-03):
+        #   1. find_confirmation_message → None (no active confirmation)
+        #   2. _find_superseded_confirmation_for_thread → None (not a
+        #      stale thread either)
+        # Follow-up lookup is explicitly NOT consulted for keyword replies.
+        mock_db.execute = _make_execute_side_effect(None, None)
 
         svc = JobConfirmationService(mock_db)
         result = await svc.handle_confirmation(
@@ -503,8 +506,8 @@ class TestFollowupCorrelation:
         )
 
         assert result["action"] == "no_match"
-        # Only the confirmation lookup was attempted — no follow-up lookup.
-        assert mock_db.execute.await_count == 1
+        # Confirmation lookup + stale-thread lookup — no follow-up lookup.
+        assert mock_db.execute.await_count == 2
 
     @pytest.mark.unit
     @pytest.mark.asyncio

@@ -5,6 +5,73 @@ Grin's Irrigation Platform — field service automation for residential/commerci
 
 ## Recent Activity
 
+## [2026-04-21 12:00] - FEAT: Thread Correlation Hardening (Gap 03)
+
+### What Was Accomplished
+Closed two latent defects in Y/R/C SMS-reply correlation so admin-initiated
+appointment changes never silently strand the customer on a stale thread.
+
+- **3.A — Widened confirmation-like correlation.** `find_confirmation_message`
+  now matches `APPOINTMENT_CONFIRMATION`, `APPOINTMENT_RESCHEDULE`, and
+  `APPOINTMENT_REMINDER` (previously only confirmation). Replies on a
+  reschedule-notification or reminder thread now route through the same
+  Y/R/C handler tree.
+- **3.A — Post-cancellation reply handler.** New `handle_post_cancellation_reply`
+  on `JobConfirmationService` routes replies to a cancellation SMS: `R`
+  opens a `RescheduleRequest` for the CANCELLED appointment, `Y` raises a
+  new `CUSTOMER_RECONSIDER_CANCELLATION` admin alert (no auto-transition),
+  anything else goes to `needs_review`. Wired into `SMSService._try_confirmation_reply`
+  as the third-rung fallback (confirmation → reschedule-followup →
+  cancellation → None).
+- **3.B — Supersession marker.** New `sent_messages.superseded_at` column +
+  partial index `ix_sent_messages_active_confirmation_by_appointment`. The
+  marker runs automatically inside `SMSService.send_message` (log-and-swallow
+  on failure) so every confirmation-like outbound tombstones its
+  predecessors for the same appointment. `find_confirmation_message`
+  filters `superseded_at IS NULL`.
+- **3.B — Stale-thread reply telemetry.** A Y/R/C on a thread whose only
+  confirmation-like row is superseded writes a
+  `JobConfirmationResponse(status='stale_thread_reply')` audit row and
+  returns a courteous auto-reply ("please reply to the most recent
+  message…") rather than a silent no_match.
+
+### Technical Details
+- Migration: `20260421_100100_add_sent_messages_superseded_at.py`
+- Enum: `AlertType.CUSTOMER_RECONSIDER_CANCELLATION`
+- Service: `JobConfirmationService` gains `find_cancellation_thread`,
+  `handle_post_cancellation_reply`, `_handle_post_cancel_reschedule`,
+  `_handle_post_cancel_reconsider`, `_dispatch_reconsider_cancellation_alert`,
+  `_handle_stale_thread_reply`, `_find_superseded_confirmation_for_thread`
+- Service: `NotificationService.send_admin_reconsider_cancellation_alert`
+  (email + Alert row, log-and-swallow contract)
+- Tests (new): `test_thread_correlation_lifecycle.py` (20 unit),
+  `test_post_cancellation_reply_functional.py` (3 functional),
+  `test_thread_correlation_integration.py` (4 integration).
+- Tests (extended): `test_thread_id_storage.py` (+4 supersession tests),
+  `test_sms_service_gaps.py` (+3 third-rung fallback), `test_correlation_properties.py`
+  (+2 Hypothesis supersession invariants).
+
+### Decision Rationale
+- Supersession is wired inside `SMSService.send_message` rather than at
+  every send site so the guarantee is uniform regardless of caller.
+- `APPOINTMENT_CANCELLATION` is intentionally NOT part of the confirmation-like
+  set — a Y on a cancellation SMS means "un-cancel," which must be a manual
+  admin decision rather than an automatic status flip.
+- Post-cancel R creates a `RescheduleRequest` row so the admin dashboard
+  surfaces the signal; `reschedule_for_request` already rejects CANCELLED
+  as a source status, so admin must reactivate first (tracked as a
+  follow-up gap).
+
+### Next Steps
+- Manual validation on dev (SMS restricted to +19527373312):
+  seed confirmation, drag-drop reschedule, reply Y to new thread, reply Y
+  to stale thread, cancel + reply R, cancel + reply Y. Expected outcomes
+  documented in `.agents/plans/thread-correlation-hardening.md` Level-5
+  validation checklist.
+- Future gap: extend `reschedule_for_request.allowed_statuses` to accept
+  CANCELLED so the admin path can resolve a post-cancel R without a
+  manual reactivation step first.
+
 ## [2026-04-18 18:00] - REFACTOR: Internal Notes Simplification — Revert Notes Timeline to Single-Blob Edit/Save
 
 ### What Was Accomplished

@@ -18,7 +18,10 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import (
+    select,
+    update as sa_update,
+)
 
 from grins_platform.log_config import LoggerMixin, get_logger
 from grins_platform.models.sent_message import SentMessage
@@ -67,6 +70,18 @@ OPT_OUT_CONFIRMATION_MSG = (
 POLL_REPLY_CONFIRMED_MSG = (
     "Thanks! We received your response: {option_label}. "
     "We'll be in touch to confirm your appointment."
+)
+
+# Gap 03.B — message types whose earlier rows for the same appointment are
+# tombstoned (``superseded_at = NOW()``) when a new one is sent. Cancellation
+# is included because a reactivation SMS (reschedule) must supersede it.
+_SUPERSEDABLE_MESSAGE_TYPES: frozenset[str] = frozenset(
+    {
+        MessageType.APPOINTMENT_CONFIRMATION.value,
+        MessageType.APPOINTMENT_RESCHEDULE.value,
+        MessageType.APPOINTMENT_CANCELLATION.value,
+        MessageType.APPOINTMENT_REMINDER.value,
+    }
 )
 
 POLL_REPLY_UNCLEAR_MSG = (
@@ -366,6 +381,35 @@ class SMSService(LoggerMixin):
                 x_request_id=result.request_id,
             )
             self.log_completed("send_message", message_id=str(sent_message.id))
+
+            # Gap 03.B — mark prior confirmation-like SMSes for the same
+            # appointment as superseded so ``find_confirmation_message``
+            # no longer routes stale-thread replies to the moved
+            # appointment. Failure is log-and-swallowed: the outbound SMS
+            # has already been delivered, so telemetry should not fail it.
+            if (
+                sent_message.appointment_id is not None
+                and sent_message.message_type in _SUPERSEDABLE_MESSAGE_TYPES
+            ):
+                try:
+                    await self.session.execute(
+                        sa_update(SentMessage)
+                        .where(
+                            SentMessage.appointment_id == sent_message.appointment_id,
+                            SentMessage.id != sent_message.id,
+                            SentMessage.message_type.in_(_SUPERSEDABLE_MESSAGE_TYPES),
+                            SentMessage.superseded_at.is_(None),
+                        )
+                        .values(superseded_at=datetime.now(tz=timezone.utc)),
+                    )
+                    await self.session.flush()
+                except Exception as supersede_exc:
+                    logger.exception(
+                        "sms.supersede.failed",
+                        appointment_id=str(sent_message.appointment_id),
+                        new_message_id=str(sent_message.id),
+                        error=str(supersede_exc),
+                    )
 
             # CRM2 Req 11.3: auto-update lead last_contacted_at on outbound
             await self._touch_lead_last_contacted(lead_id=recipient.lead_id)
@@ -790,24 +834,42 @@ class SMSService(LoggerMixin):
         # (bughunt L-14: use the public name now that one exists).
         original = await svc.find_confirmation_message(thread_id)
         keyword = parse_confirmation_reply(body)
+        use_post_cancel_handler = False
         if original is None:
             # Gap 1.C — a free-text reply on the reschedule-follow-up
             # thread should still land on the open RescheduleRequest.
-            # Keyword replies (Y/R/C) stay gated on the confirmation
-            # thread so e.g. "2" inside a free-text date can't be
-            # misparsed as RESCHEDULE on an unrelated follow-up thread.
-            if keyword is not None:
-                return None
-            original = await svc.find_reschedule_thread(thread_id)
+            # Keyword replies (Y/R/C) stay gated off the followup so
+            # e.g. "2" inside a free-text date can't be misparsed as
+            # RESCHEDULE on an unrelated follow-up thread.
+            if keyword is None:
+                original = await svc.find_reschedule_thread(thread_id)
             if original is None:
-                return None
-        result = await svc.handle_confirmation(
-            thread_id=thread_id,
-            keyword=keyword,
-            raw_body=body,
-            from_phone=from_phone,
-            provider_sid=provider_sid,
-        )
+                # Gap 03.A — reply on a cancellation thread. Route to
+                # the post-cancellation handler (Y → reconsider alert,
+                # R → new reschedule request, else → needs_review).
+                cancellation_original = await svc.find_cancellation_thread(
+                    thread_id,
+                )
+                if cancellation_original is None:
+                    return None
+                original = cancellation_original
+                use_post_cancel_handler = True
+        if use_post_cancel_handler:
+            result = await svc.handle_post_cancellation_reply(
+                thread_id=thread_id,
+                keyword=keyword,
+                raw_body=body,
+                from_phone=from_phone,
+                provider_sid=provider_sid,
+            )
+        else:
+            result = await svc.handle_confirmation(
+                thread_id=thread_id,
+                keyword=keyword,
+                raw_body=body,
+                from_phone=from_phone,
+                provider_sid=provider_sid,
+            )
 
         # Prefer the real E.164 phone from the original SentMessage. CallRail
         # masks the inbound sender (``***3312``), so falling through to

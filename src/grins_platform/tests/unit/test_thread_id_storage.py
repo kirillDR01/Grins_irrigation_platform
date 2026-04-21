@@ -8,7 +8,7 @@ Validates: Requirements 19.1, 19.2, 19.3
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -98,3 +98,150 @@ class TestThreadIdStorageOnSend:
         added = svc._added  # type: ignore[attr-defined]
         assert len(added) == 1
         assert added[0].provider_thread_id is None
+
+
+# ---------------------------------------------------------------------------
+# Gap 03.B — supersession marker on confirmation-like outbound
+# ---------------------------------------------------------------------------
+
+
+def _was_supersession_update(call: Any) -> bool:
+    """Inspect a ``session.execute`` call and detect whether it was the
+    supersession UPDATE (vs. any other statement).
+
+    The marker compiles to ``UPDATE sent_messages SET superseded_at = ...``
+    so a stringified view of the bound statement is enough to classify.
+    """
+    if not call.args:
+        return False
+    stmt = call.args[0]
+    try:
+        compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+    except Exception:
+        compiled = str(stmt)
+    lowered = compiled.lower()
+    return "update" in lowered and "superseded_at" in lowered
+
+
+@pytest.mark.unit
+class TestSupersessionOnSend:
+    """Gap 03.B: confirmation-like outbounds tombstone their predecessors."""
+
+    @pytest.mark.asyncio
+    @patch("grins_platform.services.sms_service.check_sms_consent", return_value=True)
+    async def test_confirmation_like_send_runs_supersession_update(
+        self,
+        _consent: MagicMock,
+    ) -> None:
+        """Sending an APPOINTMENT_RESCHEDULE with appointment_id triggers the UPDATE."""
+        from uuid import uuid4
+
+        svc, session = _make_service()
+        appt_id = uuid4()
+        recipient = Recipient.from_adhoc("+16125551234")
+
+        await svc.send_message(
+            recipient=recipient,
+            message="Moved to Wed.",
+            message_type=MessageType.APPOINTMENT_RESCHEDULE,
+            consent_type="transactional",
+            appointment_id=appt_id,
+            skip_formatting=True,
+        )
+
+        supersede_calls = [
+            c for c in session.execute.call_args_list if _was_supersession_update(c)
+        ]
+        assert len(supersede_calls) == 1
+
+    @pytest.mark.asyncio
+    @patch("grins_platform.services.sms_service.check_sms_consent", return_value=True)
+    async def test_non_confirmation_like_send_skips_supersession(
+        self,
+        _consent: MagicMock,
+    ) -> None:
+        """ON_THE_WAY is not confirmation-like → no supersession UPDATE."""
+        from uuid import uuid4
+
+        svc, session = _make_service()
+        appt_id = uuid4()
+        recipient = Recipient.from_adhoc("+16125551234")
+
+        await svc.send_message(
+            recipient=recipient,
+            message="Crew en route.",
+            message_type=MessageType.ON_THE_WAY,
+            consent_type="transactional",
+            appointment_id=appt_id,
+            skip_formatting=True,
+        )
+
+        supersede_calls = [
+            c for c in session.execute.call_args_list if _was_supersession_update(c)
+        ]
+        assert len(supersede_calls) == 0
+
+    @pytest.mark.asyncio
+    @patch("grins_platform.services.sms_service.check_sms_consent", return_value=True)
+    async def test_send_without_appointment_id_skips_supersession(
+        self,
+        _consent: MagicMock,
+    ) -> None:
+        """Lead-confirmation sends (no appointment) must not fire supersession."""
+        svc, session = _make_service()
+        recipient = Recipient.from_adhoc("+16125551234")
+
+        await svc.send_message(
+            recipient=recipient,
+            message="Thanks for your inquiry!",
+            message_type=MessageType.LEAD_CONFIRMATION,
+            consent_type="transactional",
+            skip_formatting=True,
+        )
+
+        supersede_calls = [
+            c for c in session.execute.call_args_list if _was_supersession_update(c)
+        ]
+        assert len(supersede_calls) == 0
+
+    @pytest.mark.asyncio
+    @patch("grins_platform.services.sms_service.check_sms_consent", return_value=True)
+    async def test_supersession_update_failure_does_not_fail_send(
+        self,
+        _consent: MagicMock,
+    ) -> None:
+        """A failing supersession UPDATE still returns the send as successful."""
+        from uuid import uuid4
+
+        svc, session = _make_service()
+        appt_id = uuid4()
+        recipient = Recipient.from_adhoc("+16125551234")
+
+        # Wrap session.execute so supersession UPDATEs raise, but inserts
+        # continue to no-op (AsyncMock default).
+        original_execute = session.execute
+
+        async def _failing_execute(stmt: Any, *args: Any, **kwargs: Any) -> Any:
+            try:
+                compiled = str(
+                    stmt.compile(compile_kwargs={"literal_binds": True}),
+                ).lower()
+            except Exception:
+                compiled = str(stmt).lower()
+            if "update" in compiled and "superseded_at" in compiled:
+                msg = "supersession down"
+                raise RuntimeError(msg)
+            return await original_execute(stmt, *args, **kwargs)
+
+        session.execute = AsyncMock(side_effect=_failing_execute)
+
+        result = await svc.send_message(
+            recipient=recipient,
+            message="Moved to Wed.",
+            message_type=MessageType.APPOINTMENT_RESCHEDULE,
+            consent_type="transactional",
+            appointment_id=appt_id,
+            skip_formatting=True,
+        )
+
+        assert result["success"] is True
