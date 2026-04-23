@@ -15,3 +15,5 @@ export { CustomerContextBlock } from './CustomerContextBlock';
 export { AppointmentAttachments } from './AppointmentAttachments';
 export { OptOutBadge } from './OptOutBadge';
 export type { OptOutBadgeProps } from './OptOutBadge';
+export { QueueFreshnessHeader } from './QueueFreshnessHeader';
+export type { QueueFreshnessHeaderProps } from './QueueFreshnessHeader';

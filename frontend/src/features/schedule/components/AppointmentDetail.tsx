@@ -45,6 +45,7 @@ import {
   Send,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { cn } from '@/lib/utils';
 import { getErrorMessage } from '@/core/api/client';
 import { appointmentKeys, useAppointment } from '../hooks/useAppointments';
 import { useAppointmentTimeline } from '../hooks/useAppointmentTimeline';
@@ -87,7 +88,13 @@ export function AppointmentDetail({
   onClose,
   onEdit,
 }: AppointmentDetailProps) {
-  const { data: appointment, isLoading, error } = useAppointment(appointmentId);
+  const {
+    data: appointment,
+    isLoading,
+    error,
+    dataUpdatedAt,
+    isFetching,
+  } = useAppointment(appointmentId);
   const {
     data: timeline,
     isLoading: timelineLoading,
@@ -328,6 +335,25 @@ export function AppointmentDetail({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <span
+              className="text-xs text-slate-400"
+              data-testid="queue-last-updated"
+            >
+              {dataUpdatedAt && dataUpdatedAt > 0
+                ? `Updated ${formatDistanceToNow(new Date(dataUpdatedAt), { addSuffix: true })}`
+                : 'Updating…'}
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 p-0"
+              disabled={isFetching}
+              onClick={invalidateTimeline}
+              data-testid="refresh-appointment-btn"
+              aria-label="Refresh appointment data"
+            >
+              <RefreshCw className={cn('h-3 w-3', isFetching && 'animate-spin')} />
+            </Button>
             {isOptedOut && (
               <Badge
                 className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1"

@@ -34,12 +34,18 @@ export function useAppointments(params?: AppointmentListParams) {
 
 /**
  * Hook to fetch a single appointment by ID.
+ * Gap 15 (Phase 1): 60 s polling while the detail modal is open.
  */
 export function useAppointment(id: string | undefined) {
   return useQuery({
     queryKey: appointmentKeys.detail(id ?? ''),
     queryFn: () => appointmentApi.getById(id!),
     enabled: !!id,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 

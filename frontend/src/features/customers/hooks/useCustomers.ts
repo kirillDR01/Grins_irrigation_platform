@@ -116,12 +116,17 @@ export function useDuplicateReviewQueue(skip = 0, limit = 20) {
   });
 }
 
-// Customer sent messages (Req 82)
+// Customer sent messages (Req 82, Gap 15: 60 s polling for inbound-reply freshness)
 export function useCustomerSentMessages(customerId: string) {
   return useQuery({
     queryKey: customerKeys.sentMessages(customerId),
     queryFn: () => customerApi.listSentMessages(customerId),
     enabled: !!customerId,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 

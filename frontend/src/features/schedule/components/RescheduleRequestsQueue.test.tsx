@@ -225,4 +225,22 @@ describe('RescheduleRequestsQueue (bughunt H-6)', () => {
       );
     });
   });
+
+  it('Refresh button invalidates the query and re-fetches (Gap 15)', async () => {
+    const user = userEvent.setup();
+    render(<RescheduleRequestsQueue />, { wrapper: createWrapper() });
+
+    const refreshBtn = await screen.findByTestId('refresh-reschedule-btn');
+    expect(screen.getByTestId('queue-last-updated')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(rescheduleApi.list).toHaveBeenCalledTimes(1);
+    });
+
+    await user.click(refreshBtn);
+
+    await waitFor(() => {
+      expect(rescheduleApi.list).toHaveBeenCalledTimes(2);
+    });
+  });
 });

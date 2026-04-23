@@ -6,6 +6,7 @@
  * Mark Contacted mutations that resolve a flagged row.
  *
  * Validates: bughunt 2026-04-16 finding H-7.
+ * Gap 15 (Phase 1): 60 s polling safety-net — nightly cron output.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -30,6 +31,11 @@ export function useNoReplyReviewList(params?: { reason?: string }) {
   return useQuery({
     queryKey: noReplyReviewKeys.list(reason),
     queryFn: () => appointmentApi.noReviewList({ reason }),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 

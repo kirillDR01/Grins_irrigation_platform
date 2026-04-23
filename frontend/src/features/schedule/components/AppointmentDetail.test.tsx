@@ -216,6 +216,8 @@ function setupDefaultMocks() {
     data: mockAppointment,
     isLoading: false,
     error: null,
+    dataUpdatedAt: Date.now(),
+    isFetching: false,
   });
   mockUseAppointmentTimeline.mockReturnValue({
     data: {
@@ -300,6 +302,8 @@ describe('AppointmentDetail — Edit Wiring (Req 18)', () => {
       data: { ...mockAppointment, status: 'completed' },
       isLoading: false,
       error: null,
+      dataUpdatedAt: Date.now(),
+      isFetching: false,
     });
 
     render(
@@ -319,6 +323,8 @@ describe('AppointmentDetail — Edit Wiring (Req 18)', () => {
       data: { ...mockAppointment, status: 'cancelled' },
       isLoading: false,
       error: null,
+      dataUpdatedAt: Date.now(),
+      isFetching: false,
     });
 
     render(
@@ -394,6 +400,8 @@ describe('AppointmentDetail — Edit Wiring (Req 18)', () => {
       data: undefined,
       isLoading: true,
       error: null,
+      dataUpdatedAt: 0,
+      isFetching: true,
     });
 
     render(
@@ -410,6 +418,8 @@ describe('AppointmentDetail — Edit Wiring (Req 18)', () => {
       data: undefined,
       isLoading: false,
       error: new Error('Network error'),
+      dataUpdatedAt: 0,
+      isFetching: false,
     });
 
     render(
@@ -419,6 +429,19 @@ describe('AppointmentDetail — Edit Wiring (Req 18)', () => {
 
     expect(screen.getByText(/error loading appointment/i)).toBeInTheDocument();
     expect(screen.queryByTestId('edit-btn')).not.toBeInTheDocument();
+  });
+
+  it('renders a refresh button in the header (Gap 15)', async () => {
+    render(
+      <AppointmentDetail appointmentId="appt-001" />,
+      { wrapper: createWrapper() },
+    );
+
+    const btn = await screen.findByTestId('refresh-appointment-btn');
+    expect(btn).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(btn);
   });
 });
 
@@ -436,6 +459,8 @@ describe('AppointmentDetail — Send Confirmation button (bughunt M-1)', () => {
       data: { ...mockAppointment, status: 'draft' },
       isLoading: false,
       error: null,
+      dataUpdatedAt: Date.now(),
+      isFetching: false,
     });
 
     render(<AppointmentDetail appointmentId="appt-001" />, {
@@ -463,6 +488,8 @@ describe('AppointmentDetail — Send Confirmation button (bughunt M-1)', () => {
       data: draftAppt,
       isLoading: false,
       error: null,
+      dataUpdatedAt: Date.now(),
+      isFetching: false,
     });
 
     render(<AppointmentDetail appointmentId="appt-001" />, {
@@ -484,6 +511,8 @@ describe('AppointmentDetail — Send Confirmation button (bughunt M-1)', () => {
       data: { ...mockAppointment, status: 'confirmed' },
       isLoading: false,
       error: null,
+      dataUpdatedAt: Date.now(),
+      isFetching: false,
     });
 
     render(<AppointmentDetail appointmentId="appt-001" />, {

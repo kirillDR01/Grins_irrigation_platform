@@ -1,8 +1,12 @@
-import { Mail, MessageSquare, Phone } from 'lucide-react';
+import { Mail, MessageSquare, Phone, RefreshCw } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OptOutBadge } from '@/shared/components';
-import { useCustomerSentMessages } from '../hooks';
+import { cn } from '@/lib/utils';
+import { useCustomerSentMessages, customerKeys } from '../hooks';
 
 const channelIcons: Record<string, React.ReactNode> = {
   sms: <MessageSquare className="h-4 w-4 text-teal-500" />,
@@ -23,13 +27,42 @@ interface CustomerMessagesProps {
 }
 
 export function CustomerMessages({ customerId }: CustomerMessagesProps) {
-  const { data: rawMessages, isLoading, error } = useCustomerSentMessages(customerId);
+  const {
+    data: rawMessages,
+    isLoading,
+    error,
+    dataUpdatedAt,
+    isFetching,
+  } = useCustomerSentMessages(customerId);
+  const queryClient = useQueryClient();
   // API may return paginated {items: [...]} or plain array
   const messages = Array.isArray(rawMessages) ? rawMessages : (rawMessages as { items?: typeof rawMessages })?.items ?? [];
 
   const header = (
-    <div className="mb-3">
+    <div className="mb-3 flex items-center justify-between">
       <OptOutBadge customerId={customerId} />
+      <div className="flex items-center gap-2 text-xs text-slate-500">
+        <span data-testid="queue-last-updated">
+          {dataUpdatedAt > 0
+            ? `Updated ${formatDistanceToNow(new Date(dataUpdatedAt), { addSuffix: true })}`
+            : 'Updating…'}
+        </span>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 w-7 p-0"
+          disabled={isFetching}
+          onClick={() =>
+            queryClient.invalidateQueries({
+              queryKey: customerKeys.sentMessages(customerId),
+            })
+          }
+          data-testid="refresh-messages-btn"
+          aria-label="Refresh messages"
+        >
+          <RefreshCw className={cn('h-3 w-3', isFetching && 'animate-spin')} />
+        </Button>
+      </div>
     </div>
   );
 

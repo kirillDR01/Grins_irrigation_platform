@@ -9,8 +9,8 @@ import { useState } from 'react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { toast } from 'sonner';
 import { CalendarClock, Check, RefreshCw } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -25,9 +25,10 @@ import { useRescheduleFromRequest } from '../hooks/useAppointmentMutations';
 import {
   useRescheduleRequests,
   useResolveRescheduleRequest,
+  rescheduleKeys,
 } from '../hooks/useRescheduleRequests';
 import type { RescheduleRequestDetail } from '../types';
-import { OptOutBadge } from '@/shared/components';
+import { OptOutBadge, QueueFreshnessHeader } from '@/shared/components';
 
 interface RescheduleRequestsQueueProps {
   onAppointmentClick?: (appointmentId: string) => void;
@@ -36,7 +37,14 @@ interface RescheduleRequestsQueueProps {
 export function RescheduleRequestsQueue({
   onAppointmentClick,
 }: RescheduleRequestsQueueProps) {
-  const { data: requests, isLoading, error } = useRescheduleRequests('open');
+  const {
+    data: requests,
+    isLoading,
+    error,
+    dataUpdatedAt,
+    isFetching,
+  } = useRescheduleRequests('open');
+  const queryClient = useQueryClient();
   const resolveMutation = useResolveRescheduleRequest();
   const rescheduleFromRequestMutation = useRescheduleFromRequest();
   const [rescheduleTarget, setRescheduleTarget] =
@@ -142,19 +150,18 @@ export function RescheduleRequestsQueue({
         className="bg-slate-50 rounded-xl p-4 border border-slate-100"
         data-testid="reschedule-queue"
       >
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <CalendarClock className="h-4 w-4 text-amber-500" />
-            <h3 className="text-sm font-semibold text-slate-700">
-              Reschedule Requests
-            </h3>
-            {hasRequests && (
-              <Badge variant="secondary" className="bg-amber-100 text-amber-700">
-                {requests.length}
-              </Badge>
-            )}
-          </div>
-        </div>
+        <QueueFreshnessHeader
+          icon={<CalendarClock className="h-4 w-4 text-amber-500" />}
+          title="Reschedule Requests"
+          badgeCount={hasRequests ? requests.length : undefined}
+          badgeClassName="bg-amber-100 text-amber-700"
+          dataUpdatedAt={dataUpdatedAt}
+          isRefetching={isFetching}
+          onRefresh={() =>
+            queryClient.invalidateQueries({ queryKey: rescheduleKeys.all })
+          }
+          testId="refresh-reschedule-btn"
+        />
 
         {!hasRequests ? (
           <p

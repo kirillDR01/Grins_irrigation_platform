@@ -169,4 +169,26 @@ describe('NoReplyReviewQueue (bughunt H-7)', () => {
       expect(screen.getByTestId('no-reply-queue-empty')).toBeInTheDocument();
     });
   });
+
+  it('Refresh button invalidates the queue and re-fetches (Gap 15)', async () => {
+    (appointmentApi.noReviewList as ReturnType<typeof vi.fn>).mockResolvedValue([
+      makeRow(),
+    ]);
+
+    const user = userEvent.setup();
+    render(<NoReplyReviewQueue />, { wrapper: createWrapper() });
+
+    const refreshBtn = await screen.findByTestId('refresh-no-reply-btn');
+    expect(screen.getByTestId('queue-last-updated')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(appointmentApi.noReviewList).toHaveBeenCalledTimes(1);
+    });
+
+    await user.click(refreshBtn);
+
+    await waitFor(() => {
+      expect(appointmentApi.noReviewList).toHaveBeenCalledTimes(2);
+    });
+  });
 });

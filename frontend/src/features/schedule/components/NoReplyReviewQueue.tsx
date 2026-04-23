@@ -22,8 +22,8 @@ import { useState } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { AlertCircle, Check, Phone, Send } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -38,9 +38,10 @@ import {
   useMarkContacted,
   useNoReplyReviewList,
   useSendReminder,
+  noReplyReviewKeys,
 } from '../hooks/useNoReplyReview';
 import type { NeedsReviewAppointment } from '../types';
-import { OptOutBadge } from '@/shared/components';
+import { OptOutBadge, QueueFreshnessHeader } from '@/shared/components';
 import { useCustomerConsentStatus } from '@/features/customers/hooks/useConsentStatus';
 
 interface NoReplyReviewQueueProps {
@@ -50,7 +51,14 @@ interface NoReplyReviewQueueProps {
 export function NoReplyReviewQueue({
   onAppointmentClick,
 }: NoReplyReviewQueueProps) {
-  const { data: rows, isLoading, error } = useNoReplyReviewList();
+  const {
+    data: rows,
+    isLoading,
+    error,
+    dataUpdatedAt,
+    isFetching,
+  } = useNoReplyReviewList();
+  const queryClient = useQueryClient();
   const markContactedMutation = useMarkContacted();
   const sendReminderMutation = useSendReminder();
   const [reminderTarget, setReminderTarget] =
@@ -128,22 +136,18 @@ export function NoReplyReviewQueue({
         className="bg-slate-50 rounded-xl p-4 border border-slate-100"
         data-testid="no-reply-queue"
       >
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-orange-500" />
-            <h3 className="text-sm font-semibold text-slate-700">
-              No-Reply Confirmations
-            </h3>
-            {hasRows && (
-              <Badge
-                variant="secondary"
-                className="bg-orange-100 text-orange-700"
-              >
-                {rows.length}
-              </Badge>
-            )}
-          </div>
-        </div>
+        <QueueFreshnessHeader
+          icon={<AlertCircle className="h-4 w-4 text-orange-500" />}
+          title="No-Reply Confirmations"
+          badgeCount={hasRows ? rows.length : undefined}
+          badgeClassName="bg-orange-100 text-orange-700"
+          dataUpdatedAt={dataUpdatedAt}
+          isRefetching={isFetching}
+          onRefresh={() =>
+            queryClient.invalidateQueries({ queryKey: noReplyReviewKeys.all })
+          }
+          testId="refresh-no-reply-btn"
+        />
 
         {!hasRows ? (
           <p

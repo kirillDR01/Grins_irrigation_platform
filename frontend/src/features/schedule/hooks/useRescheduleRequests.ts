@@ -1,6 +1,7 @@
 /**
  * Hooks for reschedule requests.
  * Validates: CRM Changes Update 2 Req 25.1, 25.2, 25.3, 25.4
+ * Gap 15 (Phase 1): 30 s polling safety-net for inbound R replies.
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -15,6 +16,11 @@ export function useRescheduleRequests(status?: string) {
   return useQuery({
     queryKey: rescheduleKeys.list(status),
     queryFn: () => rescheduleApi.list(status),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 

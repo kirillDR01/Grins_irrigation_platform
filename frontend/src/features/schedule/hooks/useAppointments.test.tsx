@@ -191,6 +191,13 @@ describe('useAppointment', () => {
     expect(result.current.fetchStatus).toBe('idle');
     expect(appointmentApi.getById).not.toHaveBeenCalled();
   });
+
+  it('useAppointment wires a 60 s refetchInterval (Gap 15)', () => {
+    const hookSource = useAppointment.toString();
+    expect(hookSource).toContain('refetchInterval');
+    // Vite may transform 60_000 → 6e4; accept either form.
+    expect(hookSource).toMatch(/6e4|60000|60_000/);
+  });
 });
 
 describe('useDailySchedule', () => {
