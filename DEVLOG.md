@@ -5,6 +5,100 @@ Grin's Irrigation Platform — field service automation for residential/commerci
 
 ## Recent Activity
 
+## [2026-04-23 21:10] - REFACTOR: Enforce appointment state machine (gap-04.A + 4.B)
+
+### What Was Accomplished
+Closed gap-04 by making `VALID_APPOINTMENT_TRANSITIONS` the structural
+source of truth at both the model (ORM attribute set) and repository (SQL
+UPDATE) layers, and added the missing `CONFIRMED → SCHEDULED` edge that
+`reschedule_for_request` already depends on.
+
+- **4.B dict edit.** Added `CONFIRMED → SCHEDULED` (the edge
+  `appointment_service.reschedule_for_request` writes to resolve a
+  customer-initiated reschedule from a confirmed appointment) plus
+  `SCHEDULED → COMPLETED` and `CONFIRMED → COMPLETED` (the skip-to-complete
+  path used by `/api/v1/jobs/{id}/complete` when an admin clicks Complete
+  on a still-scheduled job that never went through IN_PROGRESS).
+- **4.A model-level enforcement.** `Appointment._validate_status_transition`
+  is a `@validates("status")` hook that mirrors the existing
+  `staff_availability.py` pattern. Any `appt.status = X` that violates the
+  transitions dict raises `InvalidStatusTransitionError`. Initial inserts
+  (`self.status is None`) and idempotent same-status sets are no-ops.
+- **4.A repository-level enforcement.** `AppointmentRepository.update()` and
+  `update_status()` now route through `_validate_status_transition_or_raise`
+  before issuing the SQL UPDATE. SQLAlchemy's `Session.execute(sa.update())`
+  construct bypasses `@validates` entirely; without the repo guard the
+  enforcement would be decorative.
+- **`Appointment.transition_to(session, new_status, *, actor_id, reason)`.**
+  New async helper that pairs a validated status set with an `AuditLog`
+  write (`action="appointment.status.transition"`). Audit-write failures
+  are logged and swallowed so the transition itself still commits — same
+  contract as `_record_reschedule_reconfirmation_audit`.
+- **Service-side guards.** `ConflictResolutionService.cancel_appointment`
+  short-circuits on `is_terminal_status()` (returns the existing "already
+  cancelled" response shape); `reschedule_appointment` raises
+  `InvalidStatusTransitionError`. `AppointmentService.update_appointment`
+  and `reschedule` forced-reset blocks narrow the inner `if` to only run
+  for `CONFIRMED` / `CANCELLED` pre-states, so EN_ROUTE / IN_PROGRESS /
+  COMPLETED / NO_SHOW pass through without triggering the new guard.
+
+### Technical Details
+- Model: `models/appointment.py` — `validates` import, three new dict
+  edges, `_validate_status_transition`, `transition_to`.
+- Repo: `repositories/appointment_repository.py` — runtime
+  `AppointmentStatus` import, `_validate_status_transition_or_raise`,
+  guard calls in `update()` and `update_status()`.
+- Services: `services/conflict_resolution_service.py` (terminal-state
+  guards in two places), `services/appointment_service.py` (two
+  forced-reset narrowings).
+- Tests (new): `tests/unit/test_appointment_state_machine.py` (16 tests:
+  validator hook, dict edges, repo guard, transition_to + audit, Hypothesis
+  property), `tests/functional/test_appointment_state_machine_functional.py`
+  (4 tests: reschedule_for_request happy + negative, repo guard accept +
+  reject).
+- Tests (extended): `tests/integration/test_combined_status_flow_integration.py`
+  — new `TestStateMachineSmoke` class running the golden path against a
+  real `Appointment` instance so `@validates` actually fires.
+
+### Decision Rationale
+- **Two enforcement layers.** `@validates` is the ergonomic place for the
+  rule but does not fire on `Session.execute(sa.update(...))`. Without the
+  repository guard, `reschedule_for_request` and `send_confirmation` would
+  slip through. Two layers cost one extra single-column SELECT per
+  status-bearing UPDATE — cheap, and defence-in-depth.
+- **No `session.merge()` switch.** Routing all updates through the ORM
+  attribute path would change `updated_at` semantics, complicate the
+  `rescheduled_from_id` self-reference cascade, and ship a much larger
+  diff with no correctness gain over the explicit guard.
+- **Skip-to-complete edges.** `/jobs/{id}/complete` accepts any
+  non-terminal source. Without the new edges, turning on `@validates`
+  would break the common admin "Complete" click on a still-SCHEDULED job.
+  The `JobService.VALID_TRANSITIONS[TO_BE_SCHEDULED] ∋ COMPLETED` precedent
+  (bughunt M-1) is the same rationale at the job layer.
+
+### Challenges and Solutions
+- **Test-infrastructure constraint.** No real-DB test fixture exists in
+  the repo (verified via grep for `async_sessionmaker`/`create_async_engine`
+  — zero hits). All three tiers use mocks. `@validates` does not fire on
+  `MagicMock.status = X`, so the existing 28+ files of mock-based tests
+  are untouched by this change. The new tests construct real `Appointment`
+  instances (no session needed for attribute-level validation) and mock
+  the `AsyncSession.execute` for the repo-guard tests.
+- **Forced-reset edge case.** `update_appointment` and `reschedule` both
+  end with an `if updated.status != SCHEDULED → write SCHEDULED` that
+  could legitimately receive `EN_ROUTE` / `IN_PROGRESS` from the same
+  request. Narrowed the inner `if` to `CONFIRMED` / `CANCELLED` so the
+  new guard is never invoked against a non-customer-facing pre-state.
+
+### Next Steps
+- **gap-05 (audit centralisation).** Migrate the remaining 17 direct
+  `appt.status = X` assignments to `transition_to()` so every status
+  change writes an audit row. Mechanical multi-file refactor unblocked
+  by this PR.
+- **gap-01.B (EN_ROUTE reschedule guard cleanup).** `_handle_reschedule`'s
+  `blocked_statuses` is now belt-and-suspenders given the validator;
+  can be simplified.
+
 ## [2026-04-21 12:00] - FEAT: Thread Correlation Hardening (Gap 03)
 
 ### What Was Accomplished

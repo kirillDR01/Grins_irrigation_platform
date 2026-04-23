@@ -135,7 +135,11 @@ async def clear_on_site_data(
 
     Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5
     """
-    from sqlalchemy import delete, func as sa_func, select  # noqa: PLC0415
+    from sqlalchemy import (  # noqa: PLC0415
+        delete,
+        func as sa_func,
+        select,
+    )
 
     from grins_platform.models.enums import MessageType  # noqa: PLC0415
     from grins_platform.models.invoice import Invoice  # noqa: PLC0415
@@ -488,8 +492,20 @@ class AppointmentService(LoggerMixin):
                         "reschedule_sms",
                         appointment_id=str(appointment_id),
                     )
-            # Reset status to SCHEDULED (unconfirmed)
-            if updated and updated.status != AppointmentStatus.SCHEDULED.value:  # type: ignore[union-attr]
+            # Reset status to SCHEDULED (unconfirmed). Narrowed to the two
+            # pre-states from which SCHEDULED is a permitted edge per
+            # VALID_APPOINTMENT_TRANSITIONS — EN_ROUTE / IN_PROGRESS /
+            # COMPLETED / NO_SHOW would now be rejected by the @validates
+            # hook + repo guard, but they cannot legitimately reach this
+            # branch via the admin UI either.
+            if (
+                updated
+                and updated.status  # type: ignore[union-attr]
+                in (
+                    AppointmentStatus.CONFIRMED.value,
+                    AppointmentStatus.CANCELLED.value,
+                )
+            ):
                 await self.appointment_repository.update(
                     appointment_id,
                     {"status": AppointmentStatus.SCHEDULED.value},
@@ -1073,8 +1089,16 @@ class AppointmentService(LoggerMixin):
                     "reschedule_sms",
                     appointment_id=str(appointment_id),
                 )
-            # Reset status to SCHEDULED (unconfirmed)
-            if updated and updated.status != AppointmentStatus.SCHEDULED.value:  # type: ignore[union-attr]
+            # Reset status to SCHEDULED (unconfirmed). Narrowed: see the
+            # matching block in update_appointment for rationale.
+            if (
+                updated
+                and updated.status  # type: ignore[union-attr]
+                in (
+                    AppointmentStatus.CONFIRMED.value,
+                    AppointmentStatus.CANCELLED.value,
+                )
+            ):
                 await self.appointment_repository.update(
                     appointment_id,
                     {"status": AppointmentStatus.SCHEDULED.value},
@@ -1160,9 +1184,7 @@ class AppointmentService(LoggerMixin):
             + existing_start.second
         )
         end_seconds = (
-            existing_end.hour * 3600
-            + existing_end.minute * 60
-            + existing_end.second
+            existing_end.hour * 3600 + existing_end.minute * 60 + existing_end.second
         )
         duration_seconds = max(end_seconds - start_seconds, 0)
 

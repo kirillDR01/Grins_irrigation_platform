@@ -15,9 +15,13 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
+from grins_platform.exceptions import InvalidStatusTransitionError
 from grins_platform.log_config import LoggerMixin
-from grins_platform.models.appointment import Appointment
-from grins_platform.models.enums import AppointmentStatus  # noqa: TC001
+from grins_platform.models.appointment import (
+    VALID_APPOINTMENT_TRANSITIONS,
+    Appointment,
+)
+from grins_platform.models.enums import AppointmentStatus
 from grins_platform.models.job import Job
 
 if TYPE_CHECKING:
@@ -126,8 +130,6 @@ class AppointmentRepository(LoggerMixin):
         stmt = select(Appointment).where(Appointment.id == appointment_id)
 
         if include_relationships:
-            
-
             stmt = stmt.options(
                 selectinload(Appointment.job).selectinload(Job.customer),
                 selectinload(Appointment.staff),
@@ -146,6 +148,43 @@ class AppointmentRepository(LoggerMixin):
             )
 
         return appointment
+
+    async def _validate_status_transition_or_raise(
+        self,
+        appointment_id: UUID,
+        new_status: str,
+    ) -> None:
+        """Pre-check the SQL UPDATE path against ``VALID_APPOINTMENT_TRANSITIONS``.
+
+        ``@validates`` only fires on attribute set, not on
+        ``Session.execute(sa.update(...))``. Loading the current status with
+        a single-column ``SELECT`` lets us refuse illegal edges before the
+        UPDATE is issued.
+
+        Behaviour:
+            * Missing row: silent no-op — the caller's existing
+              ``returning(Appointment) -> None`` path handles not-found.
+            * ``current_status is None`` or ``current_status == new_status``:
+              silent no-op (idempotent / pre-insert).
+            * Otherwise raises ``InvalidStatusTransitionError``.
+
+        Args:
+            appointment_id: UUID of the appointment row to check.
+            new_status: Target status string.
+        """
+        stmt = select(Appointment.status).where(Appointment.id == appointment_id)
+        result = await self.session.execute(stmt)
+        current_status: str | None = result.scalar_one_or_none()
+
+        if current_status is None:
+            return
+        if current_status == new_status:
+            return
+        if new_status not in VALID_APPOINTMENT_TRANSITIONS.get(current_status, []):
+            raise InvalidStatusTransitionError(
+                AppointmentStatus(current_status),
+                AppointmentStatus(new_status),
+            )
 
     async def update(
         self,
@@ -170,6 +209,12 @@ class AppointmentRepository(LoggerMixin):
 
         if not update_data:
             return await self.get_by_id(appointment_id)
+
+        if "status" in update_data:
+            await self._validate_status_transition_or_raise(
+                appointment_id,
+                update_data["status"],
+            )
 
         update_data["updated_at"] = datetime.now()
 
@@ -328,8 +373,6 @@ class AppointmentRepository(LoggerMixin):
         )
 
         if include_relationships:
-            
-
             stmt = stmt.options(
                 selectinload(Appointment.job).selectinload(Job.customer),
                 selectinload(Appointment.staff),
@@ -376,8 +419,6 @@ class AppointmentRepository(LoggerMixin):
         )
 
         if include_relationships:
-            
-
             stmt = stmt.options(
                 selectinload(Appointment.job).selectinload(Job.customer),
                 selectinload(Appointment.staff),
@@ -420,8 +461,6 @@ class AppointmentRepository(LoggerMixin):
         )
 
         if include_relationships:
-            
-
             stmt = stmt.options(
                 selectinload(Appointment.job).selectinload(Job.customer),
                 selectinload(Appointment.staff),
@@ -554,6 +593,11 @@ class AppointmentRepository(LoggerMixin):
             "update_status",
             appointment_id=str(appointment_id),
             new_status=new_status.value,
+        )
+
+        await self._validate_status_transition_or_raise(
+            appointment_id,
+            new_status.value,
         )
 
         update_data: dict[str, Any] = {

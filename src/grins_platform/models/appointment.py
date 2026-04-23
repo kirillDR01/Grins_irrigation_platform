@@ -13,13 +13,15 @@ from uuid import UUID
 
 from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, Time
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from sqlalchemy.sql import func
 
 from grins_platform.database import Base
 from grins_platform.models.enums import AppointmentStatus
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from grins_platform.models.job import Job
     from grins_platform.models.sent_message import SentMessage
     from grins_platform.models.staff import Staff
@@ -41,12 +43,21 @@ VALID_APPOINTMENT_TRANSITIONS: dict[str, list[str]] = {
         AppointmentStatus.EN_ROUTE.value,
         AppointmentStatus.IN_PROGRESS.value,
         AppointmentStatus.CANCELLED.value,
+        # Skip-to-complete: ``/jobs/{id}/complete`` accepts any non-terminal
+        # source, including a still-SCHEDULED appointment that never went
+        # through IN_PROGRESS (admin clicked Complete directly).
+        AppointmentStatus.COMPLETED.value,
     ],
     AppointmentStatus.CONFIRMED.value: [
+        # gap-04.B: ``reschedule_for_request`` force-writes SCHEDULED when a
+        # customer requests a new date from a CONFIRMED appointment.
+        AppointmentStatus.SCHEDULED.value,
         AppointmentStatus.EN_ROUTE.value,
         AppointmentStatus.IN_PROGRESS.value,
         AppointmentStatus.CANCELLED.value,
         AppointmentStatus.NO_SHOW.value,
+        # Skip-to-complete: see SCHEDULED note above.
+        AppointmentStatus.COMPLETED.value,
     ],
     AppointmentStatus.EN_ROUTE.value: [
         AppointmentStatus.IN_PROGRESS.value,
@@ -208,6 +219,44 @@ class Appointment(Base):
         """Get the status as an enum value."""
         return AppointmentStatus(self.status)
 
+    @validates("status")  # type: ignore[misc,untyped-decorator]
+    def _validate_status_transition(self, key: str, new_status: str) -> str:  # noqa: ARG002
+        """Enforce ``VALID_APPOINTMENT_TRANSITIONS`` on every attribute set.
+
+        Fires on ``appt.status = X`` (ORM attribute set) but NOT on
+        ``Session.execute(sqlalchemy.update(Appointment).values(status=...))``
+        — the SQL UPDATE construct bypasses validators. The repository layer
+        (``AppointmentRepository.update`` / ``update_status``) carries a
+        parallel guard for that path.
+
+        Edge cases:
+            * Initial insert (``self.status is None``): accept any value;
+              SQLAlchemy fires ``@validates`` during ``__init__`` before the
+              attribute is assigned.
+            * Idempotent set (``new_status == self.status``): accept; matches
+              repeat-Y / repeat-C webhook semantics.
+
+        Raises:
+            InvalidStatusTransitionError: if the transition is not allowed.
+        """
+        if self.status is None:
+            return new_status
+        if new_status == self.status:
+            return new_status
+        if new_status not in VALID_APPOINTMENT_TRANSITIONS.get(self.status, []):
+            # Lazy imports keep this method self-contained and side-step any
+            # future cycle if exceptions/__init__.py grows a runtime import
+            # back to the models package.
+            from grins_platform.exceptions import (  # noqa: PLC0415
+                InvalidStatusTransitionError,
+            )
+
+            raise InvalidStatusTransitionError(
+                AppointmentStatus(self.status),
+                AppointmentStatus(new_status),
+            )
+        return new_status
+
     def can_transition_to(self, new_status: str) -> bool:
         """Check if the appointment can transition to the given status.
 
@@ -219,6 +268,81 @@ class Appointment(Base):
         """
         valid_transitions = VALID_APPOINTMENT_TRANSITIONS.get(self.status, [])
         return new_status in valid_transitions
+
+    async def transition_to(
+        self,
+        session: "AsyncSession",
+        new_status: str,
+        *,
+        actor_id: UUID | None = None,
+        reason: str | None = None,
+    ) -> None:
+        """Transition status with validation + audit logging.
+
+        Model-layer orchestrator that pairs the ``@validates`` hook with an
+        ``AuditLog`` write. ``AppointmentRepository.update_status`` remains
+        the lower-level primitive; this helper is the higher-level call that
+        future PRs (gap-05) migrate write sites onto.
+
+        The audit write is best-effort: a failure logs and is swallowed so
+        the transition itself still commits — matches the pattern at
+        ``appointment_service._record_reschedule_reconfirmation_audit``.
+
+        Args:
+            session: Active async DB session (used for audit write + flush).
+            new_status: Target status string (must satisfy ``@validates``).
+            actor_id: Staff UUID who initiated the transition; optional.
+            reason: Free-form rationale captured in the audit ``details``.
+
+        Raises:
+            InvalidStatusTransitionError: when ``@validates`` rejects the
+                new status. Re-raised unchanged so callers can map to 400.
+        """
+        from grins_platform.log_config import get_logger  # noqa: PLC0415
+
+        logger = get_logger(__name__)
+        old_status = self.status
+        logger.debug(
+            "appointment.status.transition_started",
+            appointment_id=str(self.id) if self.id else None,
+            **{"from": old_status, "to": new_status},
+            actor_id=str(actor_id) if actor_id else None,
+            reason=reason,
+        )
+
+        # Raises via @validates if invalid.
+        self.status = new_status
+        await session.flush()
+
+        logger.info(
+            "appointment.status.transition_completed",
+            appointment_id=str(self.id) if self.id else None,
+            **{"from": old_status, "to": new_status},
+            actor_id=str(actor_id) if actor_id else None,
+        )
+
+        try:
+            from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+                AuditLogRepository,
+            )
+
+            _ = await AuditLogRepository(session).create(
+                action="appointment.status.transition",
+                resource_type="appointment",
+                resource_id=self.id,
+                actor_id=actor_id,
+                details={
+                    "from_status": old_status,
+                    "to_status": new_status,
+                    "reason": reason,
+                },
+            )
+        except Exception as exc:
+            logger.exception(
+                "appointment.status.audit_write_failed",
+                appointment_id=str(self.id) if self.id else None,
+                error=repr(exc),
+            )
 
     def get_valid_transitions(self) -> list[str]:
         """Get the list of valid status transitions from current status.

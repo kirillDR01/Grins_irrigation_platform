@@ -2,7 +2,7 @@
 
 **Severity:** 3 (medium — latent risk)
 **Area:** Backend (models + services)
-**Status:** Investigated, not fixed
+**Status:** Fixed on 2026-04-23 — see DEVLOG entry "Enforce appointment state machine (gap-04.A + 4.B)"
 **Related files:**
 - `src/grins_platform/models/appointment.py:29-67` — `VALID_APPOINTMENT_TRANSITIONS`
 - `src/grins_platform/models/appointment.py:211-221` — `can_transition_to` (defined, unused)

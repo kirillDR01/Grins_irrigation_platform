@@ -73,6 +73,22 @@ class ConflictResolutionService(LoggerMixin):
                 message="Appointment not found",
             )
 
+        if appointment.is_terminal_status():
+            self.log_rejected(
+                "cancel_appointment",
+                reason="already_terminal",
+                appointment_id=str(appointment_id),
+                current_status=appointment.status,
+            )
+            return CancelAppointmentResponse(
+                appointment_id=appointment_id,
+                cancelled_at=appointment.cancelled_at or datetime.now(timezone.utc),
+                reason=reason,
+                message=(
+                    f"Appointment already in terminal status: {appointment.status}"
+                ),
+            )
+
         # Update appointment
         now = datetime.now(timezone.utc)
         appointment.status = AppointmentStatus.CANCELLED.value
@@ -140,6 +156,16 @@ class ConflictResolutionService(LoggerMixin):
         if not original:
             msg = f"Appointment {appointment_id} not found"
             raise ValueError(msg)
+
+        if original.is_terminal_status():
+            from grins_platform.exceptions import (  # noqa: PLC0415
+                InvalidStatusTransitionError,
+            )
+
+            raise InvalidStatusTransitionError(
+                AppointmentStatus(original.status),
+                AppointmentStatus.CANCELLED,
+            )
 
         # Cancel original
         original.status = AppointmentStatus.CANCELLED.value

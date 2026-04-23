@@ -9,16 +9,19 @@ Validates: Requirements 18.1, 18.2, 18.3, 18.4, 18.5
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
 import pytest
 
-from grins_platform.models.appointment import VALID_APPOINTMENT_TRANSITIONS
+from grins_platform.exceptions import InvalidStatusTransitionError
+from grins_platform.models.appointment import (
+    VALID_APPOINTMENT_TRANSITIONS,
+    Appointment,
+)
 from grins_platform.models.enums import AppointmentStatus, JobStatus
 from grins_platform.models.job import VALID_STATUS_TRANSITIONS
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -133,16 +136,18 @@ class TestCompleteJobAppointmentLifecycle:
         assert appt.status == AppointmentStatus.DRAFT.value
 
         # Step 1: Send confirmation → DRAFT → SCHEDULED
-        assert AppointmentStatus.SCHEDULED.value in VALID_APPOINTMENT_TRANSITIONS[
-            AppointmentStatus.DRAFT.value
-        ]
+        assert (
+            AppointmentStatus.SCHEDULED.value
+            in VALID_APPOINTMENT_TRANSITIONS[AppointmentStatus.DRAFT.value]
+        )
         appt.status = AppointmentStatus.SCHEDULED.value
         assert appt.status == AppointmentStatus.SCHEDULED.value
 
         # Step 2: Customer confirms → SCHEDULED → CONFIRMED
-        assert AppointmentStatus.CONFIRMED.value in VALID_APPOINTMENT_TRANSITIONS[
-            AppointmentStatus.SCHEDULED.value
-        ]
+        assert (
+            AppointmentStatus.CONFIRMED.value
+            in VALID_APPOINTMENT_TRANSITIONS[AppointmentStatus.SCHEDULED.value]
+        )
         appt.status = AppointmentStatus.CONFIRMED.value
         assert appt.status == AppointmentStatus.CONFIRMED.value
 
@@ -168,32 +173,40 @@ class TestCompleteJobAppointmentLifecycle:
         Validates: Requirements 18.1, 18.2
         """
         # Job transitions
-        assert JobStatus.SCHEDULED.value in VALID_STATUS_TRANSITIONS[
-            JobStatus.TO_BE_SCHEDULED.value
-        ]
-        assert JobStatus.IN_PROGRESS.value in VALID_STATUS_TRANSITIONS[
+        assert (
             JobStatus.SCHEDULED.value
-        ]
-        assert JobStatus.COMPLETED.value in VALID_STATUS_TRANSITIONS[
+            in VALID_STATUS_TRANSITIONS[JobStatus.TO_BE_SCHEDULED.value]
+        )
+        assert (
             JobStatus.IN_PROGRESS.value
-        ]
+            in VALID_STATUS_TRANSITIONS[JobStatus.SCHEDULED.value]
+        )
+        assert (
+            JobStatus.COMPLETED.value
+            in VALID_STATUS_TRANSITIONS[JobStatus.IN_PROGRESS.value]
+        )
 
         # Appointment transitions
-        assert AppointmentStatus.SCHEDULED.value in VALID_APPOINTMENT_TRANSITIONS[
-            AppointmentStatus.DRAFT.value
-        ]
-        assert AppointmentStatus.CONFIRMED.value in VALID_APPOINTMENT_TRANSITIONS[
+        assert (
             AppointmentStatus.SCHEDULED.value
-        ]
-        assert AppointmentStatus.EN_ROUTE.value in VALID_APPOINTMENT_TRANSITIONS[
+            in VALID_APPOINTMENT_TRANSITIONS[AppointmentStatus.DRAFT.value]
+        )
+        assert (
             AppointmentStatus.CONFIRMED.value
-        ]
-        assert AppointmentStatus.IN_PROGRESS.value in VALID_APPOINTMENT_TRANSITIONS[
+            in VALID_APPOINTMENT_TRANSITIONS[AppointmentStatus.SCHEDULED.value]
+        )
+        assert (
             AppointmentStatus.EN_ROUTE.value
-        ]
-        assert AppointmentStatus.COMPLETED.value in VALID_APPOINTMENT_TRANSITIONS[
+            in VALID_APPOINTMENT_TRANSITIONS[AppointmentStatus.CONFIRMED.value]
+        )
+        assert (
             AppointmentStatus.IN_PROGRESS.value
-        ]
+            in VALID_APPOINTMENT_TRANSITIONS[AppointmentStatus.EN_ROUTE.value]
+        )
+        assert (
+            AppointmentStatus.COMPLETED.value
+            in VALID_APPOINTMENT_TRANSITIONS[AppointmentStatus.IN_PROGRESS.value]
+        )
 
     def test_on_my_way_from_scheduled_unconfirmed(self) -> None:
         """On My Way from SCHEDULED (unconfirmed) appointment → EN_ROUTE.
@@ -207,9 +220,10 @@ class TestCompleteJobAppointmentLifecycle:
         )
 
         # Verify transition is valid
-        assert AppointmentStatus.EN_ROUTE.value in VALID_APPOINTMENT_TRANSITIONS[
-            AppointmentStatus.SCHEDULED.value
-        ]
+        assert (
+            AppointmentStatus.EN_ROUTE.value
+            in VALID_APPOINTMENT_TRANSITIONS[AppointmentStatus.SCHEDULED.value]
+        )
 
         _simulate_on_my_way(job, appt)
         assert appt.status == AppointmentStatus.EN_ROUTE.value
@@ -234,6 +248,50 @@ class TestCompleteJobAppointmentLifecycle:
         _simulate_complete(job, appt)
         assert job.status == JobStatus.COMPLETED.value
         assert appt.status == AppointmentStatus.COMPLETED.value
+
+
+# ---------------------------------------------------------------------------
+# gap-04: @validates("status") smoke test on a real Appointment instance
+# ---------------------------------------------------------------------------
+
+
+def _make_real_appointment(status: str = "scheduled") -> Appointment:
+    return Appointment(
+        job_id=uuid4(),
+        staff_id=uuid4(),
+        scheduled_date=date.today(),
+        time_window_start=time(9, 0),
+        time_window_end=time(11, 0),
+        status=status,
+    )
+
+
+@pytest.mark.integration
+class TestStateMachineSmoke:
+    """gap-04 smoke: real Appointment + @validates fires on attribute set.
+
+    The wider integration suite uses Mock() appointments which bypass
+    @validates entirely. This class instantiates the real model so the
+    validator runs. No DB session is needed for attribute-level checks.
+    """
+
+    def test_golden_path_scheduled_to_completed(self) -> None:
+        """SCHEDULED -> CONFIRMED -> EN_ROUTE -> IN_PROGRESS -> COMPLETED."""
+        appt = _make_real_appointment(AppointmentStatus.SCHEDULED.value)
+        for next_status in (
+            AppointmentStatus.CONFIRMED.value,
+            AppointmentStatus.EN_ROUTE.value,
+            AppointmentStatus.IN_PROGRESS.value,
+            AppointmentStatus.COMPLETED.value,
+        ):
+            appt.status = next_status
+            assert appt.status == next_status
+
+    def test_completed_is_terminal_and_blocks_further_transitions(self) -> None:
+        """A COMPLETED appointment cannot be re-set to SCHEDULED."""
+        appt = _make_real_appointment(AppointmentStatus.COMPLETED.value)
+        with pytest.raises(InvalidStatusTransitionError):
+            appt.status = AppointmentStatus.SCHEDULED.value
 
 
 # ---------------------------------------------------------------------------
@@ -342,9 +400,10 @@ class TestCancellationRevertScenarios:
 
         Validates: Requirement 18.4
         """
-        assert JobStatus.TO_BE_SCHEDULED.value in VALID_STATUS_TRANSITIONS[
-            JobStatus.SCHEDULED.value
-        ]
+        assert (
+            JobStatus.TO_BE_SCHEDULED.value
+            in VALID_STATUS_TRANSITIONS[JobStatus.SCHEDULED.value]
+        )
 
     def test_cancellation_from_any_non_terminal_appointment_status(self) -> None:
         """CANCELLED is reachable from all non-terminal appointment statuses.
@@ -359,9 +418,9 @@ class TestCancellationRevertScenarios:
             AppointmentStatus.IN_PROGRESS.value,
         ]
         for s in non_terminal:
-            assert AppointmentStatus.CANCELLED.value in VALID_APPOINTMENT_TRANSITIONS[s], (
-                f"CANCELLED should be reachable from {s}"
-            )
+            assert (
+                AppointmentStatus.CANCELLED.value in VALID_APPOINTMENT_TRANSITIONS[s]
+            ), f"CANCELLED should be reachable from {s}"
 
 
 # ---------------------------------------------------------------------------
@@ -480,9 +539,10 @@ class TestSkipScenarios:
         )
 
         # SCHEDULED → IN_PROGRESS is allowed per the transitions table
-        assert AppointmentStatus.IN_PROGRESS.value in VALID_APPOINTMENT_TRANSITIONS[
-            AppointmentStatus.SCHEDULED.value
-        ]
+        assert (
+            AppointmentStatus.IN_PROGRESS.value
+            in VALID_APPOINTMENT_TRANSITIONS[AppointmentStatus.SCHEDULED.value]
+        )
 
         _simulate_started(job, appt)
 
