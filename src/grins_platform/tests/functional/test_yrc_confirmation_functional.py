@@ -86,10 +86,24 @@ def _build_mock_db(
 
     db.add = MagicMock(side_effect=_add_side_effect)
 
-    # SELECT for _find_confirmation_message
+    # SELECT routing:
+    # - ``find_confirmation_message``: ``select(SentMessage)`` → ``sent_message``
+    # - Gap 02 appointment lock: ``select(Appointment).with_for_update()``
+    #   → ``appointment``
+    # - Everything else (e.g. open RescheduleRequest dedup): default to
+    #   ``sent_message`` so existing behaviour is preserved.
     async def _execute_side_effect(stmt: Any, params: Any = None) -> MagicMock:
         result = MagicMock()
-        result.scalar_one_or_none.return_value = sent_message
+        try:
+            entity = stmt.column_descriptions[0].get("entity")
+            entity_name = getattr(entity, "__name__", "")
+        except (AttributeError, IndexError, KeyError):
+            entity_name = ""
+
+        if entity_name == "Appointment":
+            result.scalar_one_or_none.return_value = appointment
+        else:
+            result.scalar_one_or_none.return_value = sent_message
         return result
 
     db.execute = AsyncMock(side_effect=_execute_side_effect)
@@ -194,6 +208,74 @@ class TestConfirmReplyFlow:
         response = added[0]
         assert response.reply_keyword == ConfirmationKeyword.CONFIRM.value
         assert response.status == "confirmed"
+        assert response.processed_at is not None
+
+
+# =============================================================================
+# 1.b Gap 02 — Repeat Y on an already-confirmed appointment is idempotent
+# =============================================================================
+
+
+@pytest.mark.functional
+@pytest.mark.asyncio
+class TestRepeatConfirmReplyFlow:
+    """Second ``Y`` on an already-CONFIRMED appointment short-circuits.
+
+    The appointment status stays CONFIRMED (no re-transition), the new
+    ``JobConfirmationResponse`` is marked ``confirmed_repeat``, and the
+    ``auto_reply`` contains the reassurance wording ("already confirmed")
+    rather than a full re-confirmation.
+
+    **Validates: gap-02.**
+    """
+
+    async def test_repeat_confirm_reply_short_circuits_on_already_confirmed(
+        self,
+    ) -> None:
+        """Y on an already-CONFIRMED appointment → reassurance + dedup flag."""
+        appt_id = uuid4()
+        job_id = uuid4()
+        customer_id = uuid4()
+
+        sent_msg = _make_sent_message(
+            appointment_id=appt_id,
+            job_id=job_id,
+            customer_id=customer_id,
+        )
+        appointment = _make_appointment(
+            id=appt_id,
+            job_id=job_id,
+            status=AppointmentStatus.CONFIRMED.value,
+        )
+        db = _build_mock_db(sent_message=sent_msg, appointment=appointment)
+
+        service = JobConfirmationService(db)
+        keyword = parse_confirmation_reply("Y")
+        assert keyword == ConfirmationKeyword.CONFIRM
+
+        result = await service.handle_confirmation(
+            thread_id="thread-abc-123",
+            keyword=keyword,
+            raw_body="Y",
+            from_phone="+19527373312",
+        )
+
+        # Appointment status unchanged — no re-transition.
+        assert appointment.status == AppointmentStatus.CONFIRMED.value
+        # Result signals the repeat with ``dedup=True`` and reassurance text.
+        assert result["action"] == "confirmed"
+        assert result["dedup"] is True
+        assert result["auto_reply"]
+        assert "already confirmed" in result["auto_reply"]
+        # Exactly one JobConfirmationResponse was added, with status
+        # ``confirmed_repeat`` (distinct from first-Y ``confirmed`` rows).
+        added = [
+            o for o in db._added_objects if isinstance(o, JobConfirmationResponse)
+        ]
+        assert len(added) == 1
+        response = added[0]
+        assert response.status == "confirmed_repeat"
+        assert response.reply_keyword == ConfirmationKeyword.CONFIRM.value
         assert response.processed_at is not None
 
 

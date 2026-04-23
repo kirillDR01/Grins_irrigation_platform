@@ -175,10 +175,15 @@ class TestHandleConfirmation:
         appt.scheduled_date = date(2026, 4, 20)
         appt.time_window_start = time(14, 0)
 
-        result_mock = MagicMock()
-        result_mock.scalar_one_or_none.return_value = sent_msg
-        mock_db.execute = AsyncMock(return_value=result_mock)
-        mock_db.get = AsyncMock(return_value=appt)
+        # Gap 02: ``_handle_confirm`` now fetches the appointment via
+        # ``db.execute(select(Appointment).with_for_update())``, so
+        # ``db.execute`` is called twice (find_confirmation_message +
+        # appointment lock).
+        sent_result = MagicMock()
+        sent_result.scalar_one_or_none.return_value = sent_msg
+        appt_result = MagicMock()
+        appt_result.scalar_one_or_none.return_value = appt
+        mock_db.execute = AsyncMock(side_effect=[sent_result, appt_result])
 
         svc = JobConfirmationService(mock_db)
         result = await svc.handle_confirmation(
@@ -210,10 +215,11 @@ class TestHandleConfirmation:
         appt.scheduled_date = None
         appt.time_window_start = None
 
-        result_mock = MagicMock()
-        result_mock.scalar_one_or_none.return_value = sent_msg
-        mock_db.execute = AsyncMock(return_value=result_mock)
-        mock_db.get = AsyncMock(return_value=appt)
+        sent_result = MagicMock()
+        sent_result.scalar_one_or_none.return_value = sent_msg
+        appt_result = MagicMock()
+        appt_result.scalar_one_or_none.return_value = appt
+        mock_db.execute = AsyncMock(side_effect=[sent_result, appt_result])
 
         svc = JobConfirmationService(mock_db)
         result = await svc.handle_confirmation(
@@ -350,10 +356,11 @@ class TestHandleConfirmation:
         """Verify provider_sid is passed through to the response record."""
         sent_msg = _make_sent_message()
 
-        result_mock = MagicMock()
-        result_mock.scalar_one_or_none.return_value = sent_msg
-        mock_db.execute = AsyncMock(return_value=result_mock)
-        mock_db.get = AsyncMock(return_value=_make_appointment())
+        sent_result = MagicMock()
+        sent_result.scalar_one_or_none.return_value = sent_msg
+        appt_result = MagicMock()
+        appt_result.scalar_one_or_none.return_value = _make_appointment()
+        mock_db.execute = AsyncMock(side_effect=[sent_result, appt_result])
 
         svc = JobConfirmationService(mock_db)
         await svc.handle_confirmation(
@@ -978,3 +985,336 @@ class TestAdminCancellationAlert:
         assert result["action"] == "cancelled"
         assert result["auto_reply"]  # non-empty — customer gets their SMS
         send_alert_mock.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# Gap 02 — Repeat ``Y`` on an already-confirmed appointment is idempotent
+# ---------------------------------------------------------------------------
+
+
+class TestRepeatConfirmIsIdempotent:
+    """Repeat ``Y`` short-circuits with a reassurance reply.
+
+    Mirror of :class:`TestRepeatCancelIsNoOp` with two deliberate deltas
+    (confirmation-specific semantics):
+
+    1. ``auto_reply`` is the reassurance string (NON-empty) — confirmation
+       is about trust, so a repeat Y gets a short acknowledgement instead
+       of silence.
+    2. ``response.status`` is ``'confirmed_repeat'`` (not plain
+       ``'confirmed'``) so analytics can tell first-Y apart from repeat-Y
+       rows.
+
+    Also exercises the ``select(Appointment).with_for_update()`` fetch
+    shape introduced in gap-02 — concurrent Y webhooks serialize through
+    the row lock so only one can transition SCHEDULED → CONFIRMED.
+
+    **Validates: gap-02.**
+    """
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_handle_confirm_short_circuits_when_already_confirmed(
+        self,
+        mock_db: AsyncMock,
+    ) -> None:
+        from datetime import date, time
+
+        sent_msg = _make_sent_message()
+        confirmed_appt = _make_appointment(status=AppointmentStatus.CONFIRMED.value)
+        confirmed_appt.scheduled_date = date(2026, 4, 22)
+        confirmed_appt.time_window_start = time(14, 0)
+
+        sent_result = MagicMock()
+        sent_result.scalar_one_or_none.return_value = sent_msg
+        appt_result = MagicMock()
+        appt_result.scalar_one_or_none.return_value = confirmed_appt
+        mock_db.execute = AsyncMock(side_effect=[sent_result, appt_result])
+
+        svc = JobConfirmationService(mock_db)
+        result = await svc.handle_confirmation(
+            thread_id="thread-123",
+            keyword=ConfirmationKeyword.CONFIRM,
+            raw_body="yes",
+            from_phone="+19527373312",
+        )
+
+        assert result["action"] == "confirmed"
+        assert result.get("dedup") is True
+        assert result["auto_reply"]  # non-empty reassurance
+        assert "already confirmed" in result["auto_reply"]
+        # The JobConfirmationResponse added upstream was mutated to
+        # ``confirmed_repeat`` by the short-circuit branch.
+        added_response = mock_db.add.call_args_list[0][0][0]
+        assert added_response.status == "confirmed_repeat"
+        # Appointment status is UNCHANGED (no re-transition).
+        assert confirmed_appt.status == AppointmentStatus.CONFIRMED.value
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_handle_confirm_does_not_rebuild_full_message_when_already_confirmed(
+        self,
+        mock_db: AsyncMock,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Repeat Y must NOT call ``_build_confirm_message``."""
+        sent_msg = _make_sent_message()
+        confirmed_appt = _make_appointment(status=AppointmentStatus.CONFIRMED.value)
+
+        sent_result = MagicMock()
+        sent_result.scalar_one_or_none.return_value = sent_msg
+        appt_result = MagicMock()
+        appt_result.scalar_one_or_none.return_value = confirmed_appt
+        mock_db.execute = AsyncMock(side_effect=[sent_result, appt_result])
+
+        build_mock = Mock(return_value="SHOULD_NOT_BUILD")
+        monkeypatch.setattr(
+            JobConfirmationService,
+            "_build_confirm_message",
+            staticmethod(build_mock),
+        )
+
+        svc = JobConfirmationService(mock_db)
+        await svc.handle_confirmation(
+            thread_id="thread-123",
+            keyword=ConfirmationKeyword.CONFIRM,
+            raw_body="y",
+            from_phone="+19527373312",
+        )
+
+        build_mock.assert_not_called()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_handle_confirm_rebuilds_reassurance_when_already_confirmed(
+        self,
+        mock_db: AsyncMock,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Repeat Y MUST call ``_build_confirm_reassurance_message`` exactly once."""
+        sent_msg = _make_sent_message()
+        confirmed_appt = _make_appointment(status=AppointmentStatus.CONFIRMED.value)
+
+        sent_result = MagicMock()
+        sent_result.scalar_one_or_none.return_value = sent_msg
+        appt_result = MagicMock()
+        appt_result.scalar_one_or_none.return_value = confirmed_appt
+        mock_db.execute = AsyncMock(side_effect=[sent_result, appt_result])
+
+        reassurance_mock = Mock(return_value="MOCKED_REASSURANCE")
+        monkeypatch.setattr(
+            JobConfirmationService,
+            "_build_confirm_reassurance_message",
+            staticmethod(reassurance_mock),
+        )
+
+        svc = JobConfirmationService(mock_db)
+        result = await svc.handle_confirmation(
+            thread_id="thread-123",
+            keyword=ConfirmationKeyword.CONFIRM,
+            raw_body="Y",
+            from_phone="+19527373312",
+        )
+
+        reassurance_mock.assert_called_once_with(confirmed_appt)
+        assert result["auto_reply"] == "MOCKED_REASSURANCE"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_handle_confirm_marks_response_status_confirmed_repeat(
+        self,
+        mock_db: AsyncMock,
+    ) -> None:
+        sent_msg = _make_sent_message()
+        confirmed_appt = _make_appointment(status=AppointmentStatus.CONFIRMED.value)
+
+        sent_result = MagicMock()
+        sent_result.scalar_one_or_none.return_value = sent_msg
+        appt_result = MagicMock()
+        appt_result.scalar_one_or_none.return_value = confirmed_appt
+        mock_db.execute = AsyncMock(side_effect=[sent_result, appt_result])
+
+        svc = JobConfirmationService(mock_db)
+        await svc.handle_confirmation(
+            thread_id="thread-123",
+            keyword=ConfirmationKeyword.CONFIRM,
+            raw_body="y",
+            from_phone="+19527373312",
+        )
+
+        added_response = mock_db.add.call_args_list[0][0][0]
+        assert added_response.status == "confirmed_repeat"
+        assert added_response.processed_at is not None
+        assert added_response.processed_at.tzinfo is timezone.utc
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_handle_confirm_returns_dedup_flag_on_repeat(
+        self,
+        mock_db: AsyncMock,
+    ) -> None:
+        sent_msg = _make_sent_message()
+        confirmed_appt = _make_appointment(status=AppointmentStatus.CONFIRMED.value)
+
+        sent_result = MagicMock()
+        sent_result.scalar_one_or_none.return_value = sent_msg
+        appt_result = MagicMock()
+        appt_result.scalar_one_or_none.return_value = confirmed_appt
+        mock_db.execute = AsyncMock(side_effect=[sent_result, appt_result])
+
+        svc = JobConfirmationService(mock_db)
+        result = await svc.handle_confirmation(
+            thread_id="thread-123",
+            keyword=ConfirmationKeyword.CONFIRM,
+            raw_body="y",
+            from_phone="+19527373312",
+        )
+
+        assert result.get("dedup") is True
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_handle_confirm_still_transitions_from_scheduled(
+        self,
+        mock_db: AsyncMock,
+    ) -> None:
+        """Regression: first-Y from SCHEDULED still transitions and uses
+        the full ``_build_confirm_message`` text, unaffected by the
+        repeat-Y short-circuit added in gap-02.
+        """
+        from datetime import date, time
+
+        sent_msg = _make_sent_message()
+        appt = _make_appointment(status=AppointmentStatus.SCHEDULED.value)
+        appt.scheduled_date = date(2026, 4, 22)
+        appt.time_window_start = time(14, 0)
+
+        sent_result = MagicMock()
+        sent_result.scalar_one_or_none.return_value = sent_msg
+        appt_result = MagicMock()
+        appt_result.scalar_one_or_none.return_value = appt
+        mock_db.execute = AsyncMock(side_effect=[sent_result, appt_result])
+
+        svc = JobConfirmationService(mock_db)
+        result = await svc.handle_confirmation(
+            thread_id="thread-123",
+            keyword=ConfirmationKeyword.CONFIRM,
+            raw_body="y",
+            from_phone="+19527373312",
+        )
+
+        assert result["action"] == "confirmed"
+        assert result.get("dedup") is None
+        assert appt.status == AppointmentStatus.CONFIRMED.value
+        assert "confirmed" in result["auto_reply"].lower()
+        # First-Y uses the full message, not the reassurance shortcut.
+        assert "already confirmed" not in result["auto_reply"]
+        added_response = mock_db.add.call_args_list[0][0][0]
+        assert added_response.status == "confirmed"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_handle_confirm_reassurance_message_contains_date_and_time(
+        self,
+        mock_db: AsyncMock,
+    ) -> None:
+        """Reassurance text renders the appointment date and time."""
+        from datetime import date, time
+
+        sent_msg = _make_sent_message()
+        confirmed_appt = _make_appointment(status=AppointmentStatus.CONFIRMED.value)
+        confirmed_appt.scheduled_date = date(2026, 4, 22)
+        confirmed_appt.time_window_start = time(14, 0)
+
+        sent_result = MagicMock()
+        sent_result.scalar_one_or_none.return_value = sent_msg
+        appt_result = MagicMock()
+        appt_result.scalar_one_or_none.return_value = confirmed_appt
+        mock_db.execute = AsyncMock(side_effect=[sent_result, appt_result])
+
+        svc = JobConfirmationService(mock_db)
+        result = await svc.handle_confirmation(
+            thread_id="thread-123",
+            keyword=ConfirmationKeyword.CONFIRM,
+            raw_body="Y",
+            from_phone="+19527373312",
+        )
+
+        assert "April 22, 2026" in result["auto_reply"]
+        assert "2:00 PM" in result["auto_reply"]
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_handle_confirm_noop_when_appointment_missing(
+        self,
+        mock_db: AsyncMock,
+    ) -> None:
+        """Missing appointment row → no short-circuit, no transition,
+        ``response.status='confirmed'`` guard-rail preserved.
+        """
+        sent_msg = _make_sent_message()
+
+        sent_result = MagicMock()
+        sent_result.scalar_one_or_none.return_value = sent_msg
+        appt_result = MagicMock()
+        appt_result.scalar_one_or_none.return_value = None
+        mock_db.execute = AsyncMock(side_effect=[sent_result, appt_result])
+
+        svc = JobConfirmationService(mock_db)
+        result = await svc.handle_confirmation(
+            thread_id="thread-123",
+            keyword=ConfirmationKeyword.CONFIRM,
+            raw_body="y",
+            from_phone="+19527373312",
+        )
+
+        assert result["action"] == "confirmed"
+        assert result.get("dedup") is None
+        added_response = mock_db.add.call_args_list[0][0][0]
+        assert added_response.status == "confirmed"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_handle_confirm_no_transition_from_terminal_states_sets_confirmed(
+        self,
+        mock_db: AsyncMock,
+    ) -> None:
+        """Y on EN_ROUTE / IN_PROGRESS / COMPLETED / NO_SHOW: no transition,
+        no repeat short-circuit (status != CONFIRMED), fall through to the
+        bottom branch which sets ``response.status='confirmed'``.
+
+        Documents the intentional scope boundary of gap-02: only CONFIRMED
+        triggers the repeat short-circuit; terminal/field-work states keep
+        the pre-feature no-op behaviour.
+        """
+        for status in (
+            AppointmentStatus.EN_ROUTE.value,
+            AppointmentStatus.IN_PROGRESS.value,
+            AppointmentStatus.COMPLETED.value,
+            AppointmentStatus.NO_SHOW.value,
+        ):
+            sent_msg = _make_sent_message()
+            appt = _make_appointment(status=status)
+
+            sent_result = MagicMock()
+            sent_result.scalar_one_or_none.return_value = sent_msg
+            appt_result = MagicMock()
+            appt_result.scalar_one_or_none.return_value = appt
+            mock_db.execute = AsyncMock(side_effect=[sent_result, appt_result])
+            mock_db.add.reset_mock()
+
+            svc = JobConfirmationService(mock_db)
+            result = await svc.handle_confirmation(
+                thread_id="thread-123",
+                keyword=ConfirmationKeyword.CONFIRM,
+                raw_body="y",
+                from_phone="+19527373312",
+            )
+
+            # No transition — appointment remains in its original terminal state.
+            assert appt.status == status
+            # No short-circuit — no ``dedup`` flag; plain ``confirmed`` response.
+            assert result["action"] == "confirmed"
+            assert result.get("dedup") is None
+            added_response = mock_db.add.call_args_list[0][0][0]
+            assert added_response.status == "confirmed"

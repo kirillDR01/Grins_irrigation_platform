@@ -74,7 +74,9 @@ Also **parallel-fix** the equivalent `_handle_confirm` behaviour for the race-wi
   - `test_handle_cancel_does_not_rebuild_message_when_already_cancelled` (lines 597–625) — `monkeypatch.setattr(JobConfirmationService, "_build_cancellation_message", staticmethod(build_mock))` — mirror this exactly for `_build_confirm_message`
   - `test_handle_cancel_still_cancels_from_scheduled` (lines 629–663) — regression test pattern
   - `test_handle_cancel_still_cancels_from_confirmed` (lines 667–720 approx) — second happy-path regression
-- `src/grins_platform/tests/functional/test_yrc_confirmation_functional.py` — functional slice (uses real DB). Add a Y,Y repeat test here to prove the SAVEPOINT / row lock behaviour end-to-end against PostgreSQL.
+- `src/grins_platform/tests/functional/test_yrc_confirmation_functional.py` — **mocked-DB** higher-level flow suite (despite the "functional" label, `_build_mock_db` at lines 60–107 wires an `AsyncMock`, not a real Postgres session). Add a Y,Y repeat test here that asserts the handler-level contract end-to-end through `handle_confirmation` — NOT real-Postgres concurrency (which is out of scope; the row-lock correctness is validated by code review of the `with_for_update` pattern itself, mirrored from `ghost_lead.py:55`).
+- `src/grins_platform/services/sms/ghost_lead.py` (lines 52–57) — reference `with_for_update` usage: `select(Lead).where(Lead.phone == normalized).with_for_update().limit(1)` → `await session.execute(stmt)` → `result.scalar_one_or_none()`. Mirror this exact shape in `_handle_confirm`. Comment on line 54 ("Row-level lock prevents concurrent duplicate creation") is the same reason we use it here.
+- `src/grins_platform/services/background_jobs.py` (line 428) — secondary reference using `with_for_update(skip_locked=True)` for a queue-claim pattern. **Not applicable here** — we want the second Y to BLOCK on the first (not skip), so do NOT add `skip_locked=True`.
 - `instructions/update2_instructions.md` (line 1070) — spec line for repeat-C no-op; document here that the Y rule is intentionally different (reassurance, not silence).
 - `CHANGELOG.md` — add a one-line entry under the current unreleased section referencing gap-02 after implementation.
 
@@ -375,22 +377,91 @@ Execute every task in order, top to bottom. Each task is atomic and independentl
   - `test_handle_confirm_reassurance_message_contains_date_and_time` (content assertion on the reassurance text)
 - **PATTERN**: Exact structure from `TestRepeatCancelIsNoOp` (`test_job_confirmation_service.py:556-720`). Re-use `_make_sent_message`, `_make_appointment(status=AppointmentStatus.CONFIRMED.value)`, and the `mock_db` fixture from the top of the file.
 - **IMPORTS**: All already imported at the top of the file: `AppointmentStatus`, `ConfirmationKeyword`, `JobConfirmationService`, `AsyncMock`, `MagicMock`, `Mock`, `pytest`, `datetime`, `timezone`, `uuid4`.
-- **GOTCHA**: Since Task 2 swapped `db.get` → `db.execute(select(Appointment).with_for_update())` for the appointment fetch, the mock now needs two `db.execute` calls (one for the SentMessage lookup, one for the Appointment). Use `mock_db.execute = AsyncMock(side_effect=[sent_result, appt_result])` where each is a `MagicMock` with `.scalar_one_or_none.return_value` set appropriately.
-- **GOTCHA**: `_handle_cancel` tests still use `mock_db.get = AsyncMock(...)` for the Appointment fetch. **Do NOT retrofit cancel tests** in this task — scope stays tight to `_handle_confirm`. If any cancel test breaks because of a shared fixture change, note it and handle in Task 8.
+- **GOTCHA**: Since Task 2 swapped `db.get` → `db.execute(select(Appointment).with_for_update())` for the appointment fetch, the mock now needs two `db.execute` calls (one for the SentMessage lookup via `find_confirmation_message`, one for the Appointment lock in `_handle_confirm`). Use `mock_db.execute = AsyncMock(side_effect=[sent_result, appt_result])` where each is a `MagicMock` with `.scalar_one_or_none.return_value` set appropriately.
+- **GOTCHA**: `_handle_cancel` tests still use `mock_db.get = AsyncMock(...)` for the Appointment fetch — those tests are UNAFFECTED and must not be modified. The per-test fixture is scoped (each test body mutates `mock_db.execute` / `mock_db.get` directly), so there is no shared-fixture interference between CONFIRM tests and CANCEL tests.
+- **CONCRETE TEMPLATE** for `test_handle_confirm_short_circuits_when_already_confirmed`:
+  ```python
+  @pytest.mark.unit
+  @pytest.mark.asyncio
+  async def test_handle_confirm_short_circuits_when_already_confirmed(
+      self,
+      mock_db: AsyncMock,
+  ) -> None:
+      from datetime import date, time
+
+      sent_msg = _make_sent_message()
+      confirmed_appt = _make_appointment(status=AppointmentStatus.CONFIRMED.value)
+      confirmed_appt.scheduled_date = date(2026, 4, 22)
+      confirmed_appt.time_window_start = time(14, 0)
+
+      sent_result = MagicMock()
+      sent_result.scalar_one_or_none.return_value = sent_msg
+      appt_result = MagicMock()
+      appt_result.scalar_one_or_none.return_value = confirmed_appt
+      mock_db.execute = AsyncMock(side_effect=[sent_result, appt_result])
+
+      svc = JobConfirmationService(mock_db)
+      result = await svc.handle_confirmation(
+          thread_id="thread-123",
+          keyword=ConfirmationKeyword.CONFIRM,
+          raw_body="yes",
+          from_phone="+19527373312",
+      )
+
+      assert result["action"] == "confirmed"
+      assert result.get("dedup") is True
+      assert result["auto_reply"]  # non-empty reassurance
+      assert "already confirmed" in result["auto_reply"]
+      # Response row mutated to confirmed_repeat
+      added_response = mock_db.add.call_args_list[0][0][0]
+      assert added_response.status == "confirmed_repeat"
+      # Appointment status is UNCHANGED (no re-transition)
+      assert confirmed_appt.status == AppointmentStatus.CONFIRMED.value
+  ```
 - **VALIDATE**: `pytest src/grins_platform/tests/unit/test_job_confirmation_service.py::TestRepeatConfirmIsIdempotent -v` — all tests pass.
 
-### 6. ADD functional test in `src/grins_platform/tests/functional/test_yrc_confirmation_functional.py`
+### 6. UPDATE `src/grins_platform/tests/functional/test_yrc_confirmation_functional.py` — fixture + new test
 
-- **IMPLEMENT**: Add `test_repeat_confirm_is_idempotent` — create appointment → send first Y (real service stack, real PostgreSQL) → send second Y → assert:
-  - `appointment.status == CONFIRMED` (unchanged from first Y)
-  - Exactly 2 `JobConfirmationResponse` rows for this appointment: first with `status='confirmed'`, second with `status='confirmed_repeat'`
-  - At least 1 (up to 2 depending on throttle) `SentMessage` rows with `message_type=APPOINTMENT_CONFIRMATION_REPLY` — if the test sleeps < 60s between Ys, only 1 outbound (throttle hit); if the test mocks out the throttle, 2 outbounds (first = full, second = reassurance).
-  - Reassurance message text matches the `_build_confirm_reassurance_message` output (assert substring `"already confirmed"`).
-- **PATTERN**: Follow existing functional-test patterns in `test_yrc_confirmation_functional.py`. If this file already has a `test_confirm_transitions_scheduled_to_confirmed`, place the new test directly after it.
-- **IMPORTS**: Match the existing file's import block.
-- **GOTCHA**: Functional tests may run against real Postgres — `with_for_update` requires an active transaction. Confirm the test fixture opens a session; reuse the fixture, do not invent a new one.
-- **GOTCHA**: If the throttle is active in the functional environment, the second outbound may be suppressed. Either (a) bypass the throttle via a test-fixture flag, (b) sleep 61s (slow test — avoid), or (c) assert "first outbound present + log line 'auto_reply_suppressed' present for second" — prefer (a).
-- **VALIDATE**: `pytest src/grins_platform/tests/functional/test_yrc_confirmation_functional.py::test_repeat_confirm_is_idempotent -v` — test passes against the functional test DB.
+**Sub-task 6a (fixture update):** The `_build_mock_db` helper at lines 60–107 wires `db.execute` to return the `sent_message` mock for EVERY execute call (line 90–95). After Task 2 makes `_handle_confirm` call `db.execute(select(Appointment).with_for_update())`, the helper will return the SentMessage mock when the code expects an Appointment. Update `_execute_side_effect` to introspect the statement and return the appropriate result:
+
+```python
+# Replace the existing _execute_side_effect with:
+async def _execute_side_effect(stmt: Any, params: Any = None) -> MagicMock:
+    result = MagicMock()
+    # SQLAlchemy 2.x: stmt.column_descriptions[0]["entity"] is the mapped
+    # class targeted by the SELECT. Use it to branch between
+    # find_confirmation_message (SentMessage) and the new
+    # _handle_confirm appointment fetch (Appointment).
+    try:
+        entity = stmt.column_descriptions[0].get("entity")
+        entity_name = getattr(entity, "__name__", "")
+    except (AttributeError, IndexError, KeyError):
+        entity_name = ""
+
+    if entity_name == "Appointment":
+        result.scalar_one_or_none.return_value = appointment
+    else:
+        result.scalar_one_or_none.return_value = sent_message
+    return result
+```
+
+- **PATTERN**: `stmt.column_descriptions` is the SQLAlchemy 2.x documented inspection API.
+- **GOTCHA**: `_handle_cancel`, `_handle_reschedule`, `_handle_needs_review` still use `db.get` for the Appointment — their tests are UNAFFECTED. Only Y-keyword flows hit the new `db.execute(select(Appointment))` branch.
+- **GOTCHA**: Do NOT remove the `db.get` side_effect at line 98–104 — cancel/reschedule tests still rely on it.
+
+**Sub-task 6b (new test):** Add `TestRepeatConfirmReplyFlow` class mirroring `TestConfirmReplyFlow` (lines 115–140+) with a single test `test_repeat_confirm_reply_short_circuits_on_already_confirmed`:
+
+- Construct an appointment with `status=CONFIRMED` (the "already confirmed" precondition, simulating the post-first-Y state).
+- Call `svc.handle_confirmation(..., keyword=ConfirmationKeyword.CONFIRM, raw_body="yes")`.
+- Assert:
+  - `result["action"] == "confirmed"`
+  - `result["dedup"] is True`
+  - `result["auto_reply"]` is non-empty AND contains the substring `"already confirmed"` (reassurance text signal)
+  - Appointment status remains `CONFIRMED` (no re-transition)
+  - Exactly one `JobConfirmationResponse` was added via `db.add`, and it has `status == "confirmed_repeat"`
+- **PATTERN**: Follow `TestConfirmReplyFlow` structure (lines 117–200 range). Place the new class directly after it.
+- **IMPORTS**: None new — all needed symbols (`AppointmentStatus`, `ConfirmationKeyword`, `JobConfirmationService`, `MagicMock`, `uuid4`) are already imported.
+- **VALIDATE**: `pytest src/grins_platform/tests/functional/test_yrc_confirmation_functional.py -v` — ALL tests pass (new + regression of existing Confirm/Reschedule/Cancel/NeedsReview flows, which must stay green after the `_execute_side_effect` update).
 
 ### 7. UPDATE `CHANGELOG.md`
 
@@ -401,11 +472,61 @@ Execute every task in order, top to bottom. Each task is atomic and independentl
 - **PATTERN**: Check the most recent commits in `git log --oneline -20` and the current CHANGELOG.md top section for phrasing style (e.g. `fix(gap-06)`, `feat(gap-07)`).
 - **VALIDATE**: Visual inspection + `git diff CHANGELOG.md`.
 
-### 8. UPDATE existing `_handle_cancel` tests IF they break after Task 2
+### 8. UPDATE three existing CONFIRM unit tests to match the new mock contract
 
-- **IMPLEMENT**: If the Task-2 row-lock change for `_handle_confirm` (but NOT `_handle_cancel`) accidentally broke any existing test due to shared fixture interference, audit and repair.
-- **VALIDATE**: `pytest src/grins_platform/tests/unit/test_job_confirmation_service.py -v` — full file green.
-- **GOTCHA**: `_handle_cancel` still uses `db.get(Appointment, ...)` so its tests should be unaffected. Only `_handle_confirm` tests that relied on `db.get` for the appointment need adjusting (if any). The existing `TestHandleConfirmation` cases may need `db.execute` side_effect extensions.
+After Task 2 changes `_handle_confirm` from `db.get(Appointment, ...)` to `db.execute(select(Appointment).with_for_update()).scalar_one_or_none()`, exactly **three** existing tests in `TestHandleConfirmation` need their mock wiring updated. Every other test (cancel, reschedule, needs_review, thread_id correlation) is unaffected because those handlers still use `db.get`. Enumerated:
+
+#### 8a. `test_confirm_transitions_to_confirmed` (test_job_confirmation_service.py:166–197)
+
+- **CURRENT mock** (lines 178–181):
+  ```python
+  result_mock = MagicMock()
+  result_mock.scalar_one_or_none.return_value = sent_msg
+  mock_db.execute = AsyncMock(return_value=result_mock)
+  mock_db.get = AsyncMock(return_value=appt)
+  ```
+- **REPLACE WITH**:
+  ```python
+  sent_result = MagicMock()
+  sent_result.scalar_one_or_none.return_value = sent_msg
+  appt_result = MagicMock()
+  appt_result.scalar_one_or_none.return_value = appt
+  mock_db.execute = AsyncMock(side_effect=[sent_result, appt_result])
+  # mock_db.get is no longer called by _handle_confirm — leave default AsyncMock.
+  ```
+- **VALIDATE**: test still passes with identical assertions on `result["action"]`, `appt.status`, and `result["auto_reply"]`.
+
+#### 8b. `test_confirm_falls_back_when_date_time_missing` (test_job_confirmation_service.py:201–228)
+
+- **CURRENT mock** (lines 213–216): same single-return pattern as 8a.
+- **REPLACE WITH** the same `side_effect=[sent_result, appt_result]` pattern as 8a.
+- **VALIDATE**: test still passes with assertion on the fallback `auto_reply` string.
+
+#### 8c. `test_provider_sid_stored` (test_job_confirmation_service.py:347–369)
+
+- **CURRENT mock** (lines 353–356):
+  ```python
+  result_mock = MagicMock()
+  result_mock.scalar_one_or_none.return_value = sent_msg
+  mock_db.execute = AsyncMock(return_value=result_mock)
+  mock_db.get = AsyncMock(return_value=_make_appointment())
+  ```
+- **REPLACE WITH** the `side_effect=[sent_result, appt_result]` pattern with `appt_result.scalar_one_or_none.return_value = _make_appointment()`.
+- **VALIDATE**: `added_obj.provider_sid == "SM_abc123"` assertion continues to hold.
+
+#### Tests that DO NOT change (confirm by inspection, do NOT modify):
+
+- `test_no_matching_thread_returns_no_match` (lines 144–162) — bails before reaching `_handle_confirm` since `find_confirmation_message` returns `None`.
+- `test_reschedule_creates_request` (lines 232–261) — uses `_handle_reschedule`, which still uses `db.get`.
+- `test_cancel_transitions_to_cancelled` (lines 265–292) — uses `_handle_cancel`, still `db.get`.
+- `test_cancel_from_confirmed_state` (lines 296–316) — uses `_handle_cancel`, still `db.get`.
+- `test_none_keyword_needs_review` (lines 320–345) — `_handle_needs_review` does not touch appointment fetch.
+- `test_thread_id_correlation` (lines 373+) — bails before keyword dispatch.
+- All tests in `TestRepeatCancelIsNoOp` (lines 556–720) — `_handle_cancel` unchanged.
+- All tests in `TestRescheduleFollowUp` (if present) — `_handle_reschedule` unchanged.
+
+- **VALIDATE**: `pytest src/grins_platform/tests/unit/test_job_confirmation_service.py -v` — full file green, zero new failures.
+- **GOTCHA**: If any of these three CONFIRM tests happen to depend on the mock result being reusable across multiple calls, `side_effect` as a list exhausts after two calls. That is expected — `_handle_confirm` makes exactly two `execute` calls (one upstream in `handle_confirmation.find_confirmation_message`, one for the appointment lock). Any additional `execute` call would be a handler-logic change we did NOT make; test would legitimately fail.
 
 ### 9. RUN full validation suite
 
@@ -564,10 +685,12 @@ pytest src/grins_platform/tests -x -q
 
 ### Confidence score
 
-**Confidence: 9/10** for one-pass success.
+**Confidence: 10/10** for one-pass success.
 
-Reasoning for the deduction:
-- The row-level-lock change (Task 2) requires that existing `TestHandleConfirmation` unit tests that mock `db.get` continue to pass after being migrated to `db.execute` side_effect. Task 8 catches this, but the exact number of touched tests is unknown until the edit runs.
-- Functional test concurrency simulation is harness-dependent; the test may need to use a threaded subtest to truly prove serialization. If the harness runs sequentially by default, a comment + skip for true-concurrency is acceptable.
+Previous deductions resolved:
 
-All other surface area is mechanical pattern-mirroring of `_handle_cancel` / `TestRepeatCancelIsNoOp`.
+1. **Existing CONFIRM test impact (Task 8)** — audited. Exactly **three** tests in `TestHandleConfirmation` mock `db.get` for the appointment fetch in the CONFIRM path: `test_confirm_transitions_to_confirmed` (line 166), `test_confirm_falls_back_when_date_time_missing` (line 201), `test_provider_sid_stored` (line 347). Task 8 enumerates each by line number and gives the exact mock replacement. Every other existing test is unaffected (verified by enumerating the keyword dispatched to each call site).
+2. **Functional-test concurrency** — resolved by inspection: the "functional" suite at `test_yrc_confirmation_functional.py` is actually mock-based (`AsyncMock`, `_build_mock_db`), not a real Postgres session. No concurrency simulation is needed. The plan now updates `_build_mock_db._execute_side_effect` to introspect `stmt.column_descriptions[0]["entity"]` and branch between SentMessage and Appointment results — a single deterministic edit, no runtime skip.
+3. **`with_for_update` in-repo pattern** — confirmed at `src/grins_platform/services/sms/ghost_lead.py:55`. The plan references this callsite as the copy-exact template, eliminating any ambiguity about the session-transaction shape.
+
+All remaining surface area is mechanical pattern-mirroring of `_handle_cancel` / `TestRepeatCancelIsNoOp` and the three enumerated mock edits. The plan contains the exact file paths, line ranges, replacement snippets, and validation commands required to complete the feature without further research.

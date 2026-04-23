@@ -235,10 +235,58 @@ class JobConfirmationService(LoggerMixin):
         response: JobConfirmationResponse,
         appointment_id: UUID,
     ) -> dict[str, Any]:
-        """CONFIRM: SCHEDULED → CONFIRMED + auto-reply."""
+        """CONFIRM: SCHEDULED → CONFIRMED + auto-reply.
+
+        Gap 02: a repeat ``Y`` on an already-CONFIRMED appointment
+        short-circuits to a reassurance reply (mirror of
+        :meth:`_handle_cancel`'s already-cancelled branch with a non-empty
+        reassurance ``auto_reply`` instead of silence, because confirmation
+        is about trust).
+
+        The appointment fetch uses ``SELECT ... FOR UPDATE`` so two
+        concurrent Y webhooks serialize through the status check: only one
+        can observe ``SCHEDULED`` and transition; the loser sees
+        ``CONFIRMED`` and takes the repeat branch.
+        """
         from grins_platform.models.appointment import Appointment  # noqa: PLC0415
 
-        appt = await self.db.get(Appointment, appointment_id)
+        # Row-level lock so concurrent Y webhooks serialize through the
+        # status check. Without this, two webhooks can both observe
+        # ``SCHEDULED`` and both try to transition, producing two response
+        # rows with ``status='confirmed'`` instead of one ``'confirmed'``
+        # and one ``'confirmed_repeat'``.
+        stmt = (
+            select(Appointment)
+            .where(Appointment.id == appointment_id)
+            .with_for_update()
+        )
+        appt = (await self.db.execute(stmt)).scalar_one_or_none()
+
+        # Gap 02 — repeat Y on an already-confirmed appointment. Mirror of
+        # the ``_handle_cancel`` already-cancelled short-circuit with two
+        # deliberate deltas:
+        #   1. ``auto_reply`` is NON-empty — a short reassurance
+        #      (confirmation is about trust; silence after a repeat Y
+        #      reinforces the doubt that prompted it).
+        #   2. ``response.status`` is ``'confirmed_repeat'`` (not plain
+        #      ``'confirmed'``) so analytics and support can tell first-Y
+        #      apart from repeat-Y rows.
+        if appt and appt.status == AppointmentStatus.CONFIRMED.value:
+            response.status = "confirmed_repeat"
+            response.processed_at = datetime.now(tz=timezone.utc)
+            await self.db.flush()
+            self.log_rejected(
+                "handle_confirm",
+                reason="already_confirmed",
+                appointment_id=str(appointment_id),
+            )
+            return {
+                "action": "confirmed",
+                "appointment_id": str(appointment_id),
+                "auto_reply": self._build_confirm_reassurance_message(appt),
+                "dedup": True,
+            }
+
         if appt and appt.status == AppointmentStatus.SCHEDULED.value:
             appt.status = AppointmentStatus.CONFIRMED.value
             await self.db.flush()
@@ -278,6 +326,33 @@ class JobConfirmationService(LoggerMixin):
                 f"See you on {date_str} at {time_str}!"
             )
         return "Your appointment has been confirmed. See you then!"
+
+    @staticmethod
+    def _build_confirm_reassurance_message(appt: Any | None) -> str:  # noqa: ANN401
+        """Build the reassurance SMS for a repeat ``Y`` on an already-confirmed appt.
+
+        Shorter than :meth:`_build_confirm_message` — the customer already
+        received the full confirmation on their first Y. This reply exists
+        only to reassure them the second Y landed, without re-implying a
+        state change.
+
+        Validates: gap-02.
+        """
+        from grins_platform.services.sms.formatters import (  # noqa: PLC0415
+            format_sms_time_12h,
+        )
+
+        appt_date = getattr(appt, "scheduled_date", None) if appt else None
+        appt_time = getattr(appt, "time_window_start", None) if appt else None
+        date_str = appt_date.strftime("%B %d, %Y") if appt_date else None
+        time_str = format_sms_time_12h(appt_time) if appt_time else None
+
+        if date_str and time_str:
+            return (
+                f"You're already confirmed for {date_str} at {time_str}. "
+                "See you then!"
+            )
+        return "You're already confirmed. See you then!"
 
     async def _handle_reschedule(
         self,

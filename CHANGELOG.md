@@ -1,3 +1,27 @@
+# Repeat Confirmation Idempotency (gap-02)
+
+**Date:** 2026-04-22
+**Scope:** Make a repeat ``Y`` reply on an already-CONFIRMED appointment idempotent — short-circuit with a brief reassurance SMS instead of re-sending the full confirmation. Mirrors the repeat-``C`` no-op, with a non-empty auto-reply because confirmation is about trust. Adds a row-level lock so concurrent Y webhooks serialize through the status check.
+
+---
+
+## Changes
+
+| File | Change |
+|---|---|
+| `src/grins_platform/services/job_confirmation_service.py` — `_handle_confirm` | Fetch appointment via `select(Appointment).with_for_update()` (was `db.get`). Added short-circuit branch when `appt.status == CONFIRMED` that marks the response as `confirmed_repeat`, emits a `log_rejected("handle_confirm", reason="already_confirmed", ...)` audit line, and returns a reassurance ``auto_reply`` with `"dedup": True`. |
+| `src/grins_platform/services/job_confirmation_service.py` — `_build_confirm_reassurance_message` | New static helper: short reassurance SMS ("You're already confirmed for …") kept single-segment and intentionally distinct from the first-Y wording. |
+| `src/grins_platform/tests/unit/test_job_confirmation_service.py` | New `TestRepeatConfirmIsIdempotent` class (9 tests) covering short-circuit, monkeypatched build assertions, `confirmed_repeat` response status, dedup flag, terminal-state no-op, missing-appt guard, and the first-Y regression. Three existing `TestHandleConfirmation` tests updated to the new `db.execute(side_effect=[sent_result, appt_result])` mock shape. |
+| `src/grins_platform/tests/functional/test_yrc_confirmation_functional.py` | `_build_mock_db._execute_side_effect` now introspects `stmt.column_descriptions` to route `Appointment` selects to the appointment mock. New `TestRepeatConfirmReplyFlow` class validates the repeat-Y flow end-to-end. |
+
+## Notes
+
+- **No migration.** `JobConfirmationResponse.status` is `VARCHAR(50)`; `confirmed_repeat` (16 chars) fits.
+- **No new `MessageType` value.** The reassurance outbound re-uses `APPOINTMENT_CONFIRMATION_REPLY`; the distinguishing signal lives in `JobConfirmationResponse.status`.
+- **60s per-phone throttle** in `sms_service._autoreply_suppressed` naturally rate-limits a customer spamming `Y` — no new throttle helper needed.
+
+---
+
 # Replace Zip Code with Address Field in Lead Submission
 
 **Date:** 2026-03-30
