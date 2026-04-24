@@ -244,4 +244,23 @@ export const customerApi = {
     });
     return response.data as Blob;
   },
+
+  // --- Tags (Requirements 12.4, 12.5) ---
+  getTags: async (customerId: string): Promise<import('../types').CustomerTag[]> => {
+    const response = await apiClient.get<import('../types').CustomerTag[]>(
+      `${BASE_PATH}/${customerId}/tags`
+    );
+    return response.data;
+  },
+
+  saveTags: async (
+    customerId: string,
+    data: import('../types').TagSaveRequest
+  ): Promise<import('../types').TagSaveResponse> => {
+    const response = await apiClient.put<import('../types').TagSaveResponse>(
+      `${BASE_PATH}/${customerId}/tags`,
+      data
+    );
+    return response.data;
+  },
 };

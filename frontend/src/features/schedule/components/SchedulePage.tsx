@@ -21,7 +21,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Calendar, List, CalendarPlus } from 'lucide-react';
 import { CalendarView } from './CalendarView';
 import { AppointmentForm } from './AppointmentForm';
-import { AppointmentDetail } from './AppointmentDetail';
+import { AppointmentModal } from './AppointmentModal';
 import { AppointmentList } from './AppointmentList';
 import { ClearDayButton } from './ClearDayButton';
 import { ClearDayDialog } from './ClearDayDialog';
@@ -462,27 +462,15 @@ export function SchedulePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Appointment Detail Dialog */}
-      <Dialog
-        open={!!selectedAppointmentId}
-        onOpenChange={() => handleCloseDetail()}
-      >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby="appointment-detail-description">
-          <DialogHeader>
-            <DialogTitle>Appointment Details</DialogTitle>
-            <p id="appointment-detail-description" className="text-sm text-muted-foreground">
-              View and manage appointment information.
-            </p>
-          </DialogHeader>
-          {selectedAppointmentId && (
-            <AppointmentDetail
-              appointmentId={selectedAppointmentId}
-              onClose={handleCloseDetail}
-              onEdit={handleEditAppointment}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Appointment Detail Modal */}
+      {selectedAppointmentId && (
+        <AppointmentModal
+          appointmentId={selectedAppointmentId}
+          open={!!selectedAppointmentId}
+          onClose={handleCloseDetail}
+          onEdit={handleEditAppointment}
+        />
+      )}
 
       {/* Clear Day Dialog */}
       {selectedDate && (

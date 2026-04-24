@@ -22,6 +22,7 @@ from grins_platform.database import Base
 from grins_platform.models.enums import CustomerStatus, LeadSource
 
 if TYPE_CHECKING:
+    from grins_platform.models.customer_tag import CustomerTag
     from grins_platform.models.invoice import Invoice
     from grins_platform.models.job import Job
     from grins_platform.models.property import Property
@@ -209,6 +210,12 @@ class Customer(Base):
     invoices: Mapped[list["Invoice"]] = relationship(
         "Invoice",
         back_populates="customer",
+        lazy="selectin",
+    )
+    tags: Mapped[list["CustomerTag"]] = relationship(
+        "CustomerTag",
+        back_populates="customer",
+        cascade="all, delete-orphan",
         lazy="selectin",
     )
 

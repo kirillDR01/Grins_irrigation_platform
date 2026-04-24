@@ -3,6 +3,29 @@
  * Maps to backend appointment schemas.
  */
 
+// --- Customer Tag types (Requirements 12.1, 17.2) ---
+export type TagTone = 'neutral' | 'blue' | 'green' | 'amber' | 'violet';
+export type TagSource = 'manual' | 'system';
+
+export interface CustomerTag {
+  id: string;
+  customer_id: string;
+  label: string;
+  tone: TagTone;
+  source: TagSource;
+  created_at: string;
+}
+
+export interface TagSaveRequest {
+  tags: Array<{ label: string; tone: TagTone }>;
+}
+
+export interface TagSaveResponse {
+  tags: CustomerTag[];
+  added: number;
+  removed: number;
+}
+
 export type AppointmentStatus =
   | 'pending'
   | 'draft'

@@ -17,3 +17,6 @@ export { OptOutBadge } from './OptOutBadge';
 export type { OptOutBadgeProps } from './OptOutBadge';
 export { QueueFreshnessHeader } from './QueueFreshnessHeader';
 export type { QueueFreshnessHeaderProps } from './QueueFreshnessHeader';
+export { TagChip } from './TagChip';
+export type { TagTone } from './TagChip';
+export { SheetContainer } from './SheetContainer';

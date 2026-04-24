@@ -1,5 +1,26 @@
 import type { BaseEntity, PaginationParams, PaginatedResponse } from '@/core/api';
 
+// --- Customer Tag types (Requirements 12.1, 17.2) ---
+export type TagTone = 'neutral' | 'blue' | 'green' | 'amber' | 'violet';
+export type TagSource = 'manual' | 'system';
+
+export interface CustomerTag extends BaseEntity {
+  customer_id: string;
+  label: string;
+  tone: TagTone;
+  source: TagSource;
+}
+
+export interface TagSaveRequest {
+  tags: Array<{ label: string; tone: TagTone }>;
+}
+
+export interface TagSaveResponse {
+  tags: CustomerTag[];
+  added: number;
+  removed: number;
+}
+
 // Property entity (returned nested in customer detail)
 export interface Property extends BaseEntity {
   customer_id: string;

@@ -32,13 +32,16 @@ vi.mock('./AppointmentForm', () => ({
   ),
 }));
 
-vi.mock('./AppointmentDetail', () => ({
-  AppointmentDetail: ({ appointmentId, onClose }: { appointmentId: string; onClose?: () => void }) => (
-    <div data-testid="appointment-detail">
-      <span>Appointment: {appointmentId}</span>
-      <button onClick={onClose}>Close</button>
-    </div>
-  ),
+vi.mock('./AppointmentModal', () => ({
+  AppointmentModal: ({ appointmentId, open, onClose }: { appointmentId: string; open: boolean; onClose?: () => void }) => {
+    if (!open) return null;
+    return (
+      <div data-testid="appointment-detail">
+        <span>Appointment: {appointmentId}</span>
+        <button onClick={onClose}>Close</button>
+      </div>
+    );
+  },
 }));
 
 function createWrapper() {

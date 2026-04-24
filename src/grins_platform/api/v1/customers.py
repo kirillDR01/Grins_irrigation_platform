@@ -79,6 +79,9 @@ from grins_platform.schemas.customer_merge import (
     MergePreviewResponse,
     PaginatedMergeCandidateResponse,
 )
+from grins_platform.schemas.customer_tag import (
+    CustomerTagsUpdateRequest,  # noqa: TC001 - Required at runtime for FastAPI body parsing
+)
 from grins_platform.services.customer_merge_service import (
     CustomerMergeService,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
@@ -2190,3 +2193,99 @@ async def get_customer_consent_history(
         count=len(items),
     )
     return response.model_dump(mode="json")
+
+
+# =============================================================================
+# Task 2.3: Customer Tags endpoints
+# GET  /api/v1/customers/{customer_id}/tags
+# PUT  /api/v1/customers/{customer_id}/tags
+# Validates: Requirements 12.4, 12.5, 12.6, 12.7
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/{customer_id}/tags",
+    summary="Get customer tags",
+    description="Returns all tags for a customer.",
+)
+async def get_customer_tags(
+    customer_id: UUID,
+    _user: CurrentActiveUser,
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> list[dict[str, Any]]:
+    """Return all tags for a customer.
+
+    Validates: Requirements 12.4, 12.5
+    """
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from grins_platform.models.customer import Customer  # noqa: PLC0415
+    from grins_platform.repositories.customer_tag_repository import (  # noqa: PLC0415
+        CustomerTagRepository,
+    )
+    from grins_platform.services.customer_tag_service import (  # noqa: PLC0415
+        CustomerTagService,
+    )
+
+    _endpoints.log_started("get_customer_tags", customer_id=str(customer_id))
+
+    cust_result = await db.execute(
+        select(Customer.id).where(Customer.id == customer_id).limit(1),
+    )
+    if cust_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer {customer_id} not found",
+        )
+
+    svc = CustomerTagService(CustomerTagRepository(db))
+    tags = await svc.get_tags(customer_id)
+
+    _endpoints.log_completed("get_customer_tags", count=len(tags))
+    return [t.model_dump(mode="json") for t in tags]  # type: ignore[return-value]
+
+
+@router.put(  # type: ignore[untyped-decorator]
+    "/{customer_id}/tags",
+    summary="Update customer tags",
+    description=(
+        "Diff-based save: preserves system tags, inserts new manual tags, "
+        "deletes removed manual tags."
+    ),
+)
+async def update_customer_tags(
+    customer_id: UUID,
+    body: CustomerTagsUpdateRequest,
+    _user: CurrentActiveUser,
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> dict[str, Any]:
+    """Update tags for a customer using diff-based save.
+
+    Validates: Requirements 12.4, 12.5, 12.6, 12.7
+    """
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from grins_platform.models.customer import Customer  # noqa: PLC0415
+    from grins_platform.repositories.customer_tag_repository import (  # noqa: PLC0415
+        CustomerTagRepository,
+    )
+    from grins_platform.services.customer_tag_service import (  # noqa: PLC0415
+        CustomerTagService,
+    )
+
+    _endpoints.log_started("update_customer_tags", customer_id=str(customer_id))
+
+    cust_result = await db.execute(
+        select(Customer.id).where(Customer.id == customer_id).limit(1),
+    )
+    if cust_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer {customer_id} not found",
+        )
+
+    svc = CustomerTagService(CustomerTagRepository(db))
+    result = await svc.save_tags(customer_id, body, db)
+
+    _endpoints.log_completed("update_customer_tags", total=len(result.tags))
+    return result.model_dump(mode="json")  # type: ignore[no-any-return]

@@ -38,6 +38,7 @@ from grins_platform.models.customer import Customer
 from grins_platform.models.customer_document import CustomerDocument
 from grins_platform.models.customer_merge_candidate import CustomerMergeCandidate
 from grins_platform.models.customer_photo import CustomerPhoto
+from grins_platform.models.customer_tag import CustomerTag
 from grins_platform.models.disclosure_record import DisclosureRecord
 from grins_platform.models.email_suppression_list import EmailSuppressionList
 from grins_platform.models.enums import (
@@ -163,6 +164,7 @@ __all__ = [
     "CustomerMergeCandidate",
     "CustomerPhoto",
     "CustomerStatus",
+    "CustomerTag",
     "DisclosureRecord",
     "DisclosureType",
     "DocumentType",
