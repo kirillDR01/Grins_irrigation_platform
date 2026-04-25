@@ -122,3 +122,48 @@ describe('SecondaryActionsStrip — Panel toggle callbacks', () => {
     expect(props.onEditTags).toHaveBeenCalledTimes(1);
   });
 });
+
+// ── Review-enabled gating ────────────────────────────────────────────────────
+
+describe('SecondaryActionsStrip — Review gating', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('renders Send Review Request enabled by default', () => {
+    render(<SecondaryActionsStrip {...defaultProps()} />);
+    expect(screen.getByLabelText('Send Review Request')).not.toBeDisabled();
+  });
+
+  it('disables the Review button when reviewEnabled=false and exposes the reason via title + aria-label', () => {
+    render(
+      <SecondaryActionsStrip
+        {...defaultProps({
+          reviewEnabled: false,
+          reviewDisabledReason: 'Available after appointment is marked completed',
+        })}
+      />
+    );
+    const btn = screen.getByLabelText(
+      /Send Review Request — Available after appointment is marked completed/
+    );
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveAttribute(
+      'title',
+      'Available after appointment is marked completed'
+    );
+  });
+
+  it('does not call onReview when disabled and clicked', async () => {
+    const user = userEvent.setup();
+    const props = defaultProps({
+      reviewEnabled: false,
+      reviewDisabledReason: 'Customer has no phone number',
+    });
+    render(<SecondaryActionsStrip {...props} />);
+
+    const btn = screen.getByLabelText(
+      /Send Review Request — Customer has no phone number/
+    );
+    await user.click(btn);
+    expect(props.onReview).not.toHaveBeenCalled();
+  });
+});

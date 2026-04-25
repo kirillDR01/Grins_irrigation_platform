@@ -11,16 +11,15 @@ interface LinkButtonProps {
   disabled?: boolean;
   type?: 'button' | 'submit' | 'reset';
   'aria-label'?: string;
+  title?: string;
   className?: string;
 }
 
 const variantStyles: Record<LinkButtonVariant, string> = {
   default:
     'bg-white border-[#E5E7EB] text-[#374151] hover:bg-gray-50 hover:border-gray-300',
-  active:
-    'bg-[#EDE9FE] border-[#6D28D9] text-[#6D28D9]',
-  destructive:
-    'bg-white border-[#FCA5A5] text-[#B91C1C] hover:bg-red-50',
+  active: 'bg-[#EDE9FE] border-[#6D28D9] text-[#6D28D9]',
+  destructive: 'bg-white border-[#FCA5A5] text-[#B91C1C] hover:bg-red-50',
 };
 
 export function LinkButton({
@@ -31,6 +30,7 @@ export function LinkButton({
   disabled,
   type = 'button',
   'aria-label': ariaLabel,
+  title,
   className,
 }: LinkButtonProps) {
   return (
@@ -39,13 +39,14 @@ export function LinkButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
+      title={title}
       className={cn(
         'inline-flex items-center justify-center gap-[6px] min-h-[44px] px-3',
         'rounded-[12px] border-[1.5px] text-[14px] font-bold',
         'transition-colors duration-150',
         variantStyles[variant],
         disabled && 'opacity-50 cursor-not-allowed',
-        className,
+        className
       )}
     >
       {icon && (

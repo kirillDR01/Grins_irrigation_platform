@@ -13,6 +13,8 @@ interface SecondaryActionsStripProps {
   tagsOpen: boolean;
   onEditTags: () => void;
   onReview?: () => void;
+  reviewEnabled?: boolean;
+  reviewDisabledReason?: string;
   /** V2 panel state */
   photosOpen: boolean;
   notesOpen: boolean;
@@ -26,6 +28,8 @@ export function SecondaryActionsStrip({
   tagsOpen,
   onEditTags,
   onReview,
+  reviewEnabled = true,
+  reviewDisabledReason,
   photosOpen,
   notesOpen,
   photoCount,
@@ -58,7 +62,15 @@ export function SecondaryActionsStrip({
       <LinkButton
         icon={<Star />}
         onClick={onReview}
-        aria-label="Send Review Request"
+        disabled={!reviewEnabled}
+        aria-label={
+          reviewEnabled
+            ? 'Send Review Request'
+            : reviewDisabledReason
+              ? `Send Review Request — ${reviewDisabledReason}`
+              : 'Send Review Request'
+        }
+        title={!reviewEnabled ? reviewDisabledReason : undefined}
       >
         Send Review Request
       </LinkButton>

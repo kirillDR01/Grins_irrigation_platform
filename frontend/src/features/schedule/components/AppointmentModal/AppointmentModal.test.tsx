@@ -103,8 +103,7 @@ vi.mock('../../hooks/useAppointments', () => ({
 }));
 
 vi.mock('../../hooks/useAppointmentTimeline', () => ({
-  useAppointmentTimeline: (...args: unknown[]) =>
-    mockUseAppointmentTimeline(...args),
+  useAppointmentTimeline: (...args: unknown[]) => mockUseAppointmentTimeline(...args),
 }));
 
 vi.mock('../../hooks/useRescheduleRequests', () => ({
@@ -204,9 +203,7 @@ vi.mock('@/features/customers/api/customerApi', () => ({
 
 // Mock sub-components that aren't relevant to these tests
 vi.mock('../AppointmentCommunicationTimeline', () => ({
-  AppointmentCommunicationTimeline: () => (
-    <div data-testid="communication-timeline" />
-  ),
+  AppointmentCommunicationTimeline: () => <div data-testid="communication-timeline" />,
 }));
 vi.mock('../AppointmentForm', () => ({
   AppointmentForm: () => <div data-testid="appointment-form" />,
@@ -230,6 +227,24 @@ vi.mock('./PaymentSheetWrapper', () => ({
 vi.mock('./EstimateSheetWrapper', () => ({
   EstimateSheetWrapper: () => <div data-testid="estimate-sheet" />,
 }));
+vi.mock('./ReviewConfirmDialog', () => ({
+  ReviewConfirmDialog: ({
+    open,
+    customerName,
+    customerPhone,
+  }: {
+    open: boolean;
+    customerName: string;
+    customerPhone: string | null;
+  }) =>
+    open ? (
+      <div
+        data-testid="review-confirm-dialog"
+        data-customer-name={customerName}
+        data-customer-phone={customerPhone ?? ''}
+      />
+    ) : null,
+}));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -238,9 +253,7 @@ function createWrapper() {
     defaultOptions: { queries: { retry: false } },
   });
   return function Wrapper({ children }: { children: React.ReactNode }) {
-    return (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
+    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   };
 }
 
@@ -269,7 +282,7 @@ function renderModal(props?: Partial<Parameters<typeof AppointmentModal>[0]>) {
       onClose={vi.fn()}
       {...props}
     />,
-    { wrapper: createWrapper() },
+    { wrapper: createWrapper() }
   );
 }
 
@@ -311,9 +324,7 @@ describe('AppointmentModal — Container and ARIA (Req 1.5, 1.6)', () => {
 
     const modal = await screen.findByTestId('appointment-modal');
     // The onKeyDown handler is on the modal div itself
-    modal.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-    );
+    modal.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 
     expect(onClose).toHaveBeenCalled();
   });
@@ -349,7 +360,7 @@ describe('AppointmentModal — Renders all sections', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
-        'Spring Startup',
+        'Spring Startup'
       );
     });
   });
@@ -366,9 +377,15 @@ describe('AppointmentModal — Renders all sections', () => {
     renderModal();
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /see attached photos/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /see attached notes/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /send review request/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /see attached photos/i })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /see attached notes/i })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /send review request/i })
+      ).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /edit tags/i })).toBeInTheDocument();
     });
   });
@@ -378,7 +395,7 @@ describe('AppointmentModal — Renders all sections', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('button', { name: /refresh appointment data/i }),
+        screen.getByRole('button', { name: /refresh appointment data/i })
       ).toBeInTheDocument();
     });
   });
@@ -398,10 +415,16 @@ describe('AppointmentModal — Pending/Draft hide timeline and action track (Req
       await screen.findByTestId('appointment-modal');
 
       // ActionTrack renders buttons with labels like "Mark as en route"
-      expect(screen.queryByRole('button', { name: /mark as en route/i })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /mark as on site/i })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /mark as done/i })).not.toBeInTheDocument();
-    },
+      expect(
+        screen.queryByRole('button', { name: /mark as en route/i })
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /mark as on site/i })
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /mark as done/i })
+      ).not.toBeInTheDocument();
+    }
   );
 
   it.each(['pending', 'draft'] as AppointmentStatus[])(
@@ -414,7 +437,7 @@ describe('AppointmentModal — Pending/Draft hide timeline and action track (Req
 
       // Status badge has aria-label="Status: ..."
       expect(screen.queryByLabelText(/^Status:/)).not.toBeInTheDocument();
-    },
+    }
   );
 
   it.each(['confirmed', 'scheduled', 'en_route', 'in_progress'] as AppointmentStatus[])(
@@ -426,7 +449,7 @@ describe('AppointmentModal — Pending/Draft hide timeline and action track (Req
       await waitFor(() => {
         expect(screen.getByLabelText(/^Status:/)).toBeInTheDocument();
       });
-    },
+    }
   );
 
   it('shows ActionTrack for confirmed status', async () => {
@@ -434,7 +457,9 @@ describe('AppointmentModal — Pending/Draft hide timeline and action track (Req
     renderModal();
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /mark as en route/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /mark as en route/i })
+      ).toBeInTheDocument();
     });
   });
 });
@@ -468,10 +493,10 @@ describe('AppointmentModal — Terminal states hide footer actions (Req 11.5)', 
       const cancelButtons = screen.queryAllByRole('button', { name: /^cancel$/i });
       // None of them should be the footer cancel button
       const footerCancel = cancelButtons.filter(
-        (btn) => btn.closest('[class*="border-t"]') !== null,
+        (btn) => btn.closest('[class*="border-t"]') !== null
       );
       expect(footerCancel).toHaveLength(0);
-    },
+    }
   );
 
   it.each(['confirmed', 'scheduled', 'en_route', 'in_progress'] as AppointmentStatus[])(
@@ -484,7 +509,7 @@ describe('AppointmentModal — Terminal states hide footer actions (Req 11.5)', 
         expect(screen.getByText('Edit')).toBeInTheDocument();
         expect(screen.getByText('No show')).toBeInTheDocument();
       });
-    },
+    }
   );
 });
 
@@ -532,6 +557,99 @@ describe('AppointmentModal — Loading and error states', () => {
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveAttribute('aria-label', 'Error loading appointment');
     expect(screen.getByText('Error loading appointment')).toBeInTheDocument();
+  });
+});
+
+describe('AppointmentModal — Send Review Request wiring', () => {
+  const baseCustomer = {
+    id: 'cust-001',
+    first_name: 'Jane',
+    last_name: 'Smith',
+    phone: '612-555-9876' as string | null,
+    email: 'jane@example.com',
+    properties: [
+      {
+        is_primary: true,
+        property_type: 'Residential',
+        address: '123 Elm St',
+        city: 'Eden Prairie',
+        state: 'MN',
+        zip_code: '55344',
+        latitude: null,
+        longitude: null,
+      },
+    ],
+  };
+
+  async function setCustomerPhone(phone: string | null) {
+    const { customerApi } = await import('@/features/customers/api/customerApi');
+    vi.mocked(customerApi.get).mockResolvedValue({
+      ...baseCustomer,
+      phone,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    await setCustomerPhone('612-555-9876');
+  });
+
+  it('disables the Review button for non-completed status', async () => {
+    setupMocks({ status: 'confirmed' });
+    renderModal();
+
+    const btn = await screen.findByRole('button', {
+      name: /send review request/i,
+    });
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveAttribute(
+      'title',
+      'Available after appointment is marked completed'
+    );
+  });
+
+  it('disables the Review button when the customer has no phone', async () => {
+    await setCustomerPhone(null);
+    setupMocks({
+      status: 'completed',
+      en_route_at: '2025-07-15T09:00:00Z',
+      arrived_at: '2025-07-15T09:30:00Z',
+      completed_at: '2025-07-15T11:00:00Z',
+    });
+    renderModal();
+
+    await waitFor(() => {
+      const btn = screen.getByRole('button', {
+        name: /send review request/i,
+      });
+      expect(btn).toBeDisabled();
+      expect(btn).toHaveAttribute('title', 'Customer has no phone number');
+    });
+  });
+
+  it('opens the ReviewConfirmDialog when clicked on a completed appointment with a phone', async () => {
+    setupMocks({
+      status: 'completed',
+      en_route_at: '2025-07-15T09:00:00Z',
+      arrived_at: '2025-07-15T09:30:00Z',
+      completed_at: '2025-07-15T11:00:00Z',
+    });
+    const user = userEvent.setup();
+    renderModal();
+
+    const btn = await screen.findByRole('button', {
+      name: /send review request/i,
+    });
+    await waitFor(() => expect(btn).not.toBeDisabled());
+    await user.click(btn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('review-confirm-dialog')).toBeInTheDocument();
+    });
+    const dialog = screen.getByTestId('review-confirm-dialog');
+    expect(dialog).toHaveAttribute('data-customer-name', 'Jane Smith');
+    expect(dialog).toHaveAttribute('data-customer-phone', '612-555-9876');
   });
 });
 

@@ -55,6 +55,7 @@ import { PaymentSheetWrapper } from './PaymentSheetWrapper';
 import { EstimateSheetWrapper } from './EstimateSheetWrapper';
 import { PhotosPanel } from './PhotosPanel';
 import { NotesPanel } from './NotesPanel';
+import { ReviewConfirmDialog } from './ReviewConfirmDialog';
 
 interface AppointmentModalProps {
   appointmentId: string;
@@ -72,9 +73,17 @@ export function AppointmentModal({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const queryClient = useQueryClient();
 
-  const { data: appointment, isLoading, error, isFetching } = useAppointment(appointmentId);
-  const { data: timeline, isLoading: timelineLoading, error: timelineError } =
-    useAppointmentTimeline(appointmentId);
+  const {
+    data: appointment,
+    isLoading,
+    error,
+    isFetching,
+  } = useAppointment(appointmentId);
+  const {
+    data: timeline,
+    isLoading: timelineLoading,
+    error: timelineError,
+  } = useAppointmentTimeline(appointmentId);
 
   const { data: job } = useQuery({
     queryKey: ['jobs', 'detail', appointment?.job_id],
@@ -102,7 +111,15 @@ export function AppointmentModal({
   const photoCount = photos?.length ?? 0;
   const noteCount = (notes?.body?.length ?? 0) > 0 ? 1 : 0;
 
-  const { openSheet, openSheetExclusive, closeSheet, openPanel, editingNotes, togglePanel, setEditingNotes } = useModalState();
+  const {
+    openSheet,
+    openSheetExclusive,
+    closeSheet,
+    openPanel,
+    editingNotes,
+    togglePanel,
+    setEditingNotes,
+  } = useModalState();
 
   const cancelMutation = useCancelAppointment();
   const noShowMutation = useMarkAppointmentNoShow();
@@ -112,8 +129,10 @@ export function AppointmentModal({
   const sendReminderMutation = useSendReminder();
 
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-  const [rescheduleTarget, setRescheduleTarget] = useState<PendingRescheduleRequest | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] =
+    useState<PendingRescheduleRequest | null>(null);
   const [reminderConfirmOpen, setReminderConfirmOpen] = useState(false);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
 
   // Focus close button on open (req 1.5)
   useEffect(() => {
@@ -137,7 +156,10 @@ export function AppointmentModal({
         aria-label="Loading appointment"
         className="fixed inset-0 z-50 flex items-center justify-center"
       >
-        <div className="fixed inset-0 bg-[rgba(11,18,32,0.4)] backdrop-blur-[4px]" onClick={onClose} />
+        <div
+          className="fixed inset-0 bg-[rgba(11,18,32,0.4)] backdrop-blur-[4px]"
+          onClick={onClose}
+        />
         <div className="relative bg-white rounded-[18px] p-8 flex items-center justify-center">
           <LoadingSpinner />
         </div>
@@ -153,11 +175,16 @@ export function AppointmentModal({
         aria-label="Error loading appointment"
         className="fixed inset-0 z-50 flex items-center justify-center"
       >
-        <div className="fixed inset-0 bg-[rgba(11,18,32,0.4)] backdrop-blur-[4px]" onClick={onClose} />
+        <div
+          className="fixed inset-0 bg-[rgba(11,18,32,0.4)] backdrop-blur-[4px]"
+          onClick={onClose}
+        />
         <div className="relative bg-white rounded-[18px] p-8 text-center">
           <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
           <p className="font-medium text-slate-800">Error loading appointment</p>
-          <Button variant="ghost" size="sm" onClick={onClose} className="mt-3">Close</Button>
+          <Button variant="ghost" size="sm" onClick={onClose} className="mt-3">
+            Close
+          </Button>
         </div>
       </div>
     );
@@ -166,9 +193,12 @@ export function AppointmentModal({
   const isDraft = appointment.status === 'draft';
   const isCompleted = appointment.status === 'completed';
 
-  const willNotifyByDefault = ['scheduled', 'confirmed', 'en_route', 'in_progress'].includes(
-    appointment.status,
-  );
+  const willNotifyByDefault = [
+    'scheduled',
+    'confirmed',
+    'en_route',
+    'in_progress',
+  ].includes(appointment.status);
 
   const pendingReschedule = timeline?.pending_reschedule_request ?? null;
   const needsReviewNoReply = timeline?.needs_review_reason === 'no_confirmation_response';
@@ -178,11 +208,10 @@ export function AppointmentModal({
     customer?.properties?.find((p) => p.is_primary) ?? customer?.properties?.[0];
 
   const totalJobs = customerJobs?.items?.length ?? 0;
-  const completedJobs = customerJobs?.items?.filter((j) => j.status === 'completed').length ?? 0;
+  const completedJobs =
+    customerJobs?.items?.filter((j) => j.status === 'completed').length ?? 0;
   const historySummary =
-    totalJobs > 0
-      ? `${completedJobs} of ${totalJobs} jobs completed`
-      : undefined;
+    totalJobs > 0 ? `${completedJobs} of ${totalJobs} jobs completed` : undefined;
 
   const jobTitle = job?.job_type
     ? job.job_type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
@@ -335,7 +364,9 @@ export function AppointmentModal({
                   <p className="text-sm font-medium text-amber-900">
                     Customer requested reschedule{' '}
                     <span className="text-xs text-amber-700">
-                      {formatDistanceToNow(new Date(pendingReschedule.created_at), { addSuffix: true })}
+                      {formatDistanceToNow(new Date(pendingReschedule.created_at), {
+                        addSuffix: true,
+                      })}
                     </span>
                   </p>
                   {pendingReschedule.raw_alternatives_text && (
@@ -377,7 +408,9 @@ export function AppointmentModal({
               <div className="flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 text-orange-500 mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-800">No reply received yet.</p>
+                  <p className="text-sm font-medium text-slate-800">
+                    No reply received yet.
+                  </p>
                   <div className="mt-2 flex items-center gap-2 flex-wrap">
                     {customer?.phone && (
                       <Button
@@ -415,7 +448,10 @@ export function AppointmentModal({
           {/* Draft: send confirmation */}
           {isDraft && customer && (
             <div className="px-5 pb-3 flex-shrink-0">
-              <SendConfirmationButton appointment={appointment} customerId={customer.id} />
+              <SendConfirmationButton
+                appointment={appointment}
+                customerId={customer.id}
+              />
             </div>
           )}
 
@@ -435,6 +471,15 @@ export function AppointmentModal({
           <SecondaryActionsStrip
             tagsOpen={openSheet === 'tags'}
             onEditTags={() => openSheetExclusive('tags')}
+            onReview={() => setReviewDialogOpen(true)}
+            reviewEnabled={isCompleted && !!customer?.phone}
+            reviewDisabledReason={
+              !isCompleted
+                ? 'Available after appointment is marked completed'
+                : !customer?.phone
+                  ? 'Customer has no phone number'
+                  : undefined
+            }
             photosOpen={openPanel === 'photos'}
             notesOpen={openPanel === 'notes'}
             photoCount={photoCount}
@@ -630,7 +675,12 @@ export function AppointmentModal({
       />
 
       {/* Reschedule dialog */}
-      <Dialog open={!!rescheduleTarget} onOpenChange={(open) => { if (!open) setRescheduleTarget(null); }}>
+      <Dialog
+        open={!!rescheduleTarget}
+        onOpenChange={(open) => {
+          if (!open) setRescheduleTarget(null);
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Reschedule Appointment</DialogTitle>
@@ -651,6 +701,17 @@ export function AppointmentModal({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Send Review Request confirmation dialog */}
+      <ReviewConfirmDialog
+        appointmentId={appointmentId}
+        customerName={
+          customer ? `${customer.first_name} ${customer.last_name}` : 'customer'
+        }
+        customerPhone={customer?.phone ?? null}
+        open={reviewDialogOpen}
+        onOpenChange={setReviewDialogOpen}
+      />
 
       {/* Send reminder confirmation dialog */}
       <Dialog open={reminderConfirmOpen} onOpenChange={setReminderConfirmOpen}>
@@ -674,10 +735,17 @@ export function AppointmentModal({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setReminderConfirmOpen(false)} disabled={sendReminderMutation.isPending}>
+            <Button
+              variant="ghost"
+              onClick={() => setReminderConfirmOpen(false)}
+              disabled={sendReminderMutation.isPending}
+            >
               Cancel
             </Button>
-            <Button onClick={handleSendReminder} disabled={sendReminderMutation.isPending}>
+            <Button
+              onClick={handleSendReminder}
+              disabled={sendReminderMutation.isPending}
+            >
               <Send className="h-3 w-3 mr-1" />
               Send reminder
             </Button>
@@ -722,19 +790,28 @@ function DurationMetrics({ enRouteAt, arrivedAt, completedAt }: DurationMetricsP
       <div className="grid grid-cols-3 gap-3">
         <div>
           <p className="text-[10px] text-slate-500 uppercase">Travel</p>
-          <p className="text-sm font-medium text-slate-800" data-testid="metric-travel-time">
+          <p
+            className="text-sm font-medium text-slate-800"
+            data-testid="metric-travel-time"
+          >
             {fmt(travelMinutes)}
           </p>
         </div>
         <div>
           <p className="text-[10px] text-slate-500 uppercase">Job</p>
-          <p className="text-sm font-medium text-slate-800" data-testid="metric-job-duration">
+          <p
+            className="text-sm font-medium text-slate-800"
+            data-testid="metric-job-duration"
+          >
             {fmt(jobMinutes)}
           </p>
         </div>
         <div>
           <p className="text-[10px] text-slate-500 uppercase">Total</p>
-          <p className="text-sm font-medium text-slate-800" data-testid="metric-total-time">
+          <p
+            className="text-sm font-medium text-slate-800"
+            data-testid="metric-total-time"
+          >
             {fmt(totalMinutes)}
           </p>
         </div>
