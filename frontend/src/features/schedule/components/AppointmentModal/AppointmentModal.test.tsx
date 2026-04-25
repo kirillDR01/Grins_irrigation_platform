@@ -362,13 +362,13 @@ describe('AppointmentModal — Renders all sections', () => {
     });
   });
 
-  it('renders secondary action buttons (Add photo, Notes, Review, Edit tags)', async () => {
+  it('renders secondary action buttons (See attached photos, See attached notes, Send Review Request, Edit tags)', async () => {
     renderModal();
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /add photo/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /notes/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /review/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /see attached photos/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /see attached notes/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /send review request/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /edit tags/i })).toBeInTheDocument();
     });
   });

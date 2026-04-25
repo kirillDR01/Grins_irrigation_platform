@@ -34,6 +34,10 @@ from grins_platform.repositories.service_offering_repository import (
     ServiceOfferingRepository,
 )
 from grins_platform.repositories.staff_repository import StaffRepository
+from grins_platform.repositories.appointment_note_repository import (
+    AppointmentNoteRepository,
+)
+from grins_platform.services.appointment_note_service import AppointmentNoteService
 from grins_platform.services.appointment_service import AppointmentService
 from grins_platform.services.appointment_timeline_service import (
     AppointmentTimelineService,
@@ -212,6 +216,21 @@ async def get_appointment_timeline_service(
     return AppointmentTimelineService(session=session)
 
 
+async def get_appointment_note_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> AppointmentNoteService:
+    """Get AppointmentNoteService dependency.
+
+    Args:
+        session: Database session from dependency injection
+
+    Returns:
+        AppointmentNoteService instance
+    """
+    repo = AppointmentNoteRepository(session=session)
+    return AppointmentNoteService(repo=repo, session=session)
+
+
 async def get_full_appointment_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> AppointmentService:
@@ -372,6 +391,7 @@ async def get_campaign_service(
 
 
 __all__ = [
+    "get_appointment_note_service",
     "get_appointment_service",
     "get_campaign_service",
     "get_customer_service",

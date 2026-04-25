@@ -51,3 +51,10 @@ export {
 } from './useRescheduleRequests';
 
 export { useAppointmentTimeline } from './useAppointmentTimeline';
+
+export {
+  appointmentNoteKeys,
+  useAppointmentNotes,
+  useSaveAppointmentNotes,
+} from './useAppointmentNotes';
+export type { AppointmentNotesResponse } from './useAppointmentNotes';

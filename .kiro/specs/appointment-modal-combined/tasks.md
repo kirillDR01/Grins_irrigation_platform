@@ -339,38 +339,38 @@ This plan replaces the existing `AppointmentDetail.tsx` (~941 lines) with a high
 - [x] 16. Checkpoint — All tests pass
   - Ensure all unit, functional, integration, and property-based tests pass with zero failures, ask the user if questions arise.
 
-- [ ] 17. E2E: Deploy to Vercel and validate with agent-browser
+- [x] 17. E2E: Deploy to Vercel and validate with agent-browser
   - [x] 17.1 Deploy frontend to Vercel
     - Run Vercel deployment and wait for successful build
     - Verify deployment URL is accessible
     - _Requirements: 20.6_
 
-  - [ ] 17.2 Validate modal rendering via agent-browser
+  - [x] 17.2 Validate modal rendering via agent-browser
     - Navigate to schedule page → open an appointment → verify modal renders with header, timeline, action track, customer hero, property card, scope card, footer
     - Capture screenshots to `e2e-screenshots/appointment-modal/`
     - _Requirements: 20.7_
 
-  - [ ] 17.3 Validate tag editor flow via agent-browser
+  - [x] 17.3 Validate tag editor flow via agent-browser
     - Open Edit tags sheet → add a suggested tag → remove a tag → verify save behavior
     - Capture screenshots to `e2e-screenshots/appointment-modal/`
     - _Requirements: 20.8_
 
-  - [ ] 17.4 Validate maps picker via agent-browser
+  - [x] 17.4 Validate maps picker via agent-browser
     - Tap "Get directions" → verify popover renders with Apple Maps and Google Maps options
     - Capture screenshots to `e2e-screenshots/appointment-modal/`
     - _Requirements: 20.9_
 
-  - [ ] 17.5 Validate responsive behavior via agent-browser
+  - [x] 17.5 Validate responsive behavior via agent-browser
     - Set viewport to 375×812 → verify modal renders as bottom sheet with grab handle
     - Capture screenshots to `e2e-screenshots/appointment-modal/`
     - _Requirements: 20.10_
 
-  - [ ] 17.6 Check for JavaScript errors via agent-browser
+  - [x] 17.6 Check for JavaScript errors via agent-browser
     - Run `agent-browser console` and `agent-browser errors` during all interactions
     - Verify zero JS errors and uncaught exceptions
     - _Requirements: 20.11_
 
-- [ ] 18. Final checkpoint — All tests pass, feature complete
+- [x] 18. Final checkpoint — All tests pass, feature complete
   - Ensure all tests (unit, functional, integration, property-based, and E2E) pass with zero failures before the feature is considered complete.
   - _Requirements: 20.12_
 

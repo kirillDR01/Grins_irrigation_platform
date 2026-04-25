@@ -23,6 +23,7 @@ from grins_platform.models.ai_usage import AIUsage
 from grins_platform.models.alert import Alert
 from grins_platform.models.appointment import Appointment
 from grins_platform.models.appointment_attachment import AppointmentAttachment
+from grins_platform.models.appointment_note import AppointmentNote
 from grins_platform.models.audit_log import AuditLog
 from grins_platform.models.business_setting import BusinessSetting
 from grins_platform.models.campaign import Campaign, CampaignRecipient
@@ -137,6 +138,8 @@ __all__ = [
     "Appointment",
     # April 16th: Appointment Attachments
     "AppointmentAttachment",
+    # Appointment Modal V2: Internal Notes
+    "AppointmentNote",
     "AppointmentStatus",
     "AttachmentType",
     # CRM Gap Closure

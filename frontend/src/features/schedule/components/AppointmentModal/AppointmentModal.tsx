@@ -33,8 +33,9 @@ import {
 import { useResolveRescheduleRequest } from '../../hooks/useRescheduleRequests';
 import { useMarkContacted, useSendReminder } from '../../hooks/useNoReplyReview';
 import { useCustomerTags } from '../../hooks/useCustomerTags';
-import { useModalState } from '../../hooks/useModalState';
-import { deriveStep } from '../../hooks/useModalState';
+import { useModalState, deriveStep } from '../../hooks/useModalState';
+import { useAppointmentNotes } from '../../hooks/useAppointmentNotes';
+import { useCustomerPhotos } from '@/features/customers';
 import type { Appointment, PendingRescheduleRequest } from '../../types';
 import { AppointmentCommunicationTimeline } from '../AppointmentCommunicationTimeline';
 import { AppointmentForm } from '../AppointmentForm';
@@ -52,6 +53,8 @@ import { ModalFooter } from './ModalFooter';
 import { TagEditorSheet } from './TagEditorSheet';
 import { PaymentSheetWrapper } from './PaymentSheetWrapper';
 import { EstimateSheetWrapper } from './EstimateSheetWrapper';
+import { PhotosPanel } from './PhotosPanel';
+import { NotesPanel } from './NotesPanel';
 
 interface AppointmentModalProps {
   appointmentId: string;
@@ -93,7 +96,13 @@ export function AppointmentModal({
 
   const { data: tags } = useCustomerTags(job?.customer_id);
 
-  const { openSheet, openSheetExclusive, closeSheet } = useModalState();
+  // V2: photo and note counts for SecondaryActionsStrip badges
+  const { data: photos } = useCustomerPhotos(job?.customer_id ?? '');
+  const { data: notes } = useAppointmentNotes(appointmentId);
+  const photoCount = photos?.length ?? 0;
+  const noteCount = (notes?.body?.length ?? 0) > 0 ? 1 : 0;
+
+  const { openSheet, openSheetExclusive, closeSheet, openPanel, editingNotes, togglePanel, setEditingNotes } = useModalState();
 
   const cancelMutation = useCancelAppointment();
   const noShowMutation = useMarkAppointmentNoShow();
@@ -426,7 +435,35 @@ export function AppointmentModal({
           <SecondaryActionsStrip
             tagsOpen={openSheet === 'tags'}
             onEditTags={() => openSheetExclusive('tags')}
+            photosOpen={openPanel === 'photos'}
+            notesOpen={openPanel === 'notes'}
+            photoCount={photoCount}
+            noteCount={noteCount}
+            onTogglePhotos={() => togglePanel('photos')}
+            onToggleNotes={() => togglePanel('notes')}
           />
+
+          {/* V2: Photos panel (conditional) */}
+          {openPanel === 'photos' && job?.customer_id && (
+            <div className="px-5">
+              <PhotosPanel
+                customerId={job.customer_id}
+                appointmentId={appointmentId}
+                jobId={job.id}
+              />
+            </div>
+          )}
+
+          {/* V2: Notes panel (conditional) */}
+          {openPanel === 'notes' && (
+            <div className="px-5">
+              <NotesPanel
+                appointmentId={appointmentId}
+                editing={editingNotes}
+                onSetEditing={setEditingNotes}
+              />
+            </div>
+          )}
 
           {/* Payment / Estimate CTAs */}
           {(appointment.status === 'in_progress' || isCompleted) && (

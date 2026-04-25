@@ -33,6 +33,7 @@ from grins_platform.api.v1.auth_dependencies import (
     ManagerOrAdminUser,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
 from grins_platform.api.v1.dependencies import (
+    get_appointment_note_service,
     get_appointment_service,
     get_appointment_timeline_service,
     get_db_session,
@@ -71,6 +72,10 @@ from grins_platform.schemas.appointment_ops import (
     RescheduleRequest,
     ReviewRequestResult,
 )
+from grins_platform.schemas.appointment_note import (
+    AppointmentNotesResponse,
+    AppointmentNotesSaveRequest,
+)
 from grins_platform.schemas.appointment_timeline import AppointmentTimelineResponse
 from grins_platform.schemas.estimate import (
     EstimateCreate,
@@ -81,6 +86,9 @@ from grins_platform.schemas.invoice import (
 )
 from grins_platform.services.appointment_service import (
     AppointmentService,  # noqa: TC001 - Required at runtime for FastAPI DI
+)
+from grins_platform.services.appointment_note_service import (
+    AppointmentNoteService,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
 from grins_platform.services.appointment_timeline_service import (
     AppointmentTimelineService,  # noqa: TC001 - Required at runtime for FastAPI DI
@@ -771,6 +779,107 @@ async def send_reminder_sms(
         status=AppointmentStatus.SCHEDULED.value,
         sms_sent=sms_sent,
     )
+
+
+# =============================================================================
+# GET /api/v1/appointments/{id}/notes - Get appointment notes (V2)
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/{appointment_id}/notes",
+    response_model=AppointmentNotesResponse,
+    summary="Get appointment internal notes",
+    description=(
+        "Returns the centralized internal notes for an appointment. "
+        "If no notes record exists, returns an empty body with null updated_by."
+    ),
+)
+async def get_appointment_notes(
+    appointment_id: UUID,
+    _current_user: CurrentActiveUser,
+    note_service: Annotated[
+        AppointmentNoteService,
+        Depends(get_appointment_note_service),
+    ],
+) -> AppointmentNotesResponse:
+    """Get internal notes for an appointment.
+
+    Validates: Appointment Modal V2 Req 10.1, 10.2, 10.4
+    """
+    _endpoints.log_started(
+        "get_appointment_notes",
+        appointment_id=str(appointment_id),
+    )
+
+    try:
+        result = await note_service.get_notes(appointment_id)
+    except AppointmentNotFoundError as e:
+        _endpoints.log_rejected("get_appointment_notes", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Appointment not found: {e.appointment_id}",
+        ) from e
+
+    _endpoints.log_completed(
+        "get_appointment_notes",
+        appointment_id=str(appointment_id),
+    )
+    return result
+
+
+# =============================================================================
+# PATCH /api/v1/appointments/{id}/notes - Save appointment notes (V2)
+# =============================================================================
+
+
+@router.patch(  # type: ignore[untyped-decorator]
+    "/{appointment_id}/notes",
+    response_model=AppointmentNotesResponse,
+    summary="Save appointment internal notes",
+    description=(
+        "Upserts the centralized internal notes for an appointment. "
+        "Creates the record if it doesn't exist, updates if it does. "
+        "Sets updated_by to the current authenticated user."
+    ),
+)
+async def save_appointment_notes(
+    appointment_id: UUID,
+    data: AppointmentNotesSaveRequest,
+    current_user: CurrentActiveUser,
+    note_service: Annotated[
+        AppointmentNoteService,
+        Depends(get_appointment_note_service),
+    ],
+) -> AppointmentNotesResponse:
+    """Save internal notes for an appointment.
+
+    Validates: Appointment Modal V2 Req 10.3, 10.4, 10.5, 10.6
+    """
+    _endpoints.log_started(
+        "save_appointment_notes",
+        appointment_id=str(appointment_id),
+        body_len=len(data.body),
+    )
+
+    try:
+        result = await note_service.save_notes(
+            appointment_id=appointment_id,
+            body=data.body,
+            updated_by_id=current_user.id,
+        )
+    except AppointmentNotFoundError as e:
+        _endpoints.log_rejected("save_appointment_notes", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Appointment not found: {e.appointment_id}",
+        ) from e
+
+    _endpoints.log_completed(
+        "save_appointment_notes",
+        appointment_id=str(appointment_id),
+    )
+    return result
 
 
 # =============================================================================
