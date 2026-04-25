@@ -226,8 +226,10 @@ export function useCreateCalendarEvent() {
   return useMutation({
     mutationFn: (body: SalesCalendarEventCreate) =>
       salesPipelineApi.createCalendarEvent(body),
-    onSuccess: () => {
+    onSuccess: (_data, body) => {
       qc.invalidateQueries({ queryKey: pipelineKeys.calendarEvents() });
+      qc.invalidateQueries({ queryKey: pipelineKeys.detail(body.sales_entry_id) });
+      qc.invalidateQueries({ queryKey: pipelineKeys.lists() });
     },
   });
 }
@@ -243,7 +245,7 @@ export function useUpdateCalendarEvent() {
       body: SalesCalendarEventUpdate;
     }) => salesPipelineApi.updateCalendarEvent(eventId, body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: pipelineKeys.calendarEvents() });
+      qc.invalidateQueries({ queryKey: pipelineKeys.all });
     },
   });
 }

@@ -106,6 +106,7 @@ export interface SalesCalendarEvent {
   start_time: string | null;
   end_time: string | null;
   notes: string | null;
+  assigned_to_user_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -118,6 +119,7 @@ export interface SalesCalendarEventCreate {
   start_time?: string | null;
   end_time?: string | null;
   notes?: string | null;
+  assigned_to_user_id?: string | null;
 }
 
 export interface SalesCalendarEventUpdate {
@@ -126,6 +128,7 @@ export interface SalesCalendarEventUpdate {
   start_time?: string | null;
   end_time?: string | null;
   notes?: string | null;
+  assigned_to_user_id?: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -314,3 +317,32 @@ export interface NudgeStep {
 
 /** Day offsets for the auto-nudge cadence (excluding the weekly loop). */
 export const NUDGE_CADENCE_DAYS: readonly number[] = [0, 2, 5, 8] as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ScheduleVisitModal types
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A picked slot. start/end are minutes-from-midnight (business-local TZ). */
+export type Pick = {
+  date: string;   // 'YYYY-MM-DD'
+  start: number;  // minutes (inclusive)
+  end: number;    // minutes (exclusive)
+};
+
+/** Calendar render block — minute-based projection of a SalesCalendarEvent. */
+export type EstimateBlock = {
+  id: string;
+  date: string;
+  startMin: number;
+  endMin: number;
+  customerName: string;     // resolved at hook layer
+  jobSummary: string;       // resolved at hook layer
+  assignedToUserId: string | null;
+};
+
+/** Companion form-field state held alongside `pick` in useScheduleVisit. */
+export type ScheduleVisitFormState = {
+  durationMin: 30 | 60 | 90 | 120;
+  assignedToUserId: string | null;
+  internalNotes: string;
+};

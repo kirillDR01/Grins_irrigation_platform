@@ -577,6 +577,7 @@ async def create_calendar_event(
         start_time=body.start_time,
         end_time=body.end_time,
         notes=body.notes,
+        assigned_to_user_id=body.assigned_to_user_id,
     )
     session.add(event)
 
@@ -600,7 +601,13 @@ async def create_calendar_event(
 
     await session.commit()
     await session.refresh(event)
-    _ep.log_completed("create_calendar_event", event_id=str(event.id))
+    _ep.log_completed(
+        "create_calendar_event",
+        event_id=str(event.id),
+        assigned_to_user_id=str(body.assigned_to_user_id)
+        if body.assigned_to_user_id
+        else None,
+    )
     return SalesCalendarEventResponse.model_validate(event)  # type: ignore[no-any-return]
 
 

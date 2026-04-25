@@ -140,6 +140,11 @@ class SalesCalendarEvent(Base):
     start_time: Mapped[Optional[time]] = mapped_column(Time, nullable=True)
     end_time: Mapped[Optional[time]] = mapped_column(Time, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    assigned_to_user_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("staff.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -159,7 +164,10 @@ class SalesCalendarEvent(Base):
     )
     customer: Mapped["Customer"] = relationship("Customer", lazy="selectin")
 
-    __table_args__ = (Index("idx_sales_calendar_date", "scheduled_date"),)
+    __table_args__ = (
+        Index("idx_sales_calendar_date", "scheduled_date"),
+        Index("ix_sales_calendar_assigned_to", "assigned_to_user_id"),
+    )
 
     def __repr__(self) -> str:
         return (

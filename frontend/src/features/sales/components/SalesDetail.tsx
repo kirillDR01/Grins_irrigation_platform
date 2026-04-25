@@ -33,7 +33,9 @@ import {
   useAdvanceSalesEntry,
   useConvertToJob,
   useMarkSalesLost,
+  useSalesCalendarEvents,
 } from '../hooks/useSalesPipeline';
+import { ScheduleVisitModal } from './ScheduleVisitModal';
 import { SALES_STATUS_CONFIG, TERMINAL_STATUSES, ALL_STATUSES, statusToStageKey } from '../types/pipeline';
 import type { SalesEntryStatus, NowActionId, ActivityEvent } from '../types/pipeline';
 import { DocumentsSection } from './DocumentsSection';
@@ -66,6 +68,19 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
   // Fetch customer for internal_notes display
   const { data: salesCustomer } = useCustomerDetail(entry?.customer_id ?? '');
 
+  // Existing calendar events for this entry — used to determine reschedule path.
+  // Backend orders ASC by scheduled_date (api/v1/sales_pipeline.py), so the
+  // last item is the most recent. SalesCalendarEvent has no `cancelled_at`
+  // column today; if a customer has rescheduled twice, we treat the latest
+  // row as the active one.
+  const { data: entryEvents } = useSalesCalendarEvents({
+    sales_entry_id: entryId,
+  });
+  const currentEvent =
+    entryEvents && entryEvents.length > 0
+      ? entryEvents[entryEvents.length - 1] ?? null
+      : null;
+
   // Inline edit state
   const [editingCustomerInfo, setEditingCustomerInfo] = useState(false);
   const [customerInfoForm, setCustomerInfoForm] = useState({
@@ -94,6 +109,9 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
 
   // Override status modal state
   const [_showOverrideSelect, setShowOverrideSelect] = useState(false);
+
+  // ScheduleVisitModal open state
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
 
   // Fetch documents to determine signing button state
   const { data: documents } = useSalesDocuments(entry?.customer_id ?? '');
@@ -139,10 +157,7 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
     (id: NowActionId) => {
       switch (id) {
         case 'schedule_visit':
-          advance.mutate(entryId, {
-            onSuccess: () => { toast.success('Estimate scheduled'); refetch(); },
-            onError: () => toast.error('Failed to schedule'),
-          });
+          setScheduleModalOpen(true);
           break;
 
         case 'send_estimate_email':
@@ -573,6 +588,13 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
 
       {/* Suppress unused staffData warning */}
       {staffData && null}
+
+      <ScheduleVisitModal
+        entry={entry}
+        currentEvent={currentEvent}
+        open={scheduleModalOpen}
+        onOpenChange={setScheduleModalOpen}
+      />
     </div>
   );
 }

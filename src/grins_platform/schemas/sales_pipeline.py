@@ -68,6 +68,7 @@ class SalesCalendarEventCreate(BaseModel):
     start_time: Optional[time] = None
     end_time: Optional[time] = None
     notes: Optional[str] = None
+    assigned_to_user_id: Optional[UUID] = None
 
 
 class SalesCalendarEventUpdate(BaseModel):
@@ -78,6 +79,7 @@ class SalesCalendarEventUpdate(BaseModel):
     start_time: Optional[time] = None
     end_time: Optional[time] = None
     notes: Optional[str] = None
+    assigned_to_user_id: Optional[UUID] = None
 
 
 class SalesCalendarEventResponse(BaseModel):
@@ -93,5 +95,6 @@ class SalesCalendarEventResponse(BaseModel):
     start_time: Optional[time] = None
     end_time: Optional[time] = None
     notes: Optional[str] = None
+    assigned_to_user_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime

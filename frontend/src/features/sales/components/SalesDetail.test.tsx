@@ -84,6 +84,8 @@ vi.mock('../hooks/useSalesPipeline', () => ({
   useForceConvertToJob: () => ({ mutate: vi.fn(), isPending: false }),
   useMarkSalesLost: () => ({ mutate: vi.fn(), isPending: false }),
   useCreateCalendarEvent: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateCalendarEvent: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSalesCalendarEvents: () => ({ data: [], isLoading: false, error: null }),
   useOverrideSalesStatus: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
