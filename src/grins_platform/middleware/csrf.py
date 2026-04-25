@@ -73,6 +73,8 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         self.exempt_paths: set[str] = exempt_paths or {
             "/api/v1/auth/login",
             "/api/v1/auth/refresh",
+            "/api/v1/auth/webauthn/authenticate/begin",
+            "/api/v1/auth/webauthn/authenticate/finish",
             "/health",
             "/docs",
             "/redoc",

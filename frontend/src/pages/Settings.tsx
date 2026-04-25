@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { User, Bell, Palette, Key, Shield, LogOut, Lock, Mail, Phone, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/core/providers";
-import { useAuth } from "@/features/auth";
+import { useAuth, PasskeyManager } from "@/features/auth";
 import { authApi } from "@/features/auth/api";
 import { toast } from "sonner";
 import { BusinessInfo, InvoiceDefaults, NotificationPrefs, EstimateDefaults, BusinessSettingsPanel } from "@/features/settings";
@@ -302,6 +302,9 @@ export function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Sign-in & Security (passkeys) */}
+      <PasskeyManager />
 
       {/* Account Actions Section */}
       <Card data-testid="account-actions" className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow dark:bg-slate-800 dark:border-slate-700">

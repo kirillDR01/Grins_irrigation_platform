@@ -5,6 +5,62 @@ Grin's Irrigation Platform — field service automation for residential/commerci
 
 ## Recent Activity
 
+## [2026-04-25 23:05] - SECURITY: Add WebAuthn / Passkey authentication
+
+### What Was Accomplished
+- Added biometric / passkey login (Face ID, Touch ID, Windows Hello,
+  Android) alongside the existing username/password flow. Passwords stay
+  as the recovery path.
+- Six endpoints under `/api/v1/auth/webauthn/*` (register begin/finish,
+  authenticate begin/finish, credentials list/delete). The
+  `/authenticate/finish` endpoint mints the same JWT cookie set as the
+  password `/auth/login`, so `AuthProvider` is method-agnostic.
+- Two new tables (`webauthn_credentials`, `webauthn_user_handles`) plus a
+  `WebAuthnService` that owns the four ceremonies. Challenges live in
+  Redis with a 5-min TTL.
+- New `PasskeyManager` UI in Settings ("Sign-in & Security" card);
+  biometric button and `autocomplete="username webauthn"` on the login
+  page.
+
+### Technical Details
+- Backend: `webauthn>=2.7.0,<3.0.0` (py_webauthn / duo-labs). Sign-count
+  regression auto-revokes the offending credential. Revocation is
+  IDOR-safe (filtered by `staff_id`).
+- Frontend: `@simplewebauthn/browser@^13.3.0`, TanStack Query
+  (`passkeyKeys` factory), React Hook Form + Zod for the device-name
+  form, sonner toasts.
+- Tests: unit (service + API + property-based on base64url round-trip,
+  sign-count gate, handle uniqueness). Integration / functional /
+  frontend tests are scaffolded in the plan but require real DB and were
+  deferred.
+
+### Decision Rationale
+- **Platform-bound passkeys** (`AuthenticatorAttachment.PLATFORM`) — we
+  want Face ID / Touch ID specifically, not USB security keys, for
+  staff convenience.
+- **Synced passkeys allowed** — UX win of "enroll on iPhone, log in on
+  MacBook" via iCloud Keychain outweighs the trade-off for a workforce
+  app. Hardware keys can be re-enabled later by flipping the flag.
+- **Password remains the recovery path** — `email_service.py` is a stub
+  per memory, so magic-link recovery would be premature.
+
+### Challenges and Solutions
+- `Annotated[AsyncSession, Depends(...)]` with `from __future__ import
+  annotations` left the type as a forward reference. Fix: import
+  `AsyncSession` and `AuthService` at module level in `api/v1/webauthn.py`.
+- FastAPI `include_router` snapshots routes at call time. Fix: include
+  the webauthn sub-router into auth_router *before* including auth into
+  the api_router.
+- Local Postgres wasn't running, so migration round-trip and DB-touching
+  tests are deferred to first dev-DB boot.
+
+### Next Steps
+- Apply migration to dev: `uv run alembic upgrade head`.
+- Run manual hardware test (Mac Touch ID, iPhone Face ID) — Task 29.
+- Add functional + integration tests once a test DB is available.
+- Roll out to staff (admin first, then technicians).
+- Monitor `auth.webauthn.*` log events for verification failures.
+
 ## [2026-04-23 21:10] - REFACTOR: Enforce appointment state machine (gap-04.A + 4.B)
 
 ### What Was Accomplished

@@ -12,6 +12,7 @@ import * as AuthProviderModule from './AuthProvider';
 
 // Mock useAuth hook
 const mockLogin = vi.fn();
+const mockLoginWithPasskey = vi.fn();
 const mockUseAuth = vi.spyOn(AuthProviderModule, 'useAuth');
 
 // Mock useNavigate and useLocation
@@ -46,6 +47,9 @@ describe('LoginPage', () => {
       login: mockLogin,
       logout: vi.fn(),
       refreshToken: vi.fn(),
+      updateUser: vi.fn(),
+      setAuthState: vi.fn(),
+      loginWithPasskey: mockLoginWithPasskey,
     });
   });
 
@@ -75,7 +79,78 @@ describe('LoginPage', () => {
   it('renders sign in button', () => {
     renderLoginPage();
     expect(screen.getByTestId('login-btn')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
+    // Match the password Sign In button precisely (the passkey button reads
+    // "Sign in with biometrics" so a loose /sign in/i would now collide).
+    expect(
+      screen.getByRole('button', { name: /^Sign In$/ })
+    ).toBeInTheDocument();
+  });
+
+  it('renders the biometric passkey button', () => {
+    renderLoginPage();
+    expect(screen.getByTestId('passkey-login-btn')).toBeInTheDocument();
+  });
+
+  it('calls loginWithPasskey when biometric button is clicked', async () => {
+    const user = userEvent.setup();
+    mockLoginWithPasskey.mockResolvedValue(undefined);
+    renderLoginPage();
+
+    await user.click(screen.getByTestId('passkey-login-btn'));
+
+    await waitFor(() => {
+      expect(mockLoginWithPasskey).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('passes username hint to loginWithPasskey when present', async () => {
+    const user = userEvent.setup();
+    mockLoginWithPasskey.mockResolvedValue(undefined);
+    renderLoginPage();
+
+    await user.type(screen.getByTestId('username-input'), 'kirill');
+    await user.click(screen.getByTestId('passkey-login-btn'));
+
+    await waitFor(() => {
+      expect(mockLoginWithPasskey).toHaveBeenCalledWith('kirill');
+    });
+  });
+
+  it('does NOT show passkey-error when user cancels biometric prompt', async () => {
+    const user = userEvent.setup();
+    const cancelErr = Object.assign(new Error('cancelled'), {
+      name: 'NotAllowedError',
+    });
+    mockLoginWithPasskey.mockRejectedValue(cancelErr);
+    renderLoginPage();
+
+    await user.click(screen.getByTestId('passkey-login-btn'));
+
+    // After the rejection settles, no error UI should appear.
+    await waitFor(() => {
+      expect(mockLoginWithPasskey).toHaveBeenCalled();
+    });
+    expect(screen.queryByTestId('passkey-error')).not.toBeInTheDocument();
+  });
+
+  it('shows passkey-error on non-cancellation failures', async () => {
+    const user = userEvent.setup();
+    mockLoginWithPasskey.mockRejectedValue(new Error('network down'));
+    renderLoginPage();
+
+    await user.click(screen.getByTestId('passkey-login-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('passkey-error')).toBeInTheDocument();
+    });
+  });
+
+  it('username input has webauthn autocomplete hint', () => {
+    renderLoginPage();
+    expect(screen.getByTestId('username-input')).toHaveAttribute(
+      'autocomplete',
+      'username webauthn'
+    );
   });
 
   it('toggles password visibility', async () => {

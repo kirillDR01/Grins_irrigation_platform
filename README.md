@@ -147,6 +147,27 @@ Grin's Irrigation Platform is a field service automation system that eliminates 
 - CSRF protection
 - Secure cookie handling
 
+#### Biometric / Passkey login
+
+Staff can sign in with Face ID, Touch ID, Windows Hello, or Android
+biometrics via the W3C WebAuthn standard. Passkeys are managed from
+Settings → Sign-in & Security; the login page also surfaces a
+"Sign in with biometrics" button. No biometric data ever touches the
+server — only a public key and a signed challenge.
+
+Required environment variables (defaults for local dev work out of the
+box; **must** be set explicitly in staging/prod):
+
+```env
+WEBAUTHN_RP_ID=localhost                       # bare effective domain — no scheme/port
+WEBAUTHN_RP_NAME=Grin's Irrigation             # shown in the OS prompt
+WEBAUTHN_EXPECTED_ORIGINS=http://localhost:5173 # comma-separated list
+WEBAUTHN_CHALLENGE_TTL_SECONDS=300             # short — single-use nonce
+```
+
+Browsers reject `127.0.0.1` as an RP ID; use `localhost` (or your real
+domain) instead.
+
 ---
 
 ## Technology Stack

@@ -19,6 +19,10 @@ from grins_platform.exceptions.auth import (
     InvalidTokenError,
     TokenExpiredError,
     UserNotFoundError,
+    WebAuthnChallengeNotFoundError,
+    WebAuthnCredentialNotFoundError,
+    WebAuthnDuplicateCredentialError,
+    WebAuthnVerificationError,
 )
 
 if TYPE_CHECKING:
@@ -899,4 +903,8 @@ __all__ = [
     "TokenExpiredError",
     "UserNotFoundError",
     "ValidationError",
+    "WebAuthnChallengeNotFoundError",
+    "WebAuthnCredentialNotFoundError",
+    "WebAuthnDuplicateCredentialError",
+    "WebAuthnVerificationError",
 ]

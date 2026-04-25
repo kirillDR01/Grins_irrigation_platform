@@ -40,6 +40,10 @@ from grins_platform.exceptions import (
     ServiceOfferingNotFoundError,
     StaffNotFoundError,
     ValidationError,
+    WebAuthnChallengeNotFoundError,
+    WebAuthnCredentialNotFoundError,
+    WebAuthnDuplicateCredentialError,
+    WebAuthnVerificationError,
 )
 from grins_platform.log_config import (
     clear_request_id,
@@ -829,6 +833,90 @@ def _register_exception_handlers(app: FastAPI) -> None:
                 "error": {
                     "code": "DOCUMENT_UPLOAD_ERROR",
                     "message": str(exc),
+                },
+            },
+        )
+
+    @app.exception_handler(WebAuthnVerificationError)  # type: ignore[untyped-decorator]
+    async def webauthn_verification_handler(
+        request: Request,
+        exc: WebAuthnVerificationError,
+    ) -> JSONResponse:
+        """Handle WebAuthnVerificationError — HTTP 401 Unauthorized."""
+        logger.warning(
+            "api.exception.webauthn_verification_failed",
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={
+                "success": False,
+                "error": {
+                    "code": "WEBAUTHN_VERIFICATION_FAILED",
+                    "message": str(exc) or "Authentication failed",
+                },
+            },
+        )
+
+    @app.exception_handler(WebAuthnChallengeNotFoundError)  # type: ignore[untyped-decorator]
+    async def webauthn_challenge_not_found_handler(
+        request: Request,
+        exc: WebAuthnChallengeNotFoundError,
+    ) -> JSONResponse:
+        """Handle WebAuthnChallengeNotFoundError — HTTP 400 Bad Request."""
+        logger.warning(
+            "api.exception.webauthn_challenge_not_found",
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "success": False,
+                "error": {
+                    "code": "WEBAUTHN_CHALLENGE_NOT_FOUND",
+                    "message": str(exc) or "Challenge expired or invalid",
+                },
+            },
+        )
+
+    @app.exception_handler(WebAuthnCredentialNotFoundError)  # type: ignore[untyped-decorator]
+    async def webauthn_credential_not_found_handler(
+        request: Request,
+        exc: WebAuthnCredentialNotFoundError,
+    ) -> JSONResponse:
+        """Handle WebAuthnCredentialNotFoundError — HTTP 404 Not Found."""
+        logger.warning(
+            "api.exception.webauthn_credential_not_found",
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "success": False,
+                "error": {
+                    "code": "WEBAUTHN_CREDENTIAL_NOT_FOUND",
+                    "message": str(exc) or "Passkey not found",
+                },
+            },
+        )
+
+    @app.exception_handler(WebAuthnDuplicateCredentialError)  # type: ignore[untyped-decorator]
+    async def webauthn_duplicate_credential_handler(
+        request: Request,
+        exc: WebAuthnDuplicateCredentialError,
+    ) -> JSONResponse:
+        """Handle WebAuthnDuplicateCredentialError — HTTP 409 Conflict."""
+        logger.warning(
+            "api.exception.webauthn_duplicate_credential",
+            path=request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "success": False,
+                "error": {
+                    "code": "WEBAUTHN_DUPLICATE_CREDENTIAL",
+                    "message": str(exc) or "Passkey already registered",
                 },
             },
         )

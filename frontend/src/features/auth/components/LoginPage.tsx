@@ -15,7 +15,15 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { User, Eye, EyeOff, AlertCircle, Loader2, Droplets } from 'lucide-react';
+import {
+  User,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  Loader2,
+  Droplets,
+  Fingerprint,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,7 +34,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { login } = useAuth();
+  const { login, loginWithPasskey } = useAuth();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -34,6 +42,8 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
 
   // Show session expired message if redirected from 401 interceptor
   useEffect(() => {
@@ -59,6 +69,23 @@ export function LoginPage() {
       setError('Username or password is incorrect. Please try again.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handlePasskeyLogin = async () => {
+    setPasskeyError(null);
+    setPasskeyLoading(true);
+    try {
+      await loginWithPasskey(username || undefined);
+      navigate(from, { replace: true });
+    } catch (e) {
+      // User cancelled the OS prompt — silent abort, no error UI.
+      if (e instanceof Error && e.name === 'NotAllowedError') return;
+      setPasskeyError(
+        'Biometric sign-in failed. Try again or use your password.'
+      );
+    } finally {
+      setPasskeyLoading(false);
     }
   };
 
@@ -121,6 +148,7 @@ export function LoginPage() {
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="Enter your username"
                   className="pl-10"
+                  autoComplete="username webauthn"
                   required
                   disabled={isLoading}
                   data-testid="username-input"
@@ -190,6 +218,44 @@ export function LoginPage() {
               ) : (
                 'Sign In'
               )}
+            </Button>
+
+            {/* Divider */}
+            <div className="relative py-2">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-slate-200" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-slate-400">or</span>
+              </div>
+            </div>
+
+            {/* Passkey-specific error */}
+            {passkeyError && (
+              <div
+                className="bg-red-50 p-3 rounded-xl border border-red-200 flex items-start gap-3"
+                data-testid="passkey-error"
+              >
+                <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+                <p className="text-red-700 text-sm">{passkeyError}</p>
+              </div>
+            )}
+
+            {/* Biometric / Passkey button */}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handlePasskeyLogin}
+              disabled={passkeyLoading || isLoading}
+              data-testid="passkey-login-btn"
+            >
+              {passkeyLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Fingerprint className="h-4 w-4 mr-2" />
+              )}
+              Sign in with biometrics
             </Button>
           </form>
         </div>

@@ -92,6 +92,34 @@ class UserNotFoundError(AuthenticationError):
         super().__init__(message)
 
 
+class WebAuthnVerificationError(AuthenticationError):
+    """Raised when a WebAuthn ceremony's cryptographic verification fails."""
+
+    def __init__(self, message: str = "Authentication failed") -> None:
+        super().__init__(message)
+
+
+class WebAuthnChallengeNotFoundError(AuthenticationError):
+    """Raised when the Redis challenge entry for a ceremony is missing or expired."""
+
+    def __init__(self, message: str = "Challenge expired or invalid") -> None:
+        super().__init__(message)
+
+
+class WebAuthnCredentialNotFoundError(AuthenticationError):
+    """Raised when a passkey credential cannot be located by id."""
+
+    def __init__(self, message: str = "Passkey not found") -> None:
+        super().__init__(message)
+
+
+class WebAuthnDuplicateCredentialError(AuthenticationError):
+    """Raised when a registration would create a duplicate credential."""
+
+    def __init__(self, message: str = "Passkey already registered") -> None:
+        super().__init__(message)
+
+
 __all__ = [
     "AccountLockedError",
     "AuthenticationError",
@@ -99,4 +127,8 @@ __all__ = [
     "InvalidTokenError",
     "TokenExpiredError",
     "UserNotFoundError",
+    "WebAuthnChallengeNotFoundError",
+    "WebAuthnCredentialNotFoundError",
+    "WebAuthnDuplicateCredentialError",
+    "WebAuthnVerificationError",
 ]

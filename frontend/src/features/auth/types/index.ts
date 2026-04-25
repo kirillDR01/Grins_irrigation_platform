@@ -50,4 +50,13 @@ export interface AuthContextValue extends AuthState {
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
   updateUser: (user: User) => void;
+  /**
+   * Apply a LoginResponse to the auth context — sets the access token, the
+   * user, and reschedules refresh. Used by passkey login.
+   */
+  setAuthState: (response: LoginResponse) => void;
+  /**
+   * Run the WebAuthn sign-in ceremony and apply the returned LoginResponse.
+   */
+  loginWithPasskey: (username?: string) => Promise<void>;
 }

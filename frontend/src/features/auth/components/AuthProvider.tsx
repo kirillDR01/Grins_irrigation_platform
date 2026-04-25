@@ -22,7 +22,14 @@ import {
 } from 'react';
 import { apiClient } from '@/core/api/client';
 import { authApi } from '../api';
-import type { User, LoginRequest, AuthContextValue } from '../types';
+import { webauthnApi } from '../api/webauthn';
+import { startAuthentication } from '@simplewebauthn/browser';
+import type {
+  User,
+  LoginRequest,
+  LoginResponse,
+  AuthContextValue,
+} from '../types';
 
 // Token expiration buffer (refresh 1 minute before expiry)
 const TOKEN_REFRESH_BUFFER_MS = 60 * 1000;
@@ -36,6 +43,8 @@ const defaultContextValue: AuthContextValue = {
   logout: async () => {},
   refreshToken: async () => {},
   updateUser: () => {},
+  setAuthState: () => {},
+  loginWithPasskey: async () => {},
 };
 
 const AuthContext = createContext<AuthContextValue>(defaultContextValue);
@@ -163,15 +172,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
     restoreSession();
   }, [scheduleTokenRefresh]);
 
-  // Login function
-  const login = useCallback(
-    async (credentials: LoginRequest) => {
-      const response = await authApi.login(credentials);
+  // Apply a LoginResponse — used by both password login and passkey login.
+  const setAuthState = useCallback(
+    (response: LoginResponse) => {
       setAccessToken(response.access_token);
       setUser(response.user);
       scheduleTokenRefresh(response.expires_in);
     },
     [scheduleTokenRefresh]
+  );
+
+  // Login function
+  const login = useCallback(
+    async (credentials: LoginRequest) => {
+      const response = await authApi.login(credentials);
+      setAuthState(response);
+    },
+    [setAuthState]
+  );
+
+  // Passkey login — runs the WebAuthn ceremony and applies the result.
+  const loginWithPasskey = useCallback(
+    async (username?: string) => {
+      const begin = await webauthnApi.authenticateBegin({ username });
+      const credential = await startAuthentication({ optionsJSON: begin.options });
+      const response = await webauthnApi.authenticateFinish({
+        handle: begin.handle,
+        credential,
+      });
+      setAuthState(response);
+    },
+    [setAuthState]
   );
 
   // Logout function
@@ -209,6 +240,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     logout,
     refreshToken,
     updateUser,
+    setAuthState,
+    loginWithPasskey,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -70,9 +70,14 @@ from grins_platform.api.v1.staff_reassignment import router as reassignment_rout
 from grins_platform.api.v1.stripe_terminal import router as stripe_terminal_router
 from grins_platform.api.v1.templates import router as templates_router
 from grins_platform.api.v1.voice import router as voice_router
+from grins_platform.api.v1.webauthn import router as webauthn_router
 from grins_platform.api.v1.webhooks import router as webhooks_router
 
 api_router = APIRouter(prefix="/api/v1")
+
+# Mount the WebAuthn sub-router on the auth router *before* including auth in
+# the api router — FastAPI snapshots routes at include-time.
+auth_router.include_router(webauthn_router)
 
 # Include authentication endpoints
 api_router.include_router(auth_router)

@@ -118,6 +118,10 @@ from grins_platform.models.staff import Staff
 from grins_platform.models.staff_availability import StaffAvailability
 from grins_platform.models.staff_break import StaffBreak
 from grins_platform.models.stripe_webhook_event import StripeWebhookEvent
+from grins_platform.models.webauthn_credential import (
+    WebAuthnCredential,
+    WebAuthnUserHandle,
+)
 from grins_platform.models.webhook_processed_log import WebhookProcessedLog
 
 __all__ = [
@@ -236,6 +240,8 @@ __all__ = [
     "StaffRole",
     "StripeWebhookEvent",
     "SystemType",
+    "WebAuthnCredential",
+    "WebAuthnUserHandle",
     "WebhookProcessedLog",
     "WebhookProcessingStatus",
 ]
