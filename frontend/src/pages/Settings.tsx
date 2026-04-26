@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { User, Bell, Palette, Key, Shield, LogOut, Lock, Mail, Phone, Sun, Moon } from "lucide-react";
-import { useTheme } from "@/core/providers";
+import { User, Bell, Key, Shield, LogOut, Lock, Mail, Phone } from "lucide-react";
 import { useAuth, PasskeyManager } from "@/features/auth";
 import { authApi } from "@/features/auth/api";
 import { toast } from "sonner";
@@ -27,8 +26,6 @@ export function SettingsPage() {
   const [emailEnabled, setEmailEnabled] = useState(true);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
-  const { resolvedTheme, toggleTheme } = useTheme();
-  const isDarkMode = resolvedTheme === 'dark';
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
@@ -201,42 +198,6 @@ export function SettingsPage() {
               data-testid="push-toggle"
               checked={pushEnabled}
               onCheckedChange={setPushEnabled}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Display Settings Section */}
-      <Card data-testid="display-settings" className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow dark:bg-slate-800 dark:border-slate-700">
-        <CardHeader className="p-6 border-b border-slate-100 dark:border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-amber-50 rounded-lg dark:bg-amber-900/30">
-              <Palette className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-            </div>
-            <div>
-              <CardTitle className="font-bold text-slate-800 text-lg dark:text-slate-100">Display Settings</CardTitle>
-              <CardDescription className="text-slate-500 text-sm dark:text-slate-400">Customize your visual experience</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between py-3">
-            <div className="flex items-center gap-3">
-              {isDarkMode ? (
-                <Moon className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-              ) : (
-                <Sun className="w-5 h-5 text-amber-500" />
-              )}
-              <div className="space-y-0.5">
-                <Label htmlFor="theme-toggle" className="text-sm font-medium text-slate-700 dark:text-slate-300">Dark Mode</Label>
-                <p className="text-xs text-slate-400">Switch between light and dark themes</p>
-              </div>
-            </div>
-            <Switch 
-              id="theme-toggle"
-              data-testid="theme-toggle"
-              checked={isDarkMode}
-              onCheckedChange={toggleTheme}
             />
           </div>
         </CardContent>

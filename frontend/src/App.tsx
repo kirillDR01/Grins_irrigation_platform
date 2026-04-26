@@ -6,7 +6,7 @@ import { AuthProvider } from '@/features/auth';
 
 function App() {
   return (
-    <ThemeProvider defaultTheme="system">
+    <ThemeProvider>
       <QueryProvider>
         <AuthProvider>
           <RouterProvider router={router} />
