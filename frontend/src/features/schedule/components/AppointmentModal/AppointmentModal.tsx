@@ -649,13 +649,19 @@ export function AppointmentModal({
 
         {/* Payment sheet */}
         {openSheet === 'payment' && (
-          <div className="absolute inset-0 z-10">
-            <PaymentSheetWrapper
-              appointmentId={appointmentId}
-              customerPhone={customer?.phone}
-              customerEmail={customer?.email ?? undefined}
-              onClose={closeSheet}
-            />
+          <div
+            className="absolute inset-0 z-10 bg-white flex flex-col"
+            data-testid="subsheet-payment"
+          >
+            <SubSheetHeader title="Collect payment" onBack={closeSheet} />
+            <div className="flex-1 overflow-y-auto">
+              <PaymentSheetWrapper
+                appointmentId={appointmentId}
+                customerPhone={customer?.phone}
+                customerEmail={customer?.email ?? undefined}
+                onClose={closeSheet}
+              />
+            </div>
           </div>
         )}
 
