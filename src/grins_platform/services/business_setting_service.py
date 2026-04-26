@@ -42,6 +42,9 @@ BUSINESS_SETTING_KEYS: tuple[str, ...] = (
     "lien_min_amount",
     "upcoming_due_days",
     "confirmation_no_reply_days",
+    # gap-10 Phase 1 — Day-2 No-Reply Reminder feature flag + offset.
+    "confirmation_day_2_reminder_enabled",
+    "confirmation_day_2_reminder_offset_hours",
 )
 
 
@@ -134,6 +137,41 @@ class BusinessSettingService(LoggerMixin):
                 raw=str(raw),
             )
             return default
+
+    async def get_bool(self, key: str, default: bool) -> bool:
+        """Get a boolean setting by key, falling back to ``default``.
+
+        Accepts the JSONB raw value as one of: ``True``/``False``,
+        ``"true"``/``"false"`` (case-insensitive), or ``1``/``0``. Any
+        other shape returns ``default``.
+
+        Args:
+            key: Setting key.
+            default: Returned verbatim if the row is missing or the
+                value can't be coerced to ``bool``.
+
+        Returns:
+            Boolean value (or ``default``).
+        """
+        raw = await self._get_raw(key)
+        if raw is None:
+            return default
+        if isinstance(raw, bool):
+            return raw
+        if isinstance(raw, int):
+            return bool(raw)
+        if isinstance(raw, str):
+            lowered = raw.strip().lower()
+            if lowered in {"true", "1", "yes", "on"}:
+                return True
+            if lowered in {"false", "0", "no", "off"}:
+                return False
+        self.logger.warning(
+            "business_setting.get_bool.coerce_failed",
+            key=key,
+            raw=str(raw),
+        )
+        return default
 
     async def get_decimal(self, key: str, default: Decimal) -> Decimal:
         """Get a Decimal setting by key, falling back to ``default``.

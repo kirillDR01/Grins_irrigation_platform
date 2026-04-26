@@ -344,11 +344,15 @@ class TestRegisterScheduledJobs:
     """Tests for register_scheduled_jobs."""
 
     def test_registers_all_four_jobs(self):
-        """All eight scheduled jobs are registered (H-7 added no-reply sweep)."""
+        """All ten scheduled jobs are registered.
+
+        bughunt H-7 added flag_no_reply_confirmations (7 → 8); gap-07
+        added prune_webhook_processed_logs (8 → 9); gap-10 Phase 1
+        added send_day_2_reminders (9 → 10).
+        """
         mock_scheduler = MagicMock()
         register_scheduled_jobs(mock_scheduler)
-        # bughunt H-7 added flag_no_reply_confirmations — 7 → 8.
-        assert mock_scheduler.add_job.call_count == 8
+        assert mock_scheduler.add_job.call_count == 10
 
         job_ids = [call.kwargs["id"] for call in mock_scheduler.add_job.call_args_list]
         assert "escalate_failed_payments" in job_ids
@@ -359,6 +363,8 @@ class TestRegisterScheduledJobs:
         assert "process_pending_campaign_recipients" in job_ids
         assert "duplicate_detection_sweep" in job_ids
         assert "flag_no_reply_confirmations" in job_ids
+        assert "prune_webhook_processed_logs" in job_ids
+        assert "send_day_2_reminders" in job_ids
 
     def test_registers_flag_no_reply_confirmations_via_cron_trigger(self):
         """H-7 no-reply sweep is registered with a CronTrigger instance."""

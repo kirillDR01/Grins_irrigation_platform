@@ -24,6 +24,7 @@ from grins_platform.models.alert import Alert
 from grins_platform.models.appointment import Appointment
 from grins_platform.models.appointment_attachment import AppointmentAttachment
 from grins_platform.models.appointment_note import AppointmentNote
+from grins_platform.models.appointment_reminder_log import AppointmentReminderLog
 from grins_platform.models.audit_log import AuditLog
 from grins_platform.models.business_setting import BusinessSetting
 from grins_platform.models.campaign import Campaign, CampaignRecipient
@@ -144,6 +145,8 @@ __all__ = [
     "AppointmentAttachment",
     # Appointment Modal V2: Internal Notes
     "AppointmentNote",
+    # scheduling gaps gap-10 Phase 1: Day-2 No-Reply Reminder
+    "AppointmentReminderLog",
     "AppointmentStatus",
     "AttachmentType",
     # CRM Gap Closure

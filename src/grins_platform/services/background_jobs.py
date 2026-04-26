@@ -12,6 +12,7 @@ import os
 import time as _time_mod
 from datetime import datetime, time, timedelta, timezone
 from typing import TYPE_CHECKING
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import stripe
@@ -904,6 +905,397 @@ class NoReplyConfirmationFlagger(LoggerMixin):
         return flagged
 
 
+# ============================================================================
+# Day-2 No-Reply Confirmation Reminder (scheduling gaps gap-10 Phase 1)
+# ============================================================================
+
+
+# Default offset between the original confirmation send and the day-2
+# reminder. Overridable via the ``confirmation_day_2_reminder_offset_hours``
+# BusinessSetting row seeded by ``20260429_100100``.
+DEFAULT_DAY_2_REMINDER_OFFSET_HOURS = 48
+
+# How wide a window past the offset to scan. The hourly tick re-evaluates
+# the same set on every fire, so the window only needs to cover the
+# coalesce / misfire grace plus one tick of jitter.
+DAY_2_REMINDER_WINDOW_HOURS = 4
+
+# Stage label written into the reminder log + audit details.
+REMINDER_STAGE_DAY_2 = "day_2"
+
+
+class Day2ReminderJob(LoggerMixin):
+    """Re-prompt SCHEDULED appointments that didn't reply to confirmation.
+
+    Mirrors :class:`NoReplyConfirmationFlagger` in shape, but acts: for
+    every SCHEDULED appointment whose original ``APPOINTMENT_CONFIRMATION``
+    SMS landed between (now - offset - 4 h) and (now - offset) without a
+    customer reply or a prior day-2 log row, we re-send a Y/R/C prompt
+    with day-2 copy and write an ``appointment_reminder_log`` row to
+    dedup future ticks.
+
+    Gated on ``confirmation_day_2_reminder_enabled`` — when the flag is
+    false (the seeded default), each tick no-ops after a single setting
+    read so prod opt-in is a deliberate flip.
+
+    Validates: scheduling gaps gap-10 Phase 1 (Day-2 No-Reply Reminder).
+    """
+
+    DOMAIN = "scheduler"
+
+    async def _resolve_settings(
+        self,
+        session: AsyncSession,
+    ) -> tuple[bool, int]:
+        """Return ``(enabled, offset_hours)`` from BusinessSetting.
+
+        Falls back to ``False`` / :data:`DEFAULT_DAY_2_REMINDER_OFFSET_HOURS`
+        when the row is missing — defensive against an out-of-order
+        migration environment. Lazy-imports the service so test doubles
+        can patch the module-level dependency without it being resolved
+        at import time.
+        """
+        try:
+            from grins_platform.services.business_setting_service import (  # noqa: PLC0415
+                BusinessSettingService,
+            )
+        except Exception:
+            return False, DEFAULT_DAY_2_REMINDER_OFFSET_HOURS
+
+        try:
+            service = BusinessSettingService(session)
+            enabled = await service.get_bool(
+                "confirmation_day_2_reminder_enabled",
+                default=False,
+            )
+            offset = await service.get_int(
+                "confirmation_day_2_reminder_offset_hours",
+                default=DEFAULT_DAY_2_REMINDER_OFFSET_HOURS,
+            )
+        except Exception:
+            return False, DEFAULT_DAY_2_REMINDER_OFFSET_HOURS
+
+        if offset <= 0:
+            offset = DEFAULT_DAY_2_REMINDER_OFFSET_HOURS
+        return enabled, offset
+
+    async def run(self) -> None:
+        """Execute the day-2 reminder job."""
+        self.log_started("send_day_2_reminders")
+        db_manager = get_database_manager()
+        sent = 0
+        skipped = 0
+
+        try:
+            async for session in db_manager.get_session():
+                sent, skipped = await self._run_once(session)
+        except Exception as exc:
+            self.log_failed("send_day_2_reminders", error=exc)
+            raise
+
+        self.log_completed(
+            "send_day_2_reminders",
+            sent_count=sent,
+            skipped_count=skipped,
+        )
+
+    async def _run_once(self, session: AsyncSession) -> tuple[int, int]:
+        """Scan + send in a single session. Returns ``(sent, skipped)``."""
+        from grins_platform.models.appointment_reminder_log import (  # noqa: PLC0415
+            AppointmentReminderLog,
+        )
+        from grins_platform.repositories.appointment_reminder_log_repository import (  # noqa: PLC0415
+            AppointmentReminderLogRepository,
+        )
+        from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+            AuditLogRepository,
+        )
+
+        enabled, offset_hours = await self._resolve_settings(session)
+        if not enabled:
+            self.logger.info(
+                "scheduler.day_2_reminder.disabled",
+                offset_hours=offset_hours,
+            )
+            return 0, 0
+
+        now = datetime.now(timezone.utc)
+        window_end = now - timedelta(hours=offset_hours)
+        window_start = window_end - timedelta(hours=DAY_2_REMINDER_WINDOW_HOURS)
+
+        # Most-recent APPOINTMENT_CONFIRMATION sent_at per appointment.
+        # We deliberately do NOT include APPOINTMENT_REMINDER in this
+        # subquery — using REMINDER as the message_type for the day-2
+        # send keeps this subquery anchored on the original day-1
+        # confirmation, so a successful day-2 send doesn't shift the
+        # window for any future per-appointment check.
+        latest_confirmation_subq = (
+            select(func.max(SentMessage.sent_at))
+            .where(
+                SentMessage.appointment_id == Appointment.id,
+                SentMessage.message_type == MessageType.APPOINTMENT_CONFIRMATION.value,
+                SentMessage.sent_at.is_not(None),
+            )
+            .correlate(Appointment)
+            .scalar_subquery()
+        )
+
+        # Eligibility: SCHEDULED + confirmation landed inside the
+        # (now - offset - 4h, now - offset] window + no day-2 log row.
+        already_logged_subq = (
+            select(AppointmentReminderLog.id)
+            .where(
+                AppointmentReminderLog.appointment_id == Appointment.id,
+                AppointmentReminderLog.stage == REMINDER_STAGE_DAY_2,
+            )
+            .exists()
+        )
+        stmt = select(Appointment).where(
+            Appointment.status == AppointmentStatus.SCHEDULED.value,
+            latest_confirmation_subq.is_not(None),
+            latest_confirmation_subq > window_start,
+            latest_confirmation_subq <= window_end,
+            ~already_logged_subq,
+        )
+        result = await session.execute(stmt)
+        candidates = list(result.scalars().all())
+
+        if not candidates:
+            return 0, 0
+
+        reminder_repo = AppointmentReminderLogRepository(session)
+        sent = 0
+        skipped = 0
+
+        for appt in candidates:
+            outcome = await self._process_one(
+                session=session,
+                appt=appt,
+                reminder_repo=reminder_repo,
+                audit_repo_factory=AuditLogRepository,
+            )
+            if outcome == "sent":
+                sent += 1
+            else:
+                skipped += 1
+
+        return sent, skipped
+
+    async def _process_one(  # noqa: PLR0911 — guard-clause structure is clearer than nesting
+        self,
+        *,
+        session: AsyncSession,
+        appt: Appointment,
+        reminder_repo: object,
+        audit_repo_factory: type,
+    ) -> str:
+        """Send the day-2 reminder for one appointment.
+
+        Returns one of ``"sent" | "skipped"``. All exceptions are
+        swallowed and converted to ``"skipped"`` so a single bad row
+        cannot break the whole tick.
+        """
+        from grins_platform.models.appointment_reminder_log import (  # noqa: PLC0415
+            AppointmentReminderLog,
+        )
+        from grins_platform.models.customer import Customer  # noqa: PLC0415
+        from grins_platform.models.job_confirmation import (  # noqa: PLC0415
+            JobConfirmationResponse,
+        )
+        from grins_platform.services.sms.formatters import (  # noqa: PLC0415
+            format_job_type_display,
+            format_sms_date,
+            format_sms_time_window,
+        )
+        from grins_platform.services.sms.recipient import Recipient  # noqa: PLC0415
+        from grins_platform.services.sms_service import SMSService  # noqa: PLC0415
+
+        appointment_id = appt.id
+        try:
+            # Race-protection: re-read status before sending, since the
+            # eligibility query and the send happen in different DB
+            # round-trips and a customer reply / admin cancel could
+            # have landed in between.
+            fresh = await session.get(Appointment, appointment_id)
+            if fresh is None or fresh.status != AppointmentStatus.SCHEDULED.value:
+                self.logger.info(
+                    "scheduler.day_2_reminder.skipped_status_changed",
+                    appointment_id=str(appointment_id),
+                    status=fresh.status if fresh else None,
+                )
+                return "skipped"
+
+            # Re-resolve the latest day-1 confirmation send and check for
+            # any reply that landed after it.
+            sent_at_stmt = select(func.max(SentMessage.sent_at)).where(
+                SentMessage.appointment_id == appointment_id,
+                SentMessage.message_type == MessageType.APPOINTMENT_CONFIRMATION.value,
+                SentMessage.sent_at.is_not(None),
+            )
+            sent_at_result = await session.execute(sent_at_stmt)
+            last_confirmation_at: datetime | None = sent_at_result.scalar()
+            if last_confirmation_at is None:
+                return "skipped"
+
+            reply_stmt = select(func.count()).where(
+                JobConfirmationResponse.appointment_id == appointment_id,
+                JobConfirmationResponse.received_at > last_confirmation_at,
+            )
+            reply_result = await session.execute(reply_stmt)
+            if int(reply_result.scalar() or 0) > 0:
+                self.logger.info(
+                    "scheduler.day_2_reminder.skipped_already_replied",
+                    appointment_id=str(appointment_id),
+                )
+                return "skipped"
+
+            # Resolve job + customer.
+            job = await session.get(Job, fresh.job_id)
+            if job is None:
+                return "skipped"
+            customer = await session.get(Customer, job.customer_id)
+            if customer is None or not customer.phone:
+                return "skipped"
+
+            # Skip if the customer has opted out via the most recent
+            # SmsConsentRecord. SMSService.send_message will also enforce
+            # this, but the explicit pre-check avoids a noisy raised
+            # exception path for an expected no-op.
+            opt_out_stmt = (
+                select(SmsConsentRecord.consent_given)
+                .where(SmsConsentRecord.phone_number == customer.phone)
+                .order_by(SmsConsentRecord.created_at.desc())
+                .limit(1)
+            )
+            opt_out_result = await session.execute(opt_out_stmt)
+            latest_consent = opt_out_result.scalar()
+            if latest_consent is False:
+                self.logger.info(
+                    "scheduler.day_2_reminder.skipped_opted_out",
+                    appointment_id=str(appointment_id),
+                )
+                return "skipped"
+
+            # Compose the SMS body. Mirrors the day-1 confirmation copy
+            # but leads with "Reminder:" so the customer recognises it as
+            # a follow-up rather than a new appointment notice.
+            sms_service = SMSService(session, provider=get_sms_provider())
+
+            # Quiet-hours: hourly tick + 8AM-9PM CT window means a tick
+            # at 7:55 AM CT would otherwise fire 5 min before the window
+            # opens. Defer instead — the next tick at 8:55 AM lands
+            # cleanly inside the window.
+            scheduled = sms_service.enforce_time_window(
+                customer.phone,
+                "",
+                message_type="automated",
+            )
+            if scheduled is not None:
+                self.logger.info(
+                    "scheduler.day_2_reminder.deferred_quiet_hours",
+                    appointment_id=str(appointment_id),
+                    next_window=scheduled.isoformat(),
+                )
+                return "skipped"
+
+            recipient = Recipient.from_customer(customer)
+            date_str = format_sms_date(fresh.scheduled_date)
+            time_part = format_sms_time_window(
+                getattr(fresh, "time_window_start", None),
+                getattr(fresh, "time_window_end", None),
+            )
+            service_name = format_job_type_display(getattr(job, "job_type", None))
+            service_clause = f" for your {service_name}" if service_name else ""
+            msg = (
+                f"Reminder: please reply Y to confirm your appointment on "
+                f"{date_str}{time_part}{service_clause}, R to reschedule, "
+                "or C to cancel."
+            )
+
+            send_result = await sms_service.send_message(
+                recipient=recipient,
+                message=msg,
+                message_type=MessageType.APPOINTMENT_REMINDER,
+                consent_type="transactional",
+                job_id=job.id,
+                appointment_id=appointment_id,
+            )
+
+            if not send_result.get("success"):
+                self.logger.info(
+                    "scheduler.day_2_reminder.send_failed",
+                    appointment_id=str(appointment_id),
+                    reason=send_result.get("reason"),
+                )
+                return "skipped"
+
+            # Record the dedup row. Do this BEFORE the audit so a failure
+            # to write the audit row does not leave us without a dedup
+            # marker (which would re-fire on the next tick).
+            sent_message_id_raw = send_result.get("message_id")
+            sent_message_uuid: UUID | None = None
+            if sent_message_id_raw:
+                try:
+                    sent_message_uuid = UUID(str(sent_message_id_raw))
+                except (TypeError, ValueError):
+                    sent_message_uuid = None
+
+            log_row = AppointmentReminderLog(
+                appointment_id=appointment_id,
+                stage=REMINDER_STAGE_DAY_2,
+                sent_at=datetime.now(timezone.utc),
+                sent_message_id=sent_message_uuid,
+            )
+            await reminder_repo.create(log_row)  # type: ignore[attr-defined]
+
+            # Audit (best-effort). The user-facing send already happened,
+            # so we never let an audit failure surface — we just log it.
+            try:
+                audit_repo = audit_repo_factory(session)
+                await audit_repo.create(
+                    action="appointment.reminder_sent",
+                    resource_type="appointment",
+                    resource_id=appointment_id,
+                    actor_id=None,
+                    details={
+                        "actor_type": "system",
+                        "source": "nightly_job",
+                        "stage": REMINDER_STAGE_DAY_2,
+                        "sent_message_id": (
+                            str(sent_message_uuid) if sent_message_uuid else None
+                        ),
+                        "offset_hours_at_send": int(
+                            (
+                                datetime.now(timezone.utc) - last_confirmation_at
+                            ).total_seconds()
+                            // 3600,
+                        ),
+                    },
+                )
+            except Exception as exc:
+                self.log_failed(
+                    "scheduler.day_2_reminder.audit_write_failed",
+                    appointment_id=str(appointment_id),
+                    error=exc,
+                )
+
+            self.logger.info(
+                "scheduler.day_2_reminder.sent",
+                appointment_id=str(appointment_id),
+                reminder_log_id=str(log_row.id),
+            )
+
+        except Exception as exc:  # pragma: no cover - defensive
+            self.log_failed(
+                "scheduler.day_2_reminder.process_one",
+                appointment_id=str(appointment_id),
+                error=exc,
+            )
+            return "skipped"
+        else:
+            return "sent"
+
+
 # Singleton instances for job functions
 _escalator = FailedPaymentEscalator()
 _renewal_checker = UpcomingRenewalChecker()
@@ -912,6 +1304,7 @@ _orphan_cleaner = OrphanedConsentCleaner()
 _onboarding_reminder = OnboardingReminderJob()
 _campaign_worker = CampaignWorker()
 _no_reply_flagger = NoReplyConfirmationFlagger()
+_day_2_reminder_job = Day2ReminderJob()
 
 
 async def run_duplicate_detection_sweep_job() -> None:
@@ -961,6 +1354,14 @@ async def flag_no_reply_confirmations() -> None:
     Validates: bughunt 2026-04-16 finding H-7.
     """
     await _no_reply_flagger.run()
+
+
+async def send_day_2_reminders_job() -> None:
+    """Entry point for the hourly Day-2 No-Reply Reminder job.
+
+    Validates: scheduling gaps gap-10 Phase 1.
+    """
+    await _day_2_reminder_job.run()
 
 
 async def prune_webhook_processed_logs_job() -> None:
@@ -1071,6 +1472,18 @@ def register_scheduled_jobs(scheduler: BackgroundScheduler) -> None:
         replace_existing=True,
     )
 
+    # scheduling gaps gap-10 Phase 1 — hourly Day-2 No-Reply Reminder.
+    # The job itself is feature-flagged via the
+    # ``confirmation_day_2_reminder_enabled`` BusinessSetting so prod
+    # opt-in is a deliberate flip.
+    scheduler.add_job(
+        send_day_2_reminders_job,
+        "interval",
+        hours=1,
+        id="send_day_2_reminders",
+        replace_existing=True,
+    )
+
     logger.info(
         "scheduler.jobs.registered",
         jobs=[
@@ -1083,5 +1496,6 @@ def register_scheduled_jobs(scheduler: BackgroundScheduler) -> None:
             "duplicate_detection_sweep",
             "flag_no_reply_confirmations",
             "prune_webhook_processed_logs",
+            "send_day_2_reminders",
         ],
     )
