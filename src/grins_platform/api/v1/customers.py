@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import (
 
 from grins_platform.api.v1.auth_dependencies import (
     CurrentActiveUser,  # noqa: TC001 - Required at runtime for FastAPI DI
+    ManagerOrAdminUser,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
 from grins_platform.api.v1.dependencies import (
     get_customer_merge_service,
@@ -1810,6 +1811,69 @@ async def get_customer_sent_messages(
         "page": page,
         "page_size": page_size,
         "total_pages": total_pages,
+    }
+
+
+# =============================================================================
+# Customer Conversation — scheduling-gaps gap-13 (paired in/out history)
+# =============================================================================
+
+
+@router.get(
+    "/{customer_id}/conversation",
+    summary="Get unified customer conversation",
+    description=(
+        "Return the customer's unified inbound + outbound message "
+        "history merged across sent_messages, job_confirmation_responses, "
+        "campaign_responses, and communications. Cursor-paginated, "
+        "newest first."
+    ),
+)
+async def get_customer_conversation(
+    customer_id: UUID,
+    _user: ManagerOrAdminUser,
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    cursor: str | None = Query(
+        default=None,
+        description="Opaque pagination cursor from a prior response",
+    ),
+    limit: int = Query(
+        default=50,
+        ge=1,
+        le=200,
+        description="Maximum items to return per page",
+    ),
+) -> dict[str, Any]:
+    """Return the customer conversation page.
+
+    Validates: scheduling-gaps gap-13.
+    """
+    from grins_platform.services.customer_conversation_service import (  # noqa: PLC0415
+        CustomerConversationService,
+    )
+
+    _endpoints.log_started(
+        "get_customer_conversation",
+        customer_id=str(customer_id),
+        limit=limit,
+        has_cursor=cursor is not None,
+    )
+    service = CustomerConversationService(db)
+    result = await service.list_conversation(
+        customer_id=customer_id,
+        cursor=cursor,
+        limit=limit,
+    )
+    _endpoints.log_completed(
+        "get_customer_conversation",
+        customer_id=str(customer_id),
+        count=len(result.items),
+        has_more=result.has_more,
+    )
+    return {
+        "items": [item.model_dump(mode="json") for item in result.items],
+        "next_cursor": result.next_cursor,
+        "has_more": result.has_more,
     }
 
 

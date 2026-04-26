@@ -39,6 +39,7 @@ from grins_platform.api.v1.dashboard import router as dashboard_router
 from grins_platform.api.v1.email import router as email_router
 from grins_platform.api.v1.estimates import router as estimates_router
 from grins_platform.api.v1.expenses import router as expenses_router
+from grins_platform.api.v1.inbox import router as inbox_router
 from grins_platform.api.v1.invoices import router as invoices_router
 from grins_platform.api.v1.jobs import router as jobs_router
 from grins_platform.api.v1.leads import router as leads_router
@@ -420,6 +421,12 @@ api_router.include_router(
 api_router.include_router(
     alerts_router,
     tags=["alerts"],
+)
+
+# Include unified Inbox endpoints (scheduling-gaps gap-16 v0)
+api_router.include_router(
+    inbox_router,
+    tags=["inbox"],
 )
 
 # Include Appointment Attachments endpoints (april-16th-fixes-enhancements Req 10.5)

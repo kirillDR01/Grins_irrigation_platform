@@ -18,6 +18,7 @@ export const customerKeys = {
   duplicateReviewQueue: (skip: number, limit: number) =>
     [...customerKeys.all, 'duplicate-review-queue', skip, limit] as const,
   sentMessages: (id: string) => [...customerKeys.all, id, 'sent-messages'] as const,
+  conversation: (id: string) => [...customerKeys.all, id, 'conversation'] as const,
   servicePreferences: (id: string) => [...customerKeys.all, id, 'service-preferences'] as const,
 };
 

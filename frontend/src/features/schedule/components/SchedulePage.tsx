@@ -38,6 +38,7 @@ import { RecentlyClearedSection } from './RecentlyClearedSection';
 import { RestoreScheduleDialog } from './RestoreScheduleDialog';
 import { RescheduleRequestsQueue } from './RescheduleRequestsQueue';
 import { NoReplyReviewQueue } from './NoReplyReviewQueue';
+import { InboxQueue } from './InboxQueue';
 import { DaySelector } from './DaySelector';
 import { LeadTimeIndicator } from './LeadTimeIndicator';
 import { JobSelector } from './JobSelector';
@@ -515,6 +516,11 @@ export function SchedulePage() {
 
       {/* Recently Cleared Section */}
       <RecentlyClearedSection onViewDetails={handleViewClearDetails} />
+
+      {/* Unified Inbox Queue (scheduling-gaps gap-16 v0) */}
+      <InboxQueue
+        onAppointmentClick={(id) => setSelectedAppointmentId(id)}
+      />
 
       {/* Create Appointment Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>

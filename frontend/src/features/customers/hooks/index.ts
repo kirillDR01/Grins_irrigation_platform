@@ -33,3 +33,4 @@ export {
 } from './useCustomerMutations';
 export { useCheckDuplicate } from './useCheckDuplicate';
 export { usePreviewMerge } from './usePreviewMerge';
+export { useCustomerConversation } from './useCustomerConversation';

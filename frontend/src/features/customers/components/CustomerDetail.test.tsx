@@ -25,8 +25,24 @@ vi.mock('../hooks/useCustomers', () => ({
     paymentMethods: (id: string) => ['customers', id, 'payment-methods'],
     duplicates: (id: string) => ['customers', id, 'duplicates'],
     sentMessages: (id: string) => ['customers', id, 'sent-messages'],
+    conversation: (id: string) => ['customers', id, 'conversation'],
     servicePreferences: (id: string) => ['customers', id, 'service-preferences'],
   },
+}));
+
+// gap-13: useCustomerConversation lives in its own module — mock so the
+// Messages tab renders without hitting the real cursor-paginated query.
+vi.mock('../hooks/useCustomerConversation', () => ({
+  useCustomerConversation: vi.fn(() => ({
+    data: { pages: [{ items: [], next_cursor: null, has_more: false }], pageParams: [null] },
+    isLoading: false,
+    error: null,
+    dataUpdatedAt: 0,
+    isFetching: false,
+    fetchNextPage: vi.fn(),
+    hasNextPage: false,
+    isFetchingNextPage: false,
+  })),
 }));
 
 vi.mock('../hooks/useCustomerMutations', () => ({

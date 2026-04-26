@@ -158,6 +158,23 @@ export const customerApi = {
     return response.data;
   },
 
+  // --- Conversation (scheduling-gaps gap-13: paired in/out history) ---
+  getConversation: async (
+    id: string,
+    params?: { cursor?: string; limit?: number }
+  ): Promise<{
+    items: import('../types').ConversationItem[];
+    next_cursor: string | null;
+    has_more: boolean;
+  }> => {
+    const response = await apiClient.get<{
+      items: import('../types').ConversationItem[];
+      next_cursor: string | null;
+      has_more: boolean;
+    }>(`${BASE_PATH}/${id}/conversation`, { params });
+    return response.data;
+  },
+
   // --- SMS Consent (Gap 06) ---
   getConsentStatus: async (id: string): Promise<ConsentStatus> => {
     const response = await apiClient.get<ConsentStatus>(`${BASE_PATH}/${id}/consent-status`);

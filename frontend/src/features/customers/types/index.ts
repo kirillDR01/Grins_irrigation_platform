@@ -176,6 +176,36 @@ export interface SentMessage {
   created_at: string;
 }
 
+// Conversation item — paired in/out chronological view (gap-13)
+export type ConversationDirection = 'inbound' | 'outbound';
+export type ConversationChannel = 'sms' | 'email' | 'phone' | 'other';
+export type ConversationSourceTable =
+  | 'sent_messages'
+  | 'job_confirmation_responses'
+  | 'campaign_responses'
+  | 'communications';
+
+export interface ConversationItem {
+  id: string;
+  source_table: ConversationSourceTable;
+  direction: ConversationDirection;
+  channel: ConversationChannel;
+  timestamp: string;
+  body: string;
+  status: string | null;
+  parsed_keyword: string | null;
+  appointment_id: string | null;
+  from_phone: string | null;
+  to_phone: string | null;
+  message_type: string | null;
+}
+
+export interface ConversationResponse {
+  items: ConversationItem[];
+  next_cursor: string | null;
+  has_more: boolean;
+}
+
 // Service preference entity (CRM2 Req 7)
 export interface ServicePreference {
   id: string;
