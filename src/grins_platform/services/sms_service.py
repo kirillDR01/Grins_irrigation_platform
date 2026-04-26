@@ -1110,6 +1110,15 @@ class SMSService(LoggerMixin):
             phone_masked=_mask_phone(formatted_phone),
         )
 
+        # gap-05: persistent audit row alongside the structured-log audit.
+        await self._record_customer_sms_opt_out_audit(
+            action="consent.opt_out_sms",
+            phone_e164=formatted_phone,
+            consent_record_id=record.id,
+            alert_id=None,
+            raw_body=keyword,
+        )
+
         # Gap 06: auto-acknowledge any pending informal-opt-out alerts for
         # this customer (edge case: informal phrase followed by STOP).
         resolved_customer_id = await self._resolve_customer_id_by_phone(
@@ -1192,6 +1201,29 @@ class SMSService(LoggerMixin):
                 alert_id=saved.id,
             )
 
+            # gap-05: persistent audit row alongside the structured-log audit.
+            try:
+                from grins_platform.services.sms.phone_normalizer import (  # noqa: PLC0415
+                    PhoneNormalizationError,
+                    normalize_to_e164,
+                )
+
+                try:
+                    audit_phone = normalize_to_e164(phone)
+                except PhoneNormalizationError:
+                    audit_phone = phone
+            except Exception:
+                audit_phone = phone
+
+            await self._record_customer_sms_opt_out_audit(
+                action="consent.opt_out_informal_flag",
+                phone_e164=audit_phone,
+                consent_record_id=None,
+                alert_id=saved.id,
+                raw_body=body,
+                customer_id=customer_id,
+            )
+
             logger.warning(
                 "sms.informal_opt_out.flagged",
                 phone=phone_masked,
@@ -1256,6 +1288,68 @@ class SMSService(LoggerMixin):
                 exc_info=True,
             )
             return None
+
+    async def _record_customer_sms_opt_out_audit(
+        self,
+        *,
+        action: str,
+        phone_e164: str,
+        consent_record_id: UUID | None,
+        alert_id: UUID | None,
+        raw_body: str,
+        customer_id: UUID | None = None,
+    ) -> None:
+        """Audit a customer opt-out event (gap-05).
+
+        ``action`` is one of:
+          - ``consent.opt_out_sms``                — exact STOP keyword.
+          - ``consent.opt_out_informal_flag``      — informal STOP phrase.
+          - ``consent.opt_out_admin_confirmed``    — admin confirms informal.
+
+        Failures are logged and swallowed so the inbound webhook /
+        admin-confirmation flow never fails on an audit-write hiccup.
+        """
+        from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+            AuditLogRepository,
+        )
+
+        try:
+            repo = AuditLogRepository(self.session)
+            resource_id: UUID | str | None = (
+                customer_id
+                if customer_id is not None
+                else (alert_id if alert_id is not None else phone_e164)
+            )
+            resource_type = (
+                "customer"
+                if customer_id is not None
+                else ("alert" if alert_id is not None else "phone")
+            )
+            _ = await repo.create(
+                action=action,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                actor_id=None,
+                details={
+                    "actor_type": "customer",
+                    "source": "customer_sms",
+                    "phone_e164": phone_e164,
+                    "consent_record_id": (
+                        str(consent_record_id)
+                        if consent_record_id is not None
+                        else None
+                    ),
+                    "alert_id": str(alert_id) if alert_id is not None else None,
+                    "raw_body": raw_body,
+                },
+            )
+        except Exception:
+            logger.warning(
+                "sms.opt_out.audit_write_failed",
+                action=action,
+                phone=_mask_phone(phone_e164),
+                exc_info=True,
+            )
 
     async def _auto_ack_pending_informal_alerts(
         self,
@@ -1378,6 +1472,35 @@ class SMSService(LoggerMixin):
             self.session,
             phone_masked=_mask_phone(formatted_phone),
         )
+
+        # gap-05: persistent audit row for the admin-confirmed informal path.
+        try:
+            from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+                AuditLogRepository,
+            )
+
+            audit_repo = AuditLogRepository(self.session)
+            _ = await audit_repo.create(
+                action="consent.opt_out_admin_confirmed",
+                resource_type="customer",
+                resource_id=customer.id,
+                actor_id=actor_id,
+                details={
+                    "actor_type": "staff",
+                    "source": "admin_ui",
+                    "phone_e164": formatted_phone,
+                    "consent_record_id": str(record.id),
+                    "alert_id": str(alert.id),
+                    "alert_message": alert.message,
+                },
+            )
+        except Exception:
+            logger.warning(
+                "sms.informal_opt_out.audit_write_failed",
+                alert_id=str(alert_id),
+                customer_id=str(customer.id),
+                exc_info=True,
+            )
 
         acknowledged = await repo.acknowledge(alert.id)
         if acknowledged is None:
@@ -1549,7 +1672,9 @@ class SMSService(LoggerMixin):
                 "message": "Reply STOP to unsubscribe. Call (612) 555-0100 for help.",
             }
 
-        # Default - forward to admin
+        # Default - forward to admin (orphan inbound: no thread / customer correlation).
+        await self._dispatch_orphan_inbound_alert(from_phone=from_phone, body=body)
+
         self.log_completed("handle_webhook", webhook_action="forward")
         return {
             "action": "forward",
@@ -1557,6 +1682,40 @@ class SMSService(LoggerMixin):
             "body": body,
             "message": "Message received and forwarded to admin.",
         }
+
+    async def _dispatch_orphan_inbound_alert(
+        self,
+        *,
+        from_phone: str,
+        body: str,
+    ) -> None:
+        """Raise an ORPHAN_INBOUND admin alert (gap-14).
+
+        Fired from the ``handle_webhook`` fall-through path when an
+        inbound text matches no thread, no opt-out keyword, and no
+        existing customer record. Severity = INFO. Failures are
+        swallowed so the inbound webhook still returns 200.
+        """
+        try:
+            customer_id = await self._resolve_customer_id_by_phone(from_phone)
+            entity_type = "customer" if customer_id else "phone"
+            entity_id = customer_id if customer_id else uuid4()
+            phone_masked = _mask_phone(from_phone)
+            snippet = body[:80] if body else ""
+            alert = Alert(
+                type=AlertType.ORPHAN_INBOUND.value,
+                severity=AlertSeverity.INFO.value,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                message=f"Orphan inbound from {phone_masked}: '{snippet}'",
+            )
+            await AlertRepository(self.session).create(alert)
+        except Exception:
+            logger.warning(
+                "sms.orphan_inbound.alert_creation_failed",
+                phone=_mask_phone(from_phone),
+                exc_info=True,
+            )
 
     async def check_opt_in(self, customer_id: UUID) -> bool:  # noqa: ARG002
         """Check if customer has opted in to SMS.

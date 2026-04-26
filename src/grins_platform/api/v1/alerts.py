@@ -8,7 +8,8 @@ Validates: bughunt 2026-04-16 finding H-5, Gap 06 opt-out management.
 
 from __future__ import annotations
 
-from typing import Annotated
+from datetime import datetime
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
@@ -23,7 +24,11 @@ from grins_platform.api.v1.dependencies import get_db_session
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import AlertType
 from grins_platform.repositories.alert_repository import AlertRepository
-from grins_platform.schemas.alert import AlertListResponse, AlertResponse
+from grins_platform.schemas.alert import (
+    AlertCountsResponse,
+    AlertListResponse,
+    AlertResponse,
+)
 from grins_platform.services.sms_service import SMSService
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -54,60 +59,178 @@ async def list_alerts(
         default=False,
         description=(
             "If False (default), only unacknowledged alerts are returned. "
-            "Acknowledged alerts are not currently exposed via this "
-            "endpoint — pass True only once the acknowledge workflow is "
-            "implemented."
+            "If True, acknowledged alerts are returned (history view)."
         ),
     ),
     type: str | None = Query(  # noqa: A002
         default=None,
         description=(
-            "Optional alert type filter (e.g. 'informal_opt_out'). When "
-            "provided, only unacknowledged alerts of that type are returned."
+            "Single-type filter (back-compat). For multi-type filtering, "
+            "use the repeatable ``alert_type`` query param."
         ),
+    ),
+    alert_type: list[str] | None = Query(
+        default=None,
+        description=(
+            "Repeatable alert type filter (e.g. "
+            "?alert_type=pending_reschedule_request"
+            "&alert_type=informal_opt_out)."
+        ),
+    ),
+    severity: list[str] | None = Query(
+        default=None,
+        description="Repeatable severity filter (info / warning / error).",
+    ),
+    since: datetime | None = Query(
+        default=None,
+        description=(
+            "Acknowledged-history only: return rows whose "
+            "acknowledged_at >= since (ISO 8601)."
+        ),
+    ),
+    sort: Literal["created_at_asc", "created_at_desc"] = Query(
+        default="created_at_desc",
+        description="Sort order on created_at (default: newest first).",
+    ),
+    offset: int = Query(
+        default=0,
+        ge=0,
+        description="Pagination offset.",
     ),
     limit: int = Query(
         default=100,
         ge=1,
         le=500,
-        description="Maximum number of alerts to return",
+        description="Maximum number of alerts to return.",
     ),
 ) -> AlertListResponse:
     """Return admin alerts.
 
-    Only unacknowledged alerts are returned. The ``acknowledged`` query
-    parameter is accepted for forward-compat with an eventual dismissal
-    workflow, but passing ``True`` currently yields an empty list.
-
-    Validates: bughunt 2026-04-16 finding H-5, Gap 06 (type filter).
+    Validates: bughunt 2026-04-16 finding H-5, Gap 06 (type filter),
+               scheduling-gaps gap-14 (multi-type/severity, acknowledged
+               history, offset+sort).
     """
     _endpoints.log_started(
         "list_alerts",
         acknowledged=acknowledged,
-        type=type,
+        single_type=type,
+        types_count=len(alert_type) if alert_type else 0,
+        severities_count=len(severity) if severity else 0,
+        offset=offset,
         limit=limit,
+        sort=sort,
     )
+
+    # Merge the legacy single-`type` and the new repeatable `alert_type`
+    # query params into one normalized list (back-compat with Gap 06
+    # callers that still pass ?type=informal_opt_out).
+    types_filter: list[str] | None
+    if alert_type:
+        types_filter = list(alert_type)
+        if type is not None and type not in types_filter:
+            types_filter.append(type)
+    elif type is not None:
+        types_filter = [type]
+    else:
+        types_filter = None
 
     repo = AlertRepository(session=session)
 
     if acknowledged:
-        # Acknowledged-alert listing isn't implemented yet; return empty.
-        alerts: list[AlertResponse] = []
-        total = 0
-    elif type is not None:
-        rows = await repo.list_unacknowledged_by_type(
-            alert_type=type,
+        rows = await repo.list_acknowledged(
             limit=limit,
+            offset=offset,
+            since=since,
+            types=types_filter,
+            severities=severity,
+            sort=sort,
         )
-        alerts = [AlertResponse.model_validate(row) for row in rows]
-        total = len(alerts)
     else:
-        rows = await repo.list_unacknowledged(limit=limit)
-        alerts = [AlertResponse.model_validate(row) for row in rows]
-        total = len(alerts)
+        rows = await repo.list_unacknowledged_filtered(
+            types=types_filter,
+            severities=severity,
+            offset=offset,
+            limit=limit,
+            sort=sort,
+        )
+
+    alerts = [AlertResponse.model_validate(row) for row in rows]
+    total = len(alerts)
 
     _endpoints.log_completed("list_alerts", count=total)
     return AlertListResponse(items=alerts, total=total)
+
+
+@router.get(
+    "/counts",
+    response_model=AlertCountsResponse,
+    summary="Per-type counts of unacknowledged admin alerts",
+    description=(
+        "Returns a map of ``AlertType`` → count of unacknowledged rows. "
+        "Types with zero open rows are present with value 0 so the "
+        "dashboard cards do not need to special-case missing keys."
+    ),
+)
+async def get_alert_counts(
+    _current_user: ManagerOrAdminUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> AlertCountsResponse:
+    """Return per-type counts of unacknowledged alerts.
+
+    Validates: scheduling-gaps gap-14 (dashboard alert-counts feed).
+    """
+    _endpoints.log_started("alert_counts")
+
+    repo = AlertRepository(session=session)
+    raw_counts = await repo.count_unacknowledged_by_type()
+
+    # Backfill all known AlertType values with zero so the FE can render
+    # cards without conditional defaults.
+    counts: dict[str, int] = {
+        member.value: raw_counts.get(member.value, 0) for member in AlertType
+    }
+    # Preserve any unknown keys that future writers might emit (forward-compat).
+    counts.update(
+        {key: value for key, value in raw_counts.items() if key not in counts},
+    )
+    total = sum(counts.values())
+
+    _endpoints.log_completed("alert_counts", total=total)
+    return AlertCountsResponse(counts=counts, total=total)
+
+
+@router.post(
+    "/{alert_id}/acknowledge",
+    response_model=AlertResponse,
+    summary="Acknowledge an admin alert (idempotent)",
+    description=(
+        "Generic acknowledge endpoint. Idempotent — if the alert is "
+        "already acknowledged, the existing acknowledged_at is returned "
+        "unchanged. Distinct from /confirm-opt-out and /dismiss, which "
+        "carry side effects specific to informal_opt_out."
+    ),
+)
+async def acknowledge_alert(
+    _current_user: ManagerOrAdminUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    alert_id: Annotated[UUID, Path(..., description="Alert UUID")],
+) -> AlertResponse:
+    """Acknowledge an admin alert.
+
+    Validates: scheduling-gaps gap-14 (manual ack from generic alerts UI).
+    """
+    _endpoints.log_started("acknowledge_alert", alert_id=str(alert_id))
+
+    repo = AlertRepository(session=session)
+    acknowledged = await repo.acknowledge(alert_id)
+    if acknowledged is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Alert {alert_id} not found",
+        )
+
+    _endpoints.log_completed("acknowledge_alert", alert_id=str(alert_id))
+    return AlertResponse.model_validate(acknowledged)  # type: ignore[no-any-return]
 
 
 @router.post(

@@ -272,9 +272,19 @@ class JobConfirmationService(LoggerMixin):
         #      ``'confirmed'``) so analytics and support can tell first-Y
         #      apart from repeat-Y rows.
         if appt and appt.status == AppointmentStatus.CONFIRMED.value:
+            pre_status_repeat = appt.status
             response.status = "confirmed_repeat"
             response.processed_at = datetime.now(tz=timezone.utc)
             await self.db.flush()
+            await self._record_customer_sms_confirm_audit(
+                appointment_id=appointment_id,
+                action="appointment.confirm_repeat",
+                pre_status=pre_status_repeat,
+                post_status=AppointmentStatus.CONFIRMED.value,
+                response_id=response.id,
+                from_phone=response.from_phone,
+                raw_body=response.raw_reply_body,
+            )
             self.log_rejected(
                 "handle_confirm",
                 reason="already_confirmed",
@@ -287,19 +297,79 @@ class JobConfirmationService(LoggerMixin):
                 "dedup": True,
             }
 
+        pre_status = appt.status if appt else None
+        transitioned = False
         if appt and appt.status == AppointmentStatus.SCHEDULED.value:
             appt.status = AppointmentStatus.CONFIRMED.value
+            transitioned = True
             await self.db.flush()
 
         response.status = "confirmed"
         response.processed_at = datetime.now(tz=timezone.utc)
         await self.db.flush()
 
+        if transitioned:
+            await self._record_customer_sms_confirm_audit(
+                appointment_id=appointment_id,
+                action="appointment.confirm",
+                pre_status=pre_status or "",
+                post_status=AppointmentStatus.CONFIRMED.value,
+                response_id=response.id,
+                from_phone=response.from_phone,
+                raw_body=response.raw_reply_body,
+            )
+
         return {
             "action": "confirmed",
             "appointment_id": str(appointment_id),
             "auto_reply": self._build_confirm_message(appt),
         }
+
+    async def _record_customer_sms_confirm_audit(
+        self,
+        *,
+        appointment_id: UUID,
+        action: str,
+        pre_status: str,
+        post_status: str,
+        response_id: Any,  # noqa: ANN401 — JobConfirmationResponse.id is UUID at runtime
+        from_phone: str | None,
+        raw_body: str | None,
+    ) -> None:
+        """Audit a customer Y reply (gap-05, mirrors cancel-audit).
+
+        ``action`` is ``appointment.confirm`` for the first-Y SCHEDULED→
+        CONFIRMED transition, or ``appointment.confirm_repeat`` for a
+        repeat Y on an already-CONFIRMED appointment. Failures are
+        logged and swallowed so the customer reply path never fails on
+        an audit-write hiccup.
+        """
+        from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+            AuditLogRepository,
+        )
+
+        try:
+            repo = AuditLogRepository(self.db)
+            _ = await repo.create(
+                action=action,
+                resource_type="appointment",
+                resource_id=appointment_id,
+                actor_id=None,
+                details={
+                    "actor_type": "customer",
+                    "source": "customer_sms",
+                    "pre_status": pre_status,
+                    "post_status": post_status,
+                    "response_id": str(response_id),
+                    "from_phone": from_phone,
+                    "raw_body": raw_body,
+                },
+            )
+        except Exception:
+            self.log_failed(
+                "customer_sms_confirm_audit",
+                appointment_id=str(appointment_id),
+            )
 
     @staticmethod
     def _build_confirm_message(appt: Any | None) -> str:  # noqa: ANN401
@@ -398,6 +468,15 @@ class JobConfirmationService(LoggerMixin):
                 customer_id=customer_id,
                 appt=appt,
             )
+            await self._record_customer_sms_reschedule_audit(
+                appointment_id=appointment_id,
+                action="appointment.reschedule_rejected",
+                pre_status=appt.status,
+                response_id=response.id,
+                from_phone=response.from_phone,
+                raw_body=raw_body,
+                reschedule_request_id=None,
+            )
             self.log_rejected(
                 "handle_reschedule",
                 reason="invalid_state",
@@ -464,6 +543,21 @@ class JobConfirmationService(LoggerMixin):
         response.processed_at = datetime.now(tz=timezone.utc)
         await self.db.flush()
 
+        await self._record_customer_sms_reschedule_audit(
+            appointment_id=appointment_id,
+            action="appointment.reschedule_requested",
+            pre_status=appt.status if appt is not None else "",
+            response_id=response.id,
+            from_phone=response.from_phone,
+            raw_body=raw_body,
+            reschedule_request_id=reschedule.id,
+        )
+        await self._dispatch_pending_reschedule_alert(
+            appointment_id=appointment_id,
+            customer_id=customer_id,
+            reschedule_request_id=reschedule.id,
+        )
+
         # Follow-up SMS asking for alternative times (Req 14.1, 14.2)
         follow_up_text = (
             "We'd be happy to reschedule. Please reply with 2-3 dates "
@@ -477,6 +571,100 @@ class JobConfirmationService(LoggerMixin):
             "auto_reply": _AUTO_REPLIES[ConfirmationKeyword.RESCHEDULE],
             "follow_up_sms": follow_up_text,
         }
+
+    async def _record_customer_sms_reschedule_audit(
+        self,
+        *,
+        appointment_id: UUID,
+        action: str,
+        pre_status: str,
+        response_id: Any,  # noqa: ANN401 — UUID at runtime
+        from_phone: str | None,
+        raw_body: str | None,
+        reschedule_request_id: UUID | None,
+    ) -> None:
+        """Audit a customer R reply (gap-05).
+
+        ``action`` is ``appointment.reschedule_requested`` on the
+        new-request path, or ``appointment.reschedule_rejected`` when
+        the late-reschedule guard refuses the request.
+        """
+        from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+            AuditLogRepository,
+        )
+
+        try:
+            repo = AuditLogRepository(self.db)
+            _ = await repo.create(
+                action=action,
+                resource_type="appointment",
+                resource_id=appointment_id,
+                actor_id=None,
+                details={
+                    "actor_type": "customer",
+                    "source": "customer_sms",
+                    "pre_status": pre_status,
+                    "response_id": str(response_id),
+                    "from_phone": from_phone,
+                    "raw_body": raw_body,
+                    "reschedule_request_id": (
+                        str(reschedule_request_id)
+                        if reschedule_request_id is not None
+                        else None
+                    ),
+                },
+            )
+        except Exception:
+            self.log_failed(
+                "customer_sms_reschedule_audit",
+                appointment_id=str(appointment_id),
+            )
+
+    async def _dispatch_pending_reschedule_alert(
+        self,
+        *,
+        appointment_id: UUID,
+        customer_id: UUID,
+        reschedule_request_id: UUID,
+    ) -> None:
+        """Raise a PENDING_RESCHEDULE_REQUEST admin alert (gap-14).
+
+        Fired only on the new-RescheduleRequest insert path, never on
+        the duplicate-fold branches (those route through
+        ``_append_duplicate_open_request`` which leaves the existing
+        open alert untouched). Failures are swallowed so the
+        customer-facing reply still succeeds when alert creation
+        hiccups.
+        """
+        from grins_platform.models.alert import Alert  # noqa: PLC0415
+        from grins_platform.models.customer import Customer  # noqa: PLC0415
+        from grins_platform.models.enums import (  # noqa: PLC0415
+            AlertSeverity,
+            AlertType,
+        )
+        from grins_platform.repositories.alert_repository import (  # noqa: PLC0415
+            AlertRepository,
+        )
+
+        try:
+            customer = await self.db.get(Customer, customer_id)
+            customer_name = customer.full_name if customer is not None else "customer"
+            alert = Alert(
+                type=AlertType.PENDING_RESCHEDULE_REQUEST.value,
+                severity=AlertSeverity.WARNING.value,
+                entity_type="appointment",
+                entity_id=appointment_id,
+                message=(
+                    f"Reschedule requested by {customer_name} "
+                    f"(request {reschedule_request_id})"
+                ),
+            )
+            await AlertRepository(self.db).create(alert)
+        except Exception:
+            self.log_failed(
+                "pending_reschedule_alert",
+                appointment_id=str(appointment_id),
+            )
 
     async def _append_duplicate_open_request(
         self,
@@ -727,6 +915,7 @@ class JobConfirmationService(LoggerMixin):
                 resource_id=appointment_id,
                 actor_id=None,
                 details={
+                    "actor_type": "customer",
                     "source": "customer_sms",
                     "pre_cancel_status": pre_cancel_status,
                     "response_id": str(response_id),
@@ -943,12 +1132,81 @@ class JobConfirmationService(LoggerMixin):
         response.processed_at = datetime.now(tz=timezone.utc)
         await self.db.flush()
 
+        await self._dispatch_unrecognized_reply_alert(
+            appointment_id=response.appointment_id,
+            response_id=response.id,
+            raw_body=response.raw_reply_body,
+        )
+
         logger.warning(
             "confirmation.needs_review",
             response_id=str(response.id),
             raw_body=response.raw_reply_body,
         )
         return {"action": "needs_review", "response_id": str(response.id)}
+
+    async def _dispatch_unrecognized_reply_alert(
+        self,
+        *,
+        appointment_id: UUID,
+        response_id: UUID,
+        raw_body: str | None,
+    ) -> None:
+        """Raise an UNRECOGNIZED_CONFIRMATION_REPLY admin alert (gap-14).
+
+        Severity escalates from INFO to WARNING when a second
+        unrecognized reply lands for the same appointment within 24h
+        — that signals confused customer or template churn that the
+        admin should triage rather than ignore.
+        """
+        from datetime import timedelta  # noqa: PLC0415
+
+        from sqlalchemy import and_, func  # noqa: PLC0415
+
+        from grins_platform.models.alert import Alert  # noqa: PLC0415
+        from grins_platform.models.enums import (  # noqa: PLC0415
+            AlertSeverity,
+            AlertType,
+        )
+        from grins_platform.repositories.alert_repository import (  # noqa: PLC0415
+            AlertRepository,
+        )
+
+        try:
+            cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=24)
+            count_stmt = select(func.count(Alert.id)).where(
+                and_(
+                    Alert.type == AlertType.UNRECOGNIZED_CONFIRMATION_REPLY.value,
+                    Alert.entity_type == "appointment",
+                    Alert.entity_id == appointment_id,
+                    Alert.created_at >= cutoff,
+                ),
+            )
+            recent_count = (
+                (await self.db.execute(count_stmt)).scalar_one_or_none() or 0
+            )
+            severity = (
+                AlertSeverity.WARNING.value
+                if recent_count >= 1
+                else AlertSeverity.INFO.value
+            )
+            snippet = (raw_body or "")[:120]
+            alert = Alert(
+                type=AlertType.UNRECOGNIZED_CONFIRMATION_REPLY.value,
+                severity=severity,
+                entity_type="appointment",
+                entity_id=appointment_id,
+                message=(
+                    f"Unrecognized reply on confirmation: '{snippet}' "
+                    f"(response {response_id})"
+                ),
+            )
+            await AlertRepository(self.db).create(alert)
+        except Exception:
+            self.log_failed(
+                "unrecognized_reply_alert",
+                appointment_id=str(appointment_id),
+            )
 
     # ------------------------------------------------------------------
     # Post-cancellation reply handling (gap-03 3.A)

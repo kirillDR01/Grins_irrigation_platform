@@ -602,6 +602,10 @@ class AlertType(str, Enum):
     WEBHOOK_REDIS_FALLBACK = "webhook_redis_fallback"
     WEBHOOK_SIGNATURE_FLOOD = "webhook_signature_flood"
     WEBHOOK_AUTOREPLY_CIRCUIT_OPEN = "webhook_autoreply_circuit_open"
+    # Gap 14 — Dashboard alert coverage (scheduling-gaps severity-3)
+    PENDING_RESCHEDULE_REQUEST = "pending_reschedule_request"
+    UNRECOGNIZED_CONFIRMATION_REPLY = "unrecognized_confirmation_reply"
+    ORPHAN_INBOUND = "orphan_inbound"
 
 
 # =============================================================================

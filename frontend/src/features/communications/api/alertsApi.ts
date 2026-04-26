@@ -25,17 +25,41 @@ export interface AdminAlertListResponse {
   total: number;
 }
 
+export interface AdminAlertCountsResponse {
+  counts: Record<string, number>;
+  total: number;
+}
+
 const BASE_PATH = '/alerts';
 
 export const alertsApi = {
   list: async (params?: {
     type?: string;
+    alert_type?: string[];
+    severity?: string[];
     acknowledged?: boolean;
+    since?: string;
+    sort?: 'created_at_asc' | 'created_at_desc';
+    offset?: number;
     limit?: number;
   }): Promise<AdminAlertListResponse> => {
     const response = await apiClient.get<AdminAlertListResponse>(BASE_PATH, {
       params,
     });
+    return response.data;
+  },
+
+  counts: async (): Promise<AdminAlertCountsResponse> => {
+    const response = await apiClient.get<AdminAlertCountsResponse>(
+      `${BASE_PATH}/counts`,
+    );
+    return response.data;
+  },
+
+  acknowledge: async (alertId: string): Promise<AdminAlert> => {
+    const response = await apiClient.post<AdminAlert>(
+      `${BASE_PATH}/${alertId}/acknowledge`,
+    );
     return response.data;
   },
 

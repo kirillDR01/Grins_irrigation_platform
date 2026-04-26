@@ -74,7 +74,17 @@ class TestExactOptOutKeywords:
 
     @pytest.mark.asyncio
     async def test_non_keyword_not_opt_out(self) -> None:
-        """Non-keyword messages don't trigger opt-out."""
+        """Non-keyword messages don't trigger opt-out.
+
+        gap-14 (2026-04-26): the inbound fall-through now raises a
+        single ``ORPHAN_INBOUND`` admin alert, so ``session.add`` is
+        called once for the alert row but no SmsConsentRecord is
+        written. The contract that matters here is "no opt-out side
+        effect"; assert that explicitly instead of "no DB write at all".
+        """
+        from grins_platform.models.alert import Alert
+        from grins_platform.models.sms_consent_record import SmsConsentRecord
+
         service = _make_service()
         result = await service.handle_inbound(
             "+16125551234",
@@ -82,7 +92,19 @@ class TestExactOptOutKeywords:
             "SM123",
         )
         assert result["action"] != "opt_out"
-        service.session.add.assert_not_called()
+        added_objects = [
+            call.args[0] for call in service.session.add.call_args_list
+        ]
+        consent_records = [o for o in added_objects if isinstance(o, SmsConsentRecord)]
+        assert consent_records == [], (
+            "Non-keyword inbound must NOT write an SmsConsentRecord."
+        )
+        # Orphan alert is the only allowed side-effect on this path.
+        non_alert_writes = [o for o in added_objects if not isinstance(o, Alert)]
+        assert non_alert_writes == [], (
+            f"Unexpected non-alert DB writes on orphan-inbound path: "
+            f"{non_alert_writes}"
+        )
 
 
 # --- 10.2: Informal opt-out phrases ---

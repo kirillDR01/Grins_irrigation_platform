@@ -4,8 +4,37 @@ Provides log_action() to create audit log entries and get_audit_log()
 for paginated, filterable retrieval. Also provides TCPA audit logging
 for consent field toggles on leads and customers.
 
+`details` JSONB discriminator (gap-05, 2026-04-26)
+--------------------------------------------------
+
+Audit rows whose action originates from a customer SMS, an admin UI
+click, or a nightly job carry a stable shape inside ``details`` so the
+admin history view can answer "who did this and why?" without joining
+across actor / phone / handler tables:
+
+- ``actor_type``: ``"customer"`` | ``"staff"`` | ``"system"``
+- ``source``:     ``"customer_sms"`` | ``"admin_ui"`` | ``"nightly_job"``
+
+Canonical action strings (do NOT invent new ones — extend this list
+when adding a new flow):
+
+- ``appointment.confirm``                        — first Y, SCHEDULED→CONFIRMED
+- ``appointment.confirm_repeat``                 — Y on already-CONFIRMED
+- ``appointment.reschedule_requested``           — customer R creates RescheduleRequest
+- ``appointment.reschedule_rejected``            — late R blocked by state guard
+- ``appointment.cancel``                         — admin cancel OR customer C
+- ``appointment.update``                         — admin edit / drag-drop reschedule
+- ``appointment.reactivate``                     — admin reschedules a CANCELLED appt
+- ``appointment.reschedule.reconfirmation_sent`` — admin resolved a customer R
+- ``appointment.reminder_sent``                  — manual reminder via admin UI
+- ``appointment.mark_contacted``                 — admin clears needs_review_reason
+- ``consent.opt_out_sms``                        — STOP keyword opt-out
+- ``consent.opt_out_informal_flag``              — informal STOP phrase flagged
+- ``consent.opt_out_admin_confirmed``            — admin confirms informal opt-out
+
 Validates: CRM Gap Closure Req 74.1, 74.2, 74.3;
-           april-16th-fixes-enhancements Req 2.7, 5.5, 5.9
+           april-16th-fixes-enhancements Req 2.7, 5.5, 5.9;
+           scheduling gaps gap-05 (audit asymmetry)
 """
 
 from __future__ import annotations

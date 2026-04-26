@@ -23,3 +23,5 @@ export {
   jobStatusMetricsKeys,
 } from './useJobStatusMetrics';
 export type { JobStatusMetricsResponse } from './useJobStatusMetrics';
+
+export { useAlertCounts, alertKeys } from './useAlertCounts';

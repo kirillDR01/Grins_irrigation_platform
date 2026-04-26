@@ -19,7 +19,7 @@ import { useUpdateAppointment } from '../hooks/useAppointmentMutations';
 import { useStaff } from '@/features/staff/hooks/useStaff';
 import { useMediaQuery } from '@/shared/hooks';
 import { appointmentStatusConfig } from '../types';
-import type { Appointment, AppointmentStatus } from '../types';
+import type { Appointment, AppointmentStatus, ReplyState } from '../types';
 import { LoadingSpinner } from '@/shared/components/LoadingSpinner';
 import { SendConfirmationButton } from './SendConfirmationButton';
 import { SendDayConfirmationsButton } from './SendDayConfirmationsButton';
@@ -175,6 +175,7 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
           jobId: appointment.job_id,
           isOnSelectedDate,
           isPrepaid,
+          replyState: appointment.reply_state ?? null,
         },
       };
     });
@@ -196,12 +197,66 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
   // Custom event content renderer to show send confirmation button on draft events (Req 8.4)
   // Also shows prepaid badge on service-agreement-linked appointments (Req 17.5)
   // Also shows attachment count badge (Req 10.10)
+  // gap-12: shows reply-state badges (opt-out, pending-reschedule, no-reply, unrecognized)
   const renderEventContent = useCallback(
     (eventInfo: { event: { id: string; title: string; extendedProps: Record<string, unknown> }; timeText: string }) => {
       const appointment = eventInfo.event.extendedProps.appointment as Appointment | undefined;
       const isDraft = eventInfo.event.extendedProps.status === 'draft';
       const isPrepaid = eventInfo.event.extendedProps.isPrepaid === true;
       const attachmentCount = (eventInfo.event.extendedProps.attachment_count as number) ?? 0;
+      const replyState = (eventInfo.event.extendedProps.replyState as ReplyState | null) ?? null;
+      const eventId = eventInfo.event.id;
+      // gap-12: priority-ordered list of active reply-state pills.
+      // Priority: opt-out > pending-reschedule > no-reply > unrecognized.
+      const pills: Array<{
+        key: string;
+        label: string;
+        title: string;
+        className: string;
+      }> = [];
+      if (replyState?.customer_opted_out) {
+        pills.push({
+          key: 'opt-out',
+          label: '🚫',
+          title: 'Customer opted out of SMS',
+          className: 'bg-red-100 text-red-700 border border-red-200',
+        });
+      }
+      if (replyState?.has_pending_reschedule) {
+        pills.push({
+          key: 'pending-reschedule',
+          label: '↻',
+          title: 'Pending reschedule request',
+          className: 'bg-amber-100 text-amber-700 border border-amber-200',
+        });
+      }
+      if (replyState?.has_no_reply_flag) {
+        pills.push({
+          key: 'no-reply',
+          label: '⚠',
+          title: 'Flagged for no-reply review',
+          className: 'bg-orange-100 text-orange-700 border border-orange-200',
+        });
+      }
+      if (replyState?.has_unrecognized_reply) {
+        pills.push({
+          key: 'unrecognized-reply',
+          label: '❓',
+          title: 'Unrecognized customer reply',
+          className: 'bg-purple-100 text-purple-700 border border-purple-200',
+        });
+      }
+      // Mobile aggregation: collapse 2+ pills into a single ⚠ N pill so we
+      // don't blow out the event card width on a 375px viewport.
+      const pillsToRender = isMobile && pills.length >= 2 ? [] : pills;
+      const showMobileAggregate = isMobile && pills.length >= 2;
+      const aggregateTitle = pills.map((p) => p.title).join(' · ');
+      const testIdMap: Record<string, string> = {
+        'opt-out': `opt-out-badge-${eventId}`,
+        'pending-reschedule': `pending-reschedule-badge-${eventId}`,
+        'no-reply': `no-reply-badge-${eventId}`,
+        'unrecognized-reply': `unrecognized-reply-badge-${eventId}`,
+      };
       return (
         <div className="flex items-center gap-1 w-full overflow-hidden">
           <div className="flex-1 truncate">
@@ -224,6 +279,27 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
                 📎{attachmentCount}
               </span>
             )}
+            {showMobileAggregate && (
+              <span
+                className="ml-1 inline-flex items-center rounded px-1 py-0.5 text-[9px] font-bold leading-none bg-amber-100 text-amber-700 border border-amber-200"
+                data-testid={`reply-state-aggregate-${eventId}`}
+                title={aggregateTitle}
+                aria-label={`${pills.length} reply-state issues: ${aggregateTitle}`}
+              >
+                ⚠ {pills.length}
+              </span>
+            )}
+            {pillsToRender.slice(0, 3).map((pill) => (
+              <span
+                key={pill.key}
+                className={`ml-1 inline-flex items-center rounded px-1 py-0.5 text-[9px] font-bold leading-none ${pill.className}`}
+                data-testid={testIdMap[pill.key]}
+                title={pill.title}
+                aria-label={pill.title}
+              >
+                {pill.label}
+              </span>
+            ))}
             <span className="ml-1 truncate">{eventInfo.event.title}</span>
           </div>
           {isDraft && appointment && (
@@ -235,7 +311,7 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
         </div>
       );
     },
-    []
+    [isMobile]
   );
 
   // Custom day header content to show send day confirmations button (Req 8.5)

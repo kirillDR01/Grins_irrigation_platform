@@ -526,6 +526,7 @@ class AppointmentService(LoggerMixin):
                 notify_customer=notify_customer,
                 sms_sent=sms_sent,
                 actor_id=actor_id,
+                is_reschedule=is_rescheduling,
             )
         else:
             await self._record_update_audit(
@@ -536,6 +537,7 @@ class AppointmentService(LoggerMixin):
                 notify_customer=notify_customer,
                 sms_sent=sms_sent,
                 actor_id=actor_id,
+                is_reschedule=is_rescheduling,
             )
 
         self.log_completed("update_appointment", appointment_id=str(appointment_id))
@@ -577,6 +579,7 @@ class AppointmentService(LoggerMixin):
         notify_customer: bool,
         sms_sent: bool,
         actor_id: UUID | None,
+        is_reschedule: bool = False,
     ) -> None:
         """Write an ``appointment.update`` audit row (bughunt M-7).
 
@@ -602,6 +605,9 @@ class AppointmentService(LoggerMixin):
                 resource_id=appointment_id,
                 actor_id=actor_id,
                 details={
+                    "actor_type": "staff" if actor_id is not None else "system",
+                    "source": "admin_ui",
+                    "is_reschedule": is_reschedule,
                     "pre": pre_update_snapshot,
                     "post": post_update_snapshot,
                     "changed_fields": changed_fields,
@@ -625,6 +631,7 @@ class AppointmentService(LoggerMixin):
         notify_customer: bool,
         sms_sent: bool,
         actor_id: UUID | None,
+        is_reschedule: bool = False,
     ) -> None:
         """Write an ``appointment.reactivate`` audit row (bughunt M-7).
 
@@ -644,6 +651,9 @@ class AppointmentService(LoggerMixin):
                 resource_id=appointment_id,
                 actor_id=actor_id,
                 details={
+                    "actor_type": "staff" if actor_id is not None else "system",
+                    "source": "admin_ui",
+                    "is_reschedule": is_reschedule,
                     "pre": pre_update_snapshot,
                     "post": post_update_snapshot,
                     "notify_customer": notify_customer,
@@ -790,6 +800,8 @@ class AppointmentService(LoggerMixin):
                 resource_id=appointment_id,
                 actor_id=actor_id,
                 details={
+                    "actor_type": "staff" if actor_id is not None else "system",
+                    "source": "admin_ui",
                     "pre_cancel_status": pre_cancel_status,
                     "notify_customer": notify_customer,
                     "sms_sent": sms_sent,
@@ -912,6 +924,138 @@ class AppointmentService(LoggerMixin):
 
         self.log_completed("get_weekly_schedule", total_appointments=total)
         return schedule, total
+
+    async def get_weekly_schedule_with_reply_state(
+        self,
+        start_date: date,
+    ) -> tuple[dict[date, list[Appointment]], int, dict[UUID, dict[str, Any]]]:
+        """Weekly schedule + per-appointment reply-state summary (gap-12).
+
+        Wrapper around :meth:`get_weekly_schedule` that issues three
+        bulk-load queries to compute the reply-state map in a single
+        round-trip rather than N+1 per appointment. Returns the
+        appointments dict, total count, and a map keyed by appointment
+        UUID with reply-state booleans suitable for the
+        ``ReplyState`` schema.
+        """
+        schedule, total = await self.get_weekly_schedule(
+            start_date,
+            include_relationships=True,
+        )
+
+        flat = [appt for day in schedule.values() for appt in day]
+        reply_state_map = await self._compute_reply_state_map(flat)
+        return schedule, total, reply_state_map
+
+    async def _compute_reply_state_map(
+        self,
+        appointments: list[Appointment],
+    ) -> dict[UUID, dict[str, Any]]:
+        """Bulk-load reply-state booleans for a list of appointments.
+
+        Uses three indexed queries against existing FK / status indexes
+        (``uq_reschedule_requests_open_per_appointment``,
+        ``ix_sms_consent_records_customer_id``,
+        ``idx_confirmation_responses_appointment``). Returns a map keyed
+        by appointment.id; missing keys mean "no flags set".
+
+        Validates: scheduling-gaps gap-12 (calendar reply-state badges).
+        """
+        if not appointments:
+            return {}
+
+        from sqlalchemy import select  # noqa: PLC0415
+
+        from grins_platform.models.job_confirmation import (  # noqa: PLC0415
+            JobConfirmationResponse,
+            RescheduleRequest,
+        )
+        from grins_platform.models.sms_consent_record import (  # noqa: PLC0415
+            SmsConsentRecord,
+        )
+
+        appointment_ids: list[UUID] = [appt.id for appt in appointments]
+        # Customer id pulled via the eager-loaded job relationship.
+        customer_ids: list[UUID] = []
+        appt_to_customer: dict[UUID, UUID | None] = {}
+        for appt in appointments:
+            job = getattr(appt, "job", None)
+            cust_id = getattr(job, "customer_id", None) if job is not None else None
+            appt_to_customer[appt.id] = cust_id
+            if cust_id is not None and cust_id not in customer_ids:
+                customer_ids.append(cust_id)
+
+        session = self.appointment_repository.session
+
+        # Q1: appointments with an open RescheduleRequest.
+        pending_appt_ids: set[UUID] = set()
+        try:
+            stmt_resched = select(RescheduleRequest.appointment_id).where(
+                RescheduleRequest.appointment_id.in_(appointment_ids),
+                RescheduleRequest.status == "open",
+            )
+            res = await session.execute(stmt_resched)
+            pending_appt_ids = {row[0] for row in res.all()}
+        except Exception:
+            self.log_failed("compute_reply_state.reschedule_query")
+
+        # Q2: latest SmsConsentRecord per customer → opted-out flag.
+        opted_out_customers: set[UUID] = set()
+        if customer_ids:
+            try:
+                stmt_consent = (
+                    select(
+                        SmsConsentRecord.customer_id,
+                        SmsConsentRecord.consent_given,
+                        SmsConsentRecord.consent_timestamp,
+                    )
+                    .where(SmsConsentRecord.customer_id.in_(customer_ids))
+                    .order_by(SmsConsentRecord.consent_timestamp.desc())
+                )
+                res = await session.execute(stmt_consent)
+                latest_consent: dict[UUID, bool] = {}
+                for row in res.all():
+                    cust_id, consent_given, _ts = row
+                    if cust_id in latest_consent:
+                        continue
+                    latest_consent[cust_id] = bool(consent_given)
+                opted_out_customers = {
+                    cust_id
+                    for cust_id, given in latest_consent.items()
+                    if given is False
+                }
+            except Exception:
+                self.log_failed("compute_reply_state.consent_query")
+
+        # Q3: appointments with a needs_review JobConfirmationResponse.
+        unrecognized_appt_ids: set[UUID] = set()
+        try:
+            stmt_review = select(JobConfirmationResponse.appointment_id).where(
+                JobConfirmationResponse.appointment_id.in_(appointment_ids),
+                JobConfirmationResponse.status == "needs_review",
+            )
+            res = await session.execute(stmt_review)
+            unrecognized_appt_ids = {row[0] for row in res.all()}
+        except Exception:
+            self.log_failed("compute_reply_state.unrecognized_query")
+
+        # Compose per-appointment summaries.
+        result: dict[UUID, dict[str, Any]] = {}
+        for appt in appointments:
+            cust_id = appt_to_customer.get(appt.id)
+            opted_out = cust_id in opted_out_customers if cust_id else False
+            has_no_reply = bool(getattr(appt, "needs_review_reason", None))
+            result[appt.id] = {
+                "has_pending_reschedule": appt.id in pending_appt_ids,
+                "has_no_reply_flag": has_no_reply,
+                "customer_opted_out": opted_out,
+                "has_unrecognized_reply": appt.id in unrecognized_appt_ids,
+                # `last_reminder_sent_at` is not yet a first-class column
+                # on Appointment; left None until WP-10 wires the
+                # reminder-log table.
+                "last_reminder_sent_at": None,
+            }
+        return result
 
     async def mark_arrived(self, appointment_id: UUID) -> Appointment:
         """Mark an appointment as arrived (in progress).
@@ -1230,6 +1374,10 @@ class AppointmentService(LoggerMixin):
             new_scheduled_at=new_scheduled_at,
             actor_id=actor_id,
         )
+        await self._auto_ack_pending_reschedule_alert(
+            session,
+            appointment_id=appointment_id,
+        )
 
         self.log_completed(
             "reschedule_for_request",
@@ -1237,6 +1385,52 @@ class AppointmentService(LoggerMixin):
             new_scheduled_at=new_scheduled_at.isoformat(),
         )
         return updated  # type: ignore[return-value]
+
+    async def _auto_ack_pending_reschedule_alert(
+        self,
+        session: AsyncSession,
+        *,
+        appointment_id: UUID,
+    ) -> None:
+        """Acknowledge the open PENDING_RESCHEDULE_REQUEST alert for an appt.
+
+        Fired after :meth:`reschedule_for_request` resolves. The
+        ``uq_reschedule_requests_open_per_appointment`` partial unique
+        index guarantees at most one open RescheduleRequest, so the
+        matching open alert is unique too. Failures are logged and
+        swallowed so the admin-facing reschedule never blocks on this.
+
+        Validates: scheduling-gaps gap-14 (auto-ack on resolve).
+        """
+        from sqlalchemy import select  # noqa: PLC0415
+
+        from grins_platform.models.alert import Alert  # noqa: PLC0415
+        from grins_platform.models.enums import AlertType  # noqa: PLC0415
+        from grins_platform.repositories.alert_repository import (  # noqa: PLC0415
+            AlertRepository,
+        )
+
+        try:
+            stmt = (
+                select(Alert)
+                .where(
+                    Alert.type == AlertType.PENDING_RESCHEDULE_REQUEST.value,
+                    Alert.entity_type == "appointment",
+                    Alert.entity_id == appointment_id,
+                    Alert.acknowledged_at.is_(None),
+                )
+                .limit(1)
+            )
+            result = await session.execute(stmt)
+            alert: Alert | None = result.scalar_one_or_none()
+            if alert is None:
+                return
+            await AlertRepository(session).acknowledge(alert.id)
+        except Exception:
+            self.log_failed(
+                "auto_ack_pending_reschedule_alert",
+                appointment_id=str(appointment_id),
+            )
 
     async def _record_reschedule_reconfirmation_audit(
         self,
@@ -1266,6 +1460,8 @@ class AppointmentService(LoggerMixin):
                 resource_id=appointment_id,
                 actor_id=actor_id,
                 details={
+                    "actor_type": "staff" if actor_id is not None else "system",
+                    "source": "admin_ui",
                     "new_scheduled_at": new_scheduled_at.isoformat(),
                 },
             )

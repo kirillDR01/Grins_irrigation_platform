@@ -27,6 +27,10 @@ import { TechnicianAvailability } from './TechnicianAvailability';
 import { SubscriptionDashboardWidgets } from './SubscriptionDashboardWidgets';
 import { JobStatusGrid } from './JobStatusGrid';
 import { InformalOptOutAlertCard } from './InformalOptOutAlertCard';
+import { PendingRescheduleAlertCard } from './PendingRescheduleAlertCard';
+import { NoReplyConfirmationAlertCard } from './NoReplyConfirmationAlertCard';
+import { UnrecognizedReplyAlertCard } from './UnrecognizedReplyAlertCard';
+import { OrphanInboundAlertCard } from './OrphanInboundAlertCard';
 import { AIQueryChat } from '@/features/ai/components/AIQueryChat';
 import { MorningBriefing } from '@/features/ai/components/MorningBriefing';
 import { OverdueInvoicesWidget, LienDeadlinesWidget } from '@/features/invoices';
@@ -103,6 +107,14 @@ export function DashboardPage() {
 
           {/* Gap 06: Informal opt-out review queue card */}
           <InformalOptOutAlertCard />
+
+          {/* gap-14: Reply-state alert coverage. Each card hides itself
+              when its count is zero, so the dashboard stays uncluttered
+              outside the morning triage window. */}
+          <PendingRescheduleAlertCard />
+          <NoReplyConfirmationAlertCard />
+          <UnrecognizedReplyAlertCard />
+          <OrphanInboundAlertCard />
 
           {/* Today's Schedule Summary */}
           <Card data-testid="today-schedule-card">

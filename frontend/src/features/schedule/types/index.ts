@@ -37,6 +37,19 @@ export type AppointmentStatus =
   | 'cancelled'
   | 'no_show';
 
+/**
+ * Per-appointment reply-state summary for calendar badges (gap-12).
+ * Populated by GET /api/v1/appointments/weekly only; daily / list
+ * endpoints leave it undefined.
+ */
+export interface ReplyState {
+  has_pending_reschedule: boolean;
+  has_no_reply_flag: boolean;
+  customer_opted_out: boolean;
+  has_unrecognized_reply: boolean;
+  last_reminder_sent_at: string | null;
+}
+
 export interface Appointment {
   id: string;
   job_id: string;
@@ -59,6 +72,8 @@ export interface Appointment {
   staff_name: string | null;
   // Service agreement indicator for calendar display (Smoothing Req 7.5)
   service_agreement_id: string | null;
+  // gap-12: only the weekly endpoint sends this.
+  reply_state?: ReplyState | null;
 }
 
 export interface AppointmentCreate {

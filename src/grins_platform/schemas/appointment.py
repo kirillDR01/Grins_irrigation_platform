@@ -63,6 +63,45 @@ class AppointmentUpdate(BaseModel):
     estimated_arrival: Optional[time] = Field(None, description="Estimated arrival")
 
 
+class ReplyState(BaseModel):
+    """Per-appointment reply-state summary for calendar badges (gap-12).
+
+    Populated by ``AppointmentService._compute_reply_state_map`` and
+    attached to weekly-schedule responses. Each flag drives a distinct
+    badge variant on the calendar event card.
+    """
+
+    has_pending_reschedule: bool = Field(
+        default=False,
+        description="An open RescheduleRequest exists for this appointment.",
+    )
+    has_no_reply_flag: bool = Field(
+        default=False,
+        description=(
+            "Appointment carries a needs_review_reason "
+            "set by the no-reply flagger."
+        ),
+    )
+    customer_opted_out: bool = Field(
+        default=False,
+        description=(
+            "Customer's most recent SmsConsentRecord "
+            "shows consent_given=False."
+        ),
+    )
+    has_unrecognized_reply: bool = Field(
+        default=False,
+        description="Latest JobConfirmationResponse has status='needs_review'.",
+    )
+    last_reminder_sent_at: Optional[datetime] = Field(
+        default=None,
+        description=(
+            "Most recent confirmation/reminder send "
+            "(mirrored from Appointment)."
+        ),
+    )
+
+
 class AppointmentResponse(BaseModel):
     """Schema for appointment response.
 
@@ -95,6 +134,10 @@ class AppointmentResponse(BaseModel):
     staff_name: Optional[str] = None
     # Service agreement indicator for calendar display (Smoothing Req 7.5)
     service_agreement_id: Optional[UUID] = None
+    # gap-12: reply-state summary for calendar badges. Only the
+    # weekly-schedule path populates this; daily / list endpoints leave
+    # it None to keep their query plans unchanged.
+    reply_state: Optional[ReplyState] = None
 
 
 class AppointmentListParams(BaseModel):

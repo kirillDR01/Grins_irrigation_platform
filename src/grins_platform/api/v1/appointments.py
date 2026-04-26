@@ -61,9 +61,14 @@ from grins_platform.schemas.appointment import (
     DailyScheduleResponse,
     MarkContactedResponse,
     NeedsReviewAppointmentResponse,
+    ReplyState,
     SendConfirmationResponse,
     StaffDailyScheduleResponse,
     WeeklyScheduleResponse,
+)
+from grins_platform.schemas.appointment_note import (
+    AppointmentNotesResponse,
+    AppointmentNotesSaveRequest,
 )
 from grins_platform.schemas.appointment_ops import (
     PaymentCollectionRequest,
@@ -71,10 +76,6 @@ from grins_platform.schemas.appointment_ops import (
     RescheduleFromRequest,
     RescheduleRequest,
     ReviewRequestResult,
-)
-from grins_platform.schemas.appointment_note import (
-    AppointmentNotesResponse,
-    AppointmentNotesSaveRequest,
 )
 from grins_platform.schemas.appointment_timeline import AppointmentTimelineResponse
 from grins_platform.schemas.estimate import (
@@ -84,11 +85,11 @@ from grins_platform.schemas.estimate import (
 from grins_platform.schemas.invoice import (
     InvoiceResponse,
 )
-from grins_platform.services.appointment_service import (
-    AppointmentService,  # noqa: TC001 - Required at runtime for FastAPI DI
-)
 from grins_platform.services.appointment_note_service import (
     AppointmentNoteService,  # noqa: TC001 - Required at runtime for FastAPI DI
+)
+from grins_platform.services.appointment_service import (
+    AppointmentService,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
 from grins_platform.services.appointment_timeline_service import (
     AppointmentTimelineService,  # noqa: TC001 - Required at runtime for FastAPI DI
@@ -129,10 +130,20 @@ def _populate_appointment_extended_fields(
         response.staff_name = staff.name
 
 
-def _enrich_appointment_response(appointment: object) -> AppointmentResponse:
-    """Create an AppointmentResponse with extended fields populated."""
-    response = AppointmentResponse.model_validate(appointment)
+def _enrich_appointment_response(
+    appointment: object,
+    reply_state: ReplyState | None = None,
+) -> AppointmentResponse:
+    """Create an AppointmentResponse with extended fields populated.
+
+    Optional ``reply_state`` is attached for the weekly-schedule path
+    (gap-12). Daily / list endpoints leave it ``None`` to keep their
+    query plans unchanged.
+    """
+    response: AppointmentResponse = AppointmentResponse.model_validate(appointment)
     _populate_appointment_extended_fields(response, appointment)
+    if reply_state is not None:
+        response.reply_state = reply_state
     return response
 
 
@@ -348,14 +359,23 @@ async def get_weekly_schedule(
 ) -> WeeklyScheduleResponse:
     """Get all appointments for a week starting from start_date.
 
-    Validates: Admin Dashboard Requirement 1.5
+    Validates: Admin Dashboard Requirement 1.5;
+               scheduling-gaps gap-12 (per-appointment reply_state).
     """
     _endpoints.log_started("get_weekly_schedule", start_date=str(start_date))
 
-    schedule, total = await service.get_weekly_schedule(
-        start_date,
-        include_relationships=True,
+    schedule, total, reply_state_map = (
+        await service.get_weekly_schedule_with_reply_state(start_date)
     )
+
+    def _reply_state_for(appt: object) -> ReplyState | None:
+        appt_id = getattr(appt, "id", None)
+        if appt_id is None:
+            return None
+        raw = reply_state_map.get(appt_id)
+        if raw is None:
+            return None
+        return ReplyState(**raw)
 
     # Build daily schedule responses
     days: list[DailyScheduleResponse] = []
@@ -366,7 +386,8 @@ async def get_weekly_schedule(
             DailyScheduleResponse(
                 date=day_date,
                 appointments=[
-                    _enrich_appointment_response(a) for a in day_appointments
+                    _enrich_appointment_response(a, reply_state=_reply_state_for(a))
+                    for a in day_appointments
                 ],
                 total_count=len(day_appointments),
             ),
@@ -714,8 +735,33 @@ async def mark_appointment_contacted(
             detail=f"Appointment not found: {appointment_id}",
         )
 
+    prior_reason = appt.needs_review_reason
     appt.needs_review_reason = None
     await session.flush()
+
+    # gap-05: audit who cleared the review flag and what it used to say.
+    try:
+        from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+            AuditLogRepository,
+        )
+
+        audit_repo = AuditLogRepository(session)
+        _ = await audit_repo.create(
+            action="appointment.mark_contacted",
+            resource_type="appointment",
+            resource_id=appointment_id,
+            actor_id=_current_user.id,
+            details={
+                "actor_type": "staff",
+                "source": "admin_ui",
+                "prior_reason": prior_reason,
+            },
+        )
+    except Exception:
+        _endpoints.log_failed(
+            "mark_appointment_contacted.audit",
+            appointment_id=str(appointment_id),
+        )
 
     _endpoints.log_completed(
         "mark_appointment_contacted",
@@ -749,6 +795,7 @@ async def send_reminder_sms(
     appointment_id: UUID,
     _current_user: ManagerOrAdminUser,
     service: Annotated[AppointmentService, Depends(get_full_appointment_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> SendConfirmationResponse:
     """Send a confirmation-SMS reminder for a flagged appointment.
 
@@ -769,6 +816,40 @@ async def send_reminder_sms(
         ) from e
 
     sms_sent = bool(result and result.get("success"))
+
+    # gap-05: audit the manual reminder send. Audit failures are logged
+    # but never block the customer-facing reminder.
+    try:
+        from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+            AuditLogRepository,
+        )
+
+        sent_message_id: str | None = None
+        if isinstance(result, dict):
+            raw_id = result.get("sent_message_id") or result.get("message_id")
+            if raw_id is not None:
+                sent_message_id = str(raw_id)
+
+        audit_repo = AuditLogRepository(session)
+        _ = await audit_repo.create(
+            action="appointment.reminder_sent",
+            resource_type="appointment",
+            resource_id=appointment_id,
+            actor_id=_current_user.id,
+            details={
+                "actor_type": "staff",
+                "source": "admin_ui",
+                "stage": "manual",
+                "sms_sent": sms_sent,
+                "sent_message_id": sent_message_id,
+            },
+        )
+    except Exception:
+        _endpoints.log_failed(
+            "send_reminder_sms.audit",
+            appointment_id=str(appointment_id),
+        )
+
     _endpoints.log_completed(
         "send_reminder_sms",
         appointment_id=str(appointment_id),

@@ -58,3 +58,22 @@ class AlertListResponse(BaseModel):
         ge=0,
         description="Number of alerts returned (bounded by the query limit)",
     )
+
+
+class AlertCountsResponse(BaseModel):
+    """Per-type counts of unacknowledged alerts (gap-14 dashboard cards).
+
+    The ``counts`` mapping is keyed by ``AlertType`` value strings; types
+    with no open rows are filled with zero so dashboard cards do not need
+    to special-case missing keys.
+    """
+
+    counts: dict[str, int] = Field(
+        default_factory=dict,
+        description="Map of alert_type → count of unacknowledged rows",
+    )
+    total: int = Field(
+        ...,
+        ge=0,
+        description="Total unacknowledged alerts across all types",
+    )

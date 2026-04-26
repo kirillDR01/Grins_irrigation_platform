@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import desc, func, select
 
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.alert import Alert
@@ -143,6 +143,123 @@ class AlertRepository(LoggerMixin):
             alert_type=alert_type,
             count=len(alerts),
         )
+        return alerts
+
+    async def count_unacknowledged_by_type(self) -> dict[str, int]:
+        """Return per-type counts of unacknowledged alerts.
+
+        Used by the dashboard's per-type alert cards (gap-14) to render
+        their counts off a single endpoint instead of N independent
+        per-type queries. Types with zero open rows are omitted from
+        the result; the caller fills missing keys with zero.
+
+        Returns:
+            Mapping of ``Alert.type`` → count.
+        """
+        self.log_started("count_unacknowledged_by_type")
+        stmt = (
+            select(Alert.type, func.count(Alert.id))
+            .where(Alert.acknowledged_at.is_(None))
+            .group_by(Alert.type)
+        )
+        result = await self.session.execute(stmt)
+        counts: dict[str, int] = {row[0]: int(row[1]) for row in result.all()}
+        self.log_completed("count_unacknowledged_by_type", types=len(counts))
+        return counts
+
+    async def list_unacknowledged_filtered(
+        self,
+        *,
+        types: list[str] | None = None,
+        severities: list[str] | None = None,
+        offset: int = 0,
+        limit: int = 100,
+        sort: str = "created_at_desc",
+    ) -> list[Alert]:
+        """Return unacknowledged alerts filtered by type and/or severity.
+
+        Args:
+            types: Optional list of ``Alert.type`` values to include.
+            severities: Optional list of ``Alert.severity`` values to include.
+            offset: Pagination offset (default 0).
+            limit: Max rows to return (default 100).
+            sort: ``"created_at_desc"`` (default) or ``"created_at_asc"``.
+
+        Returns:
+            List of matching :class:`Alert` rows in the requested order.
+        """
+        self.log_started(
+            "list_unacknowledged_filtered",
+            types_count=len(types) if types else 0,
+            severities_count=len(severities) if severities else 0,
+            offset=offset,
+            limit=limit,
+            sort=sort,
+        )
+        stmt = select(Alert).where(Alert.acknowledged_at.is_(None))
+        if types:
+            stmt = stmt.where(Alert.type.in_(types))
+        if severities:
+            stmt = stmt.where(Alert.severity.in_(severities))
+        order_clause = (
+            Alert.created_at.asc()
+            if sort == "created_at_asc"
+            else desc(Alert.created_at)
+        )
+        stmt = stmt.order_by(order_clause).offset(offset).limit(limit)
+        result = await self.session.execute(stmt)
+        alerts = list(result.scalars().all())
+        self.log_completed("list_unacknowledged_filtered", count=len(alerts))
+        return alerts
+
+    async def list_acknowledged(
+        self,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        since: datetime | None = None,
+        types: list[str] | None = None,
+        severities: list[str] | None = None,
+        sort: str = "created_at_desc",
+    ) -> list[Alert]:
+        """Return acknowledged alerts (history view).
+
+        Args:
+            limit: Max rows to return (default 100).
+            offset: Pagination offset (default 0).
+            since: If set, only rows whose ``acknowledged_at >= since``.
+            types: Optional list of ``Alert.type`` values to include.
+            severities: Optional list of ``Alert.severity`` values to include.
+            sort: ``"created_at_desc"`` (default) or ``"created_at_asc"``.
+
+        Returns:
+            List of acknowledged :class:`Alert` rows.
+        """
+        self.log_started(
+            "list_acknowledged",
+            limit=limit,
+            offset=offset,
+            since=since.isoformat() if since else None,
+            types_count=len(types) if types else 0,
+            severities_count=len(severities) if severities else 0,
+            sort=sort,
+        )
+        stmt = select(Alert).where(Alert.acknowledged_at.is_not(None))
+        if since is not None:
+            stmt = stmt.where(Alert.acknowledged_at >= since)
+        if types:
+            stmt = stmt.where(Alert.type.in_(types))
+        if severities:
+            stmt = stmt.where(Alert.severity.in_(severities))
+        order_clause = (
+            Alert.created_at.asc()
+            if sort == "created_at_asc"
+            else desc(Alert.created_at)
+        )
+        stmt = stmt.order_by(order_clause).offset(offset).limit(limit)
+        result = await self.session.execute(stmt)
+        alerts = list(result.scalars().all())
+        self.log_completed("list_acknowledged", count=len(alerts))
         return alerts
 
     async def acknowledge(self, alert_id: UUID) -> Alert | None:
