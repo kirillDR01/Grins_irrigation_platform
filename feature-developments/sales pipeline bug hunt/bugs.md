@@ -3,9 +3,25 @@
 All bugs confirmed via live browser test + code review on branch `dev`, against
 commit `8693b6d` (as of 2026-04-23).
 
+> **Update — 2026-04-26.** Bugs #1, #2 were resolved by intervening commits
+> (`db7befa`, `dbed5f0` → `1c4772d`). The 2026-04-26 re-audit added 4 new bugs
+> (NEW-A through NEW-D, see end of file). A bundled fix shipped in commit
+> `09dc082` and closed **8 of 9 then-open bugs** — only Bug #5 was deliberately
+> kept (user request; design addendum lives in
+> `.agents/plans/sales-pipeline-tier-1-and-tier-2-bugs.md`). NEW-C, #9, NEW-D,
+> and #10 remain open. **Each bug below now has a `**Status:**` line at the
+> top.** Original symptom / root-cause text is preserved unchanged below the
+> status block for historical context.
+
 ---
 
 ## Bug #1 — `Skip — advance manually` always fails (Critical, user-reported)
+
+**Status:** ✅ **RESOLVED** in commit `db7befa` (2026-04-26). Backend
+`MissingSigningDocumentError` gate at `SEND_ESTIMATE → PENDING_APPROVAL` was
+removed; FE wiring at `SalesDetail.tsx` is unchanged but now succeeds. Locked
+in by `test_send_estimate_without_doc_now_advances`
+(`tests/unit/test_sales_pipeline_and_signwell.py:144`).
 
 ### Symptom
 Clicking the **Skip — advance manually** button in the `send_estimate` NowCard flashes
@@ -69,6 +85,13 @@ manual overrides are explicitly allowed to bypass document gates.
 
 ## Bug #2 — `Schedule visit` doesn't open a schedule modal (Critical, spec violation)
 
+**Status:** ✅ **RESOLVED** by the `feat(schedule-visit)` series (`dbed5f0` →
+`bf1df6c` → `1c4772d`, 2026-04-26). Real `ScheduleVisitModal/` directory
+shipped with `WeekCalendar`, `ScheduleFields`, `PrefilledCustomerCard`,
+`PickSummary`, plus a `useScheduleVisit` hook owning submit, conflict
+detection, and reschedule. `SalesDetail.tsx` now opens it on
+`schedule_visit`.
+
 ### Symptom
 Clicking **Schedule visit** in the Plan-stage NowCard just flips the entry status
 (`schedule_estimate` → `estimate_scheduled`). No calendar picker opens, no way to pick a
@@ -112,6 +135,15 @@ call with an `openScheduleModal()` state toggle.
 ---
 
 ## Bug #3 — Pipeline-list row action buttons have no `onClick` (High)
+
+**Status:** ✅ **RESOLVED** in commit `09dc082` (2026-04-26). Action button
+wired to `onClick={(e) => { e.stopPropagation(); onRowClick(entry); }}` —
+clicking now navigates to `/sales/{id}` exactly like a row click. Dismiss
+`✕` toasts `'Dismiss not wired yet — TODO(backend)'` via `sonner.toast.info`
+until a backend dismiss endpoint exists. Required adding
+`import { toast } from 'sonner'` (it was not previously imported in
+`SalesPipeline.tsx`). New `PipelineList.test.tsx` cases mock `useNavigate` +
+`sonner` and assert both branches.
 
 ### Symptom
 The "Schedule", "Send", "Nudge", "Convert", "View job", and "✕" dismiss buttons on each
@@ -186,6 +218,18 @@ pattern.
 
 ## Bug #4 — `+ pick date…` chip is a no-op (High, spec violation)
 
+**Status:** ✅ **RESOLVED** in commit `09dc082` (2026-04-26). Wrapped the
+button in shadcn `<Popover>` + `<Calendar mode="single">`; on `onSelect(d)`
+calls `onChange?.(format(d, 'MMM d'))` — same `MMM d` shape as the existing
+`generateWeeks` chips. Imports added to `NowCard.tsx`:
+```tsx
+import { format } from 'date-fns';
+import { Calendar as CalendarPicker } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+```
+(Aliased to `CalendarPicker` to avoid colliding with the existing
+`lucide-react` `Calendar` icon import.)
+
 ### Symptom
 Clicking **+ pick date…** in the Week-Of picker does nothing — no popover, no
 calendar. The chip is styled like a button but has no behaviour.
@@ -220,6 +264,14 @@ Wrap the chip in a `<Popover>` from `@/components/ui/popover` and render
 ---
 
 ## Bug #5 — `⋯ change stage manually` button is a no-op (High)
+
+**Status:** ⚠️ **DEFERRED** (still present). The user opted to **keep** the
+footer button rather than delete it. A design addendum to wire the button
+into a `<DropdownMenu>` of the 5 canonical stepper stages (Schedule,
+Estimate, Approval, Contract, Closed) — calling the existing
+`useOverrideSalesStatus` mutation — is appended at the bottom of
+`.agents/plans/sales-pipeline-tier-1-and-tier-2-bugs.md`. **Implementation
+pending.**
 
 ### Symptom
 Clicking **⋯ change stage manually** in the StageStepper footer does nothing — no
@@ -257,6 +309,16 @@ UI paths for one action is noise.
 ---
 
 ## Bug #6 — `AutoNudgeSchedule` never renders (High, spec violation)
+
+**Status:** ✅ **RESOLVED** in commit `09dc082` (2026-04-26). `SalesDetail.tsx`
+now passes the missing props to `<NowCard>`:
+```tsx
+estimateSentAt={entry.updated_at ?? entry.created_at}  // TODO(backend): real estimate_sent_at
+nudgesPaused={false}                                   // TODO(backend): persist pause state
+```
+`updated_at` is the spec-allowed fallback (Req 17.5) until backend persists a
+real `estimate_sent_at` timestamp. `AutoNudgeSchedule` now renders on
+`pending_approval`.
 
 ### Symptom
 On the `pending_approval` stage, the NowCard shows the title "Waiting on Brooke to
@@ -315,6 +377,18 @@ fallback pattern with a `TODO(backend)` comment) plus a placeholder `nudgesPause
 
 ## Bug #7 — `View Job` navigates to the SignWell doc id, not a job id (Medium)
 
+**Status:** ✅ **RESOLVED** in commit `09dc082` (2026-04-26) — minimum-fix
+applied. Dropped the `signwell_document_id` branch entirely; `view_job` now
+always navigates to `/jobs`:
+```tsx
+case 'view_job':
+  // TODO(backend): expose entry.job_id and navigate to /jobs/{job_id}
+  navigate('/jobs');
+  break;
+```
+Durable fix (expose `job_id` on `SalesEntryResponse` once `convert_to_job`
+threads it through) tracked separately.
+
 ### Symptom
 On a `closed_won` entry, clicking **View Job** navigates to `/jobs/{signwell_document_id}`
 when that id is set, otherwise falls back to `/jobs`. The SignWell document id is not a
@@ -353,6 +427,22 @@ id once it's exposed by the API. Until then, keep the fallback to `/jobs` as-is.
 ---
 
 ## Bug #8 — Dropzone file upload is a TODO stub (Medium)
+
+**Status:** ✅ **RESOLVED** in commit `09dc082` (2026-04-26).
+`useUploadSalesDocument` is now imported and instantiated in `SalesDetail`.
+`handleFileDrop` replaces the stub with:
+```tsx
+await uploadDoc.mutateAsync({
+  customerId: entry.customer_id,
+  file,
+  documentType: kind === 'agreement' ? 'contract' : 'estimate',
+});
+toast.success(`${kind === 'agreement' ? 'Agreement' : 'Estimate'} uploaded`);
+refetch();
+```
+PDF-only validation already happens upstream in the `<Dropzone>` itself.
+Errors surface via `getErrorMessage` (consistent with
+`handleSaveSalesEntryNotes`).
 
 ### Symptom
 Dragging a PDF into the estimate or signed-agreement dropzone shows the toast
@@ -404,7 +494,12 @@ const handleFileDrop = useCallback(
 
 ---
 
-## Bug #9 — `hasSignedAgreement` matches unrelated contract docs (Low)
+## Bug #9 — `hasSignedAgreement` matches unrelated contract docs (Low → re-tiered to Medium)
+
+**Status:** 🔴 **STILL OPEN** as of 2026-04-26. Not in scope of `09dc082`.
+Needs either tying documents to the sales entry id (not just the customer)
+or narrowing the filter to docs created after the entry entered
+`send_contract`.
 
 ### Symptom
 Any document with `document_type === 'contract'` on the customer makes `hasSignedAgreement`
@@ -435,6 +530,10 @@ convention (e.g., filename starts with `signed_`). Track as a separate enhanceme
 
 ## Bug #10 — Pagination shows unfiltered total when filter hides all rows (Low)
 
+**Status:** 🔴 **STILL OPEN** as of 2026-04-26. Not in scope of `09dc082`.
+One-line fix: when `stuckFilter` is true, render `visibleRows.length`
+instead of `data.total`.
+
 ### Symptom
 On `/sales` with the stuck filter active and 0 matching rows, the footer still reads
 "Showing 1 to 24 of 24 entries" — the pagination math uses the un-client-side-filtered
@@ -455,7 +554,13 @@ the pagination footer when zero rows are visible.
 
 ---
 
-## Bug #11 — `Mark Lost` button stays live on `closed_won`, fails with no-op toast (Low)
+## Bug #11 — `Mark Lost` button stays live on `closed_won`, fails with no-op toast (Low → re-tiered to High)
+
+**Status:** ✅ **RESOLVED** in commit `09dc082` (2026-04-26). Added
+`isClosedWon = entry.status === 'closed_won'` to `SalesDetail.tsx`. When
+true, renders a new emerald `closed-won-banner` (mirroring the slate
+`closed-lost-banner`) and hides the StageStepper / NowCard / ActivityStrip.
+Test asserts the banner replaces the walkthrough.
 
 ### Symptom
 On a `closed_won` entry the StageStepper footer still shows **✕ Mark Lost**. Clicking
@@ -479,3 +584,138 @@ Or disable the button with a tooltip ("Already closed — cannot mark lost").
   closed_won too)
 - OR `frontend/src/features/sales/components/StageStepper.tsx` (disable Mark Lost when
   `currentStage === 'closed_won'`)
+
+---
+
+## NEW-A — `hasEmail` checks `customer_name`, not an email field (Critical, discovered 2026-04-26)
+
+**Status:** ✅ **RESOLVED** in commit `09dc082` (2026-04-26).
+
+### Resolution
+Backend: added `customer_email: Optional[str] = None` to `SalesEntryResponse`
+(`schemas/sales_pipeline.py`) and assigned it from `customer.email` in
+`_entry_to_response` (`api/v1/sales_pipeline.py`). Frontend: added
+`customer_email: string | null` to the `SalesEntry` TS type and changed
+`SalesDetail.tsx:288` to:
+```tsx
+const hasEmail = !!(entry.customer_email ?? salesCustomer?.email);
+```
+Dropped the `hasCustomerEmail = hasEmail` alias and now passes `hasEmail`
+directly to `nowContent({ hasCustomerEmail })`. 3 backend serializer unit
+tests added (`TestEntryToResponseCustomerEmail`).
+
+### Original symptom
+The "Email for Signature" button was enabled for every sales entry that had
+a customer name, regardless of whether the customer actually had an email
+address. The NowCard's `send_estimate` stage also chose the "has email" copy
+variant on the same wrong signal — so the user saw "Send estimate to
+{firstName}" instead of the "Add customer email first" prompt.
+
+### Original root cause
+`SalesDetail.tsx:279`: `const hasEmail = !!entry.customer_name;` — the variable
+name lied about what it was measuring. Reviewers and future authors could
+read the disabled-prop expression and miss it entirely.
+
+---
+
+## NEW-B — `mark_declined` skips the decline modal (High, discovered 2026-04-26)
+
+**Status:** ✅ **RESOLVED** in commit `09dc082` (2026-04-26).
+
+### Resolution
+New `MarkDeclinedDialog.tsx` component (mirrors `StatusActionButton`'s Mark
+Lost dialog with a required `<Textarea>` for reason). `SalesDetail.tsx:195`
+switch case now `setMarkDeclinedOpen(true)`; on confirm, calls
+`markLost.mutate({ id: entryId, closedReason: reason.trim() })` with success
+toast `'Marked as declined'` and refetch. 5 dedicated component tests cover
+empty/whitespace blocked, trimmed reason, and isPending state.
+
+### Original symptom
+Clicking the "Mark declined" action in the `pending_approval` NowCard
+immediately called `markLost.mutate({ id: entryId })` with no
+`closed_reason`, and toasted "Marked as lost". No reason was captured, no
+modal was shown.
+
+### Original root cause + spec
+`SalesDetail.tsx:192-200` skipped the modal. Spec Req 15.7 requires a
+decline modal capturing `closed_reason`. The supporting backend wiring
+already existed end-to-end (`useMarkSalesLost` hook accepts `closedReason`;
+backend `mark_lost` persists it).
+
+---
+
+## NEW-C — `convert_to_job` skips the convert modal & has no force-convert UI (Medium, discovered 2026-04-26)
+
+**Status:** 🔴 **STILL OPEN** as of 2026-04-26. Not in scope of `09dc082`.
+
+### Symptom
+"Convert to Job" in the `send_contract` NowCard fires
+`convertToJob.mutate(entryId)` directly. If the backend rejects with
+`SignatureRequiredError` (no `signwell_document_id` on the entry), the user
+just sees a generic "Failed to convert" toast — there is no force-convert
+escape hatch.
+
+### Root cause
+`SalesDetail.tsx:169–174` doesn't surface the error message and doesn't open
+the force-convert dialog. The `useForceConvertToJob` hook **already exists**
+at `useSalesPipeline.ts:80–88`, and `StatusActionButton.tsx:108–127` already
+implements the correct pattern.
+
+### Expected (Req 15.3)
+> WHEN the `convert_to_job` action is triggered, THE SalesDetail host SHALL
+> open a convert-to-job confirmation modal.
+
+### Fix
+Mirror `StatusActionButton.handleAdvance`: parse the axios error, on
+signature-related errors open a `<Dialog>` with a force-convert confirm,
+then `forceConvert.mutate` on confirm.
+
+---
+
+## NEW-D — Three NowCard actions + the dismiss button are permanent stubs (Medium, discovered 2026-04-26)
+
+**Status:** 🔴 **STILL OPEN** as of 2026-04-26. Each individual stub is
+spec-allowed by Req 17.4, but together they leave the pipeline functionally
+incomplete. `09dc082` resolved the dismiss-button half via a stub toast
+(Bug #3) and the AutoNudgeSchedule half via Bug #6, but the four backend
+endpoints are still missing.
+
+### Stubs that need backend endpoints
+1. `pause_nudges` — `pending_approval` stage; would let the user pause the
+   AutoNudgeSchedule. Now relevant since Bug #6 is fixed and the schedule
+   actually renders.
+2. `text_confirmation` — appears after `Schedule visit`; would send a
+   confirmation text to the customer.
+3. `add_customer_email` — appears in the `send_estimate` (no email) variant;
+   would let the user attach an email so the estimate can be sent. Critical
+   companion to NEW-A's fix — without `add_customer_email`, the user has to
+   leave the sales detail to fix the email path.
+4. Pipeline list `✕` dismiss — needs an endpoint design; currently toasts a
+   stub message courtesy of Bug #3's fix.
+
+### Root cause
+`SalesDetail.tsx:218–224` has the catch-all stub:
+```tsx
+case 'text_confirmation':
+case 'resend_estimate':
+case 'pause_nudges':
+case 'add_customer_email':
+  toast.info('Not wired yet — TODO');
+  break;
+```
+Backend grep confirms no endpoints exist for any of them. (`resend_estimate`
+could now be wired to `emailSign.mutateAsync(entryId)` since `db7befa` —
+treat as a quick spin-off.)
+
+### Fix
+Treat as a four-item backend feature gap. Each needs an endpoint, then a
+few lines of FE wiring:
+1. `POST /sales-pipeline/{id}/pause-nudges` (and `unpause`) → persist
+   `nudges_paused_until` on `SalesEntry`.
+2. `POST /sales-pipeline/{id}/send-text-confirmation` → reuses the SMS
+   provider; logs to `sent_messages`.
+3. `PATCH /customers/{id}` already supports email update — wire
+   `add_customer_email` to a small inline modal that `PATCH`es the customer
+   and refetches.
+4. `POST /sales-pipeline/{id}/dismiss` (or a new `archived` status value) —
+   design needed.
