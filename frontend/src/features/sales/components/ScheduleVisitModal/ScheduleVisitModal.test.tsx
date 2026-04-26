@@ -175,4 +175,51 @@ describe('ScheduleVisitModal', () => {
     );
     expect(screen.queryByTestId('schedule-visit-modal')).not.toBeInTheDocument();
   });
+
+  it('renders the new CTA copy with a trailing arrow icon for new bookings', () => {
+    render(
+      <ScheduleVisitModal
+        entry={mkEntry()}
+        currentEvent={null}
+        open
+        onOpenChange={() => {}}
+      />,
+      { wrapper },
+    );
+    const btn = screen.getByTestId('schedule-visit-confirm-btn');
+    expect(btn).toHaveTextContent('Confirm & advance to Send Estimate');
+    expect(btn.querySelector('svg')).not.toBeNull();
+    // Calendar-emoji prefix from v1 must be gone.
+    expect(btn.textContent ?? '').not.toContain('📅');
+  });
+
+  it('renders "Update appointment" without an arrow on the reschedule path', () => {
+    const event: SalesCalendarEvent = {
+      id: 'e1',
+      sales_entry_id: 'entry-1',
+      customer_id: 'cust-1',
+      title: 't',
+      scheduled_date: '2026-04-23',
+      start_time: '14:00:00',
+      end_time: '15:00:00',
+      notes: null,
+      assigned_to_user_id: null,
+      created_at: '',
+      updated_at: '',
+    };
+    render(
+      <ScheduleVisitModal
+        entry={mkEntry({ status: 'estimate_scheduled' })}
+        currentEvent={event}
+        open
+        onOpenChange={() => {}}
+      />,
+      { wrapper },
+    );
+    const btn = screen.getByTestId('schedule-visit-confirm-btn');
+    expect(btn).toHaveTextContent('Update appointment');
+    expect(btn.textContent ?? '').not.toContain('📅');
+    // No advance-arrow on reschedule.
+    expect(btn.querySelector('svg')).toBeNull();
+  });
 });

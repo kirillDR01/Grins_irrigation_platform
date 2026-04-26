@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { ArrowRight } from 'lucide-react';
 import { track } from '@/shared/utils/track';
 import { useScheduleVisit } from '../../hooks/useScheduleVisit';
 import { PrefilledCustomerCard } from './PrefilledCustomerCard';
@@ -92,9 +93,6 @@ export function ScheduleVisitModal({
   const title = s.isReschedule
     ? 'Reschedule estimate visit'
     : 'Schedule estimate visit';
-  const confirmLabel = s.isReschedule
-    ? '📅 Update appointment'
-    : '📅 Confirm & advance to Send Estimate';
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -169,8 +167,16 @@ export function ScheduleVisitModal({
             onClick={handleConfirm}
             disabled={!s.pick || s.submitting}
             data-testid="schedule-visit-confirm-btn"
+            className="bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-100 disabled:bg-slate-300 disabled:text-white shadow-[0_1px_0_rgba(0,0,0,0.1),0_4px_8px_rgba(15,23,42,0.16)]"
           >
-            {confirmLabel}
+            {s.isReschedule ? (
+              'Update appointment'
+            ) : (
+              <>
+                Confirm &amp; advance to Send Estimate
+                <ArrowRight className="size-3.5" strokeWidth={2.5} aria-hidden="true" />
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
