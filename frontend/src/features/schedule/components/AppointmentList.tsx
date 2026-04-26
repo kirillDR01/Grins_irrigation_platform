@@ -250,8 +250,8 @@ export function AppointmentList({ onAppointmentClick }: AppointmentListProps) {
       {/* Table Container with design system styling */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         {/* Toolbar */}
-        <div className="p-4 border-b border-slate-100 flex flex-wrap gap-4">
-          <div className="w-48">
+        <div className="p-4 border-b border-slate-100 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4">
+          <div className="w-full sm:w-48">
             <Select
               value={params.status ?? 'all'}
               onValueChange={handleStatusChange}
@@ -275,23 +275,23 @@ export function AppointmentList({ onAppointmentClick }: AppointmentListProps) {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <span className="text-sm text-slate-500">From:</span>
             <Input
               type="date"
               value={params.date_from ?? ''}
               onChange={handleDateFromChange}
-              className="w-40 border-slate-200 rounded-lg bg-white text-slate-700 text-sm focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
+              className="w-full sm:w-40 border-slate-200 rounded-lg bg-white text-slate-700 text-sm focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
               data-testid="date-from-filter"
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <span className="text-sm text-slate-500">To:</span>
             <Input
               type="date"
               value={params.date_to ?? ''}
               onChange={handleDateToChange}
-              className="w-40 border-slate-200 rounded-lg bg-white text-slate-700 text-sm focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
+              className="w-full sm:w-40 border-slate-200 rounded-lg bg-white text-slate-700 text-sm focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
               data-testid="date-to-filter"
             />
           </div>

@@ -65,7 +65,7 @@ export function ActionTrack({
   };
 
   return (
-    <div className="px-5 pb-4 flex gap-2 flex-shrink-0">
+    <div className="px-3 sm:px-5 pb-4 flex gap-1.5 sm:gap-2 flex-shrink-0">
       <ActionCard
         label="En route"
         icon={<Navigation />}

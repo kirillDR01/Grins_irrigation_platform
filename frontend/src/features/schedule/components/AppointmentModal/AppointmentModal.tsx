@@ -51,6 +51,7 @@ import { ScopeMaterialsCard } from './ScopeMaterialsCard';
 import { AssignedTechCard } from './AssignedTechCard';
 import { ModalFooter } from './ModalFooter';
 import { TagEditorSheet } from './TagEditorSheet';
+import { SubSheetHeader } from './SubSheetHeader';
 import { PaymentSheetWrapper } from './PaymentSheetWrapper';
 import { EstimateSheetWrapper } from './EstimateSheetWrapper';
 import { PhotosPanel } from './PhotosPanel';
@@ -631,12 +632,18 @@ export function AppointmentModal({
 
         {/* Tag editor sheet */}
         {openSheet === 'tags' && customer && (
-          <div className="absolute inset-0 z-10">
-            <TagEditorSheet
-              customerId={customer.id}
-              customerName={`${customer.first_name} ${customer.last_name}`}
-              onClose={closeSheet}
-            />
+          <div
+            className="absolute inset-0 z-10 bg-white flex flex-col"
+            data-testid="subsheet-tags"
+          >
+            <SubSheetHeader title="Edit tags" onBack={closeSheet} />
+            <div className="flex-1 overflow-y-auto">
+              <TagEditorSheet
+                customerId={customer.id}
+                customerName={`${customer.first_name} ${customer.last_name}`}
+                onClose={closeSheet}
+              />
+            </div>
           </div>
         )}
 
@@ -654,8 +661,17 @@ export function AppointmentModal({
 
         {/* Estimate sheet */}
         {openSheet === 'estimate' && (
-          <div className="absolute inset-0 z-10">
-            <EstimateSheetWrapper appointmentId={appointmentId} onClose={closeSheet} />
+          <div
+            className="absolute inset-0 z-10 bg-white flex flex-col"
+            data-testid="subsheet-estimate"
+          >
+            <SubSheetHeader title="Create estimate" onBack={closeSheet} />
+            <div className="flex-1 overflow-y-auto">
+              <EstimateSheetWrapper
+                appointmentId={appointmentId}
+                onClose={closeSheet}
+              />
+            </div>
           </div>
         )}
       </div>

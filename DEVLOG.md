@@ -5,6 +5,47 @@ Grin's Irrigation Platform — field service automation for residential/commerci
 
 ## Recent Activity
 
+## [2026-04-25 19:18] - FEATURE: Schedule + Appointment Modal mobile responsiveness
+
+### What Was Accomplished
+- FullCalendar viewport-aware mode (listWeek on mobile, timeGridWeek on desktop) with simplified mobile toolbar and drag-drop disabled below 768 px
+- Schedule page action bar collapses to a `+ New Appointment` button + overflow `DropdownMenu` on mobile; full inline cluster preserved on desktop
+- AppointmentModal nested sub-sheets (Tags, Estimate, Payment) each gain a back-button `SubSheetHeader` so the absolute-overlay reads as a replacement view rather than a layered modal
+- NotesPanel + PhotosPanel migrated from inline styles to Tailwind classes; NotesPanel Save/Cancel row now stacks (Save above Cancel) on mobile so it stays reachable above the iOS soft keyboard
+- ModalHeader close button bumped 40 → 44 px; CustomerHero "Call" button now meets the 44 × 44 px Apple HIG floor
+- ActionTrack tightens horizontal padding/gap on `< sm:` so the three ActionCards don't collide on iPhone SE
+- Surrounding components made responsive: AppointmentForm time inputs (`grid-cols-1 sm:grid-cols-2`), AppointmentList filter row (full-width on mobile), DaySelector (horizontal `overflow-x-auto`), SchedulingTray grid, FacetRail Sheet width
+
+### Technical Details
+- New `useMediaQuery` hook at `frontend/src/shared/hooks/useMediaQuery.ts` built on `useSyncExternalStore` (race-free subscription, no setState-in-effect lint warning); exported via the hooks barrel; 5 vitest cases covering initial match, change events, unmount cleanup, and query-change re-subscription
+- New `SubSheetHeader` shared component at `frontend/src/features/schedule/components/AppointmentModal/SubSheetHeader.tsx` with sticky-top header, 44 × 44 px back button, optional `rightAction` slot, 4 vitest cases
+- New `@fullcalendar/list@^6.1.20` package added (matched to other `@fullcalendar/*` versions)
+- `useMediaQuery('(max-width: 767px)')` drives behavior-level branching (FullCalendar config, Schedule action bar) rather than CSS-only `display: none` — avoids mounting hidden DOM and keeps mocks meaningful in tests
+- `data-testid` convention preserved for all existing testids; new testids added: `schedule-action-overflow-btn`, `schedule-action-overflow-menu`, `overflow-menu-item-{view-calendar,view-list,clear-day,send-confirmations}`, `subsheet-header`, `subsheet-back-btn`, `subsheet-tags`, `subsheet-payment`, `subsheet-estimate`
+- 660 / 660 schedule + shared-hook tests pass; production build succeeds; typecheck and lint counts unchanged from baseline (91 errors / 47 lint problems, all pre-existing)
+- No backend changes; no new env vars
+
+### Decision Rationale
+- Mobile-first responsive web (not native, not separate route tree) — chosen for lowest-risk path to parity
+- `listWeek` as default mobile calendar view — mirrors ServiceTitan / Jobber / Housecall Pro field-tech UIs
+- Drag-drop reschedule disabled on mobile — avoids touch / scroll conflicts; route through Edit dialog instead
+- Sub-sheet Option A (back-button header) — chosen over Option B (standalone Radix Sheets) for lower risk; Option B deferred to Phase 3
+- PickJobsPage stays desktop-only — bulk job picking is an office workflow, not a tech workflow; trigger buttons hidden behind `hidden lg:inline-flex`
+- `useSyncExternalStore` rewrite of `useMediaQuery` — replaces the planned `useState + useEffect` pattern that triggered the project's `react-hooks/set-state-in-effect` lint rule
+
+### Challenges and Solutions
+- Stacking context: `absolute inset-0` inside `position: fixed` modal looked layered on mobile — addressed via `SubSheetHeader` wrapping each sub-sheet so it reads as a replacement view with explicit back affordance
+- PhotosPanel + NotesPanel inline styles bypassed Tailwind's responsive system — migrated to Tailwind classes so future mobile-specific tweaks compose cleanly
+- `react-hooks/set-state-in-effect` lint rule blocked the planned `useState + useEffect + setMatches(...)` pattern — switched to `useSyncExternalStore` which is the canonical React 18+ primitive for external store subscription and avoids the rule entirely
+- Stripe Terminal Web SDK iframe risk inside the wrapped `PaymentSheetWrapper` — kept Task 17b as the last code change so it can be reverted independently if real-device QA reveals iframe layout issues
+
+### Next Steps
+- Real-device manual QA (iPhone 13/14, iPad Air portrait + landscape, MacBook Chrome + Safari) — required before merge per Phase 1G
+- Stripe Terminal payment flow on real iPhone with real Reader — required before Task 17b can ship
+- Visual regression diff (`compare -metric AE`) on NotesPanel + PhotosPanel at 1440 px and 375 px — required before merge per VISUAL REGRESSION STRATEGY
+- agent-browser E2E scripts at viewports 375 × 812, 768 × 1024, 1440 × 900 — Validation Level 5 per `spec-quality-gates.md`
+- Phase 2: extend mobile responsiveness to Sales pipeline, Customers, Jobs, Invoices, Settings (see `feature-developments/mobile-responsiveness-investigation/05_RECOMMENDED_APPROACH.md`)
+
 ## [2026-04-25 23:05] - SECURITY: Add WebAuthn / Passkey authentication
 
 ### What Was Accomplished

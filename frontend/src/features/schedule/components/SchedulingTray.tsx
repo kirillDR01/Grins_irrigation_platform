@@ -94,7 +94,7 @@ export function SchedulingTray(p: Props) {
         )}
 
         {/* Fields */}
-        <div className="grid grid-cols-2 lg:grid-cols-[200px_260px_160px_160px_1fr] gap-3 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[200px_260px_160px_160px_1fr] gap-3 items-end">
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">Date</Label>
             <Input

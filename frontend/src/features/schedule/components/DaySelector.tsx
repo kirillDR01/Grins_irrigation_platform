@@ -29,14 +29,15 @@ export function DaySelector({
   const today = new Date();
 
   return (
-    <div 
-      className="flex gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200"
+    <div
+      className="bg-slate-50 rounded-xl border border-slate-200 p-3 -mx-1 overflow-x-auto"
       data-testid="day-selector"
     >
-      <span className="flex items-center text-sm font-medium text-slate-600 mr-2">
-        Select Day:
-      </span>
-      {days.map((day) => {
+      <div className="flex gap-2 min-w-max px-1">
+        <span className="flex items-center text-sm font-medium text-slate-600 mr-2">
+          Select Day:
+        </span>
+        {days.map((day) => {
         const dateKey = format(day, 'yyyy-MM-dd');
         const isSelected = selectedDate && isSameDay(day, selectedDate);
         const isToday = isSameDay(day, today);
@@ -85,6 +86,7 @@ export function DaySelector({
           </button>
         );
       })}
+      </div>
     </div>
   );
 }

@@ -1,9 +1,18 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { SchedulePage } from './SchedulePage';
+
+vi.mock('@/shared/hooks', async () => {
+  const actual =
+    await vi.importActual<typeof import('@/shared/hooks')>('@/shared/hooks');
+  return { ...actual, useMediaQuery: vi.fn() };
+});
+
+import { useMediaQuery } from '@/shared/hooks';
+const mockUseMediaQuery = vi.mocked(useMediaQuery);
 
 // Mock the child components to avoid complex setup
 vi.mock('./CalendarView', () => ({
@@ -62,6 +71,10 @@ function createWrapper() {
 }
 
 describe('SchedulePage', () => {
+  beforeEach(() => {
+    mockUseMediaQuery.mockReturnValue(false); // default: desktop
+  });
+
   it('renders schedule page with header', () => {
     render(<SchedulePage />, { wrapper: createWrapper() });
 
@@ -186,5 +199,67 @@ describe('SchedulePage', () => {
 
     // Dialog should close
     expect(screen.queryByTestId('appointment-detail')).not.toBeInTheDocument();
+  });
+});
+
+describe('SchedulePage — mobile action bar', () => {
+  beforeEach(() => {
+    mockUseMediaQuery.mockReturnValue(true); // mobile
+  });
+
+  it('renders the primary "+ New Appointment" button at all viewports', () => {
+    render(<SchedulePage />, { wrapper: createWrapper() });
+    expect(screen.getByTestId('add-appointment-btn')).toBeInTheDocument();
+  });
+
+  it('renders the overflow menu trigger on mobile', () => {
+    render(<SchedulePage />, { wrapper: createWrapper() });
+    expect(screen.getByTestId('schedule-action-overflow-btn')).toBeInTheDocument();
+  });
+
+  it('does NOT render Add Jobs / Pick Jobs / inline view-toggle on mobile', () => {
+    render(<SchedulePage />, { wrapper: createWrapper() });
+    expect(screen.queryByTestId('add-jobs-btn')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('pick-jobs-btn')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('schedule-view-toggle')).not.toBeInTheDocument();
+  });
+
+  it('opens the overflow menu and shows view-toggle items', async () => {
+    const user = userEvent.setup();
+    render(<SchedulePage />, { wrapper: createWrapper() });
+
+    await user.click(screen.getByTestId('schedule-action-overflow-btn'));
+
+    expect(
+      await screen.findByTestId('overflow-menu-item-view-calendar'),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('overflow-menu-item-view-list')).toBeInTheDocument();
+  });
+
+  it('switches viewMode when an overflow menu view item is clicked', async () => {
+    const user = userEvent.setup();
+    render(<SchedulePage />, { wrapper: createWrapper() });
+
+    await user.click(screen.getByTestId('schedule-action-overflow-btn'));
+    await user.click(await screen.findByTestId('overflow-menu-item-view-list'));
+
+    expect(await screen.findByTestId('appointment-list')).toBeInTheDocument();
+  });
+});
+
+describe('SchedulePage — desktop action bar (regression)', () => {
+  beforeEach(() => {
+    mockUseMediaQuery.mockReturnValue(false); // desktop
+  });
+
+  it('renders all action buttons inline at lg+ (no overflow menu)', () => {
+    render(<SchedulePage />, { wrapper: createWrapper() });
+    expect(screen.getByTestId('add-appointment-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('add-jobs-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('pick-jobs-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('schedule-view-toggle')).toBeInTheDocument();
+    expect(
+      screen.queryByTestId('schedule-action-overflow-btn'),
+    ).not.toBeInTheDocument();
   });
 });

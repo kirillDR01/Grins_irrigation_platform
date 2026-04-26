@@ -56,7 +56,7 @@ export function FacetRail({ jobs, facets, onChange, onClearAll }: Props) {
               Filters
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-64 overflow-y-auto">
+          <SheetContent side="left" className="w-[85vw] sm:w-72 overflow-y-auto">
             <SheetHeader>
               <SheetTitle>Filters</SheetTitle>
             </SheetHeader>

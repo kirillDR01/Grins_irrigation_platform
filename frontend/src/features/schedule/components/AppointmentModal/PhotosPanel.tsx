@@ -82,118 +82,41 @@ export function PhotosPanel({ customerId, appointmentId }: PhotosPanelProps) {
   return (
     <div
       data-testid="photos-panel"
-      style={{
-        marginTop: 10,
-        borderRadius: 14,
-        border: '1.5px solid #1D4ED8',
-        backgroundColor: '#FFFFFF',
-        overflow: 'hidden',
-      }}
+      className="mt-2.5 rounded-[14px] border-[1.5px] border-blue-700 bg-white overflow-hidden"
     >
       {/* Header bar */}
-      <div
-        style={{
-          backgroundColor: '#DBEAFE',
-          padding: '10px 14px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
-        <span
-          style={{
-            width: 16,
-            height: 16,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#1D4ED8',
-            flexShrink: 0,
-          }}
-        >
+      <div className="bg-blue-100 py-2.5 px-3.5 flex items-center gap-2">
+        <span className="w-4 h-4 flex items-center justify-center text-blue-700 flex-shrink-0">
           <Image size={16} strokeWidth={2.2} />
         </span>
-        <span
-          style={{
-            fontSize: 13,
-            fontWeight: 800,
-            color: '#1D4ED8',
-          }}
-        >
+        <span className="text-[13px] font-extrabold text-blue-700">
           Attached photos
         </span>
         <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: 999,
-            backgroundColor: '#1D4ED8',
-            color: '#FFFFFF',
-            fontSize: 11.5,
-            fontWeight: 800,
-            fontFamily: MONO_FONT,
-            minWidth: 20,
-            height: 20,
-            padding: '0 6px',
-            lineHeight: 1,
-          }}
+          className="inline-flex items-center justify-center rounded-full bg-blue-700 text-white text-[11.5px] font-extrabold min-w-[20px] h-5 px-1.5 leading-none"
+          style={{ fontFamily: MONO_FONT }}
         >
           {photoCount}
         </span>
-        <span
-          style={{
-            marginLeft: 'auto',
-            fontSize: 11.5,
-            fontWeight: 700,
-            color: '#1D4ED8',
-            opacity: 0.85,
-          }}
-        >
+        <span className="ml-auto text-[11.5px] font-bold text-blue-700 opacity-[0.85]">
           From customer file
         </span>
       </div>
 
       {/* Upload CTAs row */}
-      <div
-        style={{
-          backgroundColor: '#FFFFFF',
-          padding: 12,
-          borderBottom: '1px solid #E5E7EB',
-          display: 'flex',
-          gap: 8,
-        }}
-      >
+      <div className="bg-white p-3 border-b border-[#E5E7EB] flex gap-2">
         {/* Primary: Upload photo · camera roll */}
         <button
           type="button"
           onClick={() => uploadInputRef.current?.click()}
           aria-label="Upload photo from camera roll"
-          style={{
-            flex: 1,
-            minHeight: 48,
-            backgroundColor: '#1D4ED8',
-            color: '#FFFFFF',
-            borderRadius: 12,
-            border: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-            cursor: 'pointer',
-            fontSize: 14,
-            fontWeight: 700,
-            padding: '0 14px',
-          }}
+          className="flex-1 min-h-[48px] bg-blue-700 text-white rounded-xl border-0 flex items-center justify-center gap-1.5 cursor-pointer text-sm font-bold px-3.5"
         >
           <Upload size={16} strokeWidth={2.2} />
           <span>Upload photo</span>
           <span
-            style={{
-              fontFamily: MONO_FONT,
-              fontSize: 11.5,
-              opacity: 0.9,
-            }}
+            className="text-[11.5px] opacity-90"
+            style={{ fontFamily: MONO_FONT }}
           >
             · camera roll
           </span>
@@ -204,7 +127,7 @@ export function PhotosPanel({ customerId, appointmentId }: PhotosPanelProps) {
           accept="image/*"
           multiple
           onChange={handleFileChange}
-          style={{ display: 'none' }}
+          className="hidden"
           data-testid="upload-photo-input"
         />
 
@@ -213,21 +136,7 @@ export function PhotosPanel({ customerId, appointmentId }: PhotosPanelProps) {
           type="button"
           onClick={() => cameraInputRef.current?.click()}
           aria-label="Take photo with camera"
-          style={{
-            minHeight: 48,
-            backgroundColor: '#FFFFFF',
-            color: '#1D4ED8',
-            borderRadius: 12,
-            border: '1.5px solid #1D4ED8',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-            cursor: 'pointer',
-            fontSize: 14,
-            fontWeight: 700,
-            padding: '0 14px',
-          }}
+          className="min-h-[48px] bg-white text-blue-700 rounded-xl border-[1.5px] border-blue-700 flex items-center justify-center gap-1.5 cursor-pointer text-sm font-bold px-3.5"
         >
           <Camera size={16} strokeWidth={2.2} />
           <span>Take photo</span>
@@ -238,7 +147,7 @@ export function PhotosPanel({ customerId, appointmentId }: PhotosPanelProps) {
           accept="image/*"
           capture="environment"
           onChange={handleFileChange}
-          style={{ display: 'none' }}
+          className="hidden"
           data-testid="take-photo-input"
         />
       </div>
@@ -246,67 +155,24 @@ export function PhotosPanel({ customerId, appointmentId }: PhotosPanelProps) {
       {/* Photo strip — horizontal scroll */}
       <div
         data-testid="photo-strip"
-        style={{
-          display: 'flex',
-          overflowX: 'auto',
-          padding: 12,
-          gap: 10,
-          WebkitOverflowScrolling: 'touch',
-        }}
+        className="flex overflow-x-auto p-3 gap-2.5"
       >
         {/* Optimistic placeholder cards */}
         {optimisticPhotos.map((op) => (
           <div
             key={op.id}
-            style={{
-              width: 180,
-              flexShrink: 0,
-              borderRadius: 12,
-              border: '1.5px solid #E5E7EB',
-              overflow: 'hidden',
-              backgroundColor: '#F9FAFB',
-              position: 'relative',
-            }}
+            className="w-[180px] max-sm:w-[140px] flex-shrink-0 rounded-xl border-[1.5px] border-[#E5E7EB] overflow-hidden bg-[#F9FAFB] relative"
           >
             <img
               src={op.previewUrl}
               alt="Uploading..."
-              style={{
-                width: '100%',
-                height: 134,
-                objectFit: 'cover',
-                display: 'block',
-                opacity: 0.6,
-              }}
+              className="w-full h-[134px] object-cover block opacity-60"
             />
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <div
-                style={{
-                  width: 24,
-                  height: 24,
-                  border: '2.5px solid #1D4ED8',
-                  borderTopColor: 'transparent',
-                  borderRadius: '50%',
-                  animation: 'spin 0.8s linear infinite',
-                }}
-              />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-6 h-6 border-[2.5px] border-blue-700 border-t-transparent rounded-full animate-spin" />
             </div>
-            <div style={{ padding: '8px 10px' }}>
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: '#9CA3AF',
-                }}
-              >
+            <div className="py-2 px-2.5">
+              <span className="text-xs font-bold text-gray-400">
                 Uploading…
               </span>
             </div>
@@ -315,34 +181,14 @@ export function PhotosPanel({ customerId, appointmentId }: PhotosPanelProps) {
 
         {/* Loading state */}
         {isLoading && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '20px 40px',
-              color: '#6B7280',
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
+          <div className="flex items-center justify-center py-5 px-10 text-gray-500 text-[13px] font-semibold">
             Loading photos…
           </div>
         )}
 
         {/* Error state */}
         {error && !isLoading && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '20px 40px',
-              color: '#EF4444',
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
+          <div className="flex items-center justify-center py-5 px-10 text-red-500 text-[13px] font-semibold">
             Unable to load photos
           </div>
         )}
@@ -370,42 +216,15 @@ export function PhotosPanel({ customerId, appointmentId }: PhotosPanelProps) {
             }
           }}
           aria-label="Add more photos from library"
-          style={{
-            width: 110,
-            flexShrink: 0,
-            borderRadius: 12,
-            border: '1.5px dashed #D1D5DB',
-            backgroundColor: '#F9FAFB',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-            cursor: 'pointer',
-            padding: '16px 8px',
-            minHeight: 134,
-          }}
+          className="w-[110px] max-sm:w-[90px] flex-shrink-0 rounded-xl border-[1.5px] border-dashed border-gray-300 bg-[#F9FAFB] flex flex-col items-center justify-center gap-1.5 cursor-pointer py-4 px-2 min-h-[134px] max-sm:min-h-[110px]"
         >
           <Plus size={20} strokeWidth={2} color="#9CA3AF" />
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 800,
-              color: '#6B7280',
-              textAlign: 'center',
-              lineHeight: 1.3,
-            }}
-          >
+          <span className="text-xs font-extrabold text-gray-500 text-center leading-[1.3]">
             Add more
           </span>
           <span
-            style={{
-              fontSize: 10.5,
-              fontWeight: 600,
-              fontFamily: MONO_FONT,
-              color: '#9CA3AF',
-              textAlign: 'center',
-            }}
+            className="text-[10.5px] font-semibold text-gray-400 text-center"
+            style={{ fontFamily: MONO_FONT }}
           >
             From library
           </span>
@@ -416,43 +235,19 @@ export function PhotosPanel({ customerId, appointmentId }: PhotosPanelProps) {
           accept="image/*"
           multiple
           onChange={handleFileChange}
-          style={{ display: 'none' }}
+          className="hidden"
           data-testid="add-more-photo-input"
         />
       </div>
 
       {/* Footer */}
-      <div
-        style={{
-          backgroundColor: '#F9FAFB',
-          padding: '8px 14px 10px',
-          borderTop: '1px solid #E5E7EB',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <span
-          style={{
-            fontSize: 11.5,
-            fontWeight: 700,
-            color: '#6B7280',
-          }}
-        >
+      <div className="bg-[#F9FAFB] pt-2 px-3.5 pb-2.5 border-t border-[#E5E7EB] flex items-center justify-between">
+        <span className="text-[11.5px] font-bold text-gray-500">
           Tap a photo to expand · pinch to zoom
         </span>
         <button
           type="button"
-          style={{
-            padding: '6px 10px',
-            borderRadius: 8,
-            border: '1.5px solid #E5E7EB',
-            backgroundColor: '#FFFFFF',
-            fontSize: 12,
-            fontWeight: 800,
-            color: '#1F2937',
-            cursor: 'pointer',
-          }}
+          className="py-1.5 px-2.5 rounded-lg border-[1.5px] border-[#E5E7EB] bg-white text-xs font-extrabold text-gray-800 cursor-pointer"
         >
           View all ({photos?.length ?? 0})
         </button>

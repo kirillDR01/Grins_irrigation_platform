@@ -110,33 +110,11 @@ export function NotesPanel({
   return (
     <div
       data-testid="notes-panel"
-      style={{
-        marginTop: 10,
-        borderRadius: 14,
-        border: '1.5px solid #E5E7EB',
-        backgroundColor: '#FFFFFF',
-        boxShadow: '0 1px 2px rgba(10,15,30,0.04)',
-        overflow: 'hidden',
-      }}
+      className="mt-2.5 rounded-[14px] border-[1.5px] border-[#E5E7EB] bg-white shadow-[0_1px_2px_rgba(10,15,30,0.04)] overflow-hidden"
     >
       {/* Header */}
-      <div
-        style={{
-          padding: '18px 20px 14px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <span
-          style={{
-            fontSize: 12.5,
-            fontWeight: 800,
-            letterSpacing: 1.4,
-            textTransform: 'uppercase' as const,
-            color: '#64748B',
-          }}
-        >
+      <div className="pt-[18px] px-5 pb-3.5 flex items-center justify-between">
+        <span className="text-[12.5px] font-extrabold tracking-[1.4px] uppercase text-slate-500">
           INTERNAL NOTES
         </span>
 
@@ -146,18 +124,7 @@ export function NotesPanel({
             type="button"
             onClick={() => onSetEditing(true)}
             aria-label="Edit notes"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              fontSize: 14,
-              fontWeight: 700,
-              color: '#64748B',
-              backgroundColor: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 0,
-            }}
+            className="inline-flex items-center gap-1 text-sm font-bold text-slate-500 bg-transparent border-0 cursor-pointer p-0"
           >
             <Pencil size={14} strokeWidth={2.2} />
             <span>Edit</span>
@@ -169,19 +136,10 @@ export function NotesPanel({
       {!editing && (
         <div
           data-testid="notes-view-body"
-          style={{
-            padding: '0 20px 22px',
-            fontSize: 14.5,
-            fontWeight: 500,
-            lineHeight: 1.6,
-            color: '#0B1220',
-            minHeight: 80,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-          }}
+          className="px-5 pb-[22px] text-[14.5px] font-medium leading-[1.6] text-[#0B1220] min-h-[80px] whitespace-pre-wrap break-words"
         >
           {notes?.body || (
-            <span style={{ color: '#9CA3AF', fontStyle: 'italic' }}>
+            <span className="text-gray-400 italic">
               No notes yet. Tap Edit to add internal notes.
             </span>
           )}
@@ -190,7 +148,7 @@ export function NotesPanel({
 
       {/* Edit mode */}
       {editing && (
-        <div style={{ padding: '0 20px 22px' }}>
+        <div className="px-5 pb-[22px]">
           <textarea
             ref={textareaRef}
             value={draft}
@@ -198,46 +156,17 @@ export function NotesPanel({
             onKeyDown={handleKeyDown}
             data-testid="notes-textarea"
             aria-label="Internal notes"
-            style={{
-              width: '100%',
-              minHeight: 150,
-              padding: '12px 14px',
-              borderRadius: 12,
-              border: '1.5px solid #E5E7EB',
-              fontSize: 14.5,
-              fontWeight: 500,
-              lineHeight: 1.5,
-              resize: 'vertical' as const,
-              outline: 'none',
-              fontFamily: 'inherit',
-              boxSizing: 'border-box',
-            }}
+            className="w-full min-h-[120px] sm:min-h-[150px] max-h-[40vh] px-3.5 py-3 rounded-xl border-[1.5px] border-[#E5E7EB] text-[14.5px] font-medium leading-[1.5] resize-y outline-none box-border"
+            style={{ fontFamily: 'inherit' }}
           />
 
-          {/* Button row */}
-          <div
-            style={{
-              marginTop: 14,
-              display: 'flex',
-              gap: 12,
-              justifyContent: 'flex-end',
-            }}
-          >
+          {/* Button row — Save on top on mobile (above keyboard), side-by-side on sm:+ */}
+          <div className="mt-3.5 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end sm:gap-3">
             <button
               type="button"
               onClick={handleCancel}
               data-testid="notes-cancel-btn"
-              style={{
-                backgroundColor: '#FFFFFF',
-                border: '1.5px solid #E5E7EB',
-                color: '#1F2937',
-                padding: '12px 28px',
-                borderRadius: 999,
-                fontSize: 15,
-                fontWeight: 700,
-                minWidth: 120,
-                cursor: 'pointer',
-              }}
+              className="w-full sm:w-auto sm:min-w-[120px] min-h-[44px] px-7 py-3 rounded-full text-[15px] font-bold bg-white border-[1.5px] border-[#E5E7EB] text-gray-800 cursor-pointer"
             >
               Cancel
             </button>
@@ -245,17 +174,7 @@ export function NotesPanel({
               type="button"
               onClick={handleSave}
               data-testid="notes-save-btn"
-              style={{
-                backgroundColor: '#14B8A6',
-                border: '1.5px solid #14B8A6',
-                color: '#FFFFFF',
-                padding: '12px 28px',
-                borderRadius: 999,
-                fontSize: 15,
-                fontWeight: 700,
-                minWidth: 140,
-                cursor: 'pointer',
-              }}
+              className="w-full sm:w-auto sm:min-w-[140px] min-h-[44px] px-7 py-3 rounded-full text-[15px] font-bold bg-teal-500 border-[1.5px] border-teal-500 text-white cursor-pointer"
             >
               Save Notes
             </button>

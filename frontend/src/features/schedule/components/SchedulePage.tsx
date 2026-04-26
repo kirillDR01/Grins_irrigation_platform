@@ -18,7 +18,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Calendar, List, CalendarPlus } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Plus, Calendar, List, CalendarPlus, MoreHorizontal } from 'lucide-react';
+import { useMediaQuery } from '@/shared/hooks';
 import { CalendarView } from './CalendarView';
 import { AppointmentForm } from './AppointmentForm';
 import { AppointmentModal } from './AppointmentModal';
@@ -59,7 +68,9 @@ export function SchedulePage() {
   const [showJobSelector, setShowJobSelector] = useState(false);
   const [inlinePanelAppointmentId, setInlinePanelAppointmentId] = useState<string | null>(null);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
-  
+
+  const isMobile = useMediaQuery('(max-width: 767px)');
+
   const navigate = useNavigate();
 
   // Pre-fill job from query param (Req 11.7 — "Schedule" button on Jobs tab)
@@ -328,61 +339,129 @@ export function SchedulePage() {
         title="Schedule"
         description="Manage appointments and view daily/weekly schedules"
         action={
-          <div className="flex items-center gap-4">
-            <LeadTimeIndicator />
-            <ClearDayButton
-              onClick={handleClearDayClick}
-              disabled={clearScheduleMutation.isPending}
-              hasSelectedDay={!!selectedDate}
-            />
-            <Tabs
-              value={viewMode}
-              onValueChange={(v) => setViewMode(v as ViewMode)}
-              data-testid="schedule-view-toggle"
-            >
-              <TabsList className="bg-slate-100 rounded-lg p-1 flex">
-                <TabsTrigger 
-                  value="calendar" 
-                  data-testid="view-calendar"
-                  className="data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
+          <div className="flex items-center gap-2 flex-wrap md:gap-3 lg:flex-nowrap lg:gap-4">
+            {isMobile ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="More schedule actions"
+                    data-testid="schedule-action-overflow-btn"
+                    className="h-11 w-11"
+                  >
+                    <MoreHorizontal className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="w-56"
+                  data-testid="schedule-action-overflow-menu"
                 >
-                  <Calendar className="mr-2 h-4 w-4" />
-                  Calendar
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="list" 
-                  data-testid="view-list"
-                  className="data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
+                  <DropdownMenuLabel>View</DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={() => setViewMode('calendar')}
+                    data-testid="overflow-menu-item-view-calendar"
+                  >
+                    <Calendar className="mr-2 h-4 w-4" />
+                    Calendar
+                    {viewMode === 'calendar' && (
+                      <span className="ml-auto text-xs text-teal-600">●</span>
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setViewMode('list')}
+                    data-testid="overflow-menu-item-view-list"
+                  >
+                    <List className="mr-2 h-4 w-4" />
+                    List
+                    {viewMode === 'list' && (
+                      <span className="ml-auto text-xs text-teal-600">●</span>
+                    )}
+                  </DropdownMenuItem>
+                  {(selectedDate || draftCount > 0) && <DropdownMenuSeparator />}
+                  {selectedDate && (
+                    <>
+                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onClick={handleClearDayClick}
+                        disabled={clearScheduleMutation.isPending}
+                        data-testid="overflow-menu-item-clear-day"
+                      >
+                        Clear day
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {draftCount > 0 && (
+                    <DropdownMenuItem
+                      asChild
+                      data-testid="overflow-menu-item-send-confirmations"
+                    >
+                      <SendAllConfirmationsButton
+                        draftAppointments={draftAppointments}
+                      />
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <>
+                <LeadTimeIndicator />
+                <ClearDayButton
+                  onClick={handleClearDayClick}
+                  disabled={clearScheduleMutation.isPending}
+                  hasSelectedDay={!!selectedDate}
+                />
+                <Tabs
+                  value={viewMode}
+                  onValueChange={(v) => setViewMode(v as ViewMode)}
+                  data-testid="schedule-view-toggle"
                 >
-                  <List className="mr-2 h-4 w-4" />
-                  List
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-            <Button
-              onClick={() => {
-                const params = new URLSearchParams();
-                if (selectedDate) params.set('date', format(selectedDate, 'yyyy-MM-dd'));
-                navigate(`/schedule/pick-jobs${params.toString() ? `?${params}` : ''}`);
-              }}
-              variant="outline"
-              data-testid="add-jobs-btn"
-              className="border-teal-200 text-teal-600 hover:bg-teal-50"
-            >
-              <CalendarPlus className="mr-2 h-4 w-4" />
-              Add Jobs
-            </Button>
-            <Button
-              onClick={() => navigate('/schedule/pick-jobs')}
-              variant="outline"
-              data-testid="pick-jobs-btn"
-              className="border-teal-200 text-teal-600 hover:bg-teal-50"
-            >
-              <CalendarPlus className="mr-2 h-4 w-4" />
-              Pick jobs to schedule
-            </Button>
-            {draftCount > 0 && (
-              <SendAllConfirmationsButton draftAppointments={draftAppointments} />
+                  <TabsList className="bg-slate-100 rounded-lg p-1 flex">
+                    <TabsTrigger
+                      value="calendar"
+                      data-testid="view-calendar"
+                      className="data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
+                    >
+                      <Calendar className="mr-2 h-4 w-4" />
+                      Calendar
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="list"
+                      data-testid="view-list"
+                      className="data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
+                    >
+                      <List className="mr-2 h-4 w-4" />
+                      List
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                <Button
+                  onClick={() => {
+                    const params = new URLSearchParams();
+                    if (selectedDate) params.set('date', format(selectedDate, 'yyyy-MM-dd'));
+                    navigate(`/schedule/pick-jobs${params.toString() ? `?${params}` : ''}`);
+                  }}
+                  variant="outline"
+                  data-testid="add-jobs-btn"
+                  className="hidden lg:inline-flex border-teal-200 text-teal-600 hover:bg-teal-50"
+                >
+                  <CalendarPlus className="mr-2 h-4 w-4" />
+                  Add Jobs
+                </Button>
+                <Button
+                  onClick={() => navigate('/schedule/pick-jobs')}
+                  variant="outline"
+                  data-testid="pick-jobs-btn"
+                  className="hidden lg:inline-flex border-teal-200 text-teal-600 hover:bg-teal-50"
+                >
+                  <CalendarPlus className="mr-2 h-4 w-4" />
+                  Pick jobs to schedule
+                </Button>
+                {draftCount > 0 && (
+                  <SendAllConfirmationsButton draftAppointments={draftAppointments} />
+                )}
+              </>
             )}
             <Button
               onClick={() => setShowCreateDialog(true)}
@@ -390,7 +469,8 @@ export function SchedulePage() {
               className="bg-teal-500 hover:bg-teal-600 text-white"
             >
               <Plus className="mr-2 h-4 w-4" />
-              New Appointment
+              <span className="hidden sm:inline">New Appointment</span>
+              <span className="sm:hidden">New</span>
             </Button>
           </div>
         }

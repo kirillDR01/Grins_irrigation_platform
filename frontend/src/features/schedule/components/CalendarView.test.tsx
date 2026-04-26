@@ -13,6 +13,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { CalendarView } from './CalendarView';
 
+vi.mock('@/shared/hooks', async () => {
+  const actual =
+    await vi.importActual<typeof import('@/shared/hooks')>('@/shared/hooks');
+  return { ...actual, useMediaQuery: vi.fn() };
+});
+
+import { useMediaQuery } from '@/shared/hooks';
+const mockUseMediaQuery = vi.mocked(useMediaQuery);
+
 // ── Mock hooks ───────────────────────────────────────────────────────────────
 
 const mockUseWeeklySchedule = vi.fn();
@@ -65,6 +74,10 @@ vi.mock('./SendDayConfirmationsButton', () => ({
 
 type StubFullCalendarProps = {
   firstDay?: number;
+  initialView?: string;
+  editable?: boolean;
+  selectable?: boolean;
+  headerToolbar?: { left?: string; center?: string; right?: string };
   datesSet?: (arg: { start: Date; end: Date; startStr: string; endStr: string; timeZone: string; view: unknown }) => void;
 };
 
@@ -74,6 +87,10 @@ vi.mock('@fullcalendar/react', () => ({
     <div
       data-testid="fullcalendar-stub"
       data-first-day={String(props.firstDay ?? 0)}
+      data-initial-view={String(props.initialView ?? '')}
+      data-editable={String(props.editable ?? '')}
+      data-selectable={String(props.selectable ?? '')}
+      data-toolbar-right={String(props.headerToolbar?.right ?? '')}
     >
       <button
         data-testid="simulate-dates-set-tuesday"
@@ -119,6 +136,7 @@ vi.mock('@fullcalendar/react', () => ({
 vi.mock('@fullcalendar/daygrid', () => ({ __esModule: true, default: {} }));
 vi.mock('@fullcalendar/timegrid', () => ({ __esModule: true, default: {} }));
 vi.mock('@fullcalendar/interaction', () => ({ __esModule: true, default: {} }));
+vi.mock('@fullcalendar/list', () => ({ __esModule: true, default: {} }));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -149,6 +167,7 @@ describe('CalendarView — Monday-based weeks (H-3)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setupDefaultMocks();
+    mockUseMediaQuery.mockReturnValue(false); // default: desktop
   });
 
   afterEach(() => {
@@ -203,5 +222,63 @@ describe('CalendarView — Monday-based weeks (H-3)', () => {
       (secondMonday.getTime() - firstMonday.getTime()) / msPerDay,
     );
     expect(diffDays).toBe(7);
+  });
+});
+
+describe('CalendarView — mobile mode', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupDefaultMocks();
+    mockUseMediaQuery.mockReturnValue(true); // mobile
+  });
+
+  it('uses listWeek as the initial view on mobile', () => {
+    render(<CalendarView />, { wrapper: createWrapper() });
+    const stub = screen.getByTestId('fullcalendar-stub');
+    expect(stub).toHaveAttribute('data-initial-view', 'listWeek');
+  });
+
+  it('disables drag-drop reschedule on mobile (editable=false)', () => {
+    render(<CalendarView />, { wrapper: createWrapper() });
+    const stub = screen.getByTestId('fullcalendar-stub');
+    expect(stub).toHaveAttribute('data-editable', 'false');
+    expect(stub).toHaveAttribute('data-selectable', 'false');
+  });
+
+  it('uses simplified mobile toolbar (no view-switcher buttons)', () => {
+    render(<CalendarView />, { wrapper: createWrapper() });
+    const stub = screen.getByTestId('fullcalendar-stub');
+    // Mobile right-toolbar is just "today" — no dayGridMonth/timeGridWeek/timeGridDay
+    expect(stub).toHaveAttribute('data-toolbar-right', 'today');
+  });
+});
+
+describe('CalendarView — desktop mode (regression)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupDefaultMocks();
+    mockUseMediaQuery.mockReturnValue(false); // desktop
+  });
+
+  it('uses timeGridWeek as the initial view on desktop', () => {
+    render(<CalendarView />, { wrapper: createWrapper() });
+    const stub = screen.getByTestId('fullcalendar-stub');
+    expect(stub).toHaveAttribute('data-initial-view', 'timeGridWeek');
+  });
+
+  it('keeps drag-drop and selection enabled on desktop', () => {
+    render(<CalendarView />, { wrapper: createWrapper() });
+    const stub = screen.getByTestId('fullcalendar-stub');
+    expect(stub).toHaveAttribute('data-editable', 'true');
+    expect(stub).toHaveAttribute('data-selectable', 'true');
+  });
+
+  it('renders the full view-switcher toolbar on desktop', () => {
+    render(<CalendarView />, { wrapper: createWrapper() });
+    const stub = screen.getByTestId('fullcalendar-stub');
+    expect(stub).toHaveAttribute(
+      'data-toolbar-right',
+      'dayGridMonth,timeGridWeek,timeGridDay',
+    );
   });
 });

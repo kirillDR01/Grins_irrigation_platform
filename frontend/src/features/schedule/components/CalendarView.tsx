@@ -9,6 +9,7 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import listPlugin from '@fullcalendar/list';
 import type { DateClickArg, EventDropArg } from '@fullcalendar/interaction';
 import type { DatesSetArg, EventInput, EventClickArg } from '@fullcalendar/core';
 import { format, startOfWeek, endOfWeek, addDays } from 'date-fns';
@@ -16,6 +17,7 @@ import { toast } from 'sonner';
 import { useWeeklySchedule } from '../hooks/useAppointments';
 import { useUpdateAppointment } from '../hooks/useAppointmentMutations';
 import { useStaff } from '@/features/staff/hooks/useStaff';
+import { useMediaQuery } from '@/shared/hooks';
 import { appointmentStatusConfig } from '../types';
 import type { Appointment, AppointmentStatus } from '../types';
 import { LoadingSpinner } from '@/shared/components/LoadingSpinner';
@@ -61,6 +63,7 @@ const statusColors: Record<AppointmentStatus, { bg: string; border: string }> = 
 };
 
 export function CalendarView({ onDateClick, onEventClick, onWeekChange, selectedDate, onCustomerClick }: CalendarViewProps) {
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const [dateRange, setDateRange] = useState(() => {
     const today = new Date();
     const start = startOfWeek(today, { weekStartsOn: 1 });
@@ -335,21 +338,32 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
       className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
     >
       <FullCalendar
-        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-        initialView="timeGridWeek"
+        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
+        initialView={isMobile ? 'listWeek' : 'timeGridWeek'}
         firstDay={1}
-        headerToolbar={{
-          left: 'prev,next today',
-          center: 'title',
-          right: 'dayGridMonth,timeGridWeek,timeGridDay',
+        headerToolbar={
+          isMobile
+            ? { left: 'prev,next', center: 'title', right: 'today' }
+            : {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay',
+              }
+        }
+        views={{
+          listWeek: {
+            buttonText: 'List',
+            noEventsContent: 'No appointments this week',
+            listDayFormat: { weekday: 'long', month: 'short', day: 'numeric' },
+          },
         }}
         events={events}
         dateClick={handleDateClick}
         eventClick={handleEventClick}
         eventDrop={handleEventDrop}
         datesSet={handleDatesSet}
-        editable={true}
-        selectable={true}
+        editable={!isMobile}
+        selectable={!isMobile}
         selectMirror={true}
         dayMaxEvents={true}
         weekends={true}
@@ -360,7 +374,7 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
         height="auto"
         eventDisplay="block"
         eventContent={renderEventContent}
-        dayHeaderContent={renderDayHeaderContent}
+        dayHeaderContent={isMobile ? undefined : renderDayHeaderContent}
         eventTimeFormat={{
           hour: 'numeric',
           minute: '2-digit',
@@ -371,6 +385,7 @@ export function CalendarView({ onDateClick, onEventClick, onWeekChange, selected
           minute: '2-digit',
           meridiem: 'short',
         }}
+        longPressDelay={isMobile ? 1500 : 1000}
       />
     </div>
   );
