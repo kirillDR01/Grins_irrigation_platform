@@ -6,6 +6,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import type React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Phone, Inbox, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Card, CardContent } from '@/components/ui/card';
@@ -310,7 +311,10 @@ function PipelineRow({
               size="sm"
               variant={entry.status === 'closed_won' ? 'ghost' : 'default'}
               data-testid={`pipeline-row-action-${entry.id}`}
-              // TODO(wiring): route to real mutation / modal opener
+              onClick={(e) => {
+                e.stopPropagation();
+                onRowClick(entry);
+              }}
             >
               {actionLabel}
             </Button>
@@ -320,7 +324,10 @@ function PipelineRow({
             variant="ghost"
             className="h-7 w-7"
             data-testid={`pipeline-row-dismiss-${entry.id}`}
-            // TODO(backend): wire dismiss endpoint
+            onClick={(e) => {
+              e.stopPropagation();
+              toast.info('Dismiss not wired yet — TODO(backend)');
+            }}
           >
             <X className="h-3.5 w-3.5 text-slate-400" />
           </Button>

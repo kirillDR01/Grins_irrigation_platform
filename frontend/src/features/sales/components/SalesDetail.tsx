@@ -34,8 +34,10 @@ import {
   useConvertToJob,
   useMarkSalesLost,
   useSalesCalendarEvents,
+  useUploadSalesDocument,
 } from '../hooks/useSalesPipeline';
 import { ScheduleVisitModal } from './ScheduleVisitModal';
+import { MarkDeclinedDialog } from './MarkDeclinedDialog';
 import { SALES_STATUS_CONFIG, TERMINAL_STATUSES, ALL_STATUSES, statusToStageKey } from '../types/pipeline';
 import type { SalesEntryStatus, NowActionId, ActivityEvent } from '../types/pipeline';
 import { DocumentsSection } from './DocumentsSection';
@@ -63,6 +65,7 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
   const advance = useAdvanceSalesEntry();
   const convertToJob = useConvertToJob();
   const markLost = useMarkSalesLost();
+  const uploadDoc = useUploadSalesDocument();
   const { data: staffData } = useStaff({ is_active: true });
 
   // Fetch customer for internal_notes display
@@ -112,6 +115,9 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
 
   // ScheduleVisitModal open state
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+
+  // MarkDeclinedDialog open state
+  const [markDeclinedOpen, setMarkDeclinedOpen] = useState(false);
 
   // Fetch documents to determine signing button state
   const { data: documents } = useSalesDocuments(entry?.customer_id ?? '');
@@ -174,11 +180,8 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
           break;
 
         case 'view_job':
-          if (entry?.signwell_document_id) {
-            navigate(`/jobs/${entry.signwell_document_id}`);
-          } else {
-            navigate('/jobs');
-          }
+          // TODO(backend): expose entry.job_id and navigate to /jobs/{job_id}
+          navigate('/jobs');
           break;
 
         case 'view_customer':
@@ -190,13 +193,7 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
           break;
 
         case 'mark_declined':
-          markLost.mutate(
-            { id: entryId },
-            {
-              onSuccess: () => { toast.success('Marked as lost'); refetch(); },
-              onError: () => toast.error('Failed to mark as lost'),
-            },
-          );
+          setMarkDeclinedOpen(true);
           break;
 
         case 'skip_advance':
@@ -227,16 +224,28 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
           break;
       }
     },
-    [entryId, entry, navigate, advance, emailSign, convertToJob, markLost, overrideStatus, refetch],
+    [entryId, entry, navigate, advance, emailSign, convertToJob, overrideStatus, refetch],
   );
 
   // ── File drop handler ───────────────────────────────────────────────────────
   const handleFileDrop = useCallback(
-    (_file: File, _kind: 'estimate' | 'agreement') => {
-      // TODO(backend): wire to useUploadSalesDocument when backend ready
-      toast.info('Not wired yet — TODO');
+    async (file: File, kind: 'estimate' | 'agreement') => {
+      if (!entry?.customer_id) return;
+      try {
+        await uploadDoc.mutateAsync({
+          customerId: entry.customer_id,
+          file,
+          documentType: kind === 'agreement' ? 'contract' : 'estimate',
+        });
+        toast.success(
+          `${kind === 'agreement' ? 'Agreement' : 'Estimate'} uploaded`,
+        );
+        refetch();
+      } catch (err) {
+        toast.error('Upload failed', { description: getErrorMessage(err) });
+      }
     },
-    [],
+    [entry, uploadDoc, refetch],
   );
 
   // ── Derive stage and NowCard content (safe before entry guard) ─────────────
@@ -276,7 +285,7 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
 
   const statusConfig = SALES_STATUS_CONFIG[entry.status];
   const isTerminal = TERMINAL_STATUSES.includes(entry.status);
-  const hasEmail = !!entry.customer_name;
+  const hasEmail = !!(entry.customer_email ?? salesCustomer?.email);
 
   const startEditCustomerInfo = () => {
     setCustomerInfoForm({
@@ -337,20 +346,20 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
 
   // ── Derive NowCard content ──────────────────────────────────────────────────
   const firstName = (entry.customer_name ?? 'Customer').split(' ')[0];
-  const hasCustomerEmail = hasEmail;
 
   const nowCardContent = stageKey
     ? nowContent({
         stage: stageKey,
         hasEstimateDoc,
         hasSignedAgreement,
-        hasCustomerEmail,
+        hasCustomerEmail: hasEmail,
         firstName,
         weekOf: weekOfValue ?? undefined,
       })
     : null;
 
   const isClosedLost = entry.status === 'closed_lost';
+  const isClosedWon = entry.status === 'closed_won';
 
   return (
     <div data-testid="sales-detail-page" className="space-y-6">
@@ -529,13 +538,20 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
         </CardContent>
       </Card>
 
-      {/* ── Stage Walkthrough (hidden for closed_lost) ── */}
+      {/* ── Stage Walkthrough (hidden for terminal statuses) ── */}
       {isClosedLost ? (
         <div
           className="rounded-lg bg-slate-100 border border-slate-200 px-4 py-3 text-sm text-slate-600"
           data-testid="closed-lost-banner"
         >
           Closed Lost{entry.closed_reason ? ` — ${entry.closed_reason}` : ''}. No further actions.
+        </div>
+      ) : isClosedWon ? (
+        <div
+          className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800"
+          data-testid="closed-won-banner"
+        >
+          Closed Won — converted to job. No further actions.
         </div>
       ) : (
         <>
@@ -566,6 +582,9 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
               onFileDrop={handleFileDrop}
               weekOfValue={weekOfValue}
               onWeekOfChange={handleWeekOfChange}
+              // TODO(backend): replace with real estimate_sent_at + nudges_paused_until
+              estimateSentAt={entry.updated_at ?? entry.created_at}
+              nudgesPaused={false}
             />
           )}
 
@@ -594,6 +613,25 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
         currentEvent={currentEvent}
         open={scheduleModalOpen}
         onOpenChange={setScheduleModalOpen}
+      />
+
+      <MarkDeclinedDialog
+        open={markDeclinedOpen}
+        onOpenChange={setMarkDeclinedOpen}
+        isPending={markLost.isPending}
+        onConfirm={(reason) => {
+          markLost.mutate(
+            { id: entryId, closedReason: reason },
+            {
+              onSuccess: () => {
+                toast.success('Marked as declined');
+                setMarkDeclinedOpen(false);
+                refetch();
+              },
+              onError: () => toast.error('Failed to mark as declined'),
+            },
+          );
+        }}
       />
     </div>
   );

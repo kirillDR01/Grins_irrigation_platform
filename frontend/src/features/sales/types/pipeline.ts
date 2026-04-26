@@ -26,6 +26,7 @@ export interface SalesEntry {
   updated_at: string;
   customer_name: string | null;
   customer_phone: string | null;
+  customer_email: string | null;
   property_address: string | null;
 }
 

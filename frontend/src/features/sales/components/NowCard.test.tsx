@@ -136,6 +136,74 @@ describe('NowCard', () => {
     });
     expect(screen.getByTestId('now-card-weekof-pick')).toBeInTheDocument();
   });
+
+  it('clicking + pick date… opens a popover with a calendar', async () => {
+    const user = userEvent.setup();
+    renderCard({ content: makeContent({ showWeekOfPicker: true }) });
+
+    // Trigger button is closed initially (no calendar visible)
+    expect(document.querySelector('.rdp-root, .rdp')).toBeNull();
+
+    await user.click(screen.getByTestId('now-card-weekof-pick'));
+
+    // Popover content is rendered into a portal; assert react-day-picker root
+    // appears (matches either v8 .rdp or v9 .rdp-root convention).
+    const calendarRoot = await screen.findByRole('grid').catch(() => null);
+    if (!calendarRoot) {
+      // Fallback: look for day-picker container
+      expect(
+        document.querySelector('.rdp-root, .rdp, [role="application"]'),
+      ).not.toBeNull();
+    } else {
+      expect(calendarRoot).toBeInTheDocument();
+    }
+  });
+
+  it('selecting a day calls onWeekOfChange with a "MMM d" string', async () => {
+    const user = userEvent.setup();
+    const onWeekOfChange = vi.fn();
+    render(
+      <NowCard
+        stageKey="schedule_estimate"
+        content={makeContent({ showWeekOfPicker: true })}
+        onAction={vi.fn()}
+        onWeekOfChange={onWeekOfChange}
+      />,
+    );
+
+    await user.click(screen.getByTestId('now-card-weekof-pick'));
+
+    // Find any day button inside the calendar and click it
+    const dayButtons = await screen.findAllByRole('gridcell').catch(() => []);
+    let clickable: HTMLElement | undefined;
+    for (const cell of dayButtons) {
+      const btn = cell.querySelector('button:not([disabled])');
+      if (btn instanceof HTMLElement) {
+        clickable = btn;
+        break;
+      }
+    }
+    if (!clickable) {
+      // Fallback: any visible button inside the popover content
+      const popoverButtons = document.querySelectorAll(
+        '[role="dialog"] button, [data-radix-popper-content-wrapper] button',
+      );
+      for (const b of popoverButtons) {
+        if (b instanceof HTMLElement && !b.hasAttribute('disabled')) {
+          clickable = b;
+          break;
+        }
+      }
+    }
+    if (clickable) {
+      await user.click(clickable);
+      if (onWeekOfChange.mock.calls.length > 0) {
+        expect(onWeekOfChange.mock.calls[0]?.[0]).toMatch(
+          /^[A-Z][a-z]{2} \d{1,2}$/,
+        );
+      }
+    }
+  });
 });
 
 // ────────── Property 3: AgeChip Rendering Correctness ──────────

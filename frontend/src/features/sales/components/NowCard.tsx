@@ -9,7 +9,10 @@ import {
   Calendar, Mail, MessageSquare, Upload, CheckCircle2, XCircle,
   RotateCw, PauseCircle, ArrowRight, User, Edit3, Lock, FileText,
 } from 'lucide-react';
+import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
+import { Calendar as CalendarPicker } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip';
@@ -275,14 +278,26 @@ function WeekOfPicker({
             Week of {w}
           </button>
         ))}
-        <button
-          type="button"
-          data-testid="now-card-weekof-pick"
-          className="text-xs px-2.5 py-1 rounded-full border border-dashed border-slate-300 text-slate-500 hover:bg-slate-50"
-          // TODO: open shadcn Popover + Calendar
-        >
-          + pick date…
-        </button>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              data-testid="now-card-weekof-pick"
+              className="text-xs px-2.5 py-1 rounded-full border border-dashed border-slate-300 text-slate-500 hover:bg-slate-50"
+            >
+              + pick date…
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <CalendarPicker
+              mode="single"
+              selected={undefined}
+              onSelect={(d) => {
+                if (d) onChange?.(format(d, 'MMM d'));
+              }}
+            />
+          </PopoverContent>
+        </Popover>
       </div>
       <p className="text-xs text-slate-500">
         Used only as a target — pin the exact day + crew later in the Jobs tab.

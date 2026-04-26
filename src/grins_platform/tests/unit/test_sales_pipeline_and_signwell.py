@@ -14,6 +14,7 @@ from uuid import uuid4
 import httpx
 import pytest
 
+from grins_platform.api.v1.sales_pipeline import _entry_to_response
 from grins_platform.exceptions import (
     InvalidSalesTransitionError,
     SalesEntryNotFoundError,
@@ -544,3 +545,83 @@ class TestSignWellWebhookVerification:
         )
         with pytest.raises(SignWellWebhookVerificationError):
             client.verify_webhook_signature(b"payload", "sig")
+
+
+# ===================================================================
+# _entry_to_response — denormalized customer_email field
+# ===================================================================
+
+
+def _make_response_entry_mock(
+    *,
+    customer: Mock | None,
+    job_type: str | None = "spring_startup",
+) -> Mock:
+    entry = Mock()
+    entry.id = uuid4()
+    entry.customer_id = uuid4() if customer is None else customer.id
+    entry.property_id = None
+    entry.lead_id = None
+    entry.job_type = job_type
+    entry.status = SalesEntryStatus.SCHEDULE_ESTIMATE.value
+    entry.last_contact_date = None
+    entry.notes = None
+    entry.override_flag = False
+    entry.closed_reason = None
+    entry.signwell_document_id = None
+    entry.created_at = datetime.now(tz=timezone.utc)
+    entry.updated_at = datetime.now(tz=timezone.utc)
+    entry.customer = customer
+    entry.property = None
+    # Denormalized response fields must be plain values so Pydantic's
+    # from_attributes loader doesn't pick up MagicMock proxies.
+    entry.customer_name = None
+    entry.customer_phone = None
+    entry.customer_email = None
+    entry.customer_internal_notes = None
+    entry.property_address = None
+    entry.job_type_display = None
+    return entry
+
+
+def _make_customer_mock(*, email: str | None) -> Mock:
+    customer = Mock()
+    customer.id = uuid4()
+    customer.first_name = "Jane"
+    customer.last_name = "Doe"
+    customer.phone = "5551234567"
+    customer.email = email
+    customer.internal_notes = None
+    return customer
+
+
+@pytest.mark.unit()
+class TestEntryToResponseCustomerEmail:
+    """Verify _entry_to_response denormalizes customer.email onto the response."""
+
+    def test_customer_email_populated_when_present(self) -> None:
+        customer = _make_customer_mock(email="jane@example.com")
+        entry = _make_response_entry_mock(customer=customer)
+
+        resp = _entry_to_response(entry)
+
+        assert resp.customer_email == "jane@example.com"
+        assert resp.customer_name == "Jane Doe"
+        assert resp.customer_phone == "5551234567"
+
+    def test_customer_email_none_when_customer_email_null(self) -> None:
+        customer = _make_customer_mock(email=None)
+        entry = _make_response_entry_mock(customer=customer)
+
+        resp = _entry_to_response(entry)
+
+        assert resp.customer_email is None
+
+    def test_customer_email_none_when_customer_missing(self) -> None:
+        entry = _make_response_entry_mock(customer=None)
+
+        resp = _entry_to_response(entry)
+
+        assert resp.customer_email is None
+        assert resp.customer_name is None
+        assert resp.customer_phone is None

@@ -12,6 +12,26 @@ import { AGE_THRESHOLDS } from '../types/pipeline';
 
 // ─── mocks ──────────────────────────────────────────────────────────────────
 
+const toastInfoMock = vi.fn();
+vi.mock('sonner', () => ({
+  toast: {
+    info: (...args: unknown[]) => toastInfoMock(...args),
+    error: vi.fn(),
+    success: vi.fn(),
+  },
+}));
+
+const navigateMock = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>(
+    'react-router-dom',
+  );
+  return {
+    ...actual,
+    useNavigate: () => navigateMock,
+  };
+});
+
 vi.mock('../hooks/useSalesPipeline', () => ({
   useSalesPipeline: vi.fn(),
 }));
@@ -47,6 +67,7 @@ function makeEntry(
     updated_at: ref,
     customer_name: 'Alice Smith',
     customer_phone: '6125550001',
+    customer_email: null,
     property_address: '123 Main St',
     ...overrides,
   };
@@ -423,5 +444,47 @@ describe('Age chip bucket correctness', () => {
 
     expect(screen.getByTestId('pipeline-row-age-e1')).toHaveAttribute('data-bucket', 'stuck');
     void freshMax;
+  });
+});
+
+// ─── Bug #3: row action + dismiss buttons wired ─────────────────────────────
+
+describe('Row action and dismiss buttons (Bug #3)', () => {
+  beforeEach(() => {
+    navigateMock.mockClear();
+    toastInfoMock.mockClear();
+  });
+
+  it('clicking row action button navigates to /sales/{id}', async () => {
+    const user = userEvent.setup();
+    const items = [makeEntry('entry-x', 'send_estimate', 1)];
+    vi.mocked(useSalesPipeline).mockReturnValue({
+      data: makePipelineData(items),
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useSalesPipeline>);
+
+    renderPipeline();
+
+    await user.click(screen.getByTestId('pipeline-row-action-entry-x'));
+    expect(navigateMock).toHaveBeenCalledWith('/sales/entry-x');
+  });
+
+  it('clicking dismiss button toasts info stub and does not navigate', async () => {
+    const user = userEvent.setup();
+    const items = [makeEntry('entry-y', 'send_estimate', 1)];
+    vi.mocked(useSalesPipeline).mockReturnValue({
+      data: makePipelineData(items),
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useSalesPipeline>);
+
+    renderPipeline();
+
+    await user.click(screen.getByTestId('pipeline-row-dismiss-entry-y'));
+    expect(toastInfoMock).toHaveBeenCalledTimes(1);
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 });
