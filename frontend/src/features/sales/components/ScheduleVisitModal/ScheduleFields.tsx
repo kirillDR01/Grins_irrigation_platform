@@ -47,7 +47,7 @@ export function ScheduleFields({
     : '';
 
   return (
-    <div className="space-y-3 mt-3">
+    <div className="space-y-3.5 mt-4">
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label
@@ -60,6 +60,7 @@ export function ScheduleFields({
             id="schedule-visit-date"
             data-testid="schedule-visit-date"
             type="date"
+            className="font-mono font-semibold"
             value={dateValue}
             onChange={(e) => onDateChange(e.target.value)}
           />
@@ -76,6 +77,7 @@ export function ScheduleFields({
             data-testid="schedule-visit-start-time"
             type="time"
             step={1800}
+            className="font-mono font-semibold"
             value={timeValue}
             onChange={(e) => {
               const parts = e.target.value.split(':').map(Number);
@@ -134,6 +136,7 @@ export function ScheduleFields({
             <SelectTrigger
               id="schedule-visit-duration"
               data-testid="schedule-visit-duration"
+              className="font-mono font-semibold"
             >
               <SelectValue />
             </SelectTrigger>

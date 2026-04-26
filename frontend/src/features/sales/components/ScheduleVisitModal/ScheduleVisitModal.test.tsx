@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import { ScheduleVisitModal } from './ScheduleVisitModal';
 import type { SalesEntry, SalesCalendarEvent } from '../../types/pipeline';
 
@@ -64,7 +65,11 @@ function wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return React.createElement(QueryClientProvider, { client: qc }, children);
+  return React.createElement(
+    QueryClientProvider,
+    { client: qc },
+    React.createElement(MemoryRouter, null, children),
+  );
 }
 
 describe('ScheduleVisitModal', () => {
@@ -221,5 +226,57 @@ describe('ScheduleVisitModal', () => {
     expect(btn.textContent ?? '').not.toContain('📅');
     // No advance-arrow on reschedule.
     expect(btn.querySelector('svg')).toBeNull();
+  });
+
+  it('renders the stage pill with the entry status label', () => {
+    render(
+      <ScheduleVisitModal
+        entry={mkEntry()}
+        currentEvent={null}
+        open
+        onOpenChange={() => {}}
+      />,
+      { wrapper },
+    );
+    expect(screen.getByText(/Stage 1 · Schedule Estimate/)).toBeInTheDocument();
+  });
+
+  it('renders the SAL-XXXX id pill', () => {
+    render(
+      <ScheduleVisitModal
+        entry={mkEntry()}
+        currentEvent={null}
+        open
+        onOpenChange={() => {}}
+      />,
+      { wrapper },
+    );
+    expect(screen.getByText(/^SAL-/)).toBeInTheDocument();
+  });
+
+  it('renders the "From lead" tag when entry.lead_id is set', () => {
+    render(
+      <ScheduleVisitModal
+        entry={mkEntry({ lead_id: 'lead-abc' })}
+        currentEvent={null}
+        open
+        onOpenChange={() => {}}
+      />,
+      { wrapper },
+    );
+    expect(screen.getByText('From lead')).toBeInTheDocument();
+  });
+
+  it('does NOT render the "From lead" tag when entry.lead_id is null', () => {
+    render(
+      <ScheduleVisitModal
+        entry={mkEntry({ lead_id: null })}
+        currentEvent={null}
+        open
+        onOpenChange={() => {}}
+      />,
+      { wrapper },
+    );
+    expect(screen.queryByText('From lead')).not.toBeInTheDocument();
   });
 });

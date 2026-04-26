@@ -5,11 +5,10 @@ import {
   DialogContent,
   DialogDescription,
   DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, X } from 'lucide-react';
 import { track } from '@/shared/utils/track';
 import { useScheduleVisit } from '../../hooks/useScheduleVisit';
 import { PrefilledCustomerCard } from './PrefilledCustomerCard';
@@ -21,6 +20,7 @@ import {
   fmtHM,
   formatShortName,
 } from '../../lib/scheduleVisitUtils';
+import { SALES_STATUS_CONFIG } from '../../types/pipeline';
 import type { SalesEntry, SalesCalendarEvent } from '../../types/pipeline';
 
 type Props = {
@@ -70,7 +70,6 @@ export function ScheduleVisitModal({
       );
       onOpenChange(false);
     }
-    // On failure, error is shown inline via PickSummary; modal stays open.
   };
 
   const handleOpenChange = (next: boolean) => {
@@ -93,28 +92,81 @@ export function ScheduleVisitModal({
   const title = s.isReschedule
     ? 'Reschedule estimate visit'
     : 'Schedule estimate visit';
+  const stageLabel = `Stage 1 · ${SALES_STATUS_CONFIG[entry.status].label}`;
+  const idLabel = `SAL-${entry.id.slice(0, 4).toUpperCase()}`;
+  const showLeadTag = !!entry.lead_id;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         data-testid="schedule-visit-modal"
-        className="sm:max-w-[960px]"
+        showCloseButton={false}
+        className="sm:max-w-[1024px] p-0 rounded-[18px] border border-slate-200"
       >
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
-            Auto-populated from the lead record. Pick a time on the calendar —
-            click a slot for a start time, or drag to set both start &amp;
-            duration.
-          </DialogDescription>
-        </DialogHeader>
-
-        {/* Mobile (<720px): customer card → calendar → fields, in that order (SPEC §2). */}
-        <div className="grid grid-cols-1 md:grid-cols-[340px_1fr] gap-[18px] items-start">
-          <div className="min-w-0 order-1 md:order-1">
-            <PrefilledCustomerCard entry={entry} />
+        <header className="flex items-start gap-4 px-6 py-5 border-b border-slate-200 bg-white">
+          <div className="min-w-0 flex-1">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-300 bg-orange-100 px-2.5 py-0.5 text-[11.5px] font-bold leading-tight tracking-tight text-orange-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-orange-700" />
+                {stageLabel}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 font-mono text-[11.5px] font-semibold tracking-tight text-slate-800">
+                {idLabel}
+              </span>
+              {showLeadTag && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-100 px-2.5 py-0.5 text-[11.5px] font-bold leading-tight tracking-tight text-emerald-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-700" />
+                  From lead
+                </span>
+              )}
+            </div>
+            <DialogTitle asChild>
+              <h2 className="m-0 text-[22px] font-extrabold leading-[1.15] tracking-tight text-slate-900">
+                {title}
+              </h2>
+            </DialogTitle>
+            <DialogDescription asChild>
+              <p className="mt-1 max-w-[680px] text-[13.5px] leading-relaxed text-slate-600">
+                Customer details are pre-filled from the lead record. Pick a time on the
+                calendar — click a slot to pin a start, or drag to set both start &amp;
+                duration.
+              </p>
+            </DialogDescription>
           </div>
-          <div className="min-w-0 order-2 md:row-span-2 md:order-2">
+          <button
+            type="button"
+            onClick={() => handleOpenChange(false)}
+            aria-label="Close"
+            data-testid="close-modal-btn"
+            className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-[10px] border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+          >
+            <X size={18} strokeWidth={2} />
+          </button>
+        </header>
+
+        {/* Body — desktop two-col, mobile stack (customer → calendar → fields). */}
+        <div className="grid grid-cols-1 md:grid-cols-[360px_1fr] items-stretch">
+          <div className="order-1 min-w-0 border-slate-200 bg-slate-50 px-6 py-5 md:border-r">
+            <PrefilledCustomerCard entry={entry} />
+            <ScheduleFields
+              pick={s.pick}
+              durationMin={s.durationMin}
+              assignedToUserId={s.assignedToUserId}
+              internalNotes={s.internalNotes}
+              onDateChange={s.setPickDate}
+              onStartChange={s.setPickStart}
+              onDurationChange={s.setPickDuration}
+              onAssigneeChange={s.setAssignedToUserId}
+              onNotesChange={s.setInternalNotes}
+            />
+            <PickSummary
+              pick={s.pick}
+              hasConflict={s.hasConflict}
+              error={s.error}
+            />
+          </div>
+
+          <div className="order-2 min-w-0 bg-white px-6 py-5">
             <WeekCalendar
               weekStart={s.weekStart}
               now={s.now}
@@ -135,27 +187,9 @@ export function ScheduleVisitModal({
               }
             />
           </div>
-          <div className="min-w-0 order-3 md:order-3">
-            <ScheduleFields
-              pick={s.pick}
-              durationMin={s.durationMin}
-              assignedToUserId={s.assignedToUserId}
-              internalNotes={s.internalNotes}
-              onDateChange={s.setPickDate}
-              onStartChange={s.setPickStart}
-              onDurationChange={s.setPickDuration}
-              onAssigneeChange={s.setAssignedToUserId}
-              onNotesChange={s.setInternalNotes}
-            />
-            <PickSummary
-              pick={s.pick}
-              hasConflict={s.hasConflict}
-              error={s.error}
-            />
-          </div>
         </div>
 
-        <DialogFooter className="mt-4">
+        <DialogFooter className="border-t border-slate-200 bg-slate-50 px-6 py-4">
           <Button
             variant="ghost"
             onClick={() => handleOpenChange(false)}
