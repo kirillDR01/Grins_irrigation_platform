@@ -22,6 +22,10 @@ export interface SalesEntry {
   override_flag: boolean;
   closed_reason: string | null;
   signwell_document_id: string | null;
+  // NEW-D: NULL = nudges active. Non-null = paused until this UTC ISO ts.
+  nudges_paused_until: string | null;
+  // NEW-D: NULL = visible in pipeline list. Non-null = dismissed at this ts.
+  dismissed_at: string | null;
   created_at: string;
   updated_at: string;
   customer_name: string | null;

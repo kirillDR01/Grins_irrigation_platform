@@ -15,7 +15,8 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { LoadingPage, ErrorMessage } from '@/shared/components';
-import { useSalesPipeline } from '../hooks/useSalesPipeline';
+import { getErrorMessage } from '@/core/api';
+import { useSalesPipeline, useDismissSalesEntry } from '../hooks/useSalesPipeline';
 import { useSalesMetrics } from '../hooks';
 import { useStageAge, countStuck } from '../hooks/useStageAge';
 import { AgeChip } from './AgeChip';
@@ -49,6 +50,22 @@ export function SalesPipeline() {
     limit: pageSize,
     status: statusFilter,
   });
+  const dismiss = useDismissSalesEntry();
+  const handleDismiss = useCallback(
+    (id: string) => {
+      dismiss.mutate(id, {
+        onSuccess: () => {
+          toast.success('Dismissed');
+          refetch();
+        },
+        onError: (err) =>
+          toast.error('Failed to dismiss', {
+            description: getErrorMessage(err),
+          }),
+      });
+    },
+    [dismiss, refetch],
+  );
 
   const rows = useMemo(() => data?.items ?? [], [data?.items]);
   const followupCount = useMemo(() => countStuck(rows), [rows]);
@@ -116,6 +133,12 @@ export function SalesPipeline() {
   if (isLoading) return <LoadingPage message="Loading sales pipeline..." />;
   if (error)     return <ErrorMessage error={error} onRetry={() => refetch()} />;
 
+  // Bug #10: when stuckFilter is on the visible row count drives the
+  // footer text; the unfiltered backend total is only used when the
+  // client has not narrowed the rows. The footer hides entirely once
+  // displayTotal hits zero (no "1 to 24 of 24" lie under a filter that
+  // hid every row).
+  const displayTotal = stuckFilter ? visibleRows.length : (data?.total ?? 0);
   const totalPages = Math.ceil((data?.total ?? 0) / pageSize);
 
   return (
@@ -192,6 +215,7 @@ export function SalesPipeline() {
                   key={entry.id}
                   entry={entry}
                   onRowClick={handleRowClick}
+                  onDismiss={handleDismiss}
                 />
               ))
             ) : (
@@ -207,11 +231,11 @@ export function SalesPipeline() {
           </TableBody>
         </Table>
 
-        {data && data.total > 0 && (
+        {displayTotal > 0 && (
           <div className="p-4 border-t border-slate-100 flex items-center justify-between">
             <div className="text-sm text-slate-500">
-              Showing {Math.min(page * pageSize + 1, data.total)} to{' '}
-              {Math.min((page + 1) * pageSize, data.total)} of {data.total} entries
+              Showing {Math.min(page * pageSize + 1, displayTotal)} to{' '}
+              {Math.min((page + 1) * pageSize, displayTotal)} of {displayTotal} entries
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-slate-500">Page {page + 1} of {totalPages}</span>
@@ -234,9 +258,11 @@ export function SalesPipeline() {
 function PipelineRow({
   entry,
   onRowClick,
+  onDismiss,
 }: {
   entry: SalesEntry;
   onRowClick: (e: SalesEntry) => void;
+  onDismiss: (id: string) => void;
 }) {
   const age = useStageAge(entry);
   const statusConfig = SALES_STATUS_CONFIG[entry.status];
@@ -326,7 +352,7 @@ function PipelineRow({
             data-testid={`pipeline-row-dismiss-${entry.id}`}
             onClick={(e) => {
               e.stopPropagation();
-              toast.info('Dismiss not wired yet — TODO(backend)');
+              onDismiss(entry.id);
             }}
           >
             <X className="h-3.5 w-3.5 text-slate-400" />

@@ -6,17 +6,20 @@ Validates: CRM Changes Update 2 Req 14.3, 14.4, 14.5, 14.7, 14.8, 14.9,
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Literal
+from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Any, Literal
 
 from sqlalchemy import select
 
 from grins_platform.exceptions import (
+    CustomerHasNoPhoneError,
+    CustomerNotFoundError,
     InvalidSalesTransitionError,
     SalesEntryNotFoundError,
     SignatureRequiredError,
 )
 from grins_platform.log_config import LoggerMixin
+from grins_platform.models.customer import Customer
 from grins_platform.models.enums import (
     SALES_PIPELINE_ORDER,
     SALES_TERMINAL_STATUSES,
@@ -24,7 +27,9 @@ from grins_platform.models.enums import (
     SalesEntryStatus,
 )
 from grins_platform.models.sales import SalesEntry
+from grins_platform.schemas.ai import MessageType
 from grins_platform.schemas.job import JobCreate
+from grins_platform.services.sms.recipient import Recipient
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -35,6 +40,7 @@ if TYPE_CHECKING:
     from grins_platform.models.job import Job
     from grins_platform.services.audit_service import AuditService
     from grins_platform.services.job_service import JobService
+    from grins_platform.services.sms_service import SMSService
 
 
 class SalesPipelineService(LoggerMixin):
@@ -432,3 +438,162 @@ class SalesPipelineService(LoggerMixin):
             forced=force and not has_signature,
         )
         return job
+
+    # ------------------------------------------------------------------
+    # NEW-D: pause/unpause nudges, send text confirmation, dismiss
+    # ------------------------------------------------------------------
+
+    async def pause_nudges(
+        self,
+        db: AsyncSession,
+        entry_id: UUID,
+        *,
+        paused_until: datetime | None = None,
+        actor_id: UUID | None = None,
+    ) -> SalesEntry:
+        """Pause auto-nudge cadence for ``entry_id`` until ``paused_until``.
+
+        Defaults to ``now + 7 days`` when ``paused_until`` is None.
+        Last call wins — re-pausing an already-paused entry refreshes
+        the window.
+
+        Validates: NEW-D pause/unpause nudges.
+        """
+        self.log_started("pause_nudges", entry_id=str(entry_id))
+
+        entry = await self._get_entry(db, entry_id)
+        target = paused_until or (datetime.now(tz=timezone.utc) + timedelta(days=7))
+        entry.nudges_paused_until = target
+        entry.updated_at = datetime.now(tz=timezone.utc)
+        await db.flush()
+        await db.refresh(entry)
+
+        self.log_completed(
+            "pause_nudges",
+            entry_id=str(entry_id),
+            paused_until=target.isoformat(),
+        )
+        _ = actor_id  # reserved for future audit hook
+        return entry
+
+    async def unpause_nudges(
+        self,
+        db: AsyncSession,
+        entry_id: UUID,
+        *,
+        actor_id: UUID | None = None,
+    ) -> SalesEntry:
+        """Clear ``nudges_paused_until`` so the entry resumes nudges.
+
+        Validates: NEW-D pause/unpause nudges.
+        """
+        self.log_started("unpause_nudges", entry_id=str(entry_id))
+
+        entry = await self._get_entry(db, entry_id)
+        entry.nudges_paused_until = None
+        entry.updated_at = datetime.now(tz=timezone.utc)
+        await db.flush()
+        await db.refresh(entry)
+
+        self.log_completed("unpause_nudges", entry_id=str(entry_id))
+        _ = actor_id
+        return entry
+
+    async def send_text_confirmation(
+        self,
+        db: AsyncSession,
+        entry_id: UUID,
+        *,
+        sms_service: SMSService,
+        actor_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        """Send an appointment-confirmation SMS to the entry's customer.
+
+        Delegates to :meth:`SMSService.send_message` so consent / rate-limit
+        / dedupe checks all flow through the established pipeline. The
+        ``sms_service`` arg is dep-injected so unit tests can substitute
+        a mock without monkey-patching module globals.
+
+        Validates: NEW-D text-confirmation.
+        """
+        self.log_started("send_text_confirmation", entry_id=str(entry_id))
+
+        entry = await self._get_entry(db, entry_id)
+
+        customer_result = await db.execute(
+            select(Customer).where(Customer.id == entry.customer_id),
+        )
+        customer = customer_result.scalar_one_or_none()
+        if customer is None:
+            self.log_rejected(
+                "send_text_confirmation",
+                reason="customer_not_found",
+                entry_id=str(entry_id),
+            )
+            raise CustomerNotFoundError(entry.customer_id)
+        if not customer.phone:
+            self.log_rejected(
+                "send_text_confirmation",
+                reason="no_phone",
+                entry_id=str(entry_id),
+            )
+            raise CustomerHasNoPhoneError(customer.id)
+
+        first_name = customer.first_name or "there"
+        body = (
+            f"Hi {first_name}, this confirms your appointment with "
+            "Grin's Irrigation. Reply YES to confirm or call us if you "
+            "need to reschedule."
+        )
+        recipient = Recipient.from_customer(customer)
+        result = await sms_service.send_message(
+            recipient,
+            body,
+            MessageType.APPOINTMENT_CONFIRMATION,
+            consent_type="transactional",
+        )
+
+        self.log_completed(
+            "send_text_confirmation",
+            entry_id=str(entry_id),
+            message_id=str(result.get("message_id")),
+        )
+        _ = actor_id
+        return result
+
+    async def dismiss_entry(
+        self,
+        db: AsyncSession,
+        entry_id: UUID,
+        *,
+        actor_id: UUID | None = None,
+    ) -> SalesEntry:
+        """Mark a pipeline row as dismissed (idempotent).
+
+        Sets ``dismissed_at = now()``. A second call leaves the existing
+        timestamp untouched — repeat dismisses are a no-op.
+
+        Validates: NEW-D pipeline-list dismiss.
+        """
+        self.log_started("dismiss_entry", entry_id=str(entry_id))
+
+        entry = await self._get_entry(db, entry_id)
+        if entry.dismissed_at is None:
+            now = datetime.now(tz=timezone.utc)
+            entry.dismissed_at = now
+            entry.updated_at = now
+            await db.flush()
+            await db.refresh(entry)
+            self.log_completed(
+                "dismiss_entry",
+                entry_id=str(entry_id),
+                already_dismissed=False,
+            )
+        else:
+            self.log_completed(
+                "dismiss_entry",
+                entry_id=str(entry_id),
+                already_dismissed=True,
+            )
+        _ = actor_id
+        return entry

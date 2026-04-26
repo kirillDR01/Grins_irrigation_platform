@@ -3,10 +3,13 @@
 
 import { MoreHorizontal, X, Calendar } from 'lucide-react';
 import { STAGES, STAGE_INDEX, type StageKey } from '../types/pipeline';
+import { StageOverrideMenu } from './StageOverrideMenu';
 
 interface StageStepperProps {
   currentStage: StageKey;
-  onOverrideClick: () => void;
+  // Bug #5: the dropdown wraps the existing footer button. Selecting a
+  // stage fires this callback (which then runs useOverrideSalesStatus).
+  onStageOverride: (stage: StageKey) => void;
   onMarkLost: () => void;
   visitScheduled?: boolean;
   visitLabel?: string;
@@ -16,7 +19,7 @@ type StepState = 'done' | 'active' | 'waiting' | 'future';
 
 export function StageStepper({
   currentStage,
-  onOverrideClick,
+  onStageOverride,
   onMarkLost,
   visitScheduled,
   visitLabel,
@@ -65,15 +68,16 @@ export function StageStepper({
 
       {/* Footer row */}
       <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-100">
-        <button
-          type="button"
-          onClick={onOverrideClick}
-          data-testid="stage-stepper-override"
-          className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1"
-        >
-          <MoreHorizontal className="h-3.5 w-3.5" />
-          change stage manually
-        </button>
+        <StageOverrideMenu currentStage={currentStage} onSelect={onStageOverride}>
+          <button
+            type="button"
+            data-testid="stage-stepper-override"
+            className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1"
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+            change stage manually
+          </button>
+        </StageOverrideMenu>
         <button
           type="button"
           onClick={onMarkLost}

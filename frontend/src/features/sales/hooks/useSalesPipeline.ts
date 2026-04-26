@@ -87,6 +87,49 @@ export function useForceConvertToJob() {
   });
 }
 
+// NEW-D: pause/unpause nudges, send text confirmation, dismiss row.
+// Mirror the invalidation strategy used by useOverrideSalesStatus —
+// each mutation invalidates the entry detail and the lists view.
+
+export function usePauseNudges() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => salesPipelineApi.pauseNudges(id),
+    onSuccess: (entry) => {
+      qc.invalidateQueries({ queryKey: pipelineKeys.detail(entry.id) });
+      qc.invalidateQueries({ queryKey: pipelineKeys.lists() });
+    },
+  });
+}
+
+export function useUnpauseNudges() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => salesPipelineApi.unpauseNudges(id),
+    onSuccess: (entry) => {
+      qc.invalidateQueries({ queryKey: pipelineKeys.detail(entry.id) });
+      qc.invalidateQueries({ queryKey: pipelineKeys.lists() });
+    },
+  });
+}
+
+export function useSendTextConfirmation() {
+  return useMutation({
+    mutationFn: (id: string) => salesPipelineApi.sendTextConfirmation(id),
+  });
+}
+
+export function useDismissSalesEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => salesPipelineApi.dismiss(id),
+    onSuccess: (entry) => {
+      qc.invalidateQueries({ queryKey: pipelineKeys.detail(entry.id) });
+      qc.invalidateQueries({ queryKey: pipelineKeys.lists() });
+    },
+  });
+}
+
 export function useMarkSalesLost() {
   const qc = useQueryClient();
   return useMutation({

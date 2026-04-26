@@ -28,6 +28,8 @@ const mockEntry = {
   override_flag: false,
   closed_reason: null,
   signwell_document_id: null,
+  nudges_paused_until: null,
+  dismissed_at: null,
   created_at: '2026-04-16T00:00:00Z',
   updated_at: '2026-04-16T00:00:00Z',
   customer_name: 'Jane Doe',
@@ -39,6 +41,7 @@ const mockEntry = {
 const mockDocument = {
   id: 'doc-001',
   customer_id: 'cust-001',
+  sales_entry_id: 'entry-001',
   file_key: 'docs/estimate.pdf',
   file_name: 'estimate.pdf',
   document_type: 'estimate',
@@ -67,7 +70,7 @@ vi.mock('../hooks/useSalesPipeline', () => ({
     error: null,
   }),
   useTriggerEmailSigning: () => ({
-    mutateAsync: vi.fn(),
+    mutateAsync: vi.fn().mockResolvedValue({ document_id: 'd', status: 'sent' }),
     isPending: false,
   }),
   useDocumentPresign: () => presignState,
@@ -89,6 +92,10 @@ vi.mock('../hooks/useSalesPipeline', () => ({
   useSalesCalendarEvents: () => ({ data: [], isLoading: false, error: null }),
   useOverrideSalesStatus: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUploadSalesDocument: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  usePauseNudges: () => ({ mutate: vi.fn(), isPending: false }),
+  useUnpauseNudges: () => ({ mutate: vi.fn(), isPending: false }),
+  useSendTextConfirmation: () => ({ mutate: vi.fn(), isPending: false }),
+  useDismissSalesEntry: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock('./DocumentsSection', () => ({

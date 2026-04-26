@@ -11,6 +11,10 @@ import type {
 export interface SalesDocument {
   id: string;
   customer_id: string;
+  // bughunt H-7 + Bug #9: scopes a contract/estimate doc to the
+  // pipeline entry it was uploaded under. Legacy rows pre-H-7 have
+  // ``null``.
+  sales_entry_id: string | null;
   file_key: string;
   file_name: string;
   document_type: string;
@@ -70,6 +74,41 @@ export const salesPipelineApi = {
       job_id: string;
       forced: boolean;
     }>(`/sales/pipeline/${id}/force-convert`);
+    return response.data;
+  },
+
+  // NEW-D: pause/unpause auto-nudges, send appointment-confirmation SMS,
+  // dismiss a row from the pipeline list. Persistence backed by the
+  // ``nudges_paused_until`` and ``dismissed_at`` columns added in the
+  // 20260430_120000 migration.
+  pauseNudges: async (id: string): Promise<SalesEntry> => {
+    const response = await apiClient.post<SalesEntry>(
+      `/sales/pipeline/${id}/pause-nudges`,
+    );
+    return response.data;
+  },
+
+  unpauseNudges: async (id: string): Promise<SalesEntry> => {
+    const response = await apiClient.post<SalesEntry>(
+      `/sales/pipeline/${id}/unpause-nudges`,
+    );
+    return response.data;
+  },
+
+  sendTextConfirmation: async (
+    id: string,
+  ): Promise<{ message_id: string; status: string }> => {
+    const response = await apiClient.post<{
+      message_id: string;
+      status: string;
+    }>(`/sales/pipeline/${id}/send-text-confirmation`);
+    return response.data;
+  },
+
+  dismiss: async (id: string): Promise<SalesEntry> => {
+    const response = await apiClient.post<SalesEntry>(
+      `/sales/pipeline/${id}/dismiss`,
+    );
     return response.data;
   },
 

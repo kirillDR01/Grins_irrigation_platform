@@ -9,17 +9,17 @@ import { STAGES, STAGE_INDEX, type StageKey } from '../types/pipeline';
 const STAGE_KEYS: StageKey[] = STAGES.map((s) => s.key);
 
 function renderStepper(currentStage: StageKey, overrides?: Partial<Parameters<typeof StageStepper>[0]>) {
-  const onOverrideClick = vi.fn();
+  const onStageOverride = vi.fn();
   const onMarkLost = vi.fn();
   render(
     <StageStepper
       currentStage={currentStage}
-      onOverrideClick={onOverrideClick}
+      onStageOverride={onStageOverride}
       onMarkLost={onMarkLost}
       {...overrides}
     />,
   );
-  return { onOverrideClick, onMarkLost };
+  return { onStageOverride, onMarkLost };
 }
 
 describe('StageStepper', () => {
@@ -58,11 +58,32 @@ describe('StageStepper', () => {
     expect(screen.getByTestId('stage-step-closed_won')).toHaveAttribute('data-state', 'future');
   });
 
-  it('override button calls onOverrideClick', async () => {
+  it('override button opens StageOverrideMenu and selecting a stage fires onStageOverride', async () => {
     const user = userEvent.setup();
-    const { onOverrideClick } = renderStepper('send_estimate');
+    const { onStageOverride } = renderStepper('send_estimate');
     await user.click(screen.getByTestId('stage-stepper-override'));
-    expect(onOverrideClick).toHaveBeenCalledOnce();
+    // Menu opens with all 5 stages.
+    expect(await screen.findByTestId('stage-override-menu')).toBeInTheDocument();
+    expect(screen.getByTestId('stage-override-schedule_estimate')).toBeInTheDocument();
+    expect(screen.getByTestId('stage-override-send_estimate')).toBeInTheDocument();
+    expect(screen.getByTestId('stage-override-pending_approval')).toBeInTheDocument();
+    expect(screen.getByTestId('stage-override-send_contract')).toBeInTheDocument();
+    expect(screen.getByTestId('stage-override-closed_won')).toBeInTheDocument();
+    // Selecting a non-current stage fires the callback with that stage key.
+    await user.click(screen.getByTestId('stage-override-pending_approval'));
+    expect(onStageOverride).toHaveBeenCalledOnce();
+    expect(onStageOverride).toHaveBeenCalledWith('pending_approval');
+  });
+
+  it('selecting the current stage does not fire onStageOverride', async () => {
+    const user = userEvent.setup();
+    const { onStageOverride } = renderStepper('send_estimate');
+    await user.click(screen.getByTestId('stage-stepper-override'));
+    const currentItem = await screen.findByTestId('stage-override-send_estimate');
+    expect(currentItem).toHaveAttribute('aria-disabled', 'true');
+    // Click attempt — disabled DropdownMenuItem won't dispatch onSelect.
+    await user.click(currentItem);
+    expect(onStageOverride).not.toHaveBeenCalled();
   });
 
   it('Mark Lost button calls onMarkLost', async () => {
@@ -91,7 +112,7 @@ describe('Property 5: StageStepper step state computation', () => {
         const { unmount } = render(
           <StageStepper
             currentStage={stageKey}
-            onOverrideClick={() => {}}
+            onStageOverride={() => {}}
             onMarkLost={() => {}}
           />,
         );

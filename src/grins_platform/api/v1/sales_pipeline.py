@@ -17,6 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from grins_platform.api.v1.auth_dependencies import CurrentActiveUser
 from grins_platform.api.v1.dependencies import get_db_session, get_job_service
 from grins_platform.exceptions import (
+    CustomerHasNoPhoneError,
+    CustomerNotFoundError,
     InvalidSalesTransitionError,
     SalesEntryNotFoundError,
     SignatureRequiredError,
@@ -36,6 +38,12 @@ from grins_platform.services.audit_service import AuditService
 from grins_platform.services.job_service import JobService
 from grins_platform.services.photo_service import PhotoService
 from grins_platform.services.sales_pipeline_service import SalesPipelineService
+from grins_platform.services.sms.factory import get_sms_provider
+from grins_platform.services.sms_service import (
+    SMSConsentDeniedError,
+    SMSError,
+    SMSService,
+)
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -483,6 +491,145 @@ async def force_convert_to_job(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     else:
         return {"job_id": str(job.id), "status": "closed_won", "forced": True}
+
+
+@router.post(
+    "/pipeline/{entry_id}/pause-nudges",
+    response_model=SalesEntryResponse,
+    summary="Pause auto-nudges for a sales entry (NEW-D)",
+)
+async def pause_nudges_endpoint(
+    entry_id: UUID,
+    user: CurrentActiveUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    service: Annotated[SalesPipelineService, Depends(_get_pipeline_service)],
+) -> SalesEntryResponse:
+    """Pause the auto-nudge cadence on ``entry_id``.
+
+    Validates: NEW-D pause/unpause nudges.
+    """
+    try:
+        entry = await service.pause_nudges(
+            session,
+            entry_id,
+            actor_id=user.id,
+        )
+        await session.commit()
+    except SalesEntryNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Sales entry not found",
+        ) from exc
+    else:
+        return _entry_to_response(entry)
+
+
+@router.post(
+    "/pipeline/{entry_id}/unpause-nudges",
+    response_model=SalesEntryResponse,
+    summary="Resume auto-nudges for a sales entry (NEW-D)",
+)
+async def unpause_nudges_endpoint(
+    entry_id: UUID,
+    user: CurrentActiveUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    service: Annotated[SalesPipelineService, Depends(_get_pipeline_service)],
+) -> SalesEntryResponse:
+    """Clear the pause window so nudges resume firing.
+
+    Validates: NEW-D pause/unpause nudges.
+    """
+    try:
+        entry = await service.unpause_nudges(
+            session,
+            entry_id,
+            actor_id=user.id,
+        )
+        await session.commit()
+    except SalesEntryNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Sales entry not found",
+        ) from exc
+    else:
+        return _entry_to_response(entry)
+
+
+@router.post(
+    "/pipeline/{entry_id}/send-text-confirmation",
+    summary="Send an appointment-confirmation SMS (NEW-D)",
+)
+async def send_text_confirmation_endpoint(
+    entry_id: UUID,
+    user: CurrentActiveUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    service: Annotated[SalesPipelineService, Depends(_get_pipeline_service)],
+) -> dict[str, Any]:
+    """Trigger an appointment-confirmation SMS for the entry's customer.
+
+    Validates: NEW-D text-confirmation.
+    """
+    sms_service = SMSService(session=session, provider=get_sms_provider())
+    try:
+        result = await service.send_text_confirmation(
+            session,
+            entry_id,
+            sms_service=sms_service,
+            actor_id=user.id,
+        )
+        await session.commit()
+    except SalesEntryNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Sales entry not found",
+        ) from exc
+    except CustomerNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Customer not found for sales entry",
+        ) from exc
+    except CustomerHasNoPhoneError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SMSConsentDeniedError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SMSError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    else:
+        return {
+            "message_id": str(result.get("message_id") or ""),
+            "status": str(result.get("status") or ""),
+        }
+
+
+@router.post(
+    "/pipeline/{entry_id}/dismiss",
+    response_model=SalesEntryResponse,
+    summary="Dismiss a pipeline row (NEW-D)",
+)
+async def dismiss_entry_endpoint(
+    entry_id: UUID,
+    user: CurrentActiveUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    service: Annotated[SalesPipelineService, Depends(_get_pipeline_service)],
+) -> SalesEntryResponse:
+    """Mark a pipeline row as dismissed (idempotent).
+
+    Validates: NEW-D pipeline-list dismiss.
+    """
+    try:
+        entry = await service.dismiss_entry(
+            session,
+            entry_id,
+            actor_id=user.id,
+        )
+        await session.commit()
+    except SalesEntryNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Sales entry not found",
+        ) from exc
+    else:
+        return _entry_to_response(entry)
 
 
 @router.delete(

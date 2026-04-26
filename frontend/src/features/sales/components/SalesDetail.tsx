@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import axios from 'axios';
 import { ArrowLeft, ChevronDown, FileText, Mail, Phone, Edit, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,14 +33,20 @@ import {
   useOverrideSalesStatus,
   useAdvanceSalesEntry,
   useConvertToJob,
+  useForceConvertToJob,
   useMarkSalesLost,
   useSalesCalendarEvents,
   useUploadSalesDocument,
+  usePauseNudges,
+  useUnpauseNudges,
+  useSendTextConfirmation,
 } from '../hooks/useSalesPipeline';
 import { ScheduleVisitModal } from './ScheduleVisitModal';
 import { MarkDeclinedDialog } from './MarkDeclinedDialog';
+import { ForceConvertDialog } from './ForceConvertDialog';
+import { AddCustomerEmailDialog } from './AddCustomerEmailDialog';
 import { SALES_STATUS_CONFIG, TERMINAL_STATUSES, ALL_STATUSES, statusToStageKey } from '../types/pipeline';
-import type { SalesEntryStatus, NowActionId, ActivityEvent } from '../types/pipeline';
+import type { SalesEntryStatus, NowActionId, ActivityEvent, StageKey } from '../types/pipeline';
 import { DocumentsSection } from './DocumentsSection';
 import { SignWellEmbeddedSigner } from './SignWellEmbeddedSigner';
 import { StageStepper } from './StageStepper';
@@ -64,8 +71,12 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
   const overrideStatus = useOverrideSalesStatus();
   const advance = useAdvanceSalesEntry();
   const convertToJob = useConvertToJob();
+  const forceConvert = useForceConvertToJob();
   const markLost = useMarkSalesLost();
   const uploadDoc = useUploadSalesDocument();
+  const pauseNudges = usePauseNudges();
+  const unpauseNudges = useUnpauseNudges();
+  const sendTextConfirm = useSendTextConfirmation();
   const { data: staffData } = useStaff({ is_active: true });
 
   // Fetch customer for internal_notes display
@@ -110,14 +121,19 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
     }
   }, [entryId]);
 
-  // Override status modal state
-  const [_showOverrideSelect, setShowOverrideSelect] = useState(false);
-
   // ScheduleVisitModal open state
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
 
   // MarkDeclinedDialog open state
   const [markDeclinedOpen, setMarkDeclinedOpen] = useState(false);
+
+  // NEW-C: ForceConvertDialog opens after the convert endpoint returns 422
+  // with "signature" in the detail. Mirrors StatusActionButton handler.
+  const [forceConvertOpen, setForceConvertOpen] = useState(false);
+
+  // NEW-D: AddCustomerEmailDialog drives the inline email-add flow used by
+  // the now-action-add-email button when the customer row has no email.
+  const [addEmailOpen, setAddEmailOpen] = useState(false);
 
   // Fetch documents to determine signing button state
   const { data: documents } = useSalesDocuments(entry?.customer_id ?? '');
@@ -173,9 +189,26 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
           break;
 
         case 'convert_to_job':
+          // NEW-C: parse the 422 axios response and surface the
+          // ForceConvertDialog when the backend reports a missing
+          // signature. Mirrors StatusActionButton.handleAdvance.
           convertToJob.mutate(entryId, {
             onSuccess: () => { toast.success('Converted to job'); refetch(); },
-            onError: () => toast.error('Failed to convert'),
+            onError: (err) => {
+              const detail = axios.isAxiosError(err)
+                ? (err.response?.data?.detail ?? 'Failed to convert')
+                : 'Failed to convert';
+              if (
+                typeof detail === 'string'
+                && (detail.includes('signature') || detail.includes('Signature'))
+              ) {
+                setForceConvertOpen(true);
+              } else {
+                toast.error('Error', {
+                  description: typeof detail === 'string' ? detail : 'Failed to convert',
+                });
+              }
+            },
           });
           break;
 
@@ -212,19 +245,64 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
             .catch(() => toast.error('Failed to update status'));
           break;
 
-        // TODO(backend): wire these when backend endpoints are ready
         case 'text_confirmation':
+          sendTextConfirm.mutate(entryId, {
+            onSuccess: () => toast.success('Confirmation text sent'),
+            onError: (err) =>
+              toast.error('Failed to send confirmation', {
+                description: getErrorMessage(err),
+              }),
+          });
+          break;
+
         case 'resend_estimate':
-        case 'pause_nudges':
+          // db7befa wired the email-signature endpoint; this gets the
+          // resend_estimate action wired without backend changes.
+          emailSign.mutateAsync(entryId)
+            .then(() => { toast.success('Estimate resent'); refetch(); })
+            .catch((err) =>
+              toast.error('Failed to resend estimate', {
+                description: getErrorMessage(err),
+              }),
+            );
+          break;
+
+        case 'pause_nudges': {
+          // Toggle: if currently paused, unpause; otherwise pause.
+          const currentlyPaused = !!entry?.nudges_paused_until;
+          const mutation = currentlyPaused ? unpauseNudges : pauseNudges;
+          const successLabel = currentlyPaused ? 'Nudges resumed' : 'Nudges paused';
+          mutation.mutate(entryId, {
+            onSuccess: () => { toast.success(successLabel); refetch(); },
+            onError: (err) =>
+              toast.error('Failed to update nudge schedule', {
+                description: getErrorMessage(err),
+              }),
+          });
+          break;
+        }
+
         case 'add_customer_email':
-          toast.info('Not wired yet — TODO');
+          setAddEmailOpen(true);
           break;
 
         default:
           break;
       }
     },
-    [entryId, entry, navigate, advance, emailSign, convertToJob, overrideStatus, refetch],
+    [
+      entryId,
+      entry,
+      navigate,
+      advance,
+      emailSign,
+      convertToJob,
+      overrideStatus,
+      refetch,
+      pauseNudges,
+      unpauseNudges,
+      sendTextConfirm,
+    ],
   );
 
   // ── File drop handler ───────────────────────────────────────────────────────
@@ -251,7 +329,17 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
   // ── Derive stage and NowCard content (safe before entry guard) ─────────────
   const stageKey = entry ? statusToStageKey(entry.status) : null;
   const hasEstimateDoc = signingDocs.some((d) => d.document_type === 'estimate');
-  const hasSignedAgreement = signingDocs.some((d) => d.document_type === 'contract');
+  // Bug #9: scope contract docs to this entry; legacy pre-H-7 docs
+  // (sales_entry_id == null) fall through to keep the old unlock
+  // behaviour for grandfathered rows. Without this filter, a customer
+  // with two open entries would see the second entry incorrectly
+  // marked as having a signed agreement based on the first entry's
+  // contract upload.
+  const hasSignedAgreement = signingDocs.some(
+    (d) =>
+      d.document_type === 'contract'
+      && (d.sales_entry_id === entry?.id || d.sales_entry_id == null),
+  );
 
   // ── Build ActivityEvent[] from entry fields ─────────────────────────────────
   const activityEvents = useMemo<ActivityEvent[]>(() => {
@@ -324,10 +412,34 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
         body: { status: newStatus as SalesEntryStatus },
       });
       toast.success('Pipeline stage updated');
-      setShowOverrideSelect(false);
       refetch();
     } catch (err: unknown) {
       toast.error('Update failed', { description: getErrorMessage(err) });
+    }
+  };
+
+  // Bug #5 part 1: dropdown-driven stage override. The StageStepper now
+  // renders a <DropdownMenu> with the 5 canonical stages; selecting one
+  // calls useOverrideSalesStatus and toasts "Moved to <Label>".
+  const STAGE_LABELS: Record<StageKey, string> = {
+    schedule_estimate: 'Schedule',
+    send_estimate: 'Estimate',
+    pending_approval: 'Approval',
+    send_contract: 'Contract',
+    closed_won: 'Closed',
+  };
+  const handleStageOverride = async (stage: StageKey) => {
+    try {
+      await overrideStatus.mutateAsync({
+        id: entryId,
+        body: { status: stage },
+      });
+      toast.success(`Moved to ${STAGE_LABELS[stage]}`);
+      refetch();
+    } catch (err) {
+      toast.error('Failed to change stage', {
+        description: getErrorMessage(err),
+      });
     }
   };
 
@@ -559,7 +671,7 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
           {stageKey && (
             <StageStepper
               currentStage={stageKey}
-              onOverrideClick={() => setShowOverrideSelect(true)}
+              onStageOverride={handleStageOverride}
               onMarkLost={() =>
                 markLost.mutate(
                   { id: entryId },
@@ -582,9 +694,10 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
               onFileDrop={handleFileDrop}
               weekOfValue={weekOfValue}
               onWeekOfChange={handleWeekOfChange}
-              // TODO(backend): replace with real estimate_sent_at + nudges_paused_until
+              // TODO(backend): replace with real estimate_sent_at column;
+              // nudges_paused_until is now wired (NEW-D).
               estimateSentAt={entry.updated_at ?? entry.created_at}
-              nudgesPaused={false}
+              nudgesPaused={!!entry.nudges_paused_until}
             />
           )}
 
@@ -632,6 +745,34 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
             },
           );
         }}
+      />
+
+      <ForceConvertDialog
+        open={forceConvertOpen}
+        onOpenChange={setForceConvertOpen}
+        isPending={forceConvert.isPending}
+        onConfirm={() =>
+          forceConvert.mutate(entryId, {
+            onSuccess: () => {
+              toast.success('Converted to job (forced)');
+              setForceConvertOpen(false);
+              refetch();
+            },
+            onError: (err) => {
+              toast.error('Failed to force convert', {
+                description: getErrorMessage(err),
+              });
+              setForceConvertOpen(false);
+            },
+          })
+        }
+      />
+
+      <AddCustomerEmailDialog
+        open={addEmailOpen}
+        onOpenChange={setAddEmailOpen}
+        customerId={entry.customer_id ?? ''}
+        onSaved={() => refetch()}
       />
     </div>
   );

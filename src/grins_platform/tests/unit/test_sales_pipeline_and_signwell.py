@@ -70,6 +70,8 @@ def _make_entry(
     status: str = SalesEntryStatus.SCHEDULE_ESTIMATE.value,
     *,
     signwell_document_id: str | None = None,
+    nudges_paused_until: datetime | None = None,
+    dismissed_at: datetime | None = None,
 ) -> Mock:
     entry = Mock()
     entry.id = uuid4()
@@ -82,6 +84,8 @@ def _make_entry(
     entry.signwell_document_id = signwell_document_id
     entry.override_flag = False
     entry.closed_reason = None
+    entry.nudges_paused_until = nudges_paused_until
+    entry.dismissed_at = dismissed_at
     entry.updated_at = datetime.now(tz=timezone.utc)
     return entry
 
@@ -556,6 +560,8 @@ def _make_response_entry_mock(
     *,
     customer: Mock | None,
     job_type: str | None = "spring_startup",
+    nudges_paused_until: datetime | None = None,
+    dismissed_at: datetime | None = None,
 ) -> Mock:
     entry = Mock()
     entry.id = uuid4()
@@ -569,6 +575,8 @@ def _make_response_entry_mock(
     entry.override_flag = False
     entry.closed_reason = None
     entry.signwell_document_id = None
+    entry.nudges_paused_until = nudges_paused_until
+    entry.dismissed_at = dismissed_at
     entry.created_at = datetime.now(tz=timezone.utc)
     entry.updated_at = datetime.now(tz=timezone.utc)
     entry.customer = customer
@@ -625,3 +633,308 @@ class TestEntryToResponseCustomerEmail:
         assert resp.customer_email is None
         assert resp.customer_name is None
         assert resp.customer_phone is None
+
+
+# ===================================================================
+# NEW-D — pause/unpause nudges
+# ===================================================================
+
+
+@pytest.mark.unit()
+class TestPauseUnpauseNudges:
+    """``pause_nudges`` / ``unpause_nudges`` set/clear ``nudges_paused_until``."""
+
+    @pytest.mark.asyncio()
+    async def test_pause_sets_default_seven_day_window(
+        self,
+        pipeline_service: SalesPipelineService,
+        mock_db: AsyncMock,
+    ) -> None:
+        entry = _make_entry()
+        mock_db.execute = AsyncMock(
+            return_value=Mock(scalar_one_or_none=Mock(return_value=entry)),
+        )
+
+        result = await pipeline_service.pause_nudges(mock_db, entry.id)
+
+        assert result is entry
+        assert entry.nudges_paused_until is not None
+        delta = entry.nudges_paused_until - datetime.now(tz=timezone.utc)
+        # Default pause window is 7 days; allow generous slack for slow CI.
+        assert 6 <= delta.days <= 7
+
+    @pytest.mark.asyncio()
+    async def test_pause_with_explicit_paused_until(
+        self,
+        pipeline_service: SalesPipelineService,
+        mock_db: AsyncMock,
+    ) -> None:
+        entry = _make_entry()
+        mock_db.execute = AsyncMock(
+            return_value=Mock(scalar_one_or_none=Mock(return_value=entry)),
+        )
+        target = datetime(2026, 6, 1, tzinfo=timezone.utc)
+
+        result = await pipeline_service.pause_nudges(
+            mock_db,
+            entry.id,
+            paused_until=target,
+        )
+
+        assert result.nudges_paused_until == target
+
+    @pytest.mark.asyncio()
+    async def test_unpause_clears_window(
+        self,
+        pipeline_service: SalesPipelineService,
+        mock_db: AsyncMock,
+    ) -> None:
+        entry = _make_entry(
+            nudges_paused_until=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        )
+        mock_db.execute = AsyncMock(
+            return_value=Mock(scalar_one_or_none=Mock(return_value=entry)),
+        )
+
+        result = await pipeline_service.unpause_nudges(mock_db, entry.id)
+
+        assert result.nudges_paused_until is None
+
+    @pytest.mark.asyncio()
+    async def test_pause_missing_entry_raises(
+        self,
+        pipeline_service: SalesPipelineService,
+        mock_db: AsyncMock,
+    ) -> None:
+        mock_db.execute = AsyncMock(
+            return_value=Mock(scalar_one_or_none=Mock(return_value=None)),
+        )
+        with pytest.raises(SalesEntryNotFoundError):
+            await pipeline_service.pause_nudges(mock_db, uuid4())
+
+
+# ===================================================================
+# NEW-D — send_text_confirmation
+# ===================================================================
+
+
+@pytest.mark.unit()
+class TestSendTextConfirmation:
+    """``send_text_confirmation`` delegates to ``SMSService.send_message``."""
+
+    @pytest.mark.asyncio()
+    async def test_delegates_to_sms_service(
+        self,
+        pipeline_service: SalesPipelineService,
+        mock_db: AsyncMock,
+    ) -> None:
+        entry = _make_entry()
+        customer = Mock()
+        customer.id = entry.customer_id
+        customer.first_name = "Jane"
+        customer.last_name = "Doe"
+        customer.phone = "+15551234567"
+        customer.email = "jane@example.com"
+        # Two execute calls: first returns entry, second returns customer.
+        mock_db.execute = AsyncMock(
+            side_effect=[
+                Mock(scalar_one_or_none=Mock(return_value=entry)),
+                Mock(scalar_one_or_none=Mock(return_value=customer)),
+            ],
+        )
+        sms_service = AsyncMock()
+        sms_service.send_message = AsyncMock(
+            return_value={"message_id": "m-123", "status": "sent"},
+        )
+
+        result = await pipeline_service.send_text_confirmation(
+            mock_db,
+            entry.id,
+            sms_service=sms_service,
+        )
+
+        sms_service.send_message.assert_called_once()
+        recipient_arg = sms_service.send_message.call_args.args[0]
+        assert recipient_arg.phone == customer.phone
+        assert recipient_arg.customer_id == customer.id
+        assert result == {"message_id": "m-123", "status": "sent"}
+
+    @pytest.mark.asyncio()
+    async def test_missing_phone_raises(
+        self,
+        pipeline_service: SalesPipelineService,
+        mock_db: AsyncMock,
+    ) -> None:
+        from grins_platform.exceptions import CustomerHasNoPhoneError
+
+        entry = _make_entry()
+        customer = Mock()
+        customer.id = entry.customer_id
+        customer.first_name = "Jane"
+        customer.last_name = "Doe"
+        customer.phone = None
+        mock_db.execute = AsyncMock(
+            side_effect=[
+                Mock(scalar_one_or_none=Mock(return_value=entry)),
+                Mock(scalar_one_or_none=Mock(return_value=customer)),
+            ],
+        )
+        sms_service = AsyncMock()
+
+        with pytest.raises(CustomerHasNoPhoneError):
+            await pipeline_service.send_text_confirmation(
+                mock_db,
+                entry.id,
+                sms_service=sms_service,
+            )
+        sms_service.send_message.assert_not_called()
+
+
+# ===================================================================
+# NEW-D — dismiss_entry
+# ===================================================================
+
+
+@pytest.mark.unit()
+class TestDismissSalesEntry:
+    """``dismiss_entry`` is idempotent: second call leaves timestamp untouched."""
+
+    @pytest.mark.asyncio()
+    async def test_first_dismiss_sets_timestamp(
+        self,
+        pipeline_service: SalesPipelineService,
+        mock_db: AsyncMock,
+    ) -> None:
+        entry = _make_entry()
+        assert entry.dismissed_at is None
+        mock_db.execute = AsyncMock(
+            return_value=Mock(scalar_one_or_none=Mock(return_value=entry)),
+        )
+
+        result = await pipeline_service.dismiss_entry(mock_db, entry.id)
+
+        assert result.dismissed_at is not None
+
+    @pytest.mark.asyncio()
+    async def test_second_dismiss_is_idempotent(
+        self,
+        pipeline_service: SalesPipelineService,
+        mock_db: AsyncMock,
+    ) -> None:
+        original_ts = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        entry = _make_entry(dismissed_at=original_ts)
+        mock_db.execute = AsyncMock(
+            return_value=Mock(scalar_one_or_none=Mock(return_value=entry)),
+        )
+
+        result = await pipeline_service.dismiss_entry(mock_db, entry.id)
+
+        assert result.dismissed_at == original_ts
+
+    @pytest.mark.asyncio()
+    async def test_dismiss_missing_entry_raises(
+        self,
+        pipeline_service: SalesPipelineService,
+        mock_db: AsyncMock,
+    ) -> None:
+        mock_db.execute = AsyncMock(
+            return_value=Mock(scalar_one_or_none=Mock(return_value=None)),
+        )
+        with pytest.raises(SalesEntryNotFoundError):
+            await pipeline_service.dismiss_entry(mock_db, uuid4())
+
+
+# ===================================================================
+# _entry_to_response — NEW-D nudges_paused_until + dismissed_at
+# ===================================================================
+
+
+@pytest.mark.unit()
+class TestEntryToResponseExposesNewFields:
+    """``_entry_to_response`` round-trips ``nudges_paused_until`` and
+    ``dismissed_at`` from the SQLAlchemy model onto the Pydantic response."""
+
+    def test_nudges_paused_until_populated(self) -> None:
+        target = datetime(2026, 5, 1, tzinfo=timezone.utc)
+        customer = _make_customer_mock(email=None)
+        entry = _make_response_entry_mock(
+            customer=customer,
+            nudges_paused_until=target,
+        )
+
+        resp = _entry_to_response(entry)
+
+        assert resp.nudges_paused_until == target
+
+    def test_dismissed_at_populated(self) -> None:
+        target = datetime(2026, 5, 1, tzinfo=timezone.utc)
+        customer = _make_customer_mock(email=None)
+        entry = _make_response_entry_mock(
+            customer=customer,
+            dismissed_at=target,
+        )
+
+        resp = _entry_to_response(entry)
+
+        assert resp.dismissed_at == target
+
+    def test_defaults_none_when_unset(self) -> None:
+        customer = _make_customer_mock(email=None)
+        entry = _make_response_entry_mock(customer=customer)
+
+        resp = _entry_to_response(entry)
+
+        assert resp.nudges_paused_until is None
+        assert resp.dismissed_at is None
+
+
+# ===================================================================
+# CustomerDocumentResponse — sales_entry_id round-trip (Bug #9)
+# ===================================================================
+
+
+@pytest.mark.unit()
+class TestCustomerDocumentResponseExposesSalesEntryId:
+    """Bug #9: response schema must surface the column so the frontend
+    can scope ``hasSignedAgreement`` to the right entry."""
+
+    def test_sales_entry_id_round_trip(self) -> None:
+        from grins_platform.schemas.customer_document import (
+            CustomerDocumentResponse,
+        )
+
+        sales_entry_id = uuid4()
+        doc = Mock()
+        doc.id = uuid4()
+        doc.customer_id = uuid4()
+        doc.sales_entry_id = sales_entry_id
+        doc.file_key = "k"
+        doc.file_name = "f.pdf"
+        doc.document_type = "contract"
+        doc.mime_type = "application/pdf"
+        doc.size_bytes = 1024
+        doc.uploaded_at = datetime.now(tz=timezone.utc)
+        doc.uploaded_by = None
+
+        resp = CustomerDocumentResponse.model_validate(doc)
+        assert resp.sales_entry_id == sales_entry_id
+
+    def test_legacy_null_sales_entry_id_is_none(self) -> None:
+        from grins_platform.schemas.customer_document import (
+            CustomerDocumentResponse,
+        )
+
+        doc = Mock()
+        doc.id = uuid4()
+        doc.customer_id = uuid4()
+        doc.sales_entry_id = None
+        doc.file_key = "k"
+        doc.file_name = "f.pdf"
+        doc.document_type = "estimate"
+        doc.mime_type = "application/pdf"
+        doc.size_bytes = 1024
+        doc.uploaded_at = datetime.now(tz=timezone.utc)
+        doc.uploaded_by = None
+
+        resp = CustomerDocumentResponse.model_validate(doc)
+        assert resp.sales_entry_id is None

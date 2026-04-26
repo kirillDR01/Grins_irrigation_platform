@@ -45,6 +45,8 @@ class SalesEntryResponse(BaseModel):
     override_flag: bool = False
     closed_reason: Optional[str] = None
     signwell_document_id: Optional[str] = None
+    nudges_paused_until: Optional[datetime] = None
+    dismissed_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

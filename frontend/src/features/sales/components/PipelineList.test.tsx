@@ -32,8 +32,13 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
+const dismissMutate = vi.fn();
 vi.mock('../hooks/useSalesPipeline', () => ({
   useSalesPipeline: vi.fn(),
+  useDismissSalesEntry: () => ({
+    mutate: dismissMutate,
+    isPending: false,
+  }),
 }));
 vi.mock('../hooks', () => ({
   useSalesMetrics: vi.fn(),
@@ -68,6 +73,8 @@ function makeEntry(
     customer_name: 'Alice Smith',
     customer_phone: '6125550001',
     customer_email: null,
+    nudges_paused_until: null,
+    dismissed_at: null,
     property_address: '123 Main St',
     ...overrides,
   };
@@ -453,6 +460,7 @@ describe('Row action and dismiss buttons (Bug #3)', () => {
   beforeEach(() => {
     navigateMock.mockClear();
     toastInfoMock.mockClear();
+    dismissMutate.mockClear();
   });
 
   it('clicking row action button navigates to /sales/{id}', async () => {
@@ -471,7 +479,7 @@ describe('Row action and dismiss buttons (Bug #3)', () => {
     expect(navigateMock).toHaveBeenCalledWith('/sales/entry-x');
   });
 
-  it('clicking dismiss button toasts info stub and does not navigate', async () => {
+  it('clicking dismiss button fires useDismissSalesEntry and does not navigate (NEW-D)', async () => {
     const user = userEvent.setup();
     const items = [makeEntry('entry-y', 'send_estimate', 1)];
     vi.mocked(useSalesPipeline).mockReturnValue({
@@ -484,7 +492,77 @@ describe('Row action and dismiss buttons (Bug #3)', () => {
     renderPipeline();
 
     await user.click(screen.getByTestId('pipeline-row-dismiss-entry-y'));
-    expect(toastInfoMock).toHaveBeenCalledTimes(1);
+    expect(dismissMutate).toHaveBeenCalledWith(
+      'entry-y',
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      }),
+    );
     expect(navigateMock).not.toHaveBeenCalled();
   });
 });
+
+// ─── Bug #10: pagination footer reflects visible row count ─────────────────
+
+describe('Bug #10 — pagination footer under stuck filter', () => {
+  it('hides pagination footer when stuck filter hides every row', async () => {
+    const user = userEvent.setup();
+    // 3 fresh entries (none stuck): stuck filter will produce 0 visibleRows.
+    const items = [
+      makeEntry('e1', 'send_estimate', 0),
+      makeEntry('e2', 'send_estimate', 0),
+      makeEntry('e3', 'send_estimate', 0),
+    ];
+    vi.mocked(useSalesPipeline).mockReturnValue({
+      data: makePipelineData(items),
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useSalesPipeline>);
+
+    renderPipeline();
+
+    // Footer visible before filter (3 of 3)
+    expect(
+      screen.getByText(/Showing 1 to 3 of 3 entries/),
+    ).toBeInTheDocument();
+
+    // Activate stuck filter — none of the rows are stuck so visibleRows = 0.
+    await user.click(screen.getByTestId('pipeline-summary-needs-followup'));
+
+    expect(screen.queryByText(/of 0 entries/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Showing/)).not.toBeInTheDocument();
+  });
+
+  it('footer text uses visibleRows count when stuck filter is on', async () => {
+    const user = userEvent.setup();
+    // 1 fresh + 1 stuck (>7 days in send_estimate per AGE_THRESHOLDS)
+    const items = [
+      makeEntry('fresh1', 'send_estimate', 0),
+      makeEntry('stuck1', 'send_estimate', 30),
+    ];
+    vi.mocked(useSalesPipeline).mockReturnValue({
+      data: makePipelineData(items),
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useSalesPipeline>);
+
+    renderPipeline();
+
+    expect(
+      screen.getByText(/Showing 1 to 2 of 2 entries/),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('pipeline-summary-needs-followup'));
+
+    // Stuck filter on → visibleRows = 1.
+    expect(
+      screen.getByText(/Showing 1 to 1 of 1 entries/),
+    ).toBeInTheDocument();
+  });
+});
+
+// Suppress AGE_THRESHOLDS unused-import warning under stricter linting.
+void AGE_THRESHOLDS;

@@ -34,9 +34,12 @@ deliberately skipped** — the user opted to keep the `⋯ change stage manually
 asked for a wiring design instead; the addendum at the bottom of the plan file describes
 turning that button into a `<DropdownMenu>` of the 5 canonical stages.
 
-Tier 3 + Tier 4 bugs (NEW-C, #9, NEW-D, #10) are **still open** — they need new backend
-endpoints (`pause_nudges`, `text_confirmation`, `add_customer_email`, pipeline
-`dismiss`), a force-convert dialog, or doc-scoping logic.
+**Second bundled fix shipped (2026-04-26 PM, "Tier 3 + 4 + Bug #5 wire-up"):**
+the plan `.agents/plans/sales-pipeline-remaining-open-bugs.md` was executed.
+**All remaining 5 open bugs are now closed**: NEW-C (force-convert dialog),
+Bug #9 (`sales_entry_id`-scoped `hasSignedAgreement`), NEW-D (×4 sub-actions
++ dismiss with new persistence columns + endpoints), Bug #10 (pagination
+text under filters), and Bug #5 (DropdownMenu of canonical stages).
 
 Files: [bugs.md](./bugs.md) · [test-matrix.md](./test-matrix.md) · [screenshots/](./screenshots/)
 
@@ -58,26 +61,26 @@ Files: [bugs.md](./bugs.md) · [test-matrix.md](./test-matrix.md) · [screenshot
 
 | # | Status | Title |
 |---|---|---|
-| 5 | ⚠️ Deferred (kept) | `⋯ change stage manually` button is a no-op — user opted to keep the button. Wiring design drafted in `.agents/plans/sales-pipeline-tier-1-and-tier-2-bugs.md` addendum |
+| 5 | ✅ Fixed (Tier 3+4+#5 wire-up, 2026-04-26 PM) | `⋯ change stage manually` now wraps a `<StageOverrideMenu>` (DropdownMenu of 5 canonical stages) → `useOverrideSalesStatus` |
 | 4 | ✅ Fixed (`09dc082`) | `+ pick date…` chip is a no-op |
 | 8 | ✅ Fixed (`09dc082`) | Dropzone file upload is TODO stub |
 | 7 | ✅ Fixed (`09dc082`) | `View Job` navigates to wrong field (`signwell_document_id`) |
 | 11 | ✅ Fixed (`09dc082`) | `Mark Lost` button stays live on `closed_won` |
 | **NEW-B** | ✅ Fixed (`09dc082`) | `mark_declined` skips the decline-reason modal (Req 15.7) |
 
-### Tier 3 — Medium (still open)
+### Tier 3 — Medium (closed)
 
 | # | Status | Title |
 |---|---|---|
-| **NEW-C** | 🔴 Open | `convert_to_job` skips the convert modal (Req 15.3); no force-convert UI on signature failure |
-| 9 | 🔴 Open | `hasSignedAgreement` matches any `contract` doc on the customer — Convert can unlock prematurely |
-| **NEW-D** | 🔴 Open | `pause_nudges`, `text_confirmation`, `add_customer_email`, pipeline `dismiss` — permanent stub toasts (no backend endpoints) |
+| **NEW-C** | ✅ Fixed (Tier 3+4+#5 wire-up, 2026-04-26 PM) | `convert_to_job` now opens `<ForceConvertDialog>` on `SignatureRequiredError` (Req 15.3) |
+| 9 | ✅ Fixed (Tier 3+4+#5 wire-up, 2026-04-26 PM) | `hasSignedAgreement` scoped to `entry.id` via newly-exposed `sales_entry_id` field on `CustomerDocumentResponse` |
+| **NEW-D** | ✅ Fixed (Tier 3+4+#5 wire-up, 2026-04-26 PM) | All 4 stubs wired: `pause_nudges`/`unpause`, `text_confirmation` (SMS), `add_customer_email` (reuses `PUT /customers/{id}`), pipeline `dismiss` (new column + endpoint) |
 
-### Tier 4 — Low (still open)
+### Tier 4 — Low (closed)
 
 | # | Status | Title |
 |---|---|---|
-| 10 | 🔴 Open | Pagination text shows unfiltered total when stuck filter hides rows |
+| 10 | ✅ Fixed (Tier 3+4+#5 wire-up, 2026-04-26 PM) | Pagination footer now uses `displayTotal = stuckFilter ? visibleRows.length : data.total` and hides on zero rows |
 
 ---
 
@@ -107,6 +110,44 @@ A single bundled PR executed the plan at
 
 **Validation:** all 111 sales-component tests + 27 backend unit tests pass. No new
 type-check errors in modified files.
+
+---
+
+## What Was Shipped in the Tier 3 + 4 + Bug #5 wire-up (2026-04-26 PM)
+
+A second bundled PR executed the plan at
+`.agents/plans/sales-pipeline-remaining-open-bugs.md` — closing every
+remaining open bug in this audit:
+
+| Bug | Change |
+|---|---|
+| **NEW-C** | New `ForceConvertDialog.tsx` component. `SalesDetail.handleNowAction` parses `axios.isAxiosError(err) ? err.response?.data?.detail` for the `convert_to_job` case; on signature-related detail strings the dialog opens, and confirming runs the existing `useForceConvertToJob` mutation → `Converted to job (forced)` toast |
+| **#9** | Backend: added `sales_entry_id: Optional[UUID]` to `CustomerDocumentResponse` (`schemas/customer_document.py`) — the column already existed (added in bughunt H-7). Frontend: extended `SalesDocument` interface with `sales_entry_id`; narrowed `SalesDetail.hasSignedAgreement` to `d.document_type === 'contract' && (d.sales_entry_id === entry.id \|\| d.sales_entry_id == null)` (legacy `null` fallback preserved) |
+| **NEW-D pause/unpause** | Alembic migration `20260430_120000` adds nullable `nudges_paused_until` (timestamptz) to `sales_entries`. New service methods + endpoints `POST /sales/pipeline/{id}/{pause-nudges,unpause-nudges}` returning `SalesEntryResponse`. New hooks `usePauseNudges` / `useUnpauseNudges`. `SalesDetail.handleNowAction` `pause_nudges` case now toggles based on `entry.nudges_paused_until`. `<NowCard>` `nudgesPaused` reads the real value |
+| **NEW-D text** | New `POST /sales/pipeline/{id}/send-text-confirmation` delegates to `SMSService.send_message` with `MessageType.APPOINTMENT_CONFIRMATION`. `Recipient` built via `Recipient.from_customer`. Returns `{ message_id, status }`. New `useSendTextConfirmation` hook. `SalesDetail.handleNowAction` `text_confirmation` → `sendTextConfirm.mutate` |
+| **NEW-D add-email** | New `AddCustomerEmailDialog.tsx` with RFC-email-regex validation, wired to existing `useUpdateCustomer` (no new backend). `SalesDetail.handleNowAction` `add_customer_email` → `setAddEmailOpen(true)`. `onSaved` callback refetches the entry so `customer_email` re-populates and dependent buttons unlock |
+| **NEW-D dismiss** | Same migration adds nullable `dismissed_at` (timestamptz) to `sales_entries`. New service `dismiss_entry` (idempotent — second call leaves timestamp untouched). New `POST /sales/pipeline/{id}/dismiss`. New `useDismissSalesEntry` hook. `SalesPipeline.PipelineRow` `pipeline-row-dismiss-{id}` → `dismiss.mutate` → `Dismissed` toast |
+| **NEW-D resend (bonus)** | `SalesDetail.handleNowAction` `resend_estimate` case wired to `emailSign.mutateAsync(entryId)` (the existing email-signature endpoint shipped in `db7befa`) — no backend work needed |
+| **#10** | `SalesPipeline.tsx` pagination: `displayTotal = stuckFilter ? visibleRows.length : (data?.total ?? 0)`; footer renders only when `displayTotal > 0`. Footer text and button-disabled conditions both use `displayTotal` |
+| **#5** | New `StageOverrideMenu.tsx` (`<DropdownMenu>` of all 5 entries from `STAGES`). `StageStepper` prop renamed `onOverrideClick → onStageOverride: (stage: StageKey) => void`; the existing footer `stage-stepper-override` button is now wrapped by `StageOverrideMenu` (render-prop child). `SalesDetail.handleStageOverride` calls `useOverrideSalesStatus.mutateAsync` and toasts `Moved to <Label>`. The current stage is rendered as `aria-disabled` to prevent override-to-current no-ops |
+
+**Tests added:**
+- 5 new backend unit-test classes in `tests/unit/test_sales_pipeline_and_signwell.py`:
+  `TestPauseUnpauseNudges`, `TestSendTextConfirmation`, `TestDismissSalesEntry`,
+  `TestEntryToResponseExposesNewFields`, `TestCustomerDocumentResponseExposesSalesEntryId`
+  (14 tests total)
+- 5 `ForceConvertDialog` component tests
+- 6 `AddCustomerEmailDialog` component tests
+- 3 `StageOverrideMenu` component tests
+- Updated `StageStepper.test.tsx` (renamed prop + new dropdown-flow assertions)
+- Updated `SalesDetail.test.tsx` mock (added new hooks + new entry fields)
+- Updated `PipelineList.test.tsx`: dismiss now asserts `useDismissSalesEntry.mutate` fires;
+  added 2 Bug #10 tests covering footer-hides-on-zero and `visibleRows`-driven count
+
+**Validation:** all 188 sales-component tests + 41 sales-pipeline backend
+unit tests pass. ruff + pyright clean on every modified backend file.
+TypeScript clean on every modified frontend file (project-wide pre-existing
+errors in `FilterPanel.tsx`/`SalesCalendar.tsx`/etc. are untouched).
 
 ---
 
@@ -142,14 +183,19 @@ type-check errors in modified files.
 
 ## Known stubs (spec-allowed; not bugs in this PR's scope)
 
-- `text_confirmation`, `pause_nudges`, `add_customer_email`, pipeline `dismiss` — stub
-  toasts (tracked as NEW-D, awaiting backend endpoints)
-- `resend_estimate` — could now be wired to `emailSign.mutateAsync(entryId)` (the
-  estimate-email backend was wired in `db7befa`); currently still a stub toast
+- ~~`text_confirmation`, `pause_nudges`, `add_customer_email`, pipeline `dismiss`~~ —
+  ✅ all wired in the Tier 3+4+#5 wire-up (NEW-D resolved)
+- ~~`resend_estimate`~~ — ✅ wired to `emailSign.mutateAsync(entryId)` in the
+  Tier 3+4+#5 wire-up
 - Week-Of backend column (uses `localStorage` per design decision)
-- `estimate_sent_at` / `stage_entered_at` / `nudges_paused_until` backend columns
-  (fall back to `updated_at` per Req 17.5)
+- `estimate_sent_at` / `stage_entered_at` backend columns (fall back to
+  `updated_at` per Req 17.5). `nudges_paused_until` is now a real column
+  (NEW-D); `dismissed_at` is also live (NEW-D dismiss)
 - `entry.job_id` not yet on `SalesEntryResponse` (Bug #7's TODO)
+- The `GET /sales/pipeline` list endpoint still returns dismissed rows.
+  Whether to hide them by default is **out of scope** — tracked as a
+  follow-up; current behavior preserves Bug #3's row-action navigation
+  for accidental dismisses
 
 ---
 
@@ -163,26 +209,20 @@ type-check errors in modified files.
 
 **Status:** ✅ FIXED in commit `09dc082`. New `MarkDeclinedDialog.tsx` component.
 
-### NEW-C — `convert_to_job` skips the convert modal & has no force-convert UI 🔴 Open
+### NEW-C — `convert_to_job` skips the convert modal & has no force-convert UI 🟢 Fixed
 
-**Symptom.** "Convert to Job" in the `send_contract` NowCard fires `convertToJob.mutate(entryId)`
-directly. If the backend rejects with `SignatureRequiredError`, the user just sees a generic
-"Failed to convert" toast — there is no force-convert escape hatch, even though
-`useForceConvertToJob` exists (`useSalesPipeline.ts:80–88`) and `StatusActionButton.tsx:117–120`
-already implements the pattern.
+**Status:** ✅ FIXED in the Tier 3+4+#5 wire-up. New `ForceConvertDialog`;
+`SalesDetail.handleNowAction` parses the axios error and opens the
+dialog on signature-related details.
 
-**Fix.** Mirror `StatusActionButton.handleAdvance` (`StatusActionButton.tsx:108–127`): on a
-signature-related error, open a confirm dialog → on confirm, call `forceConvert.mutate`.
+### NEW-D — Three NowCard actions are permanent stubs (no backend) 🟢 Fixed
 
-### NEW-D — Three NowCard actions are permanent stubs (no backend) 🔴 Open
-
-`pause_nudges`, `text_confirmation`, and `add_customer_email` all fall into the catch-all stub
-at `SalesDetail.tsx`. Backend grep confirms no endpoints exist for any of them.
-
-These compound NEW-A (which is now fixed but `add_customer_email` is the natural in-app
-fix-it path), Bug #6 (now fixed but `pause_nudges` would let admins quiet nudges they
-don't want), and the post-Bug-#2 Schedule visit flow (`text_confirmation` is the natural
-follow-up). Each needs a backend endpoint, then a few lines of FE wiring.
+**Status:** ✅ FIXED in the Tier 3+4+#5 wire-up. New Alembic migration
+adds `nudges_paused_until` and `dismissed_at` columns; 4 new endpoints
+ship pause/unpause/text-confirmation/dismiss. `add_customer_email`
+reuses the existing `PUT /customers/{id}` route via
+`<AddCustomerEmailDialog>`. `resend_estimate` was wired as a bonus to
+the existing `emailSign.mutateAsync`.
 
 ---
 
@@ -203,19 +243,22 @@ follow-up). Each needs a backend endpoint, then a few lines of FE wiring.
 8. ✅ Bug #11 — `closed_won` renders a `closed-won-banner`; StageStepper hidden
 9. ✅ NEW-B — `MarkDeclinedDialog` captures reason before `markLost.mutate`
 
-**Sprint 3 — Tier 3 (still open)**
-10. NEW-C — surface `SignatureRequiredError` and add a force-convert dialog mirroring
-    `StatusActionButton`
-11. Bug #9 — narrow `hasSignedAgreement` (filter docs to those created after entry entered
-    `send_contract`, or require a naming convention)
-12. NEW-D — design + ship the missing endpoints (`pause_nudges`, `text_confirmation`,
-    `add_customer_email`, pipeline `dismiss`)
+**Sprint 3 — Tier 3** — ✅ shipped (Tier 3+4+#5 wire-up, 2026-04-26 PM)
+10. ✅ NEW-C — `ForceConvertDialog` + axios-error parsing in
+    `SalesDetail.handleNowAction`
+11. ✅ Bug #9 — `CustomerDocumentResponse.sales_entry_id` exposed; FE
+    narrows `hasSignedAgreement` to `entry.id` (legacy `null` fallback
+    preserved)
+12. ✅ NEW-D — Alembic migration + 4 new endpoints
+    (`pause-nudges`, `unpause-nudges`, `send-text-confirmation`,
+    `dismiss`) + `<AddCustomerEmailDialog>` reusing
+    `PUT /customers/{id}`
 
-**Sprint 4 — Tier 4 (still open)**
-13. Bug #10 — when `stuckFilter` is true, render `visibleRows.length` instead of the API
-    total (or hide pagination on zero rows)
+**Sprint 4 — Tier 4** — ✅ shipped (Tier 3+4+#5 wire-up, 2026-04-26 PM)
+13. ✅ Bug #10 — `displayTotal = stuckFilter ? visibleRows.length : data.total`
+    + footer hidden when zero rows visible
 
-**Sprint 5 — Bug #5 wire-up (design ready, implementation pending)**
-14. Bug #5 (revised) — implement the addendum: dropdown of 5 stepper stages →
-    `useOverrideSalesStatus` → success toast `Moved to <Label>`. See addendum at the
-    bottom of `.agents/plans/sales-pipeline-tier-1-and-tier-2-bugs.md`
+**Sprint 5 — Bug #5 wire-up** — ✅ shipped (Tier 3+4+#5 wire-up, 2026-04-26 PM)
+14. ✅ Bug #5 — `<StageOverrideMenu>` (`<DropdownMenu>` of 5 canonical
+    stages) wraps the existing footer button; selecting a stage calls
+    `useOverrideSalesStatus` → toast `Moved to <Label>`

@@ -28,6 +28,7 @@ class CustomerDocumentResponse(BaseModel):
 
     id: UUID
     customer_id: UUID
+    sales_entry_id: Optional[UUID] = None
     file_key: str
     file_name: str
     document_type: DocumentType
