@@ -618,6 +618,16 @@ class SalesEntryStatus(str, Enum):
     SCHEDULE_ESTIMATE = "schedule_estimate"
     ESTIMATE_SCHEDULED = "estimate_scheduled"
     SEND_ESTIMATE = "send_estimate"
+    # PENDING_APPROVAL: Estimate has been sent to the customer via the
+    # portal email; we are awaiting their portal approval (a click —
+    # NOT a signature). Customer signatures only apply to the downstream
+    # contract via SignWell, gated correctly at SEND_CONTRACT → CLOSED_WON
+    # via SignatureRequiredError in convert_to_job. As of the Q-B fix in
+    # the estimate-approval-email-portal feature, the previous
+    # MissingSigningDocumentError gate at SEND_ESTIMATE → PENDING_APPROVAL
+    # has been removed — it forced reps to create a SignWell document
+    # before the customer had even seen the estimate, which contradicted
+    # the intended workflow.
     PENDING_APPROVAL = "pending_approval"
     SEND_CONTRACT = "send_contract"
     CLOSED_WON = "closed_won"

@@ -5,6 +5,51 @@ Grin's Irrigation Platform — field service automation for residential/commerci
 
 ## Recent Activity
 
+## [2026-04-26 02:45] - FEATURE: Estimate approval email portal — Resend wired + bounce webhook + internal notifications + sales-entry breadcrumb + gate correction
+
+### What Was Accomplished
+- Resend Python SDK plugged into `EmailService._send_email`; previously a logger stub. Sends carry `Reply-To: info@grinsirrigation.com`, multipart HTML+text body, and a `tags` array (`email_type`, `estimate_id`) for downstream webhook correlation.
+- New `EmailService.send_estimate_email`, `.send_internal_estimate_decision_email`, `.send_internal_estimate_bounce_email` methods with new templates `estimate_sent.html` / `estimate_sent.txt` / `internal_estimate_decision.html` / `internal_estimate_bounce.html`.
+- `EMAIL_TEST_ADDRESS_ALLOWLIST` hard guard added at the top of `_send_email` (mirrors the `SMS_TEST_PHONE_ALLOWLIST` pattern at `services/sms/base.py`); raises `EmailRecipientNotAllowedError` so callers see refusals as exceptions, not silent skips. Production no-op when env unset.
+- `EstimateService.send_estimate` now calls the real email branch (lead fallback included). Token validity bumped from 30 → 60 days for both `customer_token` and `valid_until` defaults.
+- `EstimateService.__init__` now requires `portal_base_url` (no hardcoded `https://portal.grins.com` default). Pre-existing portal URL bug fixed: builder now emits `{PORTAL_BASE_URL}/portal/estimates/{token}` matching the React Router route.
+- New `_notify_internal_decision` on `EstimateService` fires email + SMS to `INTERNAL_NOTIFICATION_EMAIL` / `INTERNAL_NOTIFICATION_PHONE` on every approve/reject; failures are swallowed and logged so they never undo the customer-side decision.
+- `POST /api/v1/webhooks/resend` (signature-verified via `resend.Webhooks.verify` Svix helper, `RESEND_WEBHOOK_SECRET`) handles `email.bounced` / `email.complained`. On `data.bounce.type == "Permanent"` we stamp `customers.email_bounced_at` and ping internal staff via email + SMS. Always returns 200 on a verified payload to avoid Resend retry storms.
+- New `customers.email_bounced_at` nullable timestamp column (Alembic `20260428_100000`), soft-flag only (informational, never blocks future sends).
+- `PORTAL_LIMIT` (`20/minute`) applied to the three portal estimate endpoints; `WEBHOOK_LIMIT` (`60/minute`) applied to the new Resend webhook.
+- Portal `GET /api/v1/portal/estimates/{token}` transitions estimates from `SENT → VIEWED` on first portal load (idempotent — second view is a no-op).
+- **Q-A breadcrumb:** new `SalesPipelineService.record_estimate_decision_breadcrumb` writes a timestamped note + `audit_log` row (`action="sales_entry.estimate_decision_received"`) to the active SalesEntry whenever a customer approves/rejects via portal. Best-effort; vertical-slice rule respected (cross-feature read of `Estimate`, write only to `SalesEntry`).
+- **Q-B gate drop:** removed the `MissingSigningDocumentError` gate at `SEND_ESTIMATE → PENDING_APPROVAL` in `sales_pipeline_service.py:142-151`. The gate forced reps to upload a SignWell document before the customer had even seen the estimate, conflating estimate approval (a portal click) with contract signature. The pre-existing test `test_send_estimate_without_doc_raises` was inverted to `test_send_estimate_without_doc_now_advances` to lock in the corrected behavior. `MissingSigningDocumentError` retained in `exceptions/__init__.py` as deprecated for back-compat. SignWell signature gating still enforced correctly at `SEND_CONTRACT → CLOSED_WON` via `SignatureRequiredError` in `convert_to_job` — that gate is *not* affected.
+- 211 / 211 feature-impacted tests pass; new test files: `test_email_recipient_allowlist.py`, `test_email_service_resend.py`, `test_send_estimate_email.py`, `test_estimate_internal_notification.py`, `test_resend_webhook.py`, `test_sales_pipeline_breadcrumb.py`, `test_estimate_correlation.py`, `test_estimate_email_send_functional.py`.
+
+### Technical Details
+- New dep: `resend>=2.0.0,<3.0.0` (v2.29.0 resolved). Webhook verification delegates to `resend.Webhooks.verify(VerifyWebhookOptions{payload, headers, webhook_secret})`; the SDK ships the Svix algorithm internally so no manual HMAC.
+- `EmailSettings` extended with `resend_api_key`, `email_api_key` (legacy fallback), `portal_base_url`, `internal_notification_email`, `resend_webhook_secret`. `is_configured = bool(self.resend_api_key or self.email_api_key)` so flipping the env var is enough to migrate. Pydantic settings field-name → uppercased env-var convention used (no `validation_alias`/`AliasChoices` collisions).
+- `EstimateService` now optionally accepts `sales_pipeline_service`; the customer-side approve/reject path runs `_notify_internal_decision` first (rep gets pinged immediately), then `_correlate_to_sales_entry` (slower DB-write step). Both helpers tolerate `Estimate | None` and never raise.
+- DI wiring: both `dependencies.py:get_estimate_service` (admin path) and `portal.py:_get_estimate_service` (customer path) now construct identically-configured `EstimateService` with `EmailService`, `SMSService`, and `SalesPipelineService`. `lead_service` intentionally `None` — preserves pre-feature behavior; deeper LeadService DI is a separate ticket.
+- Bounce payload field paths verified against current Resend webhook docs (2026-04-26): `data.bounce.type` (`"Permanent"`/`"Temporary"`, NOT `subType`/`"Transient"`), `data.bounce.message`, `data.to[]`, `data.tags[]`. Webhook handler reads back the `estimate_id` tag we threaded through `send_estimate_email → _send_email → resend.Emails.send` to correlate bounces to specific estimates.
+- New env vars (added to `.env.example`): `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `PORTAL_BASE_URL`, `EMAIL_TEST_ADDRESS_ALLOWLIST` (commented out — leave UNSET in production), `INTERNAL_NOTIFICATION_EMAIL`, `INTERNAL_NOTIFICATION_PHONE`.
+
+### Decision Rationale
+- **Resend over SES** — free tier (3K/mo, 100/day) covers our seasonal volume; SES kept as cold-swap fallback (~30 LOC). No provider abstraction class for v1 (YAGNI; one provider).
+- **Hard allowlist guard, not soft warn-and-send** — mirrors the SMS `RecipientNotAllowedError` pattern that prevented several near-miss prod sends. Production safety > developer convenience in dev.
+- **Internal notification via both email + SMS** — approval is a high-value moment; redundant channel is intentional. Failures swallowed because the customer's decision is already committed.
+- **Q-B: drop the gate, don't replace it** — the original bughunt M-10 fix mistakenly assumed `PENDING_APPROVAL` meant "awaiting signature" when the intended meaning is "awaiting estimate approval via portal." A future ticket could add an "estimate sent" precondition (gate on linked `Estimate` being in `SENT|VIEWED|APPROVED`) but that introduces cross-aggregate reads we are explicitly avoiding here. Comment-only frontend change retains the toast handler defensively.
+- **`MissingSigningDocumentError` retained in `exceptions/__init__.py`** — kept as deprecated for back-compat with any external imports/`__all__` consumers. Class docstring documents it as superseded.
+- **Manual SignWell handoff (not auto-trigger on approval)** — sales rep must click "send for signature" themselves; the internal notification + Q-A breadcrumb is what tells them. Preserves the human checkpoint.
+
+### Challenges and Solutions
+- **Resend SDK v2 API drift from plan** — plan referenced `resend.webhooks.verify(payload, headers, secret)`; v2.29.0 actually exposes `resend.Webhooks.verify(VerifyWebhookOptions)`. Wrapper in `services/resend_webhook_security.py` adapts so the rest of the codebase has a stable typed API.
+- **Pydantic Settings AliasChoices collision** — initial plan used `AliasChoices("RESEND_API_KEY", "EMAIL_API_KEY")` for `resend_api_key` AND a separate `email_api_key` field reading `EMAIL_API_KEY`; the overlap broke init via field-name kwargs (Pydantic Settings issue). Refactored to plain field names (`resend_api_key`, `email_api_key`) with default field-name → uppercased-env-var convention.
+- **Existing email tests contaminated by repo `.env`** — autouse fixture in `test_email_service.py` clears `EMAIL_TEST_ADDRESS_ALLOWLIST`, `RESEND_API_KEY`, `EMAIL_API_KEY` and patches `resend.Emails.send`; helper functions pass `_env_file=None` to fully isolate the test fixture.
+- **Webhook signature verification SDK churn** — `resend.Webhooks.verify` returns `None` on success and raises `ValueError` on failure (it does NOT return the parsed payload). The wrapper does its own `json.loads` after verification succeeds, returning the dict for the caller. Catches base `Exception` and re-raises as our typed `ResendWebhookVerificationError` to insulate from future SDK exception-class renames.
+
+### Next Steps
+- **Phase 6 cutover (ops, not code):** DNS records (SPF/DKIM/DMARC) on `grinsirrigation.com`; verify sender domain in Resend dashboard; set production env vars (`RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `PORTAL_BASE_URL=https://portal.grinsirrigation.com`, `INTERNAL_NOTIFICATION_EMAIL=<TBD>`, `INTERNAL_NOTIFICATION_PHONE=<TBD>`); confirm `EMAIL_TEST_ADDRESS_ALLOWLIST` is NOT set in prod; configure Resend webhook to `https://api.grinsirrigation.com/api/v1/webhooks/resend`; set up `noreply@grinsirrigation.com` mailbox + auto-responder.
+- **Manual dev E2E:** Apply migration `20260428_100000`; confirm `customers.email_bounced_at` exists; with `EMAIL_TEST_ADDRESS_ALLOWLIST=kirillrakitinsecond@gmail.com`, send an estimate → confirm email arrives → click portal link → approve → confirm internal email + SMS fire → trigger Resend test bounce event → confirm flag stamped + internal alert sent.
+- **Integration test:** `test_estimate_approval_email_flow_integration.py` (full HTTP round-trip from admin send → customer approve → bounce webhook with DB-side assertions) deferred to a follow-up; the unit + functional + service-layer coverage already exercises every branch in isolation.
+- **Phase 2 frontend smoke:** validate `EstimateReviewPage` and `ApprovalConfirmation` render gracefully on the new portal URL shape via agent-browser at multiple viewports.
+
 ## [2026-04-25 19:18] - FEATURE: Schedule + Appointment Modal mobile responsiveness
 
 ### What Was Accomplished

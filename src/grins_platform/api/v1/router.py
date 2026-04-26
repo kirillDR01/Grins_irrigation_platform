@@ -51,6 +51,7 @@ from grins_platform.api.v1.properties import router as properties_router
 from grins_platform.api.v1.reschedule_requests import (
     router as reschedule_requests_router,
 )
+from grins_platform.api.v1.resend_webhooks import router as resend_webhooks_router
 from grins_platform.api.v1.sales import router as sales_router
 from grins_platform.api.v1.sales_pipeline import router as sales_pipeline_router
 from grins_platform.api.v1.schedule import router as schedule_router
@@ -235,6 +236,12 @@ api_router.include_router(
 api_router.include_router(
     signwell_webhooks_router,
     tags=["signwell-webhooks"],
+)
+
+# Include Resend Webhook endpoints (excluded from CSRF)
+api_router.include_router(
+    resend_webhooks_router,
+    tags=["resend-webhooks"],
 )
 
 # Include Onboarding endpoints (public pre-checkout consent)

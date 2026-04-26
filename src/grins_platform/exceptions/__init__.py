@@ -763,11 +763,15 @@ class SignatureRequiredError(Exception):
 
 class MissingSigningDocumentError(Exception):
     """Raised when a sales entry tries to advance to ``pending_approval``
-    without a SignWell document on file. Previously the ``/sign/email``
-    endpoint gated on doc presence, but manual pipeline advance did not —
-    admins could skip the actual signing step.
+    without a SignWell document on file.
 
-    Validates: bughunt M-10
+    Deprecated as of the Q-B fix in the estimate approval email portal
+    feature: the gate that raised this exception was removed because it
+    conflated *estimate approval* (a portal click) with *contract
+    signature* (SignWell). No code path raises this exception today;
+    the class is retained for back-compat with any external imports.
+
+    Validates: bughunt M-10 (now superseded).
     """
 
     def __init__(self, entry_id: UUID) -> None:

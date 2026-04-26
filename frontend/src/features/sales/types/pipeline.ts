@@ -61,6 +61,8 @@ export const SALES_STATUS_CONFIG: Record<
     action: 'Mark Sent',
   },
   pending_approval: {
+    // Means: estimate sent; awaiting customer approval via portal click.
+    // NOT a contract signature — that happens at send_contract → closed_won.
     label: 'Pending Approval',
     className: 'bg-amber-100 text-amber-700',
     action: 'Send Contract',

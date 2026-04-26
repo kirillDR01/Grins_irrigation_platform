@@ -7,13 +7,12 @@ Validates: CRM Changes Update 2 Req 14.3, 14.4, 14.5, 14.7, 14.8, 14.9,
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from sqlalchemy import select
 
 from grins_platform.exceptions import (
     InvalidSalesTransitionError,
-    MissingSigningDocumentError,
     SalesEntryNotFoundError,
     SignatureRequiredError,
 )
@@ -32,6 +31,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from grins_platform.models.estimate import Estimate
     from grins_platform.models.job import Job
     from grins_platform.services.audit_service import AuditService
     from grins_platform.services.job_service import JobService
@@ -84,6 +84,125 @@ class SalesPipelineService(LoggerMixin):
     # Public API
     # ------------------------------------------------------------------
 
+    async def record_estimate_decision_breadcrumb(
+        self,
+        db: AsyncSession,
+        estimate: Estimate,
+        decision: Literal["approved", "rejected"],
+        *,
+        reason: str | None = None,
+        actor_id: UUID | None = None,
+    ) -> SalesEntry | None:
+        """Append a note + audit row to the active SalesEntry for ``estimate``.
+
+        Best-effort. Never raises — internal notification and the
+        customer-side decision are higher priority than the breadcrumb.
+
+        Match strategy:
+          1. By ``estimate.customer_id`` → active SalesEntry
+             (status NOT IN closed_won, closed_lost), most recently
+             updated.
+          2. Else by ``estimate.lead_id`` → same.
+          3. If neither: log and return ``None``.
+
+        Where the customer has TWO active SalesEntries (e.g., a
+        winterization deal and a separate spring-startup deal both in
+        ``send_estimate``) the most recently updated entry wins. The
+        other is untouched.
+
+        Validates: Feature — estimate approval email portal Q-A.
+        """
+        self.log_started(
+            "record_estimate_decision_breadcrumb",
+            estimate_id=str(estimate.id),
+            decision=decision,
+        )
+        try:
+            customer_id = getattr(estimate, "customer_id", None)
+            lead_id = getattr(estimate, "lead_id", None)
+
+            conditions = [
+                SalesEntry.status.notin_(
+                    [
+                        SalesEntryStatus.CLOSED_WON.value,
+                        SalesEntryStatus.CLOSED_LOST.value,
+                    ]
+                ),
+            ]
+            if customer_id is not None:
+                conditions.append(SalesEntry.customer_id == customer_id)
+            elif lead_id is not None:
+                conditions.append(SalesEntry.lead_id == lead_id)
+            else:
+                self.log_rejected(
+                    "record_estimate_decision_breadcrumb",
+                    reason="estimate_has_no_customer_or_lead",
+                    estimate_id=str(estimate.id),
+                )
+                return None
+
+            stmt = (
+                select(SalesEntry)
+                .where(*conditions)
+                .order_by(SalesEntry.updated_at.desc())
+                .limit(1)
+            )
+            result = await db.execute(stmt)
+            entry: SalesEntry | None = result.scalar_one_or_none()
+            if not entry:
+                self.logger.info(
+                    "sales.estimate_correlation.no_active_entry",
+                    estimate_id=str(estimate.id),
+                    decision=decision,
+                )
+                return None
+
+            now = datetime.now(tz=timezone.utc)
+            ts = now.strftime("%Y-%m-%d %H:%M UTC")
+            short_id = str(estimate.id)[:8]
+            if decision == "approved":
+                note_line = (
+                    f"\n[{ts}] Customer APPROVED estimate {short_id} via portal. "
+                    "Ready to send contract for signature."
+                )
+            else:
+                reason_part = f' Reason: "{reason}".' if reason else ""
+                note_line = (
+                    f"\n[{ts}] Customer REJECTED estimate {short_id} via portal."
+                    f"{reason_part}"
+                )
+            entry.notes = (entry.notes or "") + note_line
+            entry.last_contact_date = now
+            entry.updated_at = now
+
+            _ = await self.audit_service.log_action(
+                db,
+                actor_id=actor_id,
+                action="sales_entry.estimate_decision_received",
+                resource_type="sales_entry",
+                resource_id=entry.id,
+                details={
+                    "estimate_id": str(estimate.id),
+                    "decision": decision,
+                    "reason": reason,
+                    "current_status": entry.status,
+                },
+            )
+            await db.flush()
+            self.log_completed(
+                "record_estimate_decision_breadcrumb",
+                entry_id=str(entry.id),
+                decision=decision,
+            )
+        except Exception as e:
+            self.log_failed(
+                "record_estimate_decision_breadcrumb",
+                error=e,
+                estimate_id=str(estimate.id),
+            )
+            return None
+        return entry
+
     async def create_from_lead(
         self,
         db: AsyncSession,
@@ -133,22 +252,6 @@ class SalesPipelineService(LoggerMixin):
 
         if target not in VALID_SALES_TRANSITIONS.get(current, set()):
             raise InvalidSalesTransitionError(current.value, target.value)
-
-        # Gate: advancing into ``pending_approval`` requires a signing
-        # document on file. The ``/sign/email`` and ``/sign/in-person``
-        # endpoints already enforce this, but manual pipeline advance
-        # skipped the check — admins could move to awaiting-signature
-        # without anything actually sent out (bughunt M-10).
-        if (
-            target == SalesEntryStatus.PENDING_APPROVAL
-            and not entry.signwell_document_id
-        ):
-            self.log_rejected(
-                "advance_status",
-                entry_id=str(entry_id),
-                reason="missing_signing_document",
-            )
-            raise MissingSigningDocumentError(entry_id)
 
         entry.status = target.value
         entry.updated_at = datetime.now(tz=timezone.utc)

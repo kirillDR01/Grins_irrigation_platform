@@ -11,9 +11,19 @@ logger = get_logger(__name__)
 
 
 class EmailSettings(BaseSettings):
-    """Configuration for email service integration."""
+    """Configuration for email service integration.
 
+    ``resend_api_key`` is the primary key (env: ``RESEND_API_KEY``).
+    ``email_api_key`` is the legacy fallback (env: ``EMAIL_API_KEY``).
+    ``is_configured`` is True when *either* is non-empty so that flipping
+    the env var is enough to migrate.
+    """
+
+    resend_api_key: str = ""
     email_api_key: str = ""
+    portal_base_url: str = "http://localhost:5173"
+    internal_notification_email: str = ""
+    resend_webhook_secret: str = ""
     company_physical_address: str = ""
     stripe_customer_portal_url: str = ""
 
@@ -26,15 +36,19 @@ class EmailSettings(BaseSettings):
     @property
     def is_configured(self) -> bool:
         """Check if email sending is available."""
-        return bool(self.email_api_key)
+        return bool(self.resend_api_key or self.email_api_key)
 
     def log_configuration_status(self) -> None:
         """Log warnings if critical email settings are missing."""
-        if not self.email_api_key:
+        if not self.resend_api_key and not self.email_api_key:
             logger.warning(
                 "email.config.missing_key",
-                key="EMAIL_API_KEY",
-                message=("Email API key not configured — emails recorded as pending"),
+                key="RESEND_API_KEY",
+                message=(
+                    "Email API key not configured "
+                    "(neither RESEND_API_KEY nor EMAIL_API_KEY) "
+                    "— emails recorded as pending"
+                ),
             )
         if not self.company_physical_address:
             logger.warning(

@@ -16,13 +16,14 @@ from sqlalchemy.ext.asyncio import (
     AsyncSession,  # noqa: TC002 - Required at runtime for FastAPI DI
 )
 
-from grins_platform.api.v1.dependencies import get_db_session
+from grins_platform.api.v1.dependencies import get_db_session, get_job_service
 from grins_platform.exceptions import (
     EstimateAlreadyApprovedError,
     EstimateNotFoundError,
     EstimateTokenExpiredError,
 )
 from grins_platform.log_config import LoggerMixin, get_logger
+from grins_platform.middleware.rate_limit import PORTAL_LIMIT, limiter
 from grins_platform.repositories.estimate_repository import EstimateRepository
 from grins_platform.schemas.portal import (
     PortalApproveRequest,
@@ -31,7 +32,16 @@ from grins_platform.schemas.portal import (
     PortalRejectRequest,
     PortalSignRequest,
 )
+from grins_platform.services.audit_service import AuditService
+from grins_platform.services.email_config import EmailSettings
+from grins_platform.services.email_service import EmailService
 from grins_platform.services.estimate_service import EstimateService
+from grins_platform.services.job_service import (
+    JobService,  # noqa: TC001 - Required at runtime for FastAPI DI
+)
+from grins_platform.services.sales_pipeline_service import SalesPipelineService
+from grins_platform.services.sms.factory import get_sms_provider
+from grins_platform.services.sms_service import SMSService
 
 if TYPE_CHECKING:
     from grins_platform.models.estimate import Estimate
@@ -58,17 +68,38 @@ _endpoints = PortalEndpoints()
 
 async def _get_estimate_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    job_service: Annotated[JobService, Depends(get_job_service)],
 ) -> EstimateService:
     """Get EstimateService for portal endpoints.
 
+    Wires EmailService + SMSService + SalesPipelineService so customer
+    portal approve/reject triggers internal staff notifications and the
+    Q-A SalesEntry breadcrumb. Mirrors the admin-side
+    ``get_estimate_service`` factory in ``api/v1/dependencies.py`` so
+    both code paths produce identically-configured EstimateService
+    instances.
+
     Args:
         session: Database session from dependency injection.
+        job_service: JobService dependency (required by SalesPipelineService).
 
     Returns:
-        EstimateService instance with estimate repository.
+        EstimateService instance with all dependencies wired.
     """
     repo = EstimateRepository(session=session)
-    return EstimateService(estimate_repository=repo)
+    email_service = EmailService()
+    sms_service = SMSService(session=session, provider=get_sms_provider())
+    sales_pipeline_service = SalesPipelineService(
+        job_service=job_service,
+        audit_service=AuditService(),
+    )
+    return EstimateService(
+        estimate_repository=repo,
+        portal_base_url=EmailSettings().portal_base_url,
+        email_service=email_service,
+        sms_service=sms_service,
+        sales_pipeline_service=sales_pipeline_service,
+    )
 
 
 def _get_client_ip(request: Request) -> str:
@@ -161,6 +192,7 @@ def _to_portal_response(
         410: {"description": "Token expired"},
     },
 )
+@limiter.limit(PORTAL_LIMIT)
 async def get_portal_estimate(
     token: UUID,
     request: Request,
@@ -204,6 +236,18 @@ async def get_portal_estimate(
             detail="This estimate link has expired.",
         ) from exc
 
+    # Transition SENT → VIEWED on first portal load (idempotent).
+    from grins_platform.models.enums import EstimateStatus  # noqa: PLC0415
+
+    if estimate.status == EstimateStatus.SENT.value:
+        try:
+            _ = await service.repo.update(
+                estimate.id,
+                status=EstimateStatus.VIEWED.value,
+            )
+        except Exception as e:  # pragma: no cover — best-effort
+            logger.warning("portal.viewed_transition.failed", error=str(e))
+
     response = _to_portal_response(estimate)
 
     _endpoints.log_completed(
@@ -230,6 +274,7 @@ async def get_portal_estimate(
         410: {"description": "Token expired"},
     },
 )
+@limiter.limit(PORTAL_LIMIT)
 async def approve_portal_estimate(
     token: UUID,
     request: Request,
@@ -319,6 +364,7 @@ async def approve_portal_estimate(
         410: {"description": "Token expired"},
     },
 )
+@limiter.limit(PORTAL_LIMIT)
 async def reject_portal_estimate(
     token: UUID,
     request: Request,

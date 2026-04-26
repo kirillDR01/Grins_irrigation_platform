@@ -302,6 +302,7 @@ def _build_estimate_service(
     lead_svc.create_lead_from_estimate = AsyncMock(return_value=MagicMock())
     svc = EstimateService(
         estimate_repository=estimate_repo,
+        portal_base_url="https://portal.grins.com",
         lead_service=lead_svc,
         sms_service=sms,
     )

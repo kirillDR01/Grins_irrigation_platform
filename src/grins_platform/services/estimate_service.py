@@ -8,10 +8,11 @@ Validates: CRM Gap Closure Req 16, 17, 32, 48, 51, 78
 
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from grins_platform.exceptions import (
     EstimateAlreadyApprovedError,
@@ -39,13 +40,14 @@ if TYPE_CHECKING:
     from grins_platform.repositories.estimate_repository import EstimateRepository
     from grins_platform.services.email_service import EmailService
     from grins_platform.services.lead_service import LeadService
+    from grins_platform.services.sales_pipeline_service import SalesPipelineService
     from grins_platform.services.sms_service import SMSService
 
 # Follow-up schedule: days after sending
 FOLLOW_UP_DAYS = [3, 7, 14, 21]
 
 # Portal token validity in days
-TOKEN_VALIDITY_DAYS = 30
+TOKEN_VALIDITY_DAYS = 60
 
 # Auto-routing threshold in hours
 AUTO_ROUTE_HOURS = 4
@@ -75,25 +77,32 @@ class EstimateService(LoggerMixin):
     def __init__(
         self,
         estimate_repository: EstimateRepository,
+        portal_base_url: str,
         lead_service: LeadService | None = None,
         sms_service: SMSService | None = None,
         email_service: EmailService | None = None,
-        portal_base_url: str = "https://portal.grins.com",
+        sales_pipeline_service: SalesPipelineService | None = None,
     ) -> None:
         """Initialize service with dependencies.
 
         Args:
             estimate_repository: Repository for estimate DB operations.
+            portal_base_url: Base URL origin for customer portal links
+                (path is appended by the service — must be the origin
+                only, e.g. ``http://localhost:5173``).
             lead_service: Optional LeadService for cross-service tag updates.
             sms_service: Optional SMSService for sending portal links.
             email_service: Optional EmailService for sending portal links.
-            portal_base_url: Base URL for customer portal links.
+            sales_pipeline_service: Optional SalesPipelineService for
+                writing approve/reject breadcrumbs to the active
+                SalesEntry (Q-A correlation).
         """
         super().__init__()
         self.repo = estimate_repository
         self.lead_service = lead_service
         self.sms_service = sms_service
         self.email_service = email_service
+        self.sales_pipeline_service = sales_pipeline_service
         self.portal_base_url = portal_base_url
 
     # =========================================================================
@@ -109,7 +118,7 @@ class EstimateService(LoggerMixin):
 
         Calculates subtotal/tax/discount/total from line items.
         Generates a customer_token (UUID v4) and sets token_expires_at
-        to 30 days from now.
+        to 60 days from now.
 
         Args:
             data: Estimate creation data.
@@ -153,7 +162,7 @@ class EstimateService(LoggerMixin):
             discount_amount=discount_amount,
             total=total,
             promotion_code=data.promotion_code,
-            valid_until=data.valid_until or (now + timedelta(days=30)),
+            valid_until=data.valid_until or (now + timedelta(days=60)),
             notes=data.notes,
             customer_token=customer_token,
             token_expires_at=token_expires_at,
@@ -270,7 +279,9 @@ class EstimateService(LoggerMixin):
         )
 
         # Build portal URL
-        portal_url = f"{self.portal_base_url}/estimates/{estimate.customer_token}"
+        portal_url = (
+            f"{self.portal_base_url}/portal/estimates/{estimate.customer_token}"
+        )
 
         # Send via available channels
         sent_via: list[str] = []
@@ -297,18 +308,24 @@ class EstimateService(LoggerMixin):
                         estimate_id=str(estimate_id),
                     )
 
-        # Email — log intent; a dedicated send_estimate_email method
-        # can be added to EmailService when email templates are ready.
+        # Email
         if self.email_service and estimate.customer:
             email = getattr(estimate.customer, "email", None)
             if email:
-                self.logger.info(
-                    "estimate.email.queued",
-                    estimate_id=str(estimate_id),
-                    email=email,
-                    portal_url=portal_url,
-                )
-                sent_via.append("email")
+                try:
+                    result = self.email_service.send_estimate_email(
+                        customer=estimate.customer,
+                        estimate=estimate,
+                        portal_url=portal_url,
+                    )
+                    if result.get("sent"):
+                        sent_via.append("email")
+                except Exception as e:
+                    self.log_failed(
+                        "send_estimate_email",
+                        error=e,
+                        estimate_id=str(estimate_id),
+                    )
 
         # Also try lead contact info if no customer
         if not sent_via and estimate.lead:
@@ -328,6 +345,21 @@ class EstimateService(LoggerMixin):
                 except Exception as e:
                     self.log_failed(
                         "send_estimate_sms_lead",
+                        error=e,
+                        estimate_id=str(estimate_id),
+                    )
+            if self.email_service and getattr(lead, "email", None):
+                try:
+                    result = self.email_service.send_estimate_email(
+                        customer=lead,
+                        estimate=estimate,
+                        portal_url=portal_url,
+                    )
+                    if result.get("sent"):
+                        sent_via.append("email")
+                except Exception as e:
+                    self.log_failed(
+                        "send_estimate_email_lead",
                         error=e,
                         estimate_id=str(estimate_id),
                     )
@@ -425,6 +457,9 @@ class EstimateService(LoggerMixin):
                     lead_id=str(estimate.lead_id),
                 )
 
+        await self._notify_internal_decision(updated, "approved")
+        await self._correlate_to_sales_entry(updated, "approved")
+
         self.log_completed(
             "approve_via_portal",
             estimate_id=str(estimate.id),
@@ -500,6 +535,9 @@ class EstimateService(LoggerMixin):
                     lead_id=str(estimate.lead_id),
                 )
 
+        await self._notify_internal_decision(updated, "rejected")
+        await self._correlate_to_sales_entry(updated, "rejected", reason=reason)
+
         self.log_completed(
             "reject_via_portal",
             estimate_id=str(estimate.id),
@@ -507,6 +545,114 @@ class EstimateService(LoggerMixin):
         )
         response: EstimateResponse = EstimateResponse.model_validate(updated)
         return response
+
+    # =========================================================================
+    # Internal Notifications + Sales Pipeline Correlation
+    # =========================================================================
+
+    async def _notify_internal_decision(
+        self,
+        estimate: Estimate | None,
+        decision: Literal["approved", "rejected"],
+    ) -> None:
+        """Fire-and-log internal staff notification. Never raises.
+
+        Failures (vendor outage, no recipients configured) are logged
+        but never undo the customer-side decision.
+        """
+        if estimate is None:
+            return
+        recipient_email = os.getenv("INTERNAL_NOTIFICATION_EMAIL", "").strip()
+        recipient_phone = os.getenv("INTERNAL_NOTIFICATION_PHONE", "").strip()
+        customer_name = self._resolve_customer_name(estimate)
+        total = str(getattr(estimate, "total", "0.00"))
+        rejection_reason = (
+            getattr(estimate, "rejected_reason", None)
+            if decision == "rejected"
+            else None
+        )
+
+        if recipient_email and self.email_service:
+            try:
+                self.email_service.send_internal_estimate_decision_email(
+                    to_email=recipient_email,
+                    decision=decision,
+                    customer_name=customer_name,
+                    total=total,
+                    estimate_id=estimate.id,
+                    rejection_reason=rejection_reason,
+                )
+            except Exception as e:
+                self.log_failed(
+                    "notify_internal_decision_email",
+                    error=e,
+                    estimate_id=str(estimate.id),
+                )
+
+        if recipient_phone and self.sms_service:
+            subject_word = decision.upper()
+            sms_text = (
+                f"Estimate {subject_word} for {customer_name}. "
+                f"Total ${total}. Open admin to action."
+            )
+            try:
+                _ = await self.sms_service.send_automated_message(
+                    phone=recipient_phone,
+                    message=sms_text,
+                    message_type="internal_estimate_decision",
+                )
+            except Exception as e:
+                self.log_failed(
+                    "notify_internal_decision_sms",
+                    error=e,
+                    estimate_id=str(estimate.id),
+                )
+
+    async def _correlate_to_sales_entry(
+        self,
+        estimate: Estimate | None,
+        decision: Literal["approved", "rejected"],
+        *,
+        reason: str | None = None,
+    ) -> None:
+        """Best-effort breadcrumb on the active SalesEntry. Never raises."""
+        if estimate is None or not self.sales_pipeline_service:
+            return
+        try:
+            _ = await self.sales_pipeline_service.record_estimate_decision_breadcrumb(
+                self.repo.session,
+                estimate,
+                decision,
+                reason=reason,
+            )
+        except Exception as e:
+            self.log_failed(
+                "correlate_to_sales_entry",
+                error=e,
+                estimate_id=str(estimate.id),
+            )
+
+    @staticmethod
+    def _resolve_customer_name(estimate: Estimate) -> str:
+        """Return a human-readable name for the estimate's recipient."""
+        customer = getattr(estimate, "customer", None)
+        if customer is not None:
+            full_name = getattr(customer, "full_name", None)
+            if full_name:
+                return str(full_name)
+            first = getattr(customer, "first_name", "") or ""
+            last = getattr(customer, "last_name", "") or ""
+            joined = f"{first} {last}".strip()
+            if joined:
+                return joined
+        lead = getattr(estimate, "lead", None)
+        if lead is not None:
+            first = getattr(lead, "first_name", "") or ""
+            last = getattr(lead, "last_name", "") or ""
+            joined = f"{first} {last}".strip()
+            if joined:
+                return joined
+        return "a customer"
 
     # =========================================================================
     # Background Jobs
@@ -595,7 +741,9 @@ class EstimateService(LoggerMixin):
                 continue
 
             # Build portal URL
-            portal_url = f"{self.portal_base_url}/estimates/{estimate.customer_token}"
+            portal_url = (
+            f"{self.portal_base_url}/portal/estimates/{estimate.customer_token}"
+        )
 
             message = follow_up.message or (
                 f"Reminder: Your estimate from Grins Irrigation is "

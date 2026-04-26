@@ -12,14 +12,41 @@ from __future__ import annotations
 
 import hashlib
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock
+from typing import Iterator
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+import pytest
 from jose import jwt as jose_jwt
 
 from grins_platform.models.enums import DisclosureType, EmailType
 from grins_platform.services.email_config import EmailSettings
 from grins_platform.services.email_service import EmailService
+
+
+@pytest.fixture(autouse=True)
+def _clear_email_allowlist_and_mock_resend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[None]:
+    """These pre-existing tests use ``test@example.com`` recipients. The
+    repo's ``.env`` may set ``EMAIL_TEST_ADDRESS_ALLOWLIST`` for dev safety,
+    which would block those sends in unit tests. Clear the env var so the
+    allowlist guard is a no-op (matching production semantics where the
+    var is unset). Also stub ``resend.Emails.send`` so we never make a
+    real network call from a unit test.
+    """
+    monkeypatch.delenv("EMAIL_TEST_ADDRESS_ALLOWLIST", raising=False)
+    # Clear provider keys so EmailSettings constructed with explicit
+    # ``email_api_key=""``/``resend_api_key=""`` actually evaluates as
+    # unconfigured (otherwise Pydantic's AliasChoices picks up the
+    # repo's dev .env and `is_configured` is True).
+    monkeypatch.delenv("RESEND_API_KEY", raising=False)
+    monkeypatch.delenv("EMAIL_API_KEY", raising=False)
+    with patch(
+        "grins_platform.services.email_service.resend.Emails.send",
+        return_value={"id": "msg_test"},
+    ):
+        yield
 
 # =============================================================================
 # Helpers
@@ -27,20 +54,28 @@ from grins_platform.services.email_service import EmailService
 
 
 def _configured_settings(**overrides: str) -> EmailSettings:
-    """Return EmailSettings with email API configured."""
+    """Return EmailSettings with email API configured.
+
+    ``_env_file=None`` isolates from the repo's ``.env`` so a developer
+    machine with RESEND_API_KEY/EMAIL_API_KEY set doesn't contaminate
+    the test fixture.
+    """
     defaults: dict[str, str] = {
         "email_api_key": "test-key",
+        "resend_api_key": "test-key",
         "company_physical_address": "123 Main St, Minneapolis, MN 55401",
         "stripe_customer_portal_url": "https://billing.stripe.com/test",
     }
     defaults.update(overrides)
-    return EmailSettings(**defaults)  # type: ignore[arg-type]
+    return EmailSettings(_env_file=None, **defaults)  # type: ignore[arg-type]
 
 
 def _unconfigured_settings() -> EmailSettings:
     """Return EmailSettings with no API key (pending mode)."""
     return EmailSettings(
+        _env_file=None,
         email_api_key="",
+        resend_api_key="",
         company_physical_address="123 Main St",
         stripe_customer_portal_url="https://billing.stripe.com/test",
     )

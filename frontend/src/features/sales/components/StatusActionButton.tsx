@@ -137,6 +137,10 @@ export function StatusActionButton({ entry }: StatusActionButtonProps) {
           typeof msg === 'string'
           && /upload an estimate|pending_approval/i.test(msg)
         ) {
+          // Defensive: as of the Q-B gate-drop the API no longer returns
+          // this 422 — advancing send_estimate → pending_approval is
+          // gate-free. Kept in case server-side gates are reintroduced;
+          // harmless dead branch otherwise.
           toast.error('Upload an estimate before advancing', {
             description:
               'This sales entry needs a signing document on file before it can move to pending approval.',

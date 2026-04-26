@@ -255,7 +255,9 @@ class TestEstimatePortalFullFlow:
 
         send_result = await svc.send_estimate(created_est.id)
 
-        assert send_result.portal_url.startswith("https://portal.grins.com/estimates/")
+        assert send_result.portal_url.startswith(
+            "https://portal.grins.com/portal/estimates/"
+        )
         assert str(sent_est.customer_token) in send_result.portal_url
         assert "sms" in send_result.sent_via
 

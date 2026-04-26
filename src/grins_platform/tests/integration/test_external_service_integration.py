@@ -719,7 +719,7 @@ class TestEstimatePortalEndToEnd:
 
         # Verify portal URL generated
         assert send_result.portal_url.startswith(
-            "https://portal.grins.com/estimates/",
+            "https://portal.grins.com/portal/estimates/",
         )
         assert str(sent_est.customer_token) in send_result.portal_url
         # Verify SMS was sent

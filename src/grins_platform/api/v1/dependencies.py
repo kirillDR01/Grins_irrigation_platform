@@ -20,6 +20,9 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from grins_platform.database import get_db_session as db_session_generator
+from grins_platform.repositories.appointment_note_repository import (
+    AppointmentNoteRepository,
+)
 from grins_platform.repositories.appointment_repository import AppointmentRepository
 from grins_platform.repositories.campaign_repository import CampaignRepository
 from grins_platform.repositories.customer_repository import CustomerRepository
@@ -34,14 +37,12 @@ from grins_platform.repositories.service_offering_repository import (
     ServiceOfferingRepository,
 )
 from grins_platform.repositories.staff_repository import StaffRepository
-from grins_platform.repositories.appointment_note_repository import (
-    AppointmentNoteRepository,
-)
 from grins_platform.services.appointment_note_service import AppointmentNoteService
 from grins_platform.services.appointment_service import AppointmentService
 from grins_platform.services.appointment_timeline_service import (
     AppointmentTimelineService,
 )
+from grins_platform.services.audit_service import AuditService
 from grins_platform.services.campaign_service import CampaignService
 from grins_platform.services.customer_merge_service import CustomerMergeService
 from grins_platform.services.customer_service import CustomerService
@@ -49,12 +50,14 @@ from grins_platform.services.dashboard_service import DashboardService
 from grins_platform.services.duplicate_detection_service import (
     DuplicateDetectionService,
 )
+from grins_platform.services.email_config import EmailSettings
 from grins_platform.services.email_service import EmailService
 from grins_platform.services.estimate_service import EstimateService
 from grins_platform.services.google_sheets_service import GoogleSheetsService
 from grins_platform.services.job_service import JobService
 from grins_platform.services.photo_service import PhotoService
 from grins_platform.services.property_service import PropertyService
+from grins_platform.services.sales_pipeline_service import SalesPipelineService
 from grins_platform.services.service_offering_service import ServiceOfferingService
 from grins_platform.services.sms.factory import get_sms_provider
 from grins_platform.services.sms_service import SMSService
@@ -254,7 +257,10 @@ async def get_full_appointment_service(
     staff_repository = StaffRepository(session=session)
     invoice_repository = InvoiceRepository(session=session)
     estimate_repository = EstimateRepository(session=session)
-    estimate_service = EstimateService(estimate_repository=estimate_repository)
+    estimate_service = EstimateService(
+        estimate_repository=estimate_repository,
+        portal_base_url=EmailSettings().portal_base_url,
+    )
     return AppointmentService(
         appointment_repository=appointment_repository,
         job_repository=job_repository,
@@ -352,17 +358,42 @@ def get_photo_service() -> PhotoService:
 
 async def get_estimate_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    job_service: Annotated[JobService, Depends(get_job_service)],
 ) -> EstimateService:
     """Get EstimateService dependency.
 
+    Wires Resend EmailService, SMSService, and SalesPipelineService
+    so that admin-side ``send_estimate``, customer-portal approve/reject
+    notifications, and the Q-A SalesEntry breadcrumb all fire from a
+    single composed service.
+
+    ``lead_service`` is intentionally omitted — its constructor pulls in
+    additional aggregates (CustomerService, StaffRepository) that are
+    not in scope for this dependency. The lead-tag flip in
+    ``approve_via_portal`` is gated on ``self.lead_service`` being set
+    and remains a no-op here, matching the pre-feature behavior.
+
     Args:
-        session: Database session from dependency injection
+        session: Database session from dependency injection.
+        job_service: JobService dependency (used by SalesPipelineService).
 
     Returns:
-        EstimateService instance
+        EstimateService instance.
     """
     repository = EstimateRepository(session=session)
-    return EstimateService(estimate_repository=repository)
+    email_service = EmailService()
+    sms_service = SMSService(session=session, provider=get_sms_provider())
+    sales_pipeline_service = SalesPipelineService(
+        job_service=job_service,
+        audit_service=AuditService(),
+    )
+    return EstimateService(
+        estimate_repository=repository,
+        portal_base_url=EmailSettings().portal_base_url,
+        email_service=email_service,
+        sms_service=sms_service,
+        sales_pipeline_service=sales_pipeline_service,
+    )
 
 
 async def get_campaign_service(

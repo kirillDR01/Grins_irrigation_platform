@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+import resend
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jose import jwt
 
@@ -26,6 +27,7 @@ from grins_platform.services.email_config import EmailSettings
 
 if TYPE_CHECKING:
     from grins_platform.models.customer import Customer
+    from grins_platform.models.estimate import Estimate
     from grins_platform.models.lead import Lead
     from grins_platform.models.service_agreement import ServiceAgreement
     from grins_platform.models.service_agreement_tier import (
@@ -51,6 +53,63 @@ BUSINESS_EMAIL = "info@grinsirrigation.com"
 
 # Template directory
 _TEMPLATE_DIR = Path(__file__).parent.parent / "templates" / "emails"
+
+
+class EmailRecipientNotAllowedError(Exception):
+    """Raised when a send is blocked by ``EMAIL_TEST_ADDRESS_ALLOWLIST``.
+
+    This is an *intentional* refusal, not a provider failure — the hard
+    guard is configured per-environment (dev/staging) to make it
+    impossible to accidentally email an address that isn't on the
+    explicit test allow-list. Production leaves
+    ``EMAIL_TEST_ADDRESS_ALLOWLIST`` unset so the guard is a no-op there.
+    """
+
+
+def _normalize_email_for_comparison(email: str) -> str:
+    """Lowercase + strip for allow-list matching."""
+    return email.strip().lower() if email else ""
+
+
+def _load_email_allowlist() -> list[str] | None:
+    """Parse ``EMAIL_TEST_ADDRESS_ALLOWLIST``.
+
+    Returns:
+        A list of normalized addresses when set/non-empty, or ``None``
+        when unset or empty (production path: no restriction).
+    """
+    raw = os.environ.get("EMAIL_TEST_ADDRESS_ALLOWLIST", "").strip()
+    if not raw:
+        return None
+    parts = [p.strip().lower() for p in raw.split(",") if p.strip()]
+    return parts or None
+
+
+def enforce_email_recipient_allowlist(to: str, *, provider: str) -> None:
+    """Raise :class:`EmailRecipientNotAllowedError` when guard refuses.
+
+    Hard guard called at the top of ``_send_email`` before any I/O.
+    No-op when ``EMAIL_TEST_ADDRESS_ALLOWLIST`` is unset or empty.
+
+    Args:
+        to: Destination email address.
+        provider: Provider name for the log/error context.
+
+    Raises:
+        EmailRecipientNotAllowedError: If guard active and ``to`` is
+            not in the allow-list.
+    """
+    allowlist = _load_email_allowlist()
+    if allowlist is None:
+        return
+    if _normalize_email_for_comparison(to) in allowlist:
+        return
+    msg = (
+        f"recipient_not_in_email_allowlist: provider={provider} "
+        f"(set EMAIL_TEST_ADDRESS_ALLOWLIST to override for dev/staging; "
+        f"leave unset in production)"
+    )
+    raise EmailRecipientNotAllowedError(msg)
 
 
 def _mask_email(email: str) -> str:
@@ -79,6 +138,10 @@ class EmailService(LoggerMixin):
         super().__init__()
         self.settings = settings or EmailSettings()
         self._jinja_env: Environment | None = None
+        if self.settings.is_configured:
+            resend.api_key = (
+                self.settings.resend_api_key or self.settings.email_api_key
+            )
 
     @property
     def jinja_env(self) -> Environment:
@@ -106,6 +169,9 @@ class EmailService(LoggerMixin):
             "receipt",
             "onboarding_reminder",
             "failed_payment_notice",
+            "estimate_sent",
+            "internal_estimate_decision",
+            "internal_estimate_bounce",
         }
         if email_type in transactional_types:
             return EmailType.TRANSACTIONAL
@@ -162,14 +228,21 @@ class EmailService(LoggerMixin):
         html_body: str,
         email_type: str,
         classification: EmailType,
+        text_body: str | None = None,
+        extra_tags: list[dict[str, str]] | None = None,
     ) -> bool:
-        """Send email via provider or record as pending.
+        """Send email via Resend or record as pending.
 
         Returns True if sent successfully, False otherwise.
 
+        Raises:
+            EmailRecipientNotAllowedError: If dev/staging allowlist is
+                set and the recipient is not in it. The exception is
+                deliberately *not* caught here — callers see refusals
+                as exceptions, not silent skips.
+
         Validates: Requirements 39B.1, 39B.8, 39B.10
         """
-        _ = html_body  # used by provider in production
         sender = self._get_sender(classification)
         masked = _mask_email(to_email)
 
@@ -183,7 +256,40 @@ class EmailService(LoggerMixin):
             )
             return False
 
-        # Production: call email provider API here.
+        # Hard guard — raises if recipient is not in allowlist (dev/staging)
+        enforce_email_recipient_allowlist(to_email, provider="resend")
+
+        tags: list[dict[str, str]] = [
+            {"name": "email_type", "value": email_type},
+        ]
+        if extra_tags:
+            tags.extend(extra_tags)
+
+        payload: dict[str, Any] = {
+            "from": f"Grin's Irrigation <{sender}>",
+            "to": [to_email],
+            "subject": subject,
+            "html": html_body,
+            "reply_to": COMMERCIAL_SENDER,
+            "tags": tags,
+        }
+        if text_body:
+            payload["text"] = text_body
+
+        try:
+            response = resend.Emails.send(payload)  # type: ignore[arg-type]
+        except Exception as e:
+            self.log_failed(
+                "send",
+                error=e,
+                recipient=masked,
+                email_type=email_type,
+            )
+            return False
+
+        provider_message_id = (
+            response.get("id") if isinstance(response, dict) else None
+        )
         self.logger.info(
             "email.send.completed",
             recipient=masked,
@@ -191,6 +297,7 @@ class EmailService(LoggerMixin):
             classification=classification.value,
             sender=sender,
             subject=subject,
+            provider_message_id=provider_message_id,
         )
         return True
 
@@ -255,6 +362,142 @@ class EmailService(LoggerMixin):
             "content": html_body,
             "disclosure_type": None,
         }
+
+    def send_estimate_email(
+        self,
+        *,
+        customer: Customer | Lead,
+        estimate: Estimate,
+        portal_url: str,
+    ) -> dict[str, Any]:
+        """Send estimate-ready email with portal link.
+
+        Validates: Feature — estimate approval email portal.
+        """
+        self.log_started(
+            "send_estimate_email",
+            estimate_id=str(estimate.id),
+        )
+
+        email = getattr(customer, "email", None)
+        if not email:
+            self.logger.warning(
+                "email.estimate_sent.skipped",
+                estimate_id=str(estimate.id),
+                reason="no_email_address",
+            )
+            return {"sent": False, "reason": "no_email"}
+
+        customer_name = (
+            getattr(customer, "full_name", None)
+            or getattr(customer, "first_name", None)
+            or "Valued Customer"
+        )
+
+        valid_until_str = ""
+        valid_until = getattr(estimate, "valid_until", None)
+        if valid_until is not None:
+            try:
+                valid_until_str = valid_until.date().isoformat()
+            except AttributeError:
+                valid_until_str = str(valid_until)
+
+        context = {
+            "customer_name": customer_name,
+            "total": str(estimate.total),
+            "valid_until": valid_until_str,
+            "portal_url": portal_url,
+        }
+
+        html_body = self._render_template("estimate_sent.html", context)
+        try:
+            text_body = self._render_template("estimate_sent.txt", context)
+        except Exception:
+            text_body = None
+
+        classification = self._classify_email("estimate_sent")
+        sent = self._send_email(
+            to_email=email,
+            subject="Your estimate from Grin's Irrigation",
+            html_body=html_body,
+            email_type="estimate_sent",
+            classification=classification,
+            text_body=text_body,
+            extra_tags=[
+                {"name": "estimate_id", "value": str(estimate.id)},
+            ],
+        )
+
+        self.log_completed(
+            "send_estimate_email",
+            sent=sent,
+            estimate_id=str(estimate.id),
+        )
+        return {
+            "sent": sent,
+            "sent_via": "email" if sent else "pending",
+            "recipient_email": email,
+            "content": html_body,
+            "disclosure_type": None,
+        }
+
+    def send_internal_estimate_decision_email(
+        self,
+        *,
+        to_email: str,
+        decision: str,
+        customer_name: str,
+        total: str,
+        estimate_id: Any,  # noqa: ANN401 — accepts UUID or str
+        rejection_reason: str | None = None,
+    ) -> bool:
+        """Notify internal staff of approve/reject decision."""
+        subject = f"Estimate {decision.upper()} for {customer_name}"
+        html_body = self._render_template(
+            "internal_estimate_decision.html",
+            {
+                "customer_name": customer_name,
+                "decision": decision,
+                "total": str(total),
+                "estimate_id": str(estimate_id),
+                "rejection_reason": rejection_reason or "",
+            },
+        )
+        return self._send_email(
+            to_email=to_email,
+            subject=subject,
+            html_body=html_body,
+            email_type="internal_estimate_decision",
+            classification=EmailType.TRANSACTIONAL,
+        )
+
+    def send_internal_estimate_bounce_email(
+        self,
+        *,
+        to_email: str,
+        recipient_email: str,
+        reason: str,
+        estimate_id: str,
+    ) -> bool:
+        """Notify internal staff of an email bounce."""
+        subject = f"Estimate email bounced for {recipient_email}"
+        bounced_at = datetime.now(UTC).isoformat()
+        html_body = self._render_template(
+            "internal_estimate_bounce.html",
+            {
+                "recipient_email": recipient_email,
+                "reason": reason,
+                "estimate_id": estimate_id,
+                "bounced_at": bounced_at,
+            },
+        )
+        return self._send_email(
+            to_email=to_email,
+            subject=subject,
+            html_body=html_body,
+            email_type="internal_estimate_bounce",
+            classification=EmailType.TRANSACTIONAL,
+        )
 
     def send_confirmation_email(
         self,

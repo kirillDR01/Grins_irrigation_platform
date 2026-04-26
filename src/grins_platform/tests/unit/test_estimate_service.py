@@ -186,13 +186,16 @@ def _build_service(
     lead_service: AsyncMock | None = None,
     sms_service: AsyncMock | None = None,
     email_service: AsyncMock | None = None,
+    sales_pipeline_service: AsyncMock | None = None,
 ) -> EstimateService:
     """Build an EstimateService with mocked dependencies."""
     return EstimateService(
         estimate_repository=repo or AsyncMock(),
+        portal_base_url="https://portal.grins.com",
         lead_service=lead_service,
         sms_service=sms_service,
         email_service=email_service,
+        sales_pipeline_service=sales_pipeline_service,
     )
 
 

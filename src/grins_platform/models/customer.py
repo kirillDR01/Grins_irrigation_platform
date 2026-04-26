@@ -162,6 +162,12 @@ class Customer(Base):
         String(50),
         nullable=True,
     )
+    # Soft flag stamped by Resend bounce webhook on hard bounce.
+    # Informational only — does not block future sends.
+    email_bounced_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     # Duplicate Merge Tracking (CRM2 Req 6.5)
     merged_into_customer_id: Mapped[Optional[UUID]] = mapped_column(

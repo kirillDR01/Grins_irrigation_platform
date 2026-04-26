@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Estimate {{ decision }}</title></head>
+<body style="font-family: Arial, sans-serif; color: #1f2937;">
+<h2>Estimate {{ decision|upper }} — {{ customer_name }}</h2>
+<ul>
+  <li><strong>Customer:</strong> {{ customer_name }}</li>
+  <li><strong>Decision:</strong> {{ decision }}</li>
+  <li><strong>Total:</strong> ${{ total }}</li>
+  <li><strong>Estimate ID:</strong> {{ estimate_id }}</li>
+  {% if rejection_reason %}<li><strong>Reason:</strong> {{ rejection_reason }}</li>{% endif %}
+</ul>
+{% if decision == 'approved' %}
+<p>Time to send the contract for signature.</p>
+{% else %}
+<p>Recommend follow-up call within 24 hours.</p>
+{% endif %}
+</body>
+</html>
