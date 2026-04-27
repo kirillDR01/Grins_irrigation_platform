@@ -278,8 +278,10 @@ This is the core flow of how a customer moves through the system. Every record e
           Admin clicks "On My Way" button
               |
           [SYSTEM -> CUSTOMER]
-          "We're on our way! Your technician is
-           heading to your location now."
+          "[Staff Name] from Grins Irrigation is on
+           the way to your appointment!"
+          (Optional " Estimated arrival in [N] minutes."
+           appended when an ETA is provided)
               |
           (No customer reply expected)
           Logs on_my_way_at timestamp.
@@ -774,9 +776,9 @@ The customer replies by text:
 
 | Reply | What Happens |
 |-------|-------------|
-| **Y** (or yes, confirm, ok, okay) | Appointment status changes from Unconfirmed to **Confirmed**. Customer gets a confirmation reply. The job card on the schedule switches to solid border/full color. |
-| **R** (or reschedule, different time, change time) | A **reschedule request** is created and appears in your Reschedule Requests queue. The customer receives a reply acknowledging their request. |
-| **C** (or cancel, cancelled) | The appointment is **cancelled**. The customer gets a cancellation reply. You are notified. |
+| **Y** (or yes, ok, okay, confirm, confirmed, yup, yeah, or "1") | Appointment status changes from Unconfirmed to **Confirmed**. Customer gets a confirmation reply. The job card on the schedule switches to solid border/full color. |
+| **R** (or reschedule, different time, change time, or "2") | A **reschedule request** is created and appears in your Reschedule Requests queue. The customer receives a reply acknowledging their request. |
+| **C** (or cancel) | The appointment is **cancelled**. The customer gets a cancellation reply. You are notified. |
 | **Anything else** | Logged as "needs review" for you to handle manually. |
 
 ### Reschedule Requests Queue
@@ -1064,7 +1066,7 @@ The CRM uses SMS (currently via CallRail) for several automated and manual commu
 | Trigger | Message Sent |
 |---------|-------------|
 | **"Send Confirmation" clicked** | Confirmation request: "Reply Y to confirm, R to reschedule, C to cancel" (transitions DRAFT → SCHEDULED) |
-| **"On My Way" button clicked** | "We're on our way! Your technician is heading to your location now." |
+| **"On My Way" button clicked** | "[Staff Name] from Grins Irrigation is on the way to your appointment!" — staff name is dynamically inserted; an " Estimated arrival in [N] minutes." sentence is appended when an ETA is provided. |
 | **Customer confirms (Y)** | Auto-reply confirming the appointment |
 | **Customer reschedules (R)** | Acknowledgment reply + follow-up: "We'd be happy to reschedule. Please reply with 2-3 dates and times that work for you and we'll get you set up." |
 | **Customer cancels (C)** | Cancellation: "Your [service type] appointment on [date] at [time] has been cancelled. If you'd like to reschedule, please call us at [business phone]." A repeat "C" from the same customer is a no-op. |
