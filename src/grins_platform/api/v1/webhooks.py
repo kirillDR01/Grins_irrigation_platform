@@ -70,6 +70,13 @@ HANDLED_EVENT_TYPES = frozenset(
     },
 )
 
+# Sentinel for missing last_name in checkout.session.completed.
+# Stripe's Checkout name field is a single string; mononyms ("Madonna")
+# and first-name-only inputs ("Kirill") have no last name to extract.
+# Using a non-empty placeholder lets CustomerCreate (min_length=1) succeed
+# without rolling back the entire agreement transaction.
+_MISSING_LAST_NAME_PLACEHOLDER = "-"
+
 
 class StripeWebhookHandler(LoggerMixin):
     """Handles incoming Stripe webhook events.
@@ -280,7 +287,13 @@ class StripeWebhookHandler(LoggerMixin):
             full_name = str(cust_details.get("name", "") or "")
             parts = full_name.strip().split(maxsplit=1)
             first_name = parts[0] if parts else "Customer"
-            last_name = parts[1] if len(parts) > 1 else ""
+            last_name = parts[1] if len(parts) > 1 else _MISSING_LAST_NAME_PLACEHOLDER
+            if last_name == _MISSING_LAST_NAME_PLACEHOLDER:
+                self.log_started(
+                    "webhook_customer_placeholder_last_name",
+                    full_name_provided=bool(full_name),
+                    first_name=first_name,
+                )
             phone_raw = str(cust_details.get("phone", "") or "")
 
             # Normalize phone and try phone-based lookup before creating
