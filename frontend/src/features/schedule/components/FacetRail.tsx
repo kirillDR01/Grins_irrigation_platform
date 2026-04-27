@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import type { JobReadyToSchedule } from '../types/index';
 import type { FacetState } from '../types/pick-jobs';
+import { normalizeCity } from '../utils/city';
 
 interface Props {
   jobs: JobReadyToSchedule[];
@@ -83,7 +84,8 @@ function FacetRailContent({ jobs, facets, onChange, onClearAll }: Props) {
     const priors = new Set<string>();
     const weeks = new Set<string>();
     for (const j of jobs) {
-      if (j.city) cities.add(j.city);
+      const canonCity = normalizeCity(j.city);
+      if (canonCity) cities.add(canonCity);
       (j.customer_tags ?? []).forEach(t => tags.add(t));
       if (j.job_type) types.add(j.job_type);
       if (j.priority_level != null) priors.add(String(j.priority_level));
@@ -185,7 +187,7 @@ function FacetRailContent({ jobs, facets, onChange, onClearAll }: Props) {
 // ─── helpers ───────────────────────────────────────────────────────────────
 
 function matches(job: JobReadyToSchedule, f: FacetState): boolean {
-  if (f.city.size && !f.city.has(job.city)) return false;
+  if (f.city.size && !f.city.has(normalizeCity(job.city) ?? '')) return false;
   if (f.jobType.size && !f.jobType.has(job.job_type)) return false;
   if (f.priority.size && !f.priority.has(String(job.priority_level ?? 0))) return false;
   if (f.requestedWeek.size && !f.requestedWeek.has(job.requested_week ?? '')) return false;
@@ -200,7 +202,7 @@ function matches(job: JobReadyToSchedule, f: FacetState): boolean {
 
 function matchesValue(j: JobReadyToSchedule, group: FacetKey, value: string): boolean {
   switch (group) {
-    case 'city': return j.city === value;
+    case 'city': return (normalizeCity(j.city) ?? '') === value;
     case 'jobType': return j.job_type === value;
     case 'priority': return String(j.priority_level ?? 0) === value;
     case 'requestedWeek': return j.requested_week === value;

@@ -416,6 +416,15 @@ _UNKNOWN_CITY = "Unknown"
 _ZIP_PATTERN = _re.compile(r"\b(\d{5}(?:-\d{4})?)\b")
 _STATE_PATTERN = _re.compile(r"\b([A-Z]{2})\b")
 
+# Detects a city candidate that ends in a street-suffix token (case-
+# insensitive). Anchored to end-of-string so legitimate proper-noun
+# prefixes like "St. Paul" keep working: "St." has trailing punctuation
+# and therefore does not match ``\bST\b\s*$``.
+_STREET_SUFFIX_PATTERN = _re.compile(
+    r"\b(ST|AVE|AVENUE|DR|DRIVE|LN|LANE|RD|ROAD|BLVD|CT|COURT|WAY|TER|"
+    r"PL|PLACE|PKWY|CIR|CIRCLE|TRL|TRAIL)\s*$",
+)
+
 
 def _normalize_address(raw: str) -> str:
     """Normalize for idempotency: lowercase + collapse whitespace +
@@ -458,6 +467,15 @@ def _parse_address(raw: str) -> tuple[str, str, str, str | None]:
     # If the "city" slot actually holds state+zip (two-segment input
     # like "123 Main St, MN 55401"), fall back to Unknown.
     if _STATE_PATTERN.search(city.upper()) and _ZIP_PATTERN.search(city):
+        city = _UNKNOWN_CITY
+
+    # Also reject address-shaped tokens (digit prefix or trailing
+    # street-suffix word). E.g. "5808 View Ln Edina 55436" with no commas
+    # parses as a single segment whose "city" would otherwise be the raw
+    # street; quarantine to the sentinel so the facet rail stays clean.
+    if city and (
+        city[0].isdigit() or _STREET_SUFFIX_PATTERN.search(city.upper())
+    ):
         city = _UNKNOWN_CITY
 
     return street, city, state, zip_code

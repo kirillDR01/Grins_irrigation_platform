@@ -12,7 +12,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.orm import Session  # noqa: TC002
 
 from grins_platform.api.v1.auth_dependencies import (
@@ -26,6 +26,7 @@ from grins_platform.models.customer import Customer
 from grins_platform.models.enums import AppointmentStatus
 from grins_platform.models.job import Job
 from grins_platform.models.property import Property
+from grins_platform.models.service_agreement import ServiceAgreement
 from grins_platform.schemas.analytics import LeadTimeResponse
 from grins_platform.schemas.schedule_explanation import (
     JobReadyToSchedule,
@@ -386,6 +387,25 @@ async def parse_constraints(
         return response
 
 
+def _compute_effective_priority(
+    base: int,
+    has_priority_tag: bool,
+    has_active_agreement: bool,
+) -> int:
+    """Derive the picker's display priority from the underlying signals.
+
+    The picker escalates priority when the customer is a paid-tier (active
+    service agreement) or carries the manual ``priority`` VIP tag. The result
+    is monotone in each input — adding a signal can only raise (never lower)
+    the level.
+    """
+    return max(
+        base,
+        1 if has_priority_tag else 0,
+        1 if has_active_agreement else 0,
+    )
+
+
 @router.get(  # type: ignore[misc,untyped-decorator]
     "/jobs-ready",
     response_model=JobsReadyToScheduleResponse,
@@ -416,10 +436,19 @@ def get_jobs_ready_to_schedule(
     )
 
     try:
-        # Query jobs with status "approved" or "requested"
-        # that haven't been scheduled yet
+        # ``Customer.tags`` is selectin-loaded, so per-row tag access does
+        # not produce N+1 queries. ``ServiceAgreement`` participation is
+        # computed once per row via a correlated EXISTS scalar.
+        has_active_agreement_col = (
+            exists()
+            .where(ServiceAgreement.customer_id == Customer.id)
+            .where(ServiceAgreement.status == "active")
+            .correlate(Customer)
+            .label("has_active_agreement")
+        )
+
         query = (
-            select(Job, Customer, Property)
+            select(Job, Customer, Property, has_active_agreement_col)
             .join(Customer, Job.customer_id == Customer.id)
             .outerjoin(Property, Job.property_id == Property.id)
             .where(Job.status.in_(["approved", "requested", "to_be_scheduled"]))
@@ -436,10 +465,26 @@ def get_jobs_ready_to_schedule(
         jobs = []
         by_city: dict[str, int] = {}
         by_job_type: dict[str, int] = {}
+        effective_priority_count = 0
+        with_active_agreement_count = 0
 
-        for job, customer, property_ in rows:
+        for job, customer, property_, has_active_agreement in rows:
             city = property_.city if property_ else "Unknown"
             customer_name = f"{customer.first_name} {customer.last_name}"
+
+            tag_labels = [t.label.lower() for t in (customer.tags or [])]
+            has_priority_tag = "priority" in tag_labels
+
+            base_priority = job.priority_level or 0
+            effective_priority = _compute_effective_priority(
+                base_priority,
+                has_priority_tag=has_priority_tag,
+                has_active_agreement=bool(has_active_agreement),
+            )
+            if effective_priority > base_priority:
+                effective_priority_count += 1
+            if has_active_agreement:
+                with_active_agreement_count += 1
 
             jobs.append(
                 JobReadyToSchedule(
@@ -448,10 +493,23 @@ def get_jobs_ready_to_schedule(
                     customer_name=customer_name,
                     job_type=job.job_type,
                     city=city,
-                    priority=str(job.priority_level),
+                    priority=str(base_priority),
                     estimated_duration_minutes=job.estimated_duration_minutes or 60,
                     requires_equipment=job.equipment_required or [],
                     status=job.status,
+                    address=property_.address if property_ else None,
+                    customer_tags=tag_labels,
+                    property_type=property_.property_type if property_ else None,
+                    property_is_hoa=property_.is_hoa if property_ else None,
+                    requested_week=(
+                        job.target_start_date.isoformat()
+                        if job.target_start_date
+                        else None
+                    ),
+                    notes=job.notes,
+                    priority_level=base_priority,
+                    effective_priority_level=effective_priority,
+                    has_active_agreement=bool(has_active_agreement),
                 ),
             )
 
@@ -475,7 +533,12 @@ def get_jobs_ready_to_schedule(
             detail=f"Failed to get jobs ready to schedule: {e!s}",
         ) from e
     else:
-        endpoints.log_completed("get_jobs_ready", total_count=len(jobs))
+        endpoints.log_completed(
+            "get_jobs_ready",
+            total_count=len(jobs),
+            effective_priority_count=effective_priority_count,
+            with_active_agreement_count=with_active_agreement_count,
+        )
         return response
 
 

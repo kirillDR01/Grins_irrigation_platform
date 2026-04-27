@@ -183,4 +183,70 @@ describe('FacetRail', () => {
     expect(screen.getByTestId('facet-rail')).toBeInTheDocument();
     expect(screen.queryByTestId('facet-group-city')).not.toBeInTheDocument();
   });
+
+  it('deduplicates city casing/whitespace variants into one canonical entry', () => {
+    const dirtyJobs: JobReadyToSchedule[] = [
+      { ...mockJobs[0], job_id: 'a', city: 'Eden Prairie' },
+      { ...mockJobs[0], job_id: 'b', city: 'eden prairie ' },
+      { ...mockJobs[0], job_id: 'c', city: 'EDEN PRAIRIE' },
+    ];
+
+    render(
+      <FacetRail
+        jobs={dirtyJobs}
+        facets={initialFacets}
+        onChange={mockOnChange}
+        onClearAll={mockOnClearAll}
+      />
+    );
+
+    const cityGroup = screen.getByTestId('facet-group-city');
+    const items = within(cityGroup).getAllByTestId(/^facet-value-city-/);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toHaveAttribute('data-testid', 'facet-value-city-Eden Prairie');
+  });
+
+  it('hides address-shaped strings from the City rail', () => {
+    const dirtyJobs: JobReadyToSchedule[] = [
+      { ...mockJobs[0], job_id: 'a', city: '5808 View Ln Edina 55436' },
+      { ...mockJobs[0], job_id: 'b', city: 'Eden Prairie' },
+    ];
+
+    render(
+      <FacetRail
+        jobs={dirtyJobs}
+        facets={initialFacets}
+        onChange={mockOnChange}
+        onClearAll={mockOnClearAll}
+      />
+    );
+
+    const cityGroup = screen.getByTestId('facet-group-city');
+    expect(within(cityGroup).queryByTestId('facet-value-city-5808 View Ln Edina 55436')).not.toBeInTheDocument();
+    expect(within(cityGroup).getByTestId('facet-value-city-Eden Prairie')).toBeInTheDocument();
+  });
+
+  it('toggles canonical city value when a casing variant is clicked', () => {
+    const dirtyJobs: JobReadyToSchedule[] = [
+      { ...mockJobs[0], job_id: 'a', city: 'eden prairie ' },
+    ];
+
+    render(
+      <FacetRail
+        jobs={dirtyJobs}
+        facets={initialFacets}
+        onChange={mockOnChange}
+        onClearAll={mockOnClearAll}
+      />
+    );
+
+    const checkbox = screen
+      .getByTestId('facet-value-city-Eden Prairie')
+      .querySelector('button');
+    fireEvent.click(checkbox!);
+
+    expect(mockOnChange).toHaveBeenCalledTimes(1);
+    const updatedFacets = mockOnChange.mock.calls[0][0] as FacetState;
+    expect(updatedFacets.city.has('Eden Prairie')).toBe(true);
+  });
 });

@@ -138,10 +138,50 @@ class JobReadyToSchedule(BaseModel):
     customer_name: str
     job_type: str
     city: str
-    priority: str
+    priority: str  # legacy label, kept for back-compat with older clients
     estimated_duration_minutes: int
     requires_equipment: list[str] = Field(default_factory=list)
     status: str
+    # Extended fields consumed by the Pick-Jobs page (Requirements 4.1, 4.8-4.10)
+    address: str | None = Field(
+        default=None,
+        description="Street address from Property.address",
+    )
+    customer_tags: list[str] = Field(
+        default_factory=list,
+        description="Lowercased CustomerTag.label values for the customer",
+    )
+    property_type: str | None = Field(
+        default=None,
+        description="Property.property_type ('residential' | 'commercial' | None)",
+    )
+    property_is_hoa: bool | None = Field(
+        default=None,
+        description="Property.is_hoa flag",
+    )
+    requested_week: str | None = Field(
+        default=None,
+        description="ISO date string (YYYY-MM-DD, Monday) from Job.target_start_date",
+    )
+    notes: str | None = Field(
+        default=None,
+        description="Job.notes",
+    )
+    priority_level: int = Field(
+        default=0,
+        description="Raw Job.priority_level (0-2)",
+    )
+    effective_priority_level: int = Field(
+        default=0,
+        description=(
+            "Display priority for the picker: max of base priority, "
+            "'priority' tag (=>1), and active service agreement (=>1)."
+        ),
+    )
+    has_active_agreement: bool = Field(
+        default=False,
+        description="True if customer has any ServiceAgreement with status='active'",
+    )
 
 
 class JobsReadyToScheduleResponse(BaseModel):

@@ -34,6 +34,7 @@ import type {
   SortDir,
 } from '../types/pick-jobs';
 import { initialFacets, computeJobTimes } from '../types/pick-jobs';
+import { normalizeCity } from '../utils/city';
 
 function todayIso(): string {
   return new Date().toISOString().split('T')[0];
@@ -117,7 +118,7 @@ export function PickJobsPage() {
         ].join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
       }
-      if (facets.city.size && !facets.city.has(job.city)) return false;
+      if (facets.city.size && !facets.city.has(normalizeCity(job.city) ?? '')) return false;
       if (facets.jobType.size && !facets.jobType.has(job.job_type)) return false;
       if (facets.requestedWeek.size && !facets.requestedWeek.has(job.requested_week ?? '')) return false;
       if (facets.priority.size) {
