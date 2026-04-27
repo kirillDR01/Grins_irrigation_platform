@@ -1,0 +1,1088 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Schedule estimate visit — high-fi reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* ink scale */
+    --ink:   #0B1220;
+    --ink2:  #1F2937;
+    --ink3:  #4B5563;
+    --ink4:  #6B7280;
+    --ink5:  #9CA3AF;
+    /* lines + surfaces */
+    --line:  #E5E7EB;
+    --line2: #F3F4F6;
+    --surf:  #FFFFFF;
+    --soft:  #F9FAFB;
+    --paper: #F3F4F6;
+
+    /* accents */
+    --blue:    #1D4ED8;  --blueBg:    #DBEAFE; --blueBd: #93C5FD;
+    --orange:  #C2410C;  --orangeBg:  #FFEDD5; --orangeBd:#FDBA74;
+    --green:   #047857;  --greenBg:   #D1FAE5; --greenBd: #86EFAC;
+    --amber:   #B45309;  --amberBg:   #FEF3C7; --amberBd: #FCD34D;
+    --red:     #B91C1C;  --redBg:     #FEE2E2; --redBd:   #FCA5A5;
+    --violet:  #6D28D9;  --violetBg:  #EDE9FE; --violetBd:#C4B5FD;
+    --teal:    #0F766E;  --tealBg:    #CCFBF1;
+
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+    --shadow-md: 0 1px 0 rgba(0,0,0,0.04), 0 6px 16px rgba(15, 23, 42, 0.08);
+    --shadow-lg: 0 10px 30px -8px rgba(15, 23, 42, 0.18), 0 4px 12px -4px rgba(15, 23, 42, 0.10);
+
+    --font-ui:   'Inter', -apple-system, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  body { min-height: 100vh; padding: 32px 24px 80px; }
+
+  /* page header (reference chrome — ignored when porting to React) */
+  .page-header { max-width: 1180px; margin: 0 auto 6px; }
+  .eyebrow {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink4); margin: 0 0 8px;
+    white-space: nowrap;
+  }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); flex-shrink: 0; }
+  .page-title { font-size: 28px; font-weight: 800; letter-spacing: -0.022em; margin: 0 0 6px; line-height: 1.1; }
+  .page-sub { color: var(--ink3); font-size: 14.5px; margin: 0; max-width: 780px; line-height: 1.55; }
+
+  /* ─────────── modal shell ─────────── */
+  .stage { max-width: 1180px; margin: 22px auto 0; }
+  .modal {
+    background: var(--surf);
+    border-radius: 18px;
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    border: 1px solid var(--line);
+  }
+  .modal-head {
+    padding: 20px 24px 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .modal-head > .head-main { flex: 1; min-width: 0; }
+  .modal-head .head-meta {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin: 0 0 8px;
+  }
+  .modal-title {
+    font-size: 22px; font-weight: 800; letter-spacing: -0.022em; margin: 0;
+    line-height: 1.15;
+  }
+  .modal-sub {
+    color: var(--ink3); font-size: 13.5px; margin: 4px 0 0; max-width: 680px;
+    line-height: 1.5;
+  }
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: var(--surf); border: 1px solid var(--line);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--ink3); transition: all .15s ease;
+    flex-shrink: 0;
+  }
+  .icon-btn:hover { background: var(--soft); color: var(--ink); }
+
+  /* pills */
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 700; letter-spacing: -0.05px;
+    line-height: 1.4;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .pill.stage-pill { background: var(--orangeBg); color: var(--orange); border-color: var(--orangeBd); }
+  .pill.id    { background: var(--line2);   color: var(--ink2);   border-color: var(--line); font-family: var(--font-mono); font-weight: 600; }
+  .pill.tag-blue   { background: var(--blueBg);   color: var(--blue);   border-color: var(--blueBd); }
+  .pill.tag-green  { background: var(--greenBg);  color: var(--green);  border-color: var(--greenBd); }
+  .pill.tag-violet { background: var(--violetBg); color: var(--violet); border-color: var(--violetBd); }
+  .pill .pdot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* ─────────── body grid ─────────── */
+  .modal-body {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 0;
+    align-items: stretch;
+  }
+  .col-left {
+    padding: 20px 24px 24px;
+    border-right: 1px solid var(--line);
+    background: var(--soft);
+    min-width: 0;
+  }
+  .col-right {
+    padding: 20px 24px 24px;
+    background: var(--surf);
+    min-width: 0;
+  }
+
+  /* customer card */
+  .cust {
+    background: var(--surf);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 14px 12px;
+    box-shadow: var(--shadow-sm);
+  }
+  .cust-head {
+    display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px;
+  }
+  .cust-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, #1F2937, #4B5563);
+    color: #fff; font-weight: 700; font-size: 14px;
+    display: grid; place-items: center; flex-shrink: 0;
+    letter-spacing: -0.5px;
+  }
+  .cust-name { font-size: 15px; font-weight: 700; color: var(--ink); line-height: 1.2; margin: 0 0 2px; }
+  .cust-source { font-size: 11.5px; color: var(--ink4); display: inline-flex; align-items: center; gap: 4px; }
+  .cust-source .lk { color: var(--blue); text-decoration: none; font-weight: 600; }
+  .cust-source .lk:hover { text-decoration: underline; }
+  .cust-rows { display: flex; flex-direction: column; gap: 6px; }
+  .cust-row {
+    display: grid; grid-template-columns: 16px 1fr; gap: 8px;
+    font-size: 12.5px; color: var(--ink2); align-items: center;
+  }
+  .cust-row .ic { color: var(--ink5); }
+  .cust-row .v { font-weight: 500; color: var(--ink2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cust-row.job .v { font-weight: 600; }
+  .cust-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+
+  /* form fields */
+  .field-grid { display: grid; gap: 14px; margin-top: 18px; }
+  .field-grid.two { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field { display: block; min-width: 0; }
+  .field-label {
+    display: block; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ink4); margin: 0 0 6px;
+  }
+  .field-label.opt::after {
+    content: 'optional';
+    font-weight: 500; text-transform: none; letter-spacing: 0;
+    color: var(--ink5); margin-left: 6px; font-size: 10.5px;
+  }
+  .input, .select, .textarea {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--surf);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-family: var(--font-ui);
+    font-size: 13.5px; font-weight: 500;
+    color: var(--ink);
+    transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    line-height: 1.4;
+  }
+  .input:hover, .select:hover, .textarea:hover { border-color: var(--ink5); }
+  .input:focus, .select:focus, .textarea:focus {
+    outline: none; border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+    background: var(--surf);
+  }
+  .input.mono, .select.mono { font-family: var(--font-mono); font-weight: 600; }
+  .textarea { min-height: 64px; resize: vertical; }
+  .select {
+    appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat: no-repeat; background-position: right 10px center;
+    padding-right: 32px;
+  }
+
+  /* avatar select (assignee) */
+  .assignee-row {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .assignee-avatars {
+    display: inline-flex; gap: 0; padding: 0;
+  }
+  .assignee-avatars .av {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2px solid var(--surf);
+    margin-left: -6px;
+    background: var(--ink3); color: #fff;
+    font-size: 10px; font-weight: 700;
+    display: grid; place-items: center;
+  }
+  .assignee-avatars .av:first-child { margin-left: 0; }
+
+  /* pick summary card */
+  .summary {
+    margin-top: 16px;
+    padding: 12px 14px;
+    background: var(--surf);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow-sm);
+  }
+  .summary.empty {
+    background: repeating-linear-gradient(135deg, transparent 0 6px, rgba(15,23,42,0.025) 6px 12px), var(--soft);
+    border-style: dashed; border-color: var(--line);
+    box-shadow: none;
+    color: var(--ink4); font-size: 12.5px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .summary .s-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .summary .s-when {
+    font-size: 15px; font-weight: 800; color: var(--ink); letter-spacing: -0.01em;
+  }
+  .summary .s-time {
+    font-size: 13px; font-family: var(--font-mono); font-weight: 600; color: var(--ink2);
+    margin-top: 1px;
+  }
+  .summary .s-meta {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    font-size: 11.5px; color: var(--ink4); margin-top: 8px;
+    padding-top: 8px; border-top: 1px dashed var(--line);
+  }
+  .summary .s-meta b { color: var(--ink2); font-weight: 600; }
+  .summary .s-meta .dur { color: var(--ink); font-weight: 700; }
+
+  .conflict {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: var(--redBg);
+    border: 1px solid var(--redBd);
+    border-radius: 10px;
+    display: none;
+    gap: 10px;
+    align-items: start;
+    font-size: 12.5px; color: #5A1A12; line-height: 1.5;
+  }
+  .conflict.on { display: flex; }
+  .conflict .ic { color: var(--red); flex-shrink: 0; margin-top: 1px; }
+  .conflict b { color: var(--red); font-weight: 700; }
+
+  /* week calendar */
+  .wkcal {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surf);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+  .wkcal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 12px 14px;
+    background: var(--surf);
+    border-bottom: 1px solid var(--line);
+  }
+  .wkcal-head-left { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .wkcal-head .wk-label {
+    font-size: 15px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em;
+    line-height: 1;
+  }
+  .wkcal-head .wk-range {
+    color: var(--ink4); font-size: 11.5px; font-family: var(--font-mono); font-weight: 500;
+  }
+  .wkcal-nav { display: flex; gap: 4px; align-items: center; }
+  .wkcal-nav button {
+    height: 32px; padding: 0 12px;
+    border: 1px solid var(--line); background: var(--surf);
+    color: var(--ink2); font-size: 12.5px; font-weight: 600;
+    border-radius: 8px; cursor: pointer; transition: all .15s ease;
+    font-family: var(--font-ui);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .wkcal-nav button:hover { background: var(--soft); border-color: var(--ink5); }
+  .wkcal-nav button.icon { padding: 0; width: 32px; }
+  .wkcal-nav button.today { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .wkcal-nav button.today:hover { background: var(--ink2); }
+
+  /* grid */
+  .wkcal-grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: 64px repeat(7, 1fr);
+    grid-template-rows: 44px;
+    grid-auto-rows: 22px;
+    user-select: none;
+    background: var(--surf);
+  }
+  .wkcal-corner { background: var(--surf); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .wkcal-daycol-head {
+    padding: 8px 4px; text-align: center;
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background: var(--surf);
+  }
+  .wkcal-daycol-head .dow {
+    color: var(--ink4); font-size: 10.5px; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .wkcal-daycol-head .dnum {
+    font-size: 14px; color: var(--ink2); font-weight: 700;
+    width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+  }
+  .wkcal-daycol-head.today .dow { color: var(--blue); }
+  .wkcal-daycol-head.today .dnum { background: var(--blue); color: #fff; }
+  .wkcal-daycol-head.weekend .dow { color: var(--ink5); }
+  .wkcal-daycol-head.weekend .dnum { color: var(--ink4); }
+
+  .wkcal-timecell {
+    padding: 0 6px 0 0;
+    text-align: right;
+    color: var(--ink5);
+    font-size: 10px;
+    font-family: var(--font-mono);
+    font-weight: 500;
+    border-right: 1px solid var(--line);
+    background: var(--surf);
+    position: relative;
+    top: -7px;
+    line-height: 1;
+  }
+  .wkcal-timecell.hour { color: var(--ink4); }
+  .wkcal-slot {
+    border-right: 1px solid var(--line2);
+    border-bottom: 1px dashed var(--line2);
+    cursor: cell;
+    position: relative;
+    transition: background .12s ease;
+  }
+  .wkcal-slot.hour { border-bottom: 1px solid var(--line); }
+  .wkcal-slot:last-child { border-right: 1px solid var(--line); } /* sat */
+  .wkcal-slot.weekend { background: rgba(243, 244, 246, 0.4); }
+  .wkcal-slot.past   {
+    background: repeating-linear-gradient(135deg, transparent 0 4px, rgba(15,23,42,0.03) 4px 5px);
+    cursor: not-allowed;
+  }
+  .wkcal-slot:not(.past):hover { background: var(--blueBg); opacity: .55; }
+
+  /* now-line */
+  .wkcal-now {
+    position: absolute; height: 0; border-top: 2px solid var(--red);
+    pointer-events: none; z-index: 4;
+  }
+  .wkcal-now::before {
+    content: ''; position: absolute; left: -5px; top: -5px;
+    width: 8px; height: 8px; border-radius: 50%; background: var(--red);
+    box-shadow: 0 0 0 2px rgba(185, 28, 28, .15);
+  }
+
+  /* existing estimate blocks */
+  .wkcal-evt {
+    position: absolute;
+    background: var(--surf);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--ink4);
+    border-radius: 6px;
+    padding: 4px 6px;
+    font-family: var(--font-ui);
+    font-size: 10.5px;
+    color: var(--ink2);
+    line-height: 1.2;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    cursor: default;
+    z-index: 1;
+  }
+  .wkcal-evt .evt-name {
+    font-weight: 700;
+    color: var(--ink);
+    white-space: nowrap; text-overflow: ellipsis; overflow: hidden;
+    font-size: 11px;
+    letter-spacing: -0.01em;
+  }
+  .wkcal-evt .evt-meta {
+    color: var(--ink4); font-size: 10px; font-weight: 500;
+    white-space: nowrap; text-overflow: ellipsis; overflow: hidden;
+  }
+  .wkcal-evt.tone-blue   { border-left-color: var(--blue); }
+  .wkcal-evt.tone-green  { border-left-color: var(--green); }
+  .wkcal-evt.tone-violet { border-left-color: var(--violet); }
+  .wkcal-evt.tone-amber  { border-left-color: var(--amber); }
+  .wkcal-evt.tone-teal   { border-left-color: var(--teal); }
+
+  .wkcal-evt.conflict {
+    border-color: var(--redBd);
+    border-left-color: var(--red);
+    background: var(--redBg);
+  }
+
+  /* pick block */
+  .wkcal-pick {
+    position: absolute;
+    background: linear-gradient(180deg, #1D4ED8, #1E40AF);
+    color: #fff;
+    border: 2px solid var(--blue);
+    border-radius: 8px;
+    padding: 5px 7px;
+    font-family: var(--font-ui);
+    font-size: 11.5px;
+    font-weight: 700;
+    line-height: 1.2;
+    box-shadow: 0 4px 10px -2px rgba(29, 78, 216, 0.4), 0 1px 2px rgba(15, 23, 42, 0.1);
+    z-index: 3;
+    pointer-events: none;
+    overflow: hidden;
+    letter-spacing: -0.01em;
+  }
+  .wkcal-pick .pick-name {
+    display: flex; align-items: center; gap: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .wkcal-pick .pick-when {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 600;
+    opacity: .9; margin-top: 1px;
+  }
+  .wkcal-pick .pick-dur {
+    font-weight: 500; font-size: 10px; opacity: .8;
+  }
+  .wkcal-pick.warn {
+    background: linear-gradient(180deg, #B91C1C, #991B1B);
+    border-color: var(--red);
+    box-shadow: 0 4px 10px -2px rgba(185, 28, 28, 0.4), 0 1px 2px rgba(15, 23, 42, 0.1);
+  }
+
+  .wkcal-drag {
+    position: absolute;
+    background: rgba(29, 78, 216, 0.16);
+    border: 2px dashed var(--blue);
+    border-radius: 6px;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  /* legend */
+  .wkcal-legend {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 10px 14px;
+    border-top: 1px solid var(--line);
+    background: var(--soft);
+    font-size: 11.5px; color: var(--ink4); font-weight: 500;
+  }
+  .wkcal-legend .lg-item { display: inline-flex; align-items: center; gap: 6px; }
+  .wkcal-legend .sw {
+    display: inline-block; width: 14px; height: 10px;
+    border-radius: 3px; flex-shrink: 0;
+  }
+  .wkcal-legend .sw.evt {
+    background: var(--surf); border: 1px solid var(--line); border-left: 3px solid var(--ink4);
+  }
+  .wkcal-legend .sw.pick { background: var(--blue); border: 2px solid var(--blue); }
+  .wkcal-legend .sw.conflict { background: var(--redBg); border: 1px solid var(--redBd); border-left: 3px solid var(--red); }
+  .wkcal-legend .sep { color: var(--line); }
+  .wkcal-legend .hint { margin-left: auto; color: var(--ink5); }
+  .wkcal-legend kbd {
+    display: inline-block;
+    padding: 1px 5px;
+    background: var(--surf);
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--ink2);
+  }
+
+  /* footer / actions */
+  .modal-foot {
+    padding: 16px 24px;
+    border-top: 1px solid var(--line);
+    background: var(--soft);
+    display: flex; align-items: center; justify-content: flex-end;
+    gap: 14px; flex-wrap: wrap;
+  }
+  .send-toggle {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--ink2); font-weight: 500;
+    cursor: pointer; user-select: none;
+  }
+  .send-toggle input {
+    appearance: none; -webkit-appearance: none;
+    width: 32px; height: 18px; background: var(--ink5);
+    border-radius: 999px; position: relative; cursor: pointer;
+    transition: background .15s ease; flex-shrink: 0;
+  }
+  .send-toggle input::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; background: #fff;
+    border-radius: 50%; transition: transform .15s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  .send-toggle input:checked { background: var(--green); }
+  .send-toggle input:checked::after { transform: translateX(14px); }
+
+  .actions { display: inline-flex; gap: 8px; align-items: center; }
+  .btn {
+    height: 40px; padding: 0 18px;
+    border-radius: 10px;
+    font-family: var(--font-ui);
+    font-size: 13.5px; font-weight: 700;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px;
+    transition: all .15s ease;
+    border: 1px solid transparent;
+  }
+  .btn.ghost {
+    background: transparent; color: var(--ink3); border-color: transparent;
+  }
+  .btn.ghost:hover { background: var(--line2); color: var(--ink); }
+  .btn.secondary {
+    background: var(--surf); color: var(--ink2); border-color: var(--line);
+    box-shadow: var(--shadow-sm);
+  }
+  .btn.secondary:hover { background: var(--soft); border-color: var(--ink5); }
+  .btn.primary {
+    background: var(--ink); color: #fff; border-color: var(--ink);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.1), 0 4px 8px rgba(15,23,42,0.16);
+  }
+  .btn.primary:hover { background: var(--ink2); }
+  .btn.primary:disabled {
+    background: var(--ink5); border-color: var(--ink5); cursor: not-allowed;
+    box-shadow: none; color: rgba(255,255,255,0.85);
+  }
+  .btn .arr { opacity: .8; }
+
+  /* inline icon style */
+  .ic { display: inline-flex; flex-shrink: 0; }
+
+  /* annotation strip */
+  .anno {
+    max-width: 1180px; margin: 22px auto 0;
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+  }
+  .a-card {
+    background: var(--surf);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 12.5px; color: var(--ink3); line-height: 1.55;
+  }
+  .a-card .a-eyebrow {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--ink4); margin: 0 0 6px;
+  }
+  .a-card .a-num {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--ink); color: #fff;
+    font-size: 10px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .a-card b { color: var(--ink); font-weight: 700; }
+  .a-card code {
+    font-family: var(--font-mono); font-size: 11.5px;
+    background: var(--line2); padding: 1px 5px; border-radius: 4px;
+    color: var(--ink2); font-weight: 500;
+  }
+  /* responsive — collapse to one column if narrow */
+  @media (max-width: 880px) {
+    .modal-body { grid-template-columns: 1fr; }
+    .col-left { border-right: none; border-bottom: 1px solid var(--line); }
+    .anno { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div class="eyebrow"><span class="dot"></span>Sales · Stage 1 · Schedule estimate</div>
+  <h1 class="page-title">Schedule estimate visit — high-fidelity reference</h1>
+  <p class="page-sub">
+    Modal that opens from the <b>Schedule visit</b> action on the Stage Walkthrough Now card.
+    Pre-fills customer info from the lead, lets the user pick a slot on the week calendar,
+    then confirms &amp; advances the entry to <b>Send Estimate</b>.
+  </p>
+</div>
+
+<div class="stage">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="sched-title">
+    <!-- HEAD -->
+    <header class="modal-head">
+      <div class="head-main">
+        <div class="head-meta">
+          <span class="pill stage-pill">
+            <span class="pdot"></span>
+            Stage 1 · Schedule estimate
+          </span>
+          <span class="pill id">SAL-1428</span>
+          <span class="pill tag-green"><span class="pdot"></span>New lead</span>
+        </div>
+        <h2 class="modal-title" id="sched-title">Schedule estimate visit</h2>
+        <p class="modal-sub">
+          Customer details are pre-filled from the lead record.
+          Pick a time on the calendar — click a slot to pin a start, or drag to set both start &amp; duration.
+        </p>
+      </div>
+      <button class="icon-btn" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </header>
+
+    <!-- BODY -->
+    <div class="modal-body">
+      <!-- LEFT COLUMN -->
+      <div class="col-left">
+        <!-- Customer card -->
+        <section class="cust" role="group" aria-label="Customer information">
+          <div class="cust-head">
+            <div class="cust-avatar">VP</div>
+            <div style="min-width:0;flex:1">
+              <h3 class="cust-name">Viktor Petrov</h3>
+              <div class="cust-source">
+                <svg class="ic" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h7v7"/><path d="M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
+                from <a href="#" class="lk">Leads · LD-2087</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="cust-rows">
+            <div class="cust-row">
+              <svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92Z"/></svg>
+              <span class="v" style="font-family:var(--font-mono); font-weight:600;">(555) 234-9918</span>
+            </div>
+            <div class="cust-row">
+              <svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 7 9-7"/></svg>
+              <span class="v">viktor.p@example.com</span>
+            </div>
+            <div class="cust-row">
+              <svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 7-8 12-8 12S4 17 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+              <span class="v">1428 Maple Dr, Ann Arbor, MI 48103</span>
+            </div>
+            <div class="cust-row job">
+              <svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a3 3 0 0 0-4.2 4.2L3 18l3 3 7.5-7.5a3 3 0 0 0 4.2-4.2l-1.8 1.8L14 9l1.5-1.5-0.8-1.2Z"/></svg>
+              <span class="v">Sprinkler install · ~6 zone yard</span>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- Form fields -->
+        <div class="field-grid">
+          <div class="field-grid two">
+            <div class="field">
+              <label class="field-label" for="sm-date">Date</label>
+              <input type="date" id="sm-date" class="input mono" value="2026-04-23" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="sm-time">Start time</label>
+              <input type="time" id="sm-time" class="input mono" step="1800" value="14:00" />
+            </div>
+          </div>
+
+          <div class="field-grid two">
+            <div class="field">
+              <label class="field-label" for="sm-assignee">Assigned to</label>
+              <select id="sm-assignee" class="select">
+                <option>Kirill Drobinin</option>
+                <option>Mike Reeves</option>
+                <option>Maria Gonzalez</option>
+                <option>Team — first available</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="sm-dur">Duration</label>
+              <select id="sm-dur" class="select mono">
+                <option value="30">30 min</option>
+                <option value="60" selected>1 hr</option>
+                <option value="90">1 hr 30 min</option>
+                <option value="120">2 hr</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label opt" for="sm-notes">Internal notes</label>
+            <textarea id="sm-notes" class="textarea" placeholder="Gate code 4412. Large corner lot, sketched zones in intake call…"></textarea>
+          </div>
+        </div>
+
+        <!-- Pick summary -->
+        <div class="summary" id="sm-summary">
+          <div class="s-head">
+            <span class="pill tag-blue"><span class="pdot"></span>Picked</span>
+          </div>
+          <div class="s-when" id="sm-when">Thu, Apr 23, 2026</div>
+          <div class="s-time" id="sm-timestr">2:00 PM – 3:00 PM</div>
+          <div class="s-meta">
+            <span><b>Duration</b> <span class="dur" id="sm-durstr">1 hr</span></span>
+            <span><b>Assignee</b> Kirill</span>
+          </div>
+        </div>
+
+        <div class="conflict" id="sm-warn" role="alert">
+          <svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5M12 16v.5"/></svg>
+          <span>
+            <b>Overlaps</b> with an existing estimate on the same day. You can still proceed, but double-check.
+          </span>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN — calendar -->
+      <div class="col-right">
+        <div class="wkcal" id="sm-cal">
+          <div class="wkcal-head">
+            <div class="wkcal-head-left">
+              <span class="wk-label" id="sm-wkLabel">Week of Apr 20</span>
+              <span class="wk-range" id="sm-wkRange">Apr 20 – 26, 2026</span>
+            </div>
+            <div class="wkcal-nav">
+              <button class="icon" id="sm-wkPrev" aria-label="Previous week">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <button class="today" id="sm-wkToday">Today</button>
+              <button class="icon" id="sm-wkNext" aria-label="Next week">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="wkcal-grid" id="sm-grid"></div>
+          <div class="wkcal-legend">
+            <span class="lg-item"><span class="sw evt"></span>Existing estimate</span>
+            <span class="lg-item"><span class="sw conflict"></span>Conflict</span>
+            <span class="lg-item"><span class="sw pick"></span>Your pick</span>
+            <span class="hint">
+              <kbd>Click</kbd> pin start · <kbd>Drag</kbd> set range
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FOOT -->
+    <footer class="modal-foot">
+      <div class="actions">
+        <button class="btn ghost">Cancel</button>
+        <button class="btn primary" id="sm-confirm">
+          Confirm &amp; advance to Send Estimate
+          <svg class="arr" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<div class="anno">
+  <div class="a-card">
+    <div class="a-eyebrow"><span class="a-num">1</span>Pre-fill source</div>
+    Customer block is read-only — values come from <code>SalesEntry.customer_*</code> + the linked <code>lead_id</code>. Edits go to the Lead detail screen, not this modal.
+  </div>
+  <div class="a-card">
+    <div class="a-eyebrow"><span class="a-num">2</span>Calendar layer</div>
+    30-min slots, 6 AM – 8 PM. Existing estimates render as left-bordered cards (read-only); the picked slot renders solid blue. Same-date overlaps flip the pick + the conflicting block to red.
+  </div>
+  <div class="a-card">
+    <div class="a-eyebrow"><span class="a-num">3</span>Confirm</div>
+    On submit: <code>POST /sales/:id/schedule-visit</code> + advance status to <code>estimate_scheduled</code>. Modal closes, stepper badge becomes <code>📅 Apr 23 · 2 PM</code>.
+  </div>
+</div>
+
+<script>
+  // ============ SCHED MODAL CALENDAR ============
+  (function schedCal(){
+    const TODAY = new Date(2026, 3, 21);   // Apr 21, 2026 (Tue)
+    const NOW_MIN = 10 * 60 + 35;          // "now" = 10:35 AM for demo
+
+    // Existing estimates seeded with assignee tones for variety
+    const ESTIMATES = [
+      { date:'2026-04-20', start: 9*60,    end: 10*60,     name:'M. Ortiz',     meta:'Spring startup',   tone:'green'  },
+      { date:'2026-04-20', start: 13*60+30,end: 15*60,     name:'Roberts HOA',  meta:'Winterization',    tone:'amber'  },
+      { date:'2026-04-21', start: 8*60,    end: 9*60+30,   name:'D. Chen',      meta:'Leak diag.',       tone:'blue'   },
+      { date:'2026-04-22', start: 11*60,   end: 12*60+30,  name:'K. Nakamura',  meta:'Backflow test',    tone:'violet' },
+      { date:'2026-04-22', start: 15*60,   end: 16*60,     name:'T. Alvarez',   meta:'Add-on zone',      tone:'green'  },
+      { date:'2026-04-23', start: 10*60,   end: 11*60+30,  name:'L. Greenwood', meta:'Spring startup',   tone:'green'  },
+      { date:'2026-04-24', start: 9*60+30, end: 11*60,     name:'S. Patel',     meta:'Install',          tone:'teal'   },
+      { date:'2026-04-24', start: 13*60,   end: 14*60,     name:'R. Okafor',    meta:'Winterization',    tone:'amber'  },
+      { date:'2026-04-25', start: 10*60,   end: 11*60,     name:'Cinda B.',     meta:'Spring startup',   tone:'green'  },
+    ];
+
+    const HOUR_START = 6, HOUR_END = 20, SLOT_MIN = 30, SLOT_PX = 22;
+    const SLOTS_PER_DAY = (HOUR_END - HOUR_START) * 60 / SLOT_MIN;
+
+    const fmtMonD = d => d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+    const fmtRange = (a, b) => {
+      const sm = a.toLocaleDateString('en-US', { month:'short' });
+      const em = b.toLocaleDateString('en-US', { month:'short' });
+      const y  = b.getFullYear();
+      if (sm === em) return `${sm} ${a.getDate()} – ${b.getDate()}, ${y}`;
+      return `${sm} ${a.getDate()} – ${em} ${b.getDate()}, ${y}`;
+    };
+    const fmtLongDate = d => d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' });
+    const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const startOfWeek = d => {
+      const nd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const day = nd.getDay();
+      const diff = (day === 0 ? -6 : 1 - day);
+      nd.setDate(nd.getDate() + diff);
+      return nd;
+    };
+    const fmtHM = mins => {
+      const h = Math.floor(mins/60), m = mins%60;
+      const ap = h >= 12 ? 'PM' : 'AM';
+      const h12 = ((h+11)%12)+1;
+      return `${h12}:${String(m).padStart(2,'0')} ${ap}`;
+    };
+    const fmtDur = mins => mins < 60 ? `${mins} min` : (mins%60 === 0 ? `${mins/60} hr` : `${Math.floor(mins/60)}h ${mins%60}m`);
+
+    let weekStart = startOfWeek(TODAY);
+    let pick = { date:'2026-04-23', start: 14*60, end: 15*60 };
+    let drag = null;
+
+    const el = {
+      grid:   document.getElementById('sm-grid'),
+      label:  document.getElementById('sm-wkLabel'),
+      range:  document.getElementById('sm-wkRange'),
+      prev:   document.getElementById('sm-wkPrev'),
+      next:   document.getElementById('sm-wkNext'),
+      today:  document.getElementById('sm-wkToday'),
+      date:   document.getElementById('sm-date'),
+      time:   document.getElementById('sm-time'),
+      dur:    document.getElementById('sm-dur'),
+      summary:document.getElementById('sm-summary'),
+      when:   document.getElementById('sm-when'),
+      timestr:document.getElementById('sm-timestr'),
+      durstr: document.getElementById('sm-durstr'),
+      warn:   document.getElementById('sm-warn'),
+      confirm:document.getElementById('sm-confirm'),
+    };
+
+    function buildGrid() {
+      const g = el.grid;
+      g.innerHTML = '';
+      const corner = document.createElement('div');
+      corner.className = 'wkcal-corner';
+      g.appendChild(corner);
+
+      const days = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(weekStart); d.setDate(d.getDate() + i);
+        days.push(d);
+        const h = document.createElement('div');
+        h.className = 'wkcal-daycol-head';
+        if (iso(d) === iso(TODAY)) h.classList.add('today');
+        if (d.getDay() === 0 || d.getDay() === 6) h.classList.add('weekend');
+        h.innerHTML = `<div class="dow">${d.toLocaleDateString('en-US',{weekday:'short'})}</div><div class="dnum">${d.getDate()}</div>`;
+        g.appendChild(h);
+      }
+
+      for (let s = 0; s < SLOTS_PER_DAY; s++) {
+        const mins = HOUR_START*60 + s*SLOT_MIN;
+        const isHour = mins % 60 === 0;
+        const tc = document.createElement('div');
+        tc.className = 'wkcal-timecell' + (isHour ? ' hour' : '');
+        // Show only on the hour, formatted compact
+        if (isHour) {
+          const h = Math.floor(mins/60);
+          const ap = h >= 12 ? 'p' : 'a';
+          const h12 = ((h+11)%12)+1;
+          tc.textContent = `${h12} ${ap}`;
+        }
+        g.appendChild(tc);
+        for (let d = 0; d < 7; d++) {
+          const cell = document.createElement('div');
+          cell.className = 'wkcal-slot' + (isHour ? ' hour' : '');
+          cell.dataset.day = d;
+          cell.dataset.slot = s;
+          const dayDate = days[d];
+          const isToday = iso(dayDate) === iso(TODAY);
+          if (dayDate.getDay() === 0 || dayDate.getDay() === 6) cell.classList.add('weekend');
+          if (dayDate < new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate())) {
+            cell.classList.add('past');
+          } else if (isToday && mins < NOW_MIN) {
+            cell.classList.add('past');
+          }
+          g.appendChild(cell);
+        }
+      }
+
+      const wkEnd = new Date(weekStart); wkEnd.setDate(wkEnd.getDate() + 6);
+      el.label.textContent = `Week of ${fmtMonD(weekStart)}`;
+      el.range.textContent = fmtRange(weekStart, wkEnd);
+      paintOverlays(days);
+    }
+
+    function paintOverlays(days) {
+      const g = el.grid;
+      g.querySelectorAll('.wkcal-evt, .wkcal-pick, .wkcal-drag, .wkcal-now').forEach(n => n.remove());
+
+      const colLeftPct = i => `calc(64px + ${i} * ((100% - 64px) / 7))`;
+      const colWidthPct = `calc((100% - 64px) / 7)`;
+      const HEADER_PX = 44;
+
+      const todayIdx = days.findIndex(d => iso(d) === iso(TODAY));
+      if (todayIdx >= 0 && NOW_MIN >= HOUR_START*60 && NOW_MIN <= HOUR_END*60) {
+        const now = document.createElement('div');
+        now.className = 'wkcal-now';
+        const topPx = HEADER_PX + ((NOW_MIN - HOUR_START*60) / SLOT_MIN) * SLOT_PX;
+        now.style.top = topPx + 'px';
+        now.style.left = colLeftPct(todayIdx);
+        now.style.width = colWidthPct;
+        g.appendChild(now);
+      }
+
+      days.forEach((d, di) => {
+        const dISO = iso(d);
+        ESTIMATES.filter(e => e.date === dISO).forEach(e => {
+          const evt = document.createElement('div');
+          evt.className = 'wkcal-evt' + (e.tone ? ' tone-' + e.tone : '');
+          const startSlot = (e.start - HOUR_START*60) / SLOT_MIN;
+          const durSlots = (e.end - e.start) / SLOT_MIN;
+          evt.style.top = (HEADER_PX + startSlot * SLOT_PX) + 'px';
+          evt.style.height = (durSlots * SLOT_PX - 3) + 'px';
+          evt.style.left = `calc(${colLeftPct(di)} + 3px)`;
+          evt.style.width = `calc(${colWidthPct} - 6px)`;
+          evt.innerHTML = `<div class="evt-name">${e.name}</div><div class="evt-meta">${fmtHM(e.start)} · ${e.meta}</div>`;
+          if (pick && pick.date === dISO && !(e.end <= pick.start || e.start >= pick.end)) {
+            evt.classList.add('conflict');
+          }
+          g.appendChild(evt);
+        });
+      });
+
+      if (pick) {
+        const di = days.findIndex(d => iso(d) === pick.date);
+        if (di >= 0) {
+          const p = document.createElement('div');
+          p.className = 'wkcal-pick';
+          const startSlot = (pick.start - HOUR_START*60) / SLOT_MIN;
+          const durSlots = (pick.end - pick.start) / SLOT_MIN;
+          p.style.top = (HEADER_PX + startSlot * SLOT_PX) + 'px';
+          p.style.height = (durSlots * SLOT_PX - 3) + 'px';
+          p.style.left = `calc(${colLeftPct(di)} + 3px)`;
+          p.style.width = `calc(${colWidthPct} - 6px)`;
+          p.innerHTML = `
+            <div class="pick-name">Viktor Petrov</div>
+            <div class="pick-when">${fmtHM(pick.start)} – ${fmtHM(pick.end)}</div>
+            <div class="pick-dur">${fmtDur(pick.end - pick.start)}</div>
+          `;
+          if (hasConflict()) p.classList.add('warn');
+          g.appendChild(p);
+        }
+      }
+
+      if (drag) {
+        const di = drag.dayIdx;
+        const s1 = Math.min(drag.startSlotIdx, drag.curSlotIdx);
+        const s2 = Math.max(drag.startSlotIdx, drag.curSlotIdx) + 1;
+        const dragEl = document.createElement('div');
+        dragEl.className = 'wkcal-drag';
+        dragEl.style.top = (HEADER_PX + s1 * SLOT_PX) + 'px';
+        dragEl.style.height = ((s2 - s1) * SLOT_PX - 3) + 'px';
+        dragEl.style.left = `calc(${colLeftPct(di)} + 3px)`;
+        dragEl.style.width = `calc(${colWidthPct} - 6px)`;
+        g.appendChild(dragEl);
+      }
+    }
+
+    function hasConflict() {
+      if (!pick) return false;
+      return ESTIMATES.some(e =>
+        e.date === pick.date &&
+        !(e.end <= pick.start || e.start >= pick.end)
+      );
+    }
+
+    function syncFieldsFromPick() {
+      if (!pick) return;
+      el.date.value = pick.date;
+      el.time.value = String(Math.floor(pick.start/60)).padStart(2,'0') + ':' + String(pick.start%60).padStart(2,'0');
+      const dur = pick.end - pick.start;
+      const opts = [...el.dur.options].map(o => +o.value);
+      const best = opts.reduce((a,b) => Math.abs(b-dur) < Math.abs(a-dur) ? b : a);
+      el.dur.value = String(best);
+
+      const dObj = new Date(pick.date+'T12:00');
+      el.when.textContent = fmtLongDate(dObj);
+      el.timestr.textContent = `${fmtHM(pick.start)} – ${fmtHM(pick.end)}`;
+      el.durstr.textContent = fmtDur(dur);
+      el.warn.classList.toggle('on', hasConflict());
+    }
+
+    function syncPickFromFields() {
+      const d = el.date.value;
+      const [hh, mm] = el.time.value.split(':').map(Number);
+      if (!d || isNaN(hh)) return;
+      const startMin = hh*60 + mm;
+      const durMin = +el.dur.value;
+      pick = { date: d, start: startMin, end: startMin + durMin };
+      const picked = new Date(d + 'T12:00');
+      const ws = startOfWeek(picked);
+      if (iso(ws) !== iso(weekStart)) weekStart = ws;
+      buildGrid();
+      syncFieldsFromPick();
+    }
+
+    el.prev.addEventListener('click', () => { weekStart.setDate(weekStart.getDate()-7); buildGrid(); });
+    el.next.addEventListener('click', () => { weekStart.setDate(weekStart.getDate()+7); buildGrid(); });
+    el.today.addEventListener('click', () => { weekStart = startOfWeek(TODAY); buildGrid(); });
+
+    el.grid.addEventListener('mousedown', (ev) => {
+      const slot = ev.target.closest('.wkcal-slot');
+      if (!slot || slot.classList.contains('past')) return;
+      ev.preventDefault();
+      const dayIdx = +slot.dataset.day;
+      const slotIdx = +slot.dataset.slot;
+      drag = { dayIdx, startSlotIdx: slotIdx, curSlotIdx: slotIdx, moved: false };
+      const onMove = (e2) => {
+        const s = e2.target.closest && e2.target.closest('.wkcal-slot');
+        if (!s) return;
+        const di = +s.dataset.day;
+        const si = +s.dataset.slot;
+        if (di !== drag.dayIdx) return;
+        if (si !== drag.curSlotIdx) {
+          drag.curSlotIdx = si;
+          drag.moved = true;
+          const days = [];
+          for (let i = 0; i < 7; i++) { const d = new Date(weekStart); d.setDate(d.getDate()+i); days.push(d); }
+          paintOverlays(days);
+        }
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (!drag) return;
+        const dayDate = new Date(weekStart); dayDate.setDate(dayDate.getDate() + drag.dayIdx);
+        const s1 = Math.min(drag.startSlotIdx, drag.curSlotIdx);
+        const s2 = Math.max(drag.startSlotIdx, drag.curSlotIdx) + 1;
+        const startMin = HOUR_START*60 + s1 * SLOT_MIN;
+        const endMin   = HOUR_START*60 + s2 * SLOT_MIN;
+        if (drag.moved) {
+          pick = { date: iso(dayDate), start: startMin, end: endMin };
+        } else {
+          const durMin = +el.dur.value;
+          pick = { date: iso(dayDate), start: startMin, end: startMin + durMin };
+        }
+        drag = null;
+        buildGrid();
+        syncFieldsFromPick();
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+
+    ['sm-date','sm-time','sm-dur'].forEach(id => {
+      document.getElementById(id).addEventListener('change', syncPickFromFields);
+    });
+
+    buildGrid();
+    syncFieldsFromPick();
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Appointment Modal — with Estimates</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  html, body { margin: 0; padding: 0; background: #f0eee9; font-family: 'Inter', sans-serif; }
+  * { box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="modal.jsx"></script>
+<script type="text/babel" src="payment-sheet.jsx"></script>
+<script type="text/babel" src="estimate-sheet.jsx"></script>
+
+<script type="text/babel">
+function Frame({ children, bg = '#E7E4DD' }) {
+  return <div style={{ padding: 24, height: '100%', background: bg, display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>{children}</div>;
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+      <DCSection id="modal" title="Appointment modal · with Estimate button"
+        subtitle="Same modal as before — now with a 'Send estimate' button directly below 'Collect payment'. Tapping it opens the estimate sheet (state 1).">
+        <DCArtboard id="m-admin" label="Admin · on site (entry point)" width={608} height={1320}>
+          <div style={{ padding: 20, height: '100%' }}><AppointmentModal role="admin" step={2} showEstimate/></div>
+        </DCArtboard>
+        <DCArtboard id="m-tech" label="Tech · on site" width={608} height={1280}>
+          <div style={{ padding: 20, height: '100%' }}><AppointmentModal role="tech" step={2} showEstimate/></div>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="estimate-flow" title="Estimate flow"
+        subtitle="Mirrors the Collect Payment pattern: pick line items from a searchable list (or add custom), send via SMS or email, customer replies YES/NO.">
+        <DCArtboard id="e1" label="1 · Send estimate · empty" width={608} height={820}>
+          <Frame><E1_Start/></Frame>
+        </DCArtboard>
+        <DCArtboard id="e2" label="2 · Pick line item (search)" width={608} height={1040}>
+          <Frame><E2_Picker/></Frame>
+        </DCArtboard>
+        <DCArtboard id="e3" label="3 · Review & send" width={608} height={1040}>
+          <Frame><E3_Ready/></Frame>
+        </DCArtboard>
+        <DCArtboard id="e4" label="4 · SMS preview (plain text)" width={608} height={900}>
+          <Frame><E4_Preview/></Frame>
+        </DCArtboard>
+        <DCArtboard id="e5" label="5 · Sent · awaiting reply" width={608} height={860}>
+          <Frame><E5_Waiting/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="customer" title="Customer side · on their phone"
+        subtitle="Plain text SMS with inline Approve / Decline buttons. No fancy template needed — just clear copy + two big buttons.">
+        <DCArtboard id="c1" label="Customer receives SMS + decides" width={480} height={880}>
+          <Frame bg="#D8D4CC"><E6_CustomerSMS/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="outcomes" title="Back in the app · outcomes">
+        <DCArtboard id="o1" label="Approved" width={608} height={780}>
+          <Frame><E7_Approved/></Frame>
+        </DCArtboard>
+        <DCArtboard id="o2" label="Declined" width={608} height={780}>
+          <Frame><E8_Declined/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCPostIt top={-20} left={-300} rotate={-4} width={260}>
+        <b>Flow:</b><br/>
+        modal · Send estimate →<br/>
+        1. empty → 2. pick item →<br/>
+        3. review → 4. preview →<br/>
+        5. sent → customer replies →<br/>
+        7. approved / 8. declined
+      </DCPostIt>
+      <DCPostIt top={420} left={-300} rotate={3} width={260}>
+        SMS is plain-text on purpose — reliable, no template rendering failures.
+        A signed/web version can come later via the <i>grins.io/e/…</i> link.
+      </DCPostIt>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

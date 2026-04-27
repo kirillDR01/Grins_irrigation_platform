@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Appointment Modal — Combined v2 (Attached photos + notes)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  html, body { margin: 0; padding: 0; background: #f0eee9; font-family: 'Inter', sans-serif; }
+  * { box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="payment-sheet.jsx"></script>
+<script type="text/babel" src="estimate-sheet.jsx"></script>
+<script type="text/babel" src="combined-modal.jsx"></script>
+<script type="text/babel" src="combined-modal-v2.jsx"></script>
+
+<script type="text/babel">
+function Frame({ children, bg = '#E7E4DD' }) {
+  return <div style={{ padding: 24, height: '100%', background: bg, display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>{children}</div>;
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+      <DCSection id="v2-overview" title="Combined modal v2 — attached photos & internal notes"
+        subtitle="Forks v1 with two inline dropdowns under the action row: 'See attached photos' and 'See attached notes'. Notes is now ONE centralized 'Internal Notes' card — no more per-author thread, just a single shared body anyone (dispatch, tech, customer-relayed) can edit.">
+        <DCArtboard id="v2-default" label="Default · panels collapsed" width={608} height={1640}>
+          <div style={{ padding: 20, height: '100%' }}><CombinedModalV2 step={2} showEstimate/></div>
+        </DCArtboard>
+        <DCArtboard id="v2-photos" label="Photos expanded · horizontal scroll gallery" width={608} height={1900}>
+          <div style={{ padding: 20, height: '100%' }}><CombinedModalV2 step={2} showEstimate openPanel="photos"/></div>
+        </DCArtboard>
+        <DCArtboard id="v2-notes" label="Internal notes · view mode" width={608} height={1880}>
+          <div style={{ padding: 20, height: '100%' }}><CombinedModalV2 step={2} showEstimate openPanel="notes"/></div>
+        </DCArtboard>
+        <DCArtboard id="v2-notes-edit" label="Internal notes · editing" width={608} height={1960}>
+          <div style={{ padding: 20, height: '100%' }}><CombinedModalV2 step={2} showEstimate openPanel="notes" editingNote/></div>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="v2-panels" title="Just the panels"
+        subtitle="The new inline panels in isolation, so the layout, density, and CTA hierarchy are easy to review.">
+        <DCArtboard id="v2-photos-panel" label="Attached photos panel" width={608} height={340}>
+          <div style={{ padding: 20, height: '100%' }}><V2AttachedPhotos/></div>
+        </DCArtboard>
+        <DCArtboard id="v2-notes-panel" label="Internal notes · view" width={608} height={260}>
+          <div style={{ padding: 20, height: '100%' }}><V2InternalNotes/></div>
+        </DCArtboard>
+        <DCArtboard id="v2-notes-edit-panel" label="Internal notes · editing" width={608} height={340}>
+          <div style={{ padding: 20, height: '100%' }}><V2InternalNotes editing/></div>
+        </DCArtboard>
+      </DCSection>
+
+      <DCPostIt top={-20} left={-300} rotate={-3} width={280}>
+        <b>What's new in v2:</b><br/>
+        ✓ <i>See attached photos</i> dropdown — horizontal gallery, "Add photo" lives inside<br/>
+        ✓ <i>See attached notes</i> opens <b>one</b> centralized Internal Notes card<br/>
+        ✓ Edit in place · single source of truth for dispatch, tech &amp; customer<br/>
+        ✓ Phone-friendly: tap the eyebrow Edit, type, Save Notes
+      </DCPostIt>
+      <DCPostIt top={460} left={-300} rotate={2} width={280}>
+        Replaces the older multi-author thread. Now everyone reads &amp; writes the same shared notes block — no role badges, no timestamps cluttering the view. Simpler &amp; matches the rest of the platform.
+      </DCPostIt>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

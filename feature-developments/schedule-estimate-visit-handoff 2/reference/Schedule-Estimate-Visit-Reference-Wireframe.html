@@ -1,0 +1,621 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Schedule estimate visit — reference</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Kalam:wght@400;700&family=Architects+Daughter&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --ink-soft: #4a4a4a;
+    --ink-faint: #8a8a8a;
+    --paper: #fafaf6;
+    --accent: #d4622a;
+    --highlight: #ffe066;
+    --green: #4a8a5a;
+    --amber: #d89730;
+    --amber-soft: #fff2d0;
+    --red: #c44a3a;
+    --red-soft: #fbe1dc;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #efece4;
+    color: var(--ink);
+    font-family: 'Kalam', 'Architects Daughter', sans-serif;
+  }
+  body { min-height: 100vh; padding: 24px 32px 80px; }
+
+  .page-header { max-width: 1200px; margin: 0 auto 14px; }
+  .eyebrow { font-size: 13px; color: var(--ink-faint); letter-spacing:.08em; text-transform:uppercase; margin: 0 0 2px; }
+  .page-title { font-family: 'Caveat', cursive; font-size: 44px; font-weight: 700; margin: 0 0 4px; line-height: 1; }
+  .page-title em { background: var(--highlight); font-style: normal; padding: 0 6px; box-shadow: -1px 1px 0 rgba(0,0,0,.08); }
+  .page-sub { color: var(--ink-soft); font-size: 15px; margin: 0; max-width: 920px; line-height: 1.5; }
+
+  .stage { max-width: 1200px; margin: 22px auto 0; }
+  .stage-frame {
+    background: var(--paper);
+    border: 2.5px solid var(--ink);
+    border-radius: 6px;
+    padding: 22px 24px;
+    box-shadow: 4px 4px 0 rgba(0,0,0,.12);
+    position: relative;
+  }
+  .stage-frame::before {
+    content: "MODAL — schedule estimate visit";
+    position: absolute; top: -10px; left: 18px;
+    background: var(--paper); padding: 0 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: .12em; color: var(--ink-faint);
+    text-transform: uppercase;
+  }
+
+  /* ----------- modal markup (same classes the React component will reuse) ----------- */
+  .modal h3 { font-family: 'Caveat'; font-size: 30px; margin: 0 0 4px; line-height: 1.1; }
+  .modal .msub { color: var(--ink-soft); font-size: 13px; margin-bottom: 14px; }
+  .modal .split {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 18px;
+    align-items: start;
+  }
+  .modal .col-fields { min-width: 0; }
+  .modal .col-cal    { min-width: 0; }
+  .modal label.fl { display: block; font-size: 12px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .06em; margin: 10px 0 4px; font-weight: 700; }
+  .modal input[type=text], .modal input[type=date], .modal input[type=time], .modal select, .modal textarea {
+    width: 100%; font-family: 'Kalam'; font-size: 14px;
+    padding: 7px 9px; border: 1.5px solid var(--ink); border-radius: 4px; background: #fff;
+  }
+  .modal textarea { min-height: 72px; resize: vertical; }
+  .modal .prefilled {
+    background: #f4f1e3; border: 1.5px dashed var(--ink); border-radius: 4px; padding: 8px 10px;
+    font-size: 13px; line-height: 1.5;
+  }
+  .modal .prefilled .pf-label { color: var(--ink-faint); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin-right: 4px; }
+  .modal .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal .m-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--ink-faint); }
+
+  .pick-summary {
+    margin-top: 8px; padding: 8px 10px;
+    background: var(--amber-soft); border: 1.5px dashed var(--amber);
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .pick-summary .none { color: var(--ink-faint); font-style: italic; }
+  .conflict-warn {
+    display: none;
+    margin-top: 10px;
+    background: var(--red-soft);
+    border: 1.5px solid var(--red);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 13px; color: #5a1a12;
+  }
+  .conflict-warn.on { display: block; }
+  .conflict-warn b { color: var(--red); }
+
+  /* ------- buttons ------- */
+  .btn {
+    font-family: 'Kalam'; font-weight: 700; font-size: 14px;
+    padding: 8px 14px; border-radius: 12px 16px 11px 18px;
+    border: 2px solid var(--ink);
+    background: var(--paper); cursor: pointer; color: var(--ink);
+    box-shadow: 2px 2px 0 rgba(0,0,0,.12);
+    transform: rotate(-0.3deg);
+  }
+  .btn:nth-child(even) { transform: rotate(0.3deg); }
+  .btn.primary { background: var(--ink); color: var(--paper); }
+  .btn.ghost { background: transparent; border-style: dashed; box-shadow: none; }
+
+  /* ------- week calendar ------- */
+  .wkcal {
+    border: 2px solid var(--ink);
+    border-radius: 6px;
+    background: var(--paper);
+    box-shadow: 2px 2px 0 rgba(0,0,0,.08);
+    overflow: hidden;
+  }
+  .wkcal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 8px 10px;
+    border-bottom: 1.5px dashed var(--ink);
+    background: #f8f5ec;
+  }
+  .wkcal-head .wk-label { font-family: 'Caveat'; font-size: 22px; font-weight: 700; line-height: 1; }
+  .wkcal-head .wk-range { color: var(--ink-soft); font-size: 12px; margin-left: 8px; }
+  .wkcal-nav { display: flex; gap: 6px; }
+  .wkcal-nav button {
+    font-family: 'Kalam'; font-size: 13px; font-weight: 700;
+    padding: 4px 10px; border: 1.5px solid var(--ink);
+    background: var(--paper); border-radius: 999px; cursor: pointer;
+  }
+  .wkcal-nav button:hover { background: var(--highlight); }
+  .wkcal-nav button.today { background: var(--paper); }
+
+  .wkcal-grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: 56px repeat(7, 1fr);
+    grid-auto-rows: 22px;
+    user-select: none;
+  }
+  .wkcal-corner { border-right: 1px solid #d8d2c2; border-bottom: 1.5px dashed #b6ae9c; background: #f8f5ec; }
+  .wkcal-daycol-head {
+    padding: 6px 4px; text-align: center;
+    border-right: 1px solid #d8d2c2;
+    border-bottom: 1.5px dashed #b6ae9c;
+    background: #f8f5ec;
+    font-weight: 700;
+  }
+  .wkcal-daycol-head .dow { color: var(--ink-faint); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+  .wkcal-daycol-head .dnum { font-size: 16px; color: var(--ink); }
+  .wkcal-daycol-head.today .dnum {
+    display: inline-block;
+    background: var(--highlight);
+    padding: 0 6px; border-radius: 999px;
+  }
+  .wkcal-timecell {
+    padding: 1px 4px 0 6px;
+    text-align: right;
+    color: var(--ink-faint);
+    font-size: 10px;
+    border-bottom: 1px dotted #ece7d8;
+    border-right: 1px solid #d8d2c2;
+    background: #f8f5ec;
+    position: relative;
+    top: -6px;
+  }
+  .wkcal-timecell.hour { border-bottom-style: solid; border-bottom-color: #d8d2c2; }
+  .wkcal-slot {
+    border-right: 1px solid #d8d2c2;
+    border-bottom: 1px dotted #ece7d8;
+    cursor: cell;
+    position: relative;
+  }
+  .wkcal-slot.hour { border-bottom: 1px solid #d8d2c2; }
+  .wkcal-slot.past { background: repeating-linear-gradient(135deg, transparent 0 4px, rgba(0,0,0,.025) 4px 5px); }
+  .wkcal-slot:hover { background: rgba(255,224,102,.25); }
+
+  /* now-line */
+  .wkcal-now { position: absolute; height: 0; border-top: 2px solid var(--red); pointer-events: none; z-index: 3; }
+  .wkcal-now::before {
+    content: ''; position: absolute; left: -4px; top: -5px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--red);
+  }
+
+  /* estimate blocks (read-only) */
+  .wkcal-evt {
+    position: absolute;
+    background: repeating-linear-gradient(135deg, #e2d4c2 0 5px, #d8c8b4 5px 10px);
+    border: 1.5px solid #9d8972;
+    border-radius: 3px;
+    padding: 3px 5px;
+    font-family: 'Kalam'; font-size: 10.5px;
+    color: #3a2c1c;
+    line-height: 1.15;
+    overflow: hidden;
+    box-shadow: 1px 1px 0 rgba(0,0,0,.08);
+  }
+  .wkcal-evt .evt-name { font-weight: 700; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+  .wkcal-evt .evt-meta { color: #5a4a36; font-size: 9.5px; }
+  .wkcal-evt.conflict { border-color: var(--red); background: repeating-linear-gradient(135deg, #fbe1dc 0 5px, #f6ccc3 5px 10px); }
+
+  /* pick block */
+  .wkcal-pick {
+    position: absolute;
+    background: var(--accent);
+    color: #fff;
+    border: 2px solid var(--ink);
+    border-radius: 3px;
+    padding: 3px 5px;
+    font-family: 'Kalam'; font-size: 11px;
+    font-weight: 700;
+    line-height: 1.15;
+    box-shadow: 2px 2px 0 rgba(0,0,0,.12);
+    z-index: 2;
+    pointer-events: none;
+  }
+  .wkcal-pick .pick-dur { font-weight: 400; font-size: 10px; opacity: .9; display: block; }
+  .wkcal-pick.warn { background: var(--red); }
+
+  .wkcal-drag {
+    position: absolute;
+    background: rgba(212,98,42,.22);
+    border: 2px dashed var(--accent);
+    border-radius: 3px;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .wkcal-legend {
+    display: flex; align-items: center; gap: 14px;
+    padding: 6px 10px;
+    border-top: 1.5px dashed var(--ink-faint);
+    background: #f8f5ec;
+    font-size: 11px; color: var(--ink-soft);
+  }
+  .wkcal-legend .sw {
+    display: inline-block; width: 16px; height: 11px;
+    border: 1.5px solid #9d8972; border-radius: 2px;
+    background: repeating-linear-gradient(135deg, #e2d4c2 0 4px, #d8c8b4 4px 8px);
+    vertical-align: middle; margin-right: 4px;
+  }
+  .wkcal-legend .sw.pick { background: var(--accent); border-color: var(--ink); }
+
+  /* ---- annotation callouts (reference only — drop in real impl) ---- */
+  .anno {
+    max-width: 1200px; margin: 18px auto 0;
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px; font-size: 13px; color: var(--ink-soft);
+  }
+  .anno .a-card {
+    background: var(--paper);
+    border: 1.5px dashed var(--ink-faint);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+  .anno .a-card b { color: var(--ink); font-weight: 700; }
+  .anno .a-card code { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; background: #f0ecdf; padding: 1px 5px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div class="eyebrow">Sales · Stage 1 · "Schedule Estimate"</div>
+  <h1 class="page-title">Schedule estimate <em>visit</em></h1>
+  <p class="page-sub">Standalone reference for the modal that opens from the <b>Schedule visit</b> primary action on the Stage Walkthrough Now card. Pre-fills customer info from the lead, lets the user pick a slot on the week-of calendar, then confirms &amp; advances the entry to <em>Send Estimate</em>.</p>
+</div>
+
+<div class="stage">
+  <div class="stage-frame">
+    <div class="modal" style="font-family:'Kalam'">
+      <h3>Schedule estimate visit</h3>
+      <div class="msub">Auto-populated from the lead record. Pick a time on the calendar — click a slot for a start time, or drag to set both start &amp; duration.</div>
+
+      <div class="split">
+        <!-- LEFT: fields -->
+        <div class="col-fields">
+          <label class="fl">Customer</label>
+          <div class="prefilled">
+            <div><b>Viktor Petrov</b> · <span class="pf-label">from</span> Leads tab</div>
+            <div><span class="pf-label">Phone</span> (555) 234-9918</div>
+            <div><span class="pf-label">Email</span> viktor.p@example.com</div>
+            <div><span class="pf-label">Address</span> 1428 Maple Dr, Ann Arbor, MI 48103</div>
+            <div><span class="pf-label">Job</span> Sprinkler install</div>
+          </div>
+
+          <div class="two-col" style="margin-top:10px">
+            <div><label class="fl">Date</label><input type="date" id="sm-date" value="2026-04-23" /></div>
+            <div><label class="fl">Start time</label><input type="time" id="sm-time" value="14:00" /></div>
+          </div>
+          <div class="two-col">
+            <div>
+              <label class="fl">Assigned to</label>
+              <select id="sm-assignee"><option>Kirill (me)</option><option>Mike R.</option><option>Team — any avail.</option></select>
+            </div>
+            <div>
+              <label class="fl">Duration</label>
+              <select id="sm-dur">
+                <option value="30">30 min</option>
+                <option value="60" selected>1 hr</option>
+                <option value="90">1.5 hr</option>
+                <option value="120">2 hr</option>
+              </select>
+            </div>
+          </div>
+          <label class="fl">Internal notes (optional)</label>
+          <textarea placeholder="Gate code 4412. Large corner lot, sketched zones in intake call…"></textarea>
+
+          <div class="pick-summary" id="sm-summary">
+            <span class="none">No time picked yet — click or drag on the calendar →</span>
+          </div>
+          <div class="conflict-warn" id="sm-warn">
+            ⚠ <b>Overlaps</b> with an existing estimate. You can still proceed, but double-check.
+          </div>
+        </div>
+
+        <!-- RIGHT: week calendar -->
+        <div class="col-cal">
+          <div class="wkcal" id="sm-cal">
+            <div class="wkcal-head">
+              <div>
+                <span class="wk-label" id="sm-wkLabel">Week of Apr 20</span>
+                <span class="wk-range" id="sm-wkRange">Mon Apr 20 – Sun Apr 26, 2026</span>
+              </div>
+              <div class="wkcal-nav">
+                <button id="sm-wkPrev">← Prev week</button>
+                <button class="today" id="sm-wkToday">Today</button>
+                <button id="sm-wkNext">Next week →</button>
+              </div>
+            </div>
+            <div class="wkcal-grid" id="sm-grid"></div>
+            <div class="wkcal-legend">
+              <span><span class="sw"></span>Existing estimate (read-only)</span>
+              <span><span class="sw pick"></span>Your pick</span>
+              <span style="margin-left:auto; color:var(--ink-faint);">Click to pin · Drag to set range · 6 AM – 8 PM · 30-min slots</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="m-actions">
+        <button class="btn ghost">Cancel</button>
+        <button class="btn primary" id="sm-confirm">📅 Confirm &amp; advance to Send Estimate</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="anno">
+  <div class="a-card"><b>Pre-fill source.</b> Customer block is read-only; values come from <code>SalesEntry.customer_*</code> + the linked lead row. Edits go to <code>/customers/:id/edit</code>, not this modal.</div>
+  <div class="a-card"><b>Calendar layer.</b> 30-min slots, 6 AM – 8 PM. Existing estimate blocks rendered hatched/read-only; selected pick rendered solid orange. Click to pin start (uses Duration field); drag to set both start &amp; end.</div>
+  <div class="a-card"><b>Confirm.</b> On submit: <code>POST /sales/:id/schedule-visit</code> + advance status to <code>estimate_scheduled</code> (sub-state of stage 1). Modal closes; stepper badge becomes <code>📅 Apr 23 2pm</code>.</div>
+</div>
+
+<script>
+  // ============ SCHED MODAL CALENDAR ============
+  (function schedCal(){
+    const TODAY = new Date(2026, 3, 21); // Apr 21, 2026 (Tue)
+    const NOW_MIN = 10 * 60 + 35;        // "now" = 10:35 AM for demo
+
+    const ESTIMATES = [
+      { date:'2026-04-20', start: 9*60,    end: 10*60,     name:'M. Ortiz',     meta:'Spring startup' },
+      { date:'2026-04-20', start: 13*60+30,end: 15*60,     name:'Roberts HOA',  meta:'Winterization' },
+      { date:'2026-04-21', start: 8*60,    end: 9*60+30,   name:'D. Chen',      meta:'Leak diag.' },
+      { date:'2026-04-22', start: 11*60,   end: 12*60+30,  name:'K. Nakamura',  meta:'Backflow test' },
+      { date:'2026-04-22', start: 15*60,   end: 16*60,     name:'T. Alvarez',   meta:'Sprinkler add-on' },
+      { date:'2026-04-23', start: 10*60,   end: 11*60+30,  name:'L. Greenwood', meta:'Spring startup' },
+      { date:'2026-04-24', start: 9*60+30, end: 11*60,     name:'S. Patel',     meta:'Install' },
+      { date:'2026-04-24', start: 13*60,   end: 14*60,     name:'R. Okafor',    meta:'Winterization' },
+      { date:'2026-04-25', start: 10*60,   end: 11*60,     name:'Cinda B.',     meta:'Spring startup' },
+    ];
+
+    const HOUR_START = 6, HOUR_END = 20, SLOT_MIN = 30, SLOT_PX = 22;
+    const SLOTS_PER_DAY = (HOUR_END - HOUR_START) * 60 / SLOT_MIN;
+
+    const fmtMonD = d => d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+    const fmtLongDate = d => d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' });
+    const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const startOfWeek = d => {
+      const nd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const day = nd.getDay();
+      const diff = (day === 0 ? -6 : 1 - day);
+      nd.setDate(nd.getDate() + diff);
+      return nd;
+    };
+    const fmtHM = mins => {
+      const h = Math.floor(mins/60), m = mins%60;
+      const ap = h >= 12 ? 'PM' : 'AM';
+      const h12 = ((h+11)%12)+1;
+      return `${h12}:${String(m).padStart(2,'0')} ${ap}`;
+    };
+    const fmtDur = mins => mins < 60 ? mins + ' min' : (mins%60 === 0 ? `${mins/60} hr` : `${Math.floor(mins/60)}h ${mins%60}m`);
+
+    let weekStart = startOfWeek(TODAY);
+    // Pre-set the pick to match the screenshot reference
+    let pick = { date:'2026-04-23', start: 14*60, end: 15*60 };
+    let drag = null;
+
+    const el = {
+      grid:   document.getElementById('sm-grid'),
+      label:  document.getElementById('sm-wkLabel'),
+      range:  document.getElementById('sm-wkRange'),
+      prev:   document.getElementById('sm-wkPrev'),
+      next:   document.getElementById('sm-wkNext'),
+      today:  document.getElementById('sm-wkToday'),
+      date:   document.getElementById('sm-date'),
+      time:   document.getElementById('sm-time'),
+      dur:    document.getElementById('sm-dur'),
+      summary:document.getElementById('sm-summary'),
+      warn:   document.getElementById('sm-warn'),
+    };
+
+    function buildGrid() {
+      const g = el.grid;
+      g.innerHTML = '';
+      const corner = document.createElement('div');
+      corner.className = 'wkcal-corner';
+      g.appendChild(corner);
+
+      const days = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(weekStart); d.setDate(d.getDate() + i);
+        days.push(d);
+        const h = document.createElement('div');
+        h.className = 'wkcal-daycol-head';
+        if (iso(d) === iso(TODAY)) h.classList.add('today');
+        h.innerHTML = `<div class="dow">${d.toLocaleDateString('en-US',{weekday:'short'})}</div><div class="dnum">${d.getDate()}</div>`;
+        g.appendChild(h);
+      }
+
+      for (let s = 0; s < SLOTS_PER_DAY; s++) {
+        const mins = HOUR_START*60 + s*SLOT_MIN;
+        const isHour = mins % 60 === 0;
+        const tc = document.createElement('div');
+        tc.className = 'wkcal-timecell' + (isHour ? ' hour' : '');
+        tc.textContent = isHour ? fmtHM(mins) : '';
+        g.appendChild(tc);
+        for (let d = 0; d < 7; d++) {
+          const cell = document.createElement('div');
+          cell.className = 'wkcal-slot' + (isHour ? ' hour' : '');
+          cell.dataset.day = d;
+          cell.dataset.slot = s;
+          const dayDate = days[d];
+          const isToday = iso(dayDate) === iso(TODAY);
+          if (dayDate < new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate())) {
+            cell.classList.add('past');
+          } else if (isToday && mins < NOW_MIN) {
+            cell.classList.add('past');
+          }
+          g.appendChild(cell);
+        }
+      }
+
+      const wkEnd = new Date(weekStart); wkEnd.setDate(wkEnd.getDate() + 6);
+      el.label.textContent = `Week of ${fmtMonD(weekStart)}`;
+      el.range.textContent = `${fmtLongDate(weekStart)} – ${fmtLongDate(wkEnd)}`;
+      paintOverlays(days);
+    }
+
+    function paintOverlays(days) {
+      const g = el.grid;
+      g.querySelectorAll('.wkcal-evt, .wkcal-pick, .wkcal-drag, .wkcal-now').forEach(n => n.remove());
+
+      const colLeftPct = i => `calc(56px + ${i} * ((100% - 56px) / 7))`;
+      const colWidthPct = `calc((100% - 56px) / 7)`;
+
+      const todayIdx = days.findIndex(d => iso(d) === iso(TODAY));
+      if (todayIdx >= 0 && NOW_MIN >= HOUR_START*60 && NOW_MIN <= HOUR_END*60) {
+        const now = document.createElement('div');
+        now.className = 'wkcal-now';
+        const topPx = 29 + ((NOW_MIN - HOUR_START*60) / SLOT_MIN) * SLOT_PX;
+        now.style.top = topPx + 'px';
+        now.style.left = colLeftPct(todayIdx);
+        now.style.width = colWidthPct;
+        g.appendChild(now);
+      }
+
+      days.forEach((d, di) => {
+        const dISO = iso(d);
+        ESTIMATES.filter(e => e.date === dISO).forEach(e => {
+          const evt = document.createElement('div');
+          evt.className = 'wkcal-evt';
+          const startSlot = (e.start - HOUR_START*60) / SLOT_MIN;
+          const durSlots = (e.end - e.start) / SLOT_MIN;
+          evt.style.top = (29 + startSlot * SLOT_PX) + 'px';
+          evt.style.height = (durSlots * SLOT_PX - 2) + 'px';
+          evt.style.left = `calc(${colLeftPct(di)} + 2px)`;
+          evt.style.width = `calc(${colWidthPct} - 4px)`;
+          evt.innerHTML = `<div class="evt-name">${e.name}</div><div class="evt-meta">${fmtHM(e.start)} · ${e.meta}</div>`;
+          if (pick && pick.date === dISO && !(e.end <= pick.start || e.start >= pick.end)) {
+            evt.classList.add('conflict');
+          }
+          g.appendChild(evt);
+        });
+      });
+
+      if (pick) {
+        const di = days.findIndex(d => iso(d) === pick.date);
+        if (di >= 0) {
+          const p = document.createElement('div');
+          p.className = 'wkcal-pick';
+          const startSlot = (pick.start - HOUR_START*60) / SLOT_MIN;
+          const durSlots = (pick.end - pick.start) / SLOT_MIN;
+          p.style.top = (29 + startSlot * SLOT_PX) + 'px';
+          p.style.height = (durSlots * SLOT_PX - 2) + 'px';
+          p.style.left = `calc(${colLeftPct(di)} + 2px)`;
+          p.style.width = `calc(${colWidthPct} - 4px)`;
+          p.innerHTML = `<div>Viktor P. · ${fmtHM(pick.start)}</div><span class="pick-dur">${fmtDur(pick.end - pick.start)}</span>`;
+          if (hasConflict()) p.classList.add('warn');
+          g.appendChild(p);
+        }
+      }
+
+      if (drag) {
+        const di = drag.dayIdx;
+        const s1 = Math.min(drag.startSlotIdx, drag.curSlotIdx);
+        const s2 = Math.max(drag.startSlotIdx, drag.curSlotIdx) + 1;
+        const dragEl = document.createElement('div');
+        dragEl.className = 'wkcal-drag';
+        dragEl.style.top = (29 + s1 * SLOT_PX) + 'px';
+        dragEl.style.height = ((s2 - s1) * SLOT_PX - 2) + 'px';
+        dragEl.style.left = `calc(${colLeftPct(di)} + 2px)`;
+        dragEl.style.width = `calc(${colWidthPct} - 4px)`;
+        g.appendChild(dragEl);
+      }
+    }
+
+    function hasConflict() {
+      if (!pick) return false;
+      return ESTIMATES.some(e =>
+        e.date === pick.date &&
+        !(e.end <= pick.start || e.start >= pick.end)
+      );
+    }
+
+    function syncFieldsFromPick() {
+      if (!pick) return;
+      el.date.value = pick.date;
+      el.time.value = String(Math.floor(pick.start/60)).padStart(2,'0') + ':' + String(pick.start%60).padStart(2,'0');
+      const dur = pick.end - pick.start;
+      const opts = [...el.dur.options].map(o => +o.value);
+      let best = opts.reduce((a,b) => Math.abs(b-dur) < Math.abs(a-dur) ? b : a);
+      el.dur.value = String(best);
+      el.summary.innerHTML = `<b>${fmtLongDate(new Date(pick.date+'T12:00'))}</b> · ${fmtHM(pick.start)} – ${fmtHM(pick.end)} · <b>${fmtDur(pick.end-pick.start)}</b>`;
+      el.warn.classList.toggle('on', hasConflict());
+    }
+
+    function syncPickFromFields() {
+      const d = el.date.value;
+      const [hh, mm] = el.time.value.split(':').map(Number);
+      if (!d || isNaN(hh)) return;
+      const startMin = hh*60 + mm;
+      const durMin = +el.dur.value;
+      pick = { date: d, start: startMin, end: startMin + durMin };
+      const picked = new Date(d + 'T12:00');
+      const ws = startOfWeek(picked);
+      if (iso(ws) !== iso(weekStart)) weekStart = ws;
+      buildGrid();
+      syncFieldsFromPick();
+    }
+
+    el.prev.addEventListener('click', () => { weekStart.setDate(weekStart.getDate()-7); buildGrid(); });
+    el.next.addEventListener('click', () => { weekStart.setDate(weekStart.getDate()+7); buildGrid(); });
+    el.today.addEventListener('click', () => { weekStart = startOfWeek(TODAY); buildGrid(); });
+
+    el.grid.addEventListener('mousedown', (ev) => {
+      const slot = ev.target.closest('.wkcal-slot');
+      if (!slot) return;
+      ev.preventDefault();
+      const dayIdx = +slot.dataset.day;
+      const slotIdx = +slot.dataset.slot;
+      drag = { dayIdx, startSlotIdx: slotIdx, curSlotIdx: slotIdx, moved: false };
+      const onMove = (e2) => {
+        const s = e2.target.closest && e2.target.closest('.wkcal-slot');
+        if (!s) return;
+        const di = +s.dataset.day;
+        const si = +s.dataset.slot;
+        if (di !== drag.dayIdx) return;
+        if (si !== drag.curSlotIdx) {
+          drag.curSlotIdx = si;
+          drag.moved = true;
+          const days = [];
+          for (let i = 0; i < 7; i++) { const d = new Date(weekStart); d.setDate(d.getDate()+i); days.push(d); }
+          paintOverlays(days);
+        }
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (!drag) return;
+        const dayDate = new Date(weekStart); dayDate.setDate(dayDate.getDate() + drag.dayIdx);
+        const s1 = Math.min(drag.startSlotIdx, drag.curSlotIdx);
+        const s2 = Math.max(drag.startSlotIdx, drag.curSlotIdx) + 1;
+        const startMin = HOUR_START*60 + s1 * SLOT_MIN;
+        const endMin   = HOUR_START*60 + s2 * SLOT_MIN;
+        if (drag.moved) {
+          pick = { date: iso(dayDate), start: startMin, end: endMin };
+        } else {
+          const durMin = +el.dur.value;
+          pick = { date: iso(dayDate), start: startMin, end: startMin + durMin };
+        }
+        drag = null;
+        buildGrid();
+        syncFieldsFromPick();
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+
+    ['sm-date','sm-time','sm-dur'].forEach(id => {
+      document.getElementById(id).addEventListener('change', syncPickFromFields);
+    });
+
+    buildGrid();
+    syncFieldsFromPick();
+  })();
+</script>
+</body>
+</html>

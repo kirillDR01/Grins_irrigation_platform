@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Appointment Modal — Combined (Payment + Estimate + Tags)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  html, body { margin: 0; padding: 0; background: #f0eee9; font-family: 'Inter', sans-serif; }
+  * { box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="payment-sheet.jsx"></script>
+<script type="text/babel" src="estimate-sheet.jsx"></script>
+<script type="text/babel" src="combined-modal.jsx"></script>
+
+<script type="text/babel">
+function Frame({ children, bg = '#E7E4DD' }) {
+  return <div style={{ padding: 24, height: '100%', background: bg, display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>{children}</div>;
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+      <DCSection id="combined" title="Combined appointment modal"
+        subtitle="New modal with: Collect payment + Send estimate side-by-side, Edit tags button (replaces AI draft), and Get directions → Apple/Google Maps picker. Tag changes permeate to the customer profile.">
+        <DCArtboard id="c-default" label="Default view · tags visible" width={608} height={1500}>
+          <div style={{ padding: 20, height: '100%' }}><CombinedModal step={2} showEstimate/></div>
+        </DCArtboard>
+        <DCArtboard id="c-maps" label="Get directions · Apple / Google picker" width={608} height={1540}>
+          <div style={{ padding: 20, height: '100%' }}><CombinedModal step={2} showEstimate showMapsPopover/></div>
+        </DCArtboard>
+        <DCArtboard id="c-tags-active" label="Edit tags · button active" width={608} height={1500}>
+          <div style={{ padding: 20, height: '100%' }}><CombinedModal step={2} showEstimate showTagsEditMode/></div>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="tag-editor" title="Edit tags sheet"
+        subtitle="Opens when staff taps 'Edit tags'. Changes save to Test User's customer profile — next job auto-inherits.">
+        <DCArtboard id="tg-empty" label="Tag editor · current + suggested" width={608} height={780}>
+          <Frame><CKTagEditor tags={[
+            { label: 'Repeat customer', tone: 'green' },
+            { label: 'Back gate — side yard', tone: 'amber' },
+            { label: 'Prefers text', tone: 'blue' },
+          ]}/></Frame>
+        </DCArtboard>
+        <DCArtboard id="tg-edited" label="Tag editor · after adding 'Dog on property'" width={608} height={780}>
+          <Frame><CKTagEditor tags={[
+            { label: 'Repeat customer', tone: 'green' },
+            { label: 'Back gate — side yard', tone: 'amber' },
+            { label: 'Prefers text', tone: 'blue' },
+            { label: 'Dog on property', tone: 'violet' },
+          ]}/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="payment-flow" title="Collect payment flow"
+        subtitle="Triggered from the teal 'Collect payment' button. Full sheet flow preserved from the payment design.">
+        <DCArtboard id="p1" label="1 · Start · pay from line items" width={608} height={1040}>
+          <Frame><State_Start/></Frame>
+        </DCArtboard>
+        <DCArtboard id="p2" label="2 · Pay method picker" width={608} height={900}>
+          <Frame><State_PayMethod total={125}/></Frame>
+        </DCArtboard>
+        <DCArtboard id="p3" label="3 · Tap to pay · waiting" width={608} height={820}>
+          <Frame><State_TapWaiting total={125}/></Frame>
+        </DCArtboard>
+        <DCArtboard id="p4" label="4 · Paid" width={608} height={860}>
+          <Frame><State_Paid total={125}/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="estimate-flow" title="Send estimate flow"
+        subtitle="Triggered from the violet 'Send estimate' button. Full flow preserved from the estimate design.">
+        <DCArtboard id="e1" label="1 · Empty · add first line" width={608} height={820}>
+          <Frame><E1_Start/></Frame>
+        </DCArtboard>
+        <DCArtboard id="e2" label="2 · Pick line item" width={608} height={1040}>
+          <Frame><E2_Picker/></Frame>
+        </DCArtboard>
+        <DCArtboard id="e3" label="3 · Review & send" width={608} height={1040}>
+          <Frame><E3_Ready/></Frame>
+        </DCArtboard>
+        <DCArtboard id="e4" label="4 · SMS preview" width={608} height={900}>
+          <Frame><E4_Preview/></Frame>
+        </DCArtboard>
+        <DCArtboard id="e5" label="5 · Sent · waiting" width={608} height={860}>
+          <Frame><E5_Waiting/></Frame>
+        </DCArtboard>
+        <DCArtboard id="e6" label="6 · Customer phone" width={480} height={880}>
+          <Frame bg="#D8D4CC"><E6_CustomerSMS/></Frame>
+        </DCArtboard>
+        <DCArtboard id="e7" label="7 · Approved" width={608} height={780}>
+          <Frame><E7_Approved/></Frame>
+        </DCArtboard>
+        <DCArtboard id="e8" label="8 · Declined" width={608} height={780}>
+          <Frame><E8_Declined/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCPostIt top={-20} left={-300} rotate={-3} width={270}>
+        <b>Changes in this modal:</b><br/>
+        ✗ Removed AI draft button<br/>
+        ✓ Added Edit tags button<br/>
+        ✓ Tags row under customer<br/>
+        ✓ Get directions → Apple / Google picker<br/>
+        ✓ Collect payment + Send estimate both visible
+      </DCPostIt>
+      <DCPostIt top={440} left={-300} rotate={2} width={270}>
+        Tags live on the <i>customer</i>, not the appointment. Edit here → shows on every past &amp; future job. Techs see them on route cards.
+      </DCPostIt>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

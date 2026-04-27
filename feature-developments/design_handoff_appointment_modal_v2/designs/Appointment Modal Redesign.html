@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Appointment Modal — Scheduling</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  html, body { margin: 0; padding: 0; background: #f0eee9; font-family: 'Inter', sans-serif; }
+  * { box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="modal.jsx"></script>
+<script type="text/babel" src="payment-sheet.jsx"></script>
+<script type="text/babel" src="receipt-tape.jsx"></script>
+
+<script type="text/babel">
+function Frame({ children, bg = '#E7E4DD' }) {
+  return <div style={{ padding: 24, height: '100%', background: bg, display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>{children}</div>;
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+      <DCSection id="modal" title="Appointment modal (prior)"
+        subtitle="For reference — the Collect Payment button lives in the modal's payment block.">
+        <DCArtboard id="a-onsite" label="Admin · on site (entry point)" width={608} height={1260}>
+          <div style={{ padding: 20, height: '100%' }}><AppointmentModal role="admin" step={2}/></div>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="payment-a" title="Direction A · Vertical sheet"
+        subtitle="8 states covering agreement + one-off jobs. Tapping 'Collect payment' in the modal opens state 1 or 4 depending on whether the job has an agreement.">
+        <DCArtboard id="s1" label="1 · Agreement job · opens sheet" width={608} height={1000}>
+          <Frame><State_Start agreement="Gold Service Plan"/></Frame>
+        </DCArtboard>
+        <DCArtboard id="s2" label="2 · Adding an extra (search)" width={608} height={1000}>
+          <Frame><State_Picker/></Frame>
+        </DCArtboard>
+        <DCArtboard id="s3" label="3 · Agreement · ready to charge extras" width={608} height={1040}>
+          <Frame><State_Ready agreement="Gold Service Plan"/></Frame>
+        </DCArtboard>
+        <DCArtboard id="s4" label="4 · One-off · ready to charge" width={608} height={1000}>
+          <Frame><State_OneOffReady/></Frame>
+        </DCArtboard>
+        <DCArtboard id="s5" label="5 · Pick payment method" width={608} height={900}>
+          <Frame><State_PayMethod total={125}/></Frame>
+        </DCArtboard>
+        <DCArtboard id="s6" label="6 · Tap to Pay · waiting" width={608} height={900}>
+          <Frame><State_TapWaiting total={125}/></Frame>
+        </DCArtboard>
+        <DCArtboard id="s7" label="7 · Paid confirmation" width={608} height={1040}>
+          <Frame><State_Paid total={125}/></Frame>
+        </DCArtboard>
+        <DCArtboard id="s8" label="8 · Invoice sent · unpaid" width={608} height={1040}>
+          <Frame><State_InvoiceSent total={125}/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="payment-b" title="Direction B · Receipt tape"
+        subtitle="Alternate metaphor — the agreement visit + extras stack onto a single running receipt. More 'cashier' than 'form'. Just the charge-up state shown for comparison.">
+        <DCArtboard id="b1" label="B · Agreement + 2 extras on tape" width={640} height={900}>
+          <Frame bg="#D8D1C4"><ReceiptTape agreement="Gold Service Plan"/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCPostIt top={-20} left={-300} rotate={-4} width={260}>
+        <b>Flow:</b><br/>
+        modal · Collect payment →<br/>
+        state 1/4 (sheet) →<br/>
+        state 2 (add extras) →<br/>
+        state 5 (pick method) →<br/>
+        state 6 or 8 →<br/>
+        state 7 (paid)
+      </DCPostIt>
+      <DCPostIt top={420} left={-300} rotate={3} width={260}>
+        Agreement banner makes it instantly obvious the visit is covered.<br/>
+        Locked $0 line + struck-through price enforces it visually.
+      </DCPostIt>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
