@@ -1,0 +1,43 @@
+# Backend and Python
+src/
+.venv/
+__pycache__/
+*.pyc
+.hypothesis/
+.coverage
+*.egg-info/
+
+# Large files
+backups/
+Viktor_excel/
+*.xlsx
+*.zip
+*.sqlite
+*.db
+
+# Development
+.firecrawl/
+.claude/
+.agents/
+.kiro/
+diagrams/
+feature-developments/
+scripts/
+docs/
+to_do/
+instructions/
+
+# Test artifacts
+e2e-screenshots/
+htmlcov/
+
+# Git
+.git/
+
+# Node modules at root (if any)
+node_modules/
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
