@@ -70,7 +70,7 @@ describe('JobTable', () => {
     const jobs = [makeJob({ job_id: 'j1', estimated_duration_minutes: 45, requires_equipment: ['Backflow kit'] })];
     renderTable({ jobs });
     const row = screen.getByTestId('job-row-j1');
-    const cells = within(row).getAllByRole('cell');
+    const cells = within(row).getAllByRole('gridcell');
     // checkbox, customer, job type, tags, city, requested, priority, duration, equipment
     expect(cells).toHaveLength(9);
     expect(cells[1]).toHaveTextContent('Alice Smith');
@@ -90,16 +90,16 @@ describe('JobTable', () => {
     expect(onToggleJob).toHaveBeenCalledWith('j1');
   });
 
-  it('selected row has teal background class', () => {
+  it('selected row has the .selected modifier class', () => {
     const jobs = [makeJob({ job_id: 'j1' })];
     renderTable({ jobs, selectedJobIds: new Set(['j1']) });
-    expect(screen.getByTestId('job-row-j1').className).toContain('bg-teal-50');
+    expect(screen.getByTestId('job-row-j1').className).toContain('selected');
   });
 
-  it('unselected row does not have teal background', () => {
+  it('unselected row does not have .selected modifier class', () => {
     const jobs = [makeJob({ job_id: 'j1' })];
     renderTable({ jobs, selectedJobIds: new Set() });
-    expect(screen.getByTestId('job-row-j1').className).not.toContain('bg-teal-50');
+    expect(screen.getByTestId('job-row-j1').className).not.toContain('selected');
   });
 
   it('row checkbox calls onToggleJob', () => {
@@ -165,14 +165,13 @@ describe('JobTable', () => {
 
   // ─── Tag pills ───────────────────────────────────────────────────────────
 
-  it('renders customer tag pills using CUSTOMER_TAG_CONFIG labels', () => {
+  it('renders customer tag pills with redesigned labels (priority → VIP)', () => {
     const jobs = [makeJob({ job_id: 'j1', customer_tags: ['priority'] })];
     renderTable({ jobs });
-    // CUSTOMER_TAG_CONFIG['priority'].label should be rendered in the tags cell
     const row = screen.getByTestId('job-row-j1');
-    const cells = within(row).getAllByRole('cell');
-    // Tags cell is index 3
-    expect(within(cells[3]).getByText('Priority')).toBeInTheDocument();
+    const cells = within(row).getAllByRole('gridcell');
+    // Tags cell is index 3 — redesigned mapper relabels priority → VIP
+    expect(within(cells[3]).getByText('VIP')).toBeInTheDocument();
   });
 
   it('renders red_flag tag pill', () => {
@@ -181,22 +180,52 @@ describe('JobTable', () => {
     expect(screen.getByText('Red Flag')).toBeInTheDocument();
   });
 
+  it('applies job-type colour class on the type pill (spring_startup → spring)', () => {
+    const jobs = [makeJob({ job_id: 'j1', job_type: 'spring_startup' })];
+    renderTable({ jobs });
+    const row = screen.getByTestId('job-row-j1');
+    const pill = row.querySelector('.pjp-pill');
+    expect(pill?.className).toContain('spring');
+  });
+
+  it('falls back to neutral pill for an unknown job type', () => {
+    const jobs = [makeJob({ job_id: 'j1', job_type: 'mystery_op' })];
+    renderTable({ jobs });
+    const row = screen.getByTestId('job-row-j1');
+    const pill = row.querySelector('.pjp-pill');
+    expect(pill?.className).toContain('neutral');
+  });
+
+  it('renders the amber note row when job.notes is populated', () => {
+    const jobs = [makeJob({ job_id: 'j1', notes: 'Gate code 1234' })];
+    renderTable({ jobs });
+    expect(screen.getByTestId('job-note-j1')).toBeInTheDocument();
+    expect(screen.getByTestId('job-note-j1').className).toContain('pjp-note-row');
+  });
+
+  it('does not render note row when job.notes is empty', () => {
+    const jobs = [makeJob({ job_id: 'j1', notes: '' })];
+    renderTable({ jobs });
+    expect(screen.queryByTestId('job-note-j1')).not.toBeInTheDocument();
+  });
+
   // ─── Priority column ─────────────────────────────────────────────────────
 
-  it('renders star icon for priority_level 1', () => {
+  it('renders the high-priority pill for priority_level 1', () => {
     const jobs = [makeJob({ job_id: 'j1', priority_level: 1 })];
     renderTable({ jobs });
     const row = screen.getByTestId('job-row-j1');
-    const cells = within(row).getAllByRole('cell');
-    // Priority cell is index 6 — should contain an SVG star (lucide-star class)
-    expect(cells[6].querySelector('svg.lucide-star')).toBeTruthy();
+    const cells = within(row).getAllByRole('gridcell');
+    // Priority cell is index 6 — uses .pjp-prio.high (with a ::before star glyph)
+    const prio = cells[6].querySelector('.pjp-prio.high');
+    expect(prio).toBeInTheDocument();
   });
 
   it('renders em-dash for priority_level 0', () => {
     const jobs = [makeJob({ job_id: 'j1', priority_level: 0 })];
     renderTable({ jobs });
     const row = screen.getByTestId('job-row-j1');
-    const cells = within(row).getAllByRole('cell');
+    const cells = within(row).getAllByRole('gridcell');
     // Priority cell is index 6 — should contain the em-dash span
     expect(within(cells[6]).getByText('—')).toBeInTheDocument();
   });
@@ -300,12 +329,14 @@ describe('JobTable', () => {
   it('displays job count next to search', () => {
     const jobs = [makeJob({ job_id: 'j1' }), makeJob({ job_id: 'j2' })];
     renderTable({ jobs });
-    expect(screen.getByText('2 jobs')).toBeInTheDocument();
+    const countRow = document.querySelector('.pjp-count-row');
+    expect(countRow?.textContent).toMatch(/2\s+jobs/);
   });
 
   it('displays singular "job" for single result', () => {
     const jobs = [makeJob({ job_id: 'j1' })];
     renderTable({ jobs });
-    expect(screen.getByText('1 job')).toBeInTheDocument();
+    const countRow = document.querySelector('.pjp-count-row');
+    expect(countRow?.textContent).toMatch(/1\s+job(?!s)/);
   });
 });

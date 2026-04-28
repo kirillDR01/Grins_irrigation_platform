@@ -4,7 +4,7 @@
  * Implements the "relaxed count" rule: counts reflect what would match if
  * THIS group's filter were removed (other filters stay).
  *
- * At lg+ (≥1024px): renders inline as a 240px column.
+ * At lg+ (≥1024px): renders inline as the left rail in the new shell.
  * At md (768–1023px): collapses behind a "Filters" Sheet button.
  *
  * Requirements: 2.3, 3.1–3.10, 15.2
@@ -37,19 +37,10 @@ const PRIORITY_LABELS: Record<string, string> = {
 export function FacetRail({ jobs, facets, onChange, onClearAll }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const rail = (
-    <FacetRailContent
-      jobs={jobs}
-      facets={facets}
-      onChange={onChange}
-      onClearAll={onClearAll}
-    />
-  );
-
   return (
     <>
       {/* md: Sheet trigger — hidden at lg+ */}
-      <div className="lg:hidden">
+      <div className="lg:hidden pjp-rail-mobile-trigger">
         <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
           <SheetTrigger asChild>
             <Button variant="outline" size="sm" className="gap-2">
@@ -61,20 +52,39 @@ export function FacetRail({ jobs, facets, onChange, onClearAll }: Props) {
             <SheetHeader>
               <SheetTitle>Filters</SheetTitle>
             </SheetHeader>
-            <div className="mt-4">{rail}</div>
+            <div className="mt-4">
+              <FacetRailContent
+                jobs={jobs}
+                facets={facets}
+                onChange={onChange}
+                onClearAll={onClearAll}
+                inSheet
+              />
+            </div>
           </SheetContent>
         </Sheet>
       </div>
 
-      {/* lg+: inline column — hidden below lg */}
-      <div className="hidden lg:block w-60 shrink-0">{rail}</div>
+      {/* lg+: inline rail — hidden below lg */}
+      <div className="hidden lg:block pjp-rail-desktop">
+        <FacetRailContent
+          jobs={jobs}
+          facets={facets}
+          onChange={onChange}
+          onClearAll={onClearAll}
+        />
+      </div>
     </>
   );
 }
 
 // ─── Inner content (shared between inline and Sheet) ───────────────────────
 
-function FacetRailContent({ jobs, facets, onChange, onClearAll }: Props) {
+interface ContentProps extends Props {
+  inSheet?: boolean;
+}
+
+function FacetRailContent({ jobs, facets, onChange, onClearAll, inSheet }: ContentProps) {
   const anyActive = Object.values(facets).some(s => (s as Set<unknown>).size > 0);
 
   const groups = useMemo(() => {
@@ -117,16 +127,21 @@ function FacetRailContent({ jobs, facets, onChange, onClearAll }: Props) {
   }
 
   return (
-    <nav data-testid="facet-rail" className="space-y-6 pb-6 text-sm">
-      {anyActive && (
-        <button
-          type="button"
-          onClick={onClearAll}
-          className="text-xs text-teal-600 hover:text-teal-700"
-        >
-          Clear all filters
-        </button>
-      )}
+    <nav
+      data-testid="facet-rail"
+      className={`pjp-rail${inSheet ? ' pjp-rail-in-sheet' : ''}`}
+    >
+      <div className="pjp-rail-head">
+        <div className="pjp-rail-brand">
+          <span className="pjp-rail-brand-mark" aria-hidden="true">F</span>
+          Filters
+        </div>
+        {anyActive && (
+          <button type="button" className="pjp-rail-clear" onClick={onClearAll}>
+            Clear all filters
+          </button>
+        )}
+      </div>
 
       <Group
         title="City"
@@ -230,36 +245,32 @@ interface GroupProps {
 function Group({ title, testId, facetKey, items, selected, countOf, onToggle, onClear, formatLabel }: GroupProps) {
   if (items.length === 0) return null;
   return (
-    <fieldset data-testid={testId} className="space-y-2">
-      <div className="flex items-center justify-between">
-        <legend className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {title}
-        </legend>
+    <fieldset data-testid={testId} className="pjp-facet-group">
+      <div className="pjp-facet-head">
+        <legend className="pjp-facet-title">{title}</legend>
         {selected.size > 0 && (
-          <button
-            type="button"
-            onClick={onClear}
-            className="text-[10px] text-teal-600 hover:text-teal-700"
-          >
+          <button type="button" onClick={onClear} className="pjp-facet-clear">
             Clear
           </button>
         )}
       </div>
-      <ul className="space-y-1.5">
+      <ul className="pjp-facet-list">
         {items.map(v => {
           const count = countOf(v);
-          const dim = count === 0;
+          const isOn = selected.has(v);
           return (
-            <li key={v}>
+            <li
+              key={v}
+              className="pjp-facet-row"
+              data-on={isOn ? 'true' : 'false'}
+              data-count={String(count)}
+            >
               <label
                 data-testid={`facet-value-${facetKey}-${v}`}
-                className={`flex items-center justify-between gap-2 text-sm cursor-pointer ${dim ? 'text-slate-400' : 'text-foreground'}`}
               >
-                <span className="flex items-center gap-2">
-                  <Checkbox checked={selected.has(v)} onCheckedChange={() => onToggle(v)} />
-                  <span>{formatLabel ? formatLabel(v) : v}</span>
-                </span>
-                <span className="text-xs text-muted-foreground tabular-nums">{count}</span>
+                <Checkbox checked={isOn} onCheckedChange={() => onToggle(v)} />
+                <span className="pjp-facet-lbl">{formatLabel ? formatLabel(v) : v}</span>
+                <span className="pjp-facet-ct pjp-mono">{count}</span>
               </label>
             </li>
           );

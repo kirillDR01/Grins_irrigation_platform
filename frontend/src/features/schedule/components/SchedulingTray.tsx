@@ -1,14 +1,12 @@
 /**
- * SchedulingTray — persistent assignment panel pinned to the bottom of PickJobsPage.
+ * SchedulingTray — fixed assignment bar pinned to the bottom of PickJobsPage.
  * Requirements: 8.1–8.6, 9.1–9.6, 10.1–10.6, 11.1–11.5, 15.5, 15.6
  *
  * CRITICAL: always rendered — never conditionally hidden.
  */
 
 import { Clock, ChevronDown, ChevronUp, CalendarPlus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -18,7 +16,9 @@ import { computeJobTimes } from '../types/pick-jobs';
 
 interface Props {
   selectedJobIds: Set<string>;
+  /** Visible subset of selected jobs (filtered by current facets). */
   selectedJobs: JobReadyToSchedule[];
+  /** Full count of selected jobs, including those hidden by filters. */
   totalSelectedCount: number;
   staff: Staff[];
 
@@ -41,12 +41,15 @@ interface Props {
   onClearSelection: () => void;
 }
 
+const pluralize = (word: string, n: number): string =>
+  n === 1 ? word : (word === 'city' ? 'cities' : `${word}s`);
+
 export function SchedulingTray(p: Props) {
   const n = p.totalSelectedCount;
   const isActive = n > 0;
   const hiddenCount = n - p.selectedJobs.length;
 
-  // Cascade times: use computeJobTimes so auto-mode jobs cascade from last override's end
+  // Cascade times so auto-mode jobs flow from last override's end.
   const computedTimes = computeJobTimes(p.selectedJobs, p.startTime, p.duration, p.perJobTimes);
 
   const overlapWarning = Object.entries(p.perJobTimes).some(
@@ -60,25 +63,46 @@ export function SchedulingTray(p: Props) {
     overlapWarning ? 'Selected job times overlap — review per-job adjustments' :
     null;
 
+  // Derive summary: cities count and total hours from the visible selected jobs.
+  // (Hidden-by-filter jobs are not on hand to compute against; the count pill
+  // still uses totalSelectedCount and we surface the discrepancy via hiddenCount.)
+  const cities = new Set(p.selectedJobs.map(j => j.city).filter(Boolean));
+  const citiesCount = cities.size;
+  const totalMinutes = p.selectedJobs.reduce(
+    (sum, j) => sum + (j.estimated_duration_minutes ?? p.duration),
+    0,
+  );
+  const totalHoursStr = (totalMinutes / 60).toFixed(1).replace(/\.0$/, '');
+
   return (
     <section
       aria-label="Scheduling assignment"
       data-testid="scheduling-tray"
-      className="border-t border-border bg-card shadow-[0_-4px_12px_rgba(0,0,0,0.04)]"
+      className="pjp-sched-bar"
+      data-empty={!isActive}
     >
-      <div className="mx-auto max-w-screen-2xl px-6 py-4 space-y-3">
+      <div className="pjp-sched-bar-inner">
 
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div aria-live="polite" className="text-base font-semibold">
-            {isActive
-              ? <>Schedule <span className="text-teal-700">{n}</span> job{n !== 1 ? 's' : ''}</>
-              : <span className="font-normal text-muted-foreground">No jobs selected yet — pick some above</span>}
-          </div>
+        <div className="pjp-bar-header">
+          <h3 className="pjp-bar-title" aria-live="polite">
+            {isActive ? (
+              <>
+                Schedule{' '}
+                <span className="pjp-bar-num pjp-mono" data-testid="tray-selected-count">{n}</span>{' '}
+                job{n !== 1 ? 's' : ''}
+              </>
+            ) : (
+              <>
+                <span data-testid="tray-selected-count" style={{ display: 'none' }}>0</span>
+                Schedule jobs <span className="pjp-bar-muted">— pick some above</span>
+              </>
+            )}
+          </h3>
           {isActive && (
             <button
               type="button"
-              className="text-xs text-teal-600 hover:text-teal-700"
+              className="pjp-bar-clear"
               onClick={p.onClearSelection}
               data-testid="tray-clear-selection"
             >
@@ -88,15 +112,15 @@ export function SchedulingTray(p: Props) {
         </div>
 
         {hiddenCount > 0 && (
-          <p className="text-xs text-muted-foreground">
+          <p className="pjp-bar-hidden-note">
             {hiddenCount} selected job{hiddenCount !== 1 ? 's are' : ' is'} hidden by current filters.
           </p>
         )}
 
-        {/* Fields */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[200px_260px_160px_160px_1fr] gap-3 items-end">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Date</Label>
+        {/* Field row */}
+        <div className="pjp-bar-fields">
+          <div className="pjp-field">
+            <span className="pjp-field-label">Date</span>
             <Input
               type="date"
               value={p.assignDate}
@@ -104,8 +128,8 @@ export function SchedulingTray(p: Props) {
               data-testid="tray-date"
             />
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Staff member</Label>
+          <div className="pjp-field">
+            <span className="pjp-field-label">Staff member</span>
             <Select value={p.assignStaffId} onValueChange={p.onAssignStaffIdChange}>
               <SelectTrigger data-testid="tray-staff">
                 <SelectValue placeholder="Select staff…" />
@@ -117,8 +141,8 @@ export function SchedulingTray(p: Props) {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Start time</Label>
+          <div className="pjp-field">
+            <span className="pjp-field-label">Start time</span>
             <Input
               type="time"
               value={p.startTime}
@@ -126,8 +150,8 @@ export function SchedulingTray(p: Props) {
               data-testid="tray-start-time"
             />
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Default duration (min)</Label>
+          <div className="pjp-field">
+            <span className="pjp-field-label">Default duration (min)</span>
             <Input
               type="number"
               min={15}
@@ -144,85 +168,94 @@ export function SchedulingTray(p: Props) {
           <>
             <button
               type="button"
-              className="flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700"
+              className={`pjp-pjt-toggle${p.showTimeAdjust ? ' open' : ''}`}
               onClick={() => p.onShowTimeAdjustChange(!p.showTimeAdjust)}
               data-testid="tray-time-adjust-toggle"
             >
               <Clock className="h-3 w-3" />
               Per-job time adjustments
+              <span className="pjp-pjt-badge pjp-mono">{p.selectedJobs.length}</span>
               {p.showTimeAdjust ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             </button>
 
             {p.showTimeAdjust && (
-              <div
-                data-testid="tray-time-adjust-table"
-                className="rounded-lg border border-border max-h-[150px] overflow-y-auto"
-              >
-                <table className="w-full text-xs">
-                  <thead className="bg-slate-50 sticky top-0">
-                    <tr className="text-left text-muted-foreground">
-                      <th className="p-2">Customer</th>
-                      <th className="p-2">Job type</th>
-                      <th className="p-2">Start</th>
-                      <th className="p-2">End</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {p.selectedJobs.map(j => {
-                      const computed = computedTimes[j.job_id] ?? { start: p.startTime, end: '' };
-                      const override = p.perJobTimes[j.job_id];
-                      return (
-                        <tr key={j.job_id} className="border-t border-slate-100">
-                          <td className="p-2 text-foreground">{j.customer_name}</td>
-                          <td className="p-2 text-muted-foreground">{j.job_type}</td>
-                          <td className="p-2">
-                            <Input
-                              type="time"
-                              value={override?.start ?? computed.start}
-                              onChange={e => p.onPerJobTimesChange(prev => ({
-                                ...prev,
-                                [j.job_id]: { ...(prev[j.job_id] ?? { start: '', end: '' }), start: e.target.value },
-                              }))}
-                              className="h-7 text-xs w-[100px]"
-                            />
-                          </td>
-                          <td className="p-2">
-                            <Input
-                              type="time"
-                              value={override?.end ?? computed.end}
-                              onChange={e => p.onPerJobTimesChange(prev => ({
-                                ...prev,
-                                [j.job_id]: { ...(prev[j.job_id] ?? { start: '', end: '' }), end: e.target.value },
-                              }))}
-                              className="h-7 text-xs w-[100px]"
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div data-testid="tray-time-adjust-table" className="pjp-pjt-table">
+                <div className="pjp-pjt-row pjp-pjt-head">
+                  <div>Customer</div>
+                  <div>Job type</div>
+                  <div>Start</div>
+                  <div>End</div>
+                </div>
+                {p.selectedJobs.map((j, i) => {
+                  const computed = computedTimes[j.job_id] ?? { start: p.startTime, end: '' };
+                  const override = p.perJobTimes[j.job_id];
+                  return (
+                    <div key={j.job_id} className="pjp-pjt-row">
+                      <div className="pjp-pjt-cust">
+                        <span className="pjp-dot blue">{i + 1}</span>
+                        <div>
+                          <div className="pjp-pjt-name">{j.customer_name}</div>
+                          {j.city && <div className="pjp-pjt-jt">{j.city}</div>}
+                        </div>
+                      </div>
+                      <div className="pjp-pjt-jt">{j.job_type}</div>
+                      <div>
+                        <Input
+                          type="time"
+                          value={override?.start ?? computed.start}
+                          onChange={e => p.onPerJobTimesChange(prev => ({
+                            ...prev,
+                            [j.job_id]: { ...(prev[j.job_id] ?? { start: '', end: '' }), start: e.target.value },
+                          }))}
+                        />
+                      </div>
+                      <div>
+                        <Input
+                          type="time"
+                          value={override?.end ?? computed.end}
+                          onChange={e => p.onPerJobTimesChange(prev => ({
+                            ...prev,
+                            [j.job_id]: { ...(prev[j.job_id] ?? { start: '', end: '' }), end: e.target.value },
+                          }))}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </>
         )}
 
-        {/* Assign action */}
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">
-            {helper ?? `${n} job${n !== 1 ? 's' : ''} selected`}
-          </p>
-          <Button
+        {/* Footer */}
+        <div className="pjp-bar-footer">
+          <div className="pjp-footer-meta">
+            <span className="pjp-count-pill pjp-mono" aria-hidden="true">{n}</span>
+            {isActive ? (
+              <span className="pjp-footer-summary">
+                {n} {pluralize('job', n)} selected
+                {citiesCount > 0 && <> · {citiesCount} {pluralize('city', citiesCount)}</>}
+                {totalMinutes > 0 && <> · ~{totalHoursStr}h total</>}
+              </span>
+            ) : (
+              <span className="pjp-footer-helper">{helper ?? `${n} job${n !== 1 ? 's' : ''} selected`}</span>
+            )}
+            {isActive && helper && (
+              <span className="pjp-footer-helper">{helper}</span>
+            )}
+          </div>
+          <button
+            type="button"
             onClick={p.onAssign}
             disabled={disableAssign}
             data-testid="tray-assign-btn"
-            className="bg-teal-500 hover:bg-teal-600 text-white"
+            className="pjp-bar-assign-cta"
           >
-            <CalendarPlus className="mr-2 h-4 w-4" />
+            <CalendarPlus className="h-4 w-4" />
             {p.isAssigning
               ? 'Assigning…'
               : n > 0 ? `Assign ${n} Job${n !== 1 ? 's' : ''}` : 'Assign'}
-          </Button>
+          </button>
         </div>
       </div>
     </section>

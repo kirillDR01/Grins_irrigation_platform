@@ -198,9 +198,9 @@ describe('PickJobsPage integration', () => {
 
     await user.click(screen.getByTestId('job-row-j1'));
 
-    // Tray should show "Schedule 1 job" — the count is in a teal span
-    const tealCount = document.querySelector('.text-teal-700');
-    expect(tealCount?.textContent).toBe('1');
+    // Tray title shows "Schedule 1 job" — the count lives in a dedicated testid span.
+    const selectedCount = screen.getByTestId('tray-selected-count');
+    expect(selectedCount.textContent).toBe('1');
   });
 
   // ─── Facet filtering ─────────────────────────────────────────────────────
@@ -227,8 +227,8 @@ describe('PickJobsPage integration', () => {
     // j1 still visible
     expect(screen.getByTestId('job-row-j1')).toBeInTheDocument();
     // Selection count preserved
-    const tealCount = document.querySelector('.text-teal-700');
-    expect(tealCount?.textContent).toBe('1');
+    const selectedCount = screen.getByTestId('tray-selected-count');
+    expect(selectedCount.textContent).toBe('1');
   });
 
   // ─── Assign button disabled without staff ────────────────────────────────

@@ -69,7 +69,7 @@ describe('SchedulingTray', () => {
 
   it('shows idle header text when no jobs selected', () => {
     render(<SchedulingTray {...defaultProps} />);
-    expect(screen.getByText(/No jobs selected yet/)).toBeInTheDocument();
+    expect(screen.getByText(/pick some above/i)).toBeInTheDocument();
   });
 
   it('shows active header text with count when jobs selected', () => {
@@ -81,8 +81,8 @@ describe('SchedulingTray', () => {
         totalSelectedCount={1}
       />
     );
-    expect(screen.getByText(/Schedule/)).toBeInTheDocument();
-    expect(screen.getByText('1')).toBeInTheDocument();
+    const title = screen.getByTestId('tray-selected-count');
+    expect(title.textContent).toBe('1');
   });
 
   it('shows plural "jobs" for multiple selections', () => {
@@ -94,7 +94,52 @@ describe('SchedulingTray', () => {
         totalSelectedCount={2}
       />
     );
-    expect(screen.getByText(/jobs/)).toBeInTheDocument();
+    expect(screen.getByTestId('tray-selected-count').textContent).toBe('2');
+    // Title contains "jobs" plural
+    const title = screen.getByTestId('tray-selected-count').closest('.pjp-bar-title');
+    expect(title?.textContent).toMatch(/jobs/);
+  });
+
+  it('exposes the .pjp-sched-bar fixed-bar root class', () => {
+    render(<SchedulingTray {...defaultProps} />);
+    const tray = screen.getByTestId('scheduling-tray');
+    expect(tray.className).toContain('pjp-sched-bar');
+  });
+
+  it('marks the bar as data-empty="true" when no jobs are selected', () => {
+    render(<SchedulingTray {...defaultProps} />);
+    const tray = screen.getByTestId('scheduling-tray');
+    expect(tray.getAttribute('data-empty')).toBe('true');
+  });
+
+  it('marks the bar as data-empty="false" when jobs are selected', () => {
+    render(
+      <SchedulingTray
+        {...defaultProps}
+        selectedJobIds={new Set(['j1'])}
+        selectedJobs={[mockJob]}
+        totalSelectedCount={1}
+      />
+    );
+    const tray = screen.getByTestId('scheduling-tray');
+    expect(tray.getAttribute('data-empty')).toBe('false');
+  });
+
+  it('renders a contextual summary string with cities count and rounded hours', () => {
+    const j1 = { ...mockJob, job_id: 'j1', city: 'Minneapolis', estimated_duration_minutes: 60 };
+    const j2 = { ...mockJob, job_id: 'j2', city: 'St. Paul', estimated_duration_minutes: 90 };
+    render(
+      <SchedulingTray
+        {...defaultProps}
+        selectedJobIds={new Set(['j1', 'j2'])}
+        selectedJobs={[j1, j2]}
+        totalSelectedCount={2}
+      />
+    );
+    const tray = screen.getByTestId('scheduling-tray');
+    expect(tray.textContent).toMatch(/2 jobs selected/);
+    expect(tray.textContent).toMatch(/2 cities/);
+    expect(tray.textContent).toMatch(/2\.5h total/);
   });
 
   it('shows hidden selections note when some selected jobs are filtered out', () => {

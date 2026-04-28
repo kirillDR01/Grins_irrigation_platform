@@ -36,6 +36,8 @@ import type {
 import { initialFacets, computeJobTimes } from '../types/pick-jobs';
 import { normalizeCity } from '../utils/city';
 
+import '../styles/pick-jobs-theme.css';
+
 function todayIso(): string {
   return new Date().toISOString().split('T')[0];
 }
@@ -312,81 +314,79 @@ export function PickJobsPage() {
         </DialogContent>
       </Dialog>
 
-    <div
-      className="grid h-[calc(100vh-theme(spacing.16))] grid-cols-1 grid-rows-[auto_1fr_auto] gap-y-4 lg:grid-cols-[240px_1fr] lg:gap-x-6"
-      data-testid="pick-jobs-page"
-    >
-      {/* Header */}
-      <header className="col-span-full px-6 pt-6">
-        <button
-          type="button"
-          className="text-xs text-muted-foreground hover:text-foreground"
-          onClick={() => navigate(-1)}
-        >
-          ← Back to schedule
-        </button>
-        <h1 className="text-2xl font-semibold tracking-tight">Pick jobs to schedule</h1>
-        <p className="text-sm text-muted-foreground">
-          Browse freely. Facets on the left narrow the list; the scheduling tray stays pinned below.
-        </p>
-      </header>
-
-      {/* Facet rail */}
-      <aside className="overflow-y-auto pl-6">
-        <FacetRail
-          jobs={jobs}
-          facets={facets}
-          onChange={setFacets}
-          onClearAll={clearAllFilters}
-        />
-      </aside>
-
-      {/* Main table region */}
-      <main className="overflow-hidden flex flex-col px-6 lg:pl-0 lg:pr-6">
-        {isLoading ? (
-          <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>
-        ) : (
-          <JobTable
-            jobs={sortedJobs}
-            searchRef={searchRef}
-            search={search}
-            onSearchChange={setSearch}
-            selectedJobIds={selectedJobIds}
-            onToggleJob={toggleJob}
-            onToggleAllVisible={toggleAllVisible}
-            sortKey={sortKey}
-            sortDir={sortDir}
-            onSort={(key, dir) => { setSortKey(key); setSortDir(dir); }}
-            onClearAllFilters={clearAllFilters}
-            anyFilterActive={anyFilterActive}
+    <div data-pjp-root data-testid="pick-jobs-page">
+      <div className="pjp-app-shell">
+        {/* Facet rail (left) */}
+        <aside>
+          <FacetRail
+            jobs={jobs}
+            facets={facets}
+            onChange={setFacets}
+            onClearAll={clearAllFilters}
           />
-        )}
-      </main>
+        </aside>
 
-      {/* Scheduling tray */}
-      <section aria-label="Scheduling assignment" className="col-span-full">
-        <SchedulingTray
-          selectedJobIds={selectedJobIds}
-          selectedJobs={sortedJobs.filter(j => selectedJobIds.has(j.job_id))}
-          totalSelectedCount={selectedJobIds.size}
-          staff={staff}
-          assignDate={assignDate}
-          onAssignDateChange={setAssignDate}
-          assignStaffId={assignStaffId}
-          onAssignStaffIdChange={setAssignStaffId}
-          startTime={startTime}
-          onStartTimeChange={setStartTime}
-          duration={duration}
-          onDurationChange={setDuration}
-          perJobTimes={perJobTimes}
-          onPerJobTimesChange={setPerJobTimes}
-          showTimeAdjust={showTimeAdjust}
-          onShowTimeAdjustChange={setShowTimeAdjust}
-          isAssigning={createAppointment.isPending}
-          onAssign={handleBulkAssign}
-          onClearSelection={clearSelection}
-        />
-      </section>
+        {/* Main canvas */}
+        <main className="pjp-main">
+          <header className="pjp-page-head">
+            <button
+              type="button"
+              className="pjp-back-link"
+              onClick={() => navigate(-1)}
+            >
+              ← Back to schedule
+            </button>
+            <h1 className="pjp-page-title">Pick jobs to schedule</h1>
+            <p className="pjp-page-sub">
+              Browse freely. Facets on the left narrow the list; the scheduling tray stays pinned below.
+            </p>
+          </header>
+
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16"><LoadingSpinner /></div>
+          ) : (
+            <JobTable
+              jobs={sortedJobs}
+              searchRef={searchRef}
+              search={search}
+              onSearchChange={setSearch}
+              selectedJobIds={selectedJobIds}
+              onToggleJob={toggleJob}
+              onToggleAllVisible={toggleAllVisible}
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={(key, dir) => { setSortKey(key); setSortDir(dir); }}
+              onClearAllFilters={clearAllFilters}
+              anyFilterActive={anyFilterActive}
+            />
+          )}
+
+          <div className="pjp-main-scroll-pad" aria-hidden="true" />
+        </main>
+      </div>
+
+      {/* Fixed scheduling tray (sibling of shell, inside data-pjp-root) */}
+      <SchedulingTray
+        selectedJobIds={selectedJobIds}
+        selectedJobs={sortedJobs.filter(j => selectedJobIds.has(j.job_id))}
+        totalSelectedCount={selectedJobIds.size}
+        staff={staff}
+        assignDate={assignDate}
+        onAssignDateChange={setAssignDate}
+        assignStaffId={assignStaffId}
+        onAssignStaffIdChange={setAssignStaffId}
+        startTime={startTime}
+        onStartTimeChange={setStartTime}
+        duration={duration}
+        onDurationChange={setDuration}
+        perJobTimes={perJobTimes}
+        onPerJobTimesChange={setPerJobTimes}
+        showTimeAdjust={showTimeAdjust}
+        onShowTimeAdjustChange={setShowTimeAdjust}
+        isAssigning={createAppointment.isPending}
+        onAssign={handleBulkAssign}
+        onClearSelection={clearSelection}
+      />
     </div>
     </>
   );
