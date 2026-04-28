@@ -14,14 +14,17 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 import stripe
+from sqlalchemy import select
 
 from grins_platform.exceptions import (
     AgreementNotFoundError,
     InactiveTierError,
     InvalidAgreementStatusTransitionError,
+    MergeConflictError,
     MidSeasonTierChangeError,
 )
 from grins_platform.log_config import LoggerMixin
+from grins_platform.models.customer import Customer
 from grins_platform.models.enums import (
     VALID_AGREEMENT_STATUS_TRANSITIONS,
     AgreementStatus,
@@ -68,6 +71,49 @@ class AgreementService(LoggerMixin):
         year = datetime.now(timezone.utc).year
         seq = await self.agreement_repo.get_next_agreement_number_seq(year)
         return f"AGR-{year}-{seq:03d}"
+
+    async def _assert_stripe_customer_alignment(
+        self,
+        *,
+        customer_id: UUID,
+        agreement_stripe_customer_id: str | None,
+    ) -> None:
+        """CG-18 invariant: agreement and parent customer must share Stripe ID.
+
+        If the agreement is being stamped with a ``stripe_customer_id`` and
+        the parent Grin's customer already has one, the two values must
+        match. Mismatched IDs mean the agreement points at a different
+        Stripe Customer than the rest of the customer's billing record —
+        a silent failure mode that breaks reconciliation and double-bills
+        the customer when both subscriptions and Payment Links charge.
+
+        Raises:
+            MergeConflictError: When both IDs are populated and differ.
+
+        Validates: Stripe Payment Links plan §Phase 1.5 (CG-18).
+        """
+        if agreement_stripe_customer_id is None:
+            return
+        result = await self.agreement_repo.session.execute(
+            select(Customer.stripe_customer_id).where(Customer.id == customer_id),
+        )
+        customer_stripe_id = result.scalar_one_or_none()
+        if (
+            customer_stripe_id is not None
+            and customer_stripe_id != agreement_stripe_customer_id
+        ):
+            self.log_rejected(
+                "create_agreement",
+                reason="stripe_customer_id_mismatch",
+                customer_id=str(customer_id),
+                customer_stripe_id_suffix=customer_stripe_id[-6:],
+                agreement_stripe_id_suffix=agreement_stripe_customer_id[-6:],
+            )
+            msg = (
+                "ServiceAgreement.stripe_customer_id does not match "
+                "Customer.stripe_customer_id — refusing to create."
+            )
+            raise MergeConflictError(msg)
 
     async def create_agreement(
         self,
@@ -127,6 +173,18 @@ class AgreementService(LoggerMixin):
             ):
                 if key in stripe_data:
                     create_kwargs[key] = stripe_data[key]
+
+        # CG-18 invariant: any Stripe customer ID stamped on the agreement
+        # must match the parent customer's stripe_customer_id when both are
+        # populated. Diverging IDs mean a Grin's customer is double-billed
+        # under two Stripe Customer namespaces — silently wrong, hard to
+        # untangle later. Fail fast.
+        await self._assert_stripe_customer_alignment(
+            customer_id=customer_id,
+            agreement_stripe_customer_id=create_kwargs.get(
+                "stripe_customer_id",
+            ),
+        )
 
         agreement = await self.agreement_repo.create(**create_kwargs)
 
@@ -269,6 +327,7 @@ class AgreementService(LoggerMixin):
 
         if agreement.stripe_subscription_id and self.stripe_settings.is_configured:
             stripe.api_key = self.stripe_settings.stripe_secret_key
+            stripe.api_version = self.stripe_settings.stripe_api_version
             stripe.Subscription.modify(
                 agreement.stripe_subscription_id,
                 cancel_at_period_end=True,

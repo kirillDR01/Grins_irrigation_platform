@@ -175,6 +175,30 @@ class Invoice(Base):
         nullable=True,
     )
 
+    # Stripe Payment Link tracking (Architecture C — Phase 2.3)
+    stripe_payment_link_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    stripe_payment_link_url: Mapped[str | None] = mapped_column(
+        Text(),
+        nullable=True,
+    )
+    stripe_payment_link_active: Mapped[bool] = mapped_column(
+        Boolean(),
+        nullable=False,
+        server_default="true",
+    )
+    payment_link_sent_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
+    payment_link_sent_count: Mapped[int] = mapped_column(
+        Integer(),
+        nullable=False,
+        server_default="0",
+    )
+
     # CRM Gap Closure fields (Req 54, 80, 84)
     pre_due_reminder_sent_at: Mapped[datetime | None] = mapped_column(
         TIMESTAMP(timezone=True),

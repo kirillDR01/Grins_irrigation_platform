@@ -158,6 +158,12 @@ class CustomerService(LoggerMixin):
                 is_primary=True,
             )
 
+        # Best-effort: ensure a Stripe Customer exists so the new Grin's
+        # customer can receive Payment-Link receipts and be charged via the
+        # Payment Links flow without an extra round-trip later. Failures
+        # never abort the user-visible create.
+        await self._best_effort_link_stripe_customer(customer.id)
+
         self.log_completed("create_customer", customer_id=str(customer.id))
         response: CustomerResponse = CustomerResponse.model_validate(customer)
         return response
@@ -280,6 +286,11 @@ class CustomerService(LoggerMixin):
         if not updated:
             self.log_rejected("update_customer", reason="update_failed")
             raise CustomerNotFoundError(customer_id)
+
+        # Best-effort: backfill Stripe linkage if this customer never got
+        # one (e.g., migrated from before Phase 1 wiring). Idempotent —
+        # already-linked customers short-circuit inside the helper.
+        await self._best_effort_link_stripe_customer(customer_id)
 
         self.log_completed("update_customer", customer_id=str(customer_id))
         response: CustomerResponse = CustomerResponse.model_validate(updated)
@@ -1449,6 +1460,7 @@ class CustomerService(LoggerMixin):
             return []
 
         stripe.api_key = settings.stripe_secret_key
+        stripe.api_version = settings.stripe_api_version
 
         try:
             payment_methods = stripe.PaymentMethod.list(
@@ -1560,6 +1572,7 @@ class CustomerService(LoggerMixin):
             raise MergeConflictError(msg)
 
         stripe.api_key = settings.stripe_secret_key
+        stripe.api_version = settings.stripe_api_version
 
         # Get default payment method
         try:
@@ -1630,3 +1643,119 @@ class CustomerService(LoggerMixin):
             amount=amount,
             currency="usd",
         )
+
+    # =========================================================================
+    # Stripe Payment Links (Phase 1.2): customer linkage helper
+    # =========================================================================
+
+    async def get_or_create_stripe_customer(
+        self,
+        customer_id: UUID,
+    ) -> str:
+        """Return the customer's ``stripe_customer_id``, creating one if missing.
+
+        Idempotent: if the Grin's customer already has a populated
+        ``stripe_customer_id``, that value is returned without contacting
+        Stripe. Otherwise this calls ``stripe.Customer.create`` with the
+        customer's name/email/phone, persists the new ID, and returns it.
+        ``metadata.grins_customer_id`` is set on the Stripe Customer so
+        future reconciliation can map back without ambiguity.
+
+        Args:
+            customer_id: UUID of the Grin's customer.
+
+        Returns:
+            The (existing or newly created) Stripe customer ID string.
+
+        Raises:
+            CustomerNotFoundError: If no customer with this ID exists.
+            MergeConflictError: If Stripe is not configured, or
+                ``Customer.create`` fails.
+
+        Validates: Stripe Payment Links plan §Phase 1.2.
+        """
+        self.log_started(
+            "get_or_create_stripe_customer",
+            customer_id=str(customer_id),
+        )
+
+        customer = await self.repository.get_by_id(customer_id)
+        if not customer:
+            self.log_rejected(
+                "get_or_create_stripe_customer",
+                reason="not_found",
+            )
+            raise CustomerNotFoundError(customer_id)
+
+        if customer.stripe_customer_id:
+            self.log_completed(
+                "get_or_create_stripe_customer",
+                customer_id=str(customer_id),
+                outcome="already_linked",
+            )
+            return str(customer.stripe_customer_id)
+
+        settings = StripeSettings()
+        if not settings.is_configured:
+            self.log_rejected(
+                "get_or_create_stripe_customer",
+                reason="stripe_not_configured",
+            )
+            msg = "Stripe is not configured"
+            raise MergeConflictError(msg)
+
+        stripe.api_key = settings.stripe_secret_key
+        stripe.api_version = settings.stripe_api_version
+
+        full_name = f"{customer.first_name} {customer.last_name}".strip()
+        create_params: dict[str, Any] = {
+            "name": full_name,
+            "metadata": {"grins_customer_id": str(customer_id)},
+        }
+        if customer.email:
+            create_params["email"] = customer.email
+        if customer.phone:
+            create_params["phone"] = customer.phone
+
+        try:
+            stripe_customer = stripe.Customer.create(**create_params)
+        except stripe.StripeError as e:
+            self.log_failed(
+                "get_or_create_stripe_customer",
+                error=e,
+                customer_id=str(customer_id),
+            )
+            msg = f"Failed to create Stripe customer: {e}"
+            raise MergeConflictError(msg) from e
+
+        new_id: str = str(stripe_customer["id"])
+        await self.repository.update(
+            customer_id,
+            {"stripe_customer_id": new_id},
+        )
+
+        self.log_completed(
+            "get_or_create_stripe_customer",
+            customer_id=str(customer_id),
+            stripe_customer_id_suffix=new_id[-6:],
+            outcome="created",
+        )
+        return new_id
+
+    async def _best_effort_link_stripe_customer(self, customer_id: UUID) -> None:
+        """Best-effort wrapper around ``get_or_create_stripe_customer``.
+
+        Used by the post-write hooks in ``create_customer`` and
+        ``update_customer`` so a transient Stripe outage cannot block a
+        user-visible CRUD operation. Failures are logged at WARNING and
+        otherwise swallowed; the next time the customer is touched the
+        helper retries the link.
+        """
+        try:
+            await self.get_or_create_stripe_customer(customer_id)
+        except (MergeConflictError, CustomerNotFoundError) as exc:
+            self.logger.warning(
+                "customer.stripe_link.best_effort_failed",
+                customer_id=str(customer_id),
+                error=str(exc),
+            )

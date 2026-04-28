@@ -958,6 +958,8 @@ class TestProperty34InvoicePrePopulation:
             job_repo=job_repo,
             invoice_repo=invoice_repo,
         )
+        # Phase 2.4a idempotency check: ensure no existing invoice is found.
+        svc._find_invoice_for_job = AsyncMock(return_value=None)
         await svc.create_invoice_from_appointment(apt_id)
 
         # Verify create was called with correct customer_id and job_id
@@ -1010,6 +1012,7 @@ class TestProperty34InvoicePrePopulation:
             job_repo=job_repo,
             invoice_repo=invoice_repo,
         )
+        svc._find_invoice_for_job = AsyncMock(return_value=None)
         await svc.create_invoice_from_appointment(apt_id)
 
         create_call = invoice_repo.create.call_args
@@ -1028,6 +1031,48 @@ class TestProperty34InvoicePrePopulation:
 
         with pytest.raises(AppointmentNotFoundError):
             await svc.create_invoice_from_appointment(uuid4())
+
+    @pytest.mark.asyncio
+    async def test_create_invoice_from_appointment_is_idempotent(self) -> None:
+        """Second call returns the existing invoice; sequence not consumed.
+
+        Validates: Stripe Payment Links plan §Phase 2.4a (F1).
+        """
+        apt_id = uuid4()
+        job_id = uuid4()
+        customer_id = uuid4()
+        existing_invoice = _make_invoice_mock(
+            job_id=job_id,
+            customer_id=customer_id,
+            invoice_number="INV-2026-0099",
+        )
+
+        job = _make_job_mock(job_id=job_id, customer_id=customer_id)
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            job_id=job_id,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+
+        invoice_repo = AsyncMock()
+        invoice_repo.get_next_sequence = AsyncMock(return_value=99)
+        invoice_repo.create = AsyncMock()
+
+        svc = _build_service(
+            appt_repo=appt_repo,
+            job_repo=job_repo,
+            invoice_repo=invoice_repo,
+        )
+        svc._find_invoice_for_job = AsyncMock(return_value=existing_invoice)
+        result = await svc.create_invoice_from_appointment(apt_id)
+
+        assert result is existing_invoice
+        invoice_repo.create.assert_not_awaited()
+        invoice_repo.get_next_sequence.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_create_invoice_generates_valid_invoice_number(
@@ -1063,6 +1108,7 @@ class TestProperty34InvoicePrePopulation:
             job_repo=job_repo,
             invoice_repo=invoice_repo,
         )
+        svc._find_invoice_for_job = AsyncMock(return_value=None)
         await svc.create_invoice_from_appointment(apt_id)
 
         create_call = invoice_repo.create.call_args

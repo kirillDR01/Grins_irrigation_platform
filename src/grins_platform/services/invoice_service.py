@@ -13,8 +13,13 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, ClassVar, cast
 from uuid import UUID
 
+from grins_platform.exceptions import (
+    LeadOnlyInvoiceError,
+    NoContactMethodError,
+)
 from grins_platform.log_config import LoggerMixin
-from grins_platform.models.enums import InvoiceStatus
+from grins_platform.models.enums import EmailType, InvoiceStatus
+from grins_platform.schemas.ai import MessageType
 from grins_platform.schemas.invoice import (
     InvoiceCreate,
     InvoiceDetailResponse,
@@ -29,14 +34,31 @@ from grins_platform.schemas.invoice import (
     MassNotifyResponse,
     PaginatedInvoiceResponse,
     PaymentRecord,
+    SendLinkResponse,
+)
+from grins_platform.services.sms.recipient import Recipient
+from grins_platform.services.sms_service import (
+    SMSConsentDeniedError,
+    SMSError,
+    SMSRateLimitDeniedError,
+)
+from grins_platform.services.stripe_payment_link_service import (
+    StripePaymentLinkError,
 )
 
 if TYPE_CHECKING:
     from grins_platform.models.invoice import Invoice
+    from grins_platform.repositories.customer_repository import CustomerRepository
     from grins_platform.repositories.invoice_repository import InvoiceRepository
     from grins_platform.repositories.job_repository import JobRepository
     from grins_platform.services.business_setting_service import (
         BusinessSettingService,
+    )
+    from grins_platform.services.customer_service import CustomerService
+    from grins_platform.services.email_service import EmailService
+    from grins_platform.services.sms_service import SMSService
+    from grins_platform.services.stripe_payment_link_service import (
+        StripePaymentLinkService,
     )
 
 
@@ -183,6 +205,12 @@ class InvoiceService(LoggerMixin):
         invoice_repository: InvoiceRepository,
         job_repository: JobRepository,
         business_settings: BusinessSettingService | None = None,
+        *,
+        customer_repository: CustomerRepository | None = None,
+        customer_service: CustomerService | None = None,
+        payment_link_service: StripePaymentLinkService | None = None,
+        sms_service: SMSService | None = None,
+        email_service: EmailService | None = None,
     ) -> None:
         """Initialize service with repositories.
 
@@ -196,11 +224,28 @@ class InvoiceService(LoggerMixin):
                 lazily instantiates one against the repository's session when
                 first needed. Dependency injection in the API layer passes
                 this explicitly. See H-12 (bughunt 2026-04-16).
+            customer_repository: Optional :class:`CustomerRepository` used by
+                the Payment Link send-flow (plan §Phase 2.7).
+            customer_service: Optional :class:`CustomerService` used to
+                ensure a Stripe Customer exists before creating a Payment
+                Link (plan §Phase 2.5).
+            payment_link_service: Optional :class:`StripePaymentLinkService`
+                used to create / deactivate Payment Links (plan §Phase 2.4).
+            sms_service: Optional :class:`SMSService` used by the Payment
+                Link delivery path (plan §Phase 2.7). When ``None`` the
+                send-link flow falls straight to email.
+            email_service: Optional :class:`EmailService` used by the
+                Payment Link email-fallback path (plan §Phase 2.7).
         """
         super().__init__()
         self.invoice_repository = invoice_repository
         self.job_repository = job_repository
         self._settings = business_settings
+        self.customer_repository = customer_repository
+        self.customer_service = customer_service
+        self.payment_link_service = payment_link_service
+        self.sms_service = sms_service
+        self.email_service = email_service
 
     def _get_settings_service(self) -> BusinessSettingService:
         """Return (and cache) a :class:`BusinessSettingService`.
@@ -306,6 +351,11 @@ class InvoiceService(LoggerMixin):
             line_items=line_items_data,
             notes=data.notes,
         )
+
+        # Phase 2.5: best-effort Payment Link auto-creation. The hook
+        # mirrors the new link fields onto ``invoice`` directly so the
+        # response below reflects them without a separate refetch.
+        await self._attach_payment_link(invoice)
 
         self.log_completed(
             "create_invoice",
@@ -444,9 +494,26 @@ class InvoiceService(LoggerMixin):
             if isinstance(amount, Decimal) and isinstance(late_fee, Decimal):
                 update_data["total_amount"] = amount + late_fee
 
+        # Phase 2.6: detect changes that should regenerate the Payment Link.
+        # Only line_items or total_amount drive regeneration — notes/due_date
+        # changes don't affect the Stripe-side amount.
+        old_total = invoice.total_amount
+        old_line_items = invoice.line_items
+        new_total = update_data.get("total_amount", old_total)
+        new_line_items = update_data.get("line_items", old_line_items)
+        link_inputs_changed = (
+            new_total != old_total or new_line_items != old_line_items
+        )
+
         updated = await self.invoice_repository.update(invoice_id, **update_data)
         if not updated:
             raise InvoiceNotFoundError(invoice_id)
+
+        if link_inputs_changed:
+            # Best-effort regenerate: persists new link to DB. The
+            # response shape below may show stale link fields if Stripe
+            # refresh raced; the next GET returns the new state.
+            await self._regenerate_payment_link(updated)
 
         self.log_completed("update_invoice", invoice_id=str(invoice_id))
         return cast("InvoiceResponse", InvoiceResponse.model_validate(updated))
@@ -697,6 +764,343 @@ class InvoiceService(LoggerMixin):
             new_status=new_status,
         )
         return cast("InvoiceResponse", InvoiceResponse.model_validate(updated))
+
+    # =========================================================================
+    # Stripe Payment Link Operations (Architecture C — plan §Phase 2)
+    # =========================================================================
+
+    async def _attach_payment_link(
+        self,
+        invoice: Invoice,
+    ) -> None:
+        """Best-effort Payment Link creation hook.
+
+        Idempotent: re-running on an invoice that already has an active
+        Payment Link is a no-op. Failures (Stripe outage, missing
+        customer, $0 invoice) are logged but never raise — the invoice
+        is still saved and the link is created lazily on first
+        ``send_payment_link`` attempt.
+
+        Validates: Stripe Payment Links plan §Phase 2.5.
+        """
+        if (
+            invoice.stripe_payment_link_id is not None
+            and invoice.stripe_payment_link_active
+        ):
+            # Already attached and live — nothing to do.
+            return
+
+        if (
+            self.payment_link_service is None
+            or self.customer_repository is None
+        ):
+            # Best-effort wiring; missing DI means tests / legacy callers.
+            self.logger.debug(
+                "payment.invoice.attach_payment_link_skipped_missing_di",
+                invoice_id=str(invoice.id),
+            )
+            return
+
+        customer = await self.customer_repository.get_by_id(invoice.customer_id)
+        if customer is None:
+            self.logger.warning(
+                "payment.invoice.attach_payment_link_no_customer",
+                invoice_id=str(invoice.id),
+                customer_id=str(invoice.customer_id),
+            )
+            return
+
+        # Make sure a Stripe customer exists so receipts auto-send. Do not
+        # fail invoice creation if Stripe linking has a transient outage.
+        if self.customer_service is not None:
+            try:
+                await self.customer_service.get_or_create_stripe_customer(
+                    customer.id,
+                )
+            except Exception as exc:
+                self.logger.warning(
+                    "payment.invoice.stripe_customer_link_failed",
+                    invoice_id=str(invoice.id),
+                    error=str(exc),
+                )
+
+        try:
+            link_id, link_url = self.payment_link_service.create_for_invoice(
+                invoice,
+                customer,
+            )
+        except StripePaymentLinkError as exc:
+            self.logger.warning(
+                "payment.invoice.create_failed_at_invoice_creation",
+                invoice_id=str(invoice.id),
+                error=str(exc),
+            )
+            return
+
+        if link_id is None:
+            # F11: $0 invoice — no link, no persistence.
+            return
+
+        await self.invoice_repository.update(
+            invoice.id,
+            stripe_payment_link_id=link_id,
+            stripe_payment_link_url=link_url,
+            stripe_payment_link_active=True,
+        )
+        # Also mirror the new fields onto the in-memory object so callers
+        # who already hold the invoice see the new state without a refetch.
+        invoice.stripe_payment_link_id = link_id
+        invoice.stripe_payment_link_url = link_url
+        invoice.stripe_payment_link_active = True
+
+    async def _regenerate_payment_link(
+        self,
+        invoice: Invoice,
+    ) -> None:
+        """Deactivate the old Payment Link and create a fresh one.
+
+        Used by :meth:`update_invoice` when ``line_items`` or
+        ``total_amount`` change (plan §Phase 2.6). Best-effort: any
+        failure is logged and the invoice update still wins.
+        """
+        if self.payment_link_service is None:
+            return
+        old_id = invoice.stripe_payment_link_id
+        if old_id is not None and invoice.stripe_payment_link_active:
+            try:
+                self.payment_link_service.deactivate(old_id)
+            except StripePaymentLinkError as exc:
+                self.logger.warning(
+                    "payment.invoice.deactivate_failed_during_regenerate",
+                    invoice_id=str(invoice.id),
+                    error=str(exc),
+                )
+        # Force a re-attach by zeroing the cached fields on the loaded model
+        # (the database row is updated in _attach_payment_link).
+        invoice.stripe_payment_link_id = None
+        invoice.stripe_payment_link_url = None
+        invoice.stripe_payment_link_active = False
+        await self._attach_payment_link(invoice)
+        self.logger.info(
+            "payment.invoice.payment_link_regenerated",
+            invoice_id=str(invoice.id),
+            old_link_id_suffix=(old_id[-6:] if old_id else None),
+        )
+
+    async def send_payment_link(
+        self,
+        invoice_id: UUID,
+    ) -> SendLinkResponse:
+        """Deliver the Stripe Payment Link to the customer.
+
+        Tries SMS first (transactional, bypasses ``sms_opt_in`` per F12),
+        then falls back to Resend email (transactional, bypasses
+        ``email_opt_in``). Hard-STOP customers fall through to email
+        cleanly. If neither channel can deliver, raises
+        ``NoContactMethodError``.
+
+        Lazy-creates the Payment Link if it's missing (covers the
+        best-effort failure case from :meth:`_attach_payment_link`).
+        Refuses $0 invoices (no link possible) and Lead-only invoices
+        (D12 backend safety net).
+
+        Validates: Stripe Payment Links plan §Phase 2.7.
+        """
+        self.log_started("send_payment_link", invoice_id=str(invoice_id))
+
+        invoice = await self.invoice_repository.get_by_id(invoice_id)
+        if invoice is None:
+            err = InvoiceNotFoundError(invoice_id)
+            self.log_failed("send_payment_link", error=err)
+            raise err
+
+        if invoice.total_amount == Decimal(0):
+            self.log_rejected(
+                "send_payment_link",
+                reason="zero_amount",
+                invoice_id=str(invoice_id),
+            )
+            msg = "Cannot send payment link for $0 invoice"
+            raise InvalidInvoiceOperationError(msg)
+
+        if self.customer_repository is None:
+            msg = "InvoiceService.customer_repository is required for send_payment_link"
+            raise RuntimeError(msg)
+        customer = await self.customer_repository.get_by_id(invoice.customer_id)
+        if customer is None:
+            self.log_rejected(
+                "send_payment_link",
+                reason="lead_only",
+                invoice_id=str(invoice_id),
+            )
+            raise LeadOnlyInvoiceError(invoice_id)
+
+        # Lazy-create if missing (covers best-effort failures at create time).
+        if (
+            invoice.stripe_payment_link_url is None
+            or not invoice.stripe_payment_link_active
+        ):
+            await self._attach_payment_link(invoice)
+            refreshed = await self.invoice_repository.get_by_id(invoice_id)
+            if refreshed is None:
+                raise InvoiceNotFoundError(invoice_id)
+            invoice = refreshed
+
+        if invoice.stripe_payment_link_url is None:
+            # Lazy-create still failed — Stripe down or another error.
+            self.log_failed(
+                "send_payment_link",
+                error=None,
+                invoice_id=str(invoice_id),
+                reason="lazy_create_failed",
+            )
+            msg = (
+                f"Could not generate a Stripe Payment Link for invoice "
+                f"{invoice_id}; check Stripe status."
+            )
+            raise InvalidInvoiceOperationError(msg)
+
+        body = self._build_payment_link_sms_body(customer, invoice)
+
+        # SMS path — transactional, bypasses sms_opt_in per F12.
+        if customer.phone and self.sms_service is not None:
+            recipient = Recipient(
+                phone=customer.phone,
+                source_type="customer",
+                customer_id=customer.id,
+                first_name=customer.first_name,
+                last_name=customer.last_name,
+            )
+            try:
+                result = await self.sms_service.send_message(
+                    recipient=recipient,
+                    message=body,
+                    message_type=MessageType.PAYMENT_LINK,
+                    consent_type="transactional",
+                )
+                if result.get("success") is True:
+                    return await self._record_link_sent(invoice, channel="sms")
+                self.logger.warning(
+                    "payment.send_link.sms_failed_soft",
+                    invoice_id=str(invoice.id),
+                    status=result.get("status"),
+                )
+            except SMSConsentDeniedError:
+                # Customer hard-STOP'd — fall through to email.
+                self.logger.info(
+                    "payment.send_link.sms_blocked_by_consent",
+                    invoice_id=str(invoice.id),
+                )
+            except (SMSRateLimitDeniedError, SMSError) as exc:
+                self.logger.warning(
+                    "payment.send_link.sms_failed_hard",
+                    invoice_id=str(invoice.id),
+                    error=str(exc),
+                )
+
+        # Email fallback — transactional, bypasses email_opt_in per F12.
+        if customer.email and self.email_service is not None:
+            html_body, text_body = self._render_payment_link_email(
+                customer,
+                invoice,
+            )
+            sent = self.email_service._send_email(  # noqa: SLF001 — established pattern
+                to_email=customer.email,
+                subject=(
+                    f"Your invoice from Grin's Irrigation — "
+                    f"${invoice.total_amount}"
+                ),
+                html_body=html_body,
+                text_body=text_body,
+                email_type="payment_link",
+                classification=EmailType.TRANSACTIONAL,
+            )
+            if sent:
+                return await self._record_link_sent(invoice, channel="email")
+
+        self.log_rejected(
+            "send_payment_link",
+            reason="no_contact_method",
+            invoice_id=str(invoice_id),
+        )
+        raise NoContactMethodError(invoice_id)
+
+    @staticmethod
+    def _build_payment_link_sms_body(
+        customer: object,
+        invoice: Invoice,
+    ) -> str:
+        """Render the D4 short SMS template for Payment Links."""
+        first_name = getattr(customer, "first_name", "") or "there"
+        return (
+            f"Hi {first_name}, your invoice from Grin's Irrigation for "
+            f"${invoice.total_amount} is ready: "
+            f"{invoice.stripe_payment_link_url}"
+        )
+
+    @staticmethod
+    def _render_payment_link_email(
+        customer: object,
+        invoice: Invoice,
+    ) -> tuple[str, str]:
+        """Render the email body (HTML + plaintext) for the Payment Link.
+
+        Inline-rendered for now; if the template grows we'll lift it into
+        ``services/templates/emails/payment_link_email.{html,txt}`` per
+        plan §Phase 4.3.
+        """
+        first_name = getattr(customer, "first_name", "") or "there"
+        link = invoice.stripe_payment_link_url
+        amount = invoice.total_amount
+        invoice_number = invoice.invoice_number
+        html_body = (
+            f"<p>Hi {first_name},</p>"
+            f"<p>Your invoice <strong>{invoice_number}</strong> from "
+            f"Grin's Irrigation is ready. The total is "
+            f"<strong>${amount}</strong>.</p>"
+            f'<p><a href="{link}" '
+            f'style="display:inline-block;padding:12px 24px;'
+            f'background:#6366f1;color:#fff;text-decoration:none;'
+            f'border-radius:6px;">Pay invoice</a></p>'
+            f"<p>Or copy this link into your browser:<br/>"
+            f'<a href="{link}">{link}</a></p>'
+            f"<p>Thanks,<br/>Grin's Irrigation</p>"
+        )
+        text_body = (
+            f"Hi {first_name},\n\n"
+            f"Your invoice {invoice_number} from Grin's Irrigation is "
+            f"ready. The total is ${amount}.\n\n"
+            f"Pay here: {link}\n\n"
+            f"Thanks,\nGrin's Irrigation"
+        )
+        return html_body, text_body
+
+    async def _record_link_sent(
+        self,
+        invoice: Invoice,
+        *,
+        channel: str,
+    ) -> SendLinkResponse:
+        """Increment send count + persist sent_at; return SendLinkResponse."""
+        now = datetime.now(timezone.utc)
+        new_count = invoice.payment_link_sent_count + 1
+        await self.invoice_repository.update(
+            invoice.id,
+            payment_link_sent_at=now,
+            payment_link_sent_count=new_count,
+        )
+        self.log_completed(
+            "send_payment_link",
+            invoice_id=str(invoice.id),
+            channel=channel,
+            sent_count=new_count,
+        )
+        return SendLinkResponse(
+            channel=channel,  # type: ignore[arg-type]
+            link_url=str(invoice.stripe_payment_link_url),
+            sent_at=now,
+            sent_count=new_count,
+        )
 
     # =========================================================================
     # Reminder Operations (Requirements 12.1-12.5)

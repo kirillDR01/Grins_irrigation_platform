@@ -20,6 +20,7 @@ import pytest
 from grins_platform.exceptions import (
     AgreementNotFoundError,
     InvalidAgreementStatusTransitionError,
+    MergeConflictError,
     MidSeasonTierChangeError,
 )
 from grins_platform.models.enums import (
@@ -201,6 +202,10 @@ class TestCreateAgreement:
         agr_repo = AsyncMock()
         agr_repo.get_next_agreement_number_seq = AsyncMock(return_value=1)
         agr_repo.create = AsyncMock(return_value=_make_agreement())
+        # CG-18 invariant: empty parent customer side → check passes silently.
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
+        agr_repo.session.execute = AsyncMock(return_value=execute_result)
 
         svc = _make_service(agreement_repo=agr_repo, tier_repo=tier_repo)
         stripe_data = {
@@ -212,6 +217,50 @@ class TestCreateAgreement:
         call_kwargs = agr_repo.create.call_args.kwargs
         assert call_kwargs["stripe_subscription_id"] == "sub_123"
         assert call_kwargs["stripe_customer_id"] == "cus_456"
+
+    @pytest.mark.asyncio
+    async def test_stripe_customer_id_mismatch_raises(self) -> None:
+        """CG-18: refuse creation when agreement & customer have different IDs."""
+        tier = _make_tier()
+        tier_repo = AsyncMock()
+        tier_repo.get_by_id = AsyncMock(return_value=tier)
+
+        agr_repo = AsyncMock()
+        agr_repo.get_next_agreement_number_seq = AsyncMock(return_value=1)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value="cus_OTHER")
+        agr_repo.session.execute = AsyncMock(return_value=execute_result)
+
+        svc = _make_service(agreement_repo=agr_repo, tier_repo=tier_repo)
+        with pytest.raises(MergeConflictError):
+            await svc.create_agreement(
+                uuid4(),
+                tier.id,
+                stripe_data={"stripe_customer_id": "cus_DIFFERENT"},
+            )
+        agr_repo.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_stripe_customer_id_match_does_not_raise(self) -> None:
+        """CG-18: matching IDs pass cleanly (regression guard)."""
+        tier = _make_tier()
+        tier_repo = AsyncMock()
+        tier_repo.get_by_id = AsyncMock(return_value=tier)
+
+        agr_repo = AsyncMock()
+        agr_repo.get_next_agreement_number_seq = AsyncMock(return_value=1)
+        agr_repo.create = AsyncMock(return_value=_make_agreement())
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value="cus_SAME")
+        agr_repo.session.execute = AsyncMock(return_value=execute_result)
+
+        svc = _make_service(agreement_repo=agr_repo, tier_repo=tier_repo)
+        await svc.create_agreement(
+            uuid4(),
+            tier.id,
+            stripe_data={"stripe_customer_id": "cus_SAME"},
+        )
+        agr_repo.create.assert_called_once()
 
 
 # =============================================================================

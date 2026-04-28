@@ -25,9 +25,12 @@ from grins_platform.api.v1.dependencies import get_db_session
 from grins_platform.exceptions import (
     InvalidInvoiceOperationError,
     InvoiceNotFoundError,
+    LeadOnlyInvoiceError,
+    NoContactMethodError,
 )
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import InvoiceStatus
+from grins_platform.repositories.customer_repository import CustomerRepository
 from grins_platform.repositories.invoice_repository import InvoiceRepository
 from grins_platform.repositories.job_repository import JobRepository
 from grins_platform.schemas.dashboard import PendingInvoiceMetricsResponse
@@ -45,11 +48,19 @@ from grins_platform.schemas.invoice import (
     MassNotifyResponse,
     PaginatedInvoiceResponse,
     PaymentRecord,
+    SendLinkResponse,
 )
+from grins_platform.services.customer_service import CustomerService
+from grins_platform.services.email_service import EmailService
 from grins_platform.services.invoice_service import (
     InvalidInvoiceTemplateError,
     InvoiceService,
     LienMassNotifyDeprecatedError,
+)
+from grins_platform.services.sms_service import SMSService
+from grins_platform.services.stripe_config import StripeSettings
+from grins_platform.services.stripe_payment_link_service import (
+    StripePaymentLinkService,
 )
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
@@ -60,6 +71,11 @@ async def get_invoice_service(
 ) -> InvoiceService:
     """Get InvoiceService dependency.
 
+    Wires the Stripe Payment Link, SMS, and email collaborators required
+    by the Phase 2 send-link flow. Each is constructed locally (cheap)
+    so existing unit tests that pass mocks directly to ``InvoiceService``
+    still work without touching this DI.
+
     Args:
         session: Database session from dependency injection
 
@@ -68,9 +84,20 @@ async def get_invoice_service(
     """
     invoice_repository = InvoiceRepository(session=session)
     job_repository = JobRepository(session=session)
+    customer_repository = CustomerRepository(session=session)
+    customer_service = CustomerService(repository=customer_repository)
+    stripe_settings = StripeSettings()
+    payment_link_service = StripePaymentLinkService(stripe_settings=stripe_settings)
+    sms_service = SMSService(session=session)
+    email_service = EmailService()
     return InvoiceService(
         invoice_repository=invoice_repository,
         job_repository=job_repository,
+        customer_repository=customer_repository,
+        customer_service=customer_service,
+        payment_link_service=payment_link_service,
+        sms_service=sms_service,
+        email_service=email_service,
     )
 
 
@@ -684,6 +711,53 @@ async def send_reminder(
     except InvoiceNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+
+
+@router.post(
+    "/{invoice_id}/send-link",
+    response_model=SendLinkResponse,
+    summary="Send Stripe Payment Link",
+    description=(
+        "Deliver the invoice's Stripe Payment Link to the customer via "
+        "SMS (preferred) with email fallback. Lazy-creates the link if "
+        "the invoice does not yet have one."
+    ),
+)
+async def send_payment_link(
+    invoice_id: UUID,
+    _current_user: CurrentActiveUser,
+    service: Annotated[InvoiceService, Depends(get_invoice_service)],
+) -> SendLinkResponse:
+    """Deliver an invoice's Stripe Payment Link to the customer.
+
+    Returns the channel that succeeded (``sms`` or ``email``), the
+    actual URL sent, the timestamp, and the cumulative send count for
+    the invoice.
+
+    Validates: Stripe Payment Links plan §Phase 2.8.
+    """
+    try:
+        return await service.send_payment_link(invoice_id)
+    except InvoiceNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+    except LeadOnlyInvoiceError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        ) from e
+    except NoContactMethodError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        ) from e
+    except InvalidInvoiceOperationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         ) from e
 

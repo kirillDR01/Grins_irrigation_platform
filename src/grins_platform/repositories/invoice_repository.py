@@ -121,6 +121,42 @@ class InvoiceRepository(LoggerMixin):
         self.log_completed("get_by_id", found=invoice is not None)
         return invoice
 
+    async def get_by_payment_link_id(
+        self,
+        payment_link_id: str,
+    ) -> Invoice | None:
+        """Look up an invoice by its Stripe Payment Link ID.
+
+        Validates: Stripe Payment Links plan §Phase 2.
+        """
+        self.log_started("get_by_payment_link_id")
+        stmt = select(Invoice).where(
+            Invoice.stripe_payment_link_id == payment_link_id,
+        )
+        result = await self.session.execute(stmt)
+        invoice: Invoice | None = result.scalar_one_or_none()
+        self.log_completed("get_by_payment_link_id", found=invoice is not None)
+        return invoice
+
+    async def get_by_payment_intent_reference(
+        self,
+        payment_intent_id: str,
+    ) -> Invoice | None:
+        """Look up an invoice by ``payment_reference == 'stripe:{pi_id}'``.
+
+        Validates: Stripe Payment Links plan §Phase 2.10, 2.12.
+        """
+        self.log_started("get_by_payment_intent_reference")
+        reference = f"stripe:{payment_intent_id}"
+        stmt = select(Invoice).where(Invoice.payment_reference == reference)
+        result = await self.session.execute(stmt)
+        invoice: Invoice | None = result.scalar_one_or_none()
+        self.log_completed(
+            "get_by_payment_intent_reference",
+            found=invoice is not None,
+        )
+        return invoice
+
     async def update(
         self,
         invoice_id: UUID,

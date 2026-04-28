@@ -184,6 +184,7 @@ class OnboardingService(LoggerMixin):
         self.log_started("verify_session", session_id=session_id)
 
         stripe.api_key = self.stripe_settings.stripe_secret_key
+        stripe.api_version = self.stripe_settings.stripe_api_version
 
         try:
             checkout_session = stripe.checkout.Session.retrieve(
@@ -288,6 +289,7 @@ class OnboardingService(LoggerMixin):
 
         # Retrieve Stripe session to get subscription ID
         stripe.api_key = self.stripe_settings.stripe_secret_key
+        stripe.api_version = self.stripe_settings.stripe_api_version
 
         try:
             checkout_session = stripe.checkout.Session.retrieve(session_id)

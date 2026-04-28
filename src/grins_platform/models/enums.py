@@ -212,6 +212,8 @@ class InvoiceStatus(str, Enum):
     LIEN_WARNING = "lien_warning"
     LIEN_FILED = "lien_filed"
     CANCELLED = "cancelled"
+    REFUNDED = "refunded"
+    DISPUTED = "disputed"
 
 
 class PaymentMethod(str, Enum):

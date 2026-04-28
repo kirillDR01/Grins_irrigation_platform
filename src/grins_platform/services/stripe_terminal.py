@@ -53,6 +53,7 @@ class StripeTerminalService(LoggerMixin):
             raise StripeTerminalError(msg)
 
         stripe.api_key = self.stripe_settings.stripe_secret_key
+        stripe.api_version = self.stripe_settings.stripe_api_version
 
         try:
             location_id = self.stripe_settings.stripe_terminal_location_id
@@ -111,6 +112,7 @@ class StripeTerminalService(LoggerMixin):
             raise StripeTerminalError(msg)
 
         stripe.api_key = self.stripe_settings.stripe_secret_key
+        stripe.api_version = self.stripe_settings.stripe_api_version
 
         try:
             intent = stripe.PaymentIntent.create(

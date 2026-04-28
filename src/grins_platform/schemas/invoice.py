@@ -10,6 +10,7 @@ Validates: Schedule Workflow Improvements Requirements 7.1-7.10, 8.1-8.10,
 
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
@@ -220,6 +221,27 @@ class InvoiceResponse(BaseModel):
     customer_name: str | None = Field(
         default=None,
         description="Customer full name (populated from join)",
+    )
+    # Stripe Payment Link fields (Architecture C — plan §Phase 2.3).
+    stripe_payment_link_id: str | None = Field(
+        default=None,
+        description="Stripe Payment Link ID (plink_*)",
+    )
+    stripe_payment_link_url: str | None = Field(
+        default=None,
+        description="Hosted Stripe Checkout URL for this invoice's link",
+    )
+    stripe_payment_link_active: bool = Field(
+        default=True,
+        description="Whether the Payment Link is still chargeable",
+    )
+    payment_link_sent_at: datetime | None = Field(
+        default=None,
+        description="Last time the Payment Link was delivered (SMS or email)",
+    )
+    payment_link_sent_count: int = Field(
+        default=0,
+        description="Number of successful Payment Link sends",
     )
     created_at: datetime = Field(description="Record creation timestamp")
     updated_at: datetime = Field(description="Record update timestamp")
@@ -593,4 +615,25 @@ class LienNoticeResult(BaseModel):
             "Status message: 'sent', 'customer_opted_out', 'no_phone', "
             "'no_eligible_invoices', or provider error text."
         ),
+    )
+
+
+# =============================================================================
+# Stripe Payment Link Schemas (Architecture C — plan §Phase 2)
+# =============================================================================
+
+
+class SendLinkResponse(BaseModel):
+    """Response payload for ``POST /invoices/{id}/send-link``.
+
+    Validates: Stripe Payment Links plan §Phase 2.7.
+    """
+
+    channel: Literal["sms", "email"] = Field(
+        description="Channel that successfully delivered the link.",
+    )
+    link_url: str = Field(description="The Stripe Payment Link URL that was sent.")
+    sent_at: datetime = Field(description="UTC timestamp of this send.")
+    sent_count: int = Field(
+        description="Total successful sends across the invoice's lifetime.",
     )

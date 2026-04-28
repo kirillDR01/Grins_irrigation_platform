@@ -62,6 +62,10 @@ class MessageType(str, Enum):
     COMPLETION = "completion"
     INVOICE = "invoice"
     PAYMENT_REMINDER = "payment_reminder"
+    # Stripe Payment Link delivery (Architecture C — plan §Phase 2.7).
+    # Distinct from PAYMENT_REMINDER so analytics can attribute conversion
+    # back to the link-send action versus reminder cadence.
+    PAYMENT_LINK = "payment_link"
     LEAD_CONFIRMATION = "lead_confirmation"
     ESTIMATE_SENT = "estimate_sent"
     CONTRACT_SENT = "contract_sent"

@@ -421,6 +421,53 @@ class InvalidInvoiceOperationError(FieldOperationsError):
         super().__init__(message)
 
 
+class NoContactMethodError(FieldOperationsError):
+    """Raised when an invoice has no deliverable contact method.
+
+    The invoice's customer has neither a phone (or has hard-STOPped SMS)
+    nor a deliverable email. The Stripe Payment Link cannot be sent.
+
+    Validates: Stripe Payment Links plan §Phase 2.7.
+    """
+
+    def __init__(self, invoice_id: UUID) -> None:
+        """Initialize with the invoice ID.
+
+        Args:
+            invoice_id: UUID of the invoice that has no contact method.
+        """
+        self.invoice_id = invoice_id
+        super().__init__(
+            f"Invoice {invoice_id} has no deliverable contact method "
+            "(no phone and no email).",
+        )
+
+
+class LeadOnlyInvoiceError(FieldOperationsError):
+    """Raised when a Payment Link is requested for a Lead-only invoice.
+
+    Lead-only appointments are blocked from the card-payment flow at the
+    UI level (D12). This is the backend safety net: if the customer
+    cannot be resolved (null / Lead-only record), the send-link path
+    refuses rather than silently succeeding.
+
+    Validates: Stripe Payment Links plan §Phase 2.7.
+    """
+
+    def __init__(self, invoice_id: UUID) -> None:
+        """Initialize with the invoice ID.
+
+        Args:
+            invoice_id: UUID of the invoice whose customer cannot be resolved.
+        """
+        self.invoice_id = invoice_id
+        super().__init__(
+            f"Invoice {invoice_id} has no resolvable customer "
+            "(Lead-only invoices cannot send a Payment Link). "
+            "Convert the lead to a customer first.",
+        )
+
+
 # ============================================================================
 # Lead Capture Exceptions
 # ============================================================================
@@ -888,9 +935,11 @@ __all__ = [
     "LeadAlreadyConvertedError",
     "LeadError",
     "LeadNotFoundError",
+    "LeadOnlyInvoiceError",
     "MergeBlockerError",
     "MidSeasonTierChangeError",
     "MissingSigningDocumentError",
+    "NoContactMethodError",
     "PaymentRequiredError",
     "PropertyCustomerMismatchError",
     "PropertyNotFoundError",

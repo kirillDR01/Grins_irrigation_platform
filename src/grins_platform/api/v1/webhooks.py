@@ -67,6 +67,12 @@ HANDLED_EVENT_TYPES = frozenset(
         "invoice.upcoming",
         "customer.subscription.updated",
         "customer.subscription.deleted",
+        # Architecture C — Stripe Payment Links (plan §Phase 2.9-2.13)
+        "payment_intent.succeeded",
+        "payment_intent.payment_failed",
+        "payment_intent.canceled",
+        "charge.refunded",
+        "charge.dispute.created",
     },
 )
 
@@ -170,6 +176,14 @@ class StripeWebhookHandler(LoggerMixin):
             "invoice.upcoming": self._handle_invoice_upcoming,
             "customer.subscription.updated": self._handle_subscription_updated,
             "customer.subscription.deleted": self._handle_subscription_deleted,
+            # Architecture C — Payment Links handlers (plan §Phase 2.10-2.13)
+            "payment_intent.succeeded": self._handle_payment_intent_succeeded,
+            "payment_intent.payment_failed": (
+                self._handle_payment_intent_payment_failed
+            ),
+            "payment_intent.canceled": self._handle_payment_intent_canceled,
+            "charge.refunded": self._handle_charge_refunded,
+            "charge.dispute.created": self._handle_charge_dispute_created,
         }
         handler = handlers.get(event_type)
         if handler is not None:
@@ -958,6 +972,376 @@ class StripeWebhookHandler(LoggerMixin):
             "webhook_subscription_deleted",
             agreement_id=str(agreement.id),
             stripe_event_id=event["id"],
+        )
+
+    # ------------------------------------------------------------------
+    # Architecture C — Stripe Payment Links handlers
+    # Validates: Stripe Payment Links plan §Phase 2.10-2.13.
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _mask_pi(pi_id: str) -> str:
+        """Mask a Stripe payment_intent ID for safe INFO-level logging."""
+        if len(pi_id) <= 9:
+            return pi_id
+        return f"{pi_id[:6]}***{pi_id[-4:]}"
+
+    async def _handle_payment_intent_succeeded(self, event: stripe.Event) -> None:
+        """Handle ``payment_intent.succeeded`` for Architecture C invoices.
+
+        Marks the matched invoice PAID, sets ``Job.payment_collected_on_site``
+        true, and mirrors ``stripe_payment_link_active = false``. Idempotent
+        on replay (no-op if invoice is already PAID). Subscription-driven
+        intents are short-circuited (CG-7); cancelled invoices are flagged
+        for manual refund (CG-8); non-USD charges are refused (currency
+        out of scope per plan).
+        """
+        from grins_platform.models.enums import (  # noqa: PLC0415
+            InvoiceStatus,
+            PaymentMethod,
+        )
+        from grins_platform.models.job import Job  # noqa: PLC0415
+        from grins_platform.repositories.invoice_repository import (  # noqa: PLC0415
+            InvoiceRepository,
+        )
+        from grins_platform.repositories.job_repository import (  # noqa: PLC0415
+            JobRepository,
+        )
+        from grins_platform.schemas.invoice import (  # noqa: PLC0415
+            PaymentRecord,
+        )
+        from grins_platform.services.invoice_service import (  # noqa: PLC0415
+            InvoiceService,
+        )
+
+        intent = event["data"]["object"]
+        intent_id: str = intent.get("id", "")
+        masked = self._mask_pi(intent_id)
+        self.log_started(
+            "webhook_payment_intent_succeeded",
+            stripe_event_id=event["id"],
+            payment_intent=masked,
+        )
+
+        # CG-7: subscription-side PaymentIntents are owned by invoice.paid.
+        related_invoice = intent.get("invoice")
+        if related_invoice:
+            self.log_completed(
+                "webhook_payment_intent_succeeded",
+                payment_intent=masked,
+                outcome="subscription_intent_skipped",
+            )
+            return
+
+        # Currency check — out-of-scope for this feature.
+        currency = (intent.get("currency") or "").lower()
+        if currency != "usd":
+            self.log_failed(
+                "webhook_payment_intent_succeeded",
+                error=ValueError(f"Unsupported currency: {currency}"),
+                payment_intent=masked,
+            )
+            return
+
+        metadata = intent.get("metadata") or {}
+        invoice_id_raw = metadata.get("invoice_id")
+        if not invoice_id_raw:
+            self.logger.warning(
+                "stripe.webhook.payment_intent.unmatched_metadata",
+                payment_intent=masked,
+            )
+            return
+
+        try:
+            invoice_id = UUID(str(invoice_id_raw))
+        except (ValueError, AttributeError):
+            self.logger.warning(
+                "stripe.webhook.payment_intent.invalid_metadata_uuid",
+                payment_intent=masked,
+                invoice_id_raw=str(invoice_id_raw)[:50],
+            )
+            return
+
+        invoice_repo = InvoiceRepository(session=self.session)
+        invoice = await invoice_repo.get_by_id(invoice_id)
+        if invoice is None:
+            self.logger.warning(
+                "stripe.webhook.payment_intent.invoice_not_found",
+                payment_intent=masked,
+                invoice_id=str(invoice_id),
+            )
+            return
+
+        # CG-8: refuse to mark cancelled invoices paid.
+        if invoice.status == InvoiceStatus.CANCELLED.value:
+            self.logger.warning(
+                "stripe.webhook.payment_intent.cancelled_invoice_charged",
+                payment_intent=masked,
+                invoice_id=str(invoice_id),
+            )
+            return
+
+        # Idempotency double-layer: if invoice is already PAID, no-op.
+        if invoice.status == InvoiceStatus.PAID.value:
+            self.log_completed(
+                "webhook_payment_intent_succeeded",
+                payment_intent=masked,
+                invoice_id=str(invoice_id),
+                outcome="invoice_already_paid",
+            )
+            return
+
+        amount_received_cents = intent.get("amount_received") or intent.get(
+            "amount",
+            0,
+        )
+        amount = Decimal(str(amount_received_cents)) / Decimal(100)
+
+        invoice_service = InvoiceService(
+            invoice_repository=invoice_repo,
+            job_repository=JobRepository(session=self.session),
+        )
+        payment_record = PaymentRecord(
+            amount=amount,
+            payment_method=PaymentMethod.CREDIT_CARD,
+            payment_reference=f"stripe:{intent_id}",
+        )
+        await invoice_service.record_payment(invoice_id, payment_record)
+
+        # Mirror Stripe's auto-deactivation (completed_sessions.limit=1).
+        await invoice_repo.update(
+            invoice_id,
+            stripe_payment_link_active=False,
+        )
+
+        # Job.payment_collected_on_site = True
+        job_stmt = select(Job).where(Job.id == invoice.job_id)
+        job_result = await self.session.execute(job_stmt)
+        job = job_result.scalar_one_or_none()
+        if job is not None:
+            job.payment_collected_on_site = True
+
+        await self.session.flush()
+        self.log_completed(
+            "webhook_payment_intent_succeeded",
+            payment_intent=masked,
+            invoice_id=str(invoice_id),
+            amount=str(amount),
+        )
+
+    async def _handle_payment_intent_payment_failed(
+        self,
+        event: stripe.Event,
+    ) -> None:
+        """Handle ``payment_intent.payment_failed``.
+
+        No invoice mutation: failed customer attempts simply leave the
+        invoice in its current state. The link is still active (Stripe
+        only deactivates on a *completed* session). We log enough context
+        to investigate failures from Sentry / log aggregation.
+        """
+        intent = event["data"]["object"]
+        intent_id: str = intent.get("id", "")
+        masked = self._mask_pi(intent_id)
+        last_error = (intent.get("last_payment_error") or {}).get("code", "")
+        self.log_started(
+            "webhook_payment_intent_payment_failed",
+            stripe_event_id=event["id"],
+            payment_intent=masked,
+            last_error=last_error,
+        )
+        self.log_completed(
+            "webhook_payment_intent_payment_failed",
+            payment_intent=masked,
+        )
+
+    async def _handle_payment_intent_canceled(
+        self,
+        event: stripe.Event,
+    ) -> None:
+        """Handle ``payment_intent.canceled``.
+
+        No-op for Payment Link flows; logged so unexpected cancellations
+        are visible in the audit trail.
+        """
+        intent = event["data"]["object"]
+        intent_id: str = intent.get("id", "")
+        masked = self._mask_pi(intent_id)
+        self.log_started(
+            "webhook_payment_intent_canceled",
+            stripe_event_id=event["id"],
+            payment_intent=masked,
+        )
+        self.log_completed(
+            "webhook_payment_intent_canceled",
+            payment_intent=masked,
+        )
+
+    async def _handle_charge_refunded(self, event: stripe.Event) -> None:
+        """Handle ``charge.refunded`` events.
+
+        Full refund (``amount_refunded == amount``): transitions the
+        invoice to REFUNDED and clears
+        ``Job.payment_collected_on_site``. Idempotent.
+
+        Partial refund: leaves the invoice PAID/PARTIAL, updates
+        ``paid_amount`` to ``amount - amount_refunded``, and appends a
+        note documenting the refund.
+        """
+        from grins_platform.models.enums import InvoiceStatus  # noqa: PLC0415
+        from grins_platform.models.job import Job  # noqa: PLC0415
+        from grins_platform.repositories.invoice_repository import (  # noqa: PLC0415
+            InvoiceRepository,
+        )
+
+        charge = event["data"]["object"]
+        intent_id = charge.get("payment_intent") or ""
+        masked = self._mask_pi(str(intent_id))
+        self.log_started(
+            "webhook_charge_refunded",
+            stripe_event_id=event["id"],
+            payment_intent=masked,
+        )
+
+        if not intent_id:
+            self.logger.warning(
+                "stripe.webhook.charge_refunded.missing_payment_intent",
+            )
+            return
+
+        invoice_repo = InvoiceRepository(session=self.session)
+        invoice = await invoice_repo.get_by_payment_intent_reference(
+            str(intent_id),
+        )
+        if invoice is None:
+            self.logger.warning(
+                "stripe.webhook.charge_refunded.unmatched",
+                payment_intent=masked,
+            )
+            return
+
+        amount_cents = int(charge.get("amount") or 0)
+        refunded_cents = int(charge.get("amount_refunded") or 0)
+        is_full_refund = refunded_cents >= amount_cents > 0
+
+        if is_full_refund:
+            if invoice.status == InvoiceStatus.REFUNDED.value:
+                self.log_completed(
+                    "webhook_charge_refunded",
+                    payment_intent=masked,
+                    outcome="already_refunded",
+                )
+                return
+            await invoice_repo.update(
+                invoice.id,
+                status=InvoiceStatus.REFUNDED.value,
+                stripe_payment_link_active=False,
+            )
+            job_stmt = select(Job).where(Job.id == invoice.job_id)
+            job_result = await self.session.execute(job_stmt)
+            job = job_result.scalar_one_or_none()
+            if job is not None:
+                job.payment_collected_on_site = False
+            await self.session.flush()
+            self.log_completed(
+                "webhook_charge_refunded",
+                payment_intent=masked,
+                invoice_id=str(invoice.id),
+                outcome="full_refund",
+            )
+            return
+
+        # Partial refund — keep the invoice paid but reflect the
+        # remaining balance and annotate the notes field.
+        net_paid_cents = max(amount_cents - refunded_cents, 0)
+        net_paid = Decimal(str(net_paid_cents)) / Decimal(100)
+        prior_notes = invoice.notes or ""
+        annotation = (
+            f"Stripe partial refund: ${Decimal(str(refunded_cents)) / Decimal(100)} "
+            f"refunded on {datetime.now(timezone.utc).date().isoformat()}."
+        )
+        new_notes = f"{prior_notes}\n{annotation}".strip()
+        await invoice_repo.update(
+            invoice.id,
+            paid_amount=net_paid,
+            status=InvoiceStatus.PARTIAL.value,
+            notes=new_notes,
+        )
+        await self.session.flush()
+        self.log_completed(
+            "webhook_charge_refunded",
+            payment_intent=masked,
+            invoice_id=str(invoice.id),
+            outcome="partial_refund",
+            refunded_cents=refunded_cents,
+        )
+
+    async def _handle_charge_dispute_created(
+        self,
+        event: stripe.Event,
+    ) -> None:
+        """Handle ``charge.dispute.created``.
+
+        Marks the invoice DISPUTED, appends the dispute reason and
+        ``due_by`` deadline to ``notes``, and emits a WARNING log so the
+        on-call alerting can page admins.
+        """
+        from grins_platform.models.enums import InvoiceStatus  # noqa: PLC0415
+        from grins_platform.repositories.invoice_repository import (  # noqa: PLC0415
+            InvoiceRepository,
+        )
+
+        dispute = event["data"]["object"]
+        intent_id = dispute.get("payment_intent") or ""
+        masked = self._mask_pi(str(intent_id))
+        reason = dispute.get("reason") or "unknown"
+        due_by = dispute.get("evidence_details", {}).get("due_by")
+
+        self.logger.warning(
+            "stripe.webhook.charge_dispute_created",
+            stripe_event_id=event["id"],
+            payment_intent=masked,
+            reason=reason,
+        )
+
+        if not intent_id:
+            return
+
+        invoice_repo = InvoiceRepository(session=self.session)
+        invoice = await invoice_repo.get_by_payment_intent_reference(
+            str(intent_id),
+        )
+        if invoice is None:
+            self.logger.warning(
+                "stripe.webhook.charge_dispute_created.unmatched",
+                payment_intent=masked,
+            )
+            return
+
+        if invoice.status == InvoiceStatus.DISPUTED.value:
+            return
+
+        prior_notes = invoice.notes or ""
+        due_str = (
+            datetime.fromtimestamp(int(due_by), tz=timezone.utc).date().isoformat()
+            if due_by
+            else "unknown"
+        )
+        annotation = (
+            f"Stripe dispute opened ({reason}); evidence due by {due_str}."
+        )
+        new_notes = f"{prior_notes}\n{annotation}".strip()
+        await invoice_repo.update(
+            invoice.id,
+            status=InvoiceStatus.DISPUTED.value,
+            notes=new_notes,
+        )
+        await self.session.flush()
+        self.log_completed(
+            "webhook_charge_dispute_created",
+            payment_intent=masked,
+            invoice_id=str(invoice.id),
+            reason=reason,
         )
 
 

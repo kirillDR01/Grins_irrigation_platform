@@ -307,6 +307,7 @@ class CheckoutService(LoggerMixin):
 
         # Build Stripe Checkout Session params
         stripe.api_key = self.stripe_settings.stripe_secret_key
+        stripe.api_version = self.stripe_settings.stripe_api_version
 
         session_params: dict[str, Any] = {
             "mode": "subscription",
@@ -353,6 +354,7 @@ class CheckoutService(LoggerMixin):
         self.log_started("create_portal_session", email=email[:3] + "***")
 
         stripe.api_key = self.stripe_settings.stripe_secret_key
+        stripe.api_version = self.stripe_settings.stripe_api_version
 
         try:
             customers = stripe.Customer.list(email=email, limit=1)

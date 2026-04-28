@@ -14,7 +14,9 @@ export type InvoiceStatus =
   | 'overdue'
   | 'lien_warning'
   | 'lien_filed'
-  | 'cancelled';
+  | 'cancelled'
+  | 'refunded'
+  | 'disputed';
 
 // PaymentMethod mirrors the backend enum in grins_platform.models.enums.
 // H-4 (bughunt 2026-04-16): `credit_card`, `ach`, and `other` were
@@ -82,6 +84,16 @@ export const INVOICE_STATUS_CONFIG: Record<InvoiceStatus, InvoiceStatusConfig> =
     bgColor: 'bg-slate-100',
     color: 'text-slate-500',
   },
+  refunded: {
+    label: 'Refunded',
+    bgColor: 'bg-purple-100',
+    color: 'text-purple-700',
+  },
+  disputed: {
+    label: 'Disputed',
+    bgColor: 'bg-orange-100',
+    color: 'text-orange-700',
+  },
 };
 
 export function getInvoiceStatusConfig(status: InvoiceStatus): InvoiceStatusConfig {
@@ -122,6 +134,12 @@ export interface Invoice extends BaseEntity {
   // bughunt M-12: server-computed fields, exclusive of each other.
   days_until_due: number | null;
   days_past_due: number | null;
+  // Stripe Payment Link fields (Architecture C — Phase 2).
+  stripe_payment_link_id: string | null;
+  stripe_payment_link_url: string | null;
+  stripe_payment_link_active: boolean;
+  payment_link_sent_at: string | null;
+  payment_link_sent_count: number;
 }
 
 // Invoice detail with job and customer info

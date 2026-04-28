@@ -106,6 +106,12 @@ class TestInvoiceServiceCreateInvoice:
         invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
+        # Phase 2.3: Payment Link fields default to null/false/0 in tests.
+        invoice.stripe_payment_link_id = None
+        invoice.stripe_payment_link_url = None
+        invoice.stripe_payment_link_active = True
+        invoice.payment_link_sent_at = None
+        invoice.payment_link_sent_count = 0
         return invoice
 
     @pytest.mark.asyncio
@@ -356,6 +362,12 @@ class TestInvoiceServiceGetInvoice:
         invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
+        # Phase 2.3: Payment Link fields default to null/false/0 in tests.
+        invoice.stripe_payment_link_id = None
+        invoice.stripe_payment_link_url = None
+        invoice.stripe_payment_link_active = True
+        invoice.payment_link_sent_at = None
+        invoice.payment_link_sent_count = 0
         return invoice
 
     @pytest.mark.asyncio
@@ -445,6 +457,12 @@ class TestInvoiceServiceUpdateInvoice:
         invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
+        # Phase 2.3: Payment Link fields default to null/false/0 in tests.
+        invoice.stripe_payment_link_id = None
+        invoice.stripe_payment_link_url = None
+        invoice.stripe_payment_link_active = True
+        invoice.payment_link_sent_at = None
+        invoice.payment_link_sent_count = 0
         return invoice
 
     @pytest.mark.asyncio
@@ -558,6 +576,12 @@ class TestInvoiceServiceStatusOperations:
         invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
+        # Phase 2.3: Payment Link fields default to null/false/0 in tests.
+        invoice.stripe_payment_link_id = None
+        invoice.stripe_payment_link_url = None
+        invoice.stripe_payment_link_active = True
+        invoice.payment_link_sent_at = None
+        invoice.payment_link_sent_count = 0
         return invoice
 
     @pytest.mark.asyncio
@@ -731,6 +755,12 @@ class TestInvoiceServicePaymentOperations:
         invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
+        # Phase 2.3: Payment Link fields default to null/false/0 in tests.
+        invoice.stripe_payment_link_id = None
+        invoice.stripe_payment_link_url = None
+        invoice.stripe_payment_link_active = True
+        invoice.payment_link_sent_at = None
+        invoice.payment_link_sent_count = 0
         return invoice
 
     @pytest.mark.asyncio
@@ -929,6 +959,12 @@ class TestInvoiceServiceReminderOperations:
         invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
+        # Phase 2.3: Payment Link fields default to null/false/0 in tests.
+        invoice.stripe_payment_link_id = None
+        invoice.stripe_payment_link_url = None
+        invoice.stripe_payment_link_active = True
+        invoice.payment_link_sent_at = None
+        invoice.payment_link_sent_count = 0
         return invoice
 
     @pytest.mark.asyncio
@@ -1036,6 +1072,12 @@ class TestInvoiceServiceLienOperations:
         invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
+        # Phase 2.3: Payment Link fields default to null/false/0 in tests.
+        invoice.stripe_payment_link_id = None
+        invoice.stripe_payment_link_url = None
+        invoice.stripe_payment_link_active = True
+        invoice.payment_link_sent_at = None
+        invoice.payment_link_sent_count = 0
         return invoice
 
     @pytest.mark.asyncio
@@ -1210,6 +1252,12 @@ class TestInvoiceServiceGenerateFromJob:
         invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
+        # Phase 2.3: Payment Link fields default to null/false/0 in tests.
+        invoice.stripe_payment_link_id = None
+        invoice.stripe_payment_link_url = None
+        invoice.stripe_payment_link_active = True
+        invoice.payment_link_sent_at = None
+        invoice.payment_link_sent_count = 0
         return invoice
 
     @pytest.mark.asyncio
@@ -1399,6 +1447,12 @@ class TestInvoiceServiceListInvoices:
         invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
+        # Phase 2.3: Payment Link fields default to null/false/0 in tests.
+        invoice.stripe_payment_link_id = None
+        invoice.stripe_payment_link_url = None
+        invoice.stripe_payment_link_active = True
+        invoice.payment_link_sent_at = None
+        invoice.payment_link_sent_count = 0
         return invoice
 
     @pytest.mark.asyncio
@@ -1530,6 +1584,12 @@ class TestInvoiceServiceGetInvoiceDetail:
         invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
+        # Phase 2.3: Payment Link fields default to null/false/0 in tests.
+        invoice.stripe_payment_link_id = None
+        invoice.stripe_payment_link_url = None
+        invoice.stripe_payment_link_active = True
+        invoice.payment_link_sent_at = None
+        invoice.payment_link_sent_count = 0
 
         # Add job relation
         invoice.job = MagicMock()
@@ -1668,6 +1728,12 @@ class TestInvoiceServiceUpdateInvoiceFields:
         invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
+        # Phase 2.3: Payment Link fields default to null/false/0 in tests.
+        invoice.stripe_payment_link_id = None
+        invoice.stripe_payment_link_url = None
+        invoice.stripe_payment_link_active = True
+        invoice.payment_link_sent_at = None
+        invoice.payment_link_sent_count = 0
         return invoice
 
     @pytest.mark.asyncio
@@ -1943,6 +2009,12 @@ class TestInvoiceServiceSendInvoiceEdgeCases:
         invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
+        # Phase 2.3: Payment Link fields default to null/false/0 in tests.
+        invoice.stripe_payment_link_id = None
+        invoice.stripe_payment_link_url = None
+        invoice.stripe_payment_link_active = True
+        invoice.payment_link_sent_at = None
+        invoice.payment_link_sent_count = 0
         return invoice
 
     @pytest.mark.asyncio
@@ -2015,6 +2087,12 @@ class TestInvoiceServiceMarkOverdueEdgeCases:
         invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
+        # Phase 2.3: Payment Link fields default to null/false/0 in tests.
+        invoice.stripe_payment_link_id = None
+        invoice.stripe_payment_link_url = None
+        invoice.stripe_payment_link_active = True
+        invoice.payment_link_sent_at = None
+        invoice.payment_link_sent_count = 0
         return invoice
 
     @pytest.mark.asyncio
@@ -2116,6 +2194,12 @@ class TestInvoiceServiceListInvoicesFilters:
         invoice.customer_name = None
         invoice.created_at = datetime.now(timezone.utc)
         invoice.updated_at = datetime.now(timezone.utc)
+        # Phase 2.3: Payment Link fields default to null/false/0 in tests.
+        invoice.stripe_payment_link_id = None
+        invoice.stripe_payment_link_url = None
+        invoice.stripe_payment_link_active = True
+        invoice.payment_link_sent_at = None
+        invoice.payment_link_sent_count = 0
         return invoice
 
     @pytest.mark.asyncio
@@ -2270,6 +2354,12 @@ class TestInvoiceServiceFilterAxes:
         inv.customer_name = None
         inv.created_at = datetime.now(timezone.utc)
         inv.updated_at = datetime.now(timezone.utc)
+        # Phase 2.3: Payment Link fields default to null/false/0 in tests.
+        inv.stripe_payment_link_id = None
+        inv.stripe_payment_link_url = None
+        inv.stripe_payment_link_active = True
+        inv.payment_link_sent_at = None
+        inv.payment_link_sent_count = 0
         for k, v in overrides.items():
             setattr(inv, k, v)
         return inv

@@ -63,6 +63,7 @@ if TYPE_CHECKING:
     from grins_platform.schemas.appointment_ops import DateRange
     from grins_platform.schemas.estimate import EstimateCreate
     from grins_platform.services.estimate_service import EstimateService
+    from grins_platform.services.invoice_service import InvoiceService
 
 
 # Review dedup window in days
@@ -244,6 +245,7 @@ class AppointmentService(LoggerMixin):
         invoice_repository: InvoiceRepository | None = None,
         estimate_service: EstimateService | None = None,
         google_review_url: str = "",
+        invoice_service: InvoiceService | None = None,
     ) -> None:
         """Initialize service with repositories.
 
@@ -254,6 +256,8 @@ class AppointmentService(LoggerMixin):
             invoice_repository: Optional InvoiceRepository for payment ops
             estimate_service: Optional EstimateService for estimate delegation
             google_review_url: Google Business review URL
+            invoice_service: Optional InvoiceService used by the
+                ``create_invoice_from_appointment`` Payment Link hook.
         """
         super().__init__()
         self.appointment_repository = appointment_repository
@@ -262,6 +266,7 @@ class AppointmentService(LoggerMixin):
         self.invoice_repository = invoice_repository
         self.estimate_service = estimate_service
         self.google_review_url = google_review_url
+        self.invoice_service = invoice_service
 
     # =========================================================================
     # Original CRUD Methods (Admin Dashboard)
@@ -2081,21 +2086,29 @@ class AppointmentService(LoggerMixin):
         self,
         appointment_id: UUID,
     ) -> Invoice:
-        """Create an invoice pre-populated from appointment/job/customer data.
+        """Create an invoice (or return the existing one) for this appointment.
 
-        Generates a Stripe payment link and sends via SMS + email.
+        Idempotent: if the appointment's job already has an invoice,
+        returns it instead of generating a duplicate. The most-recent
+        invoice for the job (per ``_find_invoice_for_job``) is treated
+        as canonical — multi-invoice-per-job is out of scope for this
+        gate (see Stripe Payment Links plan F1).
+
+        Stripe Payment Link auto-creation is hooked in ``InvoiceService``
+        — see plan §Phase 2.5.
 
         Args:
-            appointment_id: UUID of the appointment
+            appointment_id: UUID of the appointment.
 
         Returns:
-            Created Invoice instance
+            New or existing ``Invoice`` instance for this job.
 
         Raises:
-            AppointmentNotFoundError: If appointment not found
-            JobNotFoundError: If linked job not found
+            AppointmentNotFoundError: If appointment not found.
+            JobNotFoundError: If linked job not found.
 
-        Validates: CRM Gap Closure Req 31.2, 31.3, 31.4, 31.5
+        Validates: CRM Gap Closure Req 31.2, 31.3, 31.4, 31.5; Stripe
+            Payment Links plan §Phase 2.4a.
         """
         self.log_started(
             "create_invoice_from_appointment",
@@ -2125,6 +2138,19 @@ class AppointmentService(LoggerMixin):
             msg = "InvoiceRepository is required for invoice creation"
             raise RuntimeError(msg)
 
+        # F1 idempotency: if this job already has an invoice, return it
+        # instead of consuming another sequence number / writing a duplicate.
+        existing = await self._find_invoice_for_job(job.id)
+        if existing is not None:
+            self.log_completed(
+                "create_invoice_from_appointment",
+                appointment_id=str(appointment_id),
+                invoice_id=str(existing.id),
+                invoice_number=existing.invoice_number,
+                outcome="idempotent_hit",
+            )
+            return existing
+
         now = datetime.now(tz=timezone.utc)
         seq = await self.invoice_repository.get_next_sequence()
         invoice_number = f"INV-{now.year}-{seq:04d}"
@@ -2152,13 +2178,42 @@ class AppointmentService(LoggerMixin):
             line_items=line_items,
         )
 
+        # Best-effort Payment Link creation (Phase 2.5). Wrapped here
+        # so the appointment-side path mirrors the InvoiceService path.
+        await self._best_effort_attach_payment_link(invoice)
+
         self.log_completed(
             "create_invoice_from_appointment",
             appointment_id=str(appointment_id),
             invoice_id=str(invoice.id),
             invoice_number=invoice_number,
+            outcome="created",
         )
         return invoice
+
+    async def _best_effort_attach_payment_link(
+        self,
+        invoice: Invoice,
+    ) -> None:
+        """Best-effort delegate to ``InvoiceService._attach_payment_link``.
+
+        Mirrors the AppointmentService → InvoiceService DI pattern. If
+        ``invoice_service`` is not wired, this is a silent no-op so the
+        invoice still saves cleanly. Stripe outages are also best-effort
+        per plan §Phase 2.5: log warning, continue.
+
+        Validates: Stripe Payment Links plan §Phase 2.5.
+        """
+        if self.invoice_service is None:
+            return
+        try:
+            await self.invoice_service._attach_payment_link(invoice)  # noqa: SLF001
+        except Exception as exc:
+            self.logger.warning(
+                "payment.appointment.attach_payment_link_failed",
+                invoice_id=str(invoice.id),
+                error=str(exc),
+            )
 
     async def create_estimate_from_appointment(
         self,

@@ -19,6 +19,10 @@ class StripeSettings(BaseSettings):
     stripe_customer_portal_url: str = ""
     stripe_tax_enabled: bool = True
     stripe_terminal_location_id: str = ""
+    # Pinned to match the version that existing webhook endpoints declare,
+    # so SDK expectations and incoming event shapes never drift apart. Bump
+    # only via a deliberate PR with regression tests against new event shapes.
+    stripe_api_version: str = "2025-03-31.basil"
 
     model_config = SettingsConfigDict(
         env_file=".env",

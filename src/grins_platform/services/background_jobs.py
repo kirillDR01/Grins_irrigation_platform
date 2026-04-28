@@ -133,6 +133,7 @@ class FailedPaymentEscalator(LoggerMixin):
         try:
             if agreement.stripe_subscription_id and stripe_settings.is_configured:
                 stripe.api_key = stripe_settings.stripe_secret_key
+                stripe.api_version = stripe_settings.stripe_api_version
                 stripe.Subscription.cancel(
                     agreement.stripe_subscription_id,
                 )
@@ -163,6 +164,7 @@ class FailedPaymentEscalator(LoggerMixin):
         try:
             if agreement.stripe_subscription_id and stripe_settings.is_configured:
                 stripe.api_key = stripe_settings.stripe_secret_key
+                stripe.api_version = stripe_settings.stripe_api_version
                 stripe.Subscription.modify(
                     agreement.stripe_subscription_id,
                     pause_collection={"behavior": "void"},
