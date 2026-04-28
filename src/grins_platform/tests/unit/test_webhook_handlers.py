@@ -18,7 +18,10 @@ from uuid import uuid4
 import pytest
 import stripe
 
-from grins_platform.api.v1.webhooks import StripeWebhookHandler
+from grins_platform.api.v1.webhooks import (
+    _MISSING_LAST_NAME_PLACEHOLDER,
+    StripeWebhookHandler,
+)
 from grins_platform.models.enums import (
     AgreementPaymentStatus,
     AgreementStatus,
@@ -73,6 +76,91 @@ def _make_handler() -> tuple[StripeWebhookHandler, AsyncMock]:
     handler.repo.get_by_stripe_event_id.return_value = None
     handler.repo.create_event_record.return_value = MagicMock()
     return handler, session
+
+
+def _wire_no_match_checkout_mocks(
+    mock_cust_repo_cls: MagicMock,
+    mock_cust_svc_cls: MagicMock,
+    mock_agr_repo_cls: MagicMock,
+    mock_tier_repo_cls: MagicMock,
+    mock_agr_svc_cls: MagicMock,
+    mock_compliance_cls: MagicMock,
+    mock_job_gen_cls: MagicMock,
+    mock_email_cls: MagicMock,
+) -> tuple[AsyncMock, AsyncMock]:
+    """Wire mocks for the no-email-match, no-phone-match checkout path.
+
+    Returns ``(cust_repo, cust_svc)`` so callers can assert on them.
+    """
+    cust_repo = AsyncMock()
+    cust_repo.find_by_email.return_value = []
+    cust_repo.find_by_phone.return_value = None
+    new_customer = MagicMock()
+    new_customer.id = uuid4()
+    new_customer.stripe_customer_id = None
+    new_customer.email_opt_in_at = None
+    new_customer.email_opt_in = False
+    cust_repo.get_by_id.return_value = new_customer
+    mock_cust_repo_cls.return_value = cust_repo
+
+    cust_svc = AsyncMock()
+    cust_resp = MagicMock()
+    cust_resp.id = new_customer.id
+    cust_svc.create_customer.return_value = cust_resp
+    mock_cust_svc_cls.return_value = cust_svc
+
+    tier = MagicMock()
+    tier.id = uuid4()
+    tier.name = "Essential"
+    tier.annual_price = Decimal("299.00")
+    tier.is_active = True
+    tier_repo = AsyncMock()
+    tier_repo.get_by_slug_and_type.return_value = tier
+    mock_tier_repo_cls.return_value = tier_repo
+
+    agreement = _make_agreement(status=AgreementStatus.PENDING.value)
+    agr_svc = AsyncMock()
+    agr_svc.create_agreement.return_value = agreement
+    mock_agr_svc_cls.return_value = agr_svc
+    mock_agr_repo_cls.return_value = AsyncMock()
+
+    mock_compliance_cls.return_value = AsyncMock()
+
+    job_gen = AsyncMock()
+    job_gen.generate_jobs.return_value = []
+    mock_job_gen_cls.return_value = job_gen
+
+    email_svc = MagicMock()
+    email_svc.send_confirmation_email.return_value = {
+        "content": "conf",
+        "sent_via": "email",
+        "sent": True,
+    }
+    email_svc.send_welcome_email.return_value = {"sent": True}
+    mock_email_cls.return_value = email_svc
+
+    return cust_repo, cust_svc
+
+
+def _make_checkout_event(name: str) -> stripe.Event:
+    """Build a checkout.session.completed event with the given customer name."""
+    return _make_event(
+        "checkout.session.completed",
+        {
+            "customer_details": {
+                "email": "new@example.com",
+                "name": name,
+                "phone": "5551234567",
+            },
+            "customer": "cus_stripe123",
+            "subscription": "sub_abc",
+            "metadata": {
+                "consent_token": str(uuid4()),
+                "package_tier": "essential",
+                "package_type": "residential",
+            },
+        },
+    )
 
 
 # =============================================================================
@@ -613,6 +701,228 @@ class TestCheckoutSessionCompleted:
         assert result["status"] == "processed"
         email_svc.send_welcome_email.assert_called_once()
         email_svc.send_confirmation_email.assert_called_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerService")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_single_word_customer_name_uses_placeholder_last_name(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_cust_svc_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+    ) -> None:
+        """Mononym ("Madonna") survives CustomerCreate via placeholder."""
+        handler, _session = _make_handler()
+        _, cust_svc = _wire_no_match_checkout_mocks(
+            mock_cust_repo_cls,
+            mock_cust_svc_cls,
+            mock_agr_repo_cls,
+            mock_tier_repo_cls,
+            mock_agr_svc_cls,
+            mock_compliance_cls,
+            mock_job_gen_cls,
+            mock_email_cls,
+        )
+
+        event = _make_checkout_event(name="Madonna")
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        cust_svc.create_customer.assert_called_once()
+        created = cust_svc.create_customer.call_args.args[0]
+        assert created.first_name == "Madonna"
+        assert created.last_name == _MISSING_LAST_NAME_PLACEHOLDER
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerService")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_empty_customer_name_uses_defaults_and_placeholder_last_name(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_cust_svc_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+    ) -> None:
+        """Empty name falls back to "Customer" + placeholder, no rollback."""
+        handler, _session = _make_handler()
+        _, cust_svc = _wire_no_match_checkout_mocks(
+            mock_cust_repo_cls,
+            mock_cust_svc_cls,
+            mock_agr_repo_cls,
+            mock_tier_repo_cls,
+            mock_agr_svc_cls,
+            mock_compliance_cls,
+            mock_job_gen_cls,
+            mock_email_cls,
+        )
+
+        event = _make_checkout_event(name="")
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        cust_svc.create_customer.assert_called_once()
+        created = cust_svc.create_customer.call_args.args[0]
+        assert created.first_name == "Customer"
+        assert created.last_name == _MISSING_LAST_NAME_PLACEHOLDER
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerService")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_whitespace_only_customer_name_uses_defaults(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_cust_svc_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+    ) -> None:
+        """Whitespace-only name hits both fallbacks via empty parts list."""
+        handler, _session = _make_handler()
+        _, cust_svc = _wire_no_match_checkout_mocks(
+            mock_cust_repo_cls,
+            mock_cust_svc_cls,
+            mock_agr_repo_cls,
+            mock_tier_repo_cls,
+            mock_agr_svc_cls,
+            mock_compliance_cls,
+            mock_job_gen_cls,
+            mock_email_cls,
+        )
+
+        # ``"   ".strip().split(maxsplit=1) == []`` — both fallback branches fire.
+        event = _make_checkout_event(name="   ")
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        cust_svc.create_customer.assert_called_once()
+        created = cust_svc.create_customer.call_args.args[0]
+        assert created.first_name == "Customer"
+        assert created.last_name == _MISSING_LAST_NAME_PLACEHOLDER
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerService")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_multi_word_customer_name_splits_normally(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_cust_svc_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+    ) -> None:
+        """Two-word name splits into first/last, placeholder NOT used."""
+        handler, _session = _make_handler()
+        _, cust_svc = _wire_no_match_checkout_mocks(
+            mock_cust_repo_cls,
+            mock_cust_svc_cls,
+            mock_agr_repo_cls,
+            mock_tier_repo_cls,
+            mock_agr_svc_cls,
+            mock_compliance_cls,
+            mock_job_gen_cls,
+            mock_email_cls,
+        )
+
+        event = _make_checkout_event(name="Jane Smith")
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        cust_svc.create_customer.assert_called_once()
+        created = cust_svc.create_customer.call_args.args[0]
+        assert created.first_name == "Jane"
+        assert created.last_name == "Smith"
+        assert created.last_name != _MISSING_LAST_NAME_PLACEHOLDER
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @patch("grins_platform.api.v1.webhooks.EmailService")
+    @patch("grins_platform.api.v1.webhooks.JobGenerator")
+    @patch("grins_platform.api.v1.webhooks.ComplianceService")
+    @patch("grins_platform.api.v1.webhooks.AgreementService")
+    @patch("grins_platform.api.v1.webhooks.AgreementTierRepository")
+    @patch("grins_platform.api.v1.webhooks.AgreementRepository")
+    @patch("grins_platform.api.v1.webhooks.CustomerService")
+    @patch("grins_platform.api.v1.webhooks.CustomerRepository")
+    async def test_three_word_customer_name_preserves_maxsplit_one(
+        self,
+        mock_cust_repo_cls: MagicMock,
+        mock_cust_svc_cls: MagicMock,
+        mock_agr_repo_cls: MagicMock,
+        mock_tier_repo_cls: MagicMock,
+        mock_agr_svc_cls: MagicMock,
+        mock_compliance_cls: MagicMock,
+        mock_job_gen_cls: MagicMock,
+        mock_email_cls: MagicMock,
+    ) -> None:
+        """Three-word name keeps everything after first split as last_name."""
+        handler, _session = _make_handler()
+        _, cust_svc = _wire_no_match_checkout_mocks(
+            mock_cust_repo_cls,
+            mock_cust_svc_cls,
+            mock_agr_repo_cls,
+            mock_tier_repo_cls,
+            mock_agr_svc_cls,
+            mock_compliance_cls,
+            mock_job_gen_cls,
+            mock_email_cls,
+        )
+
+        event = _make_checkout_event(name="Mary Anne Watson")
+
+        result = await handler.handle_event(event)
+
+        assert result["status"] == "processed"
+        cust_svc.create_customer.assert_called_once()
+        created = cust_svc.create_customer.call_args.args[0]
+        assert created.first_name == "Mary"
+        assert created.last_name == "Anne Watson"
 
 
 # =============================================================================
