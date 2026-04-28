@@ -1,5 +1,7 @@
 # Backend and Python
-src/
+# NOTE: anchor with leading slash so this only excludes the top-level Python
+# backend, NOT `frontend/src/` (the Vite app entrypoint).
+/src/
 .venv/
 __pycache__/
 *.pyc
