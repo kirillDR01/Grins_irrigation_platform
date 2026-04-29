@@ -96,7 +96,19 @@ def main() -> int:
     }
     appt = call("POST", "/appointments", appt_payload, token)
     appt_id = appt["id"]
-    print(f"# appointment {appt_id}", file=sys.stderr)
+    # Walk draft → scheduled → in_progress so the Collect Payment CTA renders.
+    final_status = "draft"
+    for next_status in ("scheduled", "in_progress"):
+        try:
+            call("PUT", f"/appointments/{appt_id}", {"status": next_status}, token)
+            final_status = next_status
+        except urllib.error.HTTPError as e:
+            print(
+                f"# appointment {appt_id} status→{next_status} failed: {e.code}",
+                file=sys.stderr,
+            )
+            break
+    print(f"# appointment {appt_id} ({final_status})", file=sys.stderr)
 
     # 4. Invoice — triggers auto-create payment link hook
     inv_payload = {

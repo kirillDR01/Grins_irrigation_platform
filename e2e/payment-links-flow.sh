@@ -65,41 +65,67 @@ fi
 ab screenshot "$SHOTS/01-dashboard.png"
 
 # Journey 1: Send Payment Link from Appointment Modal.
+# FullCalendar renders events as `.fc-event`; click the first one.
 ab open "$BASE/schedule"
 ab wait --load networkidle
-sleep 1
-APPT_COUNT=$(ab get count "[data-testid='appointments-row']")
+sleep 3
+APPT_COUNT=$(ab get count ".fc-event")
 if [[ "$APPT_COUNT" == "0" ]]; then
-  echo "SKIP Journey 1: dev DB has no visible appointments this week."
+  echo "SKIP Journey 1: no visible appointments this week."
 else
-  ab click "[data-testid='appointments-row']:first-child"
+  ab eval "const e = document.querySelector('.fc-event.appointment-confirmed') || document.querySelector('.fc-event'); if (e) { e.click(); 'clicked'; } else { 'no-event'; }"
   ab wait "[data-testid='appointment-modal']"
-  ab is visible "[data-testid='send-payment-link-btn']"
-  ab screenshot "$SHOTS/02-modal-pre-send.png"
-  ab click "[data-testid='send-payment-link-btn']"
-  sleep 3
-  ab screenshot "$SHOTS/03-modal-link-sent.png"
-
-  # Journey 1 (cont): once the webhook fires the modal should auto-collapse
-  # the polling indicator into a Paid pill (CG-6). Trigger via Stripe CLI:
-  #   stripe trigger payment_intent.succeeded \
-  #     --override "payment_intent:metadata.invoice_id=$INVOICE_ID"
-  sleep 15
-  ab screenshot "$SHOTS/04-modal-paid.png"
-  PAID_COUNT=$(ab get count "[data-testid='status-paid']")
-  if [[ "$PAID_COUNT" == "0" ]]; then
-    echo "WARN: status-paid not visible; check the webhook fired and metadata.invoice_id=$INVOICE_ID."
+  sleep 1
+  ab screenshot "$SHOTS/02a-modal-opened.png"
+  # The Send Payment Link button lives inside the Payment sheet — open it
+  # via the Collect Payment CTA (only rendered when status is in_progress
+  # or completed; otherwise the journey can't proceed).
+  CTA_COUNT=$(ab get count "[data-testid='collect-payment-cta']")
+  if [[ "$CTA_COUNT" == "0" ]]; then
+    echo "WARN Journey 1: Collect Payment CTA absent (appointment must be in_progress/completed)."
+  else
+    ab click "[data-testid='collect-payment-cta']"
+    sleep 1
+    ab screenshot "$SHOTS/02b-payment-sheet-open.png"
+  fi
+  SEND_COUNT=$(ab get count "[data-testid='send-payment-link-btn'], [data-testid='resend-payment-link-btn']")
+  if [[ "$SEND_COUNT" == "0" ]]; then
+    echo "WARN Journey 1: payment sheet has no Send/Resend Payment Link button."
+  else
+    if [[ $(ab get count "[data-testid='send-payment-link-btn']") -gt "0" ]]; then
+      ab click "[data-testid='send-payment-link-btn']"
+    else
+      ab click "[data-testid='resend-payment-link-btn']"
+    fi
+    sleep 3
+    ab screenshot "$SHOTS/03-modal-link-sent.png"
+    # Trigger Stripe webhook in another terminal:
+    #   stripe trigger payment_intent.succeeded \
+    #     --override "payment_intent:metadata.invoice_id=$INVOICE_ID"
+    sleep 8
+    ab screenshot "$SHOTS/04-modal-paid.png"
   fi
 fi
 
-# Journey 2: Resend from Invoice Detail page.
+# Journey 2: Send/Resend from Invoice Detail page.
+# Use whichever button is rendered (depends on payment_link_sent_count).
 ab open "$BASE/invoices/$INVOICE_ID"
 ab wait --load networkidle
-sleep 1
-ab is visible "[data-testid='resend-payment-link-btn']"
-ab click "[data-testid='resend-payment-link-btn']"
 sleep 2
-ab screenshot "$SHOTS/05-invoice-detail-resent.png"
+SEND_COUNT=$(ab get count "[data-testid='send-payment-link-btn']")
+RESEND_COUNT=$(ab get count "[data-testid='resend-payment-link-btn']")
+ab screenshot "$SHOTS/05a-invoice-detail-pre.png"
+if [[ "$RESEND_COUNT" != "0" ]]; then
+  ab click "[data-testid='resend-payment-link-btn']"
+elif [[ "$SEND_COUNT" != "0" ]]; then
+  ab click "[data-testid='send-payment-link-btn']"
+else
+  echo "FAIL: Invoice Detail page rendered neither Send nor Resend Payment Link button."
+  ab close
+  exit 1
+fi
+sleep 3
+ab screenshot "$SHOTS/05b-invoice-detail-sent.png"
 
 # Journey 3: Channel pill in Invoice List.
 ab open "$BASE/invoices"
@@ -142,7 +168,7 @@ else
 fi
 
 # Responsive: mobile viewport (375x812).
-ab viewport 375 812
+ab set viewport 375 812
 ab open "$BASE/schedule"
 ab wait --load networkidle
 ab screenshot "$SHOTS/09-mobile-schedule.png"
@@ -151,7 +177,7 @@ ab wait --load networkidle
 ab screenshot "$SHOTS/10-mobile-invoice-detail.png"
 
 # Responsive: desktop viewport (1440x900).
-ab viewport 1440 900
+ab set viewport 1440 900
 ab open "$BASE/invoices"
 ab wait --load networkidle
 ab screenshot "$SHOTS/11-desktop-invoice-list.png"

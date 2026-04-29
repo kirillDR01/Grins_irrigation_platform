@@ -13,7 +13,7 @@ import { PaymentCollector } from '../PaymentCollector';
 interface PaymentSheetWrapperProps {
   appointmentId: string;
   jobId?: string;
-  invoiceAmount?: number;
+  invoiceAmount?: number | string;
   customerPhone?: string | null;
   customerEmail?: string | null;
   customerExists?: boolean;

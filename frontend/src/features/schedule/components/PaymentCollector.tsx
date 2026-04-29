@@ -41,7 +41,7 @@ interface PaymentCollectorProps {
   appointmentId: string;
   /** Job ID, used to look up the invoice for this appointment. */
   jobId?: string;
-  invoiceAmount?: number;
+  invoiceAmount?: number | string;
   customerPhone?: string | null;
   customerEmail?: string | null;
   /**
@@ -89,7 +89,9 @@ export function PaymentCollector({
 
   const [method, setMethod] = useState<PaymentMethod | ''>('');
   const [amount, setAmount] = useState(
-    invoiceAmount ? invoiceAmount.toFixed(2) : '',
+    invoiceAmount != null && invoiceAmount !== ''
+      ? Number(invoiceAmount).toFixed(2)
+      : '',
   );
   const [referenceNumber, setReferenceNumber] = useState('');
   const collectPayment = useCollectPayment();
