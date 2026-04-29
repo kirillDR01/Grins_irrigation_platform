@@ -75,7 +75,15 @@ class ScheduleGenerateResponse(BaseModel):
 
 
 class ScheduleCapacityResponse(BaseModel):
-    """Response for schedule capacity check."""
+    """Response for schedule capacity check.
+
+    The original capacity fields (``schedule_date`` … ``can_accept_more``)
+    are preserved verbatim. The four optional ``criteria_*`` /
+    ``forecast_confidence_*`` / ``per_criterion_utilization`` fields were
+    added to surface the 30-criteria overlay (Bug 5 / Requirement 23.1)
+    without breaking existing consumers — every new field defaults to
+    ``None`` so legacy callers see the same shape they always saw.
+    """
 
     schedule_date: date
     total_staff: int
@@ -84,6 +92,34 @@ class ScheduleCapacityResponse(BaseModel):
     scheduled_minutes: int
     remaining_capacity_minutes: int
     can_accept_more: bool
+    criteria_triggered: list[int] | None = Field(
+        default=None,
+        description=(
+            "Criterion numbers (1-30) with at least one violated hard "
+            "constraint on this date. Empty list when no violations exist."
+        ),
+    )
+    forecast_confidence_low: float | None = Field(
+        default=None,
+        description=(
+            "Lower bound of the schedule-quality forecast (mean - 1 stddev "
+            "across per-assignment scores). None when no assignments exist."
+        ),
+    )
+    forecast_confidence_high: float | None = Field(
+        default=None,
+        description=(
+            "Upper bound of the schedule-quality forecast (mean + 1 stddev "
+            "across per-assignment scores). None when no assignments exist."
+        ),
+    )
+    per_criterion_utilization: dict[int, float] | None = Field(
+        default=None,
+        description=(
+            "Per-criterion average score (0-100) keyed by criterion number, "
+            "for criteria that were evaluated. ``None`` when no overlay ran."
+        ),
+    )
 
 
 class EmergencyInsertRequest(BaseModel):

@@ -8,17 +8,22 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from datetime import date
+from statistics import StatisticsError, mean, stdev
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import exists, select
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002 - runtime for FastAPI DI
 from sqlalchemy.orm import Session  # noqa: TC002
 
 from grins_platform.api.v1.auth_dependencies import (
     CurrentActiveUser,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
-from grins_platform.api.v1.dependencies import get_appointment_service
+from grins_platform.api.v1.dependencies import (
+    get_appointment_service,
+    get_db_session,
+)
 from grins_platform.database import get_database_manager, get_sync_db
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.appointment import Appointment
@@ -31,6 +36,8 @@ from grins_platform.schemas.ai_scheduling import (
     BatchScheduleRequest,
     BatchScheduleResponse,
     ResourceUtilization,
+    SchedulingConfig,
+    SchedulingContext,
     UtilizationReport,
 )
 from grins_platform.schemas.analytics import LeadTimeResponse
@@ -60,12 +67,19 @@ from grins_platform.services.ai.constraint_parser import (
 from grins_platform.services.ai.explanation_service import (
     ScheduleExplanationService,
 )
+from grins_platform.services.ai.scheduling.appointment_loader import (
+    load_assignments_for_date,
+)
+from grins_platform.services.ai.scheduling.criteria_evaluator import (
+    CriteriaEvaluator,
+)
 from grins_platform.services.ai.unassigned_analyzer import (
     UnassignedJobAnalyzer,
 )
 from grins_platform.services.appointment_service import (
     AppointmentService,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
+from grins_platform.services.schedule_domain import ScheduleSolution
 from grins_platform.services.schedule_generation_service import (
     ScheduleGenerationService,
 )
@@ -188,11 +202,18 @@ def preview_schedule(
     "/capacity/{schedule_date}",
     response_model=ScheduleCapacityResponse,
 )
-def get_capacity(
+async def get_capacity(
     schedule_date: date,
     service: ScheduleGenerationService = Depends(get_schedule_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> ScheduleCapacityResponse:
-    """Get scheduling capacity for a date.
+    """Get scheduling capacity for a date with the 30-criteria overlay.
+
+    Returns the basic capacity numbers (staff available, capacity minutes
+    scheduled / remaining) plus an optional overlay of which criteria are
+    triggered, the forecast confidence band, and per-criterion utilization
+    averages — populated when there are appointments to evaluate
+    (Bug 5 / Requirement 23.1).
 
     GET /api/v1/schedule/capacity/{date}
     """
@@ -200,6 +221,7 @@ def get_capacity(
 
     try:
         response = service.get_capacity(schedule_date)
+        overlay = await _evaluate_capacity_criteria(session, schedule_date)
     except Exception as e:
         endpoints.log_failed("get_capacity", error=e)
         raise HTTPException(
@@ -207,12 +229,76 @@ def get_capacity(
             detail=f"Capacity check failed: {e!s}",
         ) from e
     else:
+        if overlay is not None:
+            response = response.model_copy(update=overlay)
         endpoints.log_completed(
             "get_capacity",
             available_staff=response.available_staff,
             remaining_minutes=response.remaining_capacity_minutes,
+            criteria_triggered_count=(
+                len(response.criteria_triggered)
+                if response.criteria_triggered is not None
+                else 0
+            ),
         )
         return response
+
+
+async def _evaluate_capacity_criteria(
+    session: AsyncSession,
+    schedule_date: date,
+) -> dict[str, object] | None:
+    """Run the 30-criteria evaluator against the persisted schedule.
+
+    Returns a dict suitable for ``ScheduleCapacityResponse.model_copy(update=…)``
+    with the four optional overlay fields populated. Returns ``None`` when
+    no appointments exist for the date so legacy consumers see the original
+    response shape unchanged.
+    """
+    endpoints.log_started(
+        "scheduling.capacity.criteria_overlay_started",
+        schedule_date=str(schedule_date),
+    )
+
+    assignments = await load_assignments_for_date(session, schedule_date)
+    if not assignments:
+        return None
+
+    evaluator = CriteriaEvaluator(session, config=SchedulingConfig())
+    context = SchedulingContext(schedule_date=schedule_date)
+    solution = ScheduleSolution(
+        schedule_date=schedule_date,
+        assignments=assignments,
+    )
+    result = await evaluator.evaluate_schedule(solution=solution, context=context)
+
+    criteria_triggered = sorted(
+        {
+            cr.criterion_number
+            for cr in result.criteria_scores
+            if cr.is_hard and not cr.is_satisfied
+        }
+    )
+    per_criterion = {cr.criterion_number: cr.score for cr in result.criteria_scores}
+
+    per_assignment_scores = [float(cr.score) for cr in result.criteria_scores]
+    forecast_low: float | None = None
+    forecast_high: float | None = None
+    if per_assignment_scores:
+        avg = mean(per_assignment_scores)
+        try:
+            sigma = stdev(per_assignment_scores)
+        except StatisticsError:
+            sigma = 0.0
+        forecast_low = round(avg - sigma, 2)
+        forecast_high = round(avg + sigma, 2)
+
+    return {
+        "criteria_triggered": criteria_triggered,
+        "forecast_confidence_low": forecast_low,
+        "forecast_confidence_high": forecast_high,
+        "per_criterion_utilization": per_criterion,
+    }
 
 
 @router.post(  # type: ignore[misc,untyped-decorator]

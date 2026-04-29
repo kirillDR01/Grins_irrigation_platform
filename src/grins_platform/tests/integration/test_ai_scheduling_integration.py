@@ -761,6 +761,320 @@ async def test_chat_endpoint_accessible_within_rate_limit() -> None:
 
 
 # =============================================================================
+# 18.5b — Phase 3+4 remediation tests (Bug 3, Bug 5, Bug 6)
+# =============================================================================
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_evaluate_loads_assignments_from_db() -> None:
+    """``POST /evaluate`` loads persisted assignments via the loader.
+
+    Verifies Bug 3 fix: the endpoint now calls ``load_assignments_for_date``
+    instead of evaluating an empty solution. Patches the loader to return
+    a non-empty list and asserts the evaluator was invoked with that list.
+
+    Validates: Req 23.1, 23.2 (Bug 3)
+    """
+    from grins_platform.api.v1.auth_dependencies import get_current_user
+    from grins_platform.api.v1.dependencies import get_db_session
+    from grins_platform.schemas.ai_scheduling import ScheduleEvaluation
+    from grins_platform.services.schedule_domain import (
+        ScheduleAssignment,
+        ScheduleLocation,
+        ScheduleStaff,
+    )
+
+    admin = _make_staff("admin")
+    session = _make_session()
+
+    fake_assignment = ScheduleAssignment(
+        id=uuid.uuid4(),
+        staff=ScheduleStaff(
+            id=uuid.uuid4(),
+            name="Tech",
+            start_location=ScheduleLocation(latitude=0, longitude=0),  # type: ignore[arg-type]
+        ),
+        jobs=[],
+    )
+
+    fake_eval = ScheduleEvaluation(
+        schedule_date=date(2026, 5, 1),
+        total_score=72.5,
+        hard_violations=1,
+        criteria_scores=[],
+        alerts=["[Criterion 21] Compliance: deadline past"],
+    )
+
+    app.dependency_overrides[get_current_user] = lambda: admin
+    app.dependency_overrides[get_db_session] = lambda: session
+
+    try:
+        with (
+            patch(
+                "grins_platform.api.v1.ai_scheduling.load_assignments_for_date",
+                new_callable=AsyncMock,
+                return_value=[fake_assignment],
+            ) as mock_loader,
+            patch(
+                "grins_platform.api.v1.ai_scheduling.CriteriaEvaluator.evaluate_schedule",
+                new_callable=AsyncMock,
+                return_value=fake_eval,
+            ) as mock_eval,
+        ):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
+                response = await client.post(
+                    "/api/v1/ai-scheduling/evaluate",
+                    json={"schedule_date": "2026-05-01"},
+                )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["hard_violations"] == 1
+        assert body["total_score"] == 72.5
+        mock_loader.assert_awaited_once()
+        mock_eval.assert_awaited_once()
+        # Solution passed to evaluator must contain the loaded assignment.
+        passed_solution = mock_eval.call_args.kwargs["solution"]
+        assert passed_solution.assignments == [fake_assignment]
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_chat_returns_429_when_rate_limit_exceeded() -> None:
+    """Chat handler returns 429 + ``Retry-After`` when rate limit is exceeded.
+
+    Validates: Req 28.7 (Bug 6)
+    """
+    from grins_platform.api.v1.auth_dependencies import get_current_user
+    from grins_platform.api.v1.dependencies import get_db_session
+    from grins_platform.services.ai.rate_limiter import RateLimitError
+
+    admin = _make_staff("admin")
+    session = _make_session()
+
+    app.dependency_overrides[get_current_user] = lambda: admin
+    app.dependency_overrides[get_db_session] = lambda: session
+
+    try:
+        with patch(
+            "grins_platform.services.ai.rate_limiter.RateLimitService.check_limit",
+            new_callable=AsyncMock,
+            side_effect=RateLimitError("Daily limit of 100 requests exceeded"),
+        ):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
+                response = await client.post(
+                    "/api/v1/ai-scheduling/chat",
+                    json={"message": "Show me today's schedule"},
+                )
+
+        assert response.status_code == 429
+        assert response.headers.get("retry-after") == "60"
+        assert "Daily limit" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_chat_records_usage_on_success() -> None:
+    """Chat handler records token usage after a successful dispatch.
+
+    Validates: Req 28.7 (Bug 6 — usage accounting)
+    """
+    from grins_platform.api.v1.auth_dependencies import get_current_user
+    from grins_platform.api.v1.dependencies import get_db_session
+    from grins_platform.schemas.ai_scheduling import ChatResponse
+
+    admin = _make_staff("admin")
+    session = _make_session()
+
+    mock_response = ChatResponse(
+        response="OK",
+        schedule_changes=[],
+        clarifying_questions=[],
+        change_request_id=None,
+    )
+
+    app.dependency_overrides[get_current_user] = lambda: admin
+    app.dependency_overrides[get_db_session] = lambda: session
+
+    try:
+        with (
+            patch(
+                "grins_platform.api.v1.ai_scheduling.SchedulingChatService.chat",
+                new_callable=AsyncMock,
+                return_value=mock_response,
+            ),
+            patch(
+                "grins_platform.services.ai.rate_limiter.RateLimitService.check_limit",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "grins_platform.services.ai.rate_limiter.RateLimitService.record_usage",
+                new_callable=AsyncMock,
+                return_value=1,
+            ) as mock_record,
+        ):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
+                response = await client.post(
+                    "/api/v1/ai-scheduling/chat",
+                    json={"message": "Hi"},
+                )
+
+        assert response.status_code == 200
+        mock_record.assert_awaited_once()
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_capacity_response_includes_overlay_fields_when_assignments_exist() -> (
+    None
+):
+    """``GET /schedule/capacity/{date}`` populates the criteria overlay.
+
+    Verifies Bug 5 fix: when persisted appointments exist for the date the
+    response now carries ``criteria_triggered``, ``forecast_confidence_low``,
+    ``forecast_confidence_high``, and ``per_criterion_utilization``.
+
+    Validates: Req 23.1 (Bug 5)
+    """
+    from grins_platform.api.v1.dependencies import get_db_session
+    from grins_platform.schemas.ai_scheduling import (
+        CriterionResult,
+        ScheduleEvaluation,
+    )
+    from grins_platform.services.schedule_domain import (
+        ScheduleAssignment,
+        ScheduleLocation,
+        ScheduleStaff,
+    )
+
+    session = _make_session()
+
+    fake_assignment = ScheduleAssignment(
+        id=uuid.uuid4(),
+        staff=ScheduleStaff(
+            id=uuid.uuid4(),
+            name="Tech",
+            start_location=ScheduleLocation(latitude=0, longitude=0),  # type: ignore[arg-type]
+        ),
+        jobs=[],
+    )
+
+    fake_eval = ScheduleEvaluation(
+        schedule_date=date(2026, 5, 1),
+        total_score=80.0,
+        hard_violations=1,
+        criteria_scores=[
+            CriterionResult(
+                criterion_number=21,
+                criterion_name="Compliance",
+                score=10.0,
+                weight=8,
+                is_hard=True,
+                is_satisfied=False,
+                explanation="Past compliance deadline",
+            ),
+            CriterionResult(
+                criterion_number=1,
+                criterion_name="Proximity",
+                score=85.0,
+                weight=10,
+                is_hard=False,
+                is_satisfied=True,
+                explanation="Nearby",
+            ),
+        ],
+        alerts=[],
+    )
+
+    app.dependency_overrides[get_db_session] = lambda: session
+
+    try:
+        with (
+            patch(
+                "grins_platform.api.v1.schedule.load_assignments_for_date",
+                new_callable=AsyncMock,
+                return_value=[fake_assignment],
+            ),
+            patch(
+                "grins_platform.api.v1.schedule.CriteriaEvaluator.evaluate_schedule",
+                new_callable=AsyncMock,
+                return_value=fake_eval,
+            ),
+        ):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
+                response = await client.get("/api/v1/schedule/capacity/2026-05-01")
+
+        assert response.status_code == 200
+        body = response.json()
+        # Original fields preserved.
+        assert "schedule_date" in body
+        assert "total_capacity_minutes" in body
+        # New overlay fields populated.
+        assert body["criteria_triggered"] == [21]
+        assert body["per_criterion_utilization"] == {"21": 10.0, "1": 85.0}
+        assert body["forecast_confidence_low"] is not None
+        assert body["forecast_confidence_high"] is not None
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_capacity_response_skips_overlay_when_no_assignments() -> None:
+    """Capacity response keeps overlay fields ``None`` when DB is empty.
+
+    Legacy consumers must continue to see the original shape unchanged.
+
+    Validates: Req 23.1 (Bug 5 — additive, non-breaking)
+    """
+    from grins_platform.api.v1.dependencies import get_db_session
+
+    session = _make_session()
+    app.dependency_overrides[get_db_session] = lambda: session
+
+    try:
+        with patch(
+            "grins_platform.api.v1.schedule.load_assignments_for_date",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
+                response = await client.get("/api/v1/schedule/capacity/2026-05-01")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["criteria_triggered"] is None
+        assert body["forecast_confidence_low"] is None
+        assert body["forecast_confidence_high"] is None
+        assert body["per_criterion_utilization"] is None
+    finally:
+        app.dependency_overrides.clear()
+
+
+# =============================================================================
 # 18.6 — All integration tests pass verification (marker)
 # =============================================================================
 

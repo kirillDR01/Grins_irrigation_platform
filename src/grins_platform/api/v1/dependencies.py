@@ -37,6 +37,7 @@ from grins_platform.repositories.service_offering_repository import (
     ServiceOfferingRepository,
 )
 from grins_platform.repositories.staff_repository import StaffRepository
+from grins_platform.services.ai.rate_limiter import RateLimitService
 from grins_platform.services.appointment_note_service import AppointmentNoteService
 from grins_platform.services.appointment_service import AppointmentService
 from grins_platform.services.appointment_timeline_service import (
@@ -396,6 +397,23 @@ async def get_estimate_service(
     )
 
 
+async def get_rate_limit_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> RateLimitService:
+    """Get RateLimitService bound to the request session.
+
+    Used by AI endpoints (chat, evaluate) to enforce the per-user daily
+    request cap and record token usage for cost accounting.
+
+    Args:
+        session: Database session from dependency injection.
+
+    Returns:
+        RateLimitService instance.
+    """
+    return RateLimitService(session)
+
+
 async def get_campaign_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> CampaignService:
@@ -434,6 +452,7 @@ __all__ = [
     "get_job_service",
     "get_photo_service",
     "get_property_service",
+    "get_rate_limit_service",
     "get_service_offering_service",
     "get_sheets_service",
     "get_staff_availability_service",

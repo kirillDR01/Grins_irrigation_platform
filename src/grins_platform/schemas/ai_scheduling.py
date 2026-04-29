@@ -199,6 +199,18 @@ class ChatRequest(BaseModel):
     )
 
 
+class EvaluateRequest(BaseModel):
+    """Request payload for the schedule evaluation endpoint.
+
+    Validates: Requirements 23.1, 23.2
+    """
+
+    schedule_date: date = Field(
+        ...,
+        description="Schedule date to evaluate against all 30 criteria",
+    )
+
+
 class CriterionUsage(BaseModel):
     """A single criterion that influenced an AI chat response.
 

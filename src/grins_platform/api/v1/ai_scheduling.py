@@ -9,26 +9,33 @@ Validates: Requirements 1.6, 1.7, 2.1-2.5, 9.1-9.10, 14.1-14.10,
 
 from __future__ import annotations
 
-from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002 - runtime for FastAPI DI
 
 from grins_platform.api.v1.auth_dependencies import (
     CurrentActiveUser,  # noqa: TC001 - runtime for FastAPI DI
 )
-from grins_platform.api.v1.dependencies import get_db_session
+from grins_platform.api.v1.dependencies import (
+    get_db_session,
+    get_rate_limit_service,
+)
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.scheduling_criteria_config import SchedulingCriteriaConfig
 from grins_platform.schemas.ai_scheduling import (
     ChatRequest,
     ChatResponse,
     CriterionResult,
+    EvaluateRequest,
     ScheduleEvaluation,
     SchedulingConfig,
     SchedulingContext,
+)
+from grins_platform.services.ai.rate_limiter import RateLimitError, RateLimitService
+from grins_platform.services.ai.scheduling.appointment_loader import (
+    load_assignments_for_date,
 )
 from grins_platform.services.ai.scheduling.chat_service import SchedulingChatService
 from grins_platform.services.ai.scheduling.criteria_evaluator import CriteriaEvaluator
@@ -79,16 +86,19 @@ async def chat(
     request: ChatRequest,
     current_user: CurrentActiveUser,
     service: Annotated[SchedulingChatService, Depends(get_chat_service)],
+    rate_limiter: Annotated[RateLimitService, Depends(get_rate_limit_service)],
 ) -> ChatResponse:
     """Process a natural-language scheduling message.
 
     Routes to admin or resource handler based on the caller's role.
     Persists conversation history and writes an audit log entry.
+    Enforces the per-user daily request limit before dispatch and records
+    usage on success (Bug 6 / Requirement 28.7).
 
     POST /api/v1/ai-scheduling/chat
 
     Validates: Requirements 1.6, 1.7, 1.8, 1.9, 2.1, 9.1-9.10, 14.1-14.10,
-               32.7
+               28.7, 32.7
     """
     _log.log_started(
         "chat",
@@ -96,6 +106,20 @@ async def chat(
         role=current_user.role,
         message_length=len(request.message),
     )
+
+    try:
+        await rate_limiter.check_limit(current_user.id)
+    except RateLimitError as exc:
+        _log.log_rejected(
+            "chat",
+            reason="rate_limit_exceeded",
+            user_id=str(current_user.id),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(exc),
+            headers={"Retry-After": "60"},
+        ) from exc
 
     try:
         response = await service.chat(
@@ -110,13 +134,19 @@ async def chat(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Chat processing failed: {exc!s}",
         ) from exc
-    else:
-        _log.log_completed(
-            "chat",
-            user_id=str(current_user.id),
-            has_changes=bool(response.schedule_changes),
-        )
-        return response
+
+    await rate_limiter.record_usage(
+        current_user.id,
+        input_tokens=len(request.message),
+        output_tokens=len(response.response),
+    )
+
+    _log.log_completed(
+        "chat",
+        user_id=str(current_user.id),
+        has_changes=bool(response.schedule_changes),
+    )
+    return response
 
 
 @router.post(  # type: ignore[misc,untyped-decorator]
@@ -125,26 +155,31 @@ async def chat(
     summary="Evaluate a schedule against all 30 criteria",
 )
 async def evaluate_schedule(
-    schedule_date: date = Query(..., description="Schedule date to evaluate"),
-    current_user: CurrentActiveUser = None,  # type: ignore[assignment]  # noqa: ARG001
-    evaluator: Annotated[CriteriaEvaluator, Depends(get_criteria_evaluator)] = None,  # type: ignore[assignment]
+    request: EvaluateRequest,
+    current_user: CurrentActiveUser,  # noqa: ARG001
+    evaluator: Annotated[CriteriaEvaluator, Depends(get_criteria_evaluator)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> ScheduleEvaluation:
     """Evaluate a schedule against all 30 criteria.
 
-    Returns aggregate score, hard violations, per-criterion breakdown,
-    and triggered alerts.
+    Loads persisted ``Appointment`` rows for the requested date and runs
+    them through the criteria evaluator. Returns aggregate score, hard
+    violations, per-criterion breakdown, and triggered alerts.
 
     POST /api/v1/ai-scheduling/evaluate
 
     Validates: Requirements 23.1, 23.2
     """
+    schedule_date = request.schedule_date
     _log.log_started("evaluate_schedule", schedule_date=str(schedule_date))
 
     try:
+        assignments = await load_assignments_for_date(session, schedule_date)
         context = SchedulingContext(schedule_date=schedule_date)
-        # Build an empty solution for the given date; the evaluator will
-        # load assignments from the DB via the session.
-        solution = ScheduleSolution(schedule_date=schedule_date)
+        solution = ScheduleSolution(
+            schedule_date=schedule_date,
+            assignments=assignments,
+        )
         result = await evaluator.evaluate_schedule(solution=solution, context=context)
     except Exception as exc:
         _log.log_failed("evaluate_schedule", error=exc)
@@ -158,6 +193,7 @@ async def evaluate_schedule(
             schedule_date=str(schedule_date),
             total_score=result.total_score,
             hard_violations=result.hard_violations,
+            assignment_count=len(assignments),
         )
         return result
 
