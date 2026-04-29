@@ -77,25 +77,23 @@ function wrapper({ children }: { children: React.ReactNode }) {
 }
 
 const utilFixture = {
-  period_start: '2026-04-29',
-  period_end: '2026-04-29',
-  overall_utilization_pct: 72,
+  schedule_date: '2026-04-29',
   resources: [
     {
       staff_id: 'staff-1',
-      staff_name: 'Alice Tech',
-      total_jobs: 4,
+      name: 'Alice Tech',
       total_minutes: 240,
+      assigned_minutes: 192,
+      drive_minutes: 0,
       utilization_pct: 80,
-      revenue_per_hour: 120,
     },
     {
       staff_id: 'staff-2',
-      staff_name: 'Bob Tech',
-      total_jobs: 3,
+      name: 'Bob Tech',
       total_minutes: 180,
+      assigned_minutes: 115,
+      drive_minutes: 0,
       utilization_pct: 64,
-      revenue_per_hour: 110,
     },
   ],
 };

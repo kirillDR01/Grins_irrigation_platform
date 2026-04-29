@@ -28,9 +28,7 @@ vi.mock('../hooks/useAIScheduling', async () => {
     ...actual,
     useUtilizationReport: () => ({
       data: {
-        period_start: '2026-04-29',
-        period_end: '2026-04-29',
-        overall_utilization_pct: 50,
+        schedule_date: '2026-04-29',
         resources: [],
       },
       isLoading: false,

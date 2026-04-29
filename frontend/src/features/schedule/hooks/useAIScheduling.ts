@@ -59,17 +59,15 @@ export interface BatchScheduleResponse {
 }
 
 export interface UtilizationReport {
-  period_start: string;
-  period_end: string;
+  schedule_date: string;
   resources: Array<{
     staff_id: string;
-    staff_name: string;
-    total_jobs: number;
+    name: string;
     total_minutes: number;
+    assigned_minutes: number;
+    drive_minutes: number;
     utilization_pct: number;
-    revenue_per_hour: number;
   }>;
-  overall_utilization_pct: number;
 }
 
 export interface CriteriaConfig {
@@ -87,8 +85,8 @@ export const aiSchedulingKeys = {
   all: ['ai-scheduling'] as const,
   capacityForecast: (date: string) =>
     [...aiSchedulingKeys.all, 'capacity-forecast', date] as const,
-  utilization: (start: string, end: string) =>
-    [...aiSchedulingKeys.all, 'utilization', start, end] as const,
+  utilization: (date: string) =>
+    [...aiSchedulingKeys.all, 'utilization', date] as const,
   criteria: () => [...aiSchedulingKeys.all, 'criteria'] as const,
 };
 
@@ -132,22 +130,19 @@ export function useBatchGenerate() {
 }
 
 /**
- * Resource utilization report for a date range.
+ * Resource utilization report for a single schedule date.
  */
-export function useUtilizationReport(params: {
-  start_date: string;
-  end_date: string;
-}) {
+export function useUtilizationReport(scheduleDate: string) {
   return useQuery({
-    queryKey: aiSchedulingKeys.utilization(params.start_date, params.end_date),
+    queryKey: aiSchedulingKeys.utilization(scheduleDate),
     queryFn: async () => {
       const response = await apiClient.get<UtilizationReport>(
         '/schedule/utilization',
-        { params }
+        { params: { schedule_date: scheduleDate } }
       );
       return response.data;
     },
-    enabled: !!params.start_date && !!params.end_date,
+    enabled: !!scheduleDate,
   });
 }
 

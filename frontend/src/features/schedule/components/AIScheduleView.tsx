@@ -72,17 +72,14 @@ function mapToOverviewShape(
 } {
   const resources: OverviewResource[] = (util?.resources ?? []).map((r) => ({
     id: r.staff_id,
-    name: r.staff_name,
+    name: r.name,
     title: 'Technician',
     utilization: Math.round(r.utilization_pct),
     jobsByDate: {},
   }));
 
   const dayLabel = shortDayLabel(scheduleDate);
-  const dayJobCount = capacity?.total_jobs ?? util?.resources.reduce(
-    (sum, r) => sum + r.total_jobs,
-    0,
-  ) ?? 0;
+  const dayJobCount = capacity?.total_jobs ?? 0;
 
   const days: OverviewDay[] = [
     {
@@ -92,8 +89,12 @@ function mapToOverviewShape(
     },
   ];
 
+  const overallUtilization = util?.resources?.length
+    ? util.resources.reduce((sum, r) => sum + r.utilization_pct, 0) /
+      util.resources.length
+    : 0;
   const utilization = Math.round(
-    capacity?.utilization_pct ?? util?.overall_utilization_pct ?? 0,
+    capacity?.utilization_pct ?? overallUtilization,
   );
   const capacityDays: CapacityDay[] = [
     {
@@ -112,10 +113,7 @@ export function AIScheduleView() {
     () => new Date().toISOString().split('T')[0],
   );
 
-  const utilization = useUtilizationReport({
-    start_date: scheduleDate,
-    end_date: scheduleDate,
-  });
+  const utilization = useUtilizationReport(scheduleDate);
   const capacity = useCapacityForecast(scheduleDate);
 
   const { resources, days, capacityDays } = useMemo(
