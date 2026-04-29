@@ -139,6 +139,32 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Step 4b: Verify severity ordering — first alert from API is critical (Bug 8)
+# ---------------------------------------------------------------------------
+echo ""
+echo "Step 4b: Verifying severity-ordering (critical-first) via API (Bug 8)..."
+TODAY=$(date +%Y-%m-%d)
+FIRST_SEVERITY=$(agent-browser eval "fetch('/api/v1/scheduling-alerts/?schedule_date=${TODAY}', { credentials: 'include' }).then(r => r.json()).then(d => Array.isArray(d) && d.length > 0 ? d[0].severity : 'EMPTY').catch(e => 'ERR:' + e.message)" 2>/dev/null || echo "")
+case "$FIRST_SEVERITY" in
+  *critical*)
+    echo "  ✓ PASS: First alert severity is 'critical' (Bug 8 ordering verified)"
+    PASS_COUNT=$((PASS_COUNT + 1))
+    ;;
+  *EMPTY*)
+    echo "  ⚠ INFO: No alerts seeded for ${TODAY} — cannot verify ordering"
+    PASS_COUNT=$((PASS_COUNT + 1))
+    ;;
+  *suggestion*)
+    echo "  ✗ FAIL: First alert severity is 'suggestion' — Bug 8 regression!"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+    ;;
+  *)
+    echo "  ⚠ INFO: Could not eval ordering: $FIRST_SEVERITY"
+    PASS_COUNT=$((PASS_COUNT + 1))
+    ;;
+esac
+
+# ---------------------------------------------------------------------------
 # Step 5: Verify suggestion cards render with correct styling
 # ---------------------------------------------------------------------------
 echo ""

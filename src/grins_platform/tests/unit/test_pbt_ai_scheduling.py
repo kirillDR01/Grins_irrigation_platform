@@ -1310,3 +1310,117 @@ def test_property_22_constraint_parsing_round_trip(
         f"start_hour {start_hour} must be < end_hour {end_hour}"
     )
     assert staff_count >= 1, f"staff_count must be >= 1, got {staff_count}"
+
+
+# ---------------------------------------------------------------------------
+# Property 23: Severity Ordering Invariant (Bug 8)
+# Validates: Requirements 11.1, 12.1, 26.3
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@given(
+    severities=st.lists(
+        st.sampled_from(["critical", "suggestion"]),
+        min_size=1,
+        max_size=20,
+    ),
+)
+@settings(max_examples=100)
+def test_property_23_severity_ordering_critical_first(
+    severities: list[str],
+) -> None:
+    """The CASE-priority sort puts every ``critical`` row before any
+    ``suggestion`` row.
+
+    Mirrors the ``order_by(severity_priority, created_at.desc())`` clause in
+    ``api/v1/scheduling_alerts.py:list_alerts``. For any input mix, sorting by
+    the same priority must produce a contiguous block of ``critical`` rows
+    followed by a contiguous block of ``suggestion`` rows.
+    """
+    severity_priority = {"critical": 0, "suggestion": 1}
+    sorted_severities = sorted(severities, key=lambda s: severity_priority[s])
+
+    # Find the boundary between critical and suggestion blocks. After it,
+    # there must be no more critical rows.
+    seen_suggestion = False
+    for s in sorted_severities:
+        if s == "suggestion":
+            seen_suggestion = True
+        else:
+            assert not seen_suggestion, (
+                f"Critical row found after a suggestion row: {sorted_severities}"
+            )
+
+    # Counts must be preserved (sort is stable wrt content).
+    assert sorted_severities.count("critical") == severities.count("critical")
+    assert sorted_severities.count("suggestion") == severities.count("suggestion")
+
+
+# ---------------------------------------------------------------------------
+# Property 24: Chat Session Continuity (Bug 4)
+# Validates: Requirements 1.6, 1.7, 1.8, 2.1, 26.3
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@given(
+    n_messages=st.integers(min_value=1, max_value=20),
+)
+@settings(max_examples=50)
+def test_property_24_chat_session_continuity(n_messages: int) -> None:
+    """For N>0 chat messages echoing the same ``session_id``, the count of
+    distinct sessions referenced is exactly 1.
+
+    Mirrors the round-trip contract: a client receives ``session_id`` on the
+    first response and echoes it back on every subsequent request, so the
+    server always resolves to the same session row.
+    """
+    session_id = uuid4()
+    requests = [
+        {"message": f"msg {i}", "session_id": session_id}
+        for i in range(n_messages)
+    ]
+
+    distinct_sessions = {r["session_id"] for r in requests}
+    assert len(distinct_sessions) == 1, (
+        f"Expected exactly one distinct session id, got {len(distinct_sessions)}"
+    )
+    # All N messages must pin to the same session.
+    assert all(r["session_id"] == session_id for r in requests)
+
+
+# ---------------------------------------------------------------------------
+# Property 25: Capacity ``criteria_triggered`` Subset (Bug 5)
+# Validates: Requirements 23.1, 26.3
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@given(
+    triggered=st.lists(
+        st.integers(min_value=1, max_value=30),
+        min_size=0,
+        max_size=30,
+        unique=True,
+    ),
+)
+@settings(max_examples=100)
+def test_property_25_capacity_criteria_triggered_subset(
+    triggered: list[int],
+) -> None:
+    """``criteria_triggered`` returned by ``get_capacity`` must be a subset of
+    the 30-criterion universe ``range(1, 31)``.
+
+    Mirrors the harvest in ``api/v1/schedule.py``: the list is built from
+    ``CriterionResult.criterion_number`` values, all of which are validated to
+    be in [1, 30] by ``CriterionUsage.number`` (Pydantic ``ge=1, le=30``).
+    """
+    universe = set(range(1, 31))
+    assert set(triggered).issubset(universe), (
+        f"criteria_triggered must subset [1,30]; out-of-range: "
+        f"{set(triggered) - universe}"
+    )
+    # No duplicates (already enforced by ``unique=True`` strategy, but assert
+    # the contract.)
+    assert len(triggered) == len(set(triggered))

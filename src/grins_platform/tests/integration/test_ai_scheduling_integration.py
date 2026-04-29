@@ -1075,6 +1075,261 @@ async def test_capacity_response_skips_overlay_when_no_assignments() -> None:
 
 
 # =============================================================================
+# 18.5c — Phase 5 remediation tests (Bug 8, dismiss-critical guard)
+# =============================================================================
+
+
+def _make_alert(
+    *,
+    severity: str,
+    status: str = "active",
+    schedule_date_obj: date | None = None,
+    created_at: datetime | None = None,
+    alert_id: uuid.UUID | None = None,
+) -> MagicMock:
+    """Build a SchedulingAlert-shaped mock for alert endpoint tests."""
+    alert = MagicMock()
+    alert.id = alert_id or uuid.uuid4()
+    alert.alert_type = "test_alert"
+    alert.severity = severity
+    alert.title = f"{severity} alert"
+    alert.description = "Test"
+    alert.affected_job_ids = []
+    alert.affected_staff_ids = []
+    alert.criteria_triggered = []
+    alert.resolution_options = None
+    alert.status = status
+    alert.resolved_by = None
+    alert.resolved_action = None
+    alert.resolved_at = None
+    alert.schedule_date = schedule_date_obj or date(2026, 5, 1)
+    alert.created_at = created_at or datetime.now(tz=timezone.utc)
+    alert.updated_at = alert.created_at
+    return alert
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_alert_ordering_critical_first() -> None:
+    """``GET /scheduling-alerts/`` returns critical rows before suggestions.
+
+    Verifies Bug 8 fix: switching from ``severity.desc()`` (lexicographic) to a
+    CASE-based priority puts ``critical`` ahead of ``suggestion`` regardless of
+    string ordering or insertion order.
+
+    Validates: Req 11.1, 12.1 (Bug 8)
+    """
+    from grins_platform.api.v1.auth_dependencies import get_current_user
+    from grins_platform.api.v1.dependencies import get_db_session
+
+    admin = _make_staff("admin")
+    session = _make_session()
+
+    # The DB query (with the CASE-based ORDER BY) returns critical first even
+    # when newer suggestions exist. The list returned here mirrors that
+    # ordered output so the API serializer preserves the priority.
+    older_critical = _make_alert(
+        severity="critical",
+        created_at=datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc),
+    )
+    newer_suggestion = _make_alert(
+        severity="suggestion",
+        created_at=datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc),
+    )
+
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = [older_critical, newer_suggestion]
+    session.execute.return_value = result
+
+    app.dependency_overrides[get_current_user] = lambda: admin
+    app.dependency_overrides[get_db_session] = lambda: session
+
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/api/v1/scheduling-alerts/")
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 2
+        assert body[0]["severity"] == "critical"
+        assert body[1]["severity"] == "suggestion"
+    finally:
+        app.dependency_overrides.clear()
+
+    # Sanity: the handler must order by a CASE expression (priority) before
+    # created_at — guards against a regression to lexicographic ``severity.desc()``.
+    captured_stmt = session.execute.call_args.args[0]
+    compiled = str(
+        captured_stmt.compile(compile_kwargs={"literal_binds": True})
+    )
+    assert "CASE" in compiled
+    assert "'critical'" in compiled
+    assert "'suggestion'" in compiled
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_dismiss_critical_returns_400() -> None:
+    """``POST /{id}/dismiss`` rejects critical alerts with 400.
+
+    Verifies the cross-cutting fix: ``dismiss`` is reserved for suggestions;
+    critical alerts must be resolved via ``/resolve``.
+
+    Validates: Req 11.1, 12.1, 13.6 (cross-cutting dismiss guard)
+    """
+    from grins_platform.api.v1.auth_dependencies import get_current_user
+    from grins_platform.api.v1.dependencies import get_db_session
+
+    user = _make_staff("admin")
+    session = _make_session()
+
+    alert = _make_alert(severity="critical", status="active")
+
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = alert
+    session.execute.return_value = result
+
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_db_session] = lambda: session
+
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                f"/api/v1/scheduling-alerts/{alert.id}/dismiss",
+                json={},
+            )
+        assert response.status_code == 400
+        assert "/resolve" in response.json()["detail"]
+        # Critical alert must NOT have been mutated.
+        assert alert.status == "active"
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_dismiss_suggestion_succeeds() -> None:
+    """``POST /{id}/dismiss`` still accepts suggestion alerts.
+
+    Sister test to ``test_dismiss_critical_returns_400`` — confirms the new
+    severity guard does not block the legitimate dismiss path.
+    """
+    from grins_platform.api.v1.auth_dependencies import get_current_user
+    from grins_platform.api.v1.dependencies import get_db_session
+
+    user = _make_staff("admin")
+    session = _make_session()
+
+    alert = _make_alert(severity="suggestion", status="active")
+
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = alert
+    session.execute.return_value = result
+
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_db_session] = lambda: session
+
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                f"/api/v1/scheduling-alerts/{alert.id}/dismiss",
+                json={},
+            )
+        assert response.status_code == 200
+        assert alert.status == "dismissed"
+    finally:
+        app.dependency_overrides.clear()
+
+
+# =============================================================================
+# 18.5d — Phase 2 remediation tests (Bug 4 — chat session continuity)
+# =============================================================================
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_chat_session_id_round_trips() -> None:
+    """Two successive ``POST /chat`` calls with the same ``session_id`` reuse it.
+
+    Verifies Bug 4: the response now exposes ``session_id`` and the second
+    request echoes it back, so ``SchedulingChatService.chat`` is invoked with
+    the same id on the second call.
+
+    Validates: Req 1.6-1.8, 2.1-2.2 (Bug 4)
+    """
+    from grins_platform.api.v1.auth_dependencies import get_current_user
+    from grins_platform.api.v1.dependencies import get_db_session
+    from grins_platform.schemas.ai_scheduling import ChatResponse
+
+    admin = _make_staff("admin")
+    session = _make_session()
+    persisted_session_id = uuid.uuid4()
+
+    mock_response = ChatResponse(
+        response="Acknowledged.",
+        schedule_changes=[],
+        clarifying_questions=[],
+        change_request_id=None,
+        session_id=persisted_session_id,
+        criteria_used=None,
+        schedule_summary=None,
+    )
+
+    app.dependency_overrides[get_current_user] = lambda: admin
+    app.dependency_overrides[get_db_session] = lambda: session
+
+    try:
+        with (
+            patch(
+                "grins_platform.api.v1.ai_scheduling.SchedulingChatService.chat",
+                new_callable=AsyncMock,
+                return_value=mock_response,
+            ) as mock_chat,
+            patch(
+                "grins_platform.services.ai.rate_limiter.RateLimitService.check_limit",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "grins_platform.services.ai.rate_limiter.RateLimitService.record_usage",
+                new_callable=AsyncMock,
+                return_value=1,
+            ),
+        ):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
+                first = await client.post(
+                    "/api/v1/ai-scheduling/chat",
+                    json={"message": "Hi"},
+                )
+                assert first.status_code == 200
+                returned_session_id = first.json()["session_id"]
+                assert returned_session_id == str(persisted_session_id)
+
+                second = await client.post(
+                    "/api/v1/ai-scheduling/chat",
+                    json={
+                        "message": "And another message",
+                        "session_id": returned_session_id,
+                    },
+                )
+                assert second.status_code == 200
+                assert second.json()["session_id"] == str(persisted_session_id)
+
+        # Second call must have forwarded the persisted session id to the
+        # service layer (proving the round-trip is plumbed end-to-end).
+        assert mock_chat.await_count == 2
+        second_call_kwargs = mock_chat.await_args_list[1].kwargs
+        assert second_call_kwargs["session_id"] == persisted_session_id
+    finally:
+        app.dependency_overrides.clear()
+
+
+# =============================================================================
 # 18.6 — All integration tests pass verification (marker)
 # =============================================================================
 

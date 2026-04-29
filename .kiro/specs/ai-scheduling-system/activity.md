@@ -1,5 +1,118 @@
 # Activity Log — ai-scheduling-system
 
+## [2026-04-29 19:30] Audit remediation — 8 bugs closed (P0×4, P1×3, P2×1) + 4 cross-cutting cleanups
+
+### Status: ✅ COMPLETE — `[!]` audited & remediated
+
+### Source of truth
+- `bughunt/2026-04-29-ai-scheduling-system-validation.md` — canonical bug report
+- `.agents/plans/ai-scheduling-system-validation-fixes.md` — implementation plan
+
+### Why this entry exists
+The earlier `[x]`-checked tasks (7.1, 7.3, 8, 11.1, 13A) reported "complete" against
+mock-only / file-existence-only checks. The 2026-04-29 audit hit the wired surface and
+caught eight ship-blocking defects that mocks had been hiding. This entry re-marks
+those tasks as `[!]` (audited & remediated) so future readers understand completion is
+now actually wired end-to-end.
+
+### Bugs Closed (8)
+
+| # | Severity | Surface | Fix |
+|---|---|---|---|
+| 1 | P0 | `AIScheduleView.tsx` rendered blank | Wired `useUtilizationReport` + `useCapacityForecast`; added `mapToOverviewShape` adapter; loading + error states; `resource-row-{id}` testids |
+| 2 | P0 | `ResourceMobileView.tsx` shipped a TS error masked by build pipeline | `useResourceSchedule(staffId, date)` wired; loading + error states; route-card testids on `ResourceScheduleView` |
+| 3 | P0 | `POST /evaluate` returned zeros for any input | Created `services/ai/scheduling/appointment_loader.py`; switched route to `EvaluateRequest` body; loads `Appointment` rows and builds `ScheduleSolution` before evaluator runs |
+| 4 | P0 | `ChatResponse` schema diverged FE/BE — sessions never persisted in UI | Added `session_id`, `criteria_used`, `schedule_summary` (+`CriterionUsage` mini-class) to backend; chat service now populates them; FE round-trips `session_id` in `useSchedulingChat` |
+| 5 | P1 | `GET /capacity` missing 30-criteria overlay fields | Additive extension of `ScheduleCapacityResponse` with `criteria_triggered`, `forecast_confidence_low/high`, `per_criterion_utilization`; `get_capacity` now runs evaluator |
+| 6 | P1 | `POST /chat` had no rate limit (Req 28.7 violation) | `RateLimitService` wired via `get_rate_limit_service` dep; `RateLimitError → HTTPException(429)` with `Retry-After: 60`; usage recorded on success |
+| 7 | P1 | View-mode buttons couldn't drive parent date selector | `ScheduleOverviewEnhanced` adds prev/next nav arrows; emits `onViewModeChange(mode, isoDate)`; `AIScheduleView` updates `setScheduleDate` from the callback |
+| 8 | P2 | `/scheduling-alerts/` listed suggestions before critical alerts | Replaced `severity.desc()` (lexicographic) with SQLAlchemy `case`-based priority (critical=0, suggestion=1, else=2), then `created_at desc` |
+
+### Cross-cutting cleanups (4)
+
+1. **Build gate**: `frontend/package.json` `build` script now runs `tsc -p tsconfig.app.json --noEmit && vite build`. Added `typecheck` script. 29 pre-existing TS-error files documented in `bughunt/2026-04-29-pre-existing-tsc-errors.md` and excluded from `tsconfig.app.json` so the gate is meaningfully green.
+2. **`evaluate_schedule` typing hack removed**: switched from `Annotated[..., Depends()] = None # type: ignore` to a clean `EvaluateRequest` body model.
+3. **`dismiss_alert` severity guard**: only `severity == 'suggestion'` alerts can be dismissed; critical alerts return 400 with a pointer to `/resolve`.
+4. **Activity log truthfulness**: this entry — pre-existing `[x]` markings on tasks 7.1, 7.3, 8, 11.1, 13A re-annotated as `[!]` audited & remediated in `tasks.md`.
+
+### Tests Added
+
+**Backend (integration — `tests/integration/test_ai_scheduling_integration.py`)**:
+- `test_evaluate_loads_assignments_from_db` — patches loader + evaluator, asserts they're invoked end-to-end (Bug 3)
+- `test_chat_returns_429_when_rate_limit_exceeded` — `RateLimitError → 429 + Retry-After: 60` (Bug 6)
+- `test_chat_records_usage_on_success` — `record_usage` invoked after successful chat (Bug 6)
+- `test_capacity_response_includes_overlay_fields_when_assignments_exist` — overlay populated when DB has rows (Bug 5)
+- `test_capacity_response_skips_overlay_when_no_assignments` — overlay `None` when DB empty (Bug 5, additive contract)
+- `test_alert_ordering_critical_first` — HTTP-level + SQL-level (compiled CASE) assertions (Bug 8)
+- `test_dismiss_critical_returns_400` — severity guard rejects critical (cross-cutting)
+- `test_dismiss_suggestion_succeeds` — severity guard allows suggestions (cross-cutting)
+- `test_chat_session_id_round_trips` — two-message chat asserts `session_id` echoes back to service layer (Bug 4)
+
+**Backend (unit — `tests/unit/test_appointment_loader.py`)**:
+- Mocked-session unit tests for the `Appointment → ScheduleAssignment` adapter (Bug 3 helper).
+
+**Backend (property — `tests/unit/test_pbt_ai_scheduling.py`)**:
+- Property 23: severity ordering invariant — critical-block always precedes suggestion-block (Bug 8)
+- Property 24: chat session continuity — N>0 messages with same `session_id` resolve to one session (Bug 4)
+- Property 25: capacity `criteria_triggered` ⊆ range(1, 31) (Bug 5)
+
+**Frontend (Vitest)**:
+- `useSchedulingChat.test.tsx` (NEW) — second `mutate` call carries `session_id` from first response (Bug 4)
+- `AIScheduleView.test.tsx` — real `resource-row-` testids visible after hook mock (Bug 1)
+- `AIScheduleView.pbt.test.tsx` (NEW) — adapter property test
+- `ResourceMobileView.test.tsx` — real `route-card-` testids visible after hook mock (Bug 2)
+- `ResourceScheduleView.test.tsx` — schedule prop wiring
+- `SchedulingChat.test.tsx` — `chat-criteria-badge-{n}` + `chat-schedule-summary` render when fields populated (Bug 4)
+
+**E2E (`scripts/e2e/test-ai-scheduling-*.sh`)**:
+- `resource.sh` — added route-card visibility check (Bug 2)
+- `alerts.sh` — added severity-ordering API eval (Bug 8) — fails on `'suggestion'` first
+
+### Files Modified
+
+**Backend**
+- `src/grins_platform/api/v1/ai_scheduling.py` — rate limiter wiring, `EvaluateRequest` body, loader integration
+- `src/grins_platform/api/v1/scheduling_alerts.py` — CASE-based severity ordering, dismiss-critical guard
+- `src/grins_platform/api/v1/schedule.py` — capacity criteria overlay
+- `src/grins_platform/api/v1/dependencies.py` — `get_rate_limit_service`
+- `src/grins_platform/schemas/ai_scheduling.py` — `ChatResponse` extended, `CriterionUsage`, `EvaluateRequest`
+- `src/grins_platform/schemas/schedule_generation.py` — `ScheduleCapacityResponse` overlay fields
+- `src/grins_platform/services/ai/scheduling/chat_service.py` — populates `session_id`, `criteria_used`, `schedule_summary`
+- `src/grins_platform/services/ai/scheduling/appointment_loader.py` (NEW) — `Appointment → ScheduleAssignment` adapter
+
+**Frontend**
+- `frontend/package.json` — `build`/`typecheck` scripts
+- `frontend/tsconfig.app.json` — exclude list for 29 pre-existing-error files
+- `frontend/src/features/ai/types/aiScheduling.ts` — `criteria_used`/`schedule_summary` types
+- `frontend/src/features/ai/hooks/useSchedulingChat.ts` — session_id round-trip
+- `frontend/src/features/ai/components/SchedulingChat.tsx` — testids for badges + summary
+- `frontend/src/features/schedule/components/AIScheduleView.tsx` — full data wiring
+- `frontend/src/features/schedule/components/ScheduleOverviewEnhanced.tsx` — prev/next nav, `resource-row-{id}` testids
+- `frontend/src/features/resource-mobile/components/ResourceMobileView.tsx` — schedule prop wiring
+- `frontend/src/features/resource-mobile/components/ResourceScheduleView.tsx` — route-card testids
+
+**Specs / Bookkeeping**
+- `bughunt/2026-04-29-pre-existing-tsc-errors.md` (NEW) — owners + follow-up tracking for the 29 excluded files
+- `.kiro/specs/ai-scheduling-system/tasks.md` — `[!]` annotations on 7.1, 7.3, 8, 11.1, 13A
+- `DEVLOG.md` — top entry under Recent Activity (BUGFIX category per `.kiro/steering/devlog-rules.md`)
+
+### Quality gate
+- `uv run ruff check src/` — 0 errors
+- `uv run mypy src/` — 0 errors (no `# type: ignore` added in this work)
+- `uv run pyright src/` — 0 errors
+- `uv run pytest -m unit -v` — 87+ passing including 3 new properties
+- `uv run pytest -m integration -v` — passing including 9 new tests
+- `cd frontend && npm run typecheck` — 0 errors (with documented exclude list)
+- `cd frontend && npm run lint && npm test && npm run build` — green
+- `for s in scripts/e2e/test-ai-scheduling-{overview,resource,chat,alerts,responsive}.sh; do bash -n "$s"; done` — all syntax-valid
+
+### Notes
+- **Why `[!]` not `[ ]`**: the work isn't being undone; it just couldn't have been called complete in good faith based on the original mock-only checks. `[!]` flags it as "completed AND audited AND remediated."
+- **Schedule summary deferral**: `schedule_summary` in `ChatResponse` stays `None` until a tool call returns a `ScheduleSolution`. Documented inline in `chat_service.py` so the next agent knows it's intentionally deferred, not a bug.
+- **Pre-existing TS errors (154 across 30 files) are NOT fixed** by this work — they're documented and excluded so the build gate becomes meaningful for new code. Their cleanup is tracked separately.
+
+---
+
 ## [2026-04-29 11:00] Task 21: End-to-End browser testing with agent-browser
 
 ### Status: ✅ COMPLETE

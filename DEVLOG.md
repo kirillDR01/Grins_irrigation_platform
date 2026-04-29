@@ -5,6 +5,53 @@ Grin's Irrigation Platform — field service automation for residential/commerci
 
 ## Recent Activity
 
+## [2026-04-29 19:30] - BUGFIX: AI scheduling spec validation — 8 bugs closed
+
+### What Was Accomplished
+- **Bug 1 (P0)**: `AIScheduleView.tsx` no longer renders blank — wires `useUtilizationReport` + `useCapacityForecast`, maps to `ScheduleOverviewEnhanced` shape via inline `mapToOverviewShape` adapter, surfaces loading + error states, emits `resource-row-{staffId}` testids.
+- **Bug 2 (P0)**: `ResourceMobileView.tsx` no longer ships a TS error masked by the build pipeline — calls `useResourceSchedule(staffId, date)`, renders `ResourceScheduleView` only after data ready, wraps in `ErrorBoundary`.
+- **Bug 3 (P0)**: `POST /ai-scheduling/evaluate` no longer returns zeros for any input — new `services/ai/scheduling/appointment_loader.py` adapter loads `Appointment` rows for `schedule_date` and converts to `ScheduleAssignment[]`; route switched from query-param to `EvaluateRequest` body (eliminating the `Annotated[..., Depends()] = None # type: ignore` hack).
+- **Bug 4 (P0)**: `ChatResponse` schema now matches the TS contract — added `session_id`, `criteria_used`, `schedule_summary` (+ new `CriterionUsage` mini-class) to backend; chat service populates them; FE round-trips `session_id` so multi-turn chat sessions actually persist.
+- **Bug 5 (P1)**: `GET /capacity` carries the 30-criteria overlay — additive `criteria_triggered`, `forecast_confidence_low/high`, `per_criterion_utilization` fields; `get_capacity` now invokes `CriteriaEvaluator.evaluate_schedule` over the loaded assignments.
+- **Bug 6 (P1)**: `POST /chat` is rate-limited (Req 28.7) — `RateLimitService` wired via `get_rate_limit_service` dep; `RateLimitError → HTTPException(429)` with `Retry-After: 60`; usage recorded on success.
+- **Bug 7 (P1)**: View-mode buttons now drive parent date selector — `ScheduleOverviewEnhanced` adds prev/next nav arrows and emits `onViewModeChange(mode, isoDate)`; `AIScheduleView` updates `setScheduleDate` from the callback.
+- **Bug 8 (P2)**: `/scheduling-alerts/` lists critical alerts before suggestions — replaced lexicographic `severity.desc()` (which sorted `"suggestion" > "critical"`) with a SQLAlchemy `case`-based priority (critical=0, suggestion=1, else=2), then `created_at desc`.
+- **Cross-cutting**: build gate hardened (`tsc -p tsconfig.app.json --noEmit && vite build`); 29 pre-existing TS-error files documented in `bughunt/2026-04-29-pre-existing-tsc-errors.md` and excluded; `dismiss_alert` rejects critical alerts with 400; activity log re-marked `[!]` audited & remediated for tasks 7.1, 7.3, 8, 11.1, 13A.
+
+### Technical Details
+- `src/grins_platform/services/ai/scheduling/appointment_loader.py` (NEW) — async `load_assignments_for_date(session, schedule_date)` reuses the module-level `job_to_schedule_job` / `staff_to_schedule_staff` from `schedule_solver_service.py:425,454`. `selectinload(Appointment.staff/job)` avoids N+1; filters `status != "cancelled"`.
+- `src/grins_platform/api/v1/ai_scheduling.py` — `evaluate_schedule` rewritten to accept `EvaluateRequest` body, load assignments via the new helper, and pass `ScheduleSolution(schedule_date, assignments)` to the evaluator. `chat` accepts `rate_limiter: Annotated[RateLimitService, Depends(get_rate_limit_service)]`, calls `check_limit` before dispatch and `record_usage` after success, raises `HTTPException(429, headers={"Retry-After": "60"})` on `RateLimitError`. `# type: ignore` count: 0 (was 1).
+- `src/grins_platform/api/v1/scheduling_alerts.py` — `list_alerts` uses `case((severity == 'critical', 0), (severity == 'suggestion', 1), else_=2)` ahead of `created_at.desc()`. `dismiss_alert` adds a `severity != 'suggestion'` guard returning 400 with a `/resolve` pointer.
+- `src/grins_platform/api/v1/schedule.py` — `get_capacity` is now async; harvests `criteria_triggered`, `forecast_confidence_low/high`, `per_criterion_utilization` from `ScheduleEvaluation.criteria_scores` and packs them into the response. Empty-DB path keeps overlay fields `None` (additive contract).
+- `src/grins_platform/schemas/ai_scheduling.py` — `ChatResponse` extended with three optional fields (default `None`); new `CriterionUsage(number: int [1,30], name: str)`; new `EvaluateRequest(schedule_date: date)`.
+- `src/grins_platform/schemas/schedule_generation.py` — `ScheduleCapacityResponse` extended with four optional overlay fields. Existing keys unchanged; legacy callers unaffected.
+- `frontend/package.json` — `build` now runs `tsc -p tsconfig.app.json --noEmit && vite build`; new `typecheck` script; `tsconfig.app.json` excludes 29 pre-existing-error files (NOT `ResourceMobileView.tsx`, which is fixed by Bug 2).
+- `frontend/src/features/schedule/components/AIScheduleView.tsx` — full rewrite of the data path: `useUtilizationReport({start_date, end_date})` + `useCapacityForecast(scheduleDate)` → inline `mapToOverviewShape` adapter → `ScheduleOverviewEnhanced` props. Loading + error states use `<LoadingSpinner />` and `<Alert variant="destructive">` (the canonical pattern; `ErrorMessage` does NOT exist in this repo).
+- `frontend/src/features/resource-mobile/components/ResourceMobileView.tsx` — calls `useResourceSchedule(staffId, date)` (both args required, hook is gated by `enabled: Boolean(staffId && date)`); passes `schedule={data}` to `ResourceScheduleView`; wraps in `ErrorBoundary`.
+- `frontend/src/features/ai/types/aiScheduling.ts`, `useSchedulingChat.ts`, `SchedulingChat.tsx` — TS `ChatResponse` aligned to the backend (snake_case); `setSessionId(data.session_id)` now actually populates because the server returns it; `chat-criteria-badge-{n}` and `chat-schedule-summary` testids added.
+
+### Decision Rationale
+- **Bug 4 path A (extend backend) over path B (shrink frontend).** Path B was a smaller change but lost the spec-mandated criteria-badges + schedule-summary surface. Path A makes the existing TS interface honest.
+- **`EvaluateRequest` body model over `Annotated[..., Depends()] = None`.** The hack only existed because of FastAPI's parameter-ordering rules with default-less query params; switching to a body model removes the suppression entirely AND happens to match the shape the orphaned `useEvaluateSchedule` frontend hook was already sending — net win on both axes for zero added cost.
+- **`RateLimitService` (per-user) over slowapi `Limiter` (per-IP) for Bug 6.** Chat is authenticated, multi-user can share an IP, and `RateLimitService` already tracks token usage and cost — same pattern as `api/v1/ai.py:77-94`. Lowest-risk path.
+- **CASE-based ordering over a numeric `severity_priority` column.** Avoids a DB migration for a sort fix; `else_=2` fallback degrades gracefully if a third severity ever appears.
+- **Capacity overlay is additive, not a v2 endpoint.** Spec explicitly says additive non-breaking. The dead-code `CapacityForecast` Pydantic class can be removed in a follow-up if no future caller emerges.
+- **`schedule_summary` left `None` for now.** Populating it requires a tool-call return value (a `ScheduleSolution` reaching the chat handler), which is deferred to a follow-up. Documented inline in `chat_service.py` so the next agent knows it's intentional, not a bug.
+
+### Challenges and Solutions
+- **`tsc -b` build mode failed.** `tsconfig.app.json` has `composite: true` AND `noEmit: true`, which conflict in build mode. Switched to `tsc -p tsconfig.app.json --noEmit` which produces an emit-free type check that's compatible with both flags.
+- **154 pre-existing TS errors across 30 files.** Surfacing them all by enabling the build gate would have made this PR un-mergeable. Documented every file in `bughunt/2026-04-29-pre-existing-tsc-errors.md` with an owner; added them to the `tsconfig.app.json` `exclude` list so the gate is meaningful for new code without unblocking on the cleanup. `ResourceMobileView.tsx` (the in-scope file) is NOT excluded.
+- **`captured_stmt` SQL inspection in `test_alert_ordering_critical_first`.** Initial assertion `'critical' in str(stmt)` failed because SQLAlchemy compiled the literals as bound parameters (`:severity_1`, `:severity_2`). Switched to `stmt.compile(compile_kwargs={"literal_binds": True})` to inline them.
+- **`SchedulingChatService.chat` signature already accepts `session_id`.** Bug 4 turned out to be purely a schema parity issue — the chat service was already plumbing `session_id` internally; we just had to surface it on `ChatResponse`. Cheap win.
+
+### Next Steps
+- Pre-existing TS errors (29 excluded files, 154 errors) need cleanup in follow-up PRs. Tracked in `bughunt/2026-04-29-pre-existing-tsc-errors.md`.
+- `schedule_summary` populates after a chat tool call returns a `ScheduleSolution` — defer until the tool-calling chat path lands.
+- Run `bash scripts/e2e/test-ai-scheduling-{overview,resource,chat,alerts,responsive}.sh` against the next dev deploy and capture screenshots in `e2e-screenshots/ai-scheduling/{viewport}/`.
+- Optional follow-up: remove the dead-code `CapacityForecast` Pydantic class once no consumer is left; or migrate `get_capacity` to return it (path B from the plan) if the spec requirements harden.
+
+---
+
 ## [2026-04-29 17:15] - BUGFIX: Stripe Payment Links E2E bug bundle (bughunt 2026-04-28)
 
 ### What Was Accomplished

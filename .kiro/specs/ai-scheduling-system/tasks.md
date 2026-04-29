@@ -191,7 +191,7 @@ Before starting implementation, note the current state of the codebase:
 
 
 - [x] 7. API routes — AI scheduling, alerts, and schedule extensions
-  - [x] 7.1 Create AI scheduling API router
+  - [!] 7.1 Create AI scheduling API router (audited & remediated 2026-04-29 — see `bughunt/2026-04-29-ai-scheduling-system-validation.md`; Bugs 3, 6 fixed)
     - Create `src/grins_platform/api/v1/ai_scheduling.py`
     - Implement `router = APIRouter(prefix="/ai-scheduling", tags=["ai-scheduling"])`
     - `POST /chat` — role-aware AI chat endpoint, accepts `ChatRequest`, returns `ChatResponse`, routes to `SchedulingChatService.chat()` with user role from JWT
@@ -214,7 +214,7 @@ Before starting implementation, note the current state of the codebase:
     - Role-based access: resolve/approve/deny require admin role
     - _Requirements: 11.1–11.5, 12.1–12.5, 13.1–13.10, 15.1–15.10_
 
-  - [x] 7.3 Extend existing schedule API router
+  - [!] 7.3 Extend existing schedule API router (audited & remediated 2026-04-29 — see `bughunt/2026-04-29-ai-scheduling-system-validation.md`; Bug 5 fixed)
     - Modify `src/grins_platform/api/v1/schedule.py`
     - Extend the existing `GET /capacity` endpoint (which already exists as `get_capacity` and currently returns basic daily capacity) by adding 30-criteria analysis fields to the `CapacityForecast` response. Additive, non-breaking: do NOT replace the handler or change the existing response keys — only add new optional fields.
     - Add `POST /batch-generate` — batch schedule generation for multi-week campaigns, accepts `BatchScheduleRequest`, returns `BatchScheduleResponse` (new endpoint)
@@ -233,7 +233,7 @@ Before starting implementation, note the current state of the codebase:
     - Document all scheduling-specific env vars with descriptions
     - _Requirements: 31.1, 31.5_
 
-- [x] 8. Checkpoint — API layer complete
+- [!] 8. Checkpoint — API layer complete (audited & remediated 2026-04-29 — see `bughunt/2026-04-29-ai-scheduling-system-validation.md`; Bugs 3, 5, 6, 8 + dismiss-critical guard fixed)
   - Run `uv run ruff check src/grins_platform/api/v1/ai_scheduling.py src/grins_platform/api/v1/scheduling_alerts.py` and type checks. Verify all endpoints are reachable. Ensure all tests pass, ask the user if questions arise.
 
 
@@ -354,7 +354,7 @@ Before starting implementation, note the current state of the codebase:
 
 - [x] 11. Frontend — AI Chat extensions
   - Note: `features/ai/` exists with 10 components and 6 hooks, but has NO root `index.ts` barrel (only `components/index.ts`). New components go in existing `features/ai/components/` directory. A root `features/ai/index.ts` must be created in task 11.5 to support `@/features/ai` imports in the page composition phase.
-  - [x] 11.1 Create SchedulingChat component
+  - [!] 11.1 Create SchedulingChat component (audited & remediated 2026-04-29 — see `bughunt/2026-04-29-ai-scheduling-system-validation.md`; Bug 4 ChatResponse schema parity fixed)
     - Create `frontend/src/features/ai/components/SchedulingChat.tsx`
     - Persistent right sidebar panel layout (not modal or collapsible) — renders alongside the Schedule Overview in a two-column layout (schedule grid on left, chat on right)
     - Header showing "AI Scheduling Assistant" with model name badge (e.g., "Opus 4.6")
@@ -434,7 +434,7 @@ Before starting implementation, note the current state of the codebase:
   - Run `cd frontend && npm run build` to verify all components compile. Run `npm test` to verify existing tests still pass. Ensure all tests pass, ask the user if questions arise.
 
 
-- [x] 13A. Page composition and routing — Compose components into page views and register routes
+- [!] 13A. Page composition and routing — Compose components into page views and register routes (audited & remediated 2026-04-29 — see `bughunt/2026-04-29-ai-scheduling-system-validation.md`; Bugs 1, 2, 7 fixed; build gate hardened)
   - [x] 13A.1 Create AIScheduleView composed page component
     - Create `frontend/src/features/schedule/components/AIScheduleView.tsx`
     - Import `ScheduleOverviewEnhanced` from local `./ScheduleOverviewEnhanced` (same feature), `AlertsPanel` from `@/features/scheduling-alerts` (created in phase 10), `SchedulingChat` from `@/features/ai` (root barrel created in task 11.5)
