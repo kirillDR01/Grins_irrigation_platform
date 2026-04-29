@@ -56,7 +56,19 @@ def main() -> int:
     existing = call("GET", f"/customers/lookup/phone/{PHONE}", None, token)
     if isinstance(existing, list) and existing:
         customer_id = existing[0]["id"]
-        print(f"# customer {customer_id} (reused)", file=sys.stderr)
+        # Refresh email + opt-ins on reuse so the test invariants hold across
+        # consecutive runs (bughunt 2026-04-28 §Bug 5).
+        call(
+            "PUT",
+            f"/customers/{customer_id}",
+            {
+                "email": EMAIL,
+                "email_opt_in": True,
+                "sms_opt_in": True,
+            },
+            token,
+        )
+        print(f"# customer {customer_id} (reused, refreshed)", file=sys.stderr)
     else:
         suffix = dt.datetime.now(dt.UTC).strftime("%H%M%S")
         customer_payload = {

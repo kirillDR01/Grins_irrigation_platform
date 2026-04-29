@@ -36,3 +36,19 @@ export { RescheduleRequestsQueue } from './RescheduleRequestsQueue';
 export { SendConfirmationButton } from './SendConfirmationButton';
 export { SendDayConfirmationsButton } from './SendDayConfirmationsButton';
 export { SendAllConfirmationsButton } from './SendAllConfirmationsButton';
+export { CapacityHeatMap } from './CapacityHeatMap';
+export type { CapacityDay } from './CapacityHeatMap';
+export { ScheduleOverviewEnhanced } from './ScheduleOverviewEnhanced';
+export type {
+  OverviewJob,
+  OverviewResource,
+  OverviewDay,
+  ScheduleOverviewEnhancedProps,
+} from './ScheduleOverviewEnhanced';
+export { BatchScheduleResults } from './BatchScheduleResults';
+export type {
+  BatchWeekSummary,
+  RankedJob,
+  BatchScheduleResultsProps,
+} from './BatchScheduleResults';
+export { AIScheduleView } from './AIScheduleView';

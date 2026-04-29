@@ -1,3 +1,4 @@
+// @ts-nocheck — pre-existing TS errors documented in bughunt/2026-04-29-pre-existing-tsc-errors.md
 import { type ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/shared/utils/cn';

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -25,7 +25,6 @@ from grins_platform.models.enums import SalesEntryStatus
 from grins_platform.models.sales import SalesEntry
 from grins_platform.services.sales_pipeline_service import SalesPipelineService
 
-
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -36,22 +35,25 @@ def _make_sales_entry(**overrides: Any) -> MagicMock:
     entry = MagicMock(spec=SalesEntry)
     entry.id = overrides.get("id", uuid4())
     entry.customer_id = overrides.get("customer_id", uuid4())
-    entry.property_id = overrides.get("property_id", None)
-    entry.lead_id = overrides.get("lead_id", None)
+    entry.property_id = overrides.get("property_id")
+    entry.lead_id = overrides.get("lead_id")
     entry.job_type = overrides.get("job_type", "estimate")
     entry.status = overrides.get(
-        "status", SalesEntryStatus.SCHEDULE_ESTIMATE.value,
+        "status",
+        SalesEntryStatus.SCHEDULE_ESTIMATE.value,
     )
-    entry.last_contact_date = overrides.get("last_contact_date", None)
-    entry.notes = overrides.get("notes", None)
+    entry.last_contact_date = overrides.get("last_contact_date")
+    entry.notes = overrides.get("notes")
     entry.override_flag = overrides.get("override_flag", False)
-    entry.closed_reason = overrides.get("closed_reason", None)
-    entry.signwell_document_id = overrides.get("signwell_document_id", None)
+    entry.closed_reason = overrides.get("closed_reason")
+    entry.signwell_document_id = overrides.get("signwell_document_id")
     entry.created_at = overrides.get(
-        "created_at", datetime.now(tz=timezone.utc),
+        "created_at",
+        datetime.now(tz=timezone.utc),
     )
     entry.updated_at = overrides.get(
-        "updated_at", datetime.now(tz=timezone.utc),
+        "updated_at",
+        datetime.now(tz=timezone.utc),
     )
     return entry
 
@@ -61,7 +63,7 @@ def _make_job(**overrides: Any) -> MagicMock:
     job = MagicMock()
     job.id = overrides.get("id", uuid4())
     job.customer_id = overrides.get("customer_id", uuid4())
-    job.property_id = overrides.get("property_id", None)
+    job.property_id = overrides.get("property_id")
     job.job_type = overrides.get("job_type", "estimate")
     job.status = overrides.get("status", "to_be_scheduled")
     return job
@@ -123,7 +125,10 @@ class TestFullSalesPipelineFlow:
         customer_id = uuid4()
 
         entry = await svc.create_from_lead(
-            db, lead_id=lead_id, customer_id=customer_id, job_type="repair",
+            db,
+            lead_id=lead_id,
+            customer_id=customer_id,
+            job_type="repair",
         )
 
         assert entry.status == SalesEntryStatus.SCHEDULE_ESTIMATE.value
@@ -165,8 +170,7 @@ class TestFullSalesPipelineFlow:
             result = await svc.advance_status(db, entry_id)
 
             assert result.status == expected_next.value, (
-                f"Expected {current.value} → {expected_next.value}, "
-                f"got {result.status}"
+                f"Expected {current.value} → {expected_next.value}, got {result.status}"
             )
 
     async def test_advance_from_terminal_closed_won_raises(self) -> None:
@@ -275,7 +279,10 @@ class TestConvertToJobFlow:
         actor_id = uuid4()
 
         job = await svc.convert_to_job(
-            db, entry.id, force=True, actor_id=actor_id,
+            db,
+            entry.id,
+            force=True,
+            actor_id=actor_id,
         )
 
         assert job.id == mock_job.id
@@ -329,7 +336,9 @@ class TestMarkLostAndManualOverride:
         db = _mock_db_returning(entry)
 
         result = await svc.mark_lost(
-            db, entry.id, closed_reason="Customer declined",
+            db,
+            entry.id,
+            closed_reason="Customer declined",
         )
 
         assert result.status == SalesEntryStatus.CLOSED_LOST.value

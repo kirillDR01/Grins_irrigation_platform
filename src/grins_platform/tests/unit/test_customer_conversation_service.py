@@ -69,9 +69,7 @@ class TestCursorCodec:
 class TestChannelClassification:
     def test_email_message_type_maps_to_email(self) -> None:
         assert (
-            CustomerConversationService._classify_outbound_channel(
-                "email_estimate"
-            )
+            CustomerConversationService._classify_outbound_channel("email_estimate")
             == "email"
         )
 
@@ -91,8 +89,7 @@ class TestChannelClassification:
 
     def test_communications_channel_known_values(self) -> None:
         assert (
-            CustomerConversationService._classify_communication_channel("sms")
-            == "sms"
+            CustomerConversationService._classify_communication_channel("sms") == "sms"
         )
         assert (
             CustomerConversationService._classify_communication_channel("email")
@@ -143,9 +140,7 @@ class TestMergeOrdering:
             key=_sort_key,
         )
 
-        merged = list(
-            heapq.merge(sent, confirmations, key=_sort_key)
-        )
+        merged = list(heapq.merge(sent, confirmations, key=_sort_key))
 
         timestamps = [item.timestamp for item in merged]
         assert timestamps == sorted(timestamps, reverse=True)

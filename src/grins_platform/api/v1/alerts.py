@@ -341,9 +341,7 @@ async def dismiss_alert(
     if alert.type != AlertType.INFORMAL_OPT_OUT.value:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                f"Dismissal of alert type '{alert.type}' is not supported."
-            ),
+            detail=(f"Dismissal of alert type '{alert.type}' is not supported."),
         )
     if alert.acknowledged_at is not None:
         raise HTTPException(

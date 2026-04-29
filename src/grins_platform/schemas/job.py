@@ -9,12 +9,10 @@ Validates: Requirements 2.1-2.12, 4.1-4.10, 5.1-5.7, 6.1-6.9
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
-
-from datetime import timedelta
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -220,7 +218,7 @@ class JobUpdate(BaseModel):
         return v.strip().lower()
 
     @model_validator(mode="after")
-    def validate_target_window(self) -> "JobUpdate":
+    def validate_target_window(self) -> JobUpdate:
         """Validate the target_start_date / target_end_date pair.
 
         Rules:

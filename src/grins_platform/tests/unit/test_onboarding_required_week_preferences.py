@@ -33,7 +33,6 @@ from grins_platform.services.onboarding_service import (
     expected_job_types_for_tier,
 )
 
-
 # ---------------------------------------------------------------------------
 # 1. Pydantic schema: field required + value validation
 # ---------------------------------------------------------------------------
@@ -95,21 +94,25 @@ class TestExpectedJobTypesForTier:
     """Helper for deriving expected service_week_preferences keys."""
 
     def test_essential_tier(self) -> None:
-        tier = _tier([
-            {"service_type": "spring_startup", "frequency": "1x"},
-            {"service_type": "fall_winterization", "frequency": "1x"},
-        ])
+        tier = _tier(
+            [
+                {"service_type": "spring_startup", "frequency": "1x"},
+                {"service_type": "fall_winterization", "frequency": "1x"},
+            ]
+        )
         assert expected_job_types_for_tier(tier) == {
             "spring_startup",
             "fall_winterization",
         }
 
     def test_professional_tier(self) -> None:
-        tier = _tier([
-            {"service_type": "spring_startup", "frequency": "1x"},
-            {"service_type": "mid_season_inspection", "frequency": "1x"},
-            {"service_type": "fall_winterization", "frequency": "1x"},
-        ])
+        tier = _tier(
+            [
+                {"service_type": "spring_startup", "frequency": "1x"},
+                {"service_type": "mid_season_inspection", "frequency": "1x"},
+                {"service_type": "fall_winterization", "frequency": "1x"},
+            ]
+        )
         assert expected_job_types_for_tier(tier) == {
             "spring_startup",
             "mid_season_inspection",
@@ -117,11 +120,13 @@ class TestExpectedJobTypesForTier:
         }
 
     def test_premium_tier_expands_monthly_visit_into_five(self) -> None:
-        tier = _tier([
-            {"service_type": "spring_startup", "frequency": "1x"},
-            {"service_type": "monthly_visit", "frequency": "5x"},
-            {"service_type": "fall_winterization", "frequency": "1x"},
-        ])
+        tier = _tier(
+            [
+                {"service_type": "spring_startup", "frequency": "1x"},
+                {"service_type": "monthly_visit", "frequency": "5x"},
+                {"service_type": "fall_winterization", "frequency": "1x"},
+            ]
+        )
         assert expected_job_types_for_tier(tier) == {
             "spring_startup",
             "monthly_visit_5",
@@ -133,9 +138,11 @@ class TestExpectedJobTypesForTier:
         }
 
     def test_winterization_only_tier(self) -> None:
-        tier = _tier([
-            {"service_type": "fall_winterization", "frequency": "1x"},
-        ])
+        tier = _tier(
+            [
+                {"service_type": "fall_winterization", "frequency": "1x"},
+            ]
+        )
         assert expected_job_types_for_tier(tier) == {"fall_winterization"}
 
     def test_empty_included_services(self) -> None:
@@ -144,11 +151,13 @@ class TestExpectedJobTypesForTier:
 
     def test_tolerates_malformed_service_entries(self) -> None:
         """Entries missing service_type are ignored (forward-compat)."""
-        tier = _tier([
-            {"service_type": "spring_startup"},
-            {"frequency": "1x"},  # no service_type
-            {},
-        ])
+        tier = _tier(
+            [
+                {"service_type": "spring_startup"},
+                {"frequency": "1x"},  # no service_type
+                {},
+            ]
+        )
         assert expected_job_types_for_tier(tier) == {"spring_startup"}
 
 
@@ -243,7 +252,10 @@ class TestCompleteOnboardingTierCompleteness:
             subscription="sub_123",
             customer_details=SimpleNamespace(
                 address=SimpleNamespace(
-                    line1="1 St", city="Mpls", state="MN", postal_code="55401",
+                    line1="1 St",
+                    city="Mpls",
+                    state="MN",
+                    postal_code="55401",
                 ),
             ),
         )
@@ -364,7 +376,7 @@ class TestCompleteOnboardingTierCompleteness:
             "cs_test_123",
             service_week_preferences={
                 "spring_startup": "2026-04-20",  # Monday of week
-                "fall_winterization": None,       # No preference
+                "fall_winterization": None,  # No preference
             },
         )
         # Spring job now spans Mon Apr 20 - Sun Apr 26

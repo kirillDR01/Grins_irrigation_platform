@@ -19,7 +19,11 @@ from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
-from hypothesis import given, settings, strategies as st
+from hypothesis import (
+    given,
+    settings,
+    strategies as st,
+)
 from pydantic import ValidationError
 
 from grins_platform.models.customer_tag import CustomerTag
@@ -90,34 +94,40 @@ valid_labels = st.text(
 valid_tones = st.sampled_from(list(TagTone))
 
 # All valid appointment statuses for step mapping
-all_statuses = st.sampled_from([
-    "confirmed",
-    "scheduled",
-    "en_route",
-    "in_progress",
-    "completed",
-    "pending",
-    "draft",
-    "cancelled",
-    "no_show",
-])
+all_statuses = st.sampled_from(
+    [
+        "confirmed",
+        "scheduled",
+        "en_route",
+        "in_progress",
+        "completed",
+        "pending",
+        "draft",
+        "cancelled",
+        "no_show",
+    ]
+)
 
 # Statuses that map to workflow steps
-workflow_statuses = st.sampled_from([
-    "confirmed",
-    "scheduled",
-    "en_route",
-    "in_progress",
-    "completed",
-])
+workflow_statuses = st.sampled_from(
+    [
+        "confirmed",
+        "scheduled",
+        "en_route",
+        "in_progress",
+        "completed",
+    ]
+)
 
 # Non-workflow statuses (return null)
-non_workflow_statuses = st.sampled_from([
-    "pending",
-    "draft",
-    "cancelled",
-    "no_show",
-])
+non_workflow_statuses = st.sampled_from(
+    [
+        "pending",
+        "draft",
+        "cancelled",
+        "no_show",
+    ]
+)
 
 
 # ---------------------------------------------------------------------------
@@ -532,9 +542,7 @@ class TestProperty11StatusToStepMapping:
     def test_non_workflow_statuses_return_none(self, status: str) -> None:
         """Non-workflow statuses (pending, draft, cancelled, no_show) return None."""
         result = derive_step(status)
-        assert result is None, (
-            f"deriveStep({status}) = {result}, expected None"
-        )
+        assert result is None, f"deriveStep({status}) = {result}, expected None"
 
 
 # ===================================================================

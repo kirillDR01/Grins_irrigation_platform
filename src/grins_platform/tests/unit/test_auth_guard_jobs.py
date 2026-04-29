@@ -26,7 +26,6 @@ from grins_platform.api.v1.dependencies import get_job_service
 from grins_platform.app import create_app
 from grins_platform.models.enums import JobCategory, JobStatus
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

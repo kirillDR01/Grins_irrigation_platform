@@ -2,8 +2,8 @@
  * Schedule Generation page wrapper.
  */
 
-import { ScheduleGenerationPage } from '@/features/schedule';
+import { AIScheduleView } from '@/features/schedule';
 
 export function ScheduleGeneratePage() {
-  return <ScheduleGenerationPage />;
+  return <AIScheduleView />;
 }

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar, Literal, cast
 from uuid import UUID
 
 from grins_platform.exceptions import (
@@ -36,6 +36,7 @@ from grins_platform.schemas.invoice import (
     PaymentRecord,
     SendLinkResponse,
 )
+from grins_platform.services.email_service import EmailRecipientNotAllowedError
 from grins_platform.services.sms.recipient import Recipient
 from grins_platform.services.sms_service import (
     SMSConsentDeniedError,
@@ -957,8 +958,14 @@ class InvoiceService(LoggerMixin):
 
         body = self._build_payment_link_sms_body(customer, invoice)
 
+        attempted_channels: list[Literal["sms", "email"]] = []
+        sms_failure_reason: (
+            Literal["consent", "rate_limit", "provider_error", "no_phone"] | None
+        ) = None
+
         # SMS path — transactional, bypasses sms_opt_in per F12.
         if customer.phone and self.sms_service is not None:
+            attempted_channels.append("sms")
             recipient = Recipient(
                 phone=customer.phone,
                 source_type="customer",
@@ -974,43 +981,76 @@ class InvoiceService(LoggerMixin):
                     consent_type="transactional",
                 )
                 if result.get("success") is True:
-                    return await self._record_link_sent(invoice, channel="sms")
+                    return await self._record_link_sent(
+                        invoice,
+                        channel="sms",
+                        attempted_channels=attempted_channels,
+                        sms_failure_reason=None,
+                    )
+                sms_failure_reason = "provider_error"
                 self.logger.warning(
                     "payment.send_link.sms_failed_soft",
                     invoice_id=str(invoice.id),
                     status=result.get("status"),
                 )
             except SMSConsentDeniedError:
+                sms_failure_reason = "consent"
                 # Customer hard-STOP'd — fall through to email.
                 self.logger.info(
                     "payment.send_link.sms_blocked_by_consent",
                     invoice_id=str(invoice.id),
                 )
-            except (SMSRateLimitDeniedError, SMSError) as exc:
+            except SMSRateLimitDeniedError as exc:
+                sms_failure_reason = "rate_limit"
                 self.logger.warning(
                     "payment.send_link.sms_failed_hard",
                     invoice_id=str(invoice.id),
                     error=str(exc),
                 )
+            except SMSError as exc:
+                sms_failure_reason = "provider_error"
+                self.logger.warning(
+                    "payment.send_link.sms_failed_hard",
+                    invoice_id=str(invoice.id),
+                    error=str(exc),
+                )
+        elif customer.phone is None:
+            sms_failure_reason = "no_phone"
 
         # Email fallback — transactional, bypasses email_opt_in per F12.
         if customer.email and self.email_service is not None:
+            attempted_channels.append("email")
             html_body, text_body = self._render_payment_link_email(
                 customer,
                 invoice,
             )
-            sent = self.email_service._send_email(  # noqa: SLF001 — established pattern
-                to_email=customer.email,
-                subject=(
-                    f"Your invoice from Grin's Irrigation — ${invoice.total_amount}"
-                ),
-                html_body=html_body,
-                text_body=text_body,
-                email_type="payment_link",
-                classification=EmailType.TRANSACTIONAL,
-            )
+            try:
+                sent = self.email_service._send_email(  # noqa: SLF001 — established pattern
+                    to_email=customer.email,
+                    subject=(
+                        f"Your invoice from Grin's Irrigation — ${invoice.total_amount}"
+                    ),
+                    html_body=html_body,
+                    text_body=text_body,
+                    email_type="payment_link",
+                    classification=EmailType.TRANSACTIONAL,
+                )
+            except EmailRecipientNotAllowedError:
+                self.logger.warning(
+                    "payment.send_link.email_blocked_by_allowlist",
+                    invoice_id=str(invoice.id),
+                    recipient_last4=(
+                        customer.email[-4:] if customer.email else None
+                    ),
+                )
+                sent = False
             if sent:
-                return await self._record_link_sent(invoice, channel="email")
+                return await self._record_link_sent(
+                    invoice,
+                    channel="email",
+                    attempted_channels=attempted_channels,
+                    sms_failure_reason=sms_failure_reason,
+                )
 
         self.log_rejected(
             "send_payment_link",
@@ -1100,6 +1140,10 @@ class InvoiceService(LoggerMixin):
         invoice: Invoice,
         *,
         channel: str,
+        attempted_channels: list[Literal["sms", "email"]],
+        sms_failure_reason: (
+            Literal["consent", "rate_limit", "provider_error", "no_phone"] | None
+        ) = None,
     ) -> SendLinkResponse:
         """Increment send count + persist sent_at; return SendLinkResponse."""
         now = datetime.now(timezone.utc)
@@ -1120,6 +1164,8 @@ class InvoiceService(LoggerMixin):
             link_url=str(invoice.stripe_payment_link_url),
             sent_at=now,
             sent_count=new_count,
+            attempted_channels=attempted_channels,
+            sms_failure_reason=sms_failure_reason,
         )
 
     # =========================================================================

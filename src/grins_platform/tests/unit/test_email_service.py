@@ -11,8 +11,8 @@ Validates: Requirements 39B.1-39B.10, 39C.1-39C.4, 67.1-67.10, 70.1-70.4, 40.1
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
-from typing import Iterator
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -47,6 +47,7 @@ def _clear_email_allowlist_and_mock_resend(
         return_value={"id": "msg_test"},
     ):
         yield
+
 
 # =============================================================================
 # Helpers

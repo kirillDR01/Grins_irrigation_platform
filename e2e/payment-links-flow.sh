@@ -18,6 +18,7 @@
 #   INVOICE_ID                    — UUID of an invoice with an active link
 # Optional env vars:
 #   BASE                          — frontend URL (default dev Vercel)
+#   APPOINTMENT_ID                — UUID of the seeded appointment (Journey 1 target)
 #   ZERO_INVOICE_ID               — UUID of a $0 invoice (CTA-hide test)
 #   SERVICE_AGREEMENT_APPT_ID     — UUID of a service-agreement appointment
 #
@@ -64,22 +65,28 @@ if [[ "$URL_AFTER_LOGIN" != *"/dashboard"* ]]; then
 fi
 ab screenshot "$SHOTS/01-dashboard.png"
 
-# Journey 1: Send Payment Link from Appointment Modal.
-# FullCalendar renders events as `.fc-event`; click the first one.
-ab open "$BASE/schedule"
-ab wait --load networkidle
-sleep 3
-APPT_COUNT=$(ab get count ".fc-event")
-if [[ "$APPT_COUNT" == "0" ]]; then
-  echo "SKIP Journey 1: no visible appointments this week."
+# Journey 1: Send Payment Link from Appointment Modal — target the seeded appointment by id.
+# Relies on the data-testid="fc-event-{id}" attribute set by CalendarView's eventDidMount.
+if [[ -z "${APPOINTMENT_ID:-}" ]]; then
+  echo "SKIP Journey 1: APPOINTMENT_ID not set (re-seed via scripts/seed_e2e_payment_links.py)."
 else
-  ab eval "const e = document.querySelector('.fc-event.appointment-confirmed') || document.querySelector('.fc-event'); if (e) { e.click(); 'clicked'; } else { 'no-event'; }"
+  ab open "$BASE/schedule"
+  ab wait --load networkidle
+  sleep 3  # allow weekly schedule query + FullCalendar to render
+  HIT=$(ab get count "[data-testid='fc-event-$APPOINTMENT_ID']")
+  if [[ "$HIT" == "0" ]]; then
+    echo "FAIL Journey 1: seeded appointment $APPOINTMENT_ID not in current week view."
+    echo "  (Seeder creates today's appointment; if today is on a Mon-boundary"
+    echo "   the click-through can lag — re-run after refresh.)"
+    ab close
+    exit 1
+  fi
+  ab click "[data-testid='fc-event-$APPOINTMENT_ID']"
   ab wait "[data-testid='appointment-modal']"
-  sleep 1
   ab screenshot "$SHOTS/02a-modal-opened.png"
   # The Send Payment Link button lives inside the Payment sheet — open it
   # via the Collect Payment CTA (only rendered when status is in_progress
-  # or completed; otherwise the journey can't proceed).
+  # or completed; the seeder walks the appointment to in_progress).
   CTA_COUNT=$(ab get count "[data-testid='collect-payment-cta']")
   if [[ "$CTA_COUNT" == "0" ]]; then
     echo "WARN Journey 1: Collect Payment CTA absent (appointment must be in_progress/completed)."

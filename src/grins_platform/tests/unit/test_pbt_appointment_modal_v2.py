@@ -13,25 +13,25 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from hypothesis import given, settings, strategies as st
+from hypothesis import (
+    given,
+    settings,
+    strategies as st,
+)
 from pydantic import ValidationError
 
 from grins_platform.models.appointment_note import AppointmentNote
 from grins_platform.schemas.appointment_note import (
     AppointmentNotesSaveRequest,
-    AppointmentNotesResponse,
 )
 from grins_platform.services.appointment_note_service import AppointmentNoteService
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_service_and_mocks() -> (
-    tuple[AppointmentNoteService, AsyncMock, AsyncMock]
-):
+def _make_service_and_mocks() -> tuple[AppointmentNoteService, AsyncMock, AsyncMock]:
     """Create an AppointmentNoteService with mocked repo and session."""
     repo = AsyncMock()
     session = AsyncMock()

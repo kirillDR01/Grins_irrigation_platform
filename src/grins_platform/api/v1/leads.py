@@ -757,9 +757,7 @@ async def upload_lead_attachment(
     # Generate pre-signed URL. Images stay inline so the AttachmentPanel
     # thumbnails render; every other type forces a real download.
     download_filename = (
-        None
-        if attachment.content_type.startswith("image/")
-        else attachment.file_name
+        None if attachment.content_type.startswith("image/") else attachment.file_name
     )
     download_url = photo_service.generate_presigned_url(
         attachment.file_key,

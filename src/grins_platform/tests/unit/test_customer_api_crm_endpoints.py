@@ -118,9 +118,9 @@ def app(
     mock_merge_svc: AsyncMock,
 ) -> FastAPI:
     """Create FastAPI app with mocked dependencies."""
-    from unittest.mock import MagicMock as _MagicMock  # noqa: PLC0415
+    from unittest.mock import MagicMock as _MagicMock
 
-    from grins_platform.api.v1.auth_dependencies import (  # noqa: PLC0415
+    from grins_platform.api.v1.auth_dependencies import (
         get_current_active_user,
         get_current_user,
     )

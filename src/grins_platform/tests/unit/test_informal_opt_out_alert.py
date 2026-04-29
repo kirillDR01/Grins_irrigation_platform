@@ -44,17 +44,19 @@ class TestInformalOptOutCreatesAlert:
             alert.id = saved_id
             return alert
 
-        with patch.object(
-            service,
-            "_resolve_customer_id_by_phone",
-            new=AsyncMock(return_value=customer_id),
-        ), patch(
-            "grins_platform.services.sms_service.AlertRepository",
-        ) as repo_cls:
+        with (
+            patch.object(
+                service,
+                "_resolve_customer_id_by_phone",
+                new=AsyncMock(return_value=customer_id),
+            ),
+            patch(
+                "grins_platform.services.sms_service.AlertRepository",
+            ) as repo_cls,
+        ):
             repo_cls.return_value.create = AsyncMock(side_effect=_fake_create)
             with patch(
-                "grins_platform.services.sms_service."
-                "log_informal_opt_out_flagged",
+                "grins_platform.services.sms_service.log_informal_opt_out_flagged",
                 new=AsyncMock(),
             ) as log_mock:
                 result = await service._flag_informal_opt_out(
@@ -81,17 +83,19 @@ class TestInformalOptOutCreatesAlert:
             alert.id = saved_id
             return alert
 
-        with patch.object(
-            service,
-            "_resolve_customer_id_by_phone",
-            new=AsyncMock(return_value=None),
-        ), patch(
-            "grins_platform.services.sms_service.AlertRepository",
-        ) as repo_cls:
+        with (
+            patch.object(
+                service,
+                "_resolve_customer_id_by_phone",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "grins_platform.services.sms_service.AlertRepository",
+            ) as repo_cls,
+        ):
             repo_cls.return_value.create = AsyncMock(side_effect=_fake_create)
             with patch(
-                "grins_platform.services.sms_service."
-                "log_informal_opt_out_flagged",
+                "grins_platform.services.sms_service.log_informal_opt_out_flagged",
                 new=AsyncMock(),
             ):
                 result = await service._flag_informal_opt_out(
@@ -109,13 +113,16 @@ class TestInformalOptOutCreatesAlert:
         """If Alert insert raises, the inbound still returns a sensible result."""
         service = _make_service()
 
-        with patch.object(
-            service,
-            "_resolve_customer_id_by_phone",
-            new=AsyncMock(return_value=None),
-        ), patch(
-            "grins_platform.services.sms_service.AlertRepository",
-        ) as repo_cls:
+        with (
+            patch.object(
+                service,
+                "_resolve_customer_id_by_phone",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "grins_platform.services.sms_service.AlertRepository",
+            ) as repo_cls,
+        ):
             repo_cls.return_value.create = AsyncMock(
                 side_effect=RuntimeError("db down"),
             )
@@ -138,17 +145,19 @@ class TestInformalOptOutCreatesAlert:
             alert.id = saved_id
             return alert
 
-        with patch.object(
-            service,
-            "_resolve_customer_id_by_phone",
-            new=AsyncMock(return_value=None),
-        ), patch(
-            "grins_platform.services.sms_service.AlertRepository",
-        ) as repo_cls:
+        with (
+            patch.object(
+                service,
+                "_resolve_customer_id_by_phone",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "grins_platform.services.sms_service.AlertRepository",
+            ) as repo_cls,
+        ):
             repo_cls.return_value.create = AsyncMock(side_effect=_fake_create)
             with patch(
-                "grins_platform.services.sms_service."
-                "log_informal_opt_out_flagged",
+                "grins_platform.services.sms_service.log_informal_opt_out_flagged",
                 new=AsyncMock(),
             ):
                 await service._flag_informal_opt_out("+16125551234", long_body)

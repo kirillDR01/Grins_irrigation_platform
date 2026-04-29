@@ -167,7 +167,9 @@ class TestBusinessSettingServiceSetValue:
             return_value=audit_repo_instance,
         ) as mock_repo_cls:
             await service.set_value(
-                "lien_days_past_due", 75, updated_by=actor,
+                "lien_days_past_due",
+                75,
+                updated_by=actor,
             )
 
         mock_repo_cls.assert_called_once_with(session)
@@ -196,7 +198,9 @@ class TestBusinessSettingServiceSetValue:
             return_value=audit_repo_instance,
         ):
             await service.set_value(
-                "upcoming_due_days", 5, updated_by=actor,
+                "upcoming_due_days",
+                5,
+                updated_by=actor,
             )
 
         # session.add should have been called with a new BusinessSetting.
@@ -230,7 +234,9 @@ class TestBusinessSettingServiceSetValue:
             return_value=audit_repo_instance,
         ):
             await service.set_value(
-                "upcoming_due_days", 14, updated_by=actor,
+                "upcoming_due_days",
+                14,
+                updated_by=actor,
             )
 
         assert session.add.call_count == 0
@@ -287,7 +293,9 @@ class TestBusinessSettingServiceSetValue:
         ):
             # Must not raise.
             await service.set_value(
-                "confirmation_no_reply_days", 5, updated_by=actor,
+                "confirmation_no_reply_days",
+                5,
+                updated_by=actor,
             )
 
         # Value row still inserted.

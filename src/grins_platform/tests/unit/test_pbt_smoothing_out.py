@@ -16,7 +16,6 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable
 from datetime import date, datetime, timezone
-from decimal import Decimal
 from typing import TypeVar
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 from uuid import uuid4

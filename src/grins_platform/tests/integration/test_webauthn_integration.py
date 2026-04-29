@@ -34,12 +34,12 @@ pytestmark = pytest.mark.integration
 def _cookie_attrs(jar, name: str) -> dict[str, object]:  # type: ignore[no-untyped-def]
     """Pull comparable attrs out of a httpx cookie."""
     cookie = next(c for c in jar if c.name == name)
-    rest_keys = {k.lower() for k in cookie._rest}  # noqa: SLF001
+    rest_keys = {k.lower() for k in cookie._rest}
     return {
         "name": cookie.name,
         "secure": bool(cookie.secure),
         "httponly": "httponly" in rest_keys,
-        "samesite": cookie._rest.get("SameSite") or cookie._rest.get("samesite"),  # noqa: SLF001
+        "samesite": cookie._rest.get("SameSite") or cookie._rest.get("samesite"),
         "path": cookie.path,
     }
 

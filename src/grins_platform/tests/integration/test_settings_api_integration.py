@@ -74,9 +74,7 @@ class TestBusinessSettingsAPIGet:
         sample_admin_user: MagicMock,
     ) -> None:
         app.dependency_overrides[get_current_user] = lambda: sample_admin_user
-        app.dependency_overrides[get_current_active_user] = (
-            lambda: sample_admin_user
-        )
+        app.dependency_overrides[get_current_active_user] = lambda: sample_admin_user
 
         fake_service = MagicMock()
         fake_service.get_all = AsyncMock(
@@ -129,13 +127,9 @@ class TestBusinessSettingsAPIPatch:
     ) -> None:
         """PATCH with a partial body writes only the supplied keys."""
         app.dependency_overrides[get_current_user] = lambda: sample_admin_user
-        app.dependency_overrides[get_current_active_user] = (
-            lambda: sample_admin_user
-        )
+        app.dependency_overrides[get_current_active_user] = lambda: sample_admin_user
         app.dependency_overrides[require_admin] = lambda: sample_admin_user
-        app.dependency_overrides[require_manager_or_admin] = (
-            lambda: sample_admin_user
-        )
+        app.dependency_overrides[require_manager_or_admin] = lambda: sample_admin_user
 
         fake_service = MagicMock()
         fake_service.set_value = AsyncMock()
@@ -190,9 +184,7 @@ class TestBusinessSettingsAPIPatch:
             raise HTTPException(status_code=403, detail="forbidden")
 
         app.dependency_overrides[get_current_user] = lambda: sample_tech_user
-        app.dependency_overrides[get_current_active_user] = (
-            lambda: sample_tech_user
-        )
+        app.dependency_overrides[get_current_active_user] = lambda: sample_tech_user
         app.dependency_overrides[require_manager_or_admin] = _reject
 
         try:

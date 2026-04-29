@@ -1241,9 +1241,7 @@ class CampaignService(LoggerMixin):
         raw = adhoc_filters.get("recipients")
         if not isinstance(raw, list):
             return []
-        rows: list[dict[str, Any]] = [
-            item for item in raw if isinstance(item, dict)
-        ]
+        rows: list[dict[str, Any]] = [item for item in raw if isinstance(item, dict)]
         return rows
 
     async def preview_audience(

@@ -72,6 +72,11 @@ TESTS=(
   "rate-limit|scripts/e2e/test-rate-limit.sh|Rate limit toast with Too many requests message and wait time (Req 85.6, 85.7)"
   "mobile-staff|scripts/e2e/test-mobile-staff.sh|Mobile viewport workflow buttons, bottom sheet customer panel (Req 86.9, 86.10)"
   "settings|scripts/e2e/test-settings.sh|Business info edit persistence, payment terms default on invoices (Req 87.10, 87.11)"
+  "ai-scheduling-overview|scripts/e2e/test-ai-scheduling-overview.sh|AI schedule overview, capacity heat map, resource rows, alerts panel (Req 29.1, 29.2, 29.3)"
+  "ai-scheduling-alerts|scripts/e2e/test-ai-scheduling-alerts.sh|Alerts/suggestions panel, resolution actions, change requests, API endpoints (Req 29.1, 29.2, 29.4, 29.9)"
+  "ai-scheduling-chat|scripts/e2e/test-ai-scheduling-chat.sh|Admin AI chat, natural language commands, criteria tags, schedule changes (Req 29.1, 29.2, 29.5)"
+  "ai-scheduling-resource|scripts/e2e/test-ai-scheduling-resource.sh|Resource mobile chat, pre-job requirements, schedule alerts, mobile viewport (Req 29.1, 29.2, 29.6)"
+  "ai-scheduling-responsive|scripts/e2e/test-ai-scheduling-responsive.sh|Responsive behavior at mobile/tablet/desktop viewports, no overflow (Req 29.7, 29.8)"
 )
 
 # ---------------------------------------------------------------------------

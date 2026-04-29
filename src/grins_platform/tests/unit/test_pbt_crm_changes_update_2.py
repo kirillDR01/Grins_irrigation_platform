@@ -13,12 +13,11 @@ Covers all 17 correctness properties:
 from __future__ import annotations
 
 import asyncio
-import calendar
 from collections.abc import Awaitable
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, TypeVar
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -41,11 +40,6 @@ from grins_platform.repositories.invoice_repository import InvoiceRepository
 from grins_platform.schemas.invoice import InvoiceListParams
 from grins_platform.services.duplicate_detection_service import (
     MAX_SCORE,
-    WEIGHT_ADDRESS,
-    WEIGHT_EMAIL,
-    WEIGHT_NAME,
-    WEIGHT_PHONE,
-    WEIGHT_ZIP_LAST,
     DuplicateDetectionService,
 )
 from grins_platform.services.job_confirmation_service import (
@@ -128,12 +122,14 @@ _invoice_numbers = st.from_regex(r"INV-[0-9]{4,8}", fullmatch=True)
 _sort_orders = st.sampled_from(["asc", "desc"])
 
 # Service types matching the job generator's tier map
-_service_types = st.sampled_from([
-    "spring_startup",
-    "mid_season_inspection",
-    "fall_winterization",
-    "monthly_visit",
-])
+_service_types = st.sampled_from(
+    [
+        "spring_startup",
+        "mid_season_inspection",
+        "fall_winterization",
+        "monthly_visit",
+    ]
+)
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +218,6 @@ def _merge_params(
 _repo = InvoiceRepository.__new__(InvoiceRepository)
 
 
-
 # ===================================================================
 # Property 1: Duplicate Score Commutativity
 # score(A, B) == score(B, A)
@@ -258,10 +253,16 @@ class TestProperty1DuplicateScoreCommutativity:
         """score(A, B) == score(B, A) for all customer pairs."""
         svc = DuplicateDetectionService()
         a = _make_mock_customer(
-            phone=phone, email=email, first_name=first_a, last_name=last_a,
+            phone=phone,
+            email=email,
+            first_name=first_a,
+            last_name=last_a,
         )
         b = _make_mock_customer(
-            phone=phone, email=email, first_name=first_b, last_name=last_b,
+            phone=phone,
+            email=email,
+            first_name=first_b,
+            last_name=last_b,
         )
 
         score_ab, _ = svc.compute_score(a, b)
@@ -320,8 +321,7 @@ class TestProperty2DuplicateScoreSelfIdentity:
         score, signals = svc.compute_score(customer, customer)
 
         assert score == MAX_SCORE, (
-            f"Self-identity should produce {MAX_SCORE}, got {score}. "
-            f"Signals: {signals}"
+            f"Self-identity should produce {MAX_SCORE}, got {score}. Signals: {signals}"
         )
 
 
@@ -422,18 +422,21 @@ class TestProperty4DuplicateScoreBounded:
         """Score is always between 0 and 100 inclusive."""
         svc = DuplicateDetectionService()
         a = _make_mock_customer(
-            phone=phone_a, email=email_a,
-            first_name=first_a, last_name=last_a,
+            phone=phone_a,
+            email=email_a,
+            first_name=first_a,
+            last_name=last_a,
         )
         b = _make_mock_customer(
-            phone=phone_b, email=email_b,
-            first_name=first_b, last_name=last_b,
+            phone=phone_b,
+            email=email_b,
+            first_name=first_b,
+            last_name=last_b,
         )
 
         score, _ = svc.compute_score(a, b)
 
         assert 0 <= score <= 100, f"Score {score} out of bounds [0, 100]"
-
 
 
 # ===================================================================
@@ -490,8 +493,7 @@ class TestProperty6SalesPipelineTerminalImmutability:
         """Terminal statuses have empty transition sets."""
         valid = VALID_SALES_TRANSITIONS.get(terminal, set())
         assert len(valid) == 0, (
-            f"Terminal status {terminal} should have no valid transitions, "
-            f"got {valid}"
+            f"Terminal status {terminal} should have no valid transitions, got {valid}"
         )
 
     @given(terminal=terminal_statuses)
@@ -543,8 +545,7 @@ class TestProperty7SalesPipelineIdempotentAdvance:
             next_status = svc._next_status(status)
             expected = SALES_PIPELINE_ORDER[idx + 1]
             assert next_status == expected, (
-                f"Expected one step from {status} to {expected}, "
-                f"got {next_status}"
+                f"Expected one step from {status} to {expected}, got {next_status}"
             )
 
 
@@ -606,9 +607,7 @@ class TestProperty8YRCParserCompleteness:
     ) -> None:
         """Unrecognised inputs return None."""
         result = parse_confirmation_reply(text)
-        assert result is None, (
-            f"Expected None for unknown input '{text}', got {result}"
-        )
+        assert result is None, f"Expected None for unknown input '{text}', got {result}"
 
 
 # ===================================================================
@@ -672,7 +671,6 @@ class TestProperty10YRCParserCaseInsensitivity:
         assert lower_result == mixed_result, (
             f"Case sensitivity: lower={lower_result}, mixed={mixed_result}"
         )
-
 
 
 # ===================================================================
@@ -870,7 +868,6 @@ class TestProperty13WeekOfRoundTrip:
         )
 
 
-
 # ===================================================================
 # Property 14: Invoice Filter Composition
 # result(A ∪ B) == result(A) ∩ result(B)
@@ -1052,10 +1049,18 @@ class TestProperty17OnboardingWeekPreferenceRoundTrip:
         }
 
         spring_start, spring_end = JobGenerator._resolve_dates(
-            "spring_startup", 4, 4, spring_monday.year, week_prefs,
+            "spring_startup",
+            4,
+            4,
+            spring_monday.year,
+            week_prefs,
         )
         fall_start, fall_end = JobGenerator._resolve_dates(
-            "fall_winterization", 10, 10, fall_monday.year, week_prefs,
+            "fall_winterization",
+            10,
+            10,
+            fall_monday.year,
+            week_prefs,
         )
 
         exp_spring_mon, exp_spring_sun = align_to_week(spring_monday)
@@ -1071,7 +1076,11 @@ class TestProperty17OnboardingWeekPreferenceRoundTrip:
         from grins_platform.services.job_generator import JobGenerator
 
         start, end = JobGenerator._resolve_dates(
-            "spring_startup", 4, 4, 2025, {},
+            "spring_startup",
+            4,
+            4,
+            2025,
+            {},
         )
 
         assert start == date(2025, 4, 1)

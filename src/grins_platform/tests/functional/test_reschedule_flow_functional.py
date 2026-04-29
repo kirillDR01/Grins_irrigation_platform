@@ -150,9 +150,7 @@ class TestRescheduleFromRequestFlow:
         )
 
         # A RescheduleRequest was persisted.
-        reschedules = [
-            o for o in db._added_objects if isinstance(o, RescheduleRequest)
-        ]
+        reschedules = [o for o in db._added_objects if isinstance(o, RescheduleRequest)]
         assert len(reschedules) == 1
         assert reschedules[0].status == "open"
 

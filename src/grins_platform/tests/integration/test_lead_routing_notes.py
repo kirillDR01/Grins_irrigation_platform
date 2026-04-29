@@ -31,7 +31,6 @@ from grins_platform.api.v1.leads import _get_lead_service
 from grins_platform.main import app
 from grins_platform.services.lead_service import LeadService
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -228,9 +227,7 @@ class TestLeadRoutingNotesCarryForward:
             await service._carry_forward_lead_notes(lead, customer)
 
         expected = (
-            "existing customer notes"
-            "\n\n--- From lead (2026-04-15) ---\n"
-            "new lead info"
+            "existing customer notes\n\n--- From lead (2026-04-15) ---\nnew lead info"
         )
         assert customer.internal_notes == expected
 

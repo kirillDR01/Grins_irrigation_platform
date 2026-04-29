@@ -90,9 +90,7 @@ class CustomerTagService(LoggerMixin):
         existing_manual_labels = {t.label: t for t in manual_tags}
 
         # Delete manual tags not in incoming set
-        to_delete = [
-            t.id for t in manual_tags if t.label not in incoming_labels
-        ]
+        to_delete = [t.id for t in manual_tags if t.label not in incoming_labels]
         if to_delete:
             _ = await self.repo.delete_by_ids(to_delete)
 
@@ -121,9 +119,7 @@ class CustomerTagService(LoggerMixin):
             ) from e
 
         # Build final list: system tags + surviving manual tags + new tags
-        surviving_manual = [
-            t for t in manual_tags if t.label in incoming_labels
-        ]
+        surviving_manual = [t for t in manual_tags if t.label in incoming_labels]
         all_tags = system_tags + surviving_manual + new_tags
         all_tags.sort(key=lambda t: t.created_at)
 

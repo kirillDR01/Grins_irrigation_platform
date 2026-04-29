@@ -116,9 +116,7 @@ class AppointmentAttachmentService(LoggerMixin):
         for att in attachments:
             # Images render inline (thumbnails); other types force download.
             disposition_name = (
-                None
-                if att.content_type.startswith("image/")
-                else att.file_name
+                None if att.content_type.startswith("image/") else att.file_name
             )
             presigned_url = self.photo_service.generate_presigned_url(
                 att.file_key,

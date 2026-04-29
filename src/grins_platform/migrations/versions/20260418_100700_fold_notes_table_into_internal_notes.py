@@ -124,10 +124,7 @@ def upgrade() -> None:
     for subject_type, cnt, preview in rows:
         # Truncate preview to first 10 entries worth
         truncated = (preview or "")[:800]
-        print(
-            f"[fold] discarding {cnt} {subject_type} note(s); "
-            f"sample: {truncated}"
-        )
+        print(f"[fold] discarding {cnt} {subject_type} note(s); sample: {truncated}")
 
     if not rows:
         print("[fold] no sales_entry/appointment notes to discard.")

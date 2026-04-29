@@ -8,10 +8,11 @@ Validates: Requirement 1.1, 1.6, 1.8, 28.1, 28.3, 68.1, 68.4
 """
 
 from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import (
     JSON,
     UUID as PGUUID,
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
     from grins_platform.models.job import Job
     from grins_platform.models.property import Property
     from grins_platform.models.sent_message import SentMessage
+    from grins_platform.models.staff import Staff
 
 
 class Customer(Base):
@@ -169,6 +171,26 @@ class Customer(Base):
         nullable=True,
     )
 
+    # AI Scheduling fields (AI Scheduling Spec — criteria 14, 15, 11)
+    clv_score: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2),
+        nullable=True,
+    )
+    preferred_resource_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("staff.id"),
+        nullable=True,
+    )
+    time_window_preference: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+    time_window_is_hard: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
+
     # Duplicate Merge Tracking (CRM2 Req 6.5)
     merged_into_customer_id: Mapped[Optional[UUID]] = mapped_column(
         PGUUID(as_uuid=True),
@@ -223,6 +245,10 @@ class Customer(Base):
         back_populates="customer",
         cascade="all, delete-orphan",
         lazy="selectin",
+    )
+    preferred_resource: Mapped["Staff | None"] = relationship(
+        "Staff",
+        foreign_keys=[preferred_resource_id],
     )
 
     @property

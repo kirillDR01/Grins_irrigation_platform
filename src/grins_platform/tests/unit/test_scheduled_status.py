@@ -12,16 +12,14 @@ Validates: Requirements 5.2, 5.3, 5.4, 5.5, 5.6, 5.7
 
 from __future__ import annotations
 
-from datetime import date, time, timezone
-from typing import ClassVar
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import date, time
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 
-from grins_platform.models.enums import AppointmentStatus, JobStatus
+from grins_platform.models.enums import JobStatus
 from grins_platform.models.job import VALID_STATUS_TRANSITIONS
-
 
 # =============================================================================
 # Task 8.1: VALID_STATUS_TRANSITIONS tests

@@ -139,9 +139,7 @@ class EmailService(LoggerMixin):
         self.settings = settings or EmailSettings()
         self._jinja_env: Environment | None = None
         if self.settings.is_configured:
-            resend.api_key = (
-                self.settings.resend_api_key or self.settings.email_api_key
-            )
+            resend.api_key = self.settings.resend_api_key or self.settings.email_api_key
 
     @property
     def jinja_env(self) -> Environment:
@@ -288,9 +286,7 @@ class EmailService(LoggerMixin):
             )
             return False
 
-        provider_message_id = (
-            response.get("id") if isinstance(response, dict) else None
-        )
+        provider_message_id = response.get("id") if isinstance(response, dict) else None
         self.logger.info(
             "email.send.completed",
             recipient=masked,

@@ -1153,7 +1153,7 @@ class TestApplyScheduleIntegration:
     **Validates: CR-1 (bughunt 2026-04-16).**
     """
 
-    def _build_request(self) -> "ApplyScheduleRequest":  # type: ignore[name-defined]
+    def _build_request(self) -> ApplyScheduleRequest:  # type: ignore[name-defined]
         from grins_platform.schemas.schedule_generation import (
             ApplyScheduleRequest,
             ScheduleJobAssignment,

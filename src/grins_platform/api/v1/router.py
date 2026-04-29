@@ -16,6 +16,7 @@ from grins_platform.api.v1.agreements import (
     tier_router as agreement_tiers_router,
 )
 from grins_platform.api.v1.ai import router as ai_router
+from grins_platform.api.v1.ai_scheduling import router as ai_scheduling_router
 from grins_platform.api.v1.alerts import router as alerts_router
 from grins_platform.api.v1.analytics import router as analytics_router
 from grins_platform.api.v1.appointment_attachments import (
@@ -57,6 +58,9 @@ from grins_platform.api.v1.sales import router as sales_router
 from grins_platform.api.v1.sales_pipeline import router as sales_pipeline_router
 from grins_platform.api.v1.schedule import router as schedule_router
 from grins_platform.api.v1.schedule_clear import router as schedule_clear_router
+from grins_platform.api.v1.scheduling_alerts import (
+    router as scheduling_alerts_router,
+)
 from grins_platform.api.v1.sent_messages import router as sent_messages_router
 from grins_platform.api.v1.services import router as services_router
 from grins_platform.api.v1.settings import router as settings_router
@@ -433,6 +437,19 @@ api_router.include_router(
 api_router.include_router(
     appointment_attachments_router,
     tags=["appointment-attachments"],
+)
+
+# Include AI Scheduling endpoints (ai-scheduling-system spec)
+api_router.include_router(
+    ai_scheduling_router,
+    tags=["ai-scheduling"],
+)
+
+# Include Scheduling Alerts endpoints (ai-scheduling-system spec)
+# Note: generic alerts_router is at /alerts; this is at /scheduling-alerts
+api_router.include_router(
+    scheduling_alerts_router,
+    tags=["scheduling-alerts"],
 )
 
 __all__ = ["api_router"]

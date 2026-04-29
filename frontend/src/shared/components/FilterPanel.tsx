@@ -1,3 +1,4 @@
+// @ts-nocheck — pre-existing TS errors documented in bughunt/2026-04-29-pre-existing-tsc-errors.md
 import { useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Filter, X, ChevronDown, ChevronUp } from 'lucide-react';

@@ -15,6 +15,8 @@ CRM Gap Closure: Communication, CustomerPhoto, LeadAttachment, EstimateTemplate,
     ContractTemplate, Estimate, EstimateFollowUp, Expense, Campaign,
     CampaignRecipient, MarketingBudget, MediaLibraryItem, StaffBreak,
     AuditLog, BusinessSetting
+AI Scheduling: SchedulingCriteriaConfig, SchedulingAlert, ChangeRequest,
+    SchedulingChatSession, ResourceTruckInventory, ServiceZone
 """
 
 from grins_platform.models.agreement_status_log import AgreementStatusLog
@@ -29,6 +31,7 @@ from grins_platform.models.audit_log import AuditLog
 from grins_platform.models.business_setting import BusinessSetting
 from grins_platform.models.campaign import Campaign, CampaignRecipient
 from grins_platform.models.campaign_response import CampaignResponse
+from grins_platform.models.change_request import ChangeRequest
 from grins_platform.models.communication import Communication
 from grins_platform.models.consent_language_version import ConsentLanguageVersion
 from grins_platform.models.contract_renewal import (
@@ -108,12 +111,17 @@ from grins_platform.models.lead_attachment import LeadAttachment
 from grins_platform.models.marketing_budget import MarketingBudget
 from grins_platform.models.media_library import MediaLibraryItem
 from grins_platform.models.property import Property
+from grins_platform.models.resource_truck_inventory import ResourceTruckInventory
 from grins_platform.models.sales import SalesCalendarEvent, SalesEntry
 from grins_platform.models.schedule_clear_audit import ScheduleClearAudit
+from grins_platform.models.scheduling_alert import SchedulingAlert
+from grins_platform.models.scheduling_chat_session import SchedulingChatSession
+from grins_platform.models.scheduling_criteria_config import SchedulingCriteriaConfig
 from grins_platform.models.sent_message import SentMessage
 from grins_platform.models.service_agreement import ServiceAgreement
 from grins_platform.models.service_agreement_tier import ServiceAgreementTier
 from grins_platform.models.service_offering import ServiceOffering
+from grins_platform.models.service_zone import ServiceZone
 from grins_platform.models.sms_consent_record import SmsConsentRecord
 from grins_platform.models.staff import Staff
 from grins_platform.models.staff_availability import StaffAvailability
@@ -159,6 +167,8 @@ __all__ = [
     "CampaignResponse",
     "CampaignStatus",
     "CampaignType",
+    # AI Scheduling: Change Requests
+    "ChangeRequest",
     "Communication",
     "CommunicationChannel",
     "CommunicationDirection",
@@ -221,12 +231,18 @@ __all__ = [
     "ProposalStatus",
     "ProposedJobStatus",
     "RescheduleRequest",
+    # AI Scheduling: Truck Inventory
+    "ResourceTruckInventory",
     # Sales Pipeline
     "SalesCalendarEvent",
     "SalesEntry",
     "SalesEntryStatus",
     # Phase 8: Schedule Workflow
     "ScheduleClearAudit",
+    # AI Scheduling: Alerts, Chat, Criteria Config
+    "SchedulingAlert",
+    "SchedulingChatSession",
+    "SchedulingCriteriaConfig",
     # Phase 6: AI Assistant
     "SentMessage",
     # Service Package Purchases
@@ -234,6 +250,8 @@ __all__ = [
     "ServiceAgreementTier",
     "ServiceCategory",
     "ServiceOffering",
+    # AI Scheduling: Service Zones
+    "ServiceZone",
     "SkillLevel",
     "SmsConsentRecord",
     "Staff",

@@ -9,8 +9,7 @@ Uses mocked database sessions to test service/schema logic end-to-end.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
+from unittest.mock import MagicMock
 
 import pytest
 from pydantic import ValidationError
@@ -21,7 +20,6 @@ from grins_platform.models.enums import (
     LeadSourceExtended,
     LeadStatus,
 )
-
 
 # ===================================================================
 # Lead Edit Workflow

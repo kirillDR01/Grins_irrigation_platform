@@ -12,7 +12,18 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
-from sqlalchemy import JSON, Boolean, DateTime, Integer, Numeric, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -21,6 +32,7 @@ from grins_platform.models.enums import SkillLevel, StaffRole
 
 if TYPE_CHECKING:
     from grins_platform.models.appointment import Appointment
+    from grins_platform.models.service_zone import ServiceZone
     from grins_platform.models.staff_availability import StaffAvailability
 
 
@@ -132,6 +144,29 @@ class Staff(Base):
         nullable=True,
     )
 
+    # AI Scheduling fields (AI Scheduling Spec — criteria 3, 10, 24)
+    performance_score: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    callback_rate: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    avg_satisfaction: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    service_zone_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("service_zones.id"),
+        nullable=True,
+    )
+    overtime_threshold_minutes: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
     # Status
     is_active: Mapped[bool] = mapped_column(
         Boolean,
@@ -159,6 +194,10 @@ class Staff(Base):
         "StaffAvailability",
         back_populates="staff",
         cascade="all, delete-orphan",
+    )
+    service_zone: Mapped["ServiceZone | None"] = relationship(
+        "ServiceZone",
+        foreign_keys=[service_zone_id],
     )
 
     def __repr__(self) -> str:

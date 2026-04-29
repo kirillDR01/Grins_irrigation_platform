@@ -210,7 +210,9 @@ class TestEmailSigningWithDocument:
             customer_id=entry.customer_id,
             file_key="docs/real-estimate.pdf",
         )
-        presigned_url = "https://s3.amazonaws.com/bucket/docs/real-estimate.pdf?signed=abc"
+        presigned_url = (
+            "https://s3.amazonaws.com/bucket/docs/real-estimate.pdf?signed=abc"
+        )
 
         mock_session = AsyncMock()
         mock_session.commit = AsyncMock()
@@ -320,7 +322,9 @@ class TestEmbeddedSigningWithDocument:
             customer_id=entry.customer_id,
             file_key="docs/contract-v2.pdf",
         )
-        presigned_url = "https://s3.amazonaws.com/bucket/docs/contract-v2.pdf?signed=xyz"
+        presigned_url = (
+            "https://s3.amazonaws.com/bucket/docs/contract-v2.pdf?signed=xyz"
+        )
 
         mock_session = AsyncMock()
         mock_session.commit = AsyncMock()
@@ -418,7 +422,9 @@ class TestEmbeddedSigningWithDocument:
             customer_id=entry.customer_id,
             file_key="docs/estimate-existing.pdf",
         )
-        presigned_url = "https://s3.amazonaws.com/bucket/docs/estimate-existing.pdf?signed=reuse"
+        presigned_url = (
+            "https://s3.amazonaws.com/bucket/docs/estimate-existing.pdf?signed=reuse"
+        )
 
         mock_session = AsyncMock()
         mock_session.commit = AsyncMock()

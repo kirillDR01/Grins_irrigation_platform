@@ -27,7 +27,7 @@ graph TB
     subgraph API Layer
         SR[/api/v1/schedule/*]
         AR[/api/v1/ai-scheduling/*]
-        ALR[/api/v1/alerts/*]
+        ALR[/api/v1/scheduling-alerts/*]
     end
 
     subgraph AI Scheduling Engine
@@ -105,7 +105,7 @@ graph TB
 3. Each detector produces `AlertCandidate` objects with type, severity, affected entities, and resolution options
 4. Candidates are deduplicated against existing active alerts
 5. New alerts are persisted to `scheduling_alerts` table
-6. Frontend polls `/api/v1/alerts/` and renders in Alerts Panel
+6. Frontend polls `/api/v1/scheduling-alerts/` and renders in Alerts Panel
 
 ### Request Flow: Resource Chat → Change Request
 
@@ -288,7 +288,7 @@ class ChangeRequestService(LoggerMixin):
 - `POST /evaluate` — Evaluate a schedule against 30 criteria
 - `GET /criteria` — List all 30 criteria with current weights
 
-**`/api/v1/alerts/`** — Alert and suggestion management:
+**`/api/v1/scheduling-alerts/`** — Alert and suggestion management (renamed from `/api/v1/alerts/` on 2026-04-28; the original prefix is already taken by a generic Alert/SMS-cancellation router added 2026-04-16 for H-5 bughunt work):
 - `GET /` — List active alerts/suggestions (filterable by type, severity)
 - `POST /{id}/resolve` — Resolve an alert with a chosen action
 - `POST /{id}/dismiss` — Dismiss a suggestion
@@ -297,9 +297,9 @@ class ChangeRequestService(LoggerMixin):
 - `POST /change-requests/{id}/deny` — Deny a change request
 
 **`/api/v1/schedule/`** — Extensions to existing schedule routes:
-- `GET /capacity` — Extended capacity forecast with 30-criteria analysis
-- `POST /batch-generate` — Batch schedule generation for multi-week campaigns
-- `GET /utilization` — Resource utilization report
+- `GET /capacity` — **Extends the existing `get_capacity` handler** (which already returns basic daily capacity) with 30-criteria analysis fields. Additive, non-breaking: existing response shape is preserved; new fields (per-criterion utilization, forecast confidence intervals, criteria-triggered alerts) are added to the response payload.
+- `POST /batch-generate` — Batch schedule generation for multi-week campaigns (new endpoint)
+- `GET /utilization` — Resource utilization report (new endpoint)
 
 ### Frontend Components
 
@@ -820,7 +820,7 @@ class ResolveAlertRequest(BaseModel):
 # Feature: ai-scheduling-system, Property {N}: {property_text}
 ```
 
-**Property tests** validate the 22 correctness properties defined above. Each property maps to a single Hypothesis test that generates random inputs (jobs, staff, schedules, constraints) and verifies the property holds for all generated cases.
+**Property tests** validate the 27 correctness properties defined above (Properties 1–22 are backend Hypothesis tests; Properties 23–27 are frontend fast-check tests covering page composition, date propagation, and chat error isolation). Each property maps to a single test that generates random inputs (jobs, staff, schedules, constraints, ISO dates, errors) and verifies the property holds for all generated cases.
 
 Key generators needed:
 - `st_schedule_job()` — random `ScheduleJob` with valid fields

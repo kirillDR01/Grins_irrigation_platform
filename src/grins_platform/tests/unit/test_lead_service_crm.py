@@ -1536,9 +1536,9 @@ class TestProperty49SMSLeadConfirmation:
         roll back the lead-intake transaction. The service must NOT call
         ``sms_service.send_automated_message`` inline.
         """
-        from unittest.mock import MagicMock  # noqa: PLC0415
+        from unittest.mock import MagicMock
 
-        from grins_platform.services.lead_service import (  # noqa: PLC0415
+        from grins_platform.services.lead_service import (
             send_lead_confirmations_post_commit,
         )
 

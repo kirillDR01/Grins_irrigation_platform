@@ -206,11 +206,17 @@ class TestCustomerMergeDataConservation:
             stmt_str = str(c[0][0]) if c[0] else ""
             if "UPDATE" in stmt_str and "customer_id" in stmt_str:
                 for table in [
-                    "jobs", "invoices", "sent_messages",
-                    "properties", "service_agreements",
-                    "communications", "customer_photos",
-                    "customer_documents", "estimates",
-                    "sales_entries", "contract_renewal_proposals",
+                    "jobs",
+                    "invoices",
+                    "sent_messages",
+                    "properties",
+                    "service_agreements",
+                    "communications",
+                    "customer_photos",
+                    "customer_documents",
+                    "estimates",
+                    "sales_entries",
+                    "contract_renewal_proposals",
                 ]:
                     if table in stmt_str:
                         reassign_tables_found.add(table)

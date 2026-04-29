@@ -23,7 +23,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from grins_platform.api.v1.auth_dependencies import (
-    CurrentActiveUser,  # noqa: TC001 - Required at runtime for FastAPI DI
+    CurrentActiveUser,
 )
 from grins_platform.log_config import LoggerMixin, get_logger
 from grins_platform.services.stripe_config import StripeSettings
@@ -118,9 +118,7 @@ _endpoints = StripeTerminalEndpoints()
 )
 async def create_connection_token(
     _current_user: CurrentActiveUser,
-    service: Annotated[
-        StripeTerminalService, Depends(_get_stripe_terminal_service)
-    ],
+    service: Annotated[StripeTerminalService, Depends(_get_stripe_terminal_service)],
 ) -> ConnectionTokenResponse | JSONResponse:
     """Create a Stripe Terminal connection token.
 
@@ -150,9 +148,7 @@ async def create_connection_token(
 async def create_payment_intent(
     data: CreatePaymentIntentRequest,
     _current_user: CurrentActiveUser,
-    service: Annotated[
-        StripeTerminalService, Depends(_get_stripe_terminal_service)
-    ],
+    service: Annotated[StripeTerminalService, Depends(_get_stripe_terminal_service)],
 ) -> PaymentIntentResponse | JSONResponse:
     """Create a PaymentIntent for tap-to-pay collection.
 

@@ -21,13 +21,14 @@ import pytest
 from grins_platform.services.job_generator import JobGenerator
 from grins_platform.utils.week_alignment import align_to_week
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_tier(name: str = "Essential", slug: str = "essential-residential") -> MagicMock:
+def _make_tier(
+    name: str = "Essential", slug: str = "essential-residential"
+) -> MagicMock:
     """Create a mock ServiceAgreementTier."""
     tier = MagicMock()
     tier.id = uuid4()
@@ -170,9 +171,9 @@ class TestOnboardingWeekPreferencesJobGeneration:
 
         # Spot-check the May monthly visit
         may_jobs = [
-            j for j in jobs
-            if j.job_type == "monthly_visit"
-            and j.target_start_date.month == 5
+            j
+            for j in jobs
+            if j.job_type == "monthly_visit" and j.target_start_date.month == 5
         ]
         assert len(may_jobs) == 1
         assert may_jobs[0].target_start_date == date(2026, 5, 4)
@@ -348,7 +349,10 @@ class TestOnboardingWeekPreferencesJobGeneration:
         agreement = _make_agreement(
             tier_name="Essential",
             tier_slug="essential-residential",
-            week_prefs={"spring_startup": "2026-04-06", "fall_winterization": "2026-10-05"},
+            week_prefs={
+                "spring_startup": "2026-04-06",
+                "fall_winterization": "2026-10-05",
+            },
         )
 
         session = _make_async_session()

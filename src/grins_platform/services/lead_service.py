@@ -144,7 +144,7 @@ async def send_lead_confirmations_post_commit(lead_id: UUID) -> None:
                             lead_id=str(lead.id),
                             reason=result.get("reason", "unknown"),
                         )
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     log.error(
                         "lead.confirmation.sms_failed",
                         lead_id=str(lead.id),
@@ -160,7 +160,7 @@ async def send_lead_confirmations_post_commit(lead_id: UUID) -> None:
                         "lead.email_confirmation.sent",
                         lead_id=str(lead.id),
                     )
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     log.error(
                         "lead.email_confirmation.failed",
                         lead_id=str(lead.id),
@@ -170,7 +170,7 @@ async def send_lead_confirmations_post_commit(lead_id: UUID) -> None:
 
             try:
                 await session.commit()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log.error(
                     "lead.post_commit_confirmations.commit_failed",
                     lead_id=str(lead_id),
@@ -178,7 +178,7 @@ async def send_lead_confirmations_post_commit(lead_id: UUID) -> None:
                     exc_info=True,
                 )
                 await session.rollback()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.error(
                 "lead.post_commit_confirmations.unhandled",
                 lead_id=str(lead_id),
@@ -187,7 +187,7 @@ async def send_lead_confirmations_post_commit(lead_id: UUID) -> None:
             )
             try:
                 await session.rollback()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
 
@@ -1168,7 +1168,7 @@ class LeadService(LoggerMixin):
                     "new_value_len": len(customer.internal_notes or ""),
                 },
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             self.logger.warning(
                 "lead.carry_forward_notes.audit_failed",
                 lead_id=str(lead.id),
@@ -2072,7 +2072,7 @@ class LeadService(LoggerMixin):
                     "forced": True,
                 },
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             self.log_failed(
                 "convert_override_audit",
                 lead_id=str(lead_id),

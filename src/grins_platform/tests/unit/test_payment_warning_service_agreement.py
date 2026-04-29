@@ -22,7 +22,6 @@ from grins_platform.api.v1.dependencies import get_db_session, get_job_service
 from grins_platform.app import create_app
 from grins_platform.models.enums import AppointmentStatus, JobStatus
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

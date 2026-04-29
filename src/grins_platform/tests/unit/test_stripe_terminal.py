@@ -22,7 +22,6 @@ from grins_platform.services.stripe_terminal import (
     StripeTerminalService,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -63,7 +62,7 @@ def client() -> TestClient:
     mock_user.id = "test-user-id"
     mock_user.is_active = True
 
-    async def _mock_db():  # noqa: ANN202
+    async def _mock_db():
         yield MagicMock()
 
     app.dependency_overrides[get_current_active_user] = lambda: mock_user
@@ -138,9 +137,7 @@ class TestStripeTerminalServiceConnectionToken:
     ) -> None:
         """Raises StripeTerminalError on Stripe API failure."""
         mock_stripe.StripeError = Exception
-        mock_stripe.terminal.ConnectionToken.create.side_effect = Exception(
-            "API error"
-        )
+        mock_stripe.terminal.ConnectionToken.create.side_effect = Exception("API error")
 
         with pytest.raises(StripeTerminalError):
             service.create_connection_token()
@@ -320,7 +317,11 @@ class TestCreatePaymentIntentEndpoint:
 
         response = client.post(
             "/api/v1/stripe/terminal/create-payment-intent",
-            json={"amount_cents": 7500, "currency": "usd", "description": "Invoice #123"},
+            json={
+                "amount_cents": 7500,
+                "currency": "usd",
+                "description": "Invoice #123",
+            },
         )
 
         assert response.status_code == 200

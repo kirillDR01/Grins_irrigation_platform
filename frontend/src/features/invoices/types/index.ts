@@ -258,6 +258,13 @@ export interface SendPaymentLinkResponse {
   link_url: string;
   sent_at: string;
   sent_count: number;
+  attempted_channels: Array<'sms' | 'email'>;
+  sms_failure_reason:
+    | 'consent'
+    | 'rate_limit'
+    | 'provider_error'
+    | 'no_phone'
+    | null;
 }
 
 // CR-5: Lien Review Queue (bughunt 2026-04-16)

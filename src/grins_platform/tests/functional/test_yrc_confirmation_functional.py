@@ -201,9 +201,7 @@ class TestConfirmReplyFlow:
         )
 
         # A JobConfirmationResponse was added to the session
-        added = [
-            o for o in db._added_objects if isinstance(o, JobConfirmationResponse)
-        ]
+        added = [o for o in db._added_objects if isinstance(o, JobConfirmationResponse)]
         assert len(added) == 1
         response = added[0]
         assert response.reply_keyword == ConfirmationKeyword.CONFIRM.value
@@ -269,9 +267,7 @@ class TestRepeatConfirmReplyFlow:
         assert "already confirmed" in result["auto_reply"]
         # Exactly one JobConfirmationResponse was added, with status
         # ``confirmed_repeat`` (distinct from first-Y ``confirmed`` rows).
-        added = [
-            o for o in db._added_objects if isinstance(o, JobConfirmationResponse)
-        ]
+        added = [o for o in db._added_objects if isinstance(o, JobConfirmationResponse)]
         assert len(added) == 1
         response = added[0]
         assert response.status == "confirmed_repeat"
@@ -361,9 +357,7 @@ class TestRescheduleReplyFlow:
         confirmations = [
             o for o in db._added_objects if isinstance(o, JobConfirmationResponse)
         ]
-        reschedules = [
-            o for o in db._added_objects if isinstance(o, RescheduleRequest)
-        ]
+        reschedules = [o for o in db._added_objects if isinstance(o, RescheduleRequest)]
         assert len(confirmations) == 1
         assert len(reschedules) == 1
 
@@ -457,9 +451,7 @@ class TestCancelReplyFlow:
             from_phone="+15125551234",
         )
 
-        added = [
-            o for o in db._added_objects if isinstance(o, JobConfirmationResponse)
-        ]
+        added = [o for o in db._added_objects if isinstance(o, JobConfirmationResponse)]
         assert len(added) == 1
         response = added[0]
         assert response.reply_keyword == ConfirmationKeyword.CANCEL.value
@@ -604,9 +596,7 @@ class TestUnknownReplyFlow:
             from_phone="+15125551234",
         )
 
-        added = [
-            o for o in db._added_objects if isinstance(o, JobConfirmationResponse)
-        ]
+        added = [o for o in db._added_objects if isinstance(o, JobConfirmationResponse)]
         assert len(added) == 1
         response = added[0]
         assert response.reply_keyword is None

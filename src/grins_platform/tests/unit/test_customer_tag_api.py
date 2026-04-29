@@ -86,9 +86,7 @@ def app(mock_db: AsyncMock) -> FastAPI:
     test_app.dependency_overrides[get_current_active_user] = lambda: fake_user
     test_app.dependency_overrides[get_customer_service] = lambda: AsyncMock()
     test_app.dependency_overrides[get_customer_merge_service] = lambda: AsyncMock()
-    test_app.dependency_overrides[get_duplicate_detection_service] = (
-        lambda: AsyncMock()
-    )
+    test_app.dependency_overrides[get_duplicate_detection_service] = lambda: AsyncMock()
     test_app.dependency_overrides[get_photo_service] = lambda: MagicMock()
 
     async def _db_override() -> AsyncMock:

@@ -61,13 +61,13 @@ from grins_platform.scheduler import get_scheduler
 from grins_platform.services.auth_service import validate_jwt_config
 from grins_platform.services.background_jobs import register_scheduled_jobs
 from grins_platform.services.google_sheets_config import GoogleSheetsSettings
+from grins_platform.services.google_sheets_poller import GoogleSheetsPoller
+from grins_platform.services.google_sheets_service import GoogleSheetsService
 from grins_platform.services.signwell.client import (
     SignWellDocumentNotFoundError,
     SignWellError,
     SignWellWebhookVerificationError,
 )
-from grins_platform.services.google_sheets_poller import GoogleSheetsPoller
-from grins_platform.services.google_sheets_service import GoogleSheetsService
 from grins_platform.services.sms.audit import log_provider_switched
 from grins_platform.services.sms.factory import get_sms_provider
 from grins_platform.services.stripe_config import StripeSettings
@@ -917,6 +917,36 @@ def _register_exception_handlers(app: FastAPI) -> None:
                 "error": {
                     "code": "WEBAUTHN_DUPLICATE_CREDENTIAL",
                     "message": str(exc) or "Passkey already registered",
+                },
+            },
+        )
+
+    @app.exception_handler(Exception)  # type: ignore[untyped-decorator]
+    async def unhandled_exception_handler(
+        request: Request,
+        exc: Exception,
+    ) -> JSONResponse:
+        """Last-resort handler so 5xx responses carry CORS headers.
+
+        Without this, Starlette's ServerErrorMiddleware emits the response
+        outside CORSMiddleware and the browser sees an opaque CORS error
+        instead of the real 500. (bughunt 2026-04-28 §Bug 4.)
+        """
+        logger.error(
+            "api.exception.unhandled",
+            path=request.url.path,
+            method=request.method,
+            error=str(exc),
+            exc_type=type(exc).__name__,
+            exc_info=exc,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "success": False,
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Internal server error",
                 },
             },
         )

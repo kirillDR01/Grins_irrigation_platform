@@ -250,9 +250,7 @@ async def list_invoices(
     ),
     payment_reference: str | None = Query(
         default=None,
-        description=(
-            "Substring match on payment_reference (Stripe pi_* search)."
-        ),
+        description=("Substring match on payment_reference (Stripe pi_* search)."),
     ),
     lien_eligible: bool | None = Query(
         default=None,

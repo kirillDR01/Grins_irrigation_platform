@@ -53,6 +53,24 @@ export {
 export { useAppointmentTimeline } from './useAppointmentTimeline';
 
 export {
+  aiSchedulingKeys,
+  useCapacityForecast,
+  useBatchGenerate,
+  useUtilizationReport,
+  useEvaluateSchedule,
+  useCriteriaConfig,
+} from './useAIScheduling';
+export type {
+  CriterionResult,
+  ScheduleEvaluation,
+  CapacityForecastExtended,
+  BatchScheduleRequest,
+  BatchScheduleResponse,
+  UtilizationReport,
+  CriteriaConfig,
+} from './useAIScheduling';
+
+export {
   appointmentNoteKeys,
   useAppointmentNotes,
   useSaveAppointmentNotes,

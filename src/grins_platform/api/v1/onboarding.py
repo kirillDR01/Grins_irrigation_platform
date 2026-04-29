@@ -4,10 +4,9 @@ Validates: Requirements 30.1, 30.2, 30.3, 30.4, 30.5, 32.1, 32.2
 """
 
 import time
+from datetime import date
 from typing import Annotated
 from uuid import UUID
-
-from datetime import date
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
@@ -156,7 +155,8 @@ class CompleteOnboardingRequest(BaseModel):
     @field_validator("service_week_preferences")
     @classmethod
     def validate_week_preference_values(
-        cls, v: dict[str, str | None],
+        cls,
+        v: dict[str, str | None],
     ) -> dict[str, str | None]:
         """Ensure non-null values are ISO date strings (YYYY-MM-DD).
 

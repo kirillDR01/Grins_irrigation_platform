@@ -495,19 +495,13 @@ class DashboardService(LoggerMixin):
                 if len(new_sales) == 1:
                     entry = new_sales[0]
                     cust = entry.customer
-                    name = (
-                        f"{cust.first_name} {cust.last_name}" if cust else "Unknown"
-                    )
+                    name = f"{cust.first_name} {cust.last_name}" if cust else "Unknown"
                     desc = f"New sales entry needs estimate scheduling: {name}"
                     target_url = f"/sales/{ids[0]}"
                 else:
                     n = len(new_sales)
-                    desc = (
-                        f"{n} sales entries awaiting estimate scheduling"
-                    )
-                    target_url = (
-                        f"/sales?status=schedule_estimate&highlight={ids[0]}"
-                    )
+                    desc = f"{n} sales entries awaiting estimate scheduling"
+                    target_url = f"/sales?status=schedule_estimate&highlight={ids[0]}"
                 alerts.append(
                     DashboardAlert(
                         id="sales_needing_action",
@@ -539,19 +533,13 @@ class DashboardService(LoggerMixin):
                 if len(open_reschedules) == 1:
                     req = open_reschedules[0]
                     cust = req.customer
-                    name = (
-                        f"{cust.first_name} {cust.last_name}" if cust else "Unknown"
-                    )
+                    name = f"{cust.first_name} {cust.last_name}" if cust else "Unknown"
                     desc = f"Customer requested reschedule: {name}"
-                    target_url = (
-                        f"/schedule/reschedule-requests?highlight={ids[0]}"
-                    )
+                    target_url = f"/schedule/reschedule-requests?highlight={ids[0]}"
                 else:
                     n = len(open_reschedules)
                     desc = f"{n} reschedule requests awaiting action"
-                    target_url = (
-                        f"/schedule/reschedule-requests?highlight={ids[0]}"
-                    )
+                    target_url = f"/schedule/reschedule-requests?highlight={ids[0]}"
                 alerts.append(
                     DashboardAlert(
                         id="reschedule_requests",

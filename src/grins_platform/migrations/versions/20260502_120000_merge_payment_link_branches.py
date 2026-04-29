@@ -15,7 +15,6 @@ Revises: 20260428_150000, 20260502_100000
 from collections.abc import Sequence
 from typing import Union
 
-
 revision: str = "20260502_120000"
 down_revision: Union[str, Sequence[str], None] = ("20260428_150000", "20260502_100000")
 branch_labels: Union[str, Sequence[str], None] = None

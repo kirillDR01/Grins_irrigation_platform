@@ -419,8 +419,7 @@ class JobConfirmationService(LoggerMixin):
 
         if date_str and time_str:
             return (
-                f"You're already confirmed for {date_str} at {time_str}. "
-                "See you then!"
+                f"You're already confirmed for {date_str} at {time_str}. See you then!"
             )
         return "You're already confirmed. See you then!"
 
@@ -1182,9 +1181,7 @@ class JobConfirmationService(LoggerMixin):
                     Alert.created_at >= cutoff,
                 ),
             )
-            recent_count = (
-                (await self.db.execute(count_stmt)).scalar_one_or_none() or 0
-            )
+            recent_count = (await self.db.execute(count_stmt)).scalar_one_or_none() or 0
             severity = (
                 AlertSeverity.WARNING.value
                 if recent_count >= 1

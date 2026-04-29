@@ -879,7 +879,8 @@ class TestConvertLeadTier1DuplicatesFullFlow:
         customer_svc.check_tier1_duplicates.return_value = [dup_customer]
 
         svc, _ = _build_service(
-            lead_repo=lead_repo, customer_service=customer_svc,
+            lead_repo=lead_repo,
+            customer_service=customer_svc,
         )
 
         with pytest.raises(LeadDuplicateFoundError) as exc_info:
@@ -913,13 +914,14 @@ class TestConvertLeadTier1DuplicatesFullFlow:
         customer_svc.create_customer.return_value = created_customer
 
         svc, _ = _build_service(
-            lead_repo=lead_repo, customer_service=customer_svc,
+            lead_repo=lead_repo,
+            customer_service=customer_svc,
         )
 
         # Patch the audit log repository to verify the override is audited
         # without hitting real storage.
         audit_mock = AsyncMock()
-        import grins_platform.repositories.audit_log_repository as audit_mod  # noqa: PLC0415
+        import grins_platform.repositories.audit_log_repository as audit_mod
 
         original_cls = audit_mod.AuditLogRepository
         audit_mod.AuditLogRepository = MagicMock(return_value=audit_mock)  # type: ignore[assignment]

@@ -473,9 +473,7 @@ def _parse_address(raw: str) -> tuple[str, str, str, str | None]:
     # street-suffix word). E.g. "5808 View Ln Edina 55436" with no commas
     # parses as a single segment whose "city" would otherwise be the raw
     # street; quarantine to the sentinel so the facet rail stays clean.
-    if city and (
-        city[0].isdigit() or _STREET_SUFFIX_PATTERN.search(city.upper())
-    ):
+    if city and (city[0].isdigit() or _STREET_SUFFIX_PATTERN.search(city.upper())):
         city = _UNKNOWN_CITY
 
     return street, city, state, zip_code

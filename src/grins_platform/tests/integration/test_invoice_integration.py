@@ -743,9 +743,7 @@ class TestLienReviewQueueEndpoints:
         svc.compute_lien_candidates = AsyncMock(return_value=[candidate])
 
         app.dependency_overrides[get_invoice_service] = lambda: svc
-        app.dependency_overrides[require_manager_or_admin] = (
-            lambda: sample_manager_user
-        )
+        app.dependency_overrides[require_manager_or_admin] = lambda: sample_manager_user
         app.dependency_overrides[get_current_user] = lambda: sample_manager_user
         try:
             response = await async_client.get(
@@ -759,7 +757,8 @@ class TestLienReviewQueueEndpoints:
             assert rows[0]["customer_name"] == "Alice Smith"
             assert rows[0]["oldest_invoice_age_days"] == 90
             svc.compute_lien_candidates.assert_awaited_once_with(
-                days_past_due=60, min_amount=500.0,
+                days_past_due=60,
+                min_amount=500.0,
             )
         finally:
             app.dependency_overrides.clear()
@@ -786,9 +785,7 @@ class TestLienReviewQueueEndpoints:
         svc.send_lien_notice = AsyncMock(return_value=result)
 
         app.dependency_overrides[get_invoice_service] = lambda: svc
-        app.dependency_overrides[require_manager_or_admin] = (
-            lambda: sample_manager_user
-        )
+        app.dependency_overrides[require_manager_or_admin] = lambda: sample_manager_user
         app.dependency_overrides[get_current_user] = lambda: sample_manager_user
         try:
             response = await async_client.post(

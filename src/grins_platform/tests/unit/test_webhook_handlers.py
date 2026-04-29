@@ -1941,7 +1941,10 @@ class TestInvoicePaid:
         assert result["status"] == "processed"
         update_calls = agr_repo.update.call_args_list
         payment_update_dict = update_calls[-1][0][1]
-        assert payment_update_dict["payment_status"] == AgreementPaymentStatus.CURRENT.value
+        assert (
+            payment_update_dict["payment_status"]
+            == AgreementPaymentStatus.CURRENT.value
+        )
         assert payment_update_dict["last_payment_amount"] == Decimal("123.45")
         assert payment_update_dict["last_payment_date"] is not None
 

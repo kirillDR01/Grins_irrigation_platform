@@ -445,7 +445,10 @@ class TestGetReadyToSchedule:
         assert data["total"] == 1
 
     def test_get_ready_to_schedule_returns_customer_data_for_job_selector(
-        self, client, mock_job, mock_job_service,
+        self,
+        client,
+        mock_job,
+        mock_job_service,
     ):
         """Test ready-to-schedule includes customer_name, customer_address,
         property_tags, and service_preference_notes for the job selector.

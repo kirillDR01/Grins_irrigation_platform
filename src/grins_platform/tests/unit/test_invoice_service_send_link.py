@@ -5,7 +5,6 @@ Validates: Stripe Payment Links plan §Phase 2.7.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -25,6 +24,7 @@ from grins_platform.services.invoice_service import (
 from grins_platform.services.sms_service import (
     SMSConsentDeniedError,
     SMSError,
+    SMSRateLimitDeniedError,
 )
 
 
@@ -116,6 +116,8 @@ async def test_send_payment_link_sms_happy_path() -> None:
     assert response.channel == "sms"
     assert response.sent_count == 1
     assert response.link_url == invoice.stripe_payment_link_url
+    assert response.attempted_channels == ["sms"]
+    assert response.sms_failure_reason is None
 
 
 @pytest.mark.unit
@@ -131,12 +133,31 @@ async def test_send_payment_link_falls_back_to_email_on_sms_consent_denied() -> 
     )
     response = await service.send_payment_link(invoice.id)
     assert response.channel == "email"
+    assert response.attempted_channels == ["sms", "email"]
+    assert response.sms_failure_reason == "consent"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_send_payment_link_falls_back_to_email_on_sms_rate_limit() -> None:
+    """Rate-limit errors are labeled ``rate_limit`` distinctly from other errors."""
+    invoice = _make_invoice()
+    customer = _make_customer()
+    service = _build_service(
+        invoice=invoice,
+        customer=customer,
+        sms_exc=SMSRateLimitDeniedError,
+    )
+    response = await service.send_payment_link(invoice.id)
+    assert response.channel == "email"
+    assert response.attempted_channels == ["sms", "email"]
+    assert response.sms_failure_reason == "rate_limit"
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_send_payment_link_falls_back_to_email_on_sms_error() -> None:
-    """Provider errors fall through to email path."""
+    """Provider errors fall through to email path with ``provider_error`` label."""
     invoice = _make_invoice()
     customer = _make_customer()
     service = _build_service(
@@ -146,6 +167,25 @@ async def test_send_payment_link_falls_back_to_email_on_sms_error() -> None:
     )
     response = await service.send_payment_link(invoice.id)
     assert response.channel == "email"
+    assert response.attempted_channels == ["sms", "email"]
+    assert response.sms_failure_reason == "provider_error"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_send_payment_link_falls_back_to_email_on_sms_soft_fail() -> None:
+    """Soft-fail (`success=false`) is labeled ``provider_error``."""
+    invoice = _make_invoice()
+    customer = _make_customer()
+    service = _build_service(
+        invoice=invoice,
+        customer=customer,
+        sms_result={"success": False, "status": "failed"},
+    )
+    response = await service.send_payment_link(invoice.id)
+    assert response.channel == "email"
+    assert response.attempted_channels == ["sms", "email"]
+    assert response.sms_failure_reason == "provider_error"
 
 
 @pytest.mark.unit
@@ -157,6 +197,8 @@ async def test_send_payment_link_email_only_when_no_phone() -> None:
     service = _build_service(invoice=invoice, customer=customer)
     response = await service.send_payment_link(invoice.id)
     assert response.channel == "email"
+    assert response.attempted_channels == ["email"]
+    assert response.sms_failure_reason == "no_phone"
 
 
 @pytest.mark.unit

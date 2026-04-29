@@ -63,6 +63,12 @@ export {
   rescheduleKeys,
   useRescheduleRequests,
   useResolveRescheduleRequest,
+  aiSchedulingKeys,
+  useCapacityForecast,
+  useBatchGenerate,
+  useUtilizationReport,
+  useEvaluateSchedule,
+  useCriteriaConfig,
 } from './hooks';
 
 // Components
@@ -90,4 +96,8 @@ export {
   SendConfirmationButton,
   SendDayConfirmationsButton,
   SendAllConfirmationsButton,
+  CapacityHeatMap,
+  ScheduleOverviewEnhanced,
+  BatchScheduleResults,
+  AIScheduleView,
 } from './components';

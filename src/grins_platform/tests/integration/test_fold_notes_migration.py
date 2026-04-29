@@ -15,9 +15,6 @@ Validates: internal-notes-simplification Requirement 8
 
 from __future__ import annotations
 
-import uuid
-from datetime import datetime, timezone
-from io import StringIO
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -228,7 +225,6 @@ class TestFoldNotesMigration:
         - Non-empty existing internal_notes → append with separator
         """
         import importlib.util
-        from sqlalchemy import text
 
         spec = importlib.util.spec_from_file_location(
             "fold_migration",

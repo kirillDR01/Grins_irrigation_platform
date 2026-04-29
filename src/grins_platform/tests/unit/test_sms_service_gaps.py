@@ -92,9 +92,7 @@ class TestExactOptOutKeywords:
             "SM123",
         )
         assert result["action"] != "opt_out"
-        added_objects = [
-            call.args[0] for call in service.session.add.call_args_list
-        ]
+        added_objects = [call.args[0] for call in service.session.add.call_args_list]
         consent_records = [o for o in added_objects if isinstance(o, SmsConsentRecord)]
         assert consent_records == [], (
             "Non-keyword inbound must NOT write an SmsConsentRecord."
@@ -102,8 +100,7 @@ class TestExactOptOutKeywords:
         # Orphan alert is the only allowed side-effect on this path.
         non_alert_writes = [o for o in added_objects if not isinstance(o, Alert)]
         assert non_alert_writes == [], (
-            f"Unexpected non-alert DB writes on orphan-inbound path: "
-            f"{non_alert_writes}"
+            f"Unexpected non-alert DB writes on orphan-inbound path: {non_alert_writes}"
         )
 
 

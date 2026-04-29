@@ -44,7 +44,9 @@ WEBHOOK_URL = "/api/v1/webhooks/signwell"
 def _make_signature(payload_bytes: bytes, secret: str = WEBHOOK_SECRET) -> str:
     """Compute HMAC-SHA256 hex digest for webhook verification."""
     return hmac.new(
-        secret.encode(), payload_bytes, hashlib.sha256,
+        secret.encode(),
+        payload_bytes,
+        hashlib.sha256,
     ).hexdigest()
 
 
@@ -266,16 +268,10 @@ class TestSignWellWebhookDocumentSignedPreState:
             ]
             assert len(matching) == 1
             log_entry = matching[0]
-            assert (
-                log_entry["event"]
-                == "signwell.document_signed.unexpected_pre_state"
-            )
+            assert log_entry["event"] == "signwell.document_signed.unexpected_pre_state"
             assert log_entry["entry_id"] == str(entry.id)
             assert log_entry["pre_state"] == pre_state
-            assert (
-                log_entry["expected"]
-                == SalesEntryStatus.PENDING_APPROVAL.value
-            )
+            assert log_entry["expected"] == SalesEntryStatus.PENDING_APPROVAL.value
             assert log_entry["document_id"] == document_id
             assert log_entry["level"] == "warning"
         finally:

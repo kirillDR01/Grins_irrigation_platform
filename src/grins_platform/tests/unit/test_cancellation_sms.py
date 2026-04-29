@@ -183,9 +183,7 @@ class TestCancellationSmsLogic:
         mock_appt_repo.update_status.return_value = appt
 
         with (
-            patch.object(
-                service, "_send_cancellation_sms", new_callable=AsyncMock
-            ),
+            patch.object(service, "_send_cancellation_sms", new_callable=AsyncMock),
             patch(
                 "grins_platform.services.appointment_service.clear_on_site_data",
                 new_callable=AsyncMock,
@@ -204,7 +202,9 @@ class TestCancellationSmsLogic:
         assert kwargs["resource_id"] == appt.id
         assert kwargs["details"]["notify_customer"] is False
         assert kwargs["details"]["sms_sent"] is False
-        assert kwargs["details"]["pre_cancel_status"] == AppointmentStatus.SCHEDULED.value
+        assert (
+            kwargs["details"]["pre_cancel_status"] == AppointmentStatus.SCHEDULED.value
+        )
 
     @pytest.mark.unit
     @pytest.mark.asyncio

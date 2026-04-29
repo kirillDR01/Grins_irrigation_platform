@@ -364,9 +364,11 @@ async def get_weekly_schedule(
     """
     _endpoints.log_started("get_weekly_schedule", start_date=str(start_date))
 
-    schedule, total, reply_state_map = (
-        await service.get_weekly_schedule_with_reply_state(start_date)
-    )
+    (
+        schedule,
+        total,
+        reply_state_map,
+    ) = await service.get_weekly_schedule_with_reply_state(start_date)
 
     def _reply_state_for(appt: object) -> ReplyState | None:
         appt_id = getattr(appt, "id", None)
@@ -653,8 +655,7 @@ async def list_needs_review_appointments(
         # render "N days since confirmation sent".
         sent_at_stmt = _select(_sa_func.max(_SentMessage.sent_at)).where(
             _SentMessage.appointment_id == appt.id,
-            _SentMessage.message_type
-            == _MessageType.APPOINTMENT_CONFIRMATION.value,
+            _SentMessage.message_type == _MessageType.APPOINTMENT_CONFIRMATION.value,
             _SentMessage.sent_at.is_not(None),
         )
         sent_at_result = await session.execute(sent_at_stmt)

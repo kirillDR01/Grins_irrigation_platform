@@ -93,8 +93,7 @@ class TestCustomerTagModel:
     def test_model_table_args_constraints(self) -> None:
         """CustomerTag has unique constraint and check constraints."""
         constraint_names = {
-            c.name for c in CustomerTag.__table_args__
-            if hasattr(c, "name") and c.name
+            c.name for c in CustomerTag.__table_args__ if hasattr(c, "name") and c.name
         }
         assert "uq_customer_tags_customer_label" in constraint_names
         assert "ck_customer_tags_tone" in constraint_names

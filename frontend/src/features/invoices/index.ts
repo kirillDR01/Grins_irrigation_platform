@@ -19,3 +19,4 @@ export {
 } from './types';
 export * from './hooks';
 export { invoiceApi } from './api/invoiceApi';
+export { humanizeSmsFailure } from './utils';

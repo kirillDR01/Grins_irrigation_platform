@@ -72,7 +72,8 @@ class TestJobUpdateTargetDateValidator:
         monday = _next_monday()
         saturday = monday + timedelta(days=5)
         with pytest.raises(
-            ValidationError, match="must equal target_start_date \\+ 6 days",
+            ValidationError,
+            match="must equal target_start_date \\+ 6 days",
         ):
             JobUpdate(target_start_date=monday, target_end_date=saturday)
 
@@ -153,7 +154,8 @@ class TestJobServiceUpdateTargetDateGuard:
         ],
     )
     async def test_rejects_edit_when_status_is_not_to_be_scheduled(
-        self, blocked_status: str,
+        self,
+        blocked_status: str,
     ) -> None:
         job = MagicMock()
         job.id = uuid4()

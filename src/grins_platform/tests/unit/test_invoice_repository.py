@@ -548,12 +548,10 @@ class TestInvoiceRepositoryListWithFilters:
         # Compile each clause and check that one of them is an ILIKE on
         # ``invoices.payment_reference`` carrying ``%pi_xyz%`` literally.
         compiled = [
-            str(f.compile(compile_kwargs={"literal_binds": True}))
-            for f in filters
+            str(f.compile(compile_kwargs={"literal_binds": True})) for f in filters
         ]
         assert any(
-            "payment_reference" in c.lower() and "%pi_xyz%" in c
-            for c in compiled
+            "payment_reference" in c.lower() and "%pi_xyz%" in c for c in compiled
         ), compiled
 
 

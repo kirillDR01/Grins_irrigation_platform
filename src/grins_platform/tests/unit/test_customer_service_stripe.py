@@ -105,12 +105,15 @@ async def test_creates_new_stripe_customer_and_persists_id() -> None:
     repo.get_by_id.return_value = customer
 
     fake_customer: dict[str, Any] = {"id": "cus_new456"}
-    with patch(
-        "grins_platform.services.customer_service.StripeSettings",
-        return_value=_stripe_settings_mock(),
-    ), patch(
-        "grins_platform.services.customer_service.stripe",
-    ) as mock_stripe:
+    with (
+        patch(
+            "grins_platform.services.customer_service.StripeSettings",
+            return_value=_stripe_settings_mock(),
+        ),
+        patch(
+            "grins_platform.services.customer_service.stripe",
+        ) as mock_stripe,
+    ):
         mock_stripe.StripeError = stripe.StripeError
         mock_stripe.Customer.create.return_value = fake_customer
         result = await service.get_or_create_stripe_customer(customer_id)
@@ -140,12 +143,15 @@ async def test_omits_email_and_phone_when_customer_has_neither() -> None:
     service, repo = _build_service()
     repo.get_by_id.return_value = customer
 
-    with patch(
-        "grins_platform.services.customer_service.StripeSettings",
-        return_value=_stripe_settings_mock(),
-    ), patch(
-        "grins_platform.services.customer_service.stripe",
-    ) as mock_stripe:
+    with (
+        patch(
+            "grins_platform.services.customer_service.StripeSettings",
+            return_value=_stripe_settings_mock(),
+        ),
+        patch(
+            "grins_platform.services.customer_service.stripe",
+        ) as mock_stripe,
+    ):
         mock_stripe.StripeError = stripe.StripeError
         mock_stripe.Customer.create.return_value = {"id": "cus_minimal"}
         await service.get_or_create_stripe_customer(customer_id)
@@ -174,10 +180,13 @@ async def test_raises_merge_conflict_when_stripe_unconfigured() -> None:
         stripe_customer_id=None,
     )
 
-    with patch(
-        "grins_platform.services.customer_service.StripeSettings",
-        return_value=_stripe_settings_mock(configured=False),
-    ), pytest.raises(MergeConflictError):
+    with (
+        patch(
+            "grins_platform.services.customer_service.StripeSettings",
+            return_value=_stripe_settings_mock(configured=False),
+        ),
+        pytest.raises(MergeConflictError),
+    ):
         await service.get_or_create_stripe_customer(customer_id)
 
 
@@ -190,12 +199,15 @@ async def test_raises_merge_conflict_when_stripe_create_fails() -> None:
         stripe_customer_id=None,
     )
 
-    with patch(
-        "grins_platform.services.customer_service.StripeSettings",
-        return_value=_stripe_settings_mock(),
-    ), patch(
-        "grins_platform.services.customer_service.stripe",
-    ) as mock_stripe:
+    with (
+        patch(
+            "grins_platform.services.customer_service.StripeSettings",
+            return_value=_stripe_settings_mock(),
+        ),
+        patch(
+            "grins_platform.services.customer_service.stripe",
+        ) as mock_stripe,
+    ):
         mock_stripe.StripeError = stripe.StripeError
         mock_stripe.Customer.create.side_effect = stripe.StripeError("boom")
 

@@ -18,9 +18,8 @@ from pydantic import ValidationError
 from grins_platform.exceptions import AppointmentNotFoundError
 from grins_platform.models.appointment_note import AppointmentNote
 from grins_platform.schemas.appointment_note import (
-    AppointmentNotesSaveRequest,
     AppointmentNotesResponse,
-    NoteAuthorResponse,
+    AppointmentNotesSaveRequest,
 )
 from grins_platform.services.appointment_note_service import AppointmentNoteService
 

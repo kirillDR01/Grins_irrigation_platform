@@ -67,6 +67,5 @@ async def test_cors_preflight_for_public_lead_endpoint() -> None:
 
     assert response.status_code == 200
     assert (
-        response.headers.get("access-control-allow-origin")
-        == "http://localhost:5173"
+        response.headers.get("access-control-allow-origin") == "http://localhost:5173"
     )

@@ -132,11 +132,7 @@ async def _resolve_customer_id_by_phone(
 ) -> UUID | None:
     """Return the first customer_id whose phone matches any variant of e164."""
     variants = _phone_variants(e164)
-    stmt = (
-        select(Customer.id)
-        .where(Customer.phone.in_(variants))
-        .limit(1)
-    )
+    stmt = select(Customer.id).where(Customer.phone.in_(variants)).limit(1)
     result = await session.execute(stmt)
     row: UUID | None = result.scalar_one_or_none()
     return row

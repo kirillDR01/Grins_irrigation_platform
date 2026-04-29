@@ -77,9 +77,7 @@ class TestSendEmailWithResend:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setenv(
-            "EMAIL_TEST_ADDRESS_ALLOWLIST", "allowed@example.com"
-        )
+        monkeypatch.setenv("EMAIL_TEST_ADDRESS_ALLOWLIST", "allowed@example.com")
         service = EmailService(settings=_configured())
         with patch(
             "grins_platform.services.email_service.resend.Emails.send"

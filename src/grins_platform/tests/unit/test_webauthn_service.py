@@ -147,17 +147,19 @@ class TestFinishRegistration:
         )
         service = _make_service(redis_client=redis)
 
-        with patch(
-            "grins_platform.services.webauthn_service.verify_registration_response",
-            side_effect=InvalidRegistrationResponse("bad cbor"),
+        with (
+            patch(
+                "grins_platform.services.webauthn_service.verify_registration_response",
+                side_effect=InvalidRegistrationResponse("bad cbor"),
+            ),
+            pytest.raises(WebAuthnVerificationError),
         ):
-            with pytest.raises(WebAuthnVerificationError):
-                await service.finish_registration(
-                    staff=staff,
-                    handle="x",
-                    credential={"response": {}},
-                    device_name="Test",
-                )
+            await service.finish_registration(
+                staff=staff,
+                handle="x",
+                credential={"response": {}},
+                device_name="Test",
+            )
 
         # Challenge must always be deleted, even on failure.
         redis.delete.assert_awaited()
@@ -186,17 +188,19 @@ class TestFinishRegistration:
         verification.credential_device_type = CredentialDeviceType.SINGLE_DEVICE
         verification.credential_backed_up = False
 
-        with patch(
-            "grins_platform.services.webauthn_service.verify_registration_response",
-            return_value=verification,
+        with (
+            patch(
+                "grins_platform.services.webauthn_service.verify_registration_response",
+                return_value=verification,
+            ),
+            pytest.raises(WebAuthnDuplicateCredentialError),
         ):
-            with pytest.raises(WebAuthnDuplicateCredentialError):
-                await service.finish_registration(
-                    staff=staff,
-                    handle="x",
-                    credential={"response": {"transports": ["internal"]}},
-                    device_name="Test",
-                )
+            await service.finish_registration(
+                staff=staff,
+                handle="x",
+                credential={"response": {"transports": ["internal"]}},
+                device_name="Test",
+            )
 
 
 @pytest.mark.unit
@@ -252,15 +256,17 @@ class TestFinishAuthentication:
             auth_service=auth_service,
         )
 
-        with patch(
-            "grins_platform.services.webauthn_service.verify_authentication_response",
-            return_value=verification,
+        with (
+            patch(
+                "grins_platform.services.webauthn_service.verify_authentication_response",
+                return_value=verification,
+            ),
+            pytest.raises(InvalidCredentialsError),
         ):
-            with pytest.raises(InvalidCredentialsError):
-                await service.finish_authentication(
-                    handle="x",
-                    credential={"rawId": "AAAA"},
-                )
+            await service.finish_authentication(
+                handle="x",
+                credential={"rawId": "AAAA"},
+            )
 
     async def test_sign_count_regression_revokes_and_raises(self) -> None:
         from webauthn.helpers.structs import CredentialDeviceType
@@ -284,15 +290,17 @@ class TestFinishAuthentication:
         verification.credential_device_type = CredentialDeviceType.SINGLE_DEVICE
 
         service = _make_service(redis_client=redis, credential_repo=cred_repo)
-        with patch(
-            "grins_platform.services.webauthn_service.verify_authentication_response",
-            return_value=verification,
+        with (
+            patch(
+                "grins_platform.services.webauthn_service.verify_authentication_response",
+                return_value=verification,
+            ),
+            pytest.raises(WebAuthnVerificationError),
         ):
-            with pytest.raises(WebAuthnVerificationError):
-                await service.finish_authentication(
-                    handle="x",
-                    credential={"rawId": "AAAA"},
-                )
+            await service.finish_authentication(
+                handle="x",
+                credential={"rawId": "AAAA"},
+            )
         # The service decodes "AAAA" (base64url) → b'\x00\x00\x00' before
         # passing it to the repo. The revocation must hit *that* id, not the
         # stored row's id (which the regression check shows is suspect).

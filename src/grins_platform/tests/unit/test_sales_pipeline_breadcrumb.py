@@ -76,7 +76,9 @@ class TestRecordEstimateDecisionBreadcrumb:
         db = _make_db(entry)
         est = _make_estimate(customer_id=uuid4())
         result = await pipeline.record_estimate_decision_breadcrumb(
-            db, est, "approved",
+            db,
+            est,
+            "approved",
         )
         assert result is entry
         assert "APPROVED" in (entry.notes or "")
@@ -94,7 +96,9 @@ class TestRecordEstimateDecisionBreadcrumb:
         db = _make_db(None)
         est = _make_estimate(customer_id=uuid4())
         result = await pipeline.record_estimate_decision_breadcrumb(
-            db, est, "approved",
+            db,
+            est,
+            "approved",
         )
         assert result is None
         audit_service.log_action.assert_not_awaited()
@@ -108,7 +112,9 @@ class TestRecordEstimateDecisionBreadcrumb:
         db = _make_db(entry)
         est = _make_estimate(customer_id=None, lead_id=uuid4())
         result = await pipeline.record_estimate_decision_breadcrumb(
-            db, est, "rejected",
+            db,
+            est,
+            "rejected",
         )
         assert result is entry
 
@@ -120,7 +126,9 @@ class TestRecordEstimateDecisionBreadcrumb:
         db = _make_db(None)
         est = _make_estimate(customer_id=None, lead_id=None)
         result = await pipeline.record_estimate_decision_breadcrumb(
-            db, est, "approved",
+            db,
+            est,
+            "approved",
         )
         assert result is None
 
@@ -134,7 +142,9 @@ class TestRecordEstimateDecisionBreadcrumb:
         est = _make_estimate(customer_id=uuid4())
         # Must not raise
         result = await pipeline.record_estimate_decision_breadcrumb(
-            db, est, "approved",
+            db,
+            est,
+            "approved",
         )
         assert result is None
 
@@ -147,7 +157,10 @@ class TestRecordEstimateDecisionBreadcrumb:
         db = _make_db(entry)
         est = _make_estimate(customer_id=uuid4())
         await pipeline.record_estimate_decision_breadcrumb(
-            db, est, "rejected", reason="Too expensive",
+            db,
+            est,
+            "rejected",
+            reason="Too expensive",
         )
         assert "Too expensive" in (entry.notes or "")
 
@@ -160,7 +173,9 @@ class TestRecordEstimateDecisionBreadcrumb:
         db = _make_db(entry)
         est = _make_estimate(customer_id=uuid4())
         await pipeline.record_estimate_decision_breadcrumb(
-            db, est, "approved",
+            db,
+            est,
+            "approved",
         )
         assert entry.notes is not None
         assert entry.notes.startswith("prior content")
@@ -175,7 +190,9 @@ class TestRecordEstimateDecisionBreadcrumb:
         db = _make_db(entry)
         est = _make_estimate(customer_id=uuid4())
         await pipeline.record_estimate_decision_breadcrumb(
-            db, est, "approved",
+            db,
+            est,
+            "approved",
         )
         assert entry.notes is not None
         assert "APPROVED" in entry.notes

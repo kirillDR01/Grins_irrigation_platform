@@ -44,9 +44,7 @@ def _make_bounce_payload(
     bounce_type: str = "Permanent",
     estimate_id: str | None = "est-123",
 ) -> dict[str, Any]:
-    tags = (
-        [{"name": "estimate_id", "value": estimate_id}] if estimate_id else []
-    )
+    tags = [{"name": "estimate_id", "value": estimate_id}] if estimate_id else []
     return {
         "type": "email.bounced",
         "data": {
@@ -71,8 +69,7 @@ class TestResendWebhook:
         _install_db_override(mock_db)
         try:
             with patch(
-                "grins_platform.api.v1.resend_webhooks."
-                "verify_resend_webhook_signature",
+                "grins_platform.api.v1.resend_webhooks.verify_resend_webhook_signature",
                 side_effect=__import__(
                     "grins_platform.services.resend_webhook_security",
                     fromlist=["ResendWebhookVerificationError"],
@@ -95,13 +92,10 @@ class TestResendWebhook:
         _install_db_override(mock_db)
         try:
             with patch(
-                "grins_platform.api.v1.resend_webhooks."
-                "verify_resend_webhook_signature",
+                "grins_platform.api.v1.resend_webhooks.verify_resend_webhook_signature",
                 return_value={"type": "email.delivery_delayed", "data": {}},
             ):
-                resp = await client.post(
-                    WEBHOOK_URL, content=json.dumps({}).encode()
-                )
+                resp = await client.post(WEBHOOK_URL, content=json.dumps({}).encode())
             assert resp.status_code == 200
         finally:
             _clear_overrides()
@@ -120,8 +114,7 @@ class TestResendWebhook:
         _install_db_override(mock_db)
         try:
             with patch(
-                "grins_platform.api.v1.resend_webhooks."
-                "verify_resend_webhook_signature",
+                "grins_platform.api.v1.resend_webhooks.verify_resend_webhook_signature",
                 return_value=_make_bounce_payload(),
             ):
                 resp = await client.post(WEBHOOK_URL, content=b"{}")
@@ -145,8 +138,7 @@ class TestResendWebhook:
         _install_db_override(mock_db)
         try:
             with patch(
-                "grins_platform.api.v1.resend_webhooks."
-                "verify_resend_webhook_signature",
+                "grins_platform.api.v1.resend_webhooks.verify_resend_webhook_signature",
                 return_value=_make_bounce_payload(bounce_type="Temporary"),
             ):
                 resp = await client.post(WEBHOOK_URL, content=b"{}")
@@ -164,8 +156,7 @@ class TestResendWebhook:
         _install_db_override(mock_db)
         try:
             with patch(
-                "grins_platform.api.v1.resend_webhooks."
-                "verify_resend_webhook_signature",
+                "grins_platform.api.v1.resend_webhooks.verify_resend_webhook_signature",
                 return_value=_make_bounce_payload(to=[]),
             ):
                 resp = await client.post(WEBHOOK_URL, content=b"{}")
@@ -179,9 +170,7 @@ class TestResendWebhook:
         client: AsyncClient,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setenv(
-            "INTERNAL_NOTIFICATION_EMAIL", "staff@x.com"
-        )
+        monkeypatch.setenv("INTERNAL_NOTIFICATION_EMAIL", "staff@x.com")
         monkeypatch.delenv("INTERNAL_NOTIFICATION_PHONE", raising=False)
         mock_db = AsyncMock()
         mock_db.execute = AsyncMock()
@@ -199,9 +188,7 @@ class TestResendWebhook:
                 ) as mock_email_cls,
             ):
                 inst = MagicMock()
-                inst.send_internal_estimate_bounce_email = MagicMock(
-                    return_value=True
-                )
+                inst.send_internal_estimate_bounce_email = MagicMock(return_value=True)
                 mock_email_cls.return_value = inst
                 resp = await client.post(WEBHOOK_URL, content=b"{}")
             assert resp.status_code == 200

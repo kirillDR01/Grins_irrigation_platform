@@ -3134,6 +3134,7 @@ class TestSendConfirmationSmsWrapper:
         with pytest.raises(AppointmentNotFoundError):
             await svc.send_confirmation_sms(uuid4())
 
+
 # =============================================================================
 # bughunt M-7: appointment.update / appointment.reactivate audit log
 # =============================================================================

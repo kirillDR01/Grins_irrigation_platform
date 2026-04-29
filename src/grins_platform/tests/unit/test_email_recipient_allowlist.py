@@ -26,21 +26,15 @@ class TestNormalizeEmail:
 
 @pytest.mark.unit
 class TestLoadEmailAllowlist:
-    def test_unset_env_returns_none(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_unset_env_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("EMAIL_TEST_ADDRESS_ALLOWLIST", raising=False)
         assert _load_email_allowlist() is None
 
-    def test_empty_env_returns_none(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_empty_env_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("EMAIL_TEST_ADDRESS_ALLOWLIST", "")
         assert _load_email_allowlist() is None
 
-    def test_comma_only_returns_none(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_comma_only_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("EMAIL_TEST_ADDRESS_ALLOWLIST", ",")
         assert _load_email_allowlist() is None
 
@@ -62,32 +56,22 @@ class TestLoadEmailAllowlist:
 
 @pytest.mark.unit
 class TestEnforceEmailRecipientAllowlist:
-    def test_no_op_when_env_unset(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_no_op_when_env_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("EMAIL_TEST_ADDRESS_ALLOWLIST", raising=False)
         # No exception even for arbitrary recipient.
-        enforce_email_recipient_allowlist(
-            "anyone@example.com", provider="resend"
-        )
+        enforce_email_recipient_allowlist("anyone@example.com", provider="resend")
 
-    def test_allowed_recipient_passes(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_allowed_recipient_passes(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("EMAIL_TEST_ADDRESS_ALLOWLIST", "ok@x.com")
         enforce_email_recipient_allowlist("ok@x.com", provider="resend")
 
-    def test_disallowed_recipient_raises(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_disallowed_recipient_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("EMAIL_TEST_ADDRESS_ALLOWLIST", "ok@x.com")
         with pytest.raises(EmailRecipientNotAllowedError) as exc:
             enforce_email_recipient_allowlist("nope@x.com", provider="resend")
         assert "provider=resend" in str(exc.value)
 
-    def test_case_insensitive_match(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_case_insensitive_match(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("EMAIL_TEST_ADDRESS_ALLOWLIST", "ok@x.com")
         # Should not raise — caller used uppercase.
         enforce_email_recipient_allowlist("OK@X.COM", provider="resend")

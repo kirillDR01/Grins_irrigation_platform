@@ -9,7 +9,7 @@ Uses mocked services to test cross-component interactions.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -20,7 +20,6 @@ from grins_platform.models.enums import (
     LeadSourceExtended,
     LeadStatus,
 )
-
 
 # ===================================================================
 # Full Lead Lifecycle with Notes Carry-Forward
@@ -86,7 +85,10 @@ class TestLeadLifecycleWithNotes:
             n
             for n in all_notes
             if (
-                (n["subject_type"] == "sales_entry" and n["subject_id"] == sales_entry_id)
+                (
+                    n["subject_type"] == "sales_entry"
+                    and n["subject_id"] == sales_entry_id
+                )
                 or n["origin_lead_id"] == lead_id
             )
         ]
@@ -246,7 +248,9 @@ class TestSalesEntryCustomerUpdate:
         sales_entry.customer = customer
 
         # Read path should use customer relationship, not denormalized fields
-        display_name = f"{sales_entry.customer.first_name} {sales_entry.customer.last_name}"
+        display_name = (
+            f"{sales_entry.customer.first_name} {sales_entry.customer.last_name}"
+        )
         assert display_name == "Jane Smith"
         assert sales_entry.customer.phone == "6125551234"
 
@@ -300,9 +304,7 @@ class TestExportAuthGuard:
         mock_entry = MagicMock()
         mock_entry.id = uuid4()
 
-        with patch.object(
-            service, "log_action", new_callable=AsyncMock
-        ) as mock_log:
+        with patch.object(service, "log_action", new_callable=AsyncMock) as mock_log:
             mock_log.return_value = mock_entry
 
             await service.log_status_change(
@@ -334,9 +336,7 @@ class TestExportAuthGuard:
         old_value = datetime(2025, 3, 1, tzinfo=timezone.utc)
         new_value = datetime(2025, 3, 15, tzinfo=timezone.utc)
 
-        with patch.object(
-            service, "log_action", new_callable=AsyncMock
-        ) as mock_log:
+        with patch.object(service, "log_action", new_callable=AsyncMock) as mock_log:
             mock_log.return_value = mock_entry
 
             await service.log_last_contacted_edit(

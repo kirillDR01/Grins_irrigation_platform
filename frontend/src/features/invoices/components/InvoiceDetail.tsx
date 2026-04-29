@@ -29,6 +29,7 @@ import {
 } from '../hooks/useInvoiceMutations';
 import { InvoiceStatusBadge } from './InvoiceStatusBadge';
 import type { InvoiceLineItem } from '../types';
+import { humanizeSmsFailure } from '../utils';
 import { toast } from 'sonner';
 
 interface InvoiceDetailProps {
@@ -68,7 +69,11 @@ export function InvoiceDetail({
     try {
       const result = await sendPaymentLinkMutation.mutateAsync(invoice.id);
       const channelLabel = result.channel === 'sms' ? 'SMS' : 'email';
-      toast.success(`Payment Link sent via ${channelLabel}`);
+      const description =
+        result.attempted_channels.length > 1 && result.sms_failure_reason
+          ? `Sent via ${channelLabel} (SMS ${humanizeSmsFailure(result.sms_failure_reason)})`
+          : `Sent via ${channelLabel}`;
+      toast.success('Payment Link sent', { description });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to send Payment Link';
       toast.error('Send failed', { description: msg });

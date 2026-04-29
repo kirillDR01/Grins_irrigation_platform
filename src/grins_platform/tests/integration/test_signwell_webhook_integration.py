@@ -38,7 +38,9 @@ WEBHOOK_URL = "/api/v1/webhooks/signwell"
 def _make_signature(payload_bytes: bytes, secret: str = WEBHOOK_SECRET) -> str:
     """Compute HMAC-SHA256 hex digest for webhook verification."""
     return hmac.new(
-        secret.encode(), payload_bytes, hashlib.sha256,
+        secret.encode(),
+        payload_bytes,
+        hashlib.sha256,
     ).hexdigest()
 
 

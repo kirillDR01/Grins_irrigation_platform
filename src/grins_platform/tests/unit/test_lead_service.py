@@ -1000,9 +1000,11 @@ class TestConvertLeadTier1Duplicates:
         )
 
         await service.convert_lead(
-            lead.id, LeadConversionRequest(create_job=False),
+            lead.id,
+            LeadConversionRequest(create_job=False),
         )
 
         customer_svc.check_tier1_duplicates.assert_awaited_once_with(
-            phone="+19527373312", email="alice@test.example",
+            phone="+19527373312",
+            email="alice@test.example",
         )

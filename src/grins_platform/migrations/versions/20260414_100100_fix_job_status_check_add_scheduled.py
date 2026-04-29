@@ -21,7 +21,13 @@ down_revision: Union[str, None] = "20260414_100000"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_NEW_STATUSES = ("to_be_scheduled", "scheduled", "in_progress", "completed", "cancelled")
+_NEW_STATUSES = (
+    "to_be_scheduled",
+    "scheduled",
+    "in_progress",
+    "completed",
+    "cancelled",
+)
 
 
 def upgrade() -> None:

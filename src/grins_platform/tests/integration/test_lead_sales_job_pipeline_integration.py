@@ -18,7 +18,6 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

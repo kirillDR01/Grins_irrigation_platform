@@ -2839,9 +2839,7 @@ class TestRenderInvoiceTemplate:
             amount="250.00",
             due_date="2026-04-22",
         )
-        assert (
-            body == "Jane Doe, invoice INV-2026-0001 for $250.00 due 2026-04-22."
-        )
+        assert body == "Jane Doe, invoice INV-2026-0001 for $250.00 due 2026-04-22."
 
     def test_spec_brackets_translate_to_canonical(self) -> None:
         from grins_platform.services.invoice_service import (
@@ -3047,13 +3045,16 @@ class TestInvoiceServiceMassNotifyExtra:
         inv_ok = self._mock_invoice_with_customer()
         mock_invoice_repo.find_past_due.return_value = [inv_opted_out, inv_ok]
 
-        with patch(
-            "grins_platform.repositories.sms_consent_repository."
-            "SmsConsentRepository.get_opted_out_customer_ids",
-            new=AsyncMock(return_value={inv_opted_out.customer.id}),
-        ), patch(
-            "grins_platform.services.sms_service.SMSService",
-        ) as mock_sms_cls:
+        with (
+            patch(
+                "grins_platform.repositories.sms_consent_repository."
+                "SmsConsentRepository.get_opted_out_customer_ids",
+                new=AsyncMock(return_value={inv_opted_out.customer.id}),
+            ),
+            patch(
+                "grins_platform.services.sms_service.SMSService",
+            ) as mock_sms_cls,
+        ):
             mock_sms_instance = MagicMock()
             mock_sms_instance.send_message = AsyncMock(
                 return_value={"success": True, "message_id": str(uuid4())},
@@ -3091,13 +3092,16 @@ class TestInvoiceServiceMassNotifyExtra:
             inv_ok_b,
         ]
 
-        with patch(
-            "grins_platform.repositories.sms_consent_repository."
-            "SmsConsentRepository.get_opted_out_customer_ids",
-            new=AsyncMock(return_value={inv_opted_out.customer.id}),
-        ), patch(
-            "grins_platform.services.sms_service.SMSService",
-        ) as mock_sms_cls:
+        with (
+            patch(
+                "grins_platform.repositories.sms_consent_repository."
+                "SmsConsentRepository.get_opted_out_customer_ids",
+                new=AsyncMock(return_value={inv_opted_out.customer.id}),
+            ),
+            patch(
+                "grins_platform.services.sms_service.SMSService",
+            ) as mock_sms_cls,
+        ):
             mock_sms_instance = MagicMock()
             mock_sms_instance.send_message = AsyncMock(
                 return_value={"success": True, "message_id": str(uuid4())},
@@ -3137,13 +3141,16 @@ class TestInvoiceServiceMassNotifyExtra:
         mock_invoice_repo.find_past_due.return_value = [inv]
 
         # No opt-outs -> empty set from the repo.
-        with patch(
-            "grins_platform.repositories.sms_consent_repository."
-            "SmsConsentRepository.get_opted_out_customer_ids",
-            new=AsyncMock(return_value=set()),
-        ), patch(
-            "grins_platform.services.sms_service.SMSService",
-        ) as mock_sms_cls:
+        with (
+            patch(
+                "grins_platform.repositories.sms_consent_repository."
+                "SmsConsentRepository.get_opted_out_customer_ids",
+                new=AsyncMock(return_value=set()),
+            ),
+            patch(
+                "grins_platform.services.sms_service.SMSService",
+            ) as mock_sms_cls,
+        ):
             mock_sms_instance = MagicMock()
             mock_sms_instance.send_message = AsyncMock(
                 return_value={"success": True, "message_id": str(uuid4())},
@@ -3316,11 +3323,14 @@ class TestInvoiceServiceLienReviewQueue:
 
         admin_id = uuid4()
 
-        with patch(
-            "grins_platform.services.sms_service.SMSService",
-        ) as mock_sms_cls, patch(
-            "grins_platform.repositories.audit_log_repository.AuditLogRepository",
-        ) as mock_audit_cls:
+        with (
+            patch(
+                "grins_platform.services.sms_service.SMSService",
+            ) as mock_sms_cls,
+            patch(
+                "grins_platform.repositories.audit_log_repository.AuditLogRepository",
+            ) as mock_audit_cls,
+        ):
             mock_sms_instance = MagicMock()
             mock_sms_instance.send_message = AsyncMock(
                 return_value={"success": True, "message_id": str(uuid4())},
@@ -3393,7 +3403,8 @@ class TestInvoiceServiceLienReviewQueue:
         mock_invoice_repo.find_lien_eligible_for_customer.return_value = [invoice]
 
         result = await service.send_lien_notice(
-            customer_id=customer_id, admin_user_id=uuid4(),
+            customer_id=customer_id,
+            admin_user_id=uuid4(),
         )
 
         assert result.success is False
@@ -3409,7 +3420,8 @@ class TestInvoiceServiceLienReviewQueue:
         mock_invoice_repo.find_lien_eligible_for_customer.return_value = []
 
         result = await service.send_lien_notice(
-            customer_id=uuid4(), admin_user_id=uuid4(),
+            customer_id=uuid4(),
+            admin_user_id=uuid4(),
         )
 
         assert result.success is False
@@ -3476,10 +3488,12 @@ class TestInvoiceServiceH12ReadsBusinessSettings:
 
         # The service pulled both knobs from BusinessSettings.
         mock_settings.get_int.assert_awaited_once_with(
-            "lien_days_past_due", 60,
+            "lien_days_past_due",
+            60,
         )
         mock_settings.get_decimal.assert_awaited_once_with(
-            "lien_min_amount", Decimal(500),
+            "lien_min_amount",
+            Decimal(500),
         )
         # And forwarded them to the repository.
         mock_invoice_repo.find_lien_eligible.assert_awaited_once_with(
@@ -3500,7 +3514,8 @@ class TestInvoiceServiceH12ReadsBusinessSettings:
         mock_settings.get_decimal.return_value = Decimal("1250.00")
 
         await service.compute_lien_candidates(
-            days_past_due=45, min_amount=250.0,
+            days_past_due=45,
+            min_amount=250.0,
         )
 
         # Settings service should NOT be queried when explicit args given.
@@ -3525,14 +3540,17 @@ class TestInvoiceServiceH12ReadsBusinessSettings:
 
         customer_id = uuid4()
         await service.send_lien_notice(
-            customer_id=customer_id, admin_user_id=uuid4(),
+            customer_id=customer_id,
+            admin_user_id=uuid4(),
         )
 
         mock_settings.get_int.assert_awaited_once_with(
-            "lien_days_past_due", 60,
+            "lien_days_past_due",
+            60,
         )
         mock_settings.get_decimal.assert_awaited_once_with(
-            "lien_min_amount", Decimal(500),
+            "lien_min_amount",
+            Decimal(500),
         )
         mock_invoice_repo.find_lien_eligible_for_customer.assert_awaited_once_with(
             customer_id,
@@ -3554,7 +3572,8 @@ class TestInvoiceServiceH12ReadsBusinessSettings:
         await service.mass_notify("due_soon")
 
         mock_settings.get_int.assert_awaited_once_with(
-            "upcoming_due_days", 7,
+            "upcoming_due_days",
+            7,
         )
         mock_invoice_repo.find_due_soon.assert_awaited_once_with(14)
 

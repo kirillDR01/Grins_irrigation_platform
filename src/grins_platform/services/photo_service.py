@@ -367,8 +367,8 @@ class PhotoService(LoggerMixin):
         """
         params: dict[str, Any] = {"Bucket": self._bucket, "Key": file_key}
         if download_filename:
-            params["ResponseContentDisposition"] = (
-                format_attachment_disposition(download_filename)
+            params["ResponseContentDisposition"] = format_attachment_disposition(
+                download_filename
             )
         url: str = self._client.generate_presigned_url(
             "get_object",
@@ -451,11 +451,7 @@ def format_attachment_disposition(file_name: str) -> str:
     characters are stripped from the fallback to prevent header
     injection via user-supplied upload names.
     """
-    cleaned = (
-        file_name.replace("\r", "")
-        .replace("\n", "")
-        .replace("\\", "_")
-    )
+    cleaned = file_name.replace("\r", "").replace("\n", "").replace("\\", "_")
     cleaned = "".join(c for c in cleaned if c.isprintable())
     ascii_fallback = (
         cleaned.encode("ascii", "replace")
@@ -466,10 +462,7 @@ def format_attachment_disposition(file_name: str) -> str:
     if not ascii_fallback.strip():
         ascii_fallback = "download"
     encoded_utf8 = quote(cleaned, safe="")
-    return (
-        f'attachment; filename="{ascii_fallback}"; '
-        f"filename*=UTF-8''{encoded_utf8}"
-    )
+    return f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{encoded_utf8}"
 
 
 def _build_default_client() -> S3ClientProtocol:

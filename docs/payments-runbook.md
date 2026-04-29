@@ -181,3 +181,28 @@ The following modules predate Architecture C and exist only as a placeholder for
 - `frontend/src/features/schedule/api/stripeTerminalApi.ts`
 
 Do **not** import these in new code. They will be removed in a follow-up cleanup PR once it is confirmed no Capacitor work is upcoming.
+
+---
+
+## Railway service builder pin (one-time operational step)
+
+Bug 7 from the 2026-04-28 E2E bug hunt: a Railway service can report `serviceManifest.build.builder = "RAILPACK"` even when the actual build consumed the in-repo `Dockerfile`. This is cosmetic, but it cost ~10 minutes of triage time during incident response — pin it explicitly.
+
+Steps:
+
+1. Open Railway → `Grins-dev` → Settings → Build → set **Builder** to `DOCKERFILE` and **Dockerfile path** to `Dockerfile`.
+2. Repeat for the production service.
+3. Confirm by inspecting `serviceManifest.build` after the next deploy: `builder: "DOCKERFILE"`, `dockerfilePath: "Dockerfile"`.
+
+This is a manual Railway-dashboard action; there is no API call to commit it.
+
+### Optional local guard: Alembic single-head pre-push hook
+
+Per-developer opt-in (not version-controlled) — fails the push if the branch introduces a multi-head Alembic state:
+
+```bash
+ln -s ../../scripts/check-alembic-heads.sh .git/hooks/pre-push
+chmod +x .git/hooks/pre-push
+```
+
+The same check runs in CI via `.github/workflows/alembic-heads.yml` on every PR/push to `main`/`dev`, so this hook is only a faster local feedback loop.

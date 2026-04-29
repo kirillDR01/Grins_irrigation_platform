@@ -742,8 +742,8 @@ class EstimateService(LoggerMixin):
 
             # Build portal URL
             portal_url = (
-            f"{self.portal_base_url}/portal/estimates/{estimate.customer_token}"
-        )
+                f"{self.portal_base_url}/portal/estimates/{estimate.customer_token}"
+            )
 
             message = follow_up.message or (
                 f"Reminder: Your estimate from Grins Irrigation is "

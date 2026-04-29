@@ -47,7 +47,9 @@ def _essential_services(spring: str, fall: str) -> list[dict[str, Any]]:
 
 
 def _professional_services(
-    spring: str, mid: str, fall: str,
+    spring: str,
+    mid: str,
+    fall: str,
 ) -> list[dict[str, Any]]:
     return [
         {"service_type": "spring_startup", "frequency": "1x", "description": spring},
@@ -61,7 +63,9 @@ def _professional_services(
 
 
 def _premium_services(
-    spring: str, monthly: str, fall: str,
+    spring: str,
+    monthly: str,
+    fall: str,
 ) -> list[dict[str, Any]]:
     return [
         {"service_type": "spring_startup", "frequency": "1x", "description": spring},
@@ -77,7 +81,10 @@ def _winterization_services(fall: str) -> list[dict[str, Any]]:
 
 
 def _apply(
-    spring: str, mid: str, fall: str, monthly: str,
+    spring: str,
+    mid: str,
+    fall: str,
+    monthly: str,
 ) -> None:
     conn = op.get_bind()
 

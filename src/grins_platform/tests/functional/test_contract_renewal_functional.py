@@ -15,7 +15,7 @@ from __future__ import annotations
 import calendar
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, PropertyMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -36,7 +36,6 @@ from grins_platform.services.contract_renewal_service import (
     ContractRenewalReviewService,
 )
 from grins_platform.utils.week_alignment import align_to_week
-
 
 # =============================================================================
 # Helpers
@@ -59,9 +58,7 @@ def _make_agreement(**overrides: Any) -> MagicMock:
     agreement.customer_id = overrides.get("customer_id", uuid4())
     agreement.tier = overrides.get("tier", _make_tier())
     agreement.property_id = overrides.get("property_id", uuid4())
-    agreement.service_week_preferences = overrides.get(
-        "service_week_preferences", None,
-    )
+    agreement.service_week_preferences = overrides.get("service_week_preferences")
     agreement.auto_renew = overrides.get("auto_renew", True)
     return agreement
 
@@ -75,14 +72,17 @@ def _make_proposed_job(**overrides: Any) -> MagicMock:
     pj.target_start_date = overrides.get("target_start_date", date(2026, 4, 1))
     pj.target_end_date = overrides.get("target_end_date", date(2026, 4, 30))
     pj.status = overrides.get("status", ProposedJobStatus.PENDING.value)
-    pj.proposed_job_payload = overrides.get("proposed_job_payload", {
-        "description": "Spring system activation",
-        "month_start": 4,
-        "month_end": 4,
-        "priority": 1,
-    })
-    pj.admin_notes = overrides.get("admin_notes", None)
-    pj.created_job_id = overrides.get("created_job_id", None)
+    pj.proposed_job_payload = overrides.get(
+        "proposed_job_payload",
+        {
+            "description": "Spring system activation",
+            "month_start": 4,
+            "month_end": 4,
+            "priority": 1,
+        },
+    )
+    pj.admin_notes = overrides.get("admin_notes")
+    pj.created_job_id = overrides.get("created_job_id")
     return pj
 
 
@@ -95,17 +95,19 @@ def _make_proposal(**overrides: Any) -> MagicMock:
     proposal.status = overrides.get("status", ProposalStatus.PENDING.value)
     proposal.proposed_job_count = overrides.get("proposed_job_count", 3)
     proposal.created_at = overrides.get(
-        "created_at", datetime.now(tz=timezone.utc),
+        "created_at",
+        datetime.now(tz=timezone.utc),
     )
-    proposal.reviewed_at = overrides.get("reviewed_at", None)
-    proposal.reviewed_by = overrides.get("reviewed_by", None)
+    proposal.reviewed_at = overrides.get("reviewed_at")
+    proposal.reviewed_by = overrides.get("reviewed_by")
     proposal.proposed_jobs = overrides.get("proposed_jobs", [])
     # Wire up service_agreement for _create_job_from_proposed
     sa_mock = MagicMock()
     sa_mock.property_id = overrides.get("property_id", uuid4())
     proposal.service_agreement = overrides.get("service_agreement", sa_mock)
     proposal.service_agreement_id = overrides.get(
-        "service_agreement_id", proposal.service_agreement_id,
+        "service_agreement_id",
+        proposal.service_agreement_id,
     )
     return proposal
 
@@ -141,7 +143,8 @@ def _build_mock_db_for_generate(agreement: MagicMock) -> AsyncMock:
         # Populate proposed_jobs from added objects on refresh
         if isinstance(obj, ContractRenewalProposal):
             obj.proposed_jobs = [
-                o for o in db._added_objects
+                o
+                for o in db._added_objects
                 if isinstance(o, ContractRenewalProposedJob)
             ]
 
@@ -298,8 +301,7 @@ class TestProposalGeneration:
         proposal = await svc.generate_proposal(agreement.id)
 
         proposed_jobs = [
-            o for o in db._added_objects
-            if isinstance(o, ContractRenewalProposedJob)
+            o for o in db._added_objects if isinstance(o, ContractRenewalProposedJob)
         ]
         assert len(proposed_jobs) == 3
         for pj in proposed_jobs:
@@ -320,7 +322,8 @@ class TestProposalGeneration:
         }
         tier = _make_tier(name="Professional", slug="professional-annual")
         agreement = _make_agreement(
-            tier=tier, service_week_preferences=prefs,
+            tier=tier,
+            service_week_preferences=prefs,
         )
         db = _build_mock_db_for_generate(agreement)
 
@@ -328,11 +331,12 @@ class TestProposalGeneration:
         proposal = await svc.generate_proposal(agreement.id)
 
         proposed_jobs = [
-            o for o in db._added_objects
-            if isinstance(o, ContractRenewalProposedJob)
+            o for o in db._added_objects if isinstance(o, ContractRenewalProposedJob)
         ]
         # The spring startup job should use the rolled-forward preference
-        spring_jobs = [pj for pj in proposed_jobs if pj.service_type == "spring_startup"]
+        spring_jobs = [
+            pj for pj in proposed_jobs if pj.service_type == "spring_startup"
+        ]
         assert len(spring_jobs) == 1
         spring = spring_jobs[0]
         # Rolled forward: 2025-04-07 + 52 weeks = 2026-04-06 (Monday)
@@ -368,12 +372,13 @@ class TestCalendarMonthFallback:
         await svc.generate_proposal(agreement.id)
 
         proposed_jobs = [
-            o for o in db._added_objects
-            if isinstance(o, ContractRenewalProposedJob)
+            o for o in db._added_objects if isinstance(o, ContractRenewalProposedJob)
         ]
         year = datetime.now(timezone.utc).year
 
-        spring_jobs = [pj for pj in proposed_jobs if pj.service_type == "spring_startup"]
+        spring_jobs = [
+            pj for pj in proposed_jobs if pj.service_type == "spring_startup"
+        ]
         assert len(spring_jobs) == 1
         spring = spring_jobs[0]
         # Calendar-month default: April 1 to April 30
@@ -381,7 +386,9 @@ class TestCalendarMonthFallback:
         last_day_apr = calendar.monthrange(year, 4)[1]
         assert spring.target_end_date == date(year, 4, last_day_apr)
 
-        fall_jobs = [pj for pj in proposed_jobs if pj.service_type == "fall_winterization"]
+        fall_jobs = [
+            pj for pj in proposed_jobs if pj.service_type == "fall_winterization"
+        ]
         assert len(fall_jobs) == 1
         fall = fall_jobs[0]
         # Calendar-month default: October 1 to October 31
@@ -401,8 +408,7 @@ class TestCalendarMonthFallback:
         await svc.generate_proposal(agreement.id)
 
         proposed_jobs = [
-            o for o in db._added_objects
-            if isinstance(o, ContractRenewalProposedJob)
+            o for o in db._added_objects if isinstance(o, ContractRenewalProposedJob)
         ]
         year = datetime.now(timezone.utc).year
 
@@ -730,7 +736,7 @@ class TestPerJobApproveReject:
 
         # Modify Week Of to a different week
         new_start = date(2026, 4, 13)  # Monday
-        new_end = date(2026, 4, 19)    # Sunday
+        new_end = date(2026, 4, 19)  # Sunday
         modifications = ProposedJobModification(
             target_start_date=new_start,
             target_end_date=new_end,
@@ -743,7 +749,9 @@ class TestPerJobApproveReject:
         # Dates were updated before job creation
         assert result.target_start_date == new_start
         assert result.target_end_date == new_end
-        assert result.admin_notes == "Moved to second week of April per customer request"
+        assert (
+            result.admin_notes == "Moved to second week of April per customer request"
+        )
 
         # Job was created with the modified dates
         added_jobs = [o for o in db._added_objects if isinstance(o, Job)]

@@ -78,15 +78,13 @@ class ReplyState(BaseModel):
     has_no_reply_flag: bool = Field(
         default=False,
         description=(
-            "Appointment carries a needs_review_reason "
-            "set by the no-reply flagger."
+            "Appointment carries a needs_review_reason set by the no-reply flagger."
         ),
     )
     customer_opted_out: bool = Field(
         default=False,
         description=(
-            "Customer's most recent SmsConsentRecord "
-            "shows consent_given=False."
+            "Customer's most recent SmsConsentRecord shows consent_given=False."
         ),
     )
     has_unrecognized_reply: bool = Field(
@@ -96,8 +94,7 @@ class ReplyState(BaseModel):
     last_reminder_sent_at: Optional[datetime] = Field(
         default=None,
         description=(
-            "Most recent confirmation/reminder send "
-            "(mirrored from Appointment)."
+            "Most recent confirmation/reminder send (mirrored from Appointment)."
         ),
     )
 

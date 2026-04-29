@@ -36,7 +36,6 @@ import pytest
 
 from grins_platform.models.enums import AppointmentStatus, JobStatus
 
-
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -179,7 +178,7 @@ def _build_apply_schedule_request(
     job_id: uuid4 | None = None,
     staff_id: uuid4 | None = None,
     schedule_date: date | None = None,
-) -> "ApplyScheduleRequest":
+) -> ApplyScheduleRequest:
     from grins_platform.schemas.schedule_generation import (
         ApplyScheduleRequest,
         ScheduleJobAssignment,
@@ -314,15 +313,15 @@ class TestApplyScheduleDraftMode:
 # The following imports verify that the existing test modules are importable
 # and serve as documentation of the full draft mode test coverage.
 
-from grins_platform.tests.unit.test_send_confirmation import (  # noqa: E402, F401
-    TestSendConfirmationService,
-)
-from grins_platform.tests.unit.test_bulk_send_confirmations import (  # noqa: E402, F401
+from grins_platform.tests.unit.test_bulk_send_confirmations import (  # noqa: F401
     TestBulkSendConfirmationsService,
 )
-from grins_platform.tests.unit.test_reschedule_detection import (  # noqa: E402, F401
+from grins_platform.tests.unit.test_cancellation_sms import (  # noqa: F401
+    TestCancellationSmsLogic,
+)
+from grins_platform.tests.unit.test_reschedule_detection import (  # noqa: F401
     TestRescheduleDetection,
 )
-from grins_platform.tests.unit.test_cancellation_sms import (  # noqa: E402, F401
-    TestCancellationSmsLogic,
+from grins_platform.tests.unit.test_send_confirmation import (  # noqa: F401
+    TestSendConfirmationService,
 )

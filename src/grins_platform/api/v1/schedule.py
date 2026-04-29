@@ -7,7 +7,7 @@ Validates: Requirements 5.1, 5.6, 5.7, 5.8
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
-from datetime import date, datetime
+from datetime import date
 from typing import Annotated
 from uuid import UUID
 
@@ -27,6 +27,12 @@ from grins_platform.models.enums import AppointmentStatus
 from grins_platform.models.job import Job
 from grins_platform.models.property import Property
 from grins_platform.models.service_agreement import ServiceAgreement
+from grins_platform.schemas.ai_scheduling import (
+    BatchScheduleRequest,
+    BatchScheduleResponse,
+    ResourceUtilization,
+    UtilizationReport,
+)
 from grins_platform.schemas.analytics import LeadTimeResponse
 from grins_platform.schemas.schedule_explanation import (
     JobReadyToSchedule,
@@ -713,3 +719,150 @@ async def get_lead_time(
         days=result.days,
         display=result.display,
     )
+
+
+# =============================================================================
+# POST /api/v1/schedule/batch-generate — multi-week batch scheduling
+# =============================================================================
+
+
+@router.post(  # type: ignore[misc,untyped-decorator]
+    "/batch-generate",
+    response_model=BatchScheduleResponse,
+    summary="Batch schedule generation for multi-week campaigns",
+)
+def batch_generate_schedule(
+    request: BatchScheduleRequest,
+    service: ScheduleGenerationService = Depends(get_schedule_service),
+) -> BatchScheduleResponse:
+    """Generate a batch schedule across multiple weeks.
+
+    POST /api/v1/schedule/batch-generate
+
+    Validates: Requirements 9.4, 9.7, 10.7
+    """
+    endpoints.log_started(
+        "batch_generate",
+        weeks=request.weeks,
+        job_type=request.job_type,
+    )
+
+    try:
+        from datetime import timedelta  # noqa: PLC0415
+
+        today = date.today()
+        total_jobs = 0
+        jobs_by_week: dict[str, int] = {}
+        capacity_utilization: dict[str, float] = {}
+
+        for week_offset in range(request.weeks):
+            week_start = today + timedelta(weeks=week_offset)
+            iso_week = week_start.strftime("%G-W%V")
+
+            try:
+                result = service.generate_schedule(
+                    schedule_date=week_start,
+                    timeout_seconds=30,
+                )
+                week_jobs = result.total_assigned
+                total_jobs += week_jobs
+                jobs_by_week[iso_week] = week_jobs
+
+                # Estimate utilization from capacity
+                capacity = service.get_capacity(week_start)
+                if capacity.total_capacity_minutes > 0:
+                    assigned_mins = week_jobs * 60  # rough estimate
+                    capacity_utilization[iso_week] = min(
+                        100.0,
+                        assigned_mins / capacity.total_capacity_minutes * 100,
+                    )
+                else:
+                    capacity_utilization[iso_week] = 0.0
+            except Exception:
+                jobs_by_week[iso_week] = 0
+                capacity_utilization[iso_week] = 0.0
+
+        response = BatchScheduleResponse(
+            weeks_scheduled=request.weeks,
+            total_jobs=total_jobs,
+            jobs_by_week=jobs_by_week,
+            capacity_utilization=capacity_utilization,
+        )
+    except Exception as exc:
+        endpoints.log_failed("batch_generate", error=exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Batch schedule generation failed: {exc!s}",
+        ) from exc
+    else:
+        endpoints.log_completed(
+            "batch_generate",
+            weeks=request.weeks,
+            total_jobs=total_jobs,
+        )
+        return response
+
+
+# =============================================================================
+# GET /api/v1/schedule/utilization — resource utilization report
+# =============================================================================
+
+
+@router.get(  # type: ignore[misc,untyped-decorator]
+    "/utilization",
+    response_model=UtilizationReport,
+    summary="Resource utilization report for a schedule date",
+)
+def get_utilization_report(
+    schedule_date: date = Query(..., description="Date to report utilization for"),
+    service: ScheduleGenerationService = Depends(get_schedule_service),
+) -> UtilizationReport:
+    """Return per-resource utilization metrics for a schedule date.
+
+    GET /api/v1/schedule/utilization
+
+    Validates: Requirements 6.1, 9.4, 10.4, 23.5
+    """
+    endpoints.log_started("get_utilization", schedule_date=str(schedule_date))
+
+    try:
+        capacity = service.get_capacity(schedule_date)
+
+        resources: list[ResourceUtilization] = []
+        for staff_cap in getattr(capacity, "staff_capacities", []):
+            total_mins = getattr(staff_cap, "available_minutes", 0)
+            assigned_mins = getattr(staff_cap, "assigned_minutes", 0)
+            drive_mins = getattr(staff_cap, "drive_minutes", 0)
+            util_pct = (
+                (assigned_mins + drive_mins) / total_mins * 100
+                if total_mins > 0
+                else 0.0
+            )
+            resources.append(
+                ResourceUtilization(
+                    staff_id=staff_cap.staff_id,
+                    name=getattr(staff_cap, "name", ""),
+                    total_minutes=total_mins,
+                    assigned_minutes=assigned_mins,
+                    drive_minutes=drive_mins,
+                    utilization_pct=round(util_pct, 1),
+                )
+            )
+
+        report = UtilizationReport(
+            schedule_date=schedule_date,
+            resources=resources,
+        )
+    except Exception as exc:
+        endpoints.log_failed("get_utilization", error=exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Utilization report failed: {exc!s}",
+        ) from exc
+    else:
+        endpoints.log_completed(
+            "get_utilization",
+            schedule_date=str(schedule_date),
+            resource_count=len(resources),
+        )
+        return report

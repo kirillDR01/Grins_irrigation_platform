@@ -149,9 +149,7 @@ async def resend_webhook(
     if recipient_phone:
         try:
             sms_service = SMSService(session=session, provider=get_sms_provider())
-            sms_text = (
-                f"Estimate email BOUNCED for {to_email}. Reason: {reason[:80]}"
-            )
+            sms_text = f"Estimate email BOUNCED for {to_email}. Reason: {reason[:80]}"
             await sms_service.send_automated_message(
                 phone=recipient_phone,
                 message=sms_text,

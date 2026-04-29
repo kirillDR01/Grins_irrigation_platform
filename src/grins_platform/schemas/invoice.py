@@ -647,3 +647,19 @@ class SendLinkResponse(BaseModel):
     sent_count: int = Field(
         description="Total successful sends across the invoice's lifetime.",
     )
+    attempted_channels: list[Literal["sms", "email"]] = Field(
+        default_factory=list,
+        description=(
+            "Channels attempted in order. The last element equals `channel` "
+            "on success. Useful for surfacing fallback context to the UI."
+        ),
+    )
+    sms_failure_reason: (
+        Literal["consent", "rate_limit", "provider_error", "no_phone"] | None
+    ) = Field(
+        default=None,
+        description=(
+            "Reason the SMS branch failed when fallback to email succeeded. "
+            "None when SMS succeeded or was not attempted."
+        ),
+    )

@@ -28,13 +28,12 @@ from grins_platform.exceptions import (
     LeadAlreadyConvertedError,
     LeadNotFoundError,
 )
-from grins_platform.services.lead_service import LeadDuplicateFoundError
 from grins_platform.main import app
 from grins_platform.models.enums import (
+    CustomerStatus,
     LeadSituation,
     LeadStatus,
 )
-from grins_platform.models.enums import CustomerStatus
 from grins_platform.schemas.customer import CustomerResponse
 from grins_platform.schemas.lead import (
     LeadConversionResponse,
@@ -42,10 +41,13 @@ from grins_platform.schemas.lead import (
     LeadSubmissionResponse,
     PaginatedLeadResponse,
 )
+from grins_platform.services.lead_service import LeadDuplicateFoundError
 
 
 def _build_customer_response_stub(
-    *, phone: str, email: str | None = None,
+    *,
+    phone: str,
+    email: str | None = None,
 ) -> CustomerResponse:
     """Build a minimal CustomerResponse for duplicate-conflict test payloads."""
     now = datetime.now(tz=timezone.utc)
@@ -481,7 +483,8 @@ class TestConvertLead:
         """CR-6: force=False + duplicates → 409 with structured detail."""
         lead_id = uuid.uuid4()
         dup = _build_customer_response_stub(
-            phone="+19527373312", email="alice@test.example",
+            phone="+19527373312",
+            email="alice@test.example",
         )
         mock_lead_service.convert_lead.side_effect = LeadDuplicateFoundError(
             lead_id=lead_id,
@@ -509,10 +512,12 @@ class TestConvertLead:
         """CR-6: 409 detail.duplicates preserves the full customer list."""
         lead_id = uuid.uuid4()
         dup1 = _build_customer_response_stub(
-            phone="+19527373312", email="alice@test.example",
+            phone="+19527373312",
+            email="alice@test.example",
         )
         dup2 = _build_customer_response_stub(
-            phone="+19527373313", email="alice@test.example",
+            phone="+19527373313",
+            email="alice@test.example",
         )
         mock_lead_service.convert_lead.side_effect = LeadDuplicateFoundError(
             lead_id=lead_id,

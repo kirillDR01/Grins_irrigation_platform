@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { getErrorMessage } from '@/core/api/client';
+import { humanizeSmsFailure } from '@/features/invoices';
 import { useInvoicesByJob } from '@/features/invoices/hooks/useInvoices';
 import { useSendPaymentLink } from '@/features/invoices/hooks/useInvoiceMutations';
 import {
@@ -158,9 +159,11 @@ export function PaymentCollector({
       }
       const result = await sendLink.mutateAsync(invoiceId);
       const channelLabel = result.channel === 'sms' ? 'SMS' : 'email';
-      toast.success(`Payment Link sent`, {
-        description: `Sent via ${channelLabel}`,
-      });
+      const description =
+        result.attempted_channels.length > 1 && result.sms_failure_reason
+          ? `Sent via ${channelLabel} (SMS ${humanizeSmsFailure(result.sms_failure_reason)})`
+          : `Sent via ${channelLabel}`;
+      toast.success(`Payment Link sent`, { description });
       onSuccess?.();
     } catch (err) {
       toast.error('Failed to send Payment Link', {

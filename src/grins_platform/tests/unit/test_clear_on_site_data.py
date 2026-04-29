@@ -11,7 +11,7 @@ from uuid import uuid4
 
 import pytest
 
-from grins_platform.models.enums import AppointmentStatus, JobStatus, MessageType
+from grins_platform.models.enums import AppointmentStatus, JobStatus
 
 
 def _make_session(*, invoice_count: int = 0) -> AsyncMock:

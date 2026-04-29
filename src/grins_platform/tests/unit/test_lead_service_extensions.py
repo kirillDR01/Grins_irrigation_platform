@@ -586,7 +586,7 @@ class TestEmailConfirmation:
         poison the intake transaction. The service must NOT call
         ``email_service.send_lead_confirmation`` inline.
         """
-        from grins_platform.services.lead_service import (  # noqa: PLC0415
+        from grins_platform.services.lead_service import (
             send_lead_confirmations_post_commit,
         )
 

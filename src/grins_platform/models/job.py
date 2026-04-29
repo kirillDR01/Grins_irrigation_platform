@@ -17,6 +17,7 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     Numeric,
@@ -236,6 +237,34 @@ class Job(Base):
         nullable=True,
     )
 
+    # AI Scheduling fields (AI Scheduling Spec - criteria 21-30)
+    sla_deadline: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    compliance_deadline: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    job_phase: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    depends_on_job_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("jobs.id"),
+        nullable=True,
+    )
+    is_outdoor: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
+    predicted_complexity: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    revenue_per_hour: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2),
+        nullable=True,
+    )
+
     # Record Timestamps (Requirement 2.6)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -248,6 +277,11 @@ class Job(Base):
     )
 
     # Relationships
+    depends_on_job: Mapped["Job | None"] = relationship(
+        "Job",
+        remote_side="Job.id",
+        foreign_keys=[depends_on_job_id],
+    )
     customer: Mapped["Customer"] = relationship("Customer", back_populates="jobs")
     job_property: Mapped["Property | None"] = relationship(
         "Property",

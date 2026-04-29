@@ -422,11 +422,7 @@ class OnboardingService(LoggerMixin):
         # — leave the default full-month range untouched.
         for job in agreement.jobs:
             job.property_id = prop.id
-            month_start = (
-                job.target_start_date.month
-                if job.target_start_date
-                else None
-            )
+            month_start = job.target_start_date.month if job.target_start_date else None
             pref_iso = _lookup_week_preference(prefs, job.job_type, month_start)
             if pref_iso:
                 try:

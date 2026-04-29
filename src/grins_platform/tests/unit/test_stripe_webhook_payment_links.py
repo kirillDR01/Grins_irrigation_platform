@@ -9,12 +9,11 @@ Validates: Stripe Payment Links plan §Phase 2.10–2.13.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 import stripe
@@ -133,11 +132,14 @@ class TestPaymentIntentSucceeded:
             },
         )
         handler = _build_handler()
-        with patch(
-            "grins_platform.repositories.invoice_repository.InvoiceRepository",
-        ) as mock_repo_cls, patch(
-            "grins_platform.services.invoice_service.InvoiceService",
-        ) as mock_svc_cls:
+        with (
+            patch(
+                "grins_platform.repositories.invoice_repository.InvoiceRepository",
+            ) as mock_repo_cls,
+            patch(
+                "grins_platform.services.invoice_service.InvoiceService",
+            ) as mock_svc_cls,
+        ):
             instance = AsyncMock()
             instance.get_by_id.return_value = invoice
             mock_repo_cls.return_value = instance
@@ -165,11 +167,14 @@ class TestPaymentIntentSucceeded:
             },
         )
         handler = _build_handler()
-        with patch(
-            "grins_platform.repositories.invoice_repository.InvoiceRepository",
-        ) as mock_repo_cls, patch(
-            "grins_platform.services.invoice_service.InvoiceService",
-        ) as mock_svc_cls:
+        with (
+            patch(
+                "grins_platform.repositories.invoice_repository.InvoiceRepository",
+            ) as mock_repo_cls,
+            patch(
+                "grins_platform.services.invoice_service.InvoiceService",
+            ) as mock_svc_cls,
+        ):
             mock_repo_cls.return_value.get_by_id = AsyncMock(return_value=invoice)
             await handler._handle_payment_intent_succeeded(event)
         mock_svc_cls.assert_not_called()
@@ -203,11 +208,14 @@ class TestPaymentIntentSucceeded:
         scalar_result = MagicMock()
         scalar_result.scalar_one_or_none = MagicMock(return_value=job_obj)
         handler.session.execute = AsyncMock(return_value=scalar_result)
-        with patch(
-            "grins_platform.repositories.invoice_repository.InvoiceRepository",
-        ) as mock_repo_cls, patch(
-            "grins_platform.services.invoice_service.InvoiceService",
-        ) as mock_svc_cls:
+        with (
+            patch(
+                "grins_platform.repositories.invoice_repository.InvoiceRepository",
+            ) as mock_repo_cls,
+            patch(
+                "grins_platform.services.invoice_service.InvoiceService",
+            ) as mock_svc_cls,
+        ):
             mock_repo_cls.return_value.get_by_id = AsyncMock(return_value=invoice)
             mock_repo_cls.return_value.update = update_mock
             mock_svc_cls.return_value.record_payment = record_payment_mock

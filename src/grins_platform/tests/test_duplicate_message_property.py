@@ -201,5 +201,11 @@ class TestDuplicateMessageProperty:
 
         # Verify dedupe was scoped per appointment_id
         calls = service.message_repo.get_by_customer_and_type.call_args_list
-        assert calls[0].kwargs.get("appointment_id") == appt_1 or calls[0][1].get("appointment_id") == appt_1
-        assert calls[1].kwargs.get("appointment_id") == appt_2 or calls[1][1].get("appointment_id") == appt_2
+        assert (
+            calls[0].kwargs.get("appointment_id") == appt_1
+            or calls[0][1].get("appointment_id") == appt_1
+        )
+        assert (
+            calls[1].kwargs.get("appointment_id") == appt_2
+            or calls[1][1].get("appointment_id") == appt_2
+        )

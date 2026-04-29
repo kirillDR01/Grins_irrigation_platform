@@ -10,12 +10,15 @@ Uses Hypothesis for property-based testing with mocked database sessions.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
-from hypothesis import given, settings, strategies as st
+from hypothesis import (
+    given,
+    settings,
+    strategies as st,
+)
 from pydantic import ValidationError
 
 from grins_platform.models.enums import (
@@ -53,12 +56,14 @@ customer_status_values = st.sampled_from(list(CustomerStatus))
 
 valid_lead_statuses = st.sampled_from([LeadStatus.NEW, LeadStatus.CONTACTED])
 all_lead_statuses = st.sampled_from(list(LeadStatus))
-legacy_lead_statuses = st.sampled_from([
-    LeadStatus.QUALIFIED,
-    LeadStatus.CONVERTED,
-    LeadStatus.LOST,
-    LeadStatus.SPAM,
-])
+legacy_lead_statuses = st.sampled_from(
+    [
+        LeadStatus.QUALIFIED,
+        LeadStatus.CONVERTED,
+        LeadStatus.LOST,
+        LeadStatus.SPAM,
+    ]
+)
 
 
 file_sizes_valid = st.integers(min_value=1, max_value=25 * 1024 * 1024)
@@ -66,13 +71,15 @@ file_sizes_too_large = st.integers(
     min_value=25 * 1024 * 1024 + 1,
     max_value=100 * 1024 * 1024,
 )
-mime_types = st.sampled_from([
-    "image/jpeg",
-    "image/png",
-    "application/pdf",
-    "text/plain",
-    "application/octet-stream",
-])
+mime_types = st.sampled_from(
+    [
+        "image/jpeg",
+        "image/png",
+        "application/pdf",
+        "text/plain",
+        "application/octet-stream",
+    ]
+)
 file_names = st.from_regex(r"[a-z]{3,10}\.(jpg|png|pdf|txt|doc)", fullmatch=True)
 
 
@@ -270,13 +277,15 @@ class TestProperty4TCPAAuditLogging:
         actor_id=uuids,
         subject_id=uuids,
         subject_type=st.sampled_from(["lead", "customer"]),
-        field=st.sampled_from([
-            "sms_consent",
-            "email_marketing_consent",
-            "terms_accepted",
-            "sms_opt_in",
-            "email_opt_in",
-        ]),
+        field=st.sampled_from(
+            [
+                "sms_consent",
+                "email_marketing_consent",
+                "terms_accepted",
+                "sms_opt_in",
+                "email_opt_in",
+            ]
+        ),
         old_value=st.booleans(),
         new_value=st.booleans(),
     )
@@ -596,9 +605,7 @@ class TestProperty17LastContactedAutoStamp:
         now = datetime.now(tz=timezone.utc)
         lead = MagicMock()
         lead.status = "new"
-        lead.contacted_at = (
-            now - timedelta(days=5) if has_prior_contacted_at else None
-        )
+        lead.contacted_at = now - timedelta(days=5) if has_prior_contacted_at else None
         lead.last_contacted_at = None
 
         # Simulate the service logic for marking as contacted

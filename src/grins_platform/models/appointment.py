@@ -193,6 +193,13 @@ class Appointment(Base):
         index=True,
     )
 
+    # AI Scheduling fields (AI Scheduling Spec — assignment explanation)
+    ai_explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    criteria_scores: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+
     # Relationships
     job: Mapped["Job"] = relationship("Job", back_populates="appointments")
     staff: Mapped["Staff"] = relationship("Staff", back_populates="appointments")

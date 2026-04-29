@@ -394,8 +394,8 @@ class InvoicePDFService(LoggerMixin):
 
         params: dict[str, Any] = {"Bucket": self.s3_bucket, "Key": s3_key}
         if download_filename:
-            params["ResponseContentDisposition"] = (
-                format_attachment_disposition(download_filename)
+            params["ResponseContentDisposition"] = format_attachment_disposition(
+                download_filename
             )
         try:
             url: str = self.s3_client.generate_presigned_url(

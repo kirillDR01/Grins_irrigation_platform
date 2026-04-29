@@ -236,13 +236,17 @@ This is the core flow of how a customer moves through the system. Every record e
               |           |    or IN_PROGRESS. DRAFT cancels
               |           |    are silent (customer was never
               |           |    notified).
-              |           |    On-site timestamps cleared
-              |           |    (on_my_way_at, started_at,
-              |           |     completed_at, en_route_at).
+              |           |    Appointment timestamps cleared
+              |           |    (en_route_at, arrived_at,
+              |           |     completed_at).
               |           |    If this was the last active
               |           |    appointment for the job, the
-              |           |    job reverts to TO BE SCHEDULED
-              |           |    (from SCHEDULED or IN PROGRESS).
+              |           |    job's timestamps are also
+              |           |    cleared (on_my_way_at,
+              |           |     started_at, completed_at)
+              |           |    and the job reverts to TO BE
+              |           |    SCHEDULED (from SCHEDULED or
+              |           |    IN PROGRESS).
               |           |    A repeat "C" from the same
               |           |    customer is a no-op (no second
               |           |    cancellation SMS).
@@ -278,10 +282,8 @@ This is the core flow of how a customer moves through the system. Every record e
           Admin clicks "On My Way" button
               |
           [SYSTEM -> CUSTOMER]
-          "[Staff Name] from Grins Irrigation is on
-           the way to your appointment!"
-          (Optional " Estimated arrival in [N] minutes."
-           appended when an ETA is provided)
+          "We're on our way! Your technician is
+           heading to your location now."
               |
           (No customer reply expected)
           Logs on_my_way_at timestamp.
@@ -491,25 +493,27 @@ The Leads tab is where **every new request lives before you contact the person**
 
 | Column | What It Shows |
 |--------|---------------|
-| **Name** | Customer name (clickable to view details) |
+| **Name** | Customer name (clickable to open the lead detail page at `/leads/{id}`) |
 | **Phone** | Contact phone number |
 | **Job Address** | Where the work would be performed |
 | **City** | City derived from the address — helps with scheduling by area |
 | **Job Requested** | What service they're asking for — you can see this at a glance without clicking in |
 | **Status** | Current lead status (New, Contacted, Qualified, Converted, Lost, Spam) |
-| **Last Contacted Date** | When you last reached out (auto-updates from SMS when messaging is active) |
+| **Tags** | Action tags showing what's needed next: **Needs Contact**, **Needs Estimate**, **Estimate Pending**, **Estimate Approved**, **Estimate Rejected**. Tags are set/cleared automatically as the lead moves through the pipeline (e.g., "Mark Contacted" removes Needs Contact). |
+| **Last Contacted Date** | When you last reached out — auto-updates on every outbound or inbound SMS for this lead, plus when you click "Mark Contacted." |
+| **Submitted** | How long ago the lead was submitted (relative time, e.g. "3 days ago"). Sourced from `created_at`. |
 | **Source** | Where the lead came from (far right column, no color highlighting) |
 
 ### Statuses
 
-The lead statuses you'll work with day-to-day are the first two. The others are set automatically by the system:
+The lead statuses you'll work with day-to-day are the first two. **Converted** is auto-set on conversion; the rest are manual.
 
 - **New** — Default. This lead has not been contacted yet.
-- **Contacted** — You've reached out and are waiting to hear back. Set when you click "Mark Contacted."
-- **Qualified** — Lead has been evaluated and is ready to be routed.
-- **Converted** — Lead was moved to Jobs or Sales. Set automatically on conversion.
-- **Lost** — Lead is no longer interested or went elsewhere.
-- **Spam** — Lead was identified as spam.
+- **Contacted** — You've reached out and are waiting to hear back. Set when you click "Mark Contacted." (The status label in the UI reads "Contacted (Awaiting Response)" for clarity.)
+- **Qualified** — Lead has been evaluated and is ready to be routed. Set manually via the lead detail page status dropdown.
+- **Converted** — Lead was moved to Jobs or Sales. **Set automatically on conversion.**
+- **Lost** — Lead is no longer interested or went elsewhere. Set manually via the status dropdown.
+- **Spam** — Lead was identified as spam. Set manually via the status dropdown.
 
 ### Actions Available Per Lead
 
@@ -524,9 +528,12 @@ Each lead row has action buttons. The intended order of operations is: **Mark Co
 
 ### Important Behavior
 
-- **Always contact before routing.** The Leads tab is for tracking people who haven't been reached yet. "Mark Contacted" should come before "Move to Jobs" or "Move to Sales."
+- **Always contact before routing.** The Leads tab is for tracking people who haven't been reached yet. "Mark Contacted" should come before "Move to Jobs" or "Move to Sales." The "Mark Contacted" button only appears for leads in the **New** status.
 - When you "Move to Jobs" or "Move to Sales," the lead **automatically disappears** from the Leads tab. You don't need to manually delete it.
-- If a customer record already exists (matching phone or email), the system will show a **"Possible match found"** warning so you can link to the existing customer instead of creating a duplicate.
+- **Two modals can interrupt routing** — both are checked separately and may both fire on the same conversion attempt:
+  1. **Requires-estimate warning** — fires on "Move to Jobs" when the lead's situation maps to `requires_estimate`. The mapped situations are: **New System**, **Upgrade**, and **Exploring** (other situations like Repair, Winterization, Seasonal Maintenance map to `ready_to_schedule` and skip the warning). The modal offers three options: **Move to Jobs anyway** (override, audit-logged), **Move to Sales** (redirect into the estimate workflow), or **Cancel**.
+  2. **Duplicate conflict modal** — fires on either "Move to Jobs" or "Move to Sales" if a Tier-1 match (exact phone or email) already exists on another customer record. Two options: **Use existing record** (links the lead to that customer instead of creating a new one) or **Convert anyway** (forces creation of a new customer; logged).
+- On routing, the lead's notes, address, and consent fields (SMS opt-in, terms accepted, email) are carried over to the customer record. A property is auto-created from the lead's address if one doesn't already exist.
 
 ---
 
@@ -557,7 +564,7 @@ The pipeline progresses through these stages. Each stage has an **action button*
 |--------|--------------|-------------|---------------|
 | **Schedule Estimate** | Need to set up an estimate visit | Schedule the visit on the Estimate Calendar | **"Schedule Estimate"** — opens a pre-filled calendar event form. Saving the event auto-advances the entry to "Estimate Scheduled." |
 | **Estimate Scheduled** | Estimate visit is on the calendar | Go to the property, assess the job | **"Send Estimate"** — advances to "Send Estimate" after the visit. |
-| **Send Estimate** | Visit done, need to upload and send the written estimate | Upload the estimate PDF to the Documents section, then click "Send Estimate for Signature (Email)" or "Sign On-Site (Embedded)" to transmit it via SignWell | **"Mark Sent"** — advances to "Pending Approval." Gated: requires a SignWell document on file (i.e., you have already clicked one of the Send for Signature buttons), otherwise the advance is rejected with "Upload an estimate before advancing." |
+| **Send Estimate** | Visit done, need to upload and send the written estimate | Upload the estimate PDF to the Documents section, then click "Send Estimate for Signature (Email)" or "Sign On-Site (Embedded)" to transmit it via SignWell | **"Mark Sent"** — advances to "Pending Approval." Note: the Send for Signature buttons themselves require a document on file; the status advance is not separately gated. |
 | **Pending Approval** | Estimate sent to customer, waiting for them to sign | Wait for the customer to sign | (Auto-advances to "Send Contract" on the SignWell signing webhook — no manual button) |
 | **Send Contract** | Customer signed the estimate; ready to create the job | Review and convert | **"Convert to Job"** — creates a real Job record and moves the entry to "Closed-Won." Gated on a signature existing (SignWell document id) unless the admin uses "Force Convert to Job." |
 | **Closed-Won** | Job created from this sales entry | — | Terminal state (no action button) |
@@ -621,19 +628,22 @@ The Customers tab is the **one-stop shop for all customer data**. Every customer
 
 ### Customer Detail Page
 
-When you click into a customer, you see:
+The customer detail page is laid out as a header with contact info and admin flags (Priority, Red Flag, Slow Payer, customer tags), a **Consent History panel** showing SMS/email opt-in timestamps and source, and then a tabbed content area:
 
-- **Contact information** — name, phone, email, address
-- **Properties** — each property tagged with:
-  - **Residential** or **Commercial** badge
-  - **HOA** badge (if the property is in an HOA)
-  - **Subscription** badge (if the property has an active service agreement)
-- **Jobs** — all jobs associated with this customer
-- **Invoices** — all invoices for this customer (updates in real-time when invoice status changes)
-- **Service Agreements** — active subscription contracts
-- **Communications** — SMS/email history
-- **Notes and Photos** — any notes or photos added from job visits
-- **Documents** — uploaded files (estimates, contracts, signed documents)
+| Tab | What's in It |
+|-----|--------------|
+| **Overview** | Properties (with each property's zone count, type, gate code, access instructions, dogs flag, and special notes), Internal Notes, Service Preferences, and active Service Agreements. |
+| **Photos** | Photos uploaded from job visits, linked back to the originating job. |
+| **Invoice History** | All invoices for this customer; refreshes when you reload the page. |
+| **Payment Methods** | Stored Stripe payment methods for this customer. |
+| **Messages** | SMS and email history (inbound and outbound). |
+| **Potential Duplicates** | Pending merge candidates for this customer (see §14 for the full merge workflow). |
+
+**Customer-level tags** (separate from property tags below) — admin-managed labels with configurable color tones (neutral, blue, green, amber, violet) used to mark VIPs, billing notes, regional groupings, etc. Tags can be added manually or attached automatically by system events. They appear in the customer list and on the detail header.
+
+**Soft-delete and merge tracking** — customers are never permanently destroyed. Deletes set `is_deleted` and `deleted_at`. Merges set `merged_into_customer_id` on the absorbed record. See §14 for the merge workflow.
+
+The **Properties** section in Overview displays each property with its `Residential`/`Commercial` type, zone count, address, and a "Dogs" warning badge when applicable. The four tag badges (Residential, Commercial, HOA, Subscription) described in **Property Type Tags** below render on the **Jobs list, Job detail, and Schedule calendar cards** — not on the customer-detail Properties section itself.
 
 ### Service Preferences
 
@@ -662,9 +672,9 @@ Every property is tagged with one or more visual badges:
 | **Residential** | Residential property |
 | **Commercial** | Commercial property |
 | **HOA** | Property is in a homeowners association |
-| **Subscription** (or "Sub") | Property has an active service agreement |
+| **Subscription** | Property has an active service agreement (derived per-job from `service_agreement_id`) |
 
-These tags appear on the property list, customer detail, job detail, and job list views. You can **filter** by any combination of these tags on the Customers, Jobs, and Sales lists.
+These tags render on the Jobs list, Job detail, and Schedule calendar cards. You can **filter** by any combination of these tags on the Customers and Jobs lists. (The Sales list does **not** currently expose property-tag filters — its row data is keyed off the sales entry, not the property.)
 
 ---
 
@@ -676,11 +686,15 @@ The Jobs tab contains **only jobs that are approved and ready to be scheduled**.
 
 The job list shows:
 - **Job Type** — what service is being performed
-- **Customer** — who the job is for
-- **Address** — where the work will happen
-- **Week Of** — the target week for the job (displayed as "Week of M/D/YYYY" where the date is always the Monday of that week)
+- **Summary** — short job description
 - **Status** — current job status
-- **Property Tags** — Residential/Commercial, HOA, Subscription badges on each row
+- **Customer** — who the job is for (links to the customer record)
+- **Tags** — Residential/Commercial, HOA, Subscription badges on each row
+- **Days Waiting** — how long the job has been open
+- **Week Of** — the target week for the job (displayed as "Week of M/D/YYYY" where the date is always the Monday of that week); inline-editable for `to_be_scheduled` jobs
+- **Priority** — Normal, High, or Urgent
+- **Amount** — quoted or final amount, when available
+- **Actions** — "Schedule" button on `to_be_scheduled` and `scheduled` rows
 
 ### The "Week Of" Concept — Two-Step Scheduling
 
@@ -764,7 +778,7 @@ From the appointment details modal, the **Cancel** action opens a confirmation d
 
 Both paths are audit-logged server-side with the admin's choice. If the pre-cancel status is DRAFT, no SMS is sent either way (the customer was never notified in the first place). For any other customer-visible status (SCHEDULED, CONFIRMED, EN_ROUTE, IN_PROGRESS), the default is to text; you can override it with "Cancel (no text)."
 
-When an appointment is cancelled, the system also clears the on-site timestamps (`on_my_way_at`, `started_at`, `completed_at`, `en_route_at`) and deletes any "On My Way" SMS records for that appointment so a replacement appointment can send a fresh SMS. If this was the last active appointment for the job, the job reverts from SCHEDULED or IN_PROGRESS back to TO_BE_SCHEDULED.
+When an appointment is cancelled, the system clears the appointment's on-site timestamps (`en_route_at`, `arrived_at`, `completed_at`) and deletes any "On My Way" SMS records for that appointment so a replacement appointment can send a fresh SMS. If this was the last active appointment for the job, the job's timestamps (`on_my_way_at`, `started_at`, `completed_at`) are also cleared and the job reverts from SCHEDULED or IN_PROGRESS back to TO_BE_SCHEDULED.
 
 ### Appointment Confirmation Flow (Y/R/C)
 
@@ -808,7 +822,7 @@ The job detail view has three status buttons that track the lifecycle of a field
 
 **Important:** "On My Way" does **not** change the job's status — it only transitions the appointment to EN_ROUTE, logs a timestamp, and sends an SMS. "Job Started" transitions both the job to "In Progress" and the appointment to "In Progress." "Job Complete" transitions both to "Completed." Steps can be skipped — clicking "Job Complete" without "Job Started" still completes both.
 
-**Time tracking:** The system automatically calculates the time elapsed between these three timestamps — travel time (On My Way to Started), work time (Started to Complete), and total time. This metadata is stored per job type and staff member for future scheduling optimization.
+**Time tracking:** The system automatically calculates the time elapsed between these three timestamps — travel time (On My Way to Started), work time (Started to Complete), and total time. The metadata is stored on the job record (in the `time_tracking_metadata` field) for future analysis.
 
 ### Payment Warning on Completion
 
@@ -849,7 +863,7 @@ On the Schedule tab calendar, service agreement jobs show a **"PREPAID"** badge 
 When a job is marked as complete:
 - The job status changes to **Completed**
 - The appointment status also changes to **Completed** (both transition together)
-- It **archives out of the active schedule view** (no longer clutters the daily calendar)
+- The completed appointment **stays on the calendar** but is styled in green so you can see it without it competing with active work
 - It **remains visible in the Jobs tab** under the "Completed" status filter
 - The customer's record is updated with the completion data
 - Time tracking metadata is calculated (travel time, work time, total time)
@@ -900,7 +914,6 @@ The Invoices tab has the most powerful filtering in the system. Click the **filt
 - Filters combine as **AND** — each filter you add narrows the results further.
 - **"Clear all filters"** button resets to the full unfiltered list.
 - Filter state is saved in the **URL** — you can bookmark a filtered view or share the link and the recipient sees the same filters applied.
-- You can **save filter combinations** for quick reuse.
 
 ### Mass Notifications
 
@@ -1066,7 +1079,7 @@ The CRM uses SMS (currently via CallRail) for several automated and manual commu
 | Trigger | Message Sent |
 |---------|-------------|
 | **"Send Confirmation" clicked** | Confirmation request: "Reply Y to confirm, R to reschedule, C to cancel" (transitions DRAFT → SCHEDULED) |
-| **"On My Way" button clicked** | "[Staff Name] from Grins Irrigation is on the way to your appointment!" — staff name is dynamically inserted; an " Estimated arrival in [N] minutes." sentence is appended when an ETA is provided. |
+| **"On My Way" button clicked** | "We're on our way! Your technician is heading to your location now." (sent as transactional SMS, no opt-in required) |
 | **Customer confirms (Y)** | Auto-reply confirming the appointment |
 | **Customer reschedules (R)** | Acknowledgment reply + follow-up: "We'd be happy to reschedule. Please reply with 2-3 dates and times that work for you and we'll get you set up." |
 | **Customer cancels (C)** | Cancellation: "Your [service type] appointment on [date] at [time] has been cancelled. If you'd like to reschedule, please call us at [business phone]." A repeat "C" from the same customer is a no-op. |
@@ -1078,7 +1091,7 @@ The CRM uses SMS (currently via CallRail) for several automated and manual commu
 
 | Action | Where |
 |--------|-------|
-| **Google Review Push** | Job detail view — sends a review link via SMS using the configurable `GOOGLE_REVIEW_URL`. Respects 30-day dedup and SMS consent. |
+| **Google Review Push** | Job detail view — sends a review link via SMS using the configurable `GOOGLE_REVIEW_URL`. Sent as transactional SMS (no opt-in required). The job-level button does **not** enforce a per-customer dedup window — clicking it twice will send twice. |
 
 ### How Reply Correlation Works
 

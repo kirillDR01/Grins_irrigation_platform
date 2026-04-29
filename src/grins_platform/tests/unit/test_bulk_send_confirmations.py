@@ -24,7 +24,6 @@ import pytest
 from grins_platform.exceptions import CustomerHasNoPhoneError
 from grins_platform.models.enums import AppointmentStatus
 
-
 _SENT = {"success": True, "deferred": False}
 _DEFERRED = {"success": True, "deferred": True}
 _DEDUPED = {

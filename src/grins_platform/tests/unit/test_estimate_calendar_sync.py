@@ -19,7 +19,6 @@ from grins_platform.api.v1.sales_pipeline import create_calendar_event
 from grins_platform.models.enums import SalesEntryStatus
 from grins_platform.schemas.sales_pipeline import SalesCalendarEventCreate
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

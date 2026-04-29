@@ -44,9 +44,7 @@ def _fake_session(*, has_hard_stop: bool, has_pending_alert: bool, customer_id=N
             # First sms_consent_records call is always _has_hard_stop.
             if state["sms_consent_calls"] == 1:
                 return SimpleNamespace(
-                    scalar_one_or_none=(
-                        lambda: uuid4() if has_hard_stop else None
-                    ),
+                    scalar_one_or_none=(lambda: uuid4() if has_hard_stop else None),
                 )
             # Subsequent calls are marketing opt-in look-ups → default no.
             return SimpleNamespace(scalar_one_or_none=lambda: None)

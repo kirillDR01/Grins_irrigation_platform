@@ -153,13 +153,15 @@ class TestCreateForInvoice:
         service = StripePaymentLinkService(_make_settings())
         invoice = _make_invoice()
         customer = _make_customer()
-        with patch.object(
-            stripe.PaymentLink,
-            "create",
-            side_effect=stripe.StripeError("rate limit"),
+        with (
+            patch.object(
+                stripe.PaymentLink,
+                "create",
+                side_effect=stripe.StripeError("rate limit"),
+            ),
+            pytest.raises(StripePaymentLinkError),
         ):
-            with pytest.raises(StripePaymentLinkError):
-                service.create_for_invoice(invoice, customer)
+            service.create_for_invoice(invoice, customer)
 
     @pytest.mark.unit
     def test_create_for_invoice_truncates_long_descriptions(self) -> None:
@@ -212,10 +214,12 @@ class TestDeactivate:
     def test_deactivate_wraps_stripe_error(self) -> None:
         """Stripe failures bubble as ``StripePaymentLinkError``."""
         service = StripePaymentLinkService(_make_settings())
-        with patch.object(
-            stripe.PaymentLink,
-            "modify",
-            side_effect=stripe.StripeError("network"),
+        with (
+            patch.object(
+                stripe.PaymentLink,
+                "modify",
+                side_effect=stripe.StripeError("network"),
+            ),
+            pytest.raises(StripePaymentLinkError),
         ):
-            with pytest.raises(StripePaymentLinkError):
-                service.deactivate("plink_xyz")
+            service.deactivate("plink_xyz")
