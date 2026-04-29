@@ -684,7 +684,14 @@ export function AppointmentDetail({
         <div className="px-4 py-3 border-t border-slate-100 space-y-3">
           {/* Payment Collection (Req 30) */}
           {(isInProgress || isCompleted) && (
-            <PaymentCollector appointmentId={appointmentId} />
+            <PaymentCollector
+              appointmentId={appointmentId}
+              jobId={job?.id}
+              customerPhone={customer?.phone}
+              customerEmail={customer?.email ?? undefined}
+              customerExists={!!customer}
+              serviceAgreementActive={job?.service_agreement_active === true}
+            />
           )}
 
           {/* Invoice Creation (Req 31) */}

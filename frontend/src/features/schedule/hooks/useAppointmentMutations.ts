@@ -194,6 +194,9 @@ export function useMarkAppointmentEnRoute() {
 
 /**
  * Hook to collect payment on-site (Req 30).
+ *
+ * Per plan F14: invalidates the invoice and customer-invoice caches via
+ * literal-prefix keys (no cross-feature query-key imports).
  */
 export function useCollectPayment() {
   const queryClient = useQueryClient();
@@ -203,6 +206,8 @@ export function useCollectPayment() {
       appointmentApi.collectPayment(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-invoices'] });
     },
   });
 }

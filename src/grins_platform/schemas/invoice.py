@@ -469,6 +469,16 @@ class InvoiceListParams(BaseModel):
         default=None,
         description="Exact invoice number match",
     )
+    # CG-13: substring search across ``payment_reference`` so admins can
+    # paste a Stripe ``pi_*`` id (with or without the ``stripe:`` prefix)
+    # and find the matching invoice. Plan §Phase 3.9.
+    payment_reference: str | None = Field(
+        default=None,
+        description=(
+            "Substring match on ``payment_reference`` (ILIKE %value%). "
+            "Useful for finding an invoice by Stripe PaymentIntent id."
+        ),
+    )
     # Legacy filter (kept for backward compat)
     lien_eligible: bool | None = Field(
         default=None,

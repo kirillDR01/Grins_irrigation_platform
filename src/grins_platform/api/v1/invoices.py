@@ -248,6 +248,12 @@ async def list_invoices(
         default=None,
         description="Exact invoice number match",
     ),
+    payment_reference: str | None = Query(
+        default=None,
+        description=(
+            "Substring match on payment_reference (Stripe pi_* search)."
+        ),
+    ),
     lien_eligible: bool | None = Query(
         default=None,
         description="Filter by lien eligibility",
@@ -277,6 +283,7 @@ async def list_invoices(
         days_past_due_min=days_past_due_min,
         days_past_due_max=days_past_due_max,
         invoice_number=invoice_number,
+        payment_reference=payment_reference,
         lien_eligible=lien_eligible,
         sort_by=sort_by,
         sort_order=sort_order,

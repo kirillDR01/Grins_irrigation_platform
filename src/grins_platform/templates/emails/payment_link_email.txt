@@ -1,0 +1,15 @@
+Your invoice from {{ business_name }}
+
+Hi {{ customer_first_name }},
+
+Your invoice {{ invoice_number }} from {{ business_name }} is ready.
+Total: ${{ total_amount }}
+
+Pay here:
+
+{{ payment_link_url }}
+
+Reply to this email or call {{ business_phone }} with any questions.
+
+— {{ business_name }}
+{{ business_phone }} | {{ business_email }}

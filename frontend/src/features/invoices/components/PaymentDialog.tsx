@@ -42,6 +42,25 @@ interface PaymentDialogProps {
   isLoading?: boolean;
 }
 
+/**
+ * Normalize a payment-reference string before submit (plan §Phase 3.6).
+ *
+ * - Bare Stripe PaymentIntent ids (`pi_*`) are auto-prefixed with
+ *   `stripe:` so CG-13 substring search keeps working.
+ * - Already-prefixed `stripe:pi_*` references are left alone (no double
+ *   prefix).
+ * - Empty strings → ``undefined`` so the field is omitted from the
+ *   payload entirely.
+ */
+export function normalizePaymentReference(raw: string): string | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  if (/^pi_[A-Za-z0-9]+$/.test(trimmed)) {
+    return `stripe:${trimmed}`;
+  }
+  return trimmed;
+}
+
 // H-4 (bughunt 2026-04-16): spec vocabulary for NEW payments. `stripe`
 // is intentionally omitted — new credit-card charges should be recorded
 // as `credit_card` going forward. Legacy invoices already carrying
@@ -87,7 +106,7 @@ export function PaymentDialog({
     onSubmit({
       amount: parsedAmount,
       payment_method: paymentMethod,
-      payment_reference: reference || undefined,
+      payment_reference: normalizePaymentReference(reference),
     });
   };
 

@@ -280,6 +280,13 @@ class InvoiceRepository(LoggerMixin):
         if params.invoice_number:
             filters.append(Invoice.invoice_number == params.invoice_number)
 
+        # CG-13: substring search on ``payment_reference`` so admins can
+        # find an invoice by pasting a Stripe ``pi_*`` id. Plan §Phase 3.9.
+        if params.payment_reference:
+            filters.append(
+                Invoice.payment_reference.ilike(f"%{params.payment_reference}%"),
+            )
+
         # Legacy: lien eligibility
         if params.lien_eligible is not None:
             filters.append(Invoice.lien_eligible == params.lien_eligible)

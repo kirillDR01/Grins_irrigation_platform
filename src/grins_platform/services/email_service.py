@@ -172,6 +172,7 @@ class EmailService(LoggerMixin):
             "estimate_sent",
             "internal_estimate_decision",
             "internal_estimate_bounce",
+            "payment_link",
         }
         if email_type in transactional_types:
             return EmailType.TRANSACTIONAL

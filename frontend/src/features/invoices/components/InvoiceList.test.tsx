@@ -173,8 +173,11 @@ describe('InvoiceList', () => {
       items: mockInvoices, total: 3, page: 1, page_size: 20, total_pages: 1,
     });
     render(<InvoiceList />, { wrapper: createWrapper() });
+    // "Venmo" appears in both the Payment Type column (text label) and
+    // the Channel pill column added by plan §Phase 3.7. Use getAllByText
+    // so the test passes for both renderings.
     await waitFor(() => {
-      expect(screen.getByText('Venmo')).toBeInTheDocument();
+      expect(screen.getAllByText('Venmo').length).toBeGreaterThan(0);
     });
   });
 

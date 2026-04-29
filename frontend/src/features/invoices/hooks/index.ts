@@ -13,6 +13,7 @@ export {
   useSendInvoice,
   useRecordPayment,
   useSendReminder,
+  useSendPaymentLink,
   useSendLienWarning,
   useMarkLienFiled,
   useGenerateInvoiceFromJob,

@@ -91,6 +91,22 @@ export function useSendReminder() {
   });
 }
 
+// Send Stripe Payment Link via SMS (with email fallback) — Architecture C, Phase 2.
+export function useSendPaymentLink() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => invoiceApi.sendPaymentLink(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: invoiceKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: customerInvoiceKeys.all });
+      // Cross-feature: appointment views surface the same invoice state.
+      // Use literal prefix per plan F14 (no cross-feature query-key import).
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+    },
+  });
+}
+
 // Send lien warning
 export function useSendLienWarning() {
   const queryClient = useQueryClient();

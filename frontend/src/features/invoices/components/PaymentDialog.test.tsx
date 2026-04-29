@@ -5,7 +5,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PaymentDialog } from './PaymentDialog';
+import { PaymentDialog, normalizePaymentReference } from './PaymentDialog';
 
 const defaultProps = {
   open: true,
@@ -125,5 +125,44 @@ describe('PaymentDialog', () => {
   it('renders dialog description', () => {
     render(<PaymentDialog {...defaultProps} />);
     expect(screen.getByText('Enter the payment details for this invoice.')).toBeInTheDocument();
+  });
+
+});
+
+// Plan §Phase 3.6 — auto-prefix bare Stripe `pi_*` references with
+// `stripe:` so CG-13 search by PaymentIntent id keeps working. Tested
+// against the exported pure function so jsdom limitations around the
+// Radix Select don't poison the assertion.
+describe('normalizePaymentReference (CG-13)', () => {
+  it('prepends stripe: to a bare pi_* id', () => {
+    expect(normalizePaymentReference('pi_3OXxxxYYY')).toBe(
+      'stripe:pi_3OXxxxYYY',
+    );
+  });
+
+  it('does not double-prepend when reference is already stripe:pi_*', () => {
+    expect(normalizePaymentReference('stripe:pi_3OXxxxYYY')).toBe(
+      'stripe:pi_3OXxxxYYY',
+    );
+  });
+
+  it('leaves unrelated references untouched', () => {
+    expect(normalizePaymentReference('CHK-12345')).toBe('CHK-12345');
+  });
+
+  it('returns undefined for blank input', () => {
+    expect(normalizePaymentReference('')).toBeUndefined();
+    expect(normalizePaymentReference('   ')).toBeUndefined();
+  });
+
+  it('trims whitespace around bare pi_* before prefixing', () => {
+    expect(normalizePaymentReference('  pi_3ABC  ')).toBe('stripe:pi_3ABC');
+  });
+
+  it('does not match invalid pi_* shapes', () => {
+    // No alnum body → not a valid PaymentIntent id, leave untouched.
+    expect(normalizePaymentReference('pi_')).toBe('pi_');
+    // Embedded suffix should not be auto-prefixed.
+    expect(normalizePaymentReference('foo pi_3ABC')).toBe('foo pi_3ABC');
   });
 });

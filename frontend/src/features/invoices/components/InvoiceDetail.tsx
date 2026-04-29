@@ -9,7 +9,9 @@ import {
   Bell,
   AlertTriangle,
   Clock,
+  Copy,
   Download,
+  Link as LinkIcon,
   Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,6 +21,7 @@ import { LoadingPage, ErrorMessage } from '@/shared/components';
 import { useInvoice } from '../hooks';
 import {
   useSendInvoice,
+  useSendPaymentLink,
   useSendReminder,
   useSendLienWarning,
   useMarkLienFiled,
@@ -45,6 +48,7 @@ export function InvoiceDetail({
 
   const { data: invoice, isLoading, error, refetch } = useInvoice(id);
   const sendInvoiceMutation = useSendInvoice();
+  const sendPaymentLinkMutation = useSendPaymentLink();
   const sendReminderMutation = useSendReminder();
   const sendLienWarningMutation = useSendLienWarning();
   const markLienFiledMutation = useMarkLienFiled();
@@ -56,6 +60,28 @@ export function InvoiceDetail({
       await sendInvoiceMutation.mutateAsync(invoice.id);
     } catch (err) {
       console.error('Failed to send invoice:', err);
+    }
+  };
+
+  const handleSendPaymentLink = async () => {
+    if (!invoice) return;
+    try {
+      const result = await sendPaymentLinkMutation.mutateAsync(invoice.id);
+      const channelLabel = result.channel === 'sms' ? 'SMS' : 'email';
+      toast.success(`Payment Link sent via ${channelLabel}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to send Payment Link';
+      toast.error('Send failed', { description: msg });
+    }
+  };
+
+  const handleCopyPaymentLink = async () => {
+    if (!invoice?.stripe_payment_link_url) return;
+    try {
+      await navigator.clipboard.writeText(invoice.stripe_payment_link_url);
+      toast.success('Link copied to clipboard');
+    } catch {
+      toast.error('Could not copy link');
     }
   };
 
@@ -139,6 +165,17 @@ export function InvoiceDetail({
   const canSendReminder = ['sent', 'viewed', 'overdue'].includes(invoice.status);
   const canSendLienWarning = invoice.lien_eligible && !invoice.lien_warning_sent && invoice.status === 'overdue';
   const canMarkLienFiled = invoice.lien_eligible && invoice.lien_warning_sent && !invoice.lien_filed_date;
+  // Plan §Phase 3.8 — Send/Resend Payment Link gate. Backend additionally
+  // rejects $0 invoices, lead-only invoices, and unsendable states.
+  const canSendPaymentLink = [
+    'draft',
+    'sent',
+    'viewed',
+    'overdue',
+    'partial',
+  ].includes(invoice.status) && invoice.total_amount > 0;
+  const sentCount = invoice.payment_link_sent_count ?? 0;
+  const linkSentBefore = sentCount > 0;
 
   return (
     <div data-testid="invoice-detail" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -468,6 +505,82 @@ export function InvoiceDetail({
           </Card>
         )}
 
+        {/* Payment Link status (plan §Phase 3.8). Visible whenever a link
+            exists on the invoice — covers draft/sent/paid/refunded states. */}
+        {invoice.stripe_payment_link_url && (
+          <Card
+            className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow"
+            data-testid="payment-link-status"
+          >
+            <CardHeader className="p-6 border-b border-slate-100">
+              <CardTitle className="flex items-center gap-2 font-bold text-slate-800 text-lg">
+                <div className="p-2 rounded-lg bg-violet-50">
+                  <LinkIcon className="h-5 w-5 text-violet-600" />
+                </div>
+                Payment Link
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <code
+                  className="flex-1 truncate text-xs text-slate-600"
+                  data-testid="payment-link-url"
+                >
+                  {invoice.stripe_payment_link_url}
+                </code>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleCopyPaymentLink}
+                  className="h-7 px-2 text-xs"
+                  data-testid="copy-payment-link-btn"
+                >
+                  <Copy className="mr-1 h-3 w-3" />
+                  Copy
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <p className="text-xs text-slate-400 uppercase tracking-wider font-medium">
+                    Sent Count
+                  </p>
+                  <p
+                    className="font-medium text-slate-700 mt-1"
+                    data-testid="payment-link-sent-count"
+                  >
+                    {sentCount}
+                  </p>
+                </div>
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <p className="text-xs text-slate-400 uppercase tracking-wider font-medium">
+                    Last Sent
+                  </p>
+                  <p
+                    className="font-medium text-slate-700 mt-1"
+                    data-testid="payment-link-last-sent"
+                  >
+                    {invoice.payment_link_sent_at
+                      ? new Date(invoice.payment_link_sent_at).toLocaleString()
+                      : 'Never'}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    invoice.stripe_payment_link_active
+                      ? 'bg-green-50 text-green-700 border border-green-100'
+                      : 'bg-slate-100 text-slate-600 border border-slate-200'
+                  }`}
+                  data-testid="payment-link-active-state"
+                >
+                  {invoice.stripe_payment_link_active ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Actions */}
         <Card className="bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
           <CardHeader className="p-6 border-b border-slate-100">
@@ -502,6 +615,23 @@ export function InvoiceDetail({
               >
                 <Send className="mr-2 h-4 w-4" />
                 Send Invoice
+              </Button>
+            )}
+            {canSendPaymentLink && (
+              <Button
+                className="w-full bg-violet-600 hover:bg-violet-700 text-white shadow-sm shadow-violet-200"
+                onClick={handleSendPaymentLink}
+                disabled={sendPaymentLinkMutation.isPending}
+                data-testid={
+                  linkSentBefore ? 'resend-payment-link-btn' : 'send-payment-link-btn'
+                }
+              >
+                {sendPaymentLinkMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <LinkIcon className="mr-2 h-4 w-4" />
+                )}
+                {linkSentBefore ? 'Resend Payment Link' : 'Send Payment Link'}
               </Button>
             )}
             {canRecordPayment && onRecordPayment && (

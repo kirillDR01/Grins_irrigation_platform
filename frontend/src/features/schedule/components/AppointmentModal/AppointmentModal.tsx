@@ -8,7 +8,17 @@ import { useEffect, useRef, useState } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { AlertCircle, CalendarClock, Check, RefreshCw, Send } from 'lucide-react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  CalendarClock,
+  Check,
+  Clock,
+  RefreshCw,
+  Send,
+} from 'lucide-react';
+import { invoiceApi } from '@/features/invoices/api/invoiceApi';
+import type { Invoice as InvoiceWithLink } from '@/features/invoices/types';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -104,6 +114,38 @@ export function AppointmentModal({
     enabled: !!job?.customer_id,
   });
 
+  // Invoice for this appointment's job — drives PaidStatePill, link-sent
+  // indicator, and CG-6 polling. Plan §Phase 3.3 / 3.5.
+  const { data: jobInvoices } = useQuery({
+    queryKey: ['invoices', 'by-job', job?.id ?? ''],
+    queryFn: async (): Promise<InvoiceWithLink[]> => {
+      const response = await invoiceApi.list({
+        job_id: job!.id,
+        page_size: 50,
+      });
+      return response.items;
+    },
+    enabled: !!job?.id,
+    refetchInterval: (query) => {
+      const items = query.state.data;
+      if (!items || items.length === 0) return false;
+      const inv = items.find((i) => i.status !== 'cancelled') ?? items[0];
+      // CG-6: poll every 4s while a Payment Link is outstanding so the
+      // PaidStatePill flips automatically when the webhook lands. Stops
+      // on terminal states (PAID / REFUNDED / DISPUTED).
+      if (
+        (inv.status === 'sent' || inv.status === 'overdue') &&
+        (inv.payment_link_sent_count ?? 0) > 0
+      ) {
+        return 4000;
+      }
+      return false;
+    },
+    refetchIntervalInBackground: false,
+  });
+  const invoice =
+    jobInvoices?.find((i) => i.status !== 'cancelled') ?? jobInvoices?.[0] ?? null;
+
   const { data: tags } = useCustomerTags(job?.customer_id);
 
   // V2: photo and note counts for SecondaryActionsStrip badges
@@ -193,6 +235,13 @@ export function AppointmentModal({
 
   const isDraft = appointment.status === 'draft';
   const isCompleted = appointment.status === 'completed';
+
+  // Plan §Phase 3.4 guards.
+  const serviceAgreementCovered = job?.service_agreement_active === true;
+  // A "lead-only" appointment is one whose owning Job has no Customer
+  // record yet (still a Lead). We approximate this by the absence of a
+  // resolved customer object — backend rejects send-link in this case.
+  const isLeadOnly = !!job && !customer;
 
   const willNotifyByDefault = [
     'scheduled',
@@ -513,23 +562,60 @@ export function AppointmentModal({
 
           {/* Payment / Estimate CTAs */}
           {(appointment.status === 'in_progress' || isCompleted) && (
-            <div className="px-5 pb-4 flex gap-2 flex-shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1"
-                onClick={() => openSheetExclusive('payment')}
-              >
-                Collect Payment
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1"
-                onClick={() => openSheetExclusive('estimate')}
-              >
-                Create Estimate
-              </Button>
+            <div className="px-5 pb-4 space-y-2 flex-shrink-0">
+              {/* Plan §Phase 3.3 — PaidStatePill: terminal states get a pill
+                  instead of the Collect Payment CTA. */}
+              {invoice && invoice.status === 'paid' && (
+                <PaidStatePill invoice={invoice} variant="paid" />
+              )}
+              {invoice && invoice.status === 'refunded' && (
+                <PaidStatePill invoice={invoice} variant="refunded" />
+              )}
+              {invoice && invoice.status === 'disputed' && (
+                <PaidStatePill invoice={invoice} variant="disputed" />
+              )}
+
+              {/* Plan §Phase 3.3 — link-sent indicator when invoice still
+                  open. Hidden once invoice reaches a terminal state. */}
+              {invoice &&
+                (invoice.status === 'sent' || invoice.status === 'overdue') &&
+                (invoice.payment_link_sent_count ?? 0) > 0 && (
+                  <LinkSentIndicator invoice={invoice} />
+                )}
+
+              {/* Plan §Phase 3.4 — hide CTA entirely for service-agreement
+                  jobs, and don't repeat for already-paid invoices. */}
+              {!serviceAgreementCovered &&
+                !(invoice && ['paid', 'refunded'].includes(invoice.status)) && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => openSheetExclusive('payment')}
+                      data-testid="collect-payment-cta"
+                    >
+                      Collect Payment
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => openSheetExclusive('estimate')}
+                    >
+                      Create Estimate
+                    </Button>
+                  </div>
+                )}
+
+              {serviceAgreementCovered && (
+                <p
+                  className="text-xs text-slate-500"
+                  data-testid="service-agreement-payment-suppressed"
+                >
+                  Covered by service agreement — no payment required.
+                </p>
+              )}
             </div>
           )}
 
@@ -657,8 +743,12 @@ export function AppointmentModal({
             <div className="flex-1 overflow-y-auto">
               <PaymentSheetWrapper
                 appointmentId={appointmentId}
+                jobId={job?.id}
+                invoiceAmount={invoice?.total_amount}
                 customerPhone={customer?.phone}
                 customerEmail={customer?.email ?? undefined}
+                customerExists={!isLeadOnly}
+                serviceAgreementActive={serviceAgreementCovered}
                 onClose={closeSheet}
               />
             </div>
@@ -838,6 +928,96 @@ function DurationMetrics({ enRouteAt, arrivedAt, completedAt }: DurationMetricsP
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PaidStatePill / LinkSentIndicator — plan §Phase 3.3
+// ---------------------------------------------------------------------------
+
+interface PaidStatePillProps {
+  invoice: InvoiceWithLink;
+  variant: 'paid' | 'refunded' | 'disputed';
+}
+
+function PaidStatePill({ invoice, variant }: PaidStatePillProps) {
+  const amount = invoice.paid_amount ?? invoice.total_amount;
+  const formattedAmount = `$${Number(amount).toFixed(2)}`;
+  // Link channel is "Payment Link" when payment_reference starts with
+  // `stripe:` and the invoice has a Stripe link id. Fallback to the
+  // generic payment_method label otherwise.
+  const isStripeLink =
+    !!invoice.stripe_payment_link_id ||
+    invoice.payment_reference?.startsWith('stripe:') === true;
+  const channelLabel = isStripeLink
+    ? 'Payment Link'
+    : (invoice.payment_method ?? 'manual');
+
+  if (variant === 'paid') {
+    const paidDate = invoice.paid_at
+      ? format(new Date(invoice.paid_at), 'MMM d')
+      : null;
+    return (
+      <div
+        data-testid="paid-state-pill"
+        className="flex items-center gap-2 rounded-md border border-green-100 bg-green-50 px-3 py-2"
+      >
+        <Check className="h-4 w-4 text-green-600 shrink-0" />
+        <span className="text-sm text-green-800">
+          Paid — {formattedAmount} via {channelLabel}
+          {paidDate && ` on ${paidDate}`}
+        </span>
+      </div>
+    );
+  }
+
+  if (variant === 'refunded') {
+    return (
+      <div
+        data-testid="refunded-state-pill"
+        className="flex items-center gap-2 rounded-md border border-purple-100 bg-purple-50 px-3 py-2"
+      >
+        <RefreshCw className="h-4 w-4 text-purple-600 shrink-0" />
+        <span className="text-sm text-purple-800">
+          Refunded — {formattedAmount}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      data-testid="disputed-state-pill"
+      className="flex items-center gap-2 rounded-md border border-orange-100 bg-orange-50 px-3 py-2"
+    >
+      <AlertTriangle className="h-4 w-4 text-orange-600 shrink-0" />
+      <span className="text-sm text-orange-800">
+        Disputed — admin response required
+      </span>
+    </div>
+  );
+}
+
+interface LinkSentIndicatorProps {
+  invoice: InvoiceWithLink;
+}
+
+function LinkSentIndicator({ invoice }: LinkSentIndicatorProps) {
+  const sent = invoice.payment_link_sent_count ?? 0;
+  const lastSent = invoice.payment_link_sent_at
+    ? format(new Date(invoice.payment_link_sent_at), 'MMM d, h:mm a')
+    : null;
+  return (
+    <div
+      data-testid="link-sent-indicator"
+      className="flex items-center gap-2 rounded-md border border-violet-100 bg-violet-50 px-3 py-2"
+    >
+      <Clock className="h-4 w-4 text-violet-600 shrink-0" />
+      <span className="text-sm text-violet-800">
+        Link sent {sent} {sent === 1 ? 'time' : 'times'}
+        {lastSent && `, last on ${lastSent}`} · waiting for payment
+      </span>
     </div>
   );
 }

@@ -167,6 +167,8 @@ export interface InvoiceListParams extends PaginationParams {
   days_past_due_min?: number;
   days_past_due_max?: number;
   invoice_number?: string;
+  // CG-13: substring match on payment_reference (e.g. paste a Stripe pi_*).
+  payment_reference?: string;
   lien_eligible?: boolean;
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
@@ -248,6 +250,14 @@ export interface MassNotifyResponse {
 // PDF generation types (Req 80)
 export interface PdfUrlResponse {
   url: string;
+}
+
+// Stripe Payment Link send response (Architecture C — Phase 2.7).
+export interface SendPaymentLinkResponse {
+  channel: 'sms' | 'email';
+  link_url: string;
+  sent_at: string;
+  sent_count: number;
 }
 
 // CR-5: Lien Review Queue (bughunt 2026-04-16)

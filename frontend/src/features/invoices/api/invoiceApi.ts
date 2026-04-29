@@ -15,6 +15,7 @@ import type {
   LienCandidate,
   LienCandidatesParams,
   LienNoticeResult,
+  SendPaymentLinkResponse,
 } from '../types';
 
 const BASE_PATH = '/invoices';
@@ -66,6 +67,14 @@ export const invoiceApi = {
   // Send reminder
   sendReminder: async (id: string): Promise<Invoice> => {
     const response = await apiClient.post<Invoice>(`${BASE_PATH}/${id}/reminder`);
+    return response.data;
+  },
+
+  // Send Stripe Payment Link via SMS (with email fallback) — Architecture C, Phase 2.
+  sendPaymentLink: async (id: string): Promise<SendPaymentLinkResponse> => {
+    const response = await apiClient.post<SendPaymentLinkResponse>(
+      `${BASE_PATH}/${id}/send-link`,
+    );
     return response.data;
   },
 

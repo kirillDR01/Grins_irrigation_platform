@@ -497,6 +497,65 @@ class TestInvoiceRepositoryListWithFilters:
 
         mock_session.execute.assert_awaited()
 
+    @pytest.mark.asyncio
+    async def test_payment_reference_filter_renders_substring_clause(
+        self,
+        repository: InvoiceRepository,
+        mock_session: AsyncMock,
+    ) -> None:
+        """CG-13 (plan §Phase 3.9): payment_reference uses ILIKE %value%.
+
+        Verifies that the SQL emitted by ``list_with_filters`` includes
+        an ILIKE clause wrapping the user-provided substring with ``%``s
+        on both sides — which is what makes pasting a Stripe ``pi_*`` id
+        match a row whose stored reference is ``stripe:pi_…``.
+        """
+        mock_count_result = MagicMock()
+        mock_count_result.scalar.return_value = 0
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = []
+        mock_list_result = MagicMock()
+        mock_list_result.scalars.return_value = mock_scalars
+        mock_session.execute.side_effect = [mock_count_result, mock_list_result]
+
+        params = InvoiceListParams(payment_reference="pi_3OXabcDEF")
+        await repository.list_with_filters(params)
+
+        # Compile the actual ``select`` that hit the session and ensure
+        # the substring filter shows up in the generated SQL. SQLAlchemy
+        # emits ``ILIKE`` on Postgres but ``LOWER(...) LIKE LOWER(...)``
+        # under the generic compiler — accept either form so the test
+        # is dialect-agnostic.
+        called_with = mock_session.execute.await_args_list[1].args[0]
+        compiled = str(
+            called_with.compile(compile_kwargs={"literal_binds": True}),
+        )
+        assert "%pi_3OXabcDEF%" in compiled
+        compiled_upper = compiled.upper()
+        assert "ILIKE" in compiled_upper or "LOWER(" in compiled_upper
+
+    def test_build_filters_payment_reference_appends_ilike(
+        self,
+        repository: InvoiceRepository,
+    ) -> None:
+        """Direct ``_build_filters`` test for the payment_reference axis.
+
+        Plan §Phase 3.9 — the new filter must add exactly one clause
+        that compiles to a case-insensitive substring match.
+        """
+        params = InvoiceListParams(payment_reference="pi_xyz")
+        filters = repository._build_filters(params)
+        # Compile each clause and check that one of them is an ILIKE on
+        # ``invoices.payment_reference`` carrying ``%pi_xyz%`` literally.
+        compiled = [
+            str(f.compile(compile_kwargs={"literal_binds": True}))
+            for f in filters
+        ]
+        assert any(
+            "payment_reference" in c.lower() and "%pi_xyz%" in c
+            for c in compiled
+        ), compiled
+
 
 @pytest.mark.unit
 class TestInvoiceRepositoryGetNextSequence:

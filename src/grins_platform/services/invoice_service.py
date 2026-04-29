@@ -1038,18 +1038,47 @@ class InvoiceService(LoggerMixin):
             f"{invoice.stripe_payment_link_url}"
         )
 
-    @staticmethod
     def _render_payment_link_email(
+        self,
         customer: object,
         invoice: Invoice,
     ) -> tuple[str, str]:
         """Render the email body (HTML + plaintext) for the Payment Link.
 
-        Inline-rendered for now; if the template grows we'll lift it into
-        ``services/templates/emails/payment_link_email.{html,txt}`` per
-        plan §Phase 4.3.
+        Uses the Jinja2 templates at
+        ``templates/emails/payment_link_email.{html,txt}`` per plan
+        §Phase 4.3. Defaults (``business_name``, ``business_phone``,
+        ``business_email``) are injected by ``EmailService._render_template``.
+        Falls back to a minimal inline body if the email service or
+        templates are unavailable so callers never crash on render.
         """
         first_name = getattr(customer, "first_name", "") or "there"
+        context = {
+            "customer_first_name": first_name,
+            "invoice_number": invoice.invoice_number,
+            "total_amount": str(invoice.total_amount),
+            "payment_link_url": invoice.stripe_payment_link_url,
+        }
+
+        if self.email_service is not None:
+            try:
+                html_body = self.email_service._render_template(  # noqa: SLF001 — established pattern
+                    "payment_link_email.html",
+                    context,
+                )
+                text_body = self.email_service._render_template(  # noqa: SLF001
+                    "payment_link_email.txt",
+                    context,
+                )
+            except Exception as exc:  # pragma: no cover — defensive fallback
+                self.logger.warning(
+                    "payment.send_link.email_template_render_failed",
+                    invoice_id=str(invoice.id),
+                    error=str(exc),
+                )
+            else:
+                return html_body, text_body
+
         link = invoice.stripe_payment_link_url
         amount = invoice.total_amount
         invoice_number = invoice.invoice_number
@@ -1058,10 +1087,7 @@ class InvoiceService(LoggerMixin):
             f"<p>Your invoice <strong>{invoice_number}</strong> from "
             f"Grin's Irrigation is ready. The total is "
             f"<strong>${amount}</strong>.</p>"
-            f'<p><a href="{link}" '
-            f'style="display:inline-block;padding:12px 24px;'
-            f'background:#6366f1;color:#fff;text-decoration:none;'
-            f'border-radius:6px;">Pay invoice</a></p>'
+            f'<p><a href="{link}">Pay invoice</a></p>'
             f"<p>Or copy this link into your browser:<br/>"
             f'<a href="{link}">{link}</a></p>'
             f"<p>Thanks,<br/>Grin's Irrigation</p>"

@@ -118,6 +118,13 @@ const INVOICE_FILTER_AXES: FilterAxis[] = [
     type: 'text',
     placeholder: 'Exact invoice number...',
   },
+  // CG-13: paste a Stripe `pi_*` id (with or without `stripe:` prefix).
+  {
+    key: 'payment_reference',
+    label: 'Payment Reference',
+    type: 'text',
+    placeholder: 'pi_… or stripe:pi_…',
+  },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -157,6 +164,42 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   ach: 'ACH',
   other: 'Other',
 };
+
+// Plan §Phase 3.7 — Channel pill derived from payment_reference + method.
+function ChannelPill({ invoice }: { invoice: Invoice }) {
+  const ref = invoice.payment_reference ?? '';
+  if (ref.startsWith('stripe:pi_') || ref.startsWith('stripe_link:pi_')) {
+    return (
+      <span
+        data-testid={`channel-pill-${invoice.id}`}
+        className="inline-flex items-center rounded-full bg-violet-50 border border-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700"
+      >
+        Payment Link
+      </span>
+    );
+  }
+  if (invoice.payment_method === 'stripe') {
+    return (
+      <span
+        data-testid={`channel-pill-${invoice.id}`}
+        className="inline-flex items-center rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600"
+      >
+        Stripe (legacy)
+      </span>
+    );
+  }
+  if (invoice.payment_method) {
+    return (
+      <span
+        data-testid={`channel-pill-${invoice.id}`}
+        className="inline-flex items-center rounded-full bg-slate-50 border border-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600"
+      >
+        {PAYMENT_LABELS[invoice.payment_method] ?? invoice.payment_method}
+      </span>
+    );
+  }
+  return <span className="text-sm text-slate-400">—</span>;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
@@ -201,6 +244,8 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
     if (daysPastDueMax) p.days_past_due_max = Number(daysPastDueMax);
     const invoiceNumber = searchParams.get('invoice_number');
     if (invoiceNumber) p.invoice_number = invoiceNumber;
+    const paymentReference = searchParams.get('payment_reference');
+    if (paymentReference) p.payment_reference = paymentReference;
     const customerId = searchParams.get('customer_search');
     if (customerId) p.customer_search = customerId;
     const jobId = searchParams.get('job_id');
@@ -368,6 +413,13 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
         if (!method) return <span className="text-sm text-slate-400">—</span>;
         return <span className="text-sm text-slate-600">{PAYMENT_LABELS[method] ?? method}</span>;
       },
+    },
+    {
+      id: 'channel',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">Channel</span>
+      ),
+      cell: ({ row }) => <ChannelPill invoice={row.original} />,
     },
     {
       id: 'actions',
