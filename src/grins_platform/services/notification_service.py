@@ -189,6 +189,24 @@ class NotificationService(LoggerMixin):
             )
         return None
 
+    @staticmethod
+    def _payment_link_snippets(invoice: Invoice) -> tuple[str, str]:
+        """Render the optional Stripe Payment Link snippets for reminders.
+
+        Returns a ``(sms_fragment, html_fragment)`` tuple. Both are empty
+        strings when the invoice has no active Payment Link, so callers
+        can safely concatenate them into reminder bodies without branching.
+
+        Per Stripe Payment Links plan §Phase 4 (D5).
+        """
+        if not (invoice.stripe_payment_link_url and invoice.stripe_payment_link_active):
+            return "", ""
+        sms_fragment = f" Pay now: {invoice.stripe_payment_link_url}"
+        html_fragment = (
+            f'<p><a href="{invoice.stripe_payment_link_url}">Pay now</a></p>'
+        )
+        return sms_fragment, html_fragment
+
     # ------------------------------------------------------------------ #
     # Internal helpers
     # ------------------------------------------------------------------ #
@@ -902,6 +920,10 @@ class NotificationService(LoggerMixin):
     ) -> NotificationResult:
         """Send past-due invoice reminder with portal link.
 
+        Per Stripe Payment Links plan §Phase 4 (D5): when the invoice has
+        an active Stripe Payment Link, append a one-tap "Pay now" link to
+        both SMS and email so reminders double as conversion paths.
+
         Validates: Req 54.3, 84.7
         """
         portal_link = self._get_portal_invoice_link(invoice)
@@ -911,17 +933,20 @@ class NotificationService(LoggerMixin):
             portal_text = f" View and pay: {portal_link}"
             portal_html = f'<p><a href="{portal_link}">View and Pay Invoice</a></p>'
 
+        pay_link_text, pay_link_html = self._payment_link_snippets(invoice)
+
         sms_body = (
             f"Your invoice {invoice.invoice_number} for "
             f"${invoice.total_amount} is past due. "
-            f"Please pay at your earliest convenience.{portal_text}"
+            f"Please pay at your earliest convenience."
+            f"{pay_link_text}{portal_text}"
         )
         email_body = (
             f"<p>Your invoice <strong>{invoice.invoice_number}</strong> "
             f"for <strong>${invoice.total_amount}</strong> is past due.</p>"
             f"<p>Please arrange payment at your earliest convenience "
             f"to avoid additional fees.</p>"
-            f"{portal_html}"
+            f"{pay_link_html}{portal_html}"
         )
 
         self.logger.info(
@@ -969,12 +994,14 @@ class NotificationService(LoggerMixin):
             portal_text = f" Pay now: {portal_link}"
             portal_html = f'<p><a href="{portal_link}">Pay Invoice Now</a></p>'
 
+        pay_link_text, pay_link_html = self._payment_link_snippets(invoice)
+
         sms_body = (
             f"IMPORTANT: Invoice {invoice.invoice_number} for "
             f"${invoice.total_amount} is 30+ days past due. "
             f"A lien may be filed against {address} if payment "
             f"is not received by {lien_deadline.strftime('%B %d, %Y')}."
-            f"{portal_text}"
+            f"{pay_link_text}{portal_text}"
         )
         email_body = (
             f"<p><strong>Formal Lien Notice</strong></p>"
@@ -987,7 +1014,7 @@ class NotificationService(LoggerMixin):
             f"{lien_deadline.strftime('%B %d, %Y')}</p>"
             f"<p>Please arrange immediate payment to avoid a lien "
             f"being filed against the property.</p>"
-            f"{portal_html}"
+            f"{pay_link_html}{portal_html}"
         )
 
         self.logger.info(

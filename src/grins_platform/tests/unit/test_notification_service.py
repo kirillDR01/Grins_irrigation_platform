@@ -107,6 +107,8 @@ def _make_invoice_mock(
     lien_eligible: bool = False,
     lien_warning_sent: datetime | None = None,
     customer: MagicMock | None = None,
+    stripe_payment_link_url: str | None = None,
+    stripe_payment_link_active: bool = False,
 ) -> MagicMock:
     """Create a mock Invoice."""
     inv = MagicMock()
@@ -125,6 +127,8 @@ def _make_invoice_mock(
     inv.document_url = None
     inv.invoice_token = None
     inv.customer_name = None
+    inv.stripe_payment_link_url = stripe_payment_link_url
+    inv.stripe_payment_link_active = stripe_payment_link_active
     return inv
 
 
@@ -1281,3 +1285,177 @@ class TestSendAdminCancellationAlert:
         email_svc._send_email.assert_not_called()
         # Alert row still created.
         db.add.assert_called_once()
+
+
+# =============================================================================
+# Stripe Payment Links plan §Phase 4 (D5) — link injection in reminder bodies
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestPaymentLinkInjectionInReminders:
+    """Phase 4 (D5): overdue + lien reminders include the Payment Link.
+
+    Asserts:
+      - 4.1 — past-due reminder SMS/email body contains the Payment Link
+        when ``stripe_payment_link_active=True``, and does NOT contain it
+        when ``False`` or when the URL is null.
+      - 4.2 — lien-warning notification body contains the Payment Link
+        under the same conditions.
+    """
+
+    def test_payment_link_snippets_returns_url_when_active(self) -> None:
+        """Helper returns SMS + HTML fragments when link is active."""
+        inv = _make_invoice_mock(
+            stripe_payment_link_url="https://buy.stripe.com/test_active",
+            stripe_payment_link_active=True,
+        )
+        sms_fragment, html_fragment = NotificationService._payment_link_snippets(inv)
+        assert "https://buy.stripe.com/test_active" in sms_fragment
+        assert sms_fragment.startswith(" Pay now: ")
+        assert 'href="https://buy.stripe.com/test_active"' in html_fragment
+        assert "<p>" in html_fragment
+        assert "Pay now</a>" in html_fragment
+
+    def test_payment_link_snippets_empty_when_inactive(self) -> None:
+        """Helper returns empty strings when link exists but is inactive."""
+        inv = _make_invoice_mock(
+            stripe_payment_link_url="https://buy.stripe.com/test_inactive",
+            stripe_payment_link_active=False,
+        )
+        sms_fragment, html_fragment = NotificationService._payment_link_snippets(inv)
+        assert sms_fragment == ""
+        assert html_fragment == ""
+
+    def test_payment_link_snippets_empty_when_url_missing(self) -> None:
+        """Helper returns empty strings when URL is None."""
+        inv = _make_invoice_mock(
+            stripe_payment_link_url=None,
+            stripe_payment_link_active=True,
+        )
+        sms_fragment, html_fragment = NotificationService._payment_link_snippets(inv)
+        assert sms_fragment == ""
+        assert html_fragment == ""
+
+    @pytest.mark.asyncio
+    async def test_send_past_due_reminder_includes_payment_link_when_active(
+        self,
+    ) -> None:
+        """4.1: past-due reminder SMS body contains the Payment Link URL."""
+        sms_svc = AsyncMock()
+        sms_svc.send_message = AsyncMock(
+            return_value={"success": True, "message_id": "m1", "status": "sent"},
+        )
+        svc = _build_service(sms_service=sms_svc)
+        invoice = _make_invoice_mock(
+            stripe_payment_link_url="https://buy.stripe.com/test_PAYLINK",
+            stripe_payment_link_active=True,
+        )
+        customer = _make_customer_mock()
+        invoice.customer = customer
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+
+        await svc._send_past_due_reminder(db, invoice, customer)
+
+        # Inspect the SMS body that was sent
+        assert sms_svc.send_message.await_count == 1
+        kwargs = sms_svc.send_message.await_args.kwargs
+        sms_body = kwargs.get("message") or kwargs.get("body") or ""
+        if not sms_body:
+            # _send_notification likely passes positionally; capture all args
+            sms_body = " ".join(str(a) for a in sms_svc.send_message.await_args.args)
+        assert "https://buy.stripe.com/test_PAYLINK" in sms_body
+        assert "Pay now:" in sms_body
+
+    @pytest.mark.asyncio
+    async def test_send_past_due_reminder_omits_link_when_inactive(self) -> None:
+        """4.1: past-due reminder body does NOT contain link when inactive."""
+        sms_svc = AsyncMock()
+        sms_svc.send_message = AsyncMock(
+            return_value={"success": True, "message_id": "m1", "status": "sent"},
+        )
+        svc = _build_service(sms_service=sms_svc)
+        invoice = _make_invoice_mock(
+            stripe_payment_link_url="https://buy.stripe.com/test_DEACTIVATED",
+            stripe_payment_link_active=False,
+        )
+        customer = _make_customer_mock()
+        invoice.customer = customer
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+
+        await svc._send_past_due_reminder(db, invoice, customer)
+
+        kwargs = sms_svc.send_message.await_args.kwargs
+        sms_body = kwargs.get("message") or kwargs.get("body") or ""
+        if not sms_body:
+            sms_body = " ".join(str(a) for a in sms_svc.send_message.await_args.args)
+        assert "buy.stripe.com" not in sms_body
+        assert "Pay now:" not in sms_body
+
+    @pytest.mark.asyncio
+    async def test_send_lien_notification_includes_payment_link_when_active(
+        self,
+    ) -> None:
+        """4.2: lien-warning SMS body contains the Payment Link URL."""
+        sms_svc = AsyncMock()
+        sms_svc.send_message = AsyncMock(
+            return_value={"success": True, "message_id": "m1", "status": "sent"},
+        )
+        svc = _build_service(sms_service=sms_svc)
+        invoice = _make_invoice_mock(
+            stripe_payment_link_url="https://buy.stripe.com/test_LIEN",
+            stripe_payment_link_active=True,
+            lien_eligible=True,
+        )
+        customer = _make_customer_mock()
+        invoice.customer = customer
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+
+        await svc._send_lien_notification(db, invoice, customer)
+
+        kwargs = sms_svc.send_message.await_args.kwargs
+        sms_body = kwargs.get("message") or kwargs.get("body") or ""
+        if not sms_body:
+            sms_body = " ".join(str(a) for a in sms_svc.send_message.await_args.args)
+        assert "https://buy.stripe.com/test_LIEN" in sms_body
+        assert "Pay now:" in sms_body
+        # Ensure the lien-specific copy still present
+        assert "lien" in sms_body.lower() or "IMPORTANT" in sms_body
+
+    @pytest.mark.asyncio
+    async def test_send_lien_notification_omits_link_when_inactive(self) -> None:
+        """4.2: lien-warning body does NOT contain link when inactive."""
+        sms_svc = AsyncMock()
+        sms_svc.send_message = AsyncMock(
+            return_value={"success": True, "message_id": "m1", "status": "sent"},
+        )
+        svc = _build_service(sms_service=sms_svc)
+        invoice = _make_invoice_mock(
+            stripe_payment_link_url=None,
+            stripe_payment_link_active=False,
+            lien_eligible=True,
+        )
+        customer = _make_customer_mock()
+        invoice.customer = customer
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+
+        await svc._send_lien_notification(db, invoice, customer)
+
+        kwargs = sms_svc.send_message.await_args.kwargs
+        sms_body = kwargs.get("message") or kwargs.get("body") or ""
+        if not sms_body:
+            sms_body = " ".join(str(a) for a in sms_svc.send_message.await_args.args)
+        assert "buy.stripe.com" not in sms_body
+        assert "Pay now:" not in sms_body
