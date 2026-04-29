@@ -135,7 +135,7 @@ class SentMessage(Base):
             "'custom', 'lead_confirmation', 'estimate_sent', 'contract_sent', "
             "'review_request', 'campaign', 'google_review_request', 'on_my_way', "
             "'automated_notification', 'appointment_confirmation_reply', "
-            "'reschedule_followup')",
+            "'reschedule_followup', 'payment_link')",
             name="ck_sent_messages_message_type",
         ),
         CheckConstraint(
