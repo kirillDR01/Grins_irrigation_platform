@@ -1,6 +1,19 @@
 """Stripe Terminal service for tap-to-pay integration.
 
-Validates: Requirements 16.6, 16.7
+DEPRECATED — Architecture C (Stripe Payment Links via SMS) replaces
+Tap-to-Pay terminal collection as of 2026-04-28. New code MUST NOT import
+this module. Use ``StripePaymentLinkService`` from
+``grins_platform.services.stripe_payment_link_service`` instead.
+
+This module is retained as a placeholder for a possible future Capacitor-
+wrapped in-app Tap to Pay flow. It will be removed in a follow-up cleanup
+PR once that future is decided.
+
+References:
+- Plan of record: ``.agents/plans/stripe-tap-to-pay-and-invoicing.md``
+- Operational runbook: ``docs/payments-runbook.md``
+
+Validates (legacy): Requirements 16.6, 16.7
 """
 
 import stripe

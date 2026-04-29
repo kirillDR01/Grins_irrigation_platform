@@ -101,15 +101,17 @@ Grin's Irrigation Platform is a field service automation system that eliminates 
 - Emergency job insertion
 - Schedule reoptimization
 
-### 8. Invoice Management
+### 8. Invoice Management & Payments
 - Invoice generation from completed jobs
 - Line item support
-- Payment tracking (Cash, Check, Venmo, Zelle, Stripe)
-- Partial payment support
-- Overdue invoice tracking
+- **Stripe Payment Links via SMS** (Architecture C): every invoice gets a hosted Stripe link auto-generated on creation; tap **Send Payment Link** to text it to the customer (Apple Pay / Google Pay / card supported). Webhook reconciliation flips the invoice to **Paid** without manual entry. No card data on Grin's servers, no PCI scope, no card readers.
+- Manual payment recording for non-Stripe channels: Cash, Check, Venmo, Zelle
+- Partial payment support (multi-tender and installments)
+- Overdue invoice tracking with reminder SMS that include the Payment Link
 - Lien eligibility tracking (45-day warning, 120-day filing)
-- Payment reminders
-- Invoice status workflow: Draft → Sent → Viewed → Paid/Partial/Overdue
+- Refund and dispute reconciliation driven by Stripe webhooks (`charge.refunded`, `charge.dispute.created`)
+- Invoice status workflow: Draft → Sent → Viewed → Paid / Partial / Overdue / Refunded / Disputed
+- **Operational docs:** [`docs/payments-tech-1-pager.md`](docs/payments-tech-1-pager.md) for techs, [`docs/payments-runbook.md`](docs/payments-runbook.md) for office and engineering
 
 ### 9. AI Assistant Features
 - **Job Categorization**: AI-powered analysis of job descriptions
@@ -514,7 +516,8 @@ CORS_ORIGINS=http://localhost:5173,https://your-domain.com
 | `/api/v1/invoices/{id}` | PUT | Update invoice |
 | `/api/v1/invoices/{id}/cancel` | POST | Cancel invoice |
 | `/api/v1/invoices/{id}/send` | POST | Send invoice |
-| `/api/v1/invoices/{id}/payment` | POST | Record payment |
+| `/api/v1/invoices/{id}/payment` | POST | Record payment (cash/check/Venmo/Zelle) |
+| `/api/v1/invoices/{id}/send-link` | POST | Send/resend Stripe Payment Link via SMS |
 | `/api/v1/invoices/{id}/reminder` | POST | Send reminder |
 | `/api/v1/invoices/{id}/lien-warning` | POST | Send lien warning |
 | `/api/v1/invoices/{id}/lien-filed` | POST | Mark lien filed |

@@ -1,6 +1,19 @@
 """Stripe Terminal API endpoints for tap-to-pay integration.
 
-Validates: Requirements 16.2, 16.6, 16.7
+DEPRECATED — Architecture C (Stripe Payment Links via SMS) replaces
+Tap-to-Pay terminal collection as of 2026-04-28. New frontend code MUST
+NOT call these routes. Use ``POST /api/v1/invoices/{id}/send-link``
+instead (see ``api/v1/invoices.py``).
+
+These routes remain mounted only because the deprecated
+``services.stripe_terminal`` module is retained for a possible future
+Capacitor-wrapped flow. They will be removed in a follow-up cleanup PR.
+
+References:
+- Plan of record: ``.agents/plans/stripe-tap-to-pay-and-invoicing.md``
+- Operational runbook: ``docs/payments-runbook.md``
+
+Validates (legacy): Requirements 16.2, 16.6, 16.7
 """
 
 from typing import Annotated

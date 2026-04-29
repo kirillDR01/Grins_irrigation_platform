@@ -1,6 +1,15 @@
 /**
- * Stripe Terminal API client for tap-to-pay integration.
- * Validates: Requirements 16.2, 16.6, 16.7
+ * @deprecated Architecture C (Stripe Payment Links via SMS) replaces
+ * Tap-to-Pay terminal collection as of 2026-04-28. New code MUST NOT
+ * import this client; use `useSendPaymentLink` from the invoices feature
+ * instead. The file is retained until backend `/stripe/terminal/*`
+ * routes are removed in a follow-up cleanup PR.
+ *
+ * References:
+ * - Plan of record: `.agents/plans/stripe-tap-to-pay-and-invoicing.md`
+ * - Operational runbook: `docs/payments-runbook.md`
+ *
+ * Validates (legacy): Requirements 16.2, 16.6, 16.7.
  */
 
 import { apiClient } from '@/core/api/client';
