@@ -1039,9 +1039,7 @@ class InvoiceService(LoggerMixin):
                 self.logger.warning(
                     "payment.send_link.email_blocked_by_allowlist",
                     invoice_id=str(invoice.id),
-                    recipient_last4=(
-                        customer.email[-4:] if customer.email else None
-                    ),
+                    recipient_last4=(customer.email[-4:] if customer.email else None),
                 )
                 sent = False
             if sent:

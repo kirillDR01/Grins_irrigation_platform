@@ -12,10 +12,20 @@ vi.mock('../api/invoiceApi', () => ({
   invoiceApi: {
     get: vi.fn(),
     send: vi.fn(),
+    sendPaymentLink: vi.fn(),
     recordPayment: vi.fn(),
     sendReminder: vi.fn(),
     sendLienWarning: vi.fn(),
     markLienFiled: vi.fn(),
+    generatePdfUrl: vi.fn(),
+  },
+}));
+
+// Mock sonner toast — module-scoped so each test can read .mock.calls.
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
   },
 }));
 
@@ -285,6 +295,73 @@ describe('InvoiceDetail', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Test invoice notes')).toBeInTheDocument();
+    });
+  });
+
+  describe('Send Payment Link toast', () => {
+    it('surfaces SMS failure reason when fallback to email occurred', async () => {
+      const { toast } = await import('sonner');
+      const user = userEvent.setup();
+
+      vi.mocked(invoiceApi.get).mockResolvedValue({
+        ...mockInvoice,
+        status: 'sent',
+      });
+      vi.mocked(invoiceApi.sendPaymentLink).mockResolvedValue({
+        channel: 'email',
+        link_url: 'https://buy.stripe.com/test',
+        sent_at: '2026-04-29T12:00:00Z',
+        sent_count: 1,
+        attempted_channels: ['sms', 'email'],
+        sms_failure_reason: 'rate_limit',
+      });
+
+      render(<InvoiceDetail />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('send-payment-link-btn')).toBeInTheDocument();
+      });
+      await user.click(screen.getByTestId('send-payment-link-btn'));
+
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalled();
+      });
+      const args = vi.mocked(toast.success).mock.calls.at(-1);
+      expect(args?.[0]).toBe('Payment Link sent');
+      expect(args?.[1]).toMatchObject({
+        description: expect.stringMatching(/SMS rate-limited/i) as unknown,
+      });
+    });
+
+    it('shows simple description when SMS succeeds (no fallback)', async () => {
+      const { toast } = await import('sonner');
+      const user = userEvent.setup();
+
+      vi.mocked(invoiceApi.get).mockResolvedValue({
+        ...mockInvoice,
+        status: 'sent',
+      });
+      vi.mocked(invoiceApi.sendPaymentLink).mockResolvedValue({
+        channel: 'sms',
+        link_url: 'https://buy.stripe.com/test',
+        sent_at: '2026-04-29T12:00:00Z',
+        sent_count: 1,
+        attempted_channels: ['sms'],
+        sms_failure_reason: null,
+      });
+
+      render(<InvoiceDetail />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('send-payment-link-btn')).toBeInTheDocument();
+      });
+      await user.click(screen.getByTestId('send-payment-link-btn'));
+
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalled();
+      });
+      const args = vi.mocked(toast.success).mock.calls.at(-1);
+      expect(args?.[1]).toMatchObject({ description: 'Sent via SMS' });
     });
   });
 });

@@ -200,6 +200,8 @@ describe('PaymentCollector', () => {
       link_url: 'https://buy.stripe.com/test_abc',
       sent_at: '2026-04-28T00:00:00Z',
       sent_count: 1,
+      attempted_channels: ['sms'],
+      sms_failure_reason: null,
     });
     render(<PaymentCollector {...baseProps} />, { wrapper: createWrapper() });
     await waitFor(() => {
@@ -229,6 +231,8 @@ describe('PaymentCollector', () => {
       link_url: 'https://buy.stripe.com/test_xyz',
       sent_at: '2026-04-28T00:00:00Z',
       sent_count: 1,
+      attempted_channels: ['email'],
+      sms_failure_reason: 'no_phone',
     });
     render(<PaymentCollector {...baseProps} />, { wrapper: createWrapper() });
     await waitFor(() => {
@@ -258,6 +262,35 @@ describe('PaymentCollector', () => {
     );
     await waitFor(() => {
       expect(screen.getByTestId('payment-collector-no-contact')).toBeInTheDocument();
+    });
+  });
+
+  it('surfaces SMS failure reason in toast description on email fallback', async () => {
+    const { toast } = await import('sonner');
+    const user = userEvent.setup();
+    vi.mocked(invoiceApi.list).mockResolvedValue({
+      items: [buildInvoice()], total: 1, page: 1, page_size: 50, total_pages: 1,
+    });
+    vi.mocked(invoiceApi.sendPaymentLink).mockResolvedValue({
+      channel: 'email',
+      link_url: 'https://buy.stripe.com/test_abc',
+      sent_at: '2026-04-28T00:00:00Z',
+      sent_count: 1,
+      attempted_channels: ['sms', 'email'],
+      sms_failure_reason: 'rate_limit',
+    });
+    render(<PaymentCollector {...baseProps} />, { wrapper: createWrapper() });
+    await waitFor(() => {
+      expect(screen.getByTestId('send-payment-link-btn')).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId('send-payment-link-btn'));
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalled();
+    });
+    const args = vi.mocked(toast.success).mock.calls.at(-1);
+    expect(args?.[0]).toBe('Payment Link sent');
+    expect(args?.[1]).toMatchObject({
+      description: expect.stringMatching(/SMS rate-limited/i) as unknown,
     });
   });
 });

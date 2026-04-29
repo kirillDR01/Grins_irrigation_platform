@@ -12,13 +12,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from grins_platform.main import app
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
+
+    from fastapi import FastAPI
 
 
 @pytest.fixture

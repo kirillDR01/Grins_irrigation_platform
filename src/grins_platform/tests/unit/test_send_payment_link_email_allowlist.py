@@ -1,4 +1,4 @@
-"""Unit test for Bug 2 — ``send_payment_link`` catches ``EmailRecipientNotAllowedError``.
+"""Unit test for Bug 2 — email allowlist refusal in ``send_payment_link``.
 
 When the dev/staging email allowlist refuses the recipient and SMS also
 fails, the service must surface ``NoContactMethodError`` (HTTP 422 via

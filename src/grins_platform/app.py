@@ -218,6 +218,40 @@ def create_app() -> FastAPI:
             regex_parts.append(escaped)
         origin_regex = "^(" + "|".join(regex_parts) + ")$"
 
+    # Catch-all unhandled-exception middleware. Added FIRST so it ends up
+    # *inside* CORSMiddleware in the wrap order (Starlette wraps later-added
+    # middleware as outermost). When this middleware catches an exception
+    # and returns a JSONResponse, that response then goes back through
+    # CORSMiddleware, which attaches Access-Control-Allow-Origin.
+    # Without this, 5xx responses from `ServerErrorMiddleware` bypass CORS
+    # and the browser sees an opaque "Network Error" instead of the real
+    # status + body. (bughunt 2026-04-28 §Bug 4.)
+    @app.middleware("http")  # type: ignore[untyped-decorator]
+    async def _catch_unhandled_exceptions(
+        request: Request,
+        call_next: Any,  # noqa: ANN401
+    ) -> Any:  # noqa: ANN401
+        try:
+            return await call_next(request)
+        except Exception as exc:
+            logger.exception(
+                "api.exception.unhandled",
+                path=request.url.path,
+                method=request.method,
+                error=str(exc),
+                exc_type=type(exc).__name__,
+            )
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={
+                    "success": False,
+                    "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "Internal server error",
+                    },
+                },
+            )
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=exact_origins,

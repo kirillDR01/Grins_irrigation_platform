@@ -5,6 +5,45 @@ Grin's Irrigation Platform — field service automation for residential/commerci
 
 ## Recent Activity
 
+## [2026-04-29 17:15] - BUGFIX: Stripe Payment Links E2E bug bundle (bughunt 2026-04-28)
+
+### What Was Accomplished
+- Bug 2: `InvoiceService.send_payment_link` now catches `EmailRecipientNotAllowedError` from `_send_email`, logs `payment.send_link.email_blocked_by_allowlist`, sets `email_sent=False`, and falls through to the existing `NoContactMethodError → 422` path. Email-allowlist refusals on dev/staging no longer surface as opaque 500s.
+- Bug 3: `SendLinkResponse` (backend Pydantic + frontend TS) gains `attempted_channels: list[Literal["sms","email"]]` and `sms_failure_reason: Literal["consent","rate_limit","provider_error","no_phone"] | None`. The SMS failure taxonomy now distinguishes consent vs. rate-limit vs. provider error vs. no-phone-on-file. `InvoiceDetail.tsx` and `PaymentCollector.tsx` toasts surface the reason in the description (`Sent via email (SMS rate-limited; retrying shortly)`).
+- Bug 4: Added a top-level `@app.middleware("http")` catch-all that converts uncaught exceptions to JSON 500. Placed BEFORE `CORSMiddleware` in registration order so the JSONResponse goes back through CORS — the browser now sees the real status + body instead of an opaque "Network Error". Also added `@app.exception_handler(Exception)` as belt-and-suspenders fallback (defense in depth for in-middleware failures).
+- Bug 5: `scripts/seed_e2e_payment_links.py` reuse branch now PUTs `email`/`email_opt_in`/`sms_opt_in` after lookup so the test invariants survive consecutive seeder runs. Tagged `(reused, refreshed)` in stderr for traceability.
+- Bug 6: `e2e/payment-links-flow.sh` Journey 1 now targets `[data-testid='fc-event-$APPOINTMENT_ID']` instead of clicking the first `.fc-event`. `CalendarView.tsx` adds the `data-testid` via FullCalendar's `eventDidMount` hook, since `eventContent` returns React content for a CHILD element (not the `.fc-event` wrapper).
+- Bug 7: Documented Railway DOCKERFILE-builder pin in `docs/payments-runbook.md` as a manual ops step. Cosmetic but cost ~10 min triage during the bug hunt.
+- Bug 1 follow-up: `scripts/check-alembic-heads.sh` uses `grep -c '(head)'` for canonical multi-head detection. `.github/workflows/alembic-heads.yml` runs it on PR + push to `main`/`dev`. Husky deferred per Task 19 of the plan to avoid breaking Vercel's root-`package.json` install path.
+
+### Technical Details
+- `src/grins_platform/schemas/invoice.py:642-666` — `SendLinkResponse` extended with `attempted_channels` (default `[]`) and `sms_failure_reason` (default `None`). Both Field-described per existing convention.
+- `src/grins_platform/services/invoice_service.py` — runtime import of `EmailRecipientNotAllowedError` (NOT under TYPE_CHECKING); `Literal` added to typing imports; new locals `attempted_channels` + `sms_failure_reason` threaded through SMS branch (consent → rate_limit → provider_error/SMSError) into `_record_link_sent`. Email branch wrapped in try/except for the allowlist exception. Existing `except (SMSRateLimitDeniedError, SMSError)` split into separate clauses (subclass-first) so the failure-reason label is precise.
+- `src/grins_platform/app.py` — new `_catch_unhandled_exceptions` http middleware added BEFORE `app.add_middleware(CORSMiddleware, ...)` so it ends up *inside* CORS in the wrap order; response goes back through CORS which attaches `Access-Control-Allow-Origin`. Also added `unhandled_exception_handler` at the end of `_register_exception_handlers` as fallback.
+- `frontend/src/features/invoices/utils/smsFailureLabel.ts` — new shared helper `humanizeSmsFailure` re-exported from the feature index; both `InvoiceDetail.tsx` and `PaymentCollector.tsx` import it. Vertical-slice rule: util lives in the slice that owns the type, not in `shared/` (only 2 callers).
+- `frontend/src/features/schedule/components/CalendarView.tsx` — `eventDidMount` callback sets `data-testid="fc-event-{event.id}"`. Note: `eventContent` (already in use for the inner card) returns a child element — it can't reach the `.fc-event` wrapper.
+- `e2e/payment-links-flow.sh` — Journey 1 rewritten to require `APPOINTMENT_ID` and target the seeded appointment by id. `?focus=` deep-link path was NOT added (verified `SchedulePage.tsx:78-98` only handles `?scheduleJobId`); the seeder always creates today's appointment so default-week view contains it.
+- `scripts/seed_e2e_payment_links.py:56-72` — reuse branch now PUTs the test-invariant fields. PUT shape verified safe against `customers.py:420` (no expected_version required).
+- `scripts/check-alembic-heads.sh`, `.github/workflows/alembic-heads.yml` — single-job CI workflow on `pull_request`/`push` to `main`/`dev`, uses `astral-sh/setup-uv@v3` and `uv sync --frozen`. First workflow in this repo.
+- `docs/payments-runbook.md` — appended "Railway service builder pin" + "Optional local guard" sections.
+- Tests: 5 new + 1 updated `test_invoice_service_send_link.py` test (4 SMS-failure modes + happy-path + soft-fail); 1 new `test_send_payment_link_email_allowlist.py` (email-allowlist refusal); 1 new `test_send_payment_link_allowlist_integration.py` (422 contract); 1 new `test_cors_on_5xx.py` (CORS-on-500 invariant); 2 updated + 1 new frontend test for the extended response shape.
+
+### Decision Rationale
+- **HTTP middleware (not exception_handler) for Bug 4.** The plan called for `@app.exception_handler(Exception)`. Verified empirically: that handler runs in `ServerErrorMiddleware` which is OUTSIDE all user middleware, so the JSONResponse it returns bypasses `CORSMiddleware`. Confirmed via a minimal repro (`uv run python -c "..."`). Switched to a `@app.middleware("http")` placed BEFORE the CORS add — the response then unwinds through CORS, which attaches headers. Kept the original exception_handler as a fallback for in-middleware failures (defense in depth).
+- **Husky deferred (Task 19).** Root `package.json` is consumed by Vercel for frontend deploys; adding `husky` + `prepare` would break those deploys (no `.git` in production install). CI workflow alone is sufficient since multi-head can't reach `main`/`dev` without failing.
+- **`eventDidMount` over `eventContent`.** FullCalendar's `eventContent` callback returns React content for a CHILD element of `.fc-event` (the inner card). To put the `data-testid` on the actual `.fc-event` DOM node — which is the click target for the E2E selector — only `eventDidMount` (which exposes `info.el`, the wrapper) works.
+
+### Challenges and Solutions
+- **CORS-on-500 test failed initially**: discovered the `@app.exception_handler(Exception)` path goes through `ServerErrorMiddleware` (outside CORS). Reproduced in isolation, then changed approach to use an `@app.middleware("http")` wrapper. Test passes after the swap.
+- **Existing PaymentCollector test mocks**: had to extend resolved-value mocks with `attempted_channels` and `sms_failure_reason` to satisfy the new `SendPaymentLinkResponse` shape. 2 existing tests updated, 1 new fallback-toast test added.
+
+### Next Steps
+- Manual ops: pin Railway service builder to DOCKERFILE on both dev and prod (Bug 7 — runbook step).
+- After next dev deploy: re-run `bash e2e/payment-links-flow.sh` against the seeded fixtures and capture fresh screenshots in `e2e-screenshots/payment-links-architecture-c/`.
+- After CI workflow lands on `main`/`dev`: confirm GitHub Actions run goes green on the current single-head state.
+
+---
+
 ## [2026-04-28 19:11] - FEATURE: Stripe Payment Links via SMS (Architecture C)
 
 ### What Was Accomplished
