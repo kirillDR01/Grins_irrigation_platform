@@ -1,7 +1,8 @@
-import { useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { InvoiceList, CreateInvoiceDialog } from '@/features/invoices';
+import { InvoiceDetail } from '@/features/invoices/components';
 import { LienReviewQueue } from '@/features/invoices/components/LienReviewQueue';
 import { PageHeader } from '@/shared/components';
 import {
@@ -17,6 +18,11 @@ const TAB_LIEN = 'lien-review';
 export function InvoicesPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { id } = useParams<{ id: string }>();
+
+  if (id) {
+    return <InvoiceDetail />;
+  }
 
   const activeTab =
     searchParams.get('tab') === TAB_LIEN ? TAB_LIEN : TAB_ALL;

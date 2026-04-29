@@ -564,9 +564,10 @@ class StripeWebhookHandler(LoggerMixin):
         # or missing) is either the first invoice or a non-renewal charge.
         billing_reason = (invoice_obj.get("billing_reason") or "").strip()
         is_renewal_cycle = billing_reason == "subscription_cycle"
-        is_first_invoice = (
-            agreement.last_payment_date is None
-            and billing_reason in ("subscription_create", "", "manual")
+        is_first_invoice = agreement.last_payment_date is None and billing_reason in (
+            "subscription_create",
+            "",
+            "manual",
         )
 
         if is_first_invoice:
@@ -1327,9 +1328,7 @@ class StripeWebhookHandler(LoggerMixin):
             if due_by
             else "unknown"
         )
-        annotation = (
-            f"Stripe dispute opened ({reason}); evidence due by {due_str}."
-        )
+        annotation = f"Stripe dispute opened ({reason}); evidence due by {due_str}."
         new_notes = f"{prior_notes}\n{annotation}".strip()
         await invoice_repo.update(
             invoice.id,

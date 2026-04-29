@@ -208,10 +208,7 @@ class StripePaymentLinkService(LoggerMixin):
                 qty_raw = raw.get("quantity", "1")
                 qty = Decimal(str(qty_raw))
                 if qty <= 0:
-                    msg = (
-                        f"Line item quantity must be > 0, got {qty} "
-                        f"for {raw}"
-                    )
+                    msg = f"Line item quantity must be > 0, got {qty} for {raw}"
                     raise StripePaymentLinkError(msg)
                 total = Decimal(str(raw["total"]))
                 unit_amount = int((total / qty * 100).to_integral_value())

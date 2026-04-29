@@ -501,9 +501,7 @@ class InvoiceService(LoggerMixin):
         old_line_items = invoice.line_items
         new_total = update_data.get("total_amount", old_total)
         new_line_items = update_data.get("line_items", old_line_items)
-        link_inputs_changed = (
-            new_total != old_total or new_line_items != old_line_items
-        )
+        link_inputs_changed = new_total != old_total or new_line_items != old_line_items
 
         updated = await self.invoice_repository.update(invoice_id, **update_data)
         if not updated:
@@ -790,10 +788,7 @@ class InvoiceService(LoggerMixin):
             # Already attached and live — nothing to do.
             return
 
-        if (
-            self.payment_link_service is None
-            or self.customer_repository is None
-        ):
+        if self.payment_link_service is None or self.customer_repository is None:
             # Best-effort wiring; missing DI means tests / legacy callers.
             self.logger.debug(
                 "payment.invoice.attach_payment_link_skipped_missing_di",
@@ -1007,8 +1002,7 @@ class InvoiceService(LoggerMixin):
             sent = self.email_service._send_email(  # noqa: SLF001 — established pattern
                 to_email=customer.email,
                 subject=(
-                    f"Your invoice from Grin's Irrigation — "
-                    f"${invoice.total_amount}"
+                    f"Your invoice from Grin's Irrigation — ${invoice.total_amount}"
                 ),
                 html_body=html_body,
                 text_body=text_body,
@@ -1627,7 +1621,9 @@ class InvoiceService(LoggerMixin):
                 key,
                 {
                     "customer_id": customer.id,
-                    "customer_name": f"{customer.first_name} {customer.last_name}".strip(),
+                    "customer_name": (
+                        f"{customer.first_name} {customer.last_name}".strip()
+                    ),
                     "customer_phone": getattr(customer, "phone", None),
                     "oldest_age": 0,
                     "total": Decimal(0),
@@ -1753,7 +1749,8 @@ class InvoiceService(LoggerMixin):
         # behavior). Now uses canonical merge keys (bughunt M-14).
         oldest_inv = invoices[0]
         total_amount = sum(
-            (inv.total_amount for inv in invoices), start=Decimal(0),
+            (inv.total_amount for inv in invoices),
+            start=Decimal(0),
         )
         full_name = " ".join(
             p
