@@ -1,17 +1,34 @@
 /**
  * AIScheduleView — composed page component combining ScheduleOverviewEnhanced,
  * AlertsPanel, and SchedulingChat in a two-column layout.
+ *
+ * Bug 1 fix: previously rendered ScheduleOverviewEnhanced with empty
+ * resources/days/capacityDays arrays. Now wires useUtilizationReport and
+ * useCapacityForecast and adapts the responses into the overview shape.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ScheduleOverviewEnhanced } from './ScheduleOverviewEnhanced';
-import { AlertsPanel } from '@/features/scheduling-alerts';
+
 import { SchedulingChat } from '@/features/ai';
-import { ErrorBoundary } from '@/shared/components/ErrorBoundary';
-import { aiSchedulingKeys } from '../hooks/useAIScheduling';
-import { alertKeys } from '@/features/scheduling-alerts';
 import type { ScheduleChange } from '@/features/ai';
+import { AlertsPanel, alertKeys } from '@/features/scheduling-alerts';
+import { ErrorBoundary, ErrorMessage } from '@/shared/components/ErrorBoundary';
+import { LoadingSpinner } from '@/shared/components/LoadingSpinner';
+
+import {
+  aiSchedulingKeys,
+  useCapacityForecast,
+  useUtilizationReport,
+  type CapacityForecastExtended,
+  type UtilizationReport,
+} from '../hooks/useAIScheduling';
+import {
+  ScheduleOverviewEnhanced,
+  type OverviewDay,
+  type OverviewResource,
+} from './ScheduleOverviewEnhanced';
+import type { CapacityDay } from './CapacityHeatMap';
 
 function ChatErrorFallback() {
   return (
@@ -27,15 +44,91 @@ function ChatErrorFallback() {
   );
 }
 
+function MainErrorFallback() {
+  return (
+    <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+      <p className="text-slate-600 mb-2 font-medium">Schedule unavailable</p>
+      <a href="/schedule" className="text-teal-600 hover:underline text-sm">
+        Reload
+      </a>
+    </div>
+  );
+}
+
+function shortDayLabel(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  const wkday = d.toLocaleDateString('en-US', { weekday: 'short' });
+  return `${wkday} ${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+function mapToOverviewShape(
+  util: UtilizationReport | undefined,
+  capacity: CapacityForecastExtended | undefined,
+  scheduleDate: string,
+): {
+  resources: OverviewResource[];
+  days: OverviewDay[];
+  capacityDays: CapacityDay[];
+} {
+  const resources: OverviewResource[] = (util?.resources ?? []).map((r) => ({
+    id: r.staff_id,
+    name: r.staff_name,
+    title: 'Technician',
+    utilization: Math.round(r.utilization_pct),
+    jobsByDate: {},
+  }));
+
+  const dayLabel = shortDayLabel(scheduleDate);
+  const dayJobCount = capacity?.total_jobs ?? util?.resources.reduce(
+    (sum, r) => sum + r.total_jobs,
+    0,
+  ) ?? 0;
+
+  const days: OverviewDay[] = [
+    {
+      date: scheduleDate,
+      label: dayLabel,
+      jobCount: dayJobCount,
+    },
+  ];
+
+  const utilization = Math.round(
+    capacity?.utilization_pct ?? util?.overall_utilization_pct ?? 0,
+  );
+  const capacityDays: CapacityDay[] = [
+    {
+      date: scheduleDate,
+      label: dayLabel,
+      utilization,
+    },
+  ];
+
+  return { resources, days, capacityDays };
+}
+
 export function AIScheduleView() {
   const queryClient = useQueryClient();
   const [scheduleDate, setScheduleDate] = useState<string>(
-    () => new Date().toISOString().split('T')[0]
+    () => new Date().toISOString().split('T')[0],
   );
+
+  const utilization = useUtilizationReport({
+    start_date: scheduleDate,
+    end_date: scheduleDate,
+  });
+  const capacity = useCapacityForecast(scheduleDate);
+
+  const { resources, days, capacityDays } = useMemo(
+    () => mapToOverviewShape(utilization.data, capacity.data, scheduleDate),
+    [utilization.data, capacity.data, scheduleDate],
+  );
+
+  const isLoading = utilization.isLoading || capacity.isLoading;
+  const queryError = (utilization.error ?? capacity.error) as Error | null;
 
   function handleViewModeChange(
     _mode: 'day' | 'week' | 'month',
-    date?: string
+    date?: string,
   ) {
     if (date) setScheduleDate(date);
   }
@@ -54,16 +147,27 @@ export function AIScheduleView() {
       {/* Visually hidden heading for accessibility */}
       <h1 className="sr-only">AI Schedule</h1>
 
-      <main className="flex flex-col overflow-auto">
-        <ScheduleOverviewEnhanced
-          weekTitle={`Schedule Overview — Week of ${scheduleDate}`}
-          resources={[]}
-          days={[]}
-          capacityDays={[]}
-          onViewModeChange={handleViewModeChange}
-        />
-        <AlertsPanel scheduleDate={scheduleDate} />
-      </main>
+      <ErrorBoundary fallback={<MainErrorFallback />}>
+        <main className="flex flex-col overflow-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <LoadingSpinner size="lg" />
+            </div>
+          ) : queryError ? (
+            <ErrorMessage error={queryError} />
+          ) : (
+            <ScheduleOverviewEnhanced
+              weekTitle={`Schedule Overview — Week of ${scheduleDate}`}
+              resources={resources}
+              days={days}
+              capacityDays={capacityDays}
+              currentDate={scheduleDate}
+              onViewModeChange={handleViewModeChange}
+            />
+          )}
+          <AlertsPanel scheduleDate={scheduleDate} />
+        </main>
+      </ErrorBoundary>
 
       <aside className="border-l border-slate-200 flex flex-col overflow-hidden">
         <ErrorBoundary fallback={<ChatErrorFallback />}>

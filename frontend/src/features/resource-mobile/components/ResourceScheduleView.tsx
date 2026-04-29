@@ -39,7 +39,8 @@ export function ResourceScheduleView({ schedule }: Props) {
           {schedule.jobs.map((job) => (
             <li
               key={job.id}
-              data-testid={`resource-job-card-${job.id}`}
+              data-testid={`route-card-${job.route_order}`}
+              data-job-id={job.id}
               className="bg-white rounded-xl border border-gray-200 shadow-sm p-4"
             >
               <div className="flex items-start justify-between gap-2">

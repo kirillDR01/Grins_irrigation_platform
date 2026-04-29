@@ -31,14 +31,25 @@ export interface ChatRequest {
   session_id?: string;
 }
 
+/**
+ * Mirrors `CriterionUsage` in `src/grins_platform/schemas/ai_scheduling.py`.
+ */
+export interface CriterionUsage {
+  number: number;
+  name: string;
+}
+
 export interface ChatResponse {
   response: string;
-  session_id: string;
-  schedule_changes: ScheduleChange[];
-  clarifying_questions: string[];
-  change_request_id: string | null;
-  criteria_used: Array<{ number: number; name: string }>;
-  schedule_summary: string | null;
+  /** Persistent multi-turn session id; echo back on the next request. */
+  session_id?: string | null;
+  schedule_changes?: ScheduleChange[] | null;
+  clarifying_questions?: string[] | null;
+  change_request_id?: string | null;
+  /** Subset of the 30 scheduling criteria that drove this response. */
+  criteria_used?: CriterionUsage[] | null;
+  /** "Mon: 10 jobs, Tue: 8 jobs" style summary when a solution is in scope. */
+  schedule_summary?: string | null;
 }
 
 // ---- Pre-job ----------------------------------------------------------------

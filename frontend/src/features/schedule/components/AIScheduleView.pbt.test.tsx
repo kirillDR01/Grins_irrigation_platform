@@ -18,6 +18,38 @@ import { ErrorBoundary } from '@/shared/components/ErrorBoundary';
 
 // ---- Mocks ----------------------------------------------------------------
 
+// Mock the data hooks so the component renders the overview rather than
+// the error state when the test's API client has no server to talk to.
+vi.mock('../hooks/useAIScheduling', async () => {
+  const actual = await vi.importActual<
+    typeof import('../hooks/useAIScheduling')
+  >('../hooks/useAIScheduling');
+  return {
+    ...actual,
+    useUtilizationReport: () => ({
+      data: {
+        period_start: '2026-04-29',
+        period_end: '2026-04-29',
+        overall_utilization_pct: 50,
+        resources: [],
+      },
+      isLoading: false,
+      error: null,
+    }),
+    useCapacityForecast: () => ({
+      data: {
+        date: '2026-04-29',
+        total_jobs: 0,
+        total_staff: 0,
+        utilization_pct: 50,
+        forecast_confidence: 0.5,
+      },
+      isLoading: false,
+      error: null,
+    }),
+  };
+});
+
 vi.mock('@/features/scheduling-alerts', () => ({
   AlertsPanel: ({ scheduleDate }: { scheduleDate?: string }) => (
     <div data-testid="alerts-panel" data-schedule-date={scheduleDate} />

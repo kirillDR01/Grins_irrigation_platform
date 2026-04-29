@@ -19,7 +19,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, select
+from sqlalchemy import and_, case, select
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002 - runtime for FastAPI DI
 
 from grins_platform.api.v1.auth_dependencies import (
@@ -161,9 +161,16 @@ async def list_alerts(
         if alert_status is not None:
             conditions.append(SchedulingAlert.status == alert_status)
 
+        # Bug 8 fix: SchedulingAlert.severity.desc() sorts lexicographically
+        # ("suggestion" > "critical"), which inverted the intended priority.
+        # Use a CASE expression so critical alerts always rank first.
+        severity_priority = case(
+            (SchedulingAlert.severity == "critical", 0),
+            (SchedulingAlert.severity == "suggestion", 1),
+            else_=2,
+        )
         stmt = select(SchedulingAlert).order_by(
-            # Alerts (critical) before suggestions
-            SchedulingAlert.severity.desc(),
+            severity_priority,
             SchedulingAlert.created_at.desc(),
         )
         if conditions:
@@ -275,6 +282,21 @@ async def dismiss_alert(
             raise HTTPException(  # noqa: TRY301
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Alert {alert_id} is already {alert.status}.",
+            )
+
+        if alert.severity != "suggestion":
+            _log.log_rejected(
+                "dismiss_alert",
+                reason="non_suggestion_severity",
+                alert_id=str(alert_id),
+                severity=alert.severity,
+            )
+            raise HTTPException(  # noqa: TRY301
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Only suggestions can be dismissed; "
+                    "resolve critical alerts via /resolve."
+                ),
             )
 
         alert.status = "dismissed"

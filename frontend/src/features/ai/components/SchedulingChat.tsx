@@ -17,7 +17,8 @@ function CriteriaTag({ number, name }: { number: number; name: string }) {
   return (
     <span
       className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-1 mb-1 cursor-pointer hover:bg-blue-200"
-      data-testid={`criteria-tag-${number}`}
+      data-testid={`chat-criteria-badge-${number}`}
+      data-criteria-number={number}
       title={name}
     >
       Criteria #{number}
@@ -71,7 +72,10 @@ function MessageBubble({
 
         {/* Schedule summary */}
         {message.scheduleSummary && (
-          <div className="mt-2 p-2 bg-white rounded border border-gray-200 text-xs text-gray-700">
+          <div
+            className="mt-2 p-2 bg-white rounded border border-gray-200 text-xs text-gray-700"
+            data-testid="chat-schedule-summary"
+          >
             <p className="font-medium mb-1">Schedule Summary</p>
             <p>{message.scheduleSummary}</p>
           </div>

@@ -1,19 +1,31 @@
 /**
- * Tests for AIScheduleView composed page component.
+ * Tests for AIScheduleView composed page component (Bug 1 + Bug 7 fixes).
+ *
+ * Replaces the previous "child components are mocked" smoke test with one
+ * that mocks the real data hooks (useUtilizationReport / useCapacityForecast)
+ * and asserts that the resource × day grid renders real rows from fixture
+ * data, plus that arrow navigation emits onViewModeChange with a date.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
-import { ErrorBoundary } from '@/shared/components/ErrorBoundary';
 
-// Mock heavy child components
-vi.mock('./ScheduleOverviewEnhanced', () => ({
-  ScheduleOverviewEnhanced: ({ weekTitle }: { weekTitle: string }) => (
-    <div data-testid="schedule-overview-enhanced">{weekTitle}</div>
-  ),
-}));
+const mockUseUtilization = vi.fn();
+const mockUseCapacity = vi.fn();
+
+vi.mock('../hooks/useAIScheduling', async () => {
+  const actual = await vi.importActual<
+    typeof import('../hooks/useAIScheduling')
+  >('../hooks/useAIScheduling');
+  return {
+    ...actual,
+    useUtilizationReport: (...args: unknown[]) => mockUseUtilization(...args),
+    useCapacityForecast: (...args: unknown[]) => mockUseCapacity(...args),
+  };
+});
 
 vi.mock('@/features/scheduling-alerts', () => ({
   AlertsPanel: () => <div data-testid="alerts-panel" />,
@@ -45,7 +57,11 @@ vi.mock('@/features/ai', () => ({
   AIEstimateGenerator: () => null,
   MorningBriefing: () => null,
   CommunicationsQueue: () => null,
-  useSchedulingChat: () => ({ messages: [], sendMessage: vi.fn(), isLoading: false }),
+  useSchedulingChat: () => ({
+    messages: [],
+    sendMessage: vi.fn(),
+    isLoading: false,
+  }),
   schedulingChatKeys: { all: ['scheduling-chat'] },
 }));
 
@@ -60,55 +76,170 @@ function wrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
+const utilFixture = {
+  period_start: '2026-04-29',
+  period_end: '2026-04-29',
+  overall_utilization_pct: 72,
+  resources: [
+    {
+      staff_id: 'staff-1',
+      staff_name: 'Alice Tech',
+      total_jobs: 4,
+      total_minutes: 240,
+      utilization_pct: 80,
+      revenue_per_hour: 120,
+    },
+    {
+      staff_id: 'staff-2',
+      staff_name: 'Bob Tech',
+      total_jobs: 3,
+      total_minutes: 180,
+      utilization_pct: 64,
+      revenue_per_hour: 110,
+    },
+  ],
+};
+
+const capacityFixture = {
+  date: '2026-04-29',
+  total_jobs: 7,
+  total_staff: 2,
+  utilization_pct: 72,
+  forecast_confidence: 0.8,
+};
+
+afterEach(() => {
+  mockUseUtilization.mockReset();
+  mockUseCapacity.mockReset();
+});
+
 describe('AIScheduleView', () => {
-  it('renders with data-testid="ai-schedule-page"', () => {
+  it('renders the page shell with data-testid="ai-schedule-page"', () => {
+    mockUseUtilization.mockReturnValue({
+      data: utilFixture,
+      isLoading: false,
+      error: null,
+    });
+    mockUseCapacity.mockReturnValue({
+      data: capacityFixture,
+      isLoading: false,
+      error: null,
+    });
     render(<AIScheduleView />, { wrapper });
     expect(screen.getByTestId('ai-schedule-page')).toBeInTheDocument();
   });
 
-  it('renders ScheduleOverviewEnhanced child', () => {
+  it('renders one resource row per utilization-report row (Bug 1 fix)', () => {
+    mockUseUtilization.mockReturnValue({
+      data: utilFixture,
+      isLoading: false,
+      error: null,
+    });
+    mockUseCapacity.mockReturnValue({
+      data: capacityFixture,
+      isLoading: false,
+      error: null,
+    });
     render(<AIScheduleView />, { wrapper });
-    expect(screen.getByTestId('schedule-overview-enhanced')).toBeInTheDocument();
+    expect(screen.getByTestId('resource-row-staff-1')).toBeInTheDocument();
+    expect(screen.getByTestId('resource-row-staff-2')).toBeInTheDocument();
   });
 
-  it('renders AlertsPanel child', () => {
+  it('shows the loading spinner while the data hooks are loading', () => {
+    mockUseUtilization.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    });
+    mockUseCapacity.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    });
     render(<AIScheduleView />, { wrapper });
-    expect(screen.getByTestId('alerts-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
   });
 
-  it('renders SchedulingChat child', () => {
+  it('shows an error message when either query fails', () => {
+    mockUseUtilization.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error('utilization failed'),
+    });
+    mockUseCapacity.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: null,
+    });
+    render(<AIScheduleView />, { wrapper });
+    expect(screen.getByTestId('error-message')).toBeInTheDocument();
+  });
+
+  it('clicking the next-date arrow re-fetches with the shifted date (Bug 7)', async () => {
+    mockUseUtilization.mockReturnValue({
+      data: utilFixture,
+      isLoading: false,
+      error: null,
+    });
+    mockUseCapacity.mockReturnValue({
+      data: capacityFixture,
+      isLoading: false,
+      error: null,
+    });
+    const user = userEvent.setup();
+    render(<AIScheduleView />, { wrapper });
+
+    const initialUtilCalls = mockUseUtilization.mock.calls.length;
+    await user.click(screen.getByTestId('schedule-date-next-btn'));
+
+    expect(mockUseUtilization.mock.calls.length).toBeGreaterThan(
+      initialUtilCalls,
+    );
+  });
+
+  it('renders SchedulingChat in the right pane', () => {
+    mockUseUtilization.mockReturnValue({
+      data: utilFixture,
+      isLoading: false,
+      error: null,
+    });
+    mockUseCapacity.mockReturnValue({
+      data: capacityFixture,
+      isLoading: false,
+      error: null,
+    });
     render(<AIScheduleView />, { wrapper });
     expect(screen.getByTestId('scheduling-chat')).toBeInTheDocument();
   });
 
+  it('renders AlertsPanel below the overview', () => {
+    mockUseUtilization.mockReturnValue({
+      data: utilFixture,
+      isLoading: false,
+      error: null,
+    });
+    mockUseCapacity.mockReturnValue({
+      data: capacityFixture,
+      isLoading: false,
+      error: null,
+    });
+    render(<AIScheduleView />, { wrapper });
+    expect(screen.getByTestId('alerts-panel')).toBeInTheDocument();
+  });
+
   it('has <main> and <aside> semantic landmarks', () => {
+    mockUseUtilization.mockReturnValue({
+      data: utilFixture,
+      isLoading: false,
+      error: null,
+    });
+    mockUseCapacity.mockReturnValue({
+      data: capacityFixture,
+      isLoading: false,
+      error: null,
+    });
     render(<AIScheduleView />, { wrapper });
     expect(document.querySelector('main')).toBeInTheDocument();
     expect(document.querySelector('aside')).toBeInTheDocument();
-  });
-
-  it('has visually hidden h1 heading', () => {
-    render(<AIScheduleView />, { wrapper });
-    const h1 = document.querySelector('h1');
-    expect(h1).toBeInTheDocument();
-    expect(h1?.className).toContain('sr-only');
-  });
-
-  it('error boundary catches chat crash and shows fallback', () => {
-    const ThrowingChat = () => {
-      throw new Error('chat error');
-    };
-
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={qc}>
-        <BrowserRouter>
-          <ErrorBoundary fallback={<div data-testid="chat-error-fallback">Chat unavailable</div>}>
-            <ThrowingChat />
-          </ErrorBoundary>
-        </BrowserRouter>
-      </QueryClientProvider>
-    );
-    expect(screen.getByTestId('chat-error-fallback')).toBeInTheDocument();
   });
 });

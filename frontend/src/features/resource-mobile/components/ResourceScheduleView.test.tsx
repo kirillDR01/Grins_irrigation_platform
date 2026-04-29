@@ -50,10 +50,14 @@ describe('ResourceScheduleView', () => {
     expect(screen.getByText('45 min drive')).toBeInTheDocument();
   });
 
-  it('renders job cards with correct data-testid', () => {
+  it('renders route cards keyed by route_order with the data-job-id payload', () => {
     render(<ResourceScheduleView schedule={schedule} />);
-    expect(screen.getByTestId('resource-job-card-j1')).toBeInTheDocument();
-    expect(screen.getByTestId('resource-job-card-j2')).toBeInTheDocument();
+    const card1 = screen.getByTestId('route-card-1');
+    const card2 = screen.getByTestId('route-card-2');
+    expect(card1).toBeInTheDocument();
+    expect(card2).toBeInTheDocument();
+    expect(card1.getAttribute('data-job-id')).toBe('j1');
+    expect(card2.getAttribute('data-job-id')).toBe('j2');
   });
 
   it('shows job type, customer name, address, and ETA', () => {

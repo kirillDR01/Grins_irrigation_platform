@@ -54,7 +54,7 @@ describe('SchedulingChat', () => {
     expect(screen.getByTestId('chat-message-assistant')).toBeInTheDocument();
   });
 
-  it('renders criteria tags when criteriaUsed present', () => {
+  it('renders criteria badges when criteriaUsed present (Bug 4 surface)', () => {
     vi.mocked(useSchedulingChat).mockReturnValue({
       ...defaultHook,
       messages: [
@@ -62,12 +62,50 @@ describe('SchedulingChat', () => {
           id: '1',
           role: 'assistant',
           content: 'Scheduled using proximity.',
-          criteriaUsed: [{ number: 1, name: 'Proximity' }],
+          criteriaUsed: [
+            { number: 1, name: 'Proximity' },
+            { number: 7, name: 'Skill match' },
+          ],
         },
       ],
     });
     render(<SchedulingChat />, { wrapper });
-    expect(screen.getByTestId('criteria-tag-1')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-criteria-badge-1')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-criteria-badge-7')).toBeInTheDocument();
+  });
+
+  it('renders the schedule summary block when scheduleSummary present (Bug 4)', () => {
+    vi.mocked(useSchedulingChat).mockReturnValue({
+      ...defaultHook,
+      messages: [
+        {
+          id: '1',
+          role: 'assistant',
+          content: 'Here is your week.',
+          scheduleSummary: 'Mon: 10 jobs, Tue: 8 jobs',
+        },
+      ],
+    });
+    render(<SchedulingChat />, { wrapper });
+    const summary = screen.getByTestId('chat-schedule-summary');
+    expect(summary).toBeInTheDocument();
+    expect(summary).toHaveTextContent('Mon: 10 jobs, Tue: 8 jobs');
+  });
+
+  it('does not render the schedule summary block when scheduleSummary is null', () => {
+    vi.mocked(useSchedulingChat).mockReturnValue({
+      ...defaultHook,
+      messages: [
+        {
+          id: '1',
+          role: 'assistant',
+          content: 'No solution yet.',
+          scheduleSummary: null,
+        },
+      ],
+    });
+    render(<SchedulingChat />, { wrapper });
+    expect(screen.queryByTestId('chat-schedule-summary')).not.toBeInTheDocument();
   });
 
   it('renders publish schedule button when scheduleChanges present', () => {

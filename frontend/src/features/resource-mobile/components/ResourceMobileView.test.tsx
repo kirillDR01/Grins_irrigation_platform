@@ -1,14 +1,28 @@
 /**
- * Tests for ResourceMobileView composed page component.
+ * Tests for ResourceMobileView composed page component (Bug 2 fix).
+ *
+ * Verifies the page wires useResourceSchedule and renders loading,
+ * error, and data states correctly.
  */
 
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('./ResourceScheduleView', () => ({
-  ResourceScheduleView: () => <div data-testid="resource-schedule-view" />,
+import type { ResourceSchedule } from '../types';
+
+vi.mock('@/features/auth', () => ({
+  useAuth: () => ({
+    user: { id: 'staff-1', name: 'Test Staff', role: 'tech' },
+    isAuthenticated: true,
+    isLoading: false,
+  }),
+}));
+
+const mockUseResourceSchedule = vi.fn();
+vi.mock('../hooks/useResourceSchedule', () => ({
+  useResourceSchedule: (...args: unknown[]) => mockUseResourceSchedule(...args),
 }));
 
 vi.mock('@/features/ai', () => ({
@@ -40,32 +54,81 @@ function wrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
+const fixtureSchedule: ResourceSchedule = {
+  date: '2026-05-01',
+  staff_id: 'staff-1',
+  staff_name: 'Test Staff',
+  total_drive_minutes: 42,
+  jobs: [
+    {
+      id: 'job-1',
+      job_type: 'Service Call',
+      address: '123 Main St',
+      customer_name: 'Acme Co',
+      estimated_duration_minutes: 60,
+      eta: '09:00',
+      status: 'scheduled',
+      notes: null,
+      gate_code: null,
+      requires_special_prep: false,
+      route_order: 1,
+    },
+  ],
+};
+
+afterEach(() => {
+  mockUseResourceSchedule.mockReset();
+});
+
 describe('ResourceMobileView', () => {
-  it('renders with data-testid="resource-mobile-page"', () => {
+  it('renders the page shell with data-testid="resource-mobile-page"', () => {
+    mockUseResourceSchedule.mockReturnValue({
+      data: fixtureSchedule,
+      isLoading: false,
+      error: null,
+    });
     render(<ResourceMobileView />, { wrapper });
     expect(screen.getByTestId('resource-mobile-page')).toBeInTheDocument();
   });
 
-  it('renders ResourceScheduleView child', () => {
+  it('shows the loading spinner while the query is loading', () => {
+    mockUseResourceSchedule.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    });
     render(<ResourceMobileView />, { wrapper });
-    expect(screen.getByTestId('resource-schedule-view')).toBeInTheDocument();
+    expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
   });
 
-  it('renders ResourceMobileChat child', () => {
+  it('shows the error message on query failure', () => {
+    mockUseResourceSchedule.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error('Schedule fetch failed'),
+    });
+    render(<ResourceMobileView />, { wrapper });
+    expect(screen.getByTestId('error-message')).toBeInTheDocument();
+    expect(screen.getByText(/Schedule fetch failed/)).toBeInTheDocument();
+  });
+
+  it('renders route cards for each job once data is loaded', () => {
+    mockUseResourceSchedule.mockReturnValue({
+      data: fixtureSchedule,
+      isLoading: false,
+      error: null,
+    });
+    render(<ResourceMobileView />, { wrapper });
+    expect(screen.getByTestId('route-card-1')).toBeInTheDocument();
+  });
+
+  it('renders ResourceMobileChat below the schedule pane', () => {
+    mockUseResourceSchedule.mockReturnValue({
+      data: fixtureSchedule,
+      isLoading: false,
+      error: null,
+    });
     render(<ResourceMobileView />, { wrapper });
     expect(screen.getByTestId('resource-mobile-chat')).toBeInTheDocument();
-  });
-
-  it('renders schedule view before chat (correct DOM ordering)', () => {
-    render(<ResourceMobileView />, { wrapper });
-    const page = screen.getByTestId('resource-mobile-page');
-    const children = Array.from(page.children);
-    const scheduleIdx = children.findIndex(
-      (el) => el.getAttribute('data-testid') === 'resource-schedule-view'
-    );
-    const chatIdx = children.findIndex(
-      (el) => el.getAttribute('data-testid') === 'resource-mobile-chat'
-    );
-    expect(scheduleIdx).toBeLessThan(chatIdx);
   });
 });

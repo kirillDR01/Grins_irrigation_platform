@@ -6,16 +6,21 @@
 import { useState, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/core/api/client';
-import type { ChatRequest, ChatResponse, ScheduleChange } from '../types/aiScheduling';
+import type {
+  ChatRequest,
+  ChatResponse,
+  CriterionUsage,
+  ScheduleChange,
+} from '../types/aiScheduling';
 
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   userName?: string;
-  criteriaUsed?: Array<{ number: number; name: string }>;
-  clarifyingQuestions?: string[];
-  scheduleChanges?: ScheduleChange[];
+  criteriaUsed?: CriterionUsage[] | null;
+  clarifyingQuestions?: string[] | null;
+  scheduleChanges?: ScheduleChange[] | null;
   scheduleSummary?: string | null;
   changeRequestId?: string | null;
 }
@@ -38,7 +43,9 @@ export function useSchedulingChat() {
       return response.data;
     },
     onSuccess: (data) => {
-      setSessionId(data.session_id);
+      if (data.session_id) {
+        setSessionId(data.session_id);
+      }
       const assistantMsg: ChatMessage = {
         id: `${Date.now()}-assistant`,
         role: 'assistant',

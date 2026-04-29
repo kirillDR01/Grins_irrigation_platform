@@ -4,6 +4,7 @@
  */
 
 import { useState } from 'react';
+import { addDays } from 'date-fns';
 import { cn } from '@/shared/utils/cn';
 import { CapacityHeatMap } from './CapacityHeatMap';
 import type { CapacityDay } from './CapacityHeatMap';
@@ -43,6 +44,8 @@ export interface ScheduleOverviewEnhancedProps {
   resources: OverviewResource[];
   days: OverviewDay[];
   capacityDays: CapacityDay[];
+  /** Optional anchor date (ISO YYYY-MM-DD) used by the prev/next date nav. */
+  currentDate?: string;
   onAddResource?: () => void;
   onRemoveResource?: (resourceId: string) => void;
   onViewModeChange?: (mode: 'day' | 'week' | 'month', date?: string) => void;
@@ -113,6 +116,7 @@ export function ScheduleOverviewEnhanced({
   resources,
   days,
   capacityDays,
+  currentDate,
   onAddResource,
   onRemoveResource,
   onViewModeChange,
@@ -124,6 +128,16 @@ export function ScheduleOverviewEnhanced({
     onViewModeChange?.(mode);
   }
 
+  function shiftDate(direction: 1 | -1) {
+    if (!onViewModeChange) return;
+    const anchor = currentDate ?? days[0]?.date;
+    if (!anchor) return;
+    const step = viewMode === 'day' ? 1 : viewMode === 'week' ? 7 : 30;
+    const next = addDays(new Date(`${anchor}T00:00:00`), direction * step);
+    const iso = next.toISOString().split('T')[0];
+    onViewModeChange(viewMode, iso);
+  }
+
   return (
     <div
       data-testid="schedule-overview-enhanced"
@@ -131,12 +145,34 @@ export function ScheduleOverviewEnhanced({
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-        <h2 className="text-base font-semibold text-gray-900">{weekTitle}</h2>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => shiftDate(-1)}
+            data-testid="schedule-date-prev-btn"
+            aria-label="Previous date range"
+            className="rounded px-2 py-0.5 text-sm text-gray-600 hover:bg-gray-100"
+          >
+            ←
+          </button>
+          <h2 className="text-base font-semibold text-gray-900">{weekTitle}</h2>
+          <button
+            type="button"
+            onClick={() => shiftDate(1)}
+            data-testid="schedule-date-next-btn"
+            aria-label="Next date range"
+            className="rounded px-2 py-0.5 text-sm text-gray-600 hover:bg-gray-100"
+          >
+            →
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           {(['day', 'week', 'month'] as const).map((m) => (
             <button
               key={m}
+              type="button"
               onClick={() => handleViewMode(m)}
+              data-testid={`view-mode-${m}-btn`}
               className={cn(
                 'rounded px-3 py-1 text-sm capitalize',
                 viewMode === m
