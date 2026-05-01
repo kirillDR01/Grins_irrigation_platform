@@ -98,7 +98,8 @@ export function DayMode({
     isError: isErrorStaff,
   } = useStaff({ page_size: 100 });
 
-  const { data: utilization } = useUtilizationReport(dateStr);
+  const { data: utilization, isLoading: isLoadingUtilization } =
+    useUtilizationReport(dateStr);
   const updateAppointment = useUpdateAppointment();
 
   const isToday = useMemo(() => isSameDay(date, new Date()), [date]);
@@ -285,7 +286,11 @@ export function DayMode({
 
       {/* Tech rows */}
       {techs.map((staff) => {
-        const utilPct = utilizationByTech[staff.id] ?? null;
+        const fromMap = utilizationByTech[staff.id];
+        // Reserve `null` for the genuine loading state. After settle,
+        // a missing entry means the BE returned no row for that tech →
+        // render 0%, not the loading skeleton.
+        const utilPct = isLoadingUtilization ? null : (fromMap ?? 0);
         const techAppts = apptsByTech[staff.id] ?? [];
         const positioned = assignLanes(
           techAppts.map((apt) => ({

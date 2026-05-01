@@ -276,7 +276,11 @@ export function WeekMode({
 
       {/* Tech rows */}
       {techs.map((staff) => {
-        const utilPct = utilizationByTech[staff.id] ?? null;
+        const fromMap = utilizationByTech[staff.id];
+        // Reserve `null` for the genuine loading state. After settle,
+        // a missing entry means the BE returned no row for that tech →
+        // render 0%, not the loading skeleton.
+        const utilPct = utilization.isLoading ? null : (fromMap ?? 0);
         return (
           <div
             key={`row-${staff.id}`}

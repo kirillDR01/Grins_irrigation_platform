@@ -35,7 +35,6 @@ from grins_platform.models.service_agreement import ServiceAgreement
 from grins_platform.schemas.ai_scheduling import (
     BatchScheduleRequest,
     BatchScheduleResponse,
-    ResourceUtilization,
     SchedulingConfig,
     SchedulingContext,
     UtilizationReport,
@@ -912,33 +911,7 @@ def get_utilization_report(
     endpoints.log_started("get_utilization", schedule_date=str(schedule_date))
 
     try:
-        capacity = service.get_capacity(schedule_date)
-
-        resources: list[ResourceUtilization] = []
-        for staff_cap in getattr(capacity, "staff_capacities", []):
-            total_mins = getattr(staff_cap, "available_minutes", 0)
-            assigned_mins = getattr(staff_cap, "assigned_minutes", 0)
-            drive_mins = getattr(staff_cap, "drive_minutes", 0)
-            util_pct = (
-                (assigned_mins + drive_mins) / total_mins * 100
-                if total_mins > 0
-                else 0.0
-            )
-            resources.append(
-                ResourceUtilization(
-                    staff_id=staff_cap.staff_id,
-                    name=getattr(staff_cap, "name", ""),
-                    total_minutes=total_mins,
-                    assigned_minutes=assigned_mins,
-                    drive_minutes=drive_mins,
-                    utilization_pct=round(util_pct, 1),
-                )
-            )
-
-        report = UtilizationReport(
-            schedule_date=schedule_date,
-            resources=resources,
-        )
+        report = service.get_resource_utilization(schedule_date)
     except Exception as exc:
         endpoints.log_failed("get_utilization", error=exc)
         raise HTTPException(
@@ -949,6 +922,6 @@ def get_utilization_report(
         endpoints.log_completed(
             "get_utilization",
             schedule_date=str(schedule_date),
-            resource_count=len(resources),
+            resource_count=len(report.resources),
         )
         return report

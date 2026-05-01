@@ -18,6 +18,10 @@ from grins_platform.models.enums import JobStatus
 from grins_platform.models.job import Job
 from grins_platform.models.staff import Staff
 from grins_platform.models.staff_availability import StaffAvailability
+from grins_platform.schemas.ai_scheduling import (
+    ResourceUtilization,
+    UtilizationReport,
+)
 from grins_platform.schemas.schedule_generation import (
     EmergencyInsertResponse,
     ScheduleCapacityResponse,
@@ -47,6 +51,8 @@ class ScheduleGenerationService(LoggerMixin):
     """
 
     DOMAIN = "business"
+    # 8h shift; mirrors a default 08:00-17:00 day with a 1h lunch break.
+    DEFAULT_SHIFT_MINUTES = 480
 
     def __init__(self, db: Session) -> None:
         """Initialize the service."""
@@ -164,6 +170,10 @@ class ScheduleGenerationService(LoggerMixin):
         # Get scheduled minutes (from existing appointments)
         scheduled_minutes = self._get_scheduled_minutes(schedule_date)
 
+        utilization_pct = (
+            (scheduled_minutes / total_capacity) * 100 if total_capacity > 0 else 0.0
+        )
+
         return ScheduleCapacityResponse(
             schedule_date=schedule_date,
             total_staff=len(staff_with_availability),
@@ -172,6 +182,7 @@ class ScheduleGenerationService(LoggerMixin):
             scheduled_minutes=scheduled_minutes,
             remaining_capacity_minutes=total_capacity - scheduled_minutes,
             can_accept_more=total_capacity > scheduled_minutes,
+            utilization_pct=round(utilization_pct, 1),
         )
 
     def _load_jobs_for_date(self, schedule_date: date) -> list[Job]:  # noqa: ARG002
@@ -231,6 +242,125 @@ class ScheduleGenerationService(LoggerMixin):
                 total += end_mins - start_mins
 
         return total
+
+    def _load_active_staff_with_optional_availability(
+        self,
+        schedule_date: date,
+    ) -> list[tuple[Staff, StaffAvailability | None]]:
+        """Load active staff with their availability for a date.
+
+        Unlike :meth:`_load_available_staff`, staff without an availability
+        row are still returned (paired with ``None``) so utilization output
+        retains one row per active tech.
+        """
+        staff_list = (
+            self.db.query(Staff)
+            .filter(Staff.is_active == True, Staff.is_available == True)  # noqa: E712
+            .all()
+        )
+
+        result: list[tuple[Staff, StaffAvailability | None]] = []
+        for staff in staff_list:
+            availability = (
+                self.db.query(StaffAvailability)
+                .filter(
+                    StaffAvailability.staff_id == staff.id,
+                    StaffAvailability.date == schedule_date,
+                    StaffAvailability.is_available == True,  # noqa: E712
+                )
+                .first()
+            )
+            result.append((staff, availability))
+        return result
+
+    def _get_scheduled_minutes_per_staff(
+        self,
+        schedule_date: date,
+    ) -> dict[UUID, int]:
+        """Sum appointment minutes for a date grouped by staff_id."""
+        appointments = (
+            self.db.query(Appointment)
+            .filter(Appointment.scheduled_date == schedule_date)
+            .all()
+        )
+        out: dict[UUID, int] = {}
+        for apt in appointments:
+            if not (apt.staff_id and apt.time_window_start and apt.time_window_end):
+                continue
+            start_mins = apt.time_window_start.hour * 60 + apt.time_window_start.minute
+            end_mins = apt.time_window_end.hour * 60 + apt.time_window_end.minute
+            out[apt.staff_id] = out.get(apt.staff_id, 0) + (end_mins - start_mins)
+        return out
+
+    def get_resource_utilization(
+        self,
+        schedule_date: date,
+    ) -> UtilizationReport:
+        """Per-staff utilization for a schedule date.
+
+        Falls back to a synthetic ``DEFAULT_SHIFT_MINUTES`` shift when no
+        ``staff_availability`` row exists for a staff member, so an empty
+        availability table never yields an empty resources list.
+        """
+        self.log_started(
+            "get_resource_utilization",
+            schedule_date=str(schedule_date),
+        )
+        try:
+            staff_with_avail = self._load_active_staff_with_optional_availability(
+                schedule_date
+            )
+            assigned_by_staff = self._get_scheduled_minutes_per_staff(schedule_date)
+
+            resources: list[ResourceUtilization] = []
+            for staff, availability in staff_with_avail:
+                if availability:
+                    start_mins = (
+                        availability.start_time.hour * 60
+                        + availability.start_time.minute
+                    )
+                    end_mins = (
+                        availability.end_time.hour * 60 + availability.end_time.minute
+                    )
+                    total_mins = end_mins - start_mins
+                    if availability.lunch_duration_minutes:
+                        total_mins -= availability.lunch_duration_minutes
+                else:
+                    total_mins = self.DEFAULT_SHIFT_MINUTES
+
+                assigned = assigned_by_staff.get(staff.id, 0)
+                # Drive minutes are not persisted on Appointment; left at 0
+                # until route-optimization output is durable. Schema field
+                # preserved for forward-compatibility.
+                drive = 0
+                util_pct = (
+                    (assigned + drive) / total_mins * 100 if total_mins > 0 else 0.0
+                )
+                resources.append(
+                    ResourceUtilization(
+                        staff_id=staff.id,
+                        name=staff.name,
+                        total_minutes=total_mins,
+                        assigned_minutes=assigned,
+                        drive_minutes=drive,
+                        utilization_pct=round(util_pct, 1),
+                    )
+                )
+
+            report = UtilizationReport(
+                schedule_date=schedule_date,
+                resources=resources,
+            )
+        except Exception as exc:
+            self.log_failed("get_resource_utilization", error=exc)
+            raise
+        else:
+            self.log_completed(
+                "get_resource_utilization",
+                schedule_date=str(schedule_date),
+                resource_count=len(resources),
+            )
+            return report
 
     def _job_to_schedule_job(self, job: Job) -> ScheduleJob:
         """Convert Job model to ScheduleJob."""

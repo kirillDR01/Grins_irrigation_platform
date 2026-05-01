@@ -92,6 +92,13 @@ class ScheduleCapacityResponse(BaseModel):
     scheduled_minutes: int
     remaining_capacity_minutes: int
     can_accept_more: bool
+    utilization_pct: float = Field(
+        default=0.0,
+        description=(
+            "(scheduled_minutes / total_capacity_minutes) * 100, or 0.0 "
+            "when total_capacity_minutes == 0."
+        ),
+    )
     criteria_triggered: list[int] | None = Field(
         default=None,
         description=(

@@ -319,6 +319,52 @@ describe('WeekMode', () => {
     expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
   });
 
+  it('renders 0% utilized — not Loading… — when utilization settles empty', () => {
+    mockUseWeeklyUtilization.mockReturnValue({
+      days: Array.from({ length: 7 }, () => ({
+        schedule_date: '2026-04-27',
+        resources: [],
+      })),
+      isLoading: false,
+      isError: false,
+    });
+
+    render(
+      <WeekMode
+        weekStart={new Date(2026, 3, 27)}
+        selectedDate={null}
+        onAppointmentClick={vi.fn()}
+        onEmptyCellClick={vi.fn()}
+        onDayHeaderClick={vi.fn()}
+      />,
+      { wrapper }
+    );
+
+    const header = screen.getByTestId('tech-header-staff-1');
+    expect(header.textContent).toContain('0% utilized');
+    expect(header.textContent).not.toContain('Loading');
+  });
+
+  it('renders Loading… while utilization is genuinely loading', () => {
+    mockUseWeeklyUtilization.mockReturnValue({
+      days: Array.from({ length: 7 }, () => undefined),
+      isLoading: true,
+      isError: false,
+    });
+    render(
+      <WeekMode
+        weekStart={new Date(2026, 3, 27)}
+        selectedDate={null}
+        onAppointmentClick={vi.fn()}
+        onEmptyCellClick={vi.fn()}
+        onDayHeaderClick={vi.fn()}
+      />,
+      { wrapper }
+    );
+    const header = screen.getByTestId('tech-header-staff-1');
+    expect(header.textContent).toContain('Loading');
+  });
+
   it('triggers updateAppointment mutation when an appointment is dropped on a different cell', async () => {
     mockMutateAsync.mockResolvedValueOnce({});
     render(
