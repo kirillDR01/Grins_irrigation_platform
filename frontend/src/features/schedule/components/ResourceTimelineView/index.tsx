@@ -1,9 +1,9 @@
 /**
  * ResourceTimelineView — orchestrator for the day/week/month resource grid.
  *
- * Phase 2 status: Week mode is the new resource grid. Day and Month modes
- * temporarily fall through to the legacy `<CalendarView />` so Phase 2 can
- * ship the headline week experience without blocking on day/month.
+ * Phase 3 status: Day and Week modes are the new resource grid. Month mode
+ * temporarily falls through to the legacy `<CalendarView />` until Phase 4
+ * lands the density grid.
  *
  * Owns: ViewMode + currentDate state, prev/next/today nav, and the
  * orchestration handlers for empty-cell click → create dialog and
@@ -23,6 +23,7 @@ import {
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CalendarView } from '../CalendarView';
+import { DayMode } from './DayMode';
 import { ViewModeToggle } from './ViewModeToggle';
 import { WeekMode } from './WeekMode';
 import type { ViewMode } from './types';
@@ -164,7 +165,15 @@ export function ResourceTimelineView({
           onDayHeaderClick={handleDayHeaderClick}
         />
       )}
-      {(mode === 'day' || mode === 'month') && (
+      {mode === 'day' && (
+        <DayMode
+          date={currentDate}
+          selectedDate={selectedDate ?? null}
+          onAppointmentClick={handleAppointmentClick}
+          onEmptyCellClick={handleEmptyCellClick}
+        />
+      )}
+      {mode === 'month' && (
         <CalendarView
           onDateClick={(date: Date) => onDateClick?.(null, date)}
           onEventClick={onEventClick}
