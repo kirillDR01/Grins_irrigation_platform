@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Receipt from {{ business_name }}</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
+<h1 style="color: #16a34a;">Payment received</h1>
+<p>Hi {{ customer_first_name }},</p>
+<p>
+  Thank you — we received your payment of
+  <strong>${{ amount_paid }}</strong> via {{ payment_method_display }}
+  on {{ paid_at_display }}.
+</p>
+
+<table role="presentation" cellpadding="0" cellspacing="0"
+       style="border-collapse: collapse; margin: 20px 0;
+              border: 1px solid #e5e7eb; border-radius: 6px;">
+  <tr>
+    <td style="padding: 12px 18px; color: #6b7280;">Invoice</td>
+    <td style="padding: 12px 18px; font-weight: 600;">
+      {{ invoice_number }}
+    </td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 18px; color: #6b7280;">Amount paid</td>
+    <td style="padding: 12px 18px; font-weight: 600;">${{ amount_paid }}</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 18px; color: #6b7280;">Method</td>
+    <td style="padding: 12px 18px;">{{ payment_method_display }}</td>
+  </tr>
+  {% if payment_reference %}
+  <tr>
+    <td style="padding: 12px 18px; color: #6b7280;">Reference</td>
+    <td style="padding: 12px 18px;">{{ payment_reference }}</td>
+  </tr>
+  {% endif %}
+  <tr>
+    <td style="padding: 12px 18px; color: #6b7280;">Status</td>
+    <td style="padding: 12px 18px; text-transform: capitalize;">
+      {{ invoice_status }}
+    </td>
+  </tr>
+</table>
+
+<p style="font-size: 14px; color: #4b5563;">
+  This is Grin's receipt for your records. Reply to this email or call
+  {{ business_phone }} with any questions.
+</p>
+
+<hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+<p style="font-size: 13px; color: #6b7280;">
+  {{ business_name }}<br>
+  {{ business_phone }} &middot; {{ business_email }}
+</p>
+</body>
+</html>

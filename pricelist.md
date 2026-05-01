@@ -1,3 +1,9 @@
+<!--
+  AUTO-GENERATED — do not edit manually.
+  Canonical source: GET /api/v1/services/export/pricelist.md (Phase 2 export).
+  Retained as a snapshot until the Phase 2 export ships in production.
+  See umbrella plan §Phase 5.4.
+-->
 Professional Irrigation & Landscaping Services
 Complete Service Price List - Minnesota
 Effective February 2026

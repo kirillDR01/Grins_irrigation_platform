@@ -67,31 +67,31 @@ export function ActionTrack({
   return (
     <div className="px-3 sm:px-5 pb-4 flex gap-1.5 sm:gap-2 flex-shrink-0">
       <ActionCard
-        label="En route"
+        label="On my way"
         icon={<Navigation />}
         stageColor="bg-cyan-600"
         state={cardState(1)}
         completedAt={enRouteAt}
         onClick={handleEnRoute}
-        aria-label="Mark as en route"
+        aria-label="Mark as on my way"
       />
       <ActionCard
-        label="On site"
+        label="Job started"
         icon={<MapPin />}
         stageColor="bg-orange-500"
         state={cardState(2)}
         completedAt={arrivedAt}
         onClick={handleArrived}
-        aria-label="Mark as on site"
+        aria-label="Mark job as started"
       />
       <ActionCard
-        label="Done"
+        label="Job complete"
         icon={<CheckCircle />}
         stageColor="bg-green-600"
         state={cardState(3)}
         completedAt={completedAt}
         onClick={handleCompleted}
-        aria-label="Mark as done"
+        aria-label="Mark job as complete"
       />
     </div>
   );

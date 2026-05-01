@@ -603,7 +603,7 @@ export function AppointmentModal({
                       className="flex-1"
                       onClick={() => openSheetExclusive('estimate')}
                     >
-                      Create Estimate
+                      Send estimate
                     </Button>
                   </div>
                 )}

@@ -248,6 +248,46 @@ async def get_all_staff_locations(
 
 
 # =============================================================================
+# PATCH /api/v1/staff/me — current-user self-update (umbrella plan §Phase 5.2)
+# Static route must come BEFORE dynamic /{staff_id} routes.
+# =============================================================================
+
+
+@router.patch(  # type: ignore[untyped-decorator]
+    "/me",
+    response_model=StaffResponse,
+    summary="Update the current staff user's preferences",
+    description=(
+        "Patch self-update for tech-personalization fields like "
+        "preferred_maps_app. Authenticated; only the current user's "
+        "own record is mutated."
+    ),
+)
+async def update_current_staff(
+    data: StaffUpdate,
+    current_user: CurrentActiveUser,
+    service: Annotated[StaffService, Depends(get_staff_service)],
+) -> StaffResponse:
+    """Patch the current staff user (umbrella plan §Phase 5.2)."""
+    _endpoints.log_started("update_current_staff", staff_id=str(current_user.id))
+
+    try:
+        result = await service.update_staff(current_user.id, data)
+    except StaffNotFoundError as e:
+        _endpoints.log_rejected("update_current_staff", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Staff member not found: {e.staff_id}",
+        ) from e
+    else:
+        _endpoints.log_completed(
+            "update_current_staff",
+            staff_id=str(current_user.id),
+        )
+        return StaffResponse.model_validate(result)  # type: ignore[no-any-return]
+
+
+# =============================================================================
 # Task 13.2: POST /api/v1/staff - Create Staff
 # =============================================================================
 

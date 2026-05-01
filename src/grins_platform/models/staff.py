@@ -167,6 +167,12 @@ class Staff(Base):
         nullable=True,
     )
 
+    # Tech personalization (umbrella plan §Phase 5.2)
+    preferred_maps_app: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
     # Status
     is_active: Mapped[bool] = mapped_column(
         Boolean,

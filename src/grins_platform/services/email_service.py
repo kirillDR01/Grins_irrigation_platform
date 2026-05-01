@@ -28,6 +28,7 @@ from grins_platform.services.email_config import EmailSettings
 if TYPE_CHECKING:
     from grins_platform.models.customer import Customer
     from grins_platform.models.estimate import Estimate
+    from grins_platform.models.invoice import Invoice
     from grins_platform.models.lead import Lead
     from grins_platform.models.service_agreement import ServiceAgreement
     from grins_platform.models.service_agreement_tier import (
@@ -172,6 +173,7 @@ class EmailService(LoggerMixin):
             "internal_estimate_decision",
             "internal_estimate_bounce",
             "payment_link",
+            "payment_receipt",
         }
         if email_type in transactional_types:
             return EmailType.TRANSACTIONAL
@@ -530,6 +532,106 @@ class EmailService(LoggerMixin):
             "send_estimate_approved_email",
             sent=sent,
             estimate_id=str(estimate.id),
+        )
+        return {
+            "sent": sent,
+            "sent_via": "email" if sent else "pending",
+            "recipient_email": email,
+        }
+
+    def send_payment_receipt_email(
+        self,
+        *,
+        customer: Customer,
+        invoice: Invoice,
+    ) -> dict[str, Any]:
+        """Send a payment-receipt email to the customer.
+
+        Mirrors :meth:`send_estimate_email`. Fired after a successful
+        ``collect_payment`` (cash, check, Venmo, Zelle, Stripe). The Stripe
+        Payment Link path also shows a hosted confirmation; this receipt
+        is supplemental and tagged "Grin's receipt for your records" so
+        it reads distinctly from Stripe's own confirmation.
+
+        Validates: appointment-modal umbrella plan §Phase 4.3.
+        """
+        self.log_started(
+            "send_payment_receipt_email",
+            invoice_id=str(invoice.id),
+        )
+
+        email = getattr(customer, "email", None)
+        if not email:
+            self.logger.warning(
+                "email.payment_receipt.skipped",
+                invoice_id=str(invoice.id),
+                reason="no_email_address",
+            )
+            return {"sent": False, "reason": "no_email"}
+
+        first_name = (
+            getattr(customer, "first_name", None)
+            or getattr(customer, "full_name", None)
+            or "there"
+        )
+        amount_paid = (
+            invoice.paid_amount
+            if invoice.paid_amount is not None
+            else invoice.total_amount
+        )
+        method_raw = invoice.payment_method or "payment"
+        method_display = method_raw.replace("_", " ").title()
+        paid_at_display = (
+            invoice.paid_at.strftime("%B %d, %Y") if invoice.paid_at is not None else ""
+        )
+
+        context: dict[str, Any] = {
+            "customer_first_name": first_name,
+            "invoice_number": invoice.invoice_number,
+            "amount_paid": f"{amount_paid:.2f}",
+            "payment_method_display": method_display,
+            "payment_reference": invoice.payment_reference,
+            "paid_at_display": paid_at_display,
+            "invoice_status": invoice.status,
+        }
+
+        try:
+            html_body = self._render_template(
+                "payment_receipt_email.html",
+                context,
+            )
+        except Exception:
+            html_body = (
+                f"<p>Hi {first_name},</p>"
+                f"<p>We received your payment of <strong>${amount_paid}</strong> "
+                f"via {method_display} on {paid_at_display} for invoice "
+                f"<strong>{invoice.invoice_number}</strong>. This is Grin's "
+                f"receipt for your records.</p>"
+            )
+        text_body = (
+            f"Hi {first_name}, we received your payment of ${amount_paid} "
+            f"via {method_display} on {paid_at_display} for invoice "
+            f"{invoice.invoice_number}. This is Grin's receipt for your records."
+        )
+
+        sent = self._send_email(
+            to_email=email,
+            subject=(
+                f"Receipt for invoice {invoice.invoice_number} — Grin's Irrigation"
+            ),
+            html_body=html_body,
+            email_type="payment_receipt",
+            classification=EmailType.TRANSACTIONAL,
+            text_body=text_body,
+            extra_tags=[
+                {"name": "invoice_id", "value": str(invoice.id)},
+            ],
+        )
+
+        self.log_completed(
+            "send_payment_receipt_email",
+            sent=sent,
+            invoice_id=str(invoice.id),
         )
         return {
             "sent": sent,

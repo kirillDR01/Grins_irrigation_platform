@@ -29,6 +29,7 @@ class TimelineEventKind(str, Enum):
     RESCHEDULE_RESOLVED = "reschedule_resolved"
     OPT_OUT = "opt_out"
     OPT_IN = "opt_in"
+    PAYMENT_RECEIVED = "payment_received"
 
 
 class TimelineEvent(BaseModel):

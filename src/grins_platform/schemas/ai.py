@@ -66,6 +66,8 @@ class MessageType(str, Enum):
     # Distinct from PAYMENT_REMINDER so analytics can attribute conversion
     # back to the link-send action versus reminder cadence.
     PAYMENT_LINK = "payment_link"
+    # Receipt SMS sent after a successful collect_payment (umbrella §Phase 4.3).
+    PAYMENT_RECEIPT = "payment_receipt"
     LEAD_CONFIRMATION = "lead_confirmation"
     ESTIMATE_SENT = "estimate_sent"
     CONTRACT_SENT = "contract_sent"

@@ -1,15 +1,32 @@
 /**
  * MapsPickerPopover — popover with Apple Maps and Google Maps options.
+ *
+ * Phase 5.2 (umbrella plan): persists the tech's choice via
+ * ``PATCH /api/v1/staff/me { preferred_maps_app }`` when "Remember my
+ * choice" is checked, so subsequent directions clicks default to that
+ * app without re-asking. The default-app selection itself is handled
+ * by the parent (which deep-links straight to the remembered URL when
+ * a preference is present).
+ *
  * Requirements: 8.4, 8.5, 8.6, 8.7, 8.8, 18.3
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { apiClient } from '@/core/api/client';
+
+export type PreferredMapsApp = 'apple' | 'google';
 
 interface MapsPickerPopoverProps {
   address: string;
   latitude?: number | null;
   longitude?: number | null;
   onClose: () => void;
+  /** Persist the tech's selection when "Remember my choice" is checked. */
+  onRemember?: (app: PreferredMapsApp) => Promise<void> | void;
+}
+
+async function defaultPersistChoice(app: PreferredMapsApp): Promise<void> {
+  await apiClient.patch('/staff/me', { preferred_maps_app: app });
 }
 
 export function MapsPickerPopover({
@@ -17,9 +34,26 @@ export function MapsPickerPopover({
   latitude,
   longitude,
   onClose,
+  onRemember,
 }: MapsPickerPopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const [remember, setRemember] = useState(false);
   const encoded = encodeURIComponent(address);
+
+  const handleSelect = async (app: PreferredMapsApp) => {
+    if (remember) {
+      try {
+        if (onRemember) {
+          await onRemember(app);
+        } else {
+          await defaultPersistChoice(app);
+        }
+      } catch {
+        // Best-effort: persistence failure must not block navigation.
+      }
+    }
+    onClose();
+  };
 
   const appleMapsUrl = `maps://?daddr=${encoded}`;
   const appleMapsWebUrl = `https://maps.apple.com/?daddr=${encoded}`;
@@ -65,8 +99,12 @@ export function MapsPickerPopover({
       <a
         href={appleMapsUrl}
         role="menuitem"
-        onClick={onClose}
-        onKeyDown={(e) => e.key === 'Enter' && onClose()}
+        onClick={() => {
+          void handleSelect('apple');
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') void handleSelect('apple');
+        }}
         className="flex items-center gap-3 px-4 py-3 hover:bg-teal-50 focus:bg-teal-50 outline-none"
         // Fallback for non-iOS
         onError={() => {
@@ -88,7 +126,9 @@ export function MapsPickerPopover({
         target="_blank"
         rel="noopener noreferrer"
         role="menuitem"
-        onClick={onClose}
+        onClick={() => {
+          void handleSelect('google');
+        }}
         className="flex items-center gap-3 px-4 py-3 hover:bg-blue-50 focus:bg-blue-50 outline-none"
       >
         <div className="w-8 h-8 rounded-[8px] bg-blue-600 flex items-center justify-center flex-shrink-0">
@@ -101,6 +141,19 @@ export function MapsPickerPopover({
         </div>
         <span className="text-[15px] font-bold text-[#0B1220]">Google Maps</span>
       </a>
+      <label
+        data-testid="remember-maps-choice-row"
+        className="flex items-center gap-2 px-4 py-2.5 border-t border-[#F1F5F9] text-[13px] text-[#475569] cursor-pointer select-none"
+      >
+        <input
+          type="checkbox"
+          checked={remember}
+          onChange={(e) => setRemember(e.target.checked)}
+          className="h-3.5 w-3.5 rounded border-[#CBD5E1] text-teal-600 focus:ring-teal-400"
+          data-testid="remember-maps-choice-checkbox"
+        />
+        Remember my choice
+      </label>
     </div>
   );
 }

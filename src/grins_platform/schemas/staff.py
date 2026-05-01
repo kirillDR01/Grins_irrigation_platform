@@ -177,6 +177,11 @@ class StaffUpdate(BaseModel):
         default=None,
         description="Whether the staff member is active",
     )
+    preferred_maps_app: str | None = Field(
+        default=None,
+        max_length=20,
+        description="Tech-chosen Maps app ('apple' or 'google')",
+    )
 
     @field_validator("phone")  # type: ignore[misc,untyped-decorator]
     @classmethod
@@ -262,6 +267,10 @@ class StaffResponse(BaseModel):
         description="Hourly compensation rate",
     )
     is_active: bool = Field(..., description="Whether the staff member is active")
+    preferred_maps_app: str | None = Field(
+        default=None,
+        description="Tech-chosen Maps app ('apple' or 'google')",
+    )
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Record last update timestamp")
 

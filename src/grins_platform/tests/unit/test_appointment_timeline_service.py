@@ -99,6 +99,22 @@ def _make_consent(**overrides: Any) -> MagicMock:
     return row
 
 
+def _make_paid_invoice(**overrides: Any) -> MagicMock:
+    inv = MagicMock()
+    inv.id = overrides.get("id", uuid4())
+    inv.invoice_number = overrides.get("invoice_number", "INV-2026-0001")
+    inv.payment_method = overrides.get("payment_method", "cash")
+    inv.payment_reference = overrides.get("payment_reference")
+    from decimal import Decimal as _D  # noqa: PLC0415
+
+    inv.paid_amount = overrides.get("paid_amount", _D("100.00"))
+    inv.total_amount = overrides.get("total_amount", _D("100.00"))
+    inv.paid_at = overrides.get("paid_at", datetime.now(tz=timezone.utc))
+    inv.updated_at = overrides.get("updated_at", datetime.now(tz=timezone.utc))
+    inv.status = overrides.get("status", "paid")
+    return inv
+
+
 def _build_service(
     *,
     appointment: MagicMock | None,
@@ -107,6 +123,7 @@ def _build_service(
     inbound: list[MagicMock] | None = None,
     reschedules: list[MagicMock] | None = None,
     consent: MagicMock | None = None,
+    paid_invoices: list[MagicMock] | None = None,
 ) -> AppointmentTimelineService:
     """Build a service with all collaborators patched via AsyncMock."""
     session = AsyncMock()
@@ -128,6 +145,11 @@ def _build_service(
         return_value=reschedules or [],
     )
     service.consent_repo.get_latest_for_customer = AsyncMock(return_value=consent)
+    # Stub the paid-invoice lookup so the suite avoids a second SQL query
+    # path through the AsyncMock session.
+    service._list_paid_invoices = AsyncMock(  # type: ignore[method-assign]
+        return_value=paid_invoices or [],
+    )
 
     return service
 
@@ -276,6 +298,59 @@ class TestAppointmentTimelineService:
             TimelineEventKind.INBOUND_REPLY,
             TimelineEventKind.OUTBOUND_SMS,
         ]
+
+    async def test_paid_invoice_emits_payment_received_event(self) -> None:
+        """Phase 4.2: paid invoices on the job surface as PAYMENT_RECEIVED."""
+        from decimal import Decimal as _D  # noqa: PLC0415
+
+        appt = _make_appointment()
+        now = datetime.now(tz=timezone.utc)
+        inv = _make_paid_invoice(
+            paid_amount=_D("125.50"),
+            total_amount=_D("125.50"),
+            payment_method="cash",
+            invoice_number="INV-2026-0042",
+            paid_at=now,
+        )
+
+        service = _build_service(
+            appointment=appt,
+            customer_id=uuid4(),
+            paid_invoices=[inv],
+        )
+
+        result = await service.get_timeline(appt.id)
+
+        payment_events = [
+            e for e in result.events if e.kind == TimelineEventKind.PAYMENT_RECEIVED
+        ]
+        assert len(payment_events) == 1
+        evt = payment_events[0]
+        assert evt.source_id == inv.id
+        assert "125.50" in evt.summary
+        assert "cash" in evt.summary
+        assert evt.details["invoice_number"] == "INV-2026-0042"
+        assert evt.details["payment_method"] == "cash"
+
+    async def test_multiple_paid_invoices_each_emit_event(self) -> None:
+        """Phase 4.2: a job with deposit + final invoice yields two events."""
+        appt = _make_appointment()
+        base = datetime(2026, 4, 20, 10, 0, tzinfo=timezone.utc)
+        inv_a = _make_paid_invoice(paid_at=base)
+        inv_b = _make_paid_invoice(paid_at=base + timedelta(hours=1))
+
+        service = _build_service(
+            appointment=appt,
+            customer_id=uuid4(),
+            paid_invoices=[inv_a, inv_b],
+        )
+
+        result = await service.get_timeline(appt.id)
+
+        payment_events = [
+            e for e in result.events if e.kind == TimelineEventKind.PAYMENT_RECEIVED
+        ]
+        assert len(payment_events) == 2
 
     async def test_skips_consent_lookup_when_no_customer(self) -> None:
         appt = _make_appointment()

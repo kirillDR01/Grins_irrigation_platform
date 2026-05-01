@@ -2074,6 +2074,18 @@ class AppointmentService(LoggerMixin):
             method=payment.payment_method.value,
         )
 
+        # Best-effort receipt delivery — never undo the recorded payment
+        # if SMS or email fails. Mirrors notification pattern at
+        # ``EstimateService._notify_internal_decision``.
+        try:
+            await self._send_payment_receipts(job, result_invoice, payment.amount)
+        except Exception as exc:
+            self.logger.warning(
+                "payment.receipt.dispatch_failed",
+                invoice_id=str(result_invoice.id),
+                error=str(exc),
+            )
+
         return PaymentResult(
             invoice_id=result_invoice.id,
             invoice_number=result_invoice.invoice_number,
@@ -2081,6 +2093,82 @@ class AppointmentService(LoggerMixin):
             payment_method=payment.payment_method.value,
             status=result_invoice.status,
         )
+
+    async def _send_payment_receipts(
+        self,
+        job: Job,
+        invoice: Invoice,
+        amount: Decimal,
+    ) -> None:
+        """Deliver SMS + email payment receipts.
+
+        Both channels are best-effort: a failure on either logs and
+        returns without raising. The Stripe Payment Link path already
+        shows a hosted confirmation; this is supplementary and tagged as
+        "Grin's receipt for your records" to read distinctly.
+
+        Validates: appointment-modal umbrella plan §Phase 4.3.
+        """
+        from grins_platform.models.customer import Customer  # noqa: PLC0415
+        from grins_platform.schemas.ai import MessageType  # noqa: PLC0415
+        from grins_platform.services.email_service import EmailService  # noqa: PLC0415
+        from grins_platform.services.sms.factory import (  # noqa: PLC0415
+            get_sms_provider,
+        )
+        from grins_platform.services.sms.recipient import Recipient  # noqa: PLC0415
+        from grins_platform.services.sms_service import SMSService  # noqa: PLC0415
+
+        session = self.appointment_repository.session
+        customer = await session.get(Customer, job.customer_id)
+        if customer is None:
+            self.logger.info(
+                "payment.receipt.skipped",
+                invoice_id=str(invoice.id),
+                reason="customer_missing",
+            )
+            return
+
+        method_display = (invoice.payment_method or "payment").replace("_", " ")
+        amount_display = f"${amount:.2f}"
+        paid_at = invoice.paid_at
+        date_str = paid_at.strftime("%b %d, %Y") if paid_at is not None else ""
+
+        if customer.phone:
+            try:
+                sms_service = SMSService(session, provider=get_sms_provider())
+                recipient = Recipient.from_customer(customer)
+                message = (
+                    f"Grin's receipt: {amount_display} received via "
+                    f"{method_display} on {date_str} (Invoice "
+                    f"{invoice.invoice_number}). Thank you!"
+                )
+                await sms_service.send_message(
+                    recipient=recipient,
+                    message=message,
+                    message_type=MessageType.PAYMENT_RECEIPT,
+                    consent_type="transactional",
+                    job_id=job.id,
+                )
+            except Exception as exc:
+                self.logger.warning(
+                    "payment.receipt.sms_failed",
+                    invoice_id=str(invoice.id),
+                    error=str(exc),
+                )
+
+        if customer.email:
+            try:
+                email_service = EmailService()
+                email_service.send_payment_receipt_email(
+                    customer=customer,
+                    invoice=invoice,
+                )
+            except Exception as exc:
+                self.logger.warning(
+                    "payment.receipt.email_failed",
+                    invoice_id=str(invoice.id),
+                    error=str(exc),
+                )
 
     async def create_invoice_from_appointment(
         self,

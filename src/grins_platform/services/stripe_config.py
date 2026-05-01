@@ -18,7 +18,6 @@ class StripeSettings(BaseSettings):
     stripe_publishable_key: str = ""
     stripe_customer_portal_url: str = ""
     stripe_tax_enabled: bool = True
-    stripe_terminal_location_id: str = ""
     # Pinned to match the version that existing webhook endpoints declare,
     # so SDK expectations and incoming event shapes never drift apart. Bump
     # only via a deliberate PR with regression tests against new event shapes.

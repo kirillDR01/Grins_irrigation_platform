@@ -105,9 +105,9 @@ describe('ActionTrack — Hidden for terminal statuses (Req 4.8)', () => {
         completedAt: status === 'completed' ? '2025-07-15T11:00:00Z' : null,
       });
 
-      expect(screen.getByRole('button', { name: /mark as en route/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /mark as on site/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /mark as done/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /mark as on my way/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /mark job as started/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /mark job as complete/i })).toBeInTheDocument();
     },
   );
 });
@@ -124,20 +124,20 @@ describe('ActionTrack — Three cards rendered (Req 4.1)', () => {
     expect(buttons).toHaveLength(3);
   });
 
-  it('renders cards with labels: En route, On site, Done', () => {
+  it('renders cards with labels: On my way, Job started, Job complete', () => {
     renderActionTrack({ status: 'confirmed' });
 
-    expect(screen.getByText('En route')).toBeInTheDocument();
-    expect(screen.getByText('On site')).toBeInTheDocument();
-    expect(screen.getByText('Done')).toBeInTheDocument();
+    expect(screen.getByText('On my way')).toBeInTheDocument();
+    expect(screen.getByText('Job started')).toBeInTheDocument();
+    expect(screen.getByText('Job complete')).toBeInTheDocument();
   });
 
   it('renders cards with accessible aria-labels', () => {
     renderActionTrack({ status: 'confirmed' });
 
-    expect(screen.getByRole('button', { name: 'Mark as en route' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Mark as on site' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Mark as done' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark as on my way' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark job as started' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark job as complete' })).toBeInTheDocument();
   });
 });
 
@@ -172,7 +172,7 @@ describe('ActionTrack — Step 1 (En route)', () => {
       enRouteAt: '2025-07-15T09:30:00Z',
     });
 
-    const enRouteBtn = screen.getByRole('button', { name: /mark as en route/i });
+    const enRouteBtn = screen.getByRole('button', { name: /mark as on my way/i });
     expect(enRouteBtn.className).toContain('bg-cyan-600');
     expect(enRouteBtn.className).toContain('text-white');
     expect(enRouteBtn).not.toBeDisabled();
@@ -184,7 +184,7 @@ describe('ActionTrack — Step 1 (En route)', () => {
       enRouteAt: '2025-07-15T09:30:00Z',
     });
 
-    const onSiteBtn = screen.getByRole('button', { name: /mark as on site/i });
+    const onSiteBtn = screen.getByRole('button', { name: /mark job as started/i });
     expect(onSiteBtn.className).toContain('opacity-40');
     expect(onSiteBtn.className).toContain('cursor-not-allowed');
     expect(onSiteBtn).toBeDisabled();
@@ -196,7 +196,7 @@ describe('ActionTrack — Step 1 (En route)', () => {
       enRouteAt: '2025-07-15T09:30:00Z',
     });
 
-    const doneBtn = screen.getByRole('button', { name: /mark as done/i });
+    const doneBtn = screen.getByRole('button', { name: /mark job as complete/i });
     expect(doneBtn.className).toContain('opacity-40');
     expect(doneBtn.className).toContain('cursor-not-allowed');
     expect(doneBtn).toBeDisabled();
@@ -216,7 +216,7 @@ describe('ActionTrack — Step 2 (On site / in_progress)', () => {
       arrivedAt: '2025-07-15T10:00:00Z',
     });
 
-    const enRouteBtn = screen.getByRole('button', { name: /mark as en route/i });
+    const enRouteBtn = screen.getByRole('button', { name: /mark as on my way/i });
     expect(enRouteBtn.className).toContain('border-green-400');
     expect(enRouteBtn.className).toContain('bg-white');
   });
@@ -228,7 +228,7 @@ describe('ActionTrack — Step 2 (On site / in_progress)', () => {
       arrivedAt: '2025-07-15T10:00:00Z',
     });
 
-    const onSiteBtn = screen.getByRole('button', { name: /mark as on site/i });
+    const onSiteBtn = screen.getByRole('button', { name: /mark job as started/i });
     expect(onSiteBtn.className).toContain('bg-orange-500');
     expect(onSiteBtn.className).toContain('text-white');
     expect(onSiteBtn).not.toBeDisabled();
@@ -241,7 +241,7 @@ describe('ActionTrack — Step 2 (On site / in_progress)', () => {
       arrivedAt: '2025-07-15T10:00:00Z',
     });
 
-    const doneBtn = screen.getByRole('button', { name: /mark as done/i });
+    const doneBtn = screen.getByRole('button', { name: /mark job as complete/i });
     expect(doneBtn.className).toContain('opacity-40');
     expect(doneBtn.className).toContain('cursor-not-allowed');
     expect(doneBtn).toBeDisabled();
@@ -254,7 +254,7 @@ describe('ActionTrack — Step 2 (On site / in_progress)', () => {
       arrivedAt: '2025-07-15T10:00:00Z',
     });
 
-    const enRouteBtn = screen.getByRole('button', { name: /mark as en route/i });
+    const enRouteBtn = screen.getByRole('button', { name: /mark as on my way/i });
     const monoSpan = enRouteBtn.querySelector('.font-mono');
     expect(monoSpan).toBeTruthy();
   });
@@ -274,8 +274,8 @@ describe('ActionTrack — Step 3 (Completed)', () => {
       completedAt: '2025-07-15T11:00:00Z',
     });
 
-    const enRouteBtn = screen.getByRole('button', { name: /mark as en route/i });
-    const onSiteBtn = screen.getByRole('button', { name: /mark as on site/i });
+    const enRouteBtn = screen.getByRole('button', { name: /mark as on my way/i });
+    const onSiteBtn = screen.getByRole('button', { name: /mark job as started/i });
 
     expect(enRouteBtn.className).toContain('border-green-400');
     expect(enRouteBtn.className).toContain('bg-white');
@@ -291,7 +291,7 @@ describe('ActionTrack — Step 3 (Completed)', () => {
       completedAt: '2025-07-15T11:00:00Z',
     });
 
-    const doneBtn = screen.getByRole('button', { name: /mark as done/i });
+    const doneBtn = screen.getByRole('button', { name: /mark job as complete/i });
     expect(doneBtn.className).toContain('bg-green-600');
     expect(doneBtn.className).toContain('text-white');
     expect(doneBtn).not.toBeDisabled();
@@ -306,8 +306,8 @@ describe('ActionTrack — Step 3 (Completed)', () => {
     });
 
     // Done cards (En route and On site) should show timestamps in mono font
-    const enRouteBtn = screen.getByRole('button', { name: /mark as en route/i });
-    const onSiteBtn = screen.getByRole('button', { name: /mark as on site/i });
+    const enRouteBtn = screen.getByRole('button', { name: /mark as on my way/i });
+    const onSiteBtn = screen.getByRole('button', { name: /mark job as started/i });
 
     expect(enRouteBtn.querySelector('.font-mono')).toBeTruthy();
     expect(onSiteBtn.querySelector('.font-mono')).toBeTruthy();
@@ -326,7 +326,7 @@ describe('ActionTrack — Tap handlers call correct mutations (Req 4.5)', () => 
       enRouteAt: '2025-07-15T09:30:00Z',
     });
 
-    await user.click(screen.getByRole('button', { name: /mark as en route/i }));
+    await user.click(screen.getByRole('button', { name: /mark as on my way/i }));
 
     expect(mockEnRouteMutate).toHaveBeenCalledTimes(1);
     expect(mockEnRouteMutate).toHaveBeenCalledWith('appt-001', expect.any(Object));
@@ -340,7 +340,7 @@ describe('ActionTrack — Tap handlers call correct mutations (Req 4.5)', () => 
       arrivedAt: '2025-07-15T10:00:00Z',
     });
 
-    await user.click(screen.getByRole('button', { name: /mark as on site/i }));
+    await user.click(screen.getByRole('button', { name: /mark job as started/i }));
 
     expect(mockArrivedMutate).toHaveBeenCalledTimes(1);
     expect(mockArrivedMutate).toHaveBeenCalledWith('appt-001', expect.any(Object));
@@ -355,7 +355,7 @@ describe('ActionTrack — Tap handlers call correct mutations (Req 4.5)', () => 
       completedAt: '2025-07-15T11:00:00Z',
     });
 
-    await user.click(screen.getByRole('button', { name: /mark as done/i }));
+    await user.click(screen.getByRole('button', { name: /mark job as complete/i }));
 
     expect(mockCompletedMutate).toHaveBeenCalledTimes(1);
     expect(mockCompletedMutate).toHaveBeenCalledWith('appt-001', expect.any(Object));
@@ -372,9 +372,9 @@ describe('ActionTrack — Disabled cards cannot be clicked (Req 4.3)', () => {
     renderActionTrack({ status: 'confirmed' });
 
     // All cards are disabled at step 0
-    await user.click(screen.getByRole('button', { name: /mark as en route/i }));
-    await user.click(screen.getByRole('button', { name: /mark as on site/i }));
-    await user.click(screen.getByRole('button', { name: /mark as done/i }));
+    await user.click(screen.getByRole('button', { name: /mark as on my way/i }));
+    await user.click(screen.getByRole('button', { name: /mark job as started/i }));
+    await user.click(screen.getByRole('button', { name: /mark job as complete/i }));
 
     expect(mockEnRouteMutate).not.toHaveBeenCalled();
     expect(mockArrivedMutate).not.toHaveBeenCalled();
@@ -389,8 +389,8 @@ describe('ActionTrack — Disabled cards cannot be clicked (Req 4.3)', () => {
     });
 
     // "On site" and "Done" are disabled at step 1
-    await user.click(screen.getByRole('button', { name: /mark as on site/i }));
-    await user.click(screen.getByRole('button', { name: /mark as done/i }));
+    await user.click(screen.getByRole('button', { name: /mark job as started/i }));
+    await user.click(screen.getByRole('button', { name: /mark job as complete/i }));
 
     expect(mockArrivedMutate).not.toHaveBeenCalled();
     expect(mockCompletedMutate).not.toHaveBeenCalled();
@@ -404,7 +404,7 @@ describe('ActionTrack — Disabled cards cannot be clicked (Req 4.3)', () => {
       arrivedAt: '2025-07-15T10:00:00Z',
     });
 
-    await user.click(screen.getByRole('button', { name: /mark as done/i }));
+    await user.click(screen.getByRole('button', { name: /mark job as complete/i }));
 
     expect(mockCompletedMutate).not.toHaveBeenCalled();
   });
@@ -424,7 +424,7 @@ describe('ActionTrack — Done cards do not re-trigger mutations', () => {
     });
 
     // "En route" card is done at step 2 — clicking it should not trigger mutation
-    const enRouteBtn = screen.getByRole('button', { name: /mark as en route/i });
+    const enRouteBtn = screen.getByRole('button', { name: /mark as on my way/i });
     await user.click(enRouteBtn);
 
     expect(mockEnRouteMutate).not.toHaveBeenCalled();
@@ -444,7 +444,7 @@ describe('ActionTrack — Accessibility (Req 4.7)', () => {
     });
 
     // "En route" card is done at step 2
-    const enRouteBtn = screen.getByRole('button', { name: /mark as en route/i });
+    const enRouteBtn = screen.getByRole('button', { name: /mark as on my way/i });
     expect(enRouteBtn).toHaveAttribute('aria-live', 'polite');
   });
 
@@ -456,8 +456,8 @@ describe('ActionTrack — Accessibility (Req 4.7)', () => {
     });
 
     // "On site" is active, "Done" is disabled at step 2
-    const onSiteBtn = screen.getByRole('button', { name: /mark as on site/i });
-    const doneBtn = screen.getByRole('button', { name: /mark as done/i });
+    const onSiteBtn = screen.getByRole('button', { name: /mark job as started/i });
+    const doneBtn = screen.getByRole('button', { name: /mark job as complete/i });
 
     expect(onSiteBtn).not.toHaveAttribute('aria-live');
     expect(doneBtn).not.toHaveAttribute('aria-live');

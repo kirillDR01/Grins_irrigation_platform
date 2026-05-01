@@ -5,8 +5,8 @@ the Architecture-C flow: every Grin's invoice gets a server-side
 Payment Link with ``metadata.invoice_id`` set so webhook reconciliation
 is deterministic (no fuzzy matching).
 
-Companion service to ``stripe_terminal.py`` (deprecated). The ``DOMAIN``
-shared with the rest of the payment subsystem keeps log events
+Architecture C — see ``project_stripe_payment_links_arch_c`` memory. The
+``DOMAIN`` shared with the rest of the payment subsystem keeps log events
 consistent (e.g. ``payment.stripepaymentlinkservice.create_for_invoice_started``).
 
 Validates: Stripe Payment Links plan §Phase 2.4.
