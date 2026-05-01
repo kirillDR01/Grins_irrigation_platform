@@ -131,6 +131,13 @@ class AppointmentResponse(BaseModel):
     staff_name: Optional[str] = None
     # Service agreement indicator for calendar display (Smoothing Req 7.5)
     service_agreement_id: Optional[UUID] = None
+    priority_level: Optional[int] = Field(
+        default=None,
+        description=(
+            "Priority level (0-5) from the linked Job; "
+            "0 = none, 5 = highest."
+        ),
+    )
     # gap-12: reply-state summary for calendar badges. Only the
     # weekly-schedule path populates this; daily / list endpoints leave
     # it None to keep their query plans unchanged.

@@ -72,6 +72,9 @@ export interface Appointment {
   staff_name: string | null;
   // Service agreement indicator for calendar display (Smoothing Req 7.5)
   service_agreement_id: string | null;
+  // Priority level (0–5) from the linked Job; surfaced for the
+  // resource-timeline view's priority-star icon.
+  priority_level: number | null;
   // gap-12: only the weekly endpoint sends this.
   reply_state?: ReplyState | null;
 }

@@ -121,6 +121,7 @@ def _populate_appointment_extended_fields(
     if job:
         response.job_type = job.job_type
         response.service_agreement_id = getattr(job, "service_agreement_id", None)
+        response.priority_level = getattr(job, "priority_level", None)
         customer = getattr(job, "customer", None)
         if customer:
             response.customer_name = f"{customer.first_name} {customer.last_name}"
