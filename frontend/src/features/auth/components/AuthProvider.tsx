@@ -39,7 +39,9 @@ const defaultContextValue: AuthContextValue = {
   user: null,
   isAuthenticated: false,
   isLoading: true,
-  login: async () => {},
+  login: async () => {
+    throw new Error('login called outside AuthProvider');
+  },
   logout: async () => {},
   refreshToken: async () => {},
   updateUser: () => {},
@@ -182,11 +184,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [scheduleTokenRefresh]
   );
 
-  // Login function
+  // Login function — returns the LoginResponse so callers can branch on
+  // role without racing the context update.
   const login = useCallback(
-    async (credentials: LoginRequest) => {
+    async (credentials: LoginRequest): Promise<LoginResponse> => {
       const response = await authApi.login(credentials);
       setAuthState(response);
+      return response;
     },
     [setAuthState]
   );

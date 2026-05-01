@@ -3,6 +3,8 @@ import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
 import { Layout } from '@/shared/components/Layout';
 import { LoadingPage } from '@/shared/components/LoadingSpinner';
 import { ProtectedRoute, LoginPage } from '@/features/auth';
+import { useAuth } from '@/features/auth/components/AuthProvider';
+import { TechMobileLayout, TechSchedulePage } from '@/features/tech-mobile';
 
 // Lazy load pages for code splitting
 const DashboardPage = lazy(() =>
@@ -135,6 +137,15 @@ function PortalWrapper() {
   );
 }
 
+// Index redirect: techs land on /tech (mobile schedule), everyone else
+// continues to the admin /dashboard. Renders inside <ProtectedLayoutWrapper>
+// so user is guaranteed defined.
+function PostLoginRedirect() {
+  const { user } = useAuth();
+  if (user?.role === 'tech') return <Navigate to="/tech" replace />;
+  return <Navigate to="/dashboard" replace />;
+}
+
 export const router = createBrowserRouter([
   // Public route: Login
   {
@@ -164,6 +175,18 @@ export const router = createBrowserRouter([
       },
     ],
   },
+  // Tech-mobile surface — sibling to the admin layout so it does NOT
+  // inherit the desktop sidebar. Gated by ProtectedRoute(allowedRoles=tech)
+  // and an inner PhoneOnlyGate that renders a landing on non-phone viewports.
+  {
+    path: '/tech',
+    element: (
+      <ProtectedRoute allowedRoles={['tech']}>
+        <TechMobileLayout />
+      </ProtectedRoute>
+    ),
+    children: [{ index: true, element: <TechSchedulePage /> }],
+  },
   // Protected routes
   {
     path: '/',
@@ -171,7 +194,7 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Navigate to="/dashboard" replace />,
+        element: <PostLoginRedirect />,
       },
       {
         path: 'dashboard',

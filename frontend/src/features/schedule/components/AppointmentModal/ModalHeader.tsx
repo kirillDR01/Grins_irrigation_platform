@@ -64,6 +64,7 @@ export function ModalHeader({
           type="button"
           onClick={onClose}
           aria-label="Close"
+          data-testid="appointment-modal-close"
           className="w-11 h-11 flex items-center justify-center rounded-[12px] border-[1.5px] border-[#E5E7EB] bg-white hover:bg-gray-50 flex-shrink-0"
         >
           <X size={18} strokeWidth={2} />

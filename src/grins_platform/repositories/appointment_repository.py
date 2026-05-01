@@ -421,6 +421,7 @@ class AppointmentRepository(LoggerMixin):
         if include_relationships:
             stmt = stmt.options(
                 selectinload(Appointment.job).selectinload(Job.customer),
+                selectinload(Appointment.job).selectinload(Job.job_property),
                 selectinload(Appointment.staff),
             )
 

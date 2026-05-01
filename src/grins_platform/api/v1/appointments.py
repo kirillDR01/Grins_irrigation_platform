@@ -61,6 +61,7 @@ from grins_platform.schemas.appointment import (
     DailyScheduleResponse,
     MarkContactedResponse,
     NeedsReviewAppointmentResponse,
+    PropertySummary,
     ReplyState,
     SendConfirmationResponse,
     StaffDailyScheduleResponse,
@@ -126,6 +127,9 @@ def _populate_appointment_extended_fields(
         if customer:
             response.customer_name = f"{customer.first_name} {customer.last_name}"
             response.customer_internal_notes = customer.internal_notes
+        job_property = getattr(job, "job_property", None)
+        if job_property:
+            response.property_summary = PropertySummary.model_validate(job_property)
     staff = getattr(appointment, "staff", None)
     if staff:
         response.staff_name = staff.name

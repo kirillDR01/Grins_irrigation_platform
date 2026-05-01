@@ -15,6 +15,23 @@ const mockLogin = vi.fn();
 const mockLoginWithPasskey = vi.fn();
 const mockUseAuth = vi.spyOn(AuthProviderModule, 'useAuth');
 
+// LoginPage now branches post-login on response.user.role, so the mock
+// must return a LoginResponse-shaped object — not undefined.
+const fakeAdminLoginResponse = {
+  access_token: 'tok',
+  token_type: 'bearer',
+  expires_in: 900,
+  csrf_token: 'csrf',
+  user: {
+    id: 'u1',
+    username: 'testuser',
+    name: 'Test User',
+    email: null,
+    role: 'admin' as const,
+    is_active: true,
+  },
+};
+
 // Mock useNavigate and useLocation
 const mockNavigate = vi.fn();
 let mockLocationState: { from?: string } | null = null;
@@ -207,7 +224,7 @@ describe('LoginPage', () => {
 
   it('calls login with correct credentials', async () => {
     const user = userEvent.setup();
-    mockLogin.mockResolvedValue(undefined);
+    mockLogin.mockResolvedValue(fakeAdminLoginResponse);
 
     renderLoginPage();
 
@@ -226,7 +243,7 @@ describe('LoginPage', () => {
 
   it('includes remember_me when checkbox is checked', async () => {
     const user = userEvent.setup();
-    mockLogin.mockResolvedValue(undefined);
+    mockLogin.mockResolvedValue(fakeAdminLoginResponse);
 
     renderLoginPage();
 
@@ -246,7 +263,7 @@ describe('LoginPage', () => {
 
   it('navigates to dashboard on successful login', async () => {
     const user = userEvent.setup();
-    mockLogin.mockResolvedValue(undefined);
+    mockLogin.mockResolvedValue(fakeAdminLoginResponse);
 
     renderLoginPage();
 
@@ -261,7 +278,7 @@ describe('LoginPage', () => {
 
   it('navigates to original destination from location state', async () => {
     const user = userEvent.setup();
-    mockLogin.mockResolvedValue(undefined);
+    mockLogin.mockResolvedValue(fakeAdminLoginResponse);
     mockLocationState = { from: '/customers' };
 
     renderLoginPage();
@@ -319,7 +336,7 @@ describe('LoginPage', () => {
   it('clears error when retrying login', async () => {
     const user = userEvent.setup();
     mockLogin.mockRejectedValueOnce(new Error('Invalid credentials'));
-    mockLogin.mockResolvedValueOnce(undefined);
+    mockLogin.mockResolvedValueOnce(fakeAdminLoginResponse);
 
     renderLoginPage();
 

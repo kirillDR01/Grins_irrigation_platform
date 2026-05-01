@@ -34,7 +34,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { login, loginWithPasskey } = useAuth();
+  const { login, loginWithPasskey, isAuthenticated, user } = useAuth();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -52,6 +52,13 @@ export function LoginPage() {
     }
   }, [searchParams]);
 
+  // Already-authenticated tech hitting /login → bounce to /tech.
+  useEffect(() => {
+    if (isAuthenticated && user?.role === 'tech') {
+      navigate('/tech', { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
+
   // Get redirect path from location state or default to dashboard
   const from = (location.state as { from?: string })?.from || '/';
 
@@ -61,8 +68,9 @@ export function LoginPage() {
     setIsLoading(true);
 
     try {
-      await login({ username, password, remember_me: rememberMe });
-      navigate(from, { replace: true });
+      const response = await login({ username, password, remember_me: rememberMe });
+      const target = response.user.role === 'tech' ? '/tech' : from;
+      navigate(target, { replace: true });
     } catch {
       // Always show a user-friendly message for login failures
       // Don't expose technical details like "401" or "Request failed"

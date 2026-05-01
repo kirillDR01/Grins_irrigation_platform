@@ -99,6 +99,24 @@ class ReplyState(BaseModel):
     )
 
 
+class PropertySummary(BaseModel):
+    """Compact property fields for the tech-mobile schedule cards.
+
+    Populated by the staff-daily-schedule endpoint via
+    ``selectinload(Job.job_property)`` so cards can render street/city/state,
+    zone count, and system type without an extra round-trip.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    address: str
+    city: str
+    state: str
+    zip_code: Optional[str] = None
+    zone_count: Optional[int] = None
+    system_type: Optional[str] = None
+
+
 class AppointmentResponse(BaseModel):
     """Schema for appointment response.
 
@@ -142,6 +160,9 @@ class AppointmentResponse(BaseModel):
     # weekly-schedule path populates this; daily / list endpoints leave
     # it None to keep their query plans unchanged.
     reply_state: Optional[ReplyState] = None
+    # tech-mobile schedule cards: only the staff-daily endpoint populates
+    # this via selectinload(Job.job_property). Other paths leave it None.
+    property_summary: Optional[PropertySummary] = None
 
 
 class AppointmentListParams(BaseModel):

@@ -50,6 +50,19 @@ export interface ReplyState {
   last_reminder_sent_at: string | null;
 }
 
+/**
+ * Compact property fields surfaced by the staff-daily-schedule endpoint
+ * for the tech-mobile schedule cards.
+ */
+export interface PropertySummary {
+  address: string;
+  city: string;
+  state: string;
+  zip_code: string | null;
+  zone_count: number | null;
+  system_type: string | null;
+}
+
 export interface Appointment {
   id: string;
   job_id: string;
@@ -77,6 +90,9 @@ export interface Appointment {
   priority_level: number | null;
   // gap-12: only the weekly endpoint sends this.
   reply_state?: ReplyState | null;
+  // tech-mobile schedule cards: only the staff-daily endpoint populates
+  // this from Job.job_property. Other paths leave it null/undefined.
+  property_summary?: PropertySummary | null;
 }
 
 export interface AppointmentCreate {
