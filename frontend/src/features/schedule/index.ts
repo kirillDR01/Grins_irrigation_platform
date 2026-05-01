@@ -74,7 +74,6 @@ export {
 // Components
 export {
   SchedulePage,
-  CalendarView,
   AppointmentList,
   AppointmentDetail,
   AppointmentForm,

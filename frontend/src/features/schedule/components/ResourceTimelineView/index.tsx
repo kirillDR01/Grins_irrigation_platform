@@ -1,10 +1,6 @@
 /**
  * ResourceTimelineView — orchestrator for the day/week/month resource grid.
  *
- * Phase 3 status: Day and Week modes are the new resource grid. Month mode
- * temporarily falls through to the legacy `<CalendarView />` until Phase 4
- * lands the density grid.
- *
  * Owns: ViewMode + currentDate state, prev/next/today nav, and the
  * orchestration handlers for empty-cell click → create dialog and
  * day-header click → drill into Day mode.
@@ -22,20 +18,23 @@ import {
 } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { CalendarView } from '../CalendarView';
 import { DayMode } from './DayMode';
+import { MonthMode } from './MonthMode';
 import { ViewModeToggle } from './ViewModeToggle';
 import { WeekMode } from './WeekMode';
 import type { ViewMode } from './types';
 
 export interface ResourceTimelineViewProps {
-  /** Called when the user clicks an empty `[tech × day]` cell (week mode)
-   *  or a date in legacy day/month modes. The optional staffId pre-fills
-   *  the create-appointment form's `initialStaffId`. */
+  /** Called when the user clicks an empty `[tech × day]` cell (week mode).
+   *  The optional staffId pre-fills the create-appointment form's
+   *  `initialStaffId`. */
   onDateClick?: (staffId: string | null, date: Date) => void;
   onEventClick?: (appointmentId: string) => void;
   onWeekChange?: (weekStart: Date) => void;
   selectedDate?: Date | null;
+  /** Reserved for inline customer panel (CalendarView legacy). The
+   *  resource-timeline view routes the appointment-card click through
+   *  `onEventClick` instead, so this prop is currently unused. */
   onCustomerClick?: (appointmentId: string) => void;
 }
 
@@ -44,7 +43,6 @@ export function ResourceTimelineView({
   onEventClick,
   onWeekChange,
   selectedDate,
-  onCustomerClick,
 }: ResourceTimelineViewProps) {
   const [mode, setMode] = useState<ViewMode>('week');
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
@@ -174,12 +172,9 @@ export function ResourceTimelineView({
         />
       )}
       {mode === 'month' && (
-        <CalendarView
-          onDateClick={(date: Date) => onDateClick?.(null, date)}
-          onEventClick={onEventClick}
-          onWeekChange={onWeekChange}
-          selectedDate={selectedDate ?? null}
-          onCustomerClick={onCustomerClick}
+        <MonthMode
+          date={currentDate}
+          onDayHeaderClick={handleDayHeaderClick}
         />
       )}
     </div>

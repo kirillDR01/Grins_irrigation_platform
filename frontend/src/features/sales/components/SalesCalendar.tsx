@@ -34,7 +34,7 @@ import {
   useSalesPipeline,
 } from '../hooks/useSalesPipeline';
 import type { SalesCalendarEvent } from '../types/pipeline';
-import '@/features/schedule/components/CalendarView.css';
+import './SalesCalendar.css';
 
 interface EventFormState {
   mode: 'create' | 'edit';

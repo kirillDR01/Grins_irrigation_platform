@@ -66,14 +66,14 @@ fi
 ab screenshot "$SHOTS/01-dashboard.png"
 
 # Journey 1: Send Payment Link from Appointment Modal — target the seeded appointment by id.
-# Relies on the data-testid="fc-event-{id}" attribute set by CalendarView's eventDidMount.
+# Relies on the data-testid="appt-card-{id}" attribute set by ResourceTimelineView's AppointmentCard.
 if [[ -z "${APPOINTMENT_ID:-}" ]]; then
   echo "SKIP Journey 1: APPOINTMENT_ID not set (re-seed via scripts/seed_e2e_payment_links.py)."
 else
   ab open "$BASE/schedule"
   ab wait --load networkidle
-  sleep 3  # allow weekly schedule query + FullCalendar to render
-  HIT=$(ab get count "[data-testid='fc-event-$APPOINTMENT_ID']")
+  sleep 3  # allow weekly schedule query + resource-timeline grid to render
+  HIT=$(ab get count "[data-testid='appt-card-$APPOINTMENT_ID']")
   if [[ "$HIT" == "0" ]]; then
     echo "FAIL Journey 1: seeded appointment $APPOINTMENT_ID not in current week view."
     echo "  (Seeder creates today's appointment; if today is on a Mon-boundary"
@@ -81,7 +81,7 @@ else
     ab close
     exit 1
   fi
-  ab click "[data-testid='fc-event-$APPOINTMENT_ID']"
+  ab click "[data-testid='appt-card-$APPOINTMENT_ID']"
   ab wait "[data-testid='appointment-modal']"
   ab screenshot "$SHOTS/02a-modal-opened.png"
   # The Send Payment Link button lives inside the Payment sheet — open it

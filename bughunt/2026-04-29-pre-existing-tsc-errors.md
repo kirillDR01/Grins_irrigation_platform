@@ -56,7 +56,7 @@ Each file received a top-of-file marker:
 | `src/features/sales/components/SalesDashboard.tsx` | sales | Recharts `Formatter` typing drift |
 | `src/features/schedule/components/AppointmentForm.tsx` | schedule | `last_contacted_at`, `preferred_service_time`, `dogs_on_property` |
 | `src/features/schedule/components/AppointmentModal/PhotosPanel.tsx` | schedule | Unused `appointmentId` |
-| `src/features/schedule/components/CalendarView.tsx` | schedule | `EventDropArg` rename in `@fullcalendar/interaction` |
+| ~~`src/features/schedule/components/CalendarView.tsx`~~ | schedule | ~~`EventDropArg` rename in `@fullcalendar/interaction`~~ — **Removed 2026-04-30** as part of resource-timeline-view migration (`@ts-nocheck` no longer needed because the file is deleted). |
 | `src/features/schedule/components/JobTable.tsx` | schedule | `JobReadyToSchedule` missing; `verbatimModuleSyntax` type-only import |
 | `src/features/schedule/components/SchedulingTray.tsx` | schedule | `JobReadyToSchedule` missing |
 | `src/features/schedule/pages/PickJobsPage.tsx` | schedule | `JobReadyToSchedule` missing; `RefObject` nullability |

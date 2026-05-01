@@ -5,6 +5,52 @@ Grin's Irrigation Platform — field service automation for residential/commerci
 
 ## Recent Activity
 
+## [2026-04-30 20:10] - FEATURE: Schedule Resource Timeline View — Phase 4 cleanup (Month + FullCalendar removal)
+
+### What Was Accomplished
+- **Month mode lands** — new `MonthMode.tsx` density grid (`techs × days`) replaces the FullCalendar fallback that Phase 3 left in place. Each `[tech × day]` cell renders the non-cancelled appointment count; background ramps `0 → bg-slate-50`, `1–2 → bg-emerald-100`, `3–5 → bg-emerald-300`, `6+ → bg-emerald-500 text-white`. Clicking a cell or column header drills into Day mode for that date. Today's column carries an inset teal ring for orientation.
+- **`<CalendarView />` removed** — `CalendarView.tsx`, `CalendarView.test.tsx`, `CalendarView.test.ts`, and `CalendarView.css` deleted; the `CalendarView` re-exports were stripped from `features/schedule/components/index.ts` and `features/schedule/index.ts`. `ResourceTimelineView/index.tsx` no longer imports the legacy view in any branch.
+- **FullCalendar styles relocated for `SalesCalendar`** — `SalesCalendar.tsx` was the one remaining importer of the deleted `CalendarView.css`. Moved the `.fc *` theme rules to a co-located `frontend/src/features/sales/components/SalesCalendar.css` and rewired the import. No SalesCalendar behavior change.
+- **E2E selectors renamed** — `[data-testid='fc-event-{id}']` → `[data-testid='appt-card-{id}']` in `e2e/payment-links-flow.sh` (the only remaining caller of the legacy FullCalendar testid; matches the testid the new `AppointmentCard` already emits).
+- **Bughunt doc updated** — the `CalendarView.tsx` row in `bughunt/2026-04-29-pre-existing-tsc-errors.md` is struck through with a "Removed 2026-04-30" note. The file was never in `tsconfig.app.json`'s `exclude` list (it carried inline `@ts-nocheck`), so no tsconfig change is needed.
+
+### Technical Details
+- `frontend/src/features/schedule/components/ResourceTimelineView/MonthMode.tsx` (NEW, 199 LOC) — fans out one weekly query per ISO week overlapping `[startOfMonth, endOfMonth]` via `useQueries`, reusing `appointmentKeys.weekly(start)` so a recent Week-mode visit pre-warms the cache. Uses `eachDayOfInterval` for the day list and `isSameMonth` to filter out adjacent-month days returned by the bordering weekly queries. CSS Grid `200px repeat(daysInMonth, minmax(28px, 1fr))`; horizontal-scroll wrapper for narrow viewports. Loading + error + empty-tech states match WeekMode/DayMode.
+- `frontend/src/features/schedule/components/ResourceTimelineView/MonthMode.test.tsx` (NEW, 10 tests) — render, per-day column header, per-tech-per-day cell, density-color thresholds at 0/1/3/6, cancelled-appointment exclusion, drill-in on cell click, drill-in on column-header click, loading state, empty-tech state, error state. Mocks `useQueries` from `@tanstack/react-query` via `vi.mock + importOriginal()` so tests stay synchronous.
+- `frontend/src/features/schedule/components/ResourceTimelineView/index.tsx` — removed the `import { CalendarView } from '../CalendarView'` and the Phase-3 docstring that documented the temporary fallthrough; month branch now renders `<MonthMode date={currentDate} onDayHeaderClick={handleDayHeaderClick} />`. Kept `onCustomerClick` in the props interface (commented as reserved) so `SchedulePage.tsx` continues to compile without a parallel edit.
+- `frontend/src/features/sales/components/SalesCalendar.css` (NEW) — verbatim copy of the relocated FullCalendar theme rules (header, day cells, time grid, event blocks, status borders, prepaid accent). Header comment explicitly references the relocation.
+- `frontend/src/features/sales/components/SalesCalendar.tsx` — single-line import path swap from `@/features/schedule/components/CalendarView.css` → `./SalesCalendar.css`.
+- `e2e/payment-links-flow.sh` — three lines updated (`fc-event-` → `appt-card-` in selector + log message); semantics preserved.
+- Deletions: `frontend/src/features/schedule/components/CalendarView.{tsx,css,test.ts,test.tsx}` (~600 LOC removed). The component and its tests are no longer reachable via any import.
+- `bughunt/2026-04-29-pre-existing-tsc-errors.md` — `CalendarView.tsx` row struck through with the removal date and rationale.
+
+### Decision Rationale
+- **Density-only Month mode (counts, no cards).** A month grid that tries to render cards becomes the FullCalendar `dayGridMonth` it was meant to replace — same overflow problems, same "more …" link, same cluttered cells at 5+ techs × 30 days. Counts-only collapses 150 cells worth of visual budget into a single number per cell, which is the only thing a manager actually scans for at the month scale ("which day is light?", "is anyone overloaded?"). Cards stay in Week mode where they have room.
+- **Weekly fan-out over per-day or list-paginated fetches.** The BE `/appointments/weekly` endpoint returns 7 days per call; covering a month is at most 5 calls, all parallelized by `useQueries`. Pet-day fan-out would be 28–31 calls. The list-with-`date_from`/`date_to` endpoint caps `page_size` at 100, which would force pagination for any tech-heavy month. Weekly fan-out is also the existing pattern (`useWeeklyCapacity`, `useWeeklyUtilization`).
+- **Cell click drills into Day mode (no staffId pre-filter).** The plan's intent: month-scale view → drill into Day mode for the clicked date. Day mode shows ALL techs anyway, so no `staffId` is needed. Click is the click target on both the day header and the per-tech-per-day cell — no risk of missing the target on smaller cells.
+- **`onCustomerClick` retained as reserved prop (not removed).** `SchedulePage.tsx` still passes `onCustomerClick={handleCustomerClick}` from the legacy CalendarView interface. Removing the prop would force a parallel SchedulePage edit that's out of scope for Phase 4 (cleanup-only). Marked as reserved in the interface; the resource-timeline view routes the appointment-card click through `onEventClick` instead.
+- **Move `CalendarView.css` rather than delete.** The plan's `rm` command would have broken `SalesCalendar.tsx`, which is still on FullCalendar. Relocated the theme into `SalesCalendar.css` so the styles live with the only remaining FullCalendar consumer. The CSS is unchanged content-wise (only the file header comment now references the relocation).
+- **Unstruck `bughunt` row instead of deleting.** The doc is a historical audit log; striking-through with the removal date preserves the trace ("we used to suppress this; we deleted the file on 2026-04-30").
+
+### Challenges and Solutions
+- **SalesCalendar's hidden CSS dependency.** `SalesCalendar.tsx:37` imported `@/features/schedule/components/CalendarView.css`, which the plan didn't enumerate — the only way to find it was a repo-wide grep for the CSS path. Caught before deletion; relocated.
+- **Mocking `useQueries` for synchronous tests.** Mocking the whole `@tanstack/react-query` module would have stripped `QueryClientProvider`. Used `vi.mock(..., async (importOriginal) => ({ ...await importOriginal(), useQueries: vi.fn() }))` to override only the one symbol. Tests stay synchronous and don't need `waitFor` plumbing.
+- **`isSameMonth` bordering-week filter.** The fan-out's first weekly query starts at `startOfWeek(monthStart, { weekStartsOn: 1 })`, which can be in the previous month (e.g. April 2026 starts on Wed 2026-04-01, so the first week is `Mon 2026-03-30 → Sun 2026-04-05`). Without the `isSameMonth` filter, those Mar 30/31 appointments would have polluted the bucket. Same for the trailing week.
+
+### Next Steps
+- Phase 5+ (out of scope here): Tasks 25, 27, 28 already landed in earlier phases; the remaining v1 backlog is mobile horizontal-scroll resource grid, multi-day appointment rendering, and Tooltip dependency for sparkline (all called out as deliberate v1 omissions in the plan's Notes).
+- Backend `Appointment` model lacks `parent_appointment_id`/`day_index`/`total_days` — required for "New build (Day 1/4)" rendering in Week mode. Defer until product confirms multi-day jobs are a v2 priority.
+- Optional cleanup follow-up: delete the `onCustomerClick` prop from `ResourceTimelineView` and the parallel handler in `SchedulePage.tsx` once no other callers remain.
+
+### Validation
+- `npm run typecheck`: passes (zero new errors).
+- `npm run lint` for Phase-4 files (`MonthMode.tsx`, `MonthMode.test.tsx`, `ResourceTimelineView/index.tsx`): clean. Repo-wide lint count unchanged from `2026-04-29` (32 errors / 42 warnings — all pre-existing `@ts-nocheck` and unused-var warnings).
+- `npm run build`: succeeds in 5.45s; chunk sizes unchanged.
+- `npx vitest run src/features/schedule/components/ResourceTimelineView/`: 5 files, 67 tests passing (utils 25, AppointmentCard 10, DayMode 13, WeekMode 9, MonthMode 10).
+- `npx vitest run src/features/schedule/`: 57 files, 787 tests passing — no regressions from CalendarView removal.
+
+---
+
 ## [2026-04-29 19:30] - BUGFIX: AI scheduling spec validation — 8 bugs closed
 
 ### What Was Accomplished
