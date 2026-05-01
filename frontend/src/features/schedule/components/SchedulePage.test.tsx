@@ -15,10 +15,16 @@ import { useMediaQuery } from '@/shared/hooks';
 const mockUseMediaQuery = vi.mocked(useMediaQuery);
 
 // Mock the child components to avoid complex setup
-vi.mock('./CalendarView', () => ({
-  CalendarView: ({ onDateClick, onEventClick }: { onDateClick?: (date: Date) => void; onEventClick?: (id: string) => void }) => (
+vi.mock('./ResourceTimelineView', () => ({
+  ResourceTimelineView: ({
+    onDateClick,
+    onEventClick,
+  }: {
+    onDateClick?: (staffId: string | null, date: Date) => void;
+    onEventClick?: (id: string) => void;
+  }) => (
     <div data-testid="calendar-view">
-      <button onClick={() => onDateClick?.(new Date())}>Click Date</button>
+      <button onClick={() => onDateClick?.(null, new Date())}>Click Date</button>
       <button onClick={() => onEventClick?.('test-id')}>Click Event</button>
     </div>
   ),

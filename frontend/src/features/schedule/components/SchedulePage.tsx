@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Plus, Calendar, List, CalendarPlus, MoreHorizontal } from 'lucide-react';
 import { useMediaQuery } from '@/shared/hooks';
-import { CalendarView } from './CalendarView';
+import { ResourceTimelineView } from './ResourceTimelineView';
 import { AppointmentForm } from './AppointmentForm';
 import { AppointmentModal } from './AppointmentModal';
 import { AppointmentList } from './AppointmentList';
@@ -63,6 +63,7 @@ export function SchedulePage() {
   >(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [createDialogDate, setCreateDialogDate] = useState<Date | null>(null);
+  const [createDialogStaffId, setCreateDialogStaffId] = useState<string | null>(null);
   const [showClearDayDialog, setShowClearDayDialog] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
@@ -261,8 +262,9 @@ export function SchedulePage() {
     },
   });
 
-  const handleDateClick = (date: Date) => {
+  const handleDateClick = (staffId: string | null, date: Date) => {
     setCreateDialogDate(date);
+    setCreateDialogStaffId(staffId);
     setShowCreateDialog(true);
   };
 
@@ -273,6 +275,7 @@ export function SchedulePage() {
   const handleCreateSuccess = () => {
     setShowCreateDialog(false);
     setCreateDialogDate(null);
+    setCreateDialogStaffId(null);
     setPreSelectedJobId(null);
   };
 
@@ -490,7 +493,7 @@ export function SchedulePage() {
       {/* Main Content */}
       <div className="bg-white rounded-lg border shadow-sm">
         {viewMode === 'calendar' ? (
-          <CalendarView
+          <ResourceTimelineView
             onDateClick={handleDateClick}
             onEventClick={handleEventClick}
             onWeekChange={handleWeekChange}
@@ -538,10 +541,12 @@ export function SchedulePage() {
           <AppointmentForm
             initialDate={createDialogDate ?? undefined}
             initialJobId={preSelectedJobId ?? undefined}
+            initialStaffId={createDialogStaffId ?? undefined}
             onSuccess={handleCreateSuccess}
             onCancel={() => {
               setShowCreateDialog(false);
               setCreateDialogDate(null);
+              setCreateDialogStaffId(null);
               setPreSelectedJobId(null);
             }}
           />
