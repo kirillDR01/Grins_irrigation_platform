@@ -25,8 +25,13 @@ down_revision: Union[str, None] = "20250625_100000"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-# Bcrypt hash for password 'tech123' with cost factor 12
-TECH_PASSWORD_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.S3vZ3vZ3vZ3vZ3"
+# Real bcrypt hash for password 'tech123' (cost factor 12). The
+# previously committed value was a placeholder that did not actually
+# verify against 'tech123' — fresh dev DBs created from migrations got
+# tech accounts that nobody could log into. This hash verifies; existing
+# DBs that already ran this migration are unaffected (ON CONFLICT DO
+# NOTHING + alembic version tracking means upgrade() does not re-run).
+TECH_PASSWORD_HASH = "$2b$12$wENLaexYLfe3DmDuHd6UZ..tQMTNz.OGBwXqGsEjWRK7/qQM8/eSi"
 
 
 def upgrade() -> None:
@@ -76,29 +81,29 @@ def upgrade() -> None:
                 default_start_address, default_start_city, default_start_lat, default_start_lng,
                 username, password_hash, is_login_enabled
             ) VALUES
-            -- Senior Technician - Vas
-            ('Vas Grin', '6125552001', 'vas@grins-irrigations.com', 'tech', 'senior',
+            -- Senior Technician - Vasiliy
+            ('Vasiliy', '6125552001', 'vasiliy@grins-irrigations.com', 'tech', 'senior',
              '["irrigation_certified", "backflow_certified"]', true, 35.00, true,
              '["compressor", "pipe_puller"]', '123 Tech Lane', 'Eden Prairie', 44.8547, -93.4708,
-             'vas', :password_hash, true),
+             'vasiliy', :password_hash, true),
 
-            -- Lead Technician - Steven
-            ('Steven Miller', '6125552002', 'steven@grins-irrigations.com', 'tech', 'lead',
+            -- Lead Technician - Steve
+            ('Steve', '6125552002', 'steve@grins-irrigations.com', 'tech', 'lead',
              '["irrigation_certified", "backflow_certified", "landscaping_certified"]', true, 40.00, true,
              '["compressor", "pipe_puller", "trencher"]', '456 Service Rd', 'Plymouth', 45.0105, -93.4555,
-             'steven', :password_hash, true),
+             'steve', :password_hash, true),
 
-            -- Junior Technician - Dad
+            -- Junior Technician - Viktor (login disabled in seed)
             ('Viktor Sr', '6125552003', 'viktor.sr@grins-irrigations.com', 'tech', 'junior',
              '["irrigation_certified"]', true, 28.00, true,
              '["standard_tools"]', '789 Helper Ave', 'Maple Grove', 45.0724, -93.4557,
              NULL, NULL, false),
 
-            -- Part-time Technician - Vitallik
-            ('Vitallik Petrov', '6125552004', 'vitallik@grins-irrigations.com', 'tech', 'senior',
+            -- Part-time Technician - Gennadiy
+            ('Gennadiy', '6125552004', 'gennadiy@grins-irrigations.com', 'tech', 'senior',
              '["irrigation_certified", "landscaping_certified"]', true, 32.00, true,
              '["compressor", "standard_tools"]', '321 Seasonal St', 'Brooklyn Park', 45.0941, -93.3563,
-             'vitallik', :password_hash, true)
+             'gennadiy', :password_hash, true)
 
             ON CONFLICT DO NOTHING;
             """,

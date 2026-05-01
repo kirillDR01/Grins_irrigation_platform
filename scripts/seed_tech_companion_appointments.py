@@ -2,21 +2,21 @@
 
 Idempotent. Does NOT create or modify Staff rows — they were seeded by
 migration ``20250626_100000_seed_demo_data.py`` with login credentials
-``vas / steven / vitallik`` (password ``tech123``). This script only
+``vasiliy / steve / gennadiy`` (password ``tech123``). This script only
 creates / updates Customers, Properties, Jobs, and Appointments so each
 tech has a distinct daily schedule that exercises every visual state of
 the ``MobileJobCard``:
 
-  vas        — 3 appts today: completed / in_progress / scheduled
-  steven     — 2 appts today: scheduled  / en_route   (per-tech isolation)
-  vitallik   — 0 appts today                          (empty state)
+  vasiliy   — 3 appts today: completed / in_progress / scheduled
+  steve     — 2 appts today: scheduled  / en_route   (per-tech isolation)
+  gennadiy  — 0 appts today                          (empty state)
 
 Re-run safe:
 - Customers / properties keyed by stable email (e2e+<tech>@grins.test)
 - Jobs reuse the tech's customer + property
 - Appointments upserted by (staff_id, scheduled_date, time_window_start)
 - All script-owned rows tagged ``[tech-companion-e2e]`` so the
-  vitallik-cleanup step only deletes script-owned rows.
+  gennadiy-cleanup step only deletes script-owned rows.
 
 Usage:
     uv run python scripts/seed_tech_companion_appointments.py
@@ -49,17 +49,17 @@ SSL_MODE = (
     else "require"
 )
 
-# Stable tag for script-owned rows; lets us safely delete vitallik's
+# Stable tag for script-owned rows; lets us safely delete gennadiy's
 # pre-existing tagged appointments without touching anything else.
 TAG = "[tech-companion-e2e]"
 
 # Per-tech fixture data: stable email → unique customer/property.
 TECH_FIXTURES = {
-    "vas": {
+    "vasiliy": {
         "first_name": "Avery",
         "last_name": "Park",
         "phone": "+19525550101",
-        "email": "e2e+vas@grins.test",
+        "email": "e2e+vasiliy@grins.test",
         "address": "12345 Eden Way",
         "city": "Eden Prairie",
         "state": "MN",
@@ -67,11 +67,11 @@ TECH_FIXTURES = {
         "zone_count": 8,
         "system_type": "standard",
     },
-    "steven": {
+    "steve": {
         "first_name": "Brooks",
         "last_name": "Lopez",
         "phone": "+19525550102",
-        "email": "e2e+steven@grins.test",
+        "email": "e2e+steve@grins.test",
         "address": "8901 Anderson Lakes Pkwy",
         "city": "Eden Prairie",
         "state": "MN",
@@ -79,11 +79,11 @@ TECH_FIXTURES = {
         "zone_count": 6,
         "system_type": "standard",
     },
-    "vitallik": {
+    "gennadiy": {
         "first_name": "Casey",
         "last_name": "Reyes",
         "phone": "+19525550103",
-        "email": "e2e+vitallik@grins.test",
+        "email": "e2e+gennadiy@grins.test",
         "address": "555 Mitchell Rd",
         "city": "Eden Prairie",
         "state": "MN",
@@ -95,16 +95,16 @@ TECH_FIXTURES = {
 
 # Per-tech appointment plan for today.
 APPT_PLAN: dict[str, list[tuple[str, time, time]]] = {
-    "vas": [
+    "vasiliy": [
         ("completed", time(8, 0), time(9, 25)),
         ("in_progress", time(10, 30), time(12, 0)),
         ("scheduled", time(13, 0), time(14, 15)),
     ],
-    "steven": [
+    "steve": [
         ("scheduled", time(9, 0), time(10, 30)),
         ("en_route", time(11, 0), time(12, 30)),
     ],
-    "vitallik": [],
+    "gennadiy": [],
 }
 
 
@@ -117,7 +117,7 @@ def main() -> None:
     # ----- Resolve the three existing tech rows by username ------------------
     cur.execute(
         "SELECT id, username FROM staff "
-        "WHERE username IN ('vas', 'steven', 'vitallik')"
+        "WHERE username IN ('vasiliy', 'steve', 'gennadiy')"
     )
     rows = cur.fetchall()
     staff_by_username = {row["username"]: row["id"] for row in rows}
@@ -126,7 +126,7 @@ def main() -> None:
         print(
             f"ERROR: missing tech staff rows: {missing}\n"
             "Run migration 20250626_100000_seed_demo_data.py "
-            "to seed Vas / Steven / Vitallik with login enabled.",
+            "to seed Vasiliy / Steve / Gennadiy with login enabled.",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -304,9 +304,9 @@ def main() -> None:
 
     print(
         "\nDev tech logins (seeded by migration 20250626_100000_seed_demo_data):\n"
-        "  vas      / tech123   (3 appts today: completed / in_progress / scheduled)\n"
-        "  steven   / tech123   (2 appts today: scheduled / en_route)\n"
-        "  vitallik / tech123   (0 appts today — empty state)\n"
+        "  vasiliy  / tech123   (3 appts today: completed / in_progress / scheduled)\n"
+        "  steve    / tech123   (2 appts today: scheduled / en_route)\n"
+        "  gennadiy / tech123   (0 appts today — empty state)\n"
     )
 
 

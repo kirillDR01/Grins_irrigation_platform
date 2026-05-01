@@ -3,10 +3,10 @@
 #
 # Validates:
 #   - Tech logging in from a phone viewport lands on /tech (not /dashboard).
-#   - vas's three appointments render (completed / in_progress / scheduled).
+#   - vasiliy's three appointments render (completed / in_progress / scheduled).
 #   - Tapping the in_progress card opens the existing AppointmentModal.
-#   - steven's two appointments render (per-tech isolation).
-#   - vitallik renders the empty state (validates 0-appt branch).
+#   - steve's two appointments render (per-tech isolation).
+#   - gennadiy renders the empty state (validates 0-appt branch).
 #   - Admin login still goes to /dashboard.
 #   - Tech on a desktop viewport sees the "Open this on your phone" landing.
 #
@@ -45,7 +45,7 @@ if ! curl -fsS "${API_BASE}/health" >/dev/null 2>&1; then
 fi
 
 # Seed today's appointments for the three dev techs.
-echo "Seeding appointments for vas / steven / vitallik ..."
+echo "Seeding appointments for vasiliy / steve / gennadiy ..."
 uv run python scripts/seed_tech_companion_appointments.py
 
 ab() {
@@ -98,18 +98,18 @@ relogin() {
 # Phase 0 — viewport: iPhone 14 Pro ish (390x844).
 ab set viewport 390 844
 
-# Phase 1 — Tech vas login + redirect to /tech.
+# Phase 1 — Tech vasiliy login + redirect to /tech.
 ab open "$BASE/login"
 ab wait --load networkidle
 ab screenshot "$SHOTS/01-login.png"
-ab fill "[data-testid='username-input']" "vas"
+ab fill "[data-testid='username-input']" "vasiliy"
 ab fill "[data-testid='password-input']" "tech123"
 ab click "[data-testid='login-btn']"
 ab wait --load networkidle
 sleep 2
-ab screenshot "$SHOTS/02-vas-schedule.png"
+ab screenshot "$SHOTS/02-vasiliy-schedule.png"
 
-# Phase 2 — Card states (vas: completed / in_progress / scheduled)
+# Phase 2 — Card states (vasiliy: completed / in_progress / scheduled)
 ab snapshot -i > "$SHOTS/02-snapshot.txt" || true
 ab is visible "[data-testid='mobile-job-card-current']"
 ab is visible "[data-testid='mobile-job-card-complete']"
@@ -125,18 +125,18 @@ ab click "[data-testid='appointment-modal-close']"
 sleep 1
 ab screenshot "$SHOTS/05-modal-closed.png"
 
-# Phase 4 — Per-tech isolation: log out + log in as steven.
-relogin "steven" "tech123"
-ab screenshot "$SHOTS/06-steven-schedule.png"
-# steven has 2 upcoming appointments — strict-mode visibility fails on
+# Phase 4 — Per-tech isolation: log out + log in as steve.
+relogin "steve" "tech123"
+ab screenshot "$SHOTS/06-steve-schedule.png"
+# steve has 2 upcoming appointments — strict-mode visibility fails on
 # multi-match, so assert count instead.
-steven_card_count=$(ab get count "[data-testid='mobile-job-card-upcoming']" | tr -d '[:space:]' || echo 0)
-echo "steven upcoming cards: ${steven_card_count}"
-[[ "${steven_card_count}" -ge 1 ]] || { echo "expected steven to have >=1 upcoming card" >&2; exit 1; }
+steve_card_count=$(ab get count "[data-testid='mobile-job-card-upcoming']" | tr -d '[:space:]' || echo 0)
+echo "steve upcoming cards: ${steve_card_count}"
+[[ "${steve_card_count}" -ge 1 ]] || { echo "expected steve to have >=1 upcoming card" >&2; exit 1; }
 
-# Phase 5 — Empty state for vitallik.
-relogin "vitallik" "tech123"
-ab screenshot "$SHOTS/07-vitallik-empty.png"
+# Phase 5 — Empty state for gennadiy.
+relogin "gennadiy" "tech123"
+ab screenshot "$SHOTS/07-gennadiy-empty.png"
 ab is visible "[data-testid='tech-empty-state']"
 
 # Phase 6 — Admin login lands on /dashboard, NOT /tech.
@@ -145,7 +145,7 @@ ab screenshot "$SHOTS/08-admin-dashboard.png"
 
 # Phase 7 — Tech on a desktop viewport sees the "Open this on your phone" landing.
 ab set viewport 1440 900
-relogin "vas" "tech123"
+relogin "vasiliy" "tech123"
 ab screenshot "$SHOTS/09-tech-on-desktop-landing.png"
 
 # Phase 8 — Console / errors.
