@@ -132,6 +132,89 @@ class ContractTemplateUpdate(BaseModel):
 
 
 # =============================================================================
+# Estimate line-item shape (umbrella plan Phase 3 / Task 3.1).
+# =============================================================================
+
+
+class EstimateLineItem(BaseModel):
+    """Shape of one entry in ``Estimate.line_items`` (JSONB).
+
+    The column stays ``list[dict[str, Any]]`` for backwards-compat — every
+    estimate ever written predates this schema. New consumers should
+    validate dicts through this model on read so the new fields are
+    surfaced consistently. Older rows simply have the new keys absent.
+
+    Phase 3 additions (umbrella plan E2 / P5 / N3 seam):
+      * ``service_offering_id`` — pin the line to the live pricelist row
+        the tech picked from. Lets us keep historic estimates rendering
+        their original prices via the immutable archive chain.
+      * ``unit_cost`` — staff-only internal cost per unit, hidden from
+        the customer-facing PDF/portal. Drives the margin readout in
+        the staff edit drawer.
+      * ``material_markup_pct`` — 0 by default (the markup math is
+        deferred per N3, but the column is here so future activation
+        is a UI/config change rather than a migration).
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    item: str | None = Field(
+        default=None,
+        description="Free-form item label rendered to the customer",
+    )
+    description: str | None = Field(
+        default=None,
+        description="Optional sub-description rendered below ``item``",
+    )
+    quantity: Decimal = Field(
+        default=Decimal(1),
+        ge=0,
+        description="Number of units / zones / hours",
+    )
+    unit_price: Decimal = Field(
+        default=Decimal(0),
+        ge=0,
+        description="Customer-facing per-unit price (the committed number)",
+    )
+    # Phase 3 additions ---------------------------------------------------
+    service_offering_id: UUID | None = Field(
+        default=None,
+        description=(
+            "FK to the ``service_offerings`` row the tech picked. "
+            "Null for legacy / template-derived items."
+        ),
+    )
+    unit_cost: Decimal | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Internal cost-per-unit (staff-only). MUST NOT render on "
+            "customer-facing PDF or portal. Drives the margin readout in "
+            "the staff edit drawer."
+        ),
+    )
+    material_markup_pct: Decimal = Field(
+        default=Decimal(0),
+        ge=0,
+        le=Decimal(500),
+        description=(
+            "Material markup percentage applied on top of ``unit_cost``. "
+            "Default 0 — the markup math is deferred (umbrella plan N3); "
+            "the field is here as a future-proofing seam."
+        ),
+    )
+    # Tier metadata (Phase 3 / N4 schema seam — Good/Better/Best).
+    selected_tier: str | None = Field(
+        default=None,
+        description=(
+            "Picked range_anchors tier label ('low' | 'mid' | 'high') "
+            "when the offering exposes range_anchors. Free-form for "
+            "future tier names."
+        ),
+    )
+
+
+# =============================================================================
 # Estimate Schemas
 # =============================================================================
 

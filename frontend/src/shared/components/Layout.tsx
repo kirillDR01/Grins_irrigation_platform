@@ -22,6 +22,7 @@ import {
   Megaphone,
   MessageSquare,
   RefreshCw,
+  Tag,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -93,6 +94,12 @@ const navItems: NavItem[] = [
     href: '/invoices',
     icon: <FileText className="h-5 w-5" />,
     testId: 'nav-invoices',
+  },
+  {
+    label: 'Pricebook',
+    href: '/invoices?tab=pricelist',
+    icon: <Tag className="h-5 w-5" />,
+    testId: 'nav-pricebook',
   },
   {
     label: 'Agreements',

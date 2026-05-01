@@ -13,9 +13,15 @@ import math
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,  # noqa: TC002 - Required at runtime for FastAPI DI
+)
 
-from grins_platform.api.v1.dependencies import get_service_offering_service
+from grins_platform.api.v1.dependencies import (
+    get_db_session,
+    get_service_offering_service,
+)
 from grins_platform.exceptions import ServiceOfferingNotFoundError
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import (
@@ -26,6 +32,9 @@ from grins_platform.schemas.service_offering import (
     ServiceOfferingCreate,
     ServiceOfferingResponse,
     ServiceOfferingUpdate,
+)
+from grins_platform.services.price_list_export_service import (
+    PriceListExportService,
 )
 from grins_platform.services.service_offering_service import (
     ServiceOfferingService,  # noqa: TC001 - Required at runtime for FastAPI DI
@@ -137,6 +146,35 @@ async def list_services(
         page_size=page_size,
         total_pages=total_pages,
     )
+
+
+# =============================================================================
+# Pricelist auto-generated Markdown export (umbrella plan Phase 2 / P8).
+# =============================================================================
+
+
+@router.get(  # type: ignore[untyped-decorator]
+    "/export/pricelist.md",
+    summary="Export pricelist as Markdown",
+    description=(
+        "Render the active service offerings as a Markdown document grouped "
+        "by customer_type and category. Auto-generated; replaces manual "
+        "maintenance of the static pricelist.md."
+    ),
+    response_class=Response,
+)
+async def export_pricelist_markdown(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> Response:
+    """Return the pricelist as ``text/markdown``.
+
+    Validates: umbrella plan Phase 2 task 2.7 / P8.
+    """
+    _endpoints.log_started("export_pricelist_markdown")
+    exporter = PriceListExportService(session=session)
+    body = await exporter.export_to_markdown()
+    _endpoints.log_completed("export_pricelist_markdown", bytes=len(body))
+    return Response(content=body, media_type="text/markdown; charset=utf-8")
 
 
 # =============================================================================
