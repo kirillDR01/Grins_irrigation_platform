@@ -61,6 +61,13 @@ class ServiceOfferingRepository(LoggerMixin):
         equipment_required: list[str] | None = None,
         lien_eligible: bool = False,
         requires_prepay: bool = False,
+        slug: str | None = None,
+        display_name: str | None = None,
+        customer_type: str | None = None,
+        subcategory: str | None = None,
+        pricing_rule: dict[str, Any] | None = None,
+        includes_materials: bool = False,
+        source_text: str | None = None,
     ) -> ServiceOffering:
         """Create a new service offering record.
 
@@ -77,6 +84,13 @@ class ServiceOfferingRepository(LoggerMixin):
             equipment_required: List of required equipment
             lien_eligible: Whether service is lien eligible
             requires_prepay: Whether prepayment is required
+            slug: Stable, immutable handle (umbrella plan Phase 1).
+            display_name: Admin-editable label.
+            customer_type: ``residential`` / ``commercial``.
+            subcategory: Finer grouping under category.
+            pricing_rule: JSONB rule body keyed by pricing_model.
+            includes_materials: Whether materials pass through at cost.
+            source_text: Original source text from the printed price list.
 
         Returns:
             Created ServiceOffering instance
@@ -98,6 +112,13 @@ class ServiceOfferingRepository(LoggerMixin):
             equipment_required=equipment_required,
             lien_eligible=lien_eligible,
             requires_prepay=requires_prepay,
+            slug=slug,
+            display_name=display_name,
+            customer_type=customer_type,
+            subcategory=subcategory,
+            pricing_rule=pricing_rule,
+            includes_materials=includes_materials,
+            source_text=source_text,
         )
 
         self.session.add(service)
@@ -255,6 +276,7 @@ class ServiceOfferingRepository(LoggerMixin):
         page_size: int = 20,
         category: ServiceCategory | None = None,
         is_active: bool | None = None,
+        customer_type: str | None = None,
         sort_by: str = "name",
         sort_order: str = "asc",
     ) -> tuple[list[ServiceOffering], int]:
@@ -265,6 +287,8 @@ class ServiceOfferingRepository(LoggerMixin):
             page_size: Number of items per page
             category: Filter by category
             is_active: Filter by active status
+            customer_type: Filter by ``residential`` / ``commercial``
+                (umbrella plan Phase 1).
             sort_by: Field to sort by
             sort_order: Sort order (asc/desc)
 
@@ -282,6 +306,11 @@ class ServiceOfferingRepository(LoggerMixin):
 
         if is_active is not None:
             base_query = base_query.where(ServiceOffering.is_active == is_active)
+
+        if customer_type is not None:
+            base_query = base_query.where(
+                ServiceOffering.customer_type == customer_type
+            )
 
         # Get total count
         count_query = select(func.count()).select_from(base_query.subquery())

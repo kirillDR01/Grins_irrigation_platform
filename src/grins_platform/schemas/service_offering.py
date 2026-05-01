@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -84,6 +85,39 @@ class ServiceOfferingCreate(BaseModel):
     requires_prepay: bool = Field(
         default=False,
         description="Whether payment is required before work",
+    )
+
+    # Pricelist-editor extensions (umbrella plan Phase 1).
+    slug: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Stable, immutable handle (UNIQUE WHERE NOT NULL)",
+    )
+    display_name: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Admin-editable label distinct from ``name``",
+    )
+    customer_type: Literal["residential", "commercial"] | None = Field(
+        default=None,
+        description="Pricelist customer-type bucket",
+    )
+    subcategory: str | None = Field(
+        default=None,
+        max_length=50,
+        description="Finer grouping under category",
+    )
+    pricing_rule: dict[str, Any] | None = Field(
+        default=None,
+        description="JSONB rule body keyed by pricing_model",
+    )
+    includes_materials: bool = Field(
+        default=False,
+        description="Whether materials pass through at cost",
+    )
+    source_text: str | None = Field(
+        default=None,
+        description="Original source text from the printed price list",
     )
 
     @field_validator("name")  # type: ignore[misc,untyped-decorator]
@@ -167,6 +201,39 @@ class ServiceOfferingUpdate(BaseModel):
         description="Whether the service is currently offered",
     )
 
+    # Pricelist-editor extensions (umbrella plan Phase 1).
+    slug: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Stable, immutable handle (UNIQUE WHERE NOT NULL)",
+    )
+    display_name: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Admin-editable label distinct from ``name``",
+    )
+    customer_type: Literal["residential", "commercial"] | None = Field(
+        default=None,
+        description="Pricelist customer-type bucket",
+    )
+    subcategory: str | None = Field(
+        default=None,
+        max_length=50,
+        description="Finer grouping under category",
+    )
+    pricing_rule: dict[str, Any] | None = Field(
+        default=None,
+        description="JSONB rule body keyed by pricing_model",
+    )
+    includes_materials: bool | None = Field(
+        default=None,
+        description="Whether materials pass through at cost",
+    )
+    source_text: str | None = Field(
+        default=None,
+        description="Original source text from the printed price list",
+    )
+
     @field_validator("name")  # type: ignore[misc,untyped-decorator]
     @classmethod
     def strip_name(cls, v: str | None) -> str | None:
@@ -226,6 +293,38 @@ class ServiceOfferingResponse(BaseModel):
         description="Whether payment is required before work",
     )
     is_active: bool = Field(..., description="Whether the service is active")
+
+    # Pricelist-editor extensions (umbrella plan Phase 1).
+    slug: str | None = Field(default=None, description="Stable handle")
+    display_name: str | None = Field(
+        default=None,
+        description="Admin-editable label",
+    )
+    customer_type: Literal["residential", "commercial"] | None = Field(
+        default=None,
+        description="Pricelist customer-type bucket",
+    )
+    subcategory: str | None = Field(
+        default=None,
+        description="Finer grouping under category",
+    )
+    pricing_rule: dict[str, Any] | None = Field(
+        default=None,
+        description="JSONB rule body keyed by pricing_model",
+    )
+    replaced_by_id: UUID | None = Field(
+        default=None,
+        description="ID of the row that supersedes this one",
+    )
+    includes_materials: bool = Field(
+        default=False,
+        description="Whether materials pass through at cost",
+    )
+    source_text: str | None = Field(
+        default=None,
+        description="Original source text from the printed price list",
+    )
+
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Record last update timestamp")
 
@@ -274,6 +373,10 @@ class ServiceListParams(BaseModel):
     is_active: bool | None = Field(
         default=None,
         description="Filter by active status",
+    )
+    customer_type: Literal["residential", "commercial"] | None = Field(
+        default=None,
+        description="Filter by customer-type bucket",
     )
     lien_eligible: bool | None = Field(
         default=None,

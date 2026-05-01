@@ -86,19 +86,33 @@ async def _get_estimate_service(
     Returns:
         EstimateService instance with all dependencies wired.
     """
+    from grins_platform.services.business_setting_service import (  # noqa: PLC0415
+        BusinessSettingService,
+    )
+    from grins_platform.services.estimate_pdf_service import (  # noqa: PLC0415
+        EstimatePDFService,
+    )
+
     repo = EstimateRepository(session=session)
     email_service = EmailService()
     sms_service = SMSService(session=session, provider=get_sms_provider())
+    audit_service = AuditService()
     sales_pipeline_service = SalesPipelineService(
         job_service=job_service,
-        audit_service=AuditService(),
+        audit_service=audit_service,
     )
+    business_setting_service = BusinessSettingService(session=session)
+    estimate_pdf_service = EstimatePDFService()
     return EstimateService(
         estimate_repository=repo,
         portal_base_url=EmailSettings().portal_base_url,
         email_service=email_service,
         sms_service=sms_service,
         sales_pipeline_service=sales_pipeline_service,
+        job_service=job_service,
+        business_setting_service=business_setting_service,
+        audit_service=audit_service,
+        estimate_pdf_service=estimate_pdf_service,
     )
 
 

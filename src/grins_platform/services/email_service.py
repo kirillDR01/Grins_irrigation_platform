@@ -168,6 +168,7 @@ class EmailService(LoggerMixin):
             "onboarding_reminder",
             "failed_payment_notice",
             "estimate_sent",
+            "estimate_approved",
             "internal_estimate_decision",
             "internal_estimate_bounce",
             "payment_link",
@@ -229,6 +230,7 @@ class EmailService(LoggerMixin):
         classification: EmailType,
         text_body: str | None = None,
         extra_tags: list[dict[str, str]] | None = None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> bool:
         """Send email via Resend or record as pending.
 
@@ -274,6 +276,8 @@ class EmailService(LoggerMixin):
         }
         if text_body:
             payload["text"] = text_body
+        if attachments:
+            payload["attachments"] = attachments
 
         try:
             response = resend.Emails.send(payload)  # type: ignore[arg-type]
@@ -436,6 +440,101 @@ class EmailService(LoggerMixin):
             "recipient_email": email,
             "content": html_body,
             "disclosure_type": None,
+        }
+
+    def send_estimate_approved_email(
+        self,
+        *,
+        customer: Customer | Lead,
+        estimate: Estimate,
+        portal_url: str,
+        pdf_bytes: bytes | None = None,
+    ) -> dict[str, Any]:
+        """Send a "your approved estimate" email with the signed PDF attached.
+
+        Mirrors :meth:`send_estimate_email` but is fired *after* portal
+        approval to deliver the customer-signed copy. ``pdf_bytes`` is
+        attached directly to the Resend payload (≤500KB; well under
+        the 40MB limit).
+
+        Validates: appointment-modal umbrella plan AJ-8.
+        """
+        self.log_started(
+            "send_estimate_approved_email",
+            estimate_id=str(estimate.id),
+        )
+
+        email = getattr(customer, "email", None)
+        if not email:
+            self.logger.warning(
+                "email.estimate_approved.skipped",
+                estimate_id=str(estimate.id),
+                reason="no_email_address",
+            )
+            return {"sent": False, "reason": "no_email"}
+
+        customer_name = (
+            getattr(customer, "full_name", None)
+            or getattr(customer, "first_name", None)
+            or "Valued Customer"
+        )
+
+        context = {
+            "customer_name": customer_name,
+            "total": str(estimate.total),
+            "portal_url": portal_url,
+        }
+
+        try:
+            html_body = self._render_template("estimate_approved.html", context)
+        except Exception:
+            html_body = (
+                f"<p>Hi {customer_name},</p>"
+                f"<p>Thanks for approving your estimate from Grin's Irrigation. "
+                f"Your signed copy is attached for your records. We will reach out "
+                f"shortly to schedule the work.</p>"
+                f"<p>Total: ${estimate.total}</p>"
+                f'<p><a href="{portal_url}">View your estimate online</a></p>'
+            )
+        text_body = (
+            f"Hi {customer_name}, thank you for approving your estimate "
+            f"from Grin's Irrigation. Your signed copy is attached. "
+            f"Total: ${estimate.total}. View online: {portal_url}"
+        )
+
+        attachments: list[dict[str, Any]] | None = None
+        if pdf_bytes:
+            attachments = [
+                {
+                    "filename": f"estimate-{estimate.id}.pdf",
+                    "content": list(pdf_bytes),
+                    "content_type": "application/pdf",
+                },
+            ]
+
+        classification = self._classify_email("estimate_approved")
+        sent = self._send_email(
+            to_email=email,
+            subject="Your signed estimate from Grin's Irrigation",
+            html_body=html_body,
+            email_type="estimate_approved",
+            classification=classification,
+            text_body=text_body,
+            extra_tags=[
+                {"name": "estimate_id", "value": str(estimate.id)},
+            ],
+            attachments=attachments,
+        )
+
+        self.log_completed(
+            "send_estimate_approved_email",
+            sent=sent,
+            estimate_id=str(estimate.id),
+        )
+        return {
+            "sent": sent,
+            "sent_via": "email" if sent else "pending",
+            "recipient_email": email,
         }
 
     def send_internal_estimate_decision_email(

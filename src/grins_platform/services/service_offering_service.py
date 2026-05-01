@@ -80,6 +80,13 @@ class ServiceOfferingService(LoggerMixin):
             equipment_required=data.equipment_required,
             lien_eligible=data.lien_eligible,
             requires_prepay=data.requires_prepay,
+            slug=data.slug,
+            display_name=data.display_name,
+            customer_type=data.customer_type,
+            subcategory=data.subcategory,
+            pricing_rule=data.pricing_rule,
+            includes_materials=data.includes_materials,
+            source_text=data.source_text,
         )
 
         self.log_completed("create_service", service_id=str(service.id))
@@ -184,6 +191,7 @@ class ServiceOfferingService(LoggerMixin):
         page_size: int = 20,
         category: ServiceCategory | None = None,
         is_active: bool | None = None,
+        customer_type: str | None = None,
         sort_by: str = "name",
         sort_order: str = "asc",
     ) -> tuple[list[ServiceOffering], int]:
@@ -194,6 +202,7 @@ class ServiceOfferingService(LoggerMixin):
             page_size: Number of items per page
             category: Filter by category
             is_active: Filter by active status
+            customer_type: Filter by ``residential`` / ``commercial``.
             sort_by: Field to sort by
             sort_order: Sort order (asc/desc)
 
@@ -209,6 +218,7 @@ class ServiceOfferingService(LoggerMixin):
             page_size=page_size,
             category=category,
             is_active=is_active,
+            customer_type=customer_type,
             sort_by=sort_by,
             sort_order=sort_order,
         )

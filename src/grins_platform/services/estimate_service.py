@@ -38,7 +38,13 @@ if TYPE_CHECKING:
 
     from grins_platform.models.estimate import Estimate
     from grins_platform.repositories.estimate_repository import EstimateRepository
+    from grins_platform.services.audit_service import AuditService
+    from grins_platform.services.business_setting_service import (
+        BusinessSettingService,
+    )
     from grins_platform.services.email_service import EmailService
+    from grins_platform.services.estimate_pdf_service import EstimatePDFService
+    from grins_platform.services.job_service import JobService
     from grins_platform.services.lead_service import LeadService
     from grins_platform.services.sales_pipeline_service import SalesPipelineService
     from grins_platform.services.sms_service import SMSService
@@ -82,6 +88,10 @@ class EstimateService(LoggerMixin):
         sms_service: SMSService | None = None,
         email_service: EmailService | None = None,
         sales_pipeline_service: SalesPipelineService | None = None,
+        job_service: JobService | None = None,
+        business_setting_service: BusinessSettingService | None = None,
+        audit_service: AuditService | None = None,
+        estimate_pdf_service: EstimatePDFService | None = None,
     ) -> None:
         """Initialize service with dependencies.
 
@@ -96,6 +106,16 @@ class EstimateService(LoggerMixin):
             sales_pipeline_service: Optional SalesPipelineService for
                 writing approve/reject breadcrumbs to the active
                 SalesEntry (Q-A correlation).
+            job_service: Optional JobService used by ``approve_via_portal``
+                to auto-create a TO_BE_SCHEDULED job (umbrella plan AJ-1).
+            business_setting_service: Optional BusinessSettingService
+                used to read the ``auto_job_on_approval`` toggle (N5).
+            audit_service: Optional AuditService used to record auto-job
+                outcomes (``estimate.auto_job_created`` /
+                ``estimate.auto_job_skipped``).
+            estimate_pdf_service: Optional EstimatePDFService used to
+                generate a signed-PDF copy of the approved estimate
+                (umbrella plan AJ-8).
         """
         super().__init__()
         self.repo = estimate_repository
@@ -103,6 +123,10 @@ class EstimateService(LoggerMixin):
         self.sms_service = sms_service
         self.email_service = email_service
         self.sales_pipeline_service = sales_pipeline_service
+        self.job_service = job_service
+        self.business_setting_service = business_setting_service
+        self.audit_service = audit_service
+        self.estimate_pdf_service = estimate_pdf_service
         self.portal_base_url = portal_base_url
 
     # =========================================================================
@@ -457,6 +481,12 @@ class EstimateService(LoggerMixin):
                     lead_id=str(estimate.lead_id),
                 )
 
+        # Auto-job-on-approval (umbrella plan Phase 0 / AJ-1, AJ-7) and
+        # signed-PDF email (AJ-8). Both are best-effort: failures are
+        # logged but never undo the customer-side decision.
+        await self._maybe_auto_create_job(updated, ip_address, user_agent)
+        await self._send_signed_pdf_email(updated)
+
         await self._notify_internal_decision(updated, "approved")
         await self._correlate_to_sales_entry(updated, "approved")
 
@@ -628,6 +658,297 @@ class EstimateService(LoggerMixin):
         except Exception as e:
             self.log_failed(
                 "correlate_to_sales_entry",
+                error=e,
+                estimate_id=str(estimate.id),
+            )
+
+    # =========================================================================
+    # Auto-job-on-approval (umbrella plan Phase 0 / N5, AJ-1, AJ-3, AJ-4, AJ-7)
+    # =========================================================================
+
+    async def _maybe_auto_create_job(
+        self,
+        estimate: Estimate | None,
+        ip_address: str,
+        user_agent: str,
+    ) -> None:
+        """Create a TO_BE_SCHEDULED job from the approved estimate.
+
+        Best-effort: any failure (missing DI, missing customer, JobService
+        validation error) is logged and audited but never re-raises — the
+        approval has already been recorded and must remain durable.
+
+        Branches per AJ-7:
+
+        * **Standalone** (``estimate.job_id is None``) → create a new Job,
+          copy line items into ``Job.scope_items``, and back-fill
+          ``estimate.job_id``.
+        * **Attached** (``estimate.job_id is not None``) → append/copy
+          line items into the parent ``Job.scope_items``; do NOT create
+          a new Job.
+        """
+        if estimate is None:
+            return
+
+        # N5 — feature flag.
+        if self.business_setting_service is not None:
+            try:
+                enabled = await self.business_setting_service.get_bool(
+                    "auto_job_on_approval",
+                    default=True,
+                )
+            except Exception as e:
+                self.log_failed(
+                    "auto_create_job_setting_lookup",
+                    error=e,
+                    estimate_id=str(estimate.id),
+                )
+                enabled = True
+        else:
+            enabled = True
+
+        if not enabled:
+            self.logger.info(
+                "estimate.auto_job.skipped",
+                estimate_id=str(estimate.id),
+                reason="setting_off",
+            )
+            await self._audit_auto_job_skipped(
+                estimate,
+                reason="setting_off",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            return
+
+        if self.job_service is None:
+            self.logger.info(
+                "estimate.auto_job.skipped",
+                estimate_id=str(estimate.id),
+                reason="no_job_service",
+            )
+            return
+
+        # AJ-7 attached branch — copy items into the parent job.
+        if estimate.job_id is not None:
+            try:
+                await self._copy_scope_into_parent_job(estimate)
+                await self._audit_auto_job_created(
+                    estimate,
+                    job_id=estimate.job_id,
+                    branch="attached",
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                )
+            except Exception as e:
+                self.log_failed(
+                    "auto_create_job_attached",
+                    error=e,
+                    estimate_id=str(estimate.id),
+                )
+            return
+
+        # AJ-7 standalone branch.
+        if estimate.customer_id is None:
+            self.logger.info(
+                "estimate.auto_job.skipped",
+                estimate_id=str(estimate.id),
+                reason="no_customer",
+            )
+            await self._audit_auto_job_skipped(
+                estimate,
+                reason="no_customer",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            return
+
+        self.log_started(
+            "auto_create_job_from_estimate",
+            estimate_id=str(estimate.id),
+        )
+        try:
+            from grins_platform.models.enums import JobSource  # noqa: PLC0415
+            from grins_platform.schemas.job import JobCreate  # noqa: PLC0415
+
+            job_data = JobCreate(
+                customer_id=estimate.customer_id,
+                job_type="estimate_approved",
+                description=estimate.notes or "Auto-created from approved estimate",
+                quoted_amount=estimate.total,
+                source=JobSource.WEBSITE,
+                source_details={
+                    "auto_created_from_estimate_id": str(estimate.id),
+                },
+            )
+            job = await self.job_service.create_job(job_data)
+
+            # Copy line items into Job.scope_items (AJ-4).
+            if estimate.line_items:
+                job.scope_items = list(estimate.line_items)
+                await self.repo.session.flush()
+
+            # Back-fill estimate.job_id so the modal banner can link.
+            await self.repo.update(estimate.id, job_id=job.id)
+
+            await self._audit_auto_job_created(
+                estimate,
+                job_id=job.id,
+                branch="standalone",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            self.log_completed(
+                "auto_create_job_from_estimate",
+                estimate_id=str(estimate.id),
+                job_id=str(job.id),
+            )
+        except Exception as e:
+            self.log_failed(
+                "auto_create_job_from_estimate",
+                error=e,
+                estimate_id=str(estimate.id),
+            )
+            await self._audit_auto_job_skipped(
+                estimate,
+                reason="job_create_failed",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+
+    async def _copy_scope_into_parent_job(self, estimate: Estimate) -> None:
+        """Append the approved estimate's line items to the parent job.
+
+        Used by the AJ-7 attached branch when the estimate already
+        references an in-progress appointment's job.
+        """
+        if estimate.job_id is None or self.job_service is None:
+            return
+        from sqlalchemy import select  # noqa: PLC0415
+
+        from grins_platform.models.job import Job  # noqa: PLC0415
+
+        result = await self.repo.session.execute(
+            select(Job).where(Job.id == estimate.job_id),
+        )
+        job: Job | None = result.scalar_one_or_none()
+        if job is None:
+            return
+        new_items = list(estimate.line_items or [])
+        if not new_items:
+            return
+        existing = list(job.scope_items or [])
+        existing.extend(new_items)
+        job.scope_items = existing
+        await self.repo.session.flush()
+
+    async def _audit_auto_job_created(
+        self,
+        estimate: Estimate,
+        *,
+        job_id: UUID,
+        branch: str,
+        ip_address: str,
+        user_agent: str,
+    ) -> None:
+        """Write an audit row for a successful auto-job creation."""
+        if self.audit_service is None:
+            return
+        try:
+            await self.audit_service.log_action(
+                self.repo.session,
+                action="estimate.auto_job_created",
+                resource_type="estimate",
+                resource_id=estimate.id,
+                details={
+                    "job_id": str(job_id),
+                    "branch": branch,
+                    "actor_type": "customer",
+                    "source": "customer_portal",
+                },
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+        except Exception as e:
+            self.log_failed(
+                "audit_auto_job_created",
+                error=e,
+                estimate_id=str(estimate.id),
+            )
+
+    async def _audit_auto_job_skipped(
+        self,
+        estimate: Estimate,
+        *,
+        reason: str,
+        ip_address: str,
+        user_agent: str,
+    ) -> None:
+        """Write an audit row when the auto-job branch is skipped."""
+        if self.audit_service is None:
+            return
+        try:
+            await self.audit_service.log_action(
+                self.repo.session,
+                action="estimate.auto_job_skipped",
+                resource_type="estimate",
+                resource_id=estimate.id,
+                details={
+                    "skip_reason": reason,
+                    "actor_type": "customer",
+                    "source": "customer_portal",
+                },
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+        except Exception as e:
+            self.log_failed(
+                "audit_auto_job_skipped",
+                error=e,
+                estimate_id=str(estimate.id),
+            )
+
+    async def _send_signed_pdf_email(self, estimate: Estimate | None) -> None:
+        """Generate the signed PDF and email it to the customer (AJ-8).
+
+        Best-effort: any failure is logged but never undoes approval.
+        """
+        if estimate is None:
+            return
+        if self.estimate_pdf_service is None or self.email_service is None:
+            return
+
+        recipient = estimate.customer or estimate.lead
+        if recipient is None or not getattr(recipient, "email", None):
+            self.logger.info(
+                "estimate.signed_pdf_email.skipped",
+                estimate_id=str(estimate.id),
+                reason="no_email_recipient",
+            )
+            return
+
+        self.log_started("send_signed_pdf_email", estimate_id=str(estimate.id))
+        try:
+            pdf_bytes = await self.estimate_pdf_service.generate_pdf_bytes(
+                self.repo.session,
+                estimate,
+            )
+            portal_url = (
+                f"{self.portal_base_url}/portal/estimates/{estimate.customer_token}"
+            )
+            self.email_service.send_estimate_approved_email(
+                customer=recipient,
+                estimate=estimate,
+                portal_url=portal_url,
+                pdf_bytes=pdf_bytes,
+            )
+            self.log_completed(
+                "send_signed_pdf_email",
+                estimate_id=str(estimate.id),
+            )
+        except Exception as e:
+            self.log_failed(
+                "send_signed_pdf_email",
                 error=e,
                 estimate_id=str(estimate.id),
             )

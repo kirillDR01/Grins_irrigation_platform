@@ -45,6 +45,10 @@ BUSINESS_SETTING_KEYS: tuple[str, ...] = (
     # gap-10 Phase 1 — Day-2 No-Reply Reminder feature flag + offset.
     "confirmation_day_2_reminder_enabled",
     "confirmation_day_2_reminder_offset_hours",
+    # Appointment-modal umbrella Phase 0 (N5) — auto-create a
+    # TO_BE_SCHEDULED job when a customer approves an estimate via the
+    # portal. Default ON when unset.
+    "auto_job_on_approval",
 )
 
 

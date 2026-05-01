@@ -125,8 +125,35 @@ class TestEnumValidation:
         """
         Feature: field-operations, Property 2: Enum Validation Completeness
         All PricingModel enum values should be valid.
+
+        Phase 1 of the appointment-modal umbrella plan extended this enum
+        with 15 additional pricelist-shape variants (range, per-unit,
+        tiered, materials pass-through, etc.) — kept legacy 4 plus
+        extensions are all listed below.
         """
-        assert model.value in ["flat", "zone_based", "hourly", "custom"]
+        assert model.value in {
+            # Legacy.
+            "flat",
+            "zone_based",
+            "hourly",
+            "custom",
+            # Pricelist editor extensions (umbrella plan Phase 1).
+            "flat_range",
+            "per_unit_flat",
+            "per_unit_range",
+            "per_unit_flat_plus_materials",
+            "per_zone_range",
+            "tiered_zone_step",
+            "tiered_linear",
+            "compound_per_unit",
+            "compound_repair",
+            "size_tier",
+            "size_tier_plus_materials",
+            "yard_tier",
+            "variants",
+            "flat_plus_materials",
+            "conditional_fee",
+        }
 
     @pytest.mark.unit
     @given(status=st.sampled_from(list(JobStatus)))

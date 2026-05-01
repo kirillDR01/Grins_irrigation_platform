@@ -100,6 +100,30 @@ export function useEstimateDetail(id: string) {
   });
 }
 
+/**
+ * Estimate detail with 60s polling while the estimate is still in a
+ * non-terminal state (sent / draft). Used by the appointment modal so
+ * a portal-side approval refreshes the banner without a manual reload
+ * (umbrella plan AJ-6).
+ *
+ * Polling is suppressed on terminal states (approved / rejected /
+ * cancelled) to avoid wasted requests.
+ */
+export function useEstimateDetailWithPolling(id: string, opts?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: salesKeys.estimateDetail(id),
+    queryFn: () => salesApi.getEstimateDetail(id),
+    enabled: !!id && opts?.enabled !== false,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return false;
+      const terminal = new Set(['approved', 'rejected', 'cancelled']);
+      return terminal.has(data.status) ? false : 60_000;
+    },
+    refetchIntervalInBackground: false,
+  });
+}
+
 // Cancel estimate mutation
 export function useCancelEstimate() {
   const qc = useQueryClient();

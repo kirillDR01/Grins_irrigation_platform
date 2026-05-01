@@ -24,6 +24,7 @@ from sqlalchemy import (
     String,
     Text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -170,6 +171,14 @@ class Job(Base):
     )
     equipment_required: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     materials_required: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+
+    # Scope items copied from approved estimate (AJ-4 / Phase 0).
+    # Mirrors the JSONB shape of ``Estimate.line_items``; populated when an
+    # approved estimate auto-creates a TO_BE_SCHEDULED job.
+    scope_items: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
 
     # Pricing (Requirement 2.7)
     quoted_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)

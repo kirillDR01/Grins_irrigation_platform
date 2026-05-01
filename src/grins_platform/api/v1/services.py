@@ -71,6 +71,11 @@ async def list_services(
         default=None,
         description="Filter by active status",
     ),
+    customer_type: str | None = Query(
+        default=None,
+        pattern="^(residential|commercial)$",
+        description=("Filter by customer-type bucket (umbrella plan Phase 1)"),
+    ),
     sort_by: str = Query(
         default="name",
         description="Field to sort by",
@@ -112,6 +117,7 @@ async def list_services(
         page_size=page_size,
         category=category,
         is_active=is_active,
+        customer_type=customer_type,
         sort_by=sort_by,
         sort_order=sort_order,
     )

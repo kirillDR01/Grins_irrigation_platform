@@ -87,13 +87,39 @@ class ServiceCategory(str, Enum):
 class PricingModel(str, Enum):
     """Pricing model enumeration for service offerings.
 
-    Validates: Requirement 1.3
+    Phase 1 of the appointment-modal umbrella plan extends this enum to
+    cover the 17 distinct shapes observed in Viktor's price-list seed
+    JSON (range, per-unit, tiered, materials pass-through, etc.). The
+    column is stored as a ``String(50)`` rather than a Postgres ENUM,
+    so existing rows with the legacy four values continue to parse
+    after the additive extension.
+
+    Validates: Requirement 1.3; appointment-modal umbrella plan E1.
     """
 
+    # Legacy values — kept as-is for backwards compat with seed rows
+    # that exist before the price-list seed migration runs.
     FLAT = "flat"
     ZONE_BASED = "zone_based"
     HOURLY = "hourly"
     CUSTOM = "custom"
+
+    # Extended values — Phase 1 / E1.
+    FLAT_RANGE = "flat_range"
+    PER_UNIT_FLAT = "per_unit_flat"
+    PER_UNIT_RANGE = "per_unit_range"
+    PER_UNIT_FLAT_PLUS_MATERIALS = "per_unit_flat_plus_materials"
+    PER_ZONE_RANGE = "per_zone_range"
+    TIERED_ZONE_STEP = "tiered_zone_step"
+    TIERED_LINEAR = "tiered_linear"
+    COMPOUND_PER_UNIT = "compound_per_unit"
+    COMPOUND_REPAIR = "compound_repair"
+    SIZE_TIER = "size_tier"
+    SIZE_TIER_PLUS_MATERIALS = "size_tier_plus_materials"
+    YARD_TIER = "yard_tier"
+    VARIANTS = "variants"
+    FLAT_PLUS_MATERIALS = "flat_plus_materials"
+    CONDITIONAL_FEE = "conditional_fee"
 
 
 class JobCategory(str, Enum):

@@ -12,7 +12,20 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import JSON, Boolean, DateTime, Integer, Numeric, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
+from sqlalchemy.dialects.postgresql import (
+    JSONB,
+    UUID as PGUUID,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -108,6 +121,42 @@ class ServiceOffering(Base):
         nullable=False,
         server_default="true",
     )
+
+    # Pricelist editor extensions (umbrella plan Phase 1).
+    # Every column below is nullable / has a server default so existing
+    # rows seeded before the migration ran continue to validate.
+    slug: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        unique=True,
+    )
+    display_name: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True,
+    )
+    customer_type: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+    subcategory: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+    pricing_rule: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+    replaced_by_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("service_offerings.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    includes_materials: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
+    source_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Timestamps (Requirement 1.7)
     created_at: Mapped[datetime] = mapped_column(
