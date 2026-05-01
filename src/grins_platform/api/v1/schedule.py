@@ -220,27 +220,41 @@ async def get_capacity(
 
     try:
         response = service.get_capacity(schedule_date)
-        overlay = await _evaluate_capacity_criteria(session, schedule_date)
     except Exception as e:
         endpoints.log_failed("get_capacity", error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Capacity check failed: {e!s}",
         ) from e
-    else:
-        if overlay is not None:
-            response = response.model_copy(update=overlay)
-        endpoints.log_completed(
-            "get_capacity",
-            available_staff=response.available_staff,
-            remaining_minutes=response.remaining_capacity_minutes,
-            criteria_triggered_count=(
-                len(response.criteria_triggered)
-                if response.criteria_triggered is not None
-                else 0
-            ),
+
+    # The 30-criteria overlay is additive — if it errors, log and serve the
+    # base capacity response. The overlay computation can fail under async
+    # SQLAlchemy lazy-load conditions (greenlet_spawn) that the base
+    # ``service.get_capacity`` (sync session) is immune to, and a stale
+    # overlay must never block ``utilization_pct`` / capacity totals.
+    overlay: dict[str, object] | None = None
+    try:
+        overlay = await _evaluate_capacity_criteria(session, schedule_date)
+    except Exception as overlay_exc:
+        endpoints.log_failed(
+            "get_capacity.criteria_overlay",
+            error=overlay_exc,
+            schedule_date=str(schedule_date),
         )
-        return response
+
+    if overlay is not None:
+        response = response.model_copy(update=overlay)
+    endpoints.log_completed(
+        "get_capacity",
+        available_staff=response.available_staff,
+        remaining_minutes=response.remaining_capacity_minutes,
+        criteria_triggered_count=(
+            len(response.criteria_triggered)
+            if response.criteria_triggered is not None
+            else 0
+        ),
+    )
+    return response
 
 
 async def _evaluate_capacity_criteria(
