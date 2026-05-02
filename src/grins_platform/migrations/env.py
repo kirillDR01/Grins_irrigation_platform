@@ -6,7 +6,10 @@ for PostgreSQL database migrations.
 """
 
 import asyncio
+import os
+import sys
 from logging.config import fileConfig
+from urllib.parse import urlparse
 
 from alembic import context
 from sqlalchemy import pool
@@ -32,9 +35,57 @@ target_metadata = Base.metadata
 db_settings = DatabaseSettings()
 
 
+# Hosts that look like the Railway-managed Postgres for this project.
+# Running alembic against these from a developer workstation has caused
+# the deployed DB to advance to a never-committed revision and crash-loop
+# the container on the next push (incident: 2026-05-02). Inside the
+# Railway container itself ``RAILWAY_ENVIRONMENT`` is set, which bypasses
+# the guard so deploys keep working.
+_REMOTE_HOST_FRAGMENTS = (
+    ".railway.app",
+    ".railway.internal",
+    ".up.railway.app",
+)
+
+
+def _is_remote_host(url: str) -> bool:
+    try:
+        host = urlparse(url).hostname or ""
+    except ValueError:
+        return False
+    return any(fragment in host for fragment in _REMOTE_HOST_FRAGMENTS)
+
+
+def _guard_against_remote_db(url: str) -> None:
+    """Refuse to run alembic against a Railway-hosted DB from outside the container.
+
+    Override with ``ALEMBIC_ALLOW_REMOTE=1`` if you genuinely intend to
+    run a migration against the deployed DB (rare — the normal path is
+    ``git push origin <branch>`` and let Railway run it on container start).
+    """
+    if not _is_remote_host(url):
+        return
+    if os.environ.get("RAILWAY_ENVIRONMENT"):
+        return
+    if os.environ.get("ALEMBIC_ALLOW_REMOTE") == "1":
+        return
+    host = urlparse(url).hostname
+    sys.stderr.write(
+        "\n[alembic env.py] Refusing to run against remote DB host "
+        f"{host!r}.\n"
+        "  Migrations should be applied by the deployed Railway container,\n"
+        "  not from a developer workstation. Push the migration to its\n"
+        "  branch and Railway will apply it on the next container start.\n"
+        "  If you really mean it, re-run with ALEMBIC_ALLOW_REMOTE=1.\n\n",
+    )
+    raise SystemExit(2)
+
+
 def get_url() -> str:
     """Get the database URL from settings."""
-    return db_settings.async_database_url
+    url = db_settings.async_database_url
+    _guard_against_remote_db(url)
+    return url
 
 
 def run_migrations_offline() -> None:
