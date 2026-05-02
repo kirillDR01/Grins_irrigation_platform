@@ -2024,13 +2024,11 @@ class AppointmentService(LoggerMixin):
             )
             updated_invoice = await self.invoice_repository.update(
                 existing_invoice.id,
-                {
-                    "paid_amount": new_paid,
-                    "payment_method": payment.payment_method.value,
-                    "payment_reference": payment.reference_number,
-                    "paid_at": now,
-                    "status": new_status,
-                },
+                paid_amount=new_paid,
+                payment_method=payment.payment_method.value,
+                payment_reference=payment.reference_number,
+                paid_at=now,
+                status=new_status,
             )
             result_invoice = updated_invoice or existing_invoice
         else:
@@ -2058,12 +2056,10 @@ class AppointmentService(LoggerMixin):
             # Update with payment details
             await self.invoice_repository.update(
                 result_invoice.id,
-                {
-                    "payment_method": payment.payment_method.value,
-                    "payment_reference": payment.reference_number,
-                    "paid_at": now,
-                    "paid_amount": payment.amount,
-                },
+                payment_method=payment.payment_method.value,
+                payment_reference=payment.reference_number,
+                paid_at=now,
+                paid_amount=payment.amount,
             )
 
         self.log_completed(
