@@ -143,13 +143,15 @@ export function AccountingDashboard() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList data-testid="accounting-tabs">
-          <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-          <TabsTrigger value="expenses" data-testid="tab-expenses">Expenses</TabsTrigger>
-          <TabsTrigger value="tax" data-testid="tab-tax">Tax</TabsTrigger>
-          <TabsTrigger value="connected" data-testid="tab-connected">Connected Accounts</TabsTrigger>
-          <TabsTrigger value="audit" data-testid="tab-audit">Audit Log</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto pb-1">
+          <TabsList data-testid="accounting-tabs">
+            <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+            <TabsTrigger value="expenses" data-testid="tab-expenses">Expenses</TabsTrigger>
+            <TabsTrigger value="tax" data-testid="tab-tax">Tax</TabsTrigger>
+            <TabsTrigger value="connected" data-testid="tab-connected">Connected Accounts</TabsTrigger>
+            <TabsTrigger value="audit" data-testid="tab-audit">Audit Log</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6 mt-4">

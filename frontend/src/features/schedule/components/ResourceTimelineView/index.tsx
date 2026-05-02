@@ -117,7 +117,7 @@ export function ResourceTimelineView({
   return (
     <div
       data-testid="schedule-resource-timeline"
-      className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+      className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-x-auto"
     >
       <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 flex-wrap">
         <div className="flex items-center gap-1">

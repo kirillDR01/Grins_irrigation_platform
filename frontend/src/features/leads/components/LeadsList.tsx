@@ -396,16 +396,15 @@ export function LeadsList() {
   return (
     <div data-testid="leads-page" className="space-y-6">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Leads</h1>
           {data && (
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-slate-500">
               {data.total} {data.total === 1 ? 'lead' : 'leads'} total
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <SheetsSync />
           <BulkOutreach
             selectedLeadIds={selectedLeadIds}
@@ -435,7 +434,7 @@ export function LeadsList() {
       <LeadFilters params={params} onChange={handleFilterChange} />
 
       {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
         <Table data-testid="leads-table">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

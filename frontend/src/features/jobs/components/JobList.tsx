@@ -462,7 +462,7 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
 
   return (
     <div data-testid="job-list">
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
         {/* Table Toolbar */}
         <div className="p-4 border-b border-slate-100 flex gap-4 items-center flex-wrap">
           {/* Search Input */}

@@ -217,7 +217,7 @@ export function EstimateReview() {
         )}
 
         {/* Line items table */}
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
           <div className="p-4 border-b border-slate-100">
             <h3 className="font-semibold text-slate-800">
               {selectedTier ? `${selectedTier} — Line Items` : 'Line Items'}

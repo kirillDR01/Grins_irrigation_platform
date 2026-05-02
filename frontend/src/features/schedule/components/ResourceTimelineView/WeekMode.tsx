@@ -242,7 +242,7 @@ export function WeekMode({
 
   // CSS Grid: 200px tech-header column + 7 equal day columns.
   const gridStyle: CSSProperties = {
-    gridTemplateColumns: '200px repeat(7, minmax(0, 1fr))',
+    gridTemplateColumns: '200px repeat(7, minmax(72px, 1fr))',
   };
 
   return (

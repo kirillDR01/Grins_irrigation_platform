@@ -230,100 +230,98 @@ export function PriceListEditor() {
         />
       )}
       {!isLoading && !isError && (
-        <div className="rounded-md border border-slate-200 bg-white overflow-hidden">
-          <Table data-testid="price-list-table">
-            <TableHeader>
+        <Table data-testid="price-list-table">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Customer</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Pricing model</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.length === 0 && (
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Pricing model</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableCell
+                  colSpan={6}
+                  className="text-center text-sm text-slate-500 py-8"
+                  data-testid="price-list-empty"
+                >
+                  No offerings match the current filters.
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center text-sm text-slate-500 py-8"
-                    data-testid="price-list-empty"
-                  >
-                    No offerings match the current filters.
-                  </TableCell>
-                </TableRow>
-              )}
-              {filtered.map((o) => (
-                <TableRow key={o.id} data-testid={`price-list-row-${o.id}`}>
-                  <TableCell>
-                    <div className="font-medium text-slate-800">
-                      {offeringDisplayLabel(o)}
-                    </div>
-                    {o.slug && (
-                      <div className="text-xs text-slate-400">{o.slug}</div>
-                    )}
-                  </TableCell>
-                  <TableCell className="capitalize">
-                    {o.customer_type ?? '—'}
-                  </TableCell>
-                  <TableCell>
-                    {SERVICE_CATEGORY_LABEL[o.category] ?? o.category}
-                    {o.subcategory && (
-                      <span className="text-xs text-slate-400">
-                        {' '}
-                        · {o.subcategory}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">
-                      {PRICING_MODEL_LABEL[o.pricing_model] ?? o.pricing_model}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {o.is_active ? (
-                      <span className="text-emerald-600 text-sm">Active</span>
-                    ) : (
-                      <span className="text-slate-400 text-sm">Inactive</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
+            )}
+            {filtered.map((o) => (
+              <TableRow key={o.id} data-testid={`price-list-row-${o.id}`}>
+                <TableCell>
+                  <div className="font-medium text-slate-800">
+                    {offeringDisplayLabel(o)}
+                  </div>
+                  {o.slug && (
+                    <div className="text-xs text-slate-400">{o.slug}</div>
+                  )}
+                </TableCell>
+                <TableCell className="capitalize">
+                  {o.customer_type ?? '—'}
+                </TableCell>
+                <TableCell>
+                  {SERVICE_CATEGORY_LABEL[o.category] ?? o.category}
+                  {o.subcategory && (
+                    <span className="text-xs text-slate-400">
+                      {' '}
+                      · {o.subcategory}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline">
+                    {PRICING_MODEL_LABEL[o.pricing_model] ?? o.pricing_model}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  {o.is_active ? (
+                    <span className="text-emerald-600 text-sm">Active</span>
+                  ) : (
+                    <span className="text-slate-400 text-sm">Inactive</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleHistory(o)}
+                      data-testid={`price-list-history-${o.id}`}
+                      aria-label="View history"
+                    >
+                      <HistoryIcon className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEdit(o)}
+                      data-testid={`price-list-edit-${o.id}`}
+                    >
+                      Edit
+                    </Button>
+                    {o.is_active && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleHistory(o)}
-                        data-testid={`price-list-history-${o.id}`}
-                        aria-label="View history"
+                        onClick={() => handleDeactivate(o)}
+                        data-testid={`price-list-deactivate-${o.id}`}
                       >
-                        <HistoryIcon className="h-4 w-4" />
+                        Deactivate
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(o)}
-                        data-testid={`price-list-edit-${o.id}`}
-                      >
-                        Edit
-                      </Button>
-                      {o.is_active && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeactivate(o)}
-                          data-testid={`price-list-deactivate-${o.id}`}
-                        >
-                          Deactivate
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
 
       {/* Pagination */}

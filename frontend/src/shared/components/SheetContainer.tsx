@@ -23,7 +23,7 @@ export function SheetContainer({
   return (
     <div
       className={cn(
-        'flex flex-col w-[560px] bg-white rounded-t-[20px] border border-[#E5E7EB]',
+        'flex flex-col w-full sm:w-[560px] max-w-full bg-white rounded-t-[20px] border border-[#E5E7EB]',
         'shadow-[0_-4px_24px_rgba(0,0,0,0.12)]',
         className,
       )}

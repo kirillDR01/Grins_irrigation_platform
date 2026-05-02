@@ -109,7 +109,7 @@ export function SearchableCustomerDropdown({
         </Button>
       </PopoverTrigger>
       <PopoverContent 
-        className="w-[400px] p-0 bg-white rounded-lg shadow-lg border border-slate-100" 
+        className="w-[min(400px,calc(100vw-1rem))] p-0 bg-white rounded-lg shadow-lg border border-slate-100"
         align="start"
         data-testid="customer-dropdown-content"
       >

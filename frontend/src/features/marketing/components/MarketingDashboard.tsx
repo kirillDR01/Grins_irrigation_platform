@@ -164,23 +164,25 @@ export function MarketingDashboard() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList data-testid="marketing-tabs">
-          <TabsTrigger value="overview" data-testid="tab-overview">
-            Overview
-          </TabsTrigger>
-          <TabsTrigger value="campaigns" data-testid="tab-campaigns">
-            Campaigns
-          </TabsTrigger>
-          <TabsTrigger value="budget" data-testid="tab-budget">
-            Budget
-          </TabsTrigger>
-          <TabsTrigger value="qrcodes" data-testid="tab-qrcodes">
-            QR Codes
-          </TabsTrigger>
-          <TabsTrigger value="cac" data-testid="tab-cac">
-            CAC Analysis
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto pb-1">
+          <TabsList data-testid="marketing-tabs">
+            <TabsTrigger value="overview" data-testid="tab-overview">
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="campaigns" data-testid="tab-campaigns">
+              Campaigns
+            </TabsTrigger>
+            <TabsTrigger value="budget" data-testid="tab-budget">
+              Budget
+            </TabsTrigger>
+            <TabsTrigger value="qrcodes" data-testid="tab-qrcodes">
+              QR Codes
+            </TabsTrigger>
+            <TabsTrigger value="cac" data-testid="tab-cac">
+              CAC Analysis
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6 mt-4">

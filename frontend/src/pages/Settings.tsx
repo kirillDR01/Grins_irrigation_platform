@@ -233,18 +233,18 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent className="p-6 space-y-4">
           <div className="p-4 bg-slate-50 rounded-xl dark:bg-slate-700/50">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-300">API Key</p>
-                <p className="text-xs text-slate-400 font-mono mt-1">grins_sk_****************************1234</p>
+                <p className="text-xs text-slate-400 font-mono mt-1 break-all">grins_sk_****************************1234</p>
               </div>
               <Button variant="secondary" size="sm">Regenerate</Button>
             </div>
           </div>
 
           <div className="p-4 bg-slate-50 rounded-xl dark:bg-slate-700/50">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Google Maps API</p>
                 <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">● Connected</p>
               </div>
@@ -253,8 +253,8 @@ export function SettingsPage() {
           </div>
 
           <div className="p-4 bg-slate-50 rounded-xl dark:bg-slate-700/50">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Twilio SMS</p>
                 <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">● Connected</p>
               </div>
@@ -281,16 +281,16 @@ export function SettingsPage() {
           </div>
         </CardHeader>
         <CardContent className="p-6 space-y-4">
-          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl dark:bg-slate-700/50">
-            <div className="flex items-center gap-3">
-              <Lock className="w-5 h-5 text-slate-500 dark:text-slate-400" />
-              <div>
+          <div className="flex flex-wrap items-center justify-between gap-2 p-4 bg-slate-50 rounded-xl dark:bg-slate-700/50">
+            <div className="flex items-center gap-3 min-w-0">
+              <Lock className="w-5 h-5 text-slate-500 dark:text-slate-400 shrink-0" />
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Change Password</p>
                 <p className="text-xs text-slate-400">Update your account password</p>
               </div>
             </div>
-            <Button 
-              variant="secondary" 
+            <Button
+              variant="secondary"
               size="sm"
               data-testid="change-password-btn"
               onClick={() => setChangePasswordOpen(true)}
@@ -299,16 +299,16 @@ export function SettingsPage() {
             </Button>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-red-50 rounded-xl dark:bg-red-900/20">
-            <div className="flex items-center gap-3">
-              <LogOut className="w-5 h-5 text-red-500" />
-              <div>
+          <div className="flex flex-wrap items-center justify-between gap-2 p-4 bg-red-50 rounded-xl dark:bg-red-900/20">
+            <div className="flex items-center gap-3 min-w-0">
+              <LogOut className="w-5 h-5 text-red-500 shrink-0" />
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-red-700 dark:text-red-400">Sign Out</p>
                 <p className="text-xs text-red-500/70">Sign out of your account</p>
               </div>
             </div>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               size="sm"
               data-testid="logout-btn"
               onClick={handleSignOut}
