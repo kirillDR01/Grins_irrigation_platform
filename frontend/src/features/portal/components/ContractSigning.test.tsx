@@ -6,12 +6,10 @@ import { ContractSigning } from './ContractSigning';
 import type { PortalContract } from '../types';
 
 const mockContractData: PortalContract = {
-  business: {
-    company_name: 'Grins Irrigation',
-    company_logo_url: 'https://example.com/logo.png',
-    company_address: '123 Main St',
-    company_phone: '(555) 123-4567',
-  },
+  company_name: 'Grins Irrigation',
+  company_logo_url: 'https://example.com/logo.png',
+  company_address: '123 Main St',
+  company_phone: '(555) 123-4567',
   customer_name: 'John Smith',
   contract_body: '<p>This is the contract body with <strong>terms</strong> for irrigation services.</p>',
   terms_and_conditions: '<p>Standard terms and conditions apply.</p>',

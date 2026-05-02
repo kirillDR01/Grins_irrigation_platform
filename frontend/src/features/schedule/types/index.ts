@@ -640,7 +640,8 @@ export type TimelineEventKind =
   | 'reschedule_opened'
   | 'reschedule_resolved'
   | 'opt_out'
-  | 'opt_in';
+  | 'opt_in'
+  | 'payment_received';
 
 export interface TimelineEvent {
   id: string;

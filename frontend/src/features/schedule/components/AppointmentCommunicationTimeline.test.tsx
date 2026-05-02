@@ -2,10 +2,13 @@
  * Tests for AppointmentCommunicationTimeline (Gap 11).
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { AppointmentCommunicationTimeline } from './AppointmentCommunicationTimeline';
-import type { AppointmentTimelineResponse } from '../types';
+import type {
+  AppointmentTimelineResponse,
+  TimelineEventKind,
+} from '../types';
 
 function buildTimeline(
   overrides?: Partial<AppointmentTimelineResponse>,
@@ -133,5 +136,70 @@ describe('AppointmentCommunicationTimeline', () => {
 
     expect(screen.getByText(/"Yes thanks"/)).toBeInTheDocument();
     expect(screen.getByText(/delivered/)).toBeInTheDocument();
+  });
+
+  it('renders payment_received event without throwing', () => {
+    const timeline = buildTimeline({
+      last_event_at: '2026-05-01T12:00:00Z',
+      events: [
+        {
+          id: 'evt-pay-1',
+          kind: 'payment_received',
+          occurred_at: '2026-05-01T12:00:00Z',
+          summary: 'Payment received: $100.00 (cash)',
+          details: { payment_method: 'cash', amount: '100.00' },
+          source_id: 'inv-1',
+        },
+      ],
+    });
+
+    render(
+      <AppointmentCommunicationTimeline
+        data={timeline}
+        isLoading={false}
+        error={null}
+      />,
+    );
+
+    expect(
+      screen.getByTestId('timeline-event-evt-pay-1'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/payment received: \$100\.00/i),
+    ).toBeInTheDocument();
+  });
+
+  it('renders unknown timeline kind without throwing and warns', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const timeline = buildTimeline({
+      last_event_at: '2026-05-01T12:00:00Z',
+      events: [
+        {
+          id: 'evt-unknown',
+          kind: 'totally_made_up' as TimelineEventKind,
+          occurred_at: '2026-05-01T12:00:00Z',
+          summary: 'Unknown event kind',
+          details: {},
+          source_id: null,
+        },
+      ],
+    });
+
+    render(
+      <AppointmentCommunicationTimeline
+        data={timeline}
+        isLoading={false}
+        error={null}
+      />,
+    );
+
+    expect(
+      screen.getByTestId('timeline-event-evt-unknown'),
+    ).toBeInTheDocument();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'timeline.kind.unknown',
+      expect.objectContaining({ kind: 'totally_made_up', id: 'evt-unknown' }),
+    );
+    warnSpy.mockRestore();
   });
 });

@@ -57,6 +57,21 @@ class PortalEstimateResponse(BaseModel):
         max_length=200,
         description="Company name",
     )
+    company_address: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Company address (from settings)",
+    )
+    company_phone: str | None = Field(
+        default=None,
+        max_length=20,
+        description="Company phone (from settings)",
+    )
+    company_logo_url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="Company logo URL (from settings)",
+    )
     readonly: bool = Field(
         default=False,
         description="Whether estimate is read-only (already approved)",

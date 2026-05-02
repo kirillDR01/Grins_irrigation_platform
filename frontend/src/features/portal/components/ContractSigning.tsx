@@ -138,18 +138,20 @@ export function ContractSigning() {
       {/* Header with company branding */}
       <header className="bg-white border-b border-slate-200 px-4 py-6 md:px-8">
         <div className="max-w-3xl mx-auto flex items-center gap-4">
-          {contract.business.company_logo_url && (
+          {contract.company_logo_url && (
             <img
-              src={contract.business.company_logo_url}
-              alt={contract.business.company_name}
+              src={contract.company_logo_url}
+              alt={contract.company_name ?? 'Grins Irrigation'}
               className="h-12 w-auto object-contain"
               data-testid="company-logo"
             />
           )}
           <div>
-            <h1 className="text-lg font-bold text-slate-800">{contract.business.company_name}</h1>
-            {contract.business.company_phone && (
-              <p className="text-sm text-slate-500">{contract.business.company_phone}</p>
+            <h1 className="text-lg font-bold text-slate-800">
+              {contract.company_name ?? 'Grins Irrigation'}
+            </h1>
+            {contract.company_phone && (
+              <p className="text-sm text-slate-500">{contract.company_phone}</p>
             )}
           </div>
         </div>

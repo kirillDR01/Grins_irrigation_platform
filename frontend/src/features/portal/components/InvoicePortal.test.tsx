@@ -6,12 +6,10 @@ import { InvoicePortal } from './InvoicePortal';
 import type { PortalInvoice } from '../types';
 
 const mockInvoiceData: PortalInvoice = {
-  business: {
-    company_name: 'Grins Irrigation',
-    company_logo_url: 'https://example.com/logo.png',
-    company_address: '123 Main St, Austin TX',
-    company_phone: '(555) 123-4567',
-  },
+  company_name: 'Grins Irrigation',
+  company_logo_url: 'https://example.com/logo.png',
+  company_address: '123 Main St, Austin TX',
+  company_phone: '(555) 123-4567',
   invoice_number: 'INV-2025-001',
   invoice_date: '2025-06-01',
   due_date: '2025-07-01',

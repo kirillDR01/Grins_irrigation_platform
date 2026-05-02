@@ -14,9 +14,17 @@ interface TierEntry {
   price: number;
 }
 
+function capitalize(s: string): string {
+  if (s.length === 0) return s;
+  const spaced = s.replace(/_/g, ' ');
+  return spaced[0].toUpperCase() + spaced.slice(1);
+}
+
 /**
- * Reads ``pricing_rule.tiers`` looking for either an array of
- * ``{label, price}`` entries or an object mapping ``label -> price``.
+ * Reads ``pricing_rule.tiers`` accepting either:
+ *   - array of ``{label, price}`` (test fixture shape)
+ *   - array of ``{size, price | labor_amount, size_range_ft?}`` (Phase-1 seed shape)
+ *   - object mapping ``label -> price``
  * Returns ``[]`` if the rule shape doesn't match the expected forms.
  */
 function readTiers(offering: ServiceOffering): TierEntry[] {
@@ -26,14 +34,22 @@ function readTiers(offering: ServiceOffering): TierEntry[] {
   if (Array.isArray(tiers)) {
     return tiers
       .map((t): TierEntry | null => {
-        if (t && typeof t === 'object') {
-          const label = (t as Record<string, unknown>).label;
-          const price = (t as Record<string, unknown>).price;
-          if (typeof label === 'string' && typeof price === 'number') {
-            return { label, price };
-          }
-        }
-        return null;
+        if (!t || typeof t !== 'object') return null;
+        const obj = t as Record<string, unknown>;
+        const rawLabel = obj.label ?? obj.size;
+        const rawPrice = obj.price ?? obj.labor_amount;
+        const sizeRange = obj.size_range_ft;
+        if (typeof rawLabel !== 'string') return null;
+        const price =
+          typeof rawPrice === 'number' ? rawPrice : Number(rawPrice);
+        if (!Number.isFinite(price)) return null;
+        const baseLabel =
+          typeof obj.label === 'string' ? rawLabel : capitalize(rawLabel);
+        const label =
+          typeof sizeRange === 'string'
+            ? `${baseLabel} (${sizeRange} ft)`
+            : baseLabel;
+        return { label, price };
       })
       .filter((x): x is TierEntry => x !== null);
   }

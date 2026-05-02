@@ -1123,6 +1123,45 @@ class StripeWebhookHandler(LoggerMixin):
             job.payment_collected_on_site = True
 
         await self.session.flush()
+
+        # Architecture C parity: cash/check/etc. fire a customer receipt
+        # SMS+email from AppointmentService._send_payment_receipts. Stripe
+        # payments take the webhook path instead, so receipts must fire
+        # here for parity. Best-effort — a failure logs and returns.
+        # NOTE: _send_payment_receipts is a private method on
+        # AppointmentService; calling it from outside the class is
+        # intentional cross-service reuse (the alternative is duplicating
+        # ~70 lines of SMS+email construction). A future refactor should
+        # extract this into a standalone payment_receipt_dispatcher
+        # module.
+        try:
+            from grins_platform.repositories.appointment_repository import (  # noqa: PLC0415
+                AppointmentRepository,
+            )
+            from grins_platform.services.appointment_service import (  # noqa: PLC0415
+                AppointmentService,
+            )
+
+            paid_invoice = await invoice_repo.get_by_id(invoice_id)
+            if paid_invoice is not None and job is not None:
+                appt_service = AppointmentService(
+                    appointment_repository=AppointmentRepository(session=self.session),
+                    job_repository=JobRepository(session=self.session),
+                    invoice_repository=invoice_repo,
+                )
+                await appt_service._send_payment_receipts(  # noqa: SLF001
+                    job,
+                    paid_invoice,
+                    amount,
+                )
+        except Exception as exc:
+            self.logger.warning(
+                "stripe.webhook.receipt_dispatch_failed",
+                payment_intent=masked,
+                invoice_id=str(invoice_id),
+                error=str(exc),
+            )
+
         self.log_completed(
             "webhook_payment_intent_succeeded",
             payment_intent=masked,

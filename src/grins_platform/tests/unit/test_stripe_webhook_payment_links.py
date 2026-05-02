@@ -215,10 +215,14 @@ class TestPaymentIntentSucceeded:
             patch(
                 "grins_platform.services.invoice_service.InvoiceService",
             ) as mock_svc_cls,
+            patch(
+                "grins_platform.services.appointment_service.AppointmentService",
+            ) as mock_appt_svc_cls,
         ):
             mock_repo_cls.return_value.get_by_id = AsyncMock(return_value=invoice)
             mock_repo_cls.return_value.update = update_mock
             mock_svc_cls.return_value.record_payment = record_payment_mock
+            mock_appt_svc_cls.return_value._send_payment_receipts = AsyncMock()
 
             await handler._handle_payment_intent_succeeded(event)
 
@@ -232,6 +236,65 @@ class TestPaymentIntentSucceeded:
             stripe_payment_link_active=False,
         )
         assert job_obj.payment_collected_on_site is True
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_payment_intent_succeeded_fires_customer_receipt(self) -> None:
+        """Webhook fires _send_payment_receipts after recording payment.
+
+        **Validates: Architecture C parity — Stripe payments must trigger
+        the same receipt SMS+email that cash/check do.**
+        """
+        invoice_id = uuid4()
+        job_id = uuid4()
+        invoice = SimpleNamespace(
+            id=invoice_id,
+            job_id=job_id,
+            status=InvoiceStatus.SENT.value,
+        )
+        event = _make_event(
+            "payment_intent.succeeded",
+            {
+                "id": "pi_test_receipt",
+                "currency": "usd",
+                "amount_received": 25000,
+                "invoice": None,
+                "metadata": {"invoice_id": str(invoice_id)},
+            },
+        )
+        handler = _build_handler()
+        send_receipts_mock = AsyncMock()
+        job_obj = SimpleNamespace(
+            id=job_id,
+            payment_collected_on_site=False,
+        )
+        scalar_result = MagicMock()
+        scalar_result.scalar_one_or_none = MagicMock(return_value=job_obj)
+        handler.session.execute = AsyncMock(return_value=scalar_result)
+        with (
+            patch(
+                "grins_platform.repositories.invoice_repository.InvoiceRepository",
+            ) as mock_repo_cls,
+            patch(
+                "grins_platform.services.invoice_service.InvoiceService",
+            ) as mock_svc_cls,
+            patch(
+                "grins_platform.services.appointment_service.AppointmentService",
+            ) as mock_appt_svc_cls,
+        ):
+            mock_repo_cls.return_value.get_by_id = AsyncMock(return_value=invoice)
+            mock_repo_cls.return_value.update = AsyncMock()
+            mock_svc_cls.return_value.record_payment = AsyncMock()
+            mock_appt_svc_cls.return_value._send_payment_receipts = send_receipts_mock
+
+            await handler._handle_payment_intent_succeeded(event)
+
+        send_receipts_mock.assert_awaited_once()
+        args = send_receipts_mock.await_args
+        # Positional: (job, invoice, amount)
+        assert args.args[0] is job_obj
+        assert args.args[1] is invoice
+        assert args.args[2] == Decimal("250.00")
 
 
 # =============================================================================

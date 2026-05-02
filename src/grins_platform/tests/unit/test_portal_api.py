@@ -17,6 +17,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from grins_platform.api.v1 import portal as portal_module
 from grins_platform.api.v1.dependencies import get_db_session
 from grins_platform.api.v1.portal import _get_estimate_service, router
 from grins_platform.exceptions import (
@@ -231,6 +232,37 @@ class TestGetPortalEstimate:
             "created_by",
         }
         assert not forbidden_keys.intersection(data.keys())
+
+    def test_portal_estimate_response_includes_company_branding(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Branding dict from SettingsService is wired through to the response."""
+
+        async def fake_branding(_session: object) -> dict[str, str]:
+            return {
+                "company_name": "Acme Co",
+                "company_address": "1 Main St",
+                "company_phone": "(555) 555-0000",
+                "company_logo_url": "https://cdn.example.com/logo.png",
+            }
+
+        monkeypatch.setattr(portal_module, "_fetch_branding", fake_branding)
+
+        estimate = _make_estimate_mock()
+        mock_service.get_by_portal_token.return_value = estimate
+
+        token = uuid4()
+        resp = client.get(f"/api/v1/portal/estimates/{token}")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["company_name"] == "Acme Co"
+        assert data["company_address"] == "1 Main St"
+        assert data["company_phone"] == "(555) 555-0000"
+        assert data["company_logo_url"] == "https://cdn.example.com/logo.png"
 
 
 # =============================================================================

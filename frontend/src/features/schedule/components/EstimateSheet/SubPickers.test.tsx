@@ -69,6 +69,50 @@ describe('SizeTierSubPicker', () => {
     );
     expect(screen.getByTestId('size-tier-subpicker-empty')).toBeInTheDocument();
   });
+
+  it('renders seed-shape tiers (size + price + size_range_ft)', async () => {
+    const onSelect = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <SizeTierSubPicker
+        offering={offering({
+          tiers: [
+            { size: 'small', price: 750, size_range_ft: '10-20' },
+            { size: 'medium', price: 1250, size_range_ft: '20-30' },
+            { size: 'large', price: 2000, size_range_ft: '30-50' },
+          ],
+        })}
+        onSelect={onSelect}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('size-tier-subpicker')).toBeInTheDocument();
+    await user.click(screen.getByTestId('size-tier-subpicker-confirm'));
+    expect(onSelect).toHaveBeenCalledWith('Small (10-20 ft)', 750);
+  });
+
+  it('reads labor_amount alias for size_tier_plus_materials shape', async () => {
+    const onSelect = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <SizeTierSubPicker
+        offering={offering(
+          {
+            tiers: [
+              { size: 'small_to_medium', labor_amount: 200 },
+              { size: 'large', labor_amount: 400 },
+            ],
+          },
+          'size_tier_plus_materials',
+        )}
+        onSelect={onSelect}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('size-tier-subpicker')).toBeInTheDocument();
+    await user.click(screen.getByTestId('size-tier-subpicker-confirm'));
+    expect(onSelect).toHaveBeenCalledWith('Small to medium', 200);
+  });
 });
 
 describe('VariantSubPicker', () => {

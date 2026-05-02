@@ -885,6 +885,124 @@ class TestProperty33PaymentCollection:
         with pytest.raises(AppointmentNotFoundError):
             await svc.collect_payment(uuid4(), payment)
 
+    @pytest.mark.asyncio
+    async def test_collect_payment_stripe_method_skips_paid_transition(
+        self,
+    ) -> None:
+        """Stripe defers PAID transition and skips receipts.
+
+        **Validates: Architecture C — webhook owns the PAID transition.**
+        """
+        apt_id = uuid4()
+        job_id = uuid4()
+        customer_id = uuid4()
+
+        job = _make_job_mock(job_id=job_id, customer_id=customer_id)
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            job_id=job_id,
+        )
+        existing_invoice = _make_invoice_mock(
+            job_id=job_id,
+            customer_id=customer_id,
+            total_amount=Decimal("500.00"),
+            paid_amount=Decimal(0),
+            status=InvoiceStatus.SENT.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+        invoice_repo = AsyncMock()
+        invoice_repo.update = AsyncMock(return_value=existing_invoice)
+
+        svc = _build_service(
+            appt_repo=appt_repo,
+            job_repo=job_repo,
+            invoice_repo=invoice_repo,
+        )
+        svc._find_invoice_for_job = AsyncMock(return_value=existing_invoice)
+        svc._send_payment_receipts = AsyncMock()
+
+        payment = PaymentCollectionRequest(
+            payment_method=PaymentMethod.STRIPE,
+            amount=Decimal("500.00"),
+        )
+        result = await svc.collect_payment(apt_id, payment)
+
+        # Existing-invoice branch: no update call (webhook owns the flip).
+        invoice_repo.update.assert_not_awaited()
+        # Receipts deferred to webhook handler.
+        svc._send_payment_receipts.assert_not_awaited()
+        # Result status reflects the unchanged invoice status (still SENT,
+        # not flipped to PAID).
+        assert result.status == InvoiceStatus.SENT.value
+
+    @pytest.mark.asyncio
+    async def test_collect_payment_credit_card_method_skips_paid_transition(
+        self,
+    ) -> None:
+        """Credit card defers PAID transition and skips receipts.
+
+        **Validates: Architecture C — credit_card is the new UI alias for stripe.**
+        """
+        apt_id = uuid4()
+        job_id = uuid4()
+        customer_id = uuid4()
+
+        customer = _make_customer_mock(customer_id=customer_id)
+        job = _make_job_mock(
+            job_id=job_id,
+            customer_id=customer_id,
+            customer=customer,
+        )
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            job_id=job_id,
+        )
+
+        new_invoice = _make_invoice_mock(
+            job_id=job_id,
+            customer_id=customer_id,
+            total_amount=Decimal("100.00"),
+            paid_amount=Decimal(0),
+            status=InvoiceStatus.SENT.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+        invoice_repo = AsyncMock()
+        invoice_repo.get_next_sequence = AsyncMock(return_value=42)
+        invoice_repo.create = AsyncMock(return_value=new_invoice)
+        invoice_repo.update = AsyncMock(return_value=new_invoice)
+
+        svc = _build_service(
+            appt_repo=appt_repo,
+            job_repo=job_repo,
+            invoice_repo=invoice_repo,
+        )
+        svc._find_invoice_for_job = AsyncMock(return_value=None)
+        svc._send_payment_receipts = AsyncMock()
+
+        payment = PaymentCollectionRequest(
+            payment_method=PaymentMethod.CREDIT_CARD,
+            amount=Decimal("100.00"),
+        )
+        result = await svc.collect_payment(apt_id, payment)
+
+        # New-invoice branch: create called with SENT (not PAID); no
+        # second update for payment fields (webhook will fill them in).
+        invoice_repo.create.assert_awaited_once()
+        create_kwargs = invoice_repo.create.await_args.kwargs
+        assert create_kwargs["status"] == InvoiceStatus.SENT.value
+        invoice_repo.update.assert_not_awaited()
+        # Receipts deferred to webhook handler.
+        svc._send_payment_receipts.assert_not_awaited()
+        assert result.status == InvoiceStatus.SENT.value
+
 
 # =============================================================================
 # Property 34: Invoice pre-population from appointment

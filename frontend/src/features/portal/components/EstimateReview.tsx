@@ -128,18 +128,20 @@ export function EstimateReview() {
       {/* Header with company branding */}
       <header className="bg-white border-b border-slate-200 px-4 py-6 md:px-8">
         <div className="max-w-3xl mx-auto flex items-center gap-4">
-          {estimate.business.company_logo_url && (
+          {estimate.company_logo_url && (
             <img
-              src={estimate.business.company_logo_url}
-              alt={estimate.business.company_name}
+              src={estimate.company_logo_url}
+              alt={estimate.company_name ?? 'Grins Irrigation'}
               className="h-12 w-auto object-contain"
               data-testid="company-logo"
             />
           )}
           <div>
-            <h1 className="text-lg font-bold text-slate-800">{estimate.business.company_name}</h1>
-            {estimate.business.company_phone && (
-              <p className="text-sm text-slate-500">{estimate.business.company_phone}</p>
+            <h1 className="text-lg font-bold text-slate-800">
+              {estimate.company_name ?? 'Grins Irrigation'}
+            </h1>
+            {estimate.company_phone && (
+              <p className="text-sm text-slate-500">{estimate.company_phone}</p>
             )}
           </div>
         </div>

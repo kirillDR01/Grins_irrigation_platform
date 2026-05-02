@@ -14,6 +14,7 @@ import {
   ChevronDown,
   MessageCircle,
   MessageSquare,
+  Receipt,
   Send,
 } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
@@ -41,6 +42,7 @@ const KIND_ICON: Record<
   reschedule_resolved: Check,
   opt_out: Ban,
   opt_in: Send,
+  payment_received: Receipt,
 };
 
 const KIND_COLOR: Record<TimelineEventKind, string> = {
@@ -50,6 +52,7 @@ const KIND_COLOR: Record<TimelineEventKind, string> = {
   reschedule_resolved: 'text-emerald-600',
   opt_out: 'text-red-600',
   opt_in: 'text-emerald-600',
+  payment_received: 'text-emerald-600',
 };
 
 export function AppointmentCommunicationTimeline({
@@ -128,8 +131,11 @@ interface TimelineRowProps {
 }
 
 function TimelineRow({ event }: TimelineRowProps) {
-  const Icon = KIND_ICON[event.kind];
-  const color = KIND_COLOR[event.kind];
+  const Icon = KIND_ICON[event.kind] ?? MessageSquare;
+  const color = KIND_COLOR[event.kind] ?? 'text-slate-400';
+  if (!(event.kind in KIND_ICON)) {
+    console.warn('timeline.kind.unknown', { kind: event.kind, id: event.id });
+  }
   const occurred = new Date(event.occurred_at);
   const relative = formatDistanceToNow(occurred, { addSuffix: true });
   const absolute = format(occurred, 'PPp');

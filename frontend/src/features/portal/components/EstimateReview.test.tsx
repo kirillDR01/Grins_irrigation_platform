@@ -8,12 +8,10 @@ import type { PortalEstimate } from '../types';
 
 // Mock the hooks
 const mockEstimateData: PortalEstimate = {
-  business: {
-    company_name: 'Grins Irrigation',
-    company_logo_url: 'https://example.com/logo.png',
-    company_address: '123 Main St',
-    company_phone: '(555) 123-4567',
-  },
+  company_name: 'Grins Irrigation',
+  company_logo_url: 'https://example.com/logo.png',
+  company_address: '123 Main St',
+  company_phone: '(555) 123-4567',
   customer_name: 'John Smith',
   estimate_number: 'EST-001',
   status: 'SENT',
@@ -107,6 +105,23 @@ describe('EstimateReview', () => {
     expect(screen.getByText('(555) 123-4567')).toBeInTheDocument();
     expect(screen.getByText((_content, element) => element?.tagName === 'H2' && element?.textContent?.includes('EST-001') === true)).toBeInTheDocument();
     expect(screen.getByText('John Smith')).toBeInTheDocument();
+  });
+
+  it('renders without crashing when company fields are null and falls back to default name', () => {
+    const nullBrandingData: PortalEstimate = {
+      ...mockEstimateData,
+      company_name: null,
+      company_address: null,
+      company_phone: null,
+      company_logo_url: null,
+    };
+    mockUsePortalEstimate.mockReturnValue({ data: nullBrandingData, isLoading: false, error: null });
+    renderWithProviders();
+
+    expect(screen.getByTestId('estimate-review-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('company-logo')).not.toBeInTheDocument();
+    // Falls back to the default company name.
+    expect(screen.getByText('Grins Irrigation')).toBeInTheDocument();
   });
 
   it('renders line items table', () => {

@@ -33,6 +33,7 @@ from grins_platform.models.enums import (
     AppointmentStatus,
     InvoiceStatus,
     JobStatus,
+    PaymentMethod,
 )
 from grins_platform.schemas.appointment_ops import (
     LeadTimeResult,
@@ -75,6 +76,14 @@ _TERMINAL_STATUSES: set[str] = {
     AppointmentStatus.CANCELLED.value,
     AppointmentStatus.NO_SHOW.value,
 }
+
+# Payment methods whose PAID transition is owned by the Stripe webhook
+# (Architecture C). Receipt SMS/email also fire from the webhook handler,
+# not from collect_payment, so the gate skips them here.
+STRIPE_DEFERRED_METHODS = frozenset({
+    PaymentMethod.STRIPE,
+    PaymentMethod.CREDIT_CARD,
+})
 
 
 async def count_active_appointments(
@@ -2013,30 +2022,51 @@ class AppointmentService(LoggerMixin):
 
         now = datetime.now(tz=timezone.utc)
 
+        # Architecture C: card payments via Stripe Payment Links are
+        # reconciled by the webhook (`_handle_payment_intent_succeeded`).
+        # collect_payment must NOT flip the invoice to PAID for those
+        # methods, and must NOT fire receipts here — both happen inside
+        # the webhook handler when the customer actually pays.
+        defer_to_webhook = payment.payment_method in STRIPE_DEFERRED_METHODS
+
         if existing_invoice is not None:
-            # Update existing invoice with payment
-            existing_paid = existing_invoice.paid_amount or Decimal(0)
-            new_paid = existing_paid + payment.amount
-            new_status = (
-                InvoiceStatus.PAID.value
-                if new_paid >= existing_invoice.total_amount
-                else InvoiceStatus.PARTIAL.value
-            )
-            updated_invoice = await self.invoice_repository.update(
-                existing_invoice.id,
-                paid_amount=new_paid,
-                payment_method=payment.payment_method.value,
-                payment_reference=payment.reference_number,
-                paid_at=now,
-                status=new_status,
-            )
-            result_invoice = updated_invoice or existing_invoice
+            if defer_to_webhook:
+                # Leave existing invoice untouched; the webhook owns the
+                # PAID transition. Caller is expected to follow up with
+                # POST /api/v1/invoices/{id}/send-link.
+                result_invoice = existing_invoice
+            else:
+                # Update existing invoice with payment
+                existing_paid = existing_invoice.paid_amount or Decimal(0)
+                new_paid = existing_paid + payment.amount
+                new_status = (
+                    InvoiceStatus.PAID.value
+                    if new_paid >= existing_invoice.total_amount
+                    else InvoiceStatus.PARTIAL.value
+                )
+                updated_invoice = await self.invoice_repository.update(
+                    existing_invoice.id,
+                    paid_amount=new_paid,
+                    payment_method=payment.payment_method.value,
+                    payment_reference=payment.reference_number,
+                    paid_at=now,
+                    status=new_status,
+                )
+                result_invoice = updated_invoice or existing_invoice
         else:
             # Create new invoice then update with payment fields
             seq = await self.invoice_repository.get_next_sequence()
             invoice_number = f"INV-{now.year}-{seq:04d}"
             due_date = (now + timedelta(days=30)).date()
 
+            # Stripe-class methods: create as SENT (awaiting webhook
+            # reconciliation). Webhook flips to PAID once Stripe Checkout
+            # completes. Cash/check/etc. mark PAID immediately below.
+            initial_status = (
+                InvoiceStatus.SENT.value
+                if defer_to_webhook
+                else InvoiceStatus.PAID.value
+            )
             result_invoice = await self.invoice_repository.create(
                 job_id=appointment.job_id,
                 customer_id=job.customer_id,
@@ -2045,7 +2075,7 @@ class AppointmentService(LoggerMixin):
                 total_amount=payment.amount,
                 invoice_date=now.date(),
                 due_date=due_date,
-                status=InvoiceStatus.PAID.value,
+                status=initial_status,
                 line_items=[
                     {
                         "description": f"{job.job_type} service",
@@ -2053,14 +2083,16 @@ class AppointmentService(LoggerMixin):
                     },
                 ],
             )
-            # Update with payment details
-            await self.invoice_repository.update(
-                result_invoice.id,
-                payment_method=payment.payment_method.value,
-                payment_reference=payment.reference_number,
-                paid_at=now,
-                paid_amount=payment.amount,
-            )
+            if not defer_to_webhook:
+                # Update with payment details — for Stripe-class methods
+                # the webhook fills these in after checkout completes.
+                await self.invoice_repository.update(
+                    result_invoice.id,
+                    payment_method=payment.payment_method.value,
+                    payment_reference=payment.reference_number,
+                    paid_at=now,
+                    paid_amount=payment.amount,
+                )
 
         self.log_completed(
             "collect_payment",
@@ -2068,19 +2100,25 @@ class AppointmentService(LoggerMixin):
             invoice_id=str(result_invoice.id),
             amount=str(payment.amount),
             method=payment.payment_method.value,
+            deferred_to_webhook=defer_to_webhook,
         )
 
         # Best-effort receipt delivery — never undo the recorded payment
         # if SMS or email fails. Mirrors notification pattern at
-        # ``EstimateService._notify_internal_decision``.
-        try:
-            await self._send_payment_receipts(job, result_invoice, payment.amount)
-        except Exception as exc:
-            self.logger.warning(
-                "payment.receipt.dispatch_failed",
-                invoice_id=str(result_invoice.id),
-                error=str(exc),
-            )
+        # ``EstimateService._notify_internal_decision``. Skipped for
+        # Stripe-class methods: the webhook handler fires receipts after
+        # the customer actually pays.
+        if not defer_to_webhook:
+            try:
+                await self._send_payment_receipts(
+                    job, result_invoice, payment.amount,
+                )
+            except Exception as exc:
+                self.logger.warning(
+                    "payment.receipt.dispatch_failed",
+                    invoice_id=str(result_invoice.id),
+                    error=str(exc),
+                )
 
         return PaymentResult(
             invoice_id=result_invoice.id,

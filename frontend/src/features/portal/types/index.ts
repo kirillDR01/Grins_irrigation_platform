@@ -1,12 +1,5 @@
 // Portal types — public-facing, no internal IDs exposed
 
-export interface PortalBusinessInfo {
-  company_name: string;
-  company_logo_url: string | null;
-  company_address: string | null;
-  company_phone: string | null;
-}
-
 // Estimate portal types
 export interface PortalEstimateLineItem {
   item: string;
@@ -22,7 +15,6 @@ export interface PortalEstimateTier {
 }
 
 export interface PortalEstimate {
-  business: PortalBusinessInfo;
   customer_name: string;
   estimate_number: string;
   status: string;
@@ -37,6 +29,10 @@ export interface PortalEstimate {
   valid_until: string | null;
   created_at: string;
   is_readonly: boolean;
+  company_name?: string | null;
+  company_address?: string | null;
+  company_phone?: string | null;
+  company_logo_url?: string | null;
 }
 
 export interface PortalApproveRequest {
@@ -49,12 +45,15 @@ export interface PortalRejectRequest {
 
 // Contract portal types
 export interface PortalContract {
-  business: PortalBusinessInfo;
   customer_name: string;
   contract_body: string;
   terms_and_conditions: string | null;
   is_signed: boolean;
   signed_at: string | null;
+  company_name?: string | null;
+  company_address?: string | null;
+  company_phone?: string | null;
+  company_logo_url?: string | null;
 }
 
 export interface PortalSignRequest {
@@ -70,7 +69,6 @@ export interface PortalInvoiceLineItem {
 }
 
 export interface PortalInvoice {
-  business: PortalBusinessInfo;
   invoice_number: string;
   invoice_date: string;
   due_date: string;
@@ -81,6 +79,10 @@ export interface PortalInvoice {
   balance_due: number;
   payment_status: string;
   stripe_payment_url: string | null;
+  company_name?: string | null;
+  company_address?: string | null;
+  company_phone?: string | null;
+  company_logo_url?: string | null;
 }
 
 // Error response for expired tokens

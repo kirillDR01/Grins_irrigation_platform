@@ -21,7 +21,6 @@ export {
 
 // Types
 export type {
-  PortalBusinessInfo,
   PortalEstimate,
   PortalEstimateLineItem,
   PortalEstimateTier,

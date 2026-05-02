@@ -8,7 +8,7 @@ Validates: CRM Gap Closure Req 16.1, 16.2, 16.3, 16.4, 78.3, 78.5, 78.6
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -147,6 +147,7 @@ def _to_portal_response(
     estimate: Estimate | EstimateResponse,
     *,
     force_readonly: bool = False,
+    branding: dict[str, Any] | None = None,
 ) -> PortalEstimateResponse:
     """Convert an Estimate model or EstimateResponse to PortalEstimateResponse.
 
@@ -155,6 +156,7 @@ def _to_portal_response(
     Args:
         estimate: Estimate model instance or EstimateResponse schema.
         force_readonly: Override readonly to True (for approve/sign).
+        branding: Optional company branding dict from SettingsService.get_company_info.
 
     Returns:
         PortalEstimateResponse with no internal IDs.
@@ -174,6 +176,8 @@ def _to_portal_response(
     else:
         status_str = str(raw_status) if raw_status else "draft"
 
+    branding = branding or {}
+
     return PortalEstimateResponse(
         estimate_number=number,
         status=status_str,
@@ -186,8 +190,30 @@ def _to_portal_response(
         promotion_code=estimate.promotion_code,
         valid_until=estimate.valid_until,
         notes=estimate.notes,
+        company_name=branding.get("company_name"),
+        company_address=branding.get("company_address"),
+        company_phone=branding.get("company_phone"),
+        company_logo_url=branding.get("company_logo_url"),
         readonly=readonly,
     )
+
+
+async def _fetch_branding(session: AsyncSession) -> dict[str, Any]:
+    """Fetch company branding for portal responses.
+
+    Uses SettingsService.get_company_info which falls back to a safe default
+    when settings are absent. Best-effort: any unexpected error logs and
+    returns an empty dict so the portal page still renders.
+    """
+    from grins_platform.services.settings_service import (  # noqa: PLC0415
+        SettingsService,
+    )
+
+    try:
+        return await SettingsService().get_company_info(session)
+    except Exception as exc:  # pragma: no cover — best-effort
+        logger.warning("portal.branding_fetch_failed", error=str(exc))
+        return {}
 
 
 # =============================================================================
@@ -211,6 +237,7 @@ async def get_portal_estimate(
     token: UUID,
     request: Request,
     service: Annotated[EstimateService, Depends(_get_estimate_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> PortalEstimateResponse:
     """Retrieve estimate details for customer review.
 
@@ -262,7 +289,8 @@ async def get_portal_estimate(
         except Exception as e:  # pragma: no cover — best-effort
             logger.warning("portal.viewed_transition.failed", error=str(e))
 
-    response = _to_portal_response(estimate)
+    branding = await _fetch_branding(session)
+    response = _to_portal_response(estimate, branding=branding)
 
     _endpoints.log_completed(
         "get_portal_estimate",
@@ -293,6 +321,7 @@ async def approve_portal_estimate(
     token: UUID,
     request: Request,
     service: Annotated[EstimateService, Depends(_get_estimate_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
     body: PortalApproveRequest | None = None,
 ) -> PortalEstimateResponse:
     """Record customer approval of an estimate.
@@ -352,7 +381,8 @@ async def approve_portal_estimate(
             detail="This estimate has already been approved or rejected.",
         ) from exc
 
-    response = _to_portal_response(result, force_readonly=True)
+    branding = await _fetch_branding(session)
+    response = _to_portal_response(result, force_readonly=True, branding=branding)
 
     _endpoints.log_completed(
         "approve_portal_estimate",
@@ -383,6 +413,7 @@ async def reject_portal_estimate(
     token: UUID,
     request: Request,
     service: Annotated[EstimateService, Depends(_get_estimate_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
     body: PortalRejectRequest | None = None,
 ) -> PortalEstimateResponse:
     """Record customer rejection of an estimate.
@@ -437,7 +468,8 @@ async def reject_portal_estimate(
             detail="This estimate has already been approved or rejected.",
         ) from exc
 
-    response = _to_portal_response(result, force_readonly=True)
+    branding = await _fetch_branding(session)
+    response = _to_portal_response(result, force_readonly=True, branding=branding)
 
     _endpoints.log_completed(
         "reject_portal_estimate",
@@ -468,6 +500,7 @@ async def sign_portal_contract(
     request: Request,
     body: PortalSignRequest,
     service: Annotated[EstimateService, Depends(_get_estimate_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> PortalEstimateResponse:
     """Record customer's electronic signature on a contract.
 
@@ -526,7 +559,8 @@ async def sign_portal_contract(
             detail="This contract has already been signed.",
         ) from exc
 
-    response = _to_portal_response(result, force_readonly=True)
+    branding = await _fetch_branding(session)
+    response = _to_portal_response(result, force_readonly=True, branding=branding)
 
     _endpoints.log_completed(
         "sign_portal_contract",
