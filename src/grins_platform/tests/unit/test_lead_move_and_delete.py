@@ -11,6 +11,7 @@ Validates: Requirements 9.1, 9.2, 12.1, 12.2
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -54,6 +55,8 @@ def _make_lead(
     lead.sms_consent = sms_consent
     lead.source_site = "residential"
     lead.lead_source = "website"
+    # Real datetime so _carry_forward_lead_notes can ``f"{lead.created_at:%Y-%m-%d}"``.
+    lead.created_at = datetime.now(tz=timezone.utc)
     return lead
 
 
@@ -345,8 +348,11 @@ class TestMoveToSales:
 
         assert result.customer_id == customer_id
         assert result.sales_entry_id is not None
-        session.add.assert_called_once()
-        added_entry = session.add.call_args[0][0]
+        # Two adds now: SalesEntry + AuditLog. Find the SalesEntry by name.
+        added_objs = [c.args[0] for c in session.add.call_args_list]
+        sales_entries = [o for o in added_objs if type(o).__name__ == "SalesEntry"]
+        assert len(sales_entries) == 1
+        added_entry = sales_entries[0]
         assert added_entry.status == "schedule_estimate"
         assert added_entry.job_type == "New irrigation system"
         # Verify lead marked as moved

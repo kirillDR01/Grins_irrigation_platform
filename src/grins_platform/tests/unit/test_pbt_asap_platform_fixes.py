@@ -415,6 +415,7 @@ class TestProperty7ConversionJobDescription:
         data = LeadConversionRequest(
             create_job=True,
             job_description=job_description,
+            force=True,
         )
 
         _run_async(svc.convert_lead(lead_id, data))
@@ -469,7 +470,7 @@ class TestProperty8ConversionStatusUpdate:
         )
         svc.customer_service.repository = AsyncMock()
 
-        data = LeadConversionRequest(create_job=False)
+        data = LeadConversionRequest(create_job=False, force=True)
 
         _run_async(svc.convert_lead(lead_id, data))
 
@@ -516,7 +517,7 @@ class TestProperty9ConversionWithoutJob:
         )
         svc.customer_service.repository = AsyncMock()
 
-        data = LeadConversionRequest(create_job=False)
+        data = LeadConversionRequest(create_job=False, force=True)
 
         result = _run_async(svc.convert_lead(lead_id, data))
 
@@ -558,7 +559,7 @@ class TestProperty10AlreadyConvertedRejection:
         )
         svc.lead_repository.get_by_id = AsyncMock(return_value=mock_lead)
 
-        data = LeadConversionRequest(create_job=False)
+        data = LeadConversionRequest(create_job=False, force=True)
 
         with pytest.raises(LeadAlreadyConvertedError):
             _run_async(svc.convert_lead(lead_id, data))

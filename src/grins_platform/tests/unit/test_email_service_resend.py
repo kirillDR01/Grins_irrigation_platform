@@ -33,6 +33,7 @@ class TestSendEmailWithResend:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.delenv("EMAIL_TEST_ADDRESS_ALLOWLIST", raising=False)
+        monkeypatch.delenv("EMAIL_TEST_REDIRECT_TO", raising=False)
         service = EmailService(settings=_configured())
         with patch(
             "grins_platform.services.email_service.resend.Emails.send"
@@ -59,6 +60,7 @@ class TestSendEmailWithResend:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.delenv("EMAIL_TEST_ADDRESS_ALLOWLIST", raising=False)
+        monkeypatch.delenv("EMAIL_TEST_REDIRECT_TO", raising=False)
         service = EmailService(settings=_configured())
         with patch(
             "grins_platform.services.email_service.resend.Emails.send",
@@ -78,6 +80,7 @@ class TestSendEmailWithResend:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("EMAIL_TEST_ADDRESS_ALLOWLIST", "allowed@example.com")
+        monkeypatch.delenv("EMAIL_TEST_REDIRECT_TO", raising=False)
         service = EmailService(settings=_configured())
         with patch(
             "grins_platform.services.email_service.resend.Emails.send"
@@ -97,6 +100,7 @@ class TestSendEmailWithResend:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.delenv("EMAIL_TEST_ADDRESS_ALLOWLIST", raising=False)
+        monkeypatch.delenv("EMAIL_TEST_REDIRECT_TO", raising=False)
         monkeypatch.delenv("RESEND_API_KEY", raising=False)
         monkeypatch.delenv("EMAIL_API_KEY", raising=False)
         service = EmailService(settings=EmailSettings(_env_file=None))
@@ -118,6 +122,7 @@ class TestSendEmailWithResend:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.delenv("EMAIL_TEST_ADDRESS_ALLOWLIST", raising=False)
+        monkeypatch.delenv("EMAIL_TEST_REDIRECT_TO", raising=False)
         service = EmailService(settings=_configured())
         with patch(
             "grins_platform.services.email_service.resend.Emails.send"
@@ -139,6 +144,7 @@ class TestSendEmailWithResend:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.delenv("EMAIL_TEST_ADDRESS_ALLOWLIST", raising=False)
+        monkeypatch.delenv("EMAIL_TEST_REDIRECT_TO", raising=False)
         service = EmailService(settings=_configured())
         with patch(
             "grins_platform.services.email_service.resend.Emails.send"
@@ -163,6 +169,7 @@ class TestSendInternalEstimateDecisionEmail:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.delenv("EMAIL_TEST_ADDRESS_ALLOWLIST", raising=False)
+        monkeypatch.delenv("EMAIL_TEST_REDIRECT_TO", raising=False)
         service = EmailService(settings=_configured())
         with patch(
             "grins_platform.services.email_service.resend.Emails.send"

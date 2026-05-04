@@ -75,6 +75,11 @@ class TestRescheduleAppointment:
         mock_appointment.job_type = None
         mock_appointment.customer_name = None
         mock_appointment.staff_name = None
+        mock_appointment.customer_internal_notes = None
+        mock_appointment.service_agreement_id = None
+        mock_appointment.priority_level = None
+        mock_appointment.reply_state = None
+        mock_appointment.property_summary = None
 
         mock_service = AsyncMock()
         mock_service.reschedule.return_value = mock_appointment

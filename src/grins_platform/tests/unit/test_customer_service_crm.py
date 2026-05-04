@@ -121,6 +121,11 @@ def _make_invoice_mock(
     inv.invoice_token_expires_at = None
     inv.pre_due_reminder_sent_at = None
     inv.last_past_due_reminder_at = None
+    inv.stripe_payment_link_id = None
+    inv.stripe_payment_link_url = None
+    inv.stripe_payment_link_active = True
+    inv.payment_link_sent_at = None
+    inv.payment_link_sent_count = 0
     inv.created_at = datetime.now(tz=timezone.utc)
     inv.updated_at = datetime.now(tz=timezone.utc)
     return inv

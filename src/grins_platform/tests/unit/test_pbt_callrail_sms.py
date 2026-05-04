@@ -4429,8 +4429,9 @@ class TestDualKeyDedupInvariant:
                         created_at,
                         msgid,
                     )
-                seen_primary.add(primary)
-                seen_msgids.add(msgid)
+                if is_expected_new:
+                    seen_primary.add(primary)
+                    seen_msgids.add(msgid)
             return actual_new, expected_new
 
         actual_new, expected_new = asyncio.run(_run())

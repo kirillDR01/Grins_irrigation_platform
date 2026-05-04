@@ -80,7 +80,24 @@ def _build_mock_db(
 
     async def _execute_side_effect(stmt: Any, params: Any = None) -> MagicMock:
         result = MagicMock()
-        result.scalar_one_or_none.return_value = sent_message
+        try:
+            entity = stmt.column_descriptions[0].get("entity")
+            entity_name = getattr(entity, "__name__", "")
+        except (AttributeError, IndexError, KeyError):
+            entity_name = ""
+
+        # ``select(func.count())`` for invoice/appointment counts: default to 0.
+        result.scalar_one.return_value = 0
+
+        if entity_name == "Appointment":
+            result.scalar_one_or_none.return_value = appointment
+        elif entity_name == "RescheduleRequest":
+            # No existing open RescheduleRequest — let _handle_reschedule
+            # insert a fresh one rather than short-circuit on the seeded
+            # sent_message row.
+            result.scalar_one_or_none.return_value = None
+        else:
+            result.scalar_one_or_none.return_value = sent_message
         return result
 
     db.execute = AsyncMock(side_effect=_execute_side_effect)
@@ -90,6 +107,12 @@ def _build_mock_db(
 
     db.get = AsyncMock(side_effect=_get_side_effect)
     db.flush = AsyncMock()
+
+    # ``async with db.begin_nested():`` is used by _handle_reschedule.
+    nested_cm = AsyncMock()
+    nested_cm.__aenter__ = AsyncMock(return_value=nested_cm)
+    nested_cm.__aexit__ = AsyncMock(return_value=False)
+    db.begin_nested = MagicMock(return_value=nested_cm)
 
     return db
 

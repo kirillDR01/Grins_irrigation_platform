@@ -19,8 +19,10 @@ from grins_platform.services.job_confirmation_service import parse_confirmation_
 # Known keyword sets
 # ---------------------------------------------------------------------------
 
-CONFIRM_KEYWORDS = ["y", "yes", "confirm", "confirmed"]
-RESCHEDULE_KEYWORDS = ["r", "reschedule"]
+CONFIRM_KEYWORDS = [
+    "y", "yes", "confirm", "confirmed", "ok", "okay", "yup", "yeah", "1",
+]
+RESCHEDULE_KEYWORDS = ["r", "reschedule", "different time", "change time", "2"]
 CANCEL_KEYWORDS = ["c", "cancel"]
 ALL_KNOWN_KEYWORDS = CONFIRM_KEYWORDS + RESCHEDULE_KEYWORDS + CANCEL_KEYWORDS
 

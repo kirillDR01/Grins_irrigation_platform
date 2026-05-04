@@ -551,16 +551,16 @@ class TestUploadCustomerPhoto:
 
         assert resp.status_code == 404
 
-    def test_upload_photo_with_invalid_file_returns_400(
+    def test_upload_photo_with_invalid_mime_returns_415(
         self,
         client: TestClient,
         mock_service: AsyncMock,
         mock_photo_svc: MagicMock,
     ) -> None:
-        """Upload with invalid file type returns 400."""
+        """Upload with disallowed MIME type returns 415 Unsupported Media Type."""
         cid = uuid.uuid4()
         mock_service.get_customer.return_value = _sample_customer(cid)
-        mock_photo_svc.upload_file.side_effect = ValueError(
+        mock_photo_svc.upload_file.side_effect = TypeError(
             "File type not allowed",
         )
 
@@ -569,7 +569,7 @@ class TestUploadCustomerPhoto:
             files={"file": ("test.exe", b"bad-data", "application/octet-stream")},
         )
 
-        assert resp.status_code == 400
+        assert resp.status_code == 415
 
 
 # =============================================================================

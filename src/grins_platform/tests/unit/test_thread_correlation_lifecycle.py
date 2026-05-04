@@ -580,7 +580,10 @@ class TestStaleThreadReply:
             message_type=MessageType.APPOINTMENT_CONFIRMATION.value,
         )
         scheduled_appt = _make_appointment(status=AppointmentStatus.SCHEDULED.value)
-        mock_db.execute = _make_execute_side_effect(active)
+        # _handle_confirm calls db.execute twice: once for find_message, once
+        # for the appointment SELECT...FOR UPDATE lock. Provide a side_effect
+        # that returns the active message first and the appointment after.
+        mock_db.execute = _make_execute_side_effect(active, scheduled_appt)
         mock_db.get = AsyncMock(return_value=scheduled_appt)
 
         svc = JobConfirmationService(mock_db)
@@ -592,5 +595,7 @@ class TestStaleThreadReply:
         )
 
         assert result["action"] == "confirmed"
-        # Only one execute call — no stale-thread lookup was attempted.
-        assert mock_db.execute.await_count == 1
+        # No stale-thread lookup — execute count matches the legitimate path
+        # (find + appointment lock), not the stale-recovery path which would
+        # add a third execute call.
+        assert mock_db.execute.await_count == 2

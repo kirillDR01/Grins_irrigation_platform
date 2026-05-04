@@ -76,6 +76,12 @@ non_empty_name = st.text(
     max_size=30,
 ).filter(lambda s: len(s.strip()) > 0)
 
+# Disjoint alphabets for the zero-floor property: by construction, names from
+# alpha_a and alpha_b share zero characters, so Jaro-Winkler similarity is 0
+# and WEIGHT_NAME never fires.
+name_alpha_a = st.text(alphabet="abcdefghijklm", min_size=1, max_size=10)
+name_alpha_b = st.text(alphabet="nopqrstuvwxyz", min_size=1, max_size=10)
+
 emails = st.emails()
 
 addresses = st.text(
@@ -342,10 +348,10 @@ class TestProperty3DuplicateScoreZeroFloor:
     @given(
         phone_a=phone_digits,
         phone_b=phone_digits,
-        first_a=non_empty_name,
-        last_a=non_empty_name,
-        first_b=non_empty_name,
-        last_b=non_empty_name,
+        first_a=name_alpha_a,
+        last_a=name_alpha_a,
+        first_b=name_alpha_b,
+        last_b=name_alpha_b,
     )
     @settings(max_examples=100, deadline=None)
     def test_no_matching_signals_yields_zero(
@@ -366,15 +372,15 @@ class TestProperty3DuplicateScoreZeroFloor:
         a = _make_mock_customer(
             phone=phone_a,
             email=f"unique_a_{uuid4().hex[:8]}@example.com",
-            first_name=first_a + "AAAA",
-            last_name=last_a + "AAAA",
+            first_name=first_a,
+            last_name=last_a,
             properties=[],
         )
         b = _make_mock_customer(
             phone=phone_b,
             email=f"unique_b_{uuid4().hex[:8]}@example.com",
-            first_name=first_b + "ZZZZ",
-            last_name=last_b + "ZZZZ",
+            first_name=first_b,
+            last_name=last_b,
             properties=[],
         )
 

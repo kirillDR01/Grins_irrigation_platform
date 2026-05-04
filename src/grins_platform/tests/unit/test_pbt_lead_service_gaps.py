@@ -332,7 +332,7 @@ class TestProperty4EmailMarketingConsentConversion:
 
         await svc.convert_lead(
             lead.id,
-            LeadConversionRequest(create_job=False),
+            LeadConversionRequest(create_job=False, force=True),
         )
 
         if email_marketing:
@@ -397,7 +397,7 @@ class TestProperty11ConsentRecordCustomerIdUpdate:
 
         await svc.convert_lead(
             lead.id,
-            LeadConversionRequest(create_job=False),
+            LeadConversionRequest(create_job=False, force=True),
         )
 
         # Verify customer_id was set on the consent record

@@ -51,6 +51,7 @@ def _make_appointment(
     apt.service_agreement_id = None
     apt.priority_level = None
     apt.reply_state = None
+    apt.property_summary = None
     apt.job = job
     apt.staff = None
     return apt
@@ -63,6 +64,7 @@ def _make_job(*, priority_level: int = 0) -> MagicMock:
     job.priority_level = priority_level
     job.service_agreement_id = None
     job.customer = None
+    job.job_property = None
     return job
 
 

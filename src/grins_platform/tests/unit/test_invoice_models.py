@@ -72,6 +72,8 @@ class TestInvoiceStatusEnum:
             "lien_warning",
             "lien_filed",
             "cancelled",
+            "refunded",
+            "disputed",
         }
         actual_statuses = {status.value for status in InvoiceStatus}
         assert actual_statuses == expected_statuses
@@ -108,7 +110,16 @@ class TestPaymentMethodEnum:
 
     def test_all_payment_methods_count(self) -> None:
         """Test that all expected payment methods exist."""
-        expected_methods = {"cash", "check", "venmo", "zelle", "stripe"}
+        expected_methods = {
+            "cash",
+            "check",
+            "venmo",
+            "zelle",
+            "stripe",
+            "credit_card",
+            "ach",
+            "other",
+        }
         actual_methods = {method.value for method in PaymentMethod}
         assert actual_methods == expected_methods
 

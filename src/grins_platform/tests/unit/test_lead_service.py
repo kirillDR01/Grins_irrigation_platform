@@ -588,23 +588,15 @@ class TestUpdateLead:
             await service.update_lead(lead_id, data)
 
     @pytest.mark.asyncio
-    async def test_converted_auto_sets_converted_at(
+    async def test_converted_status_is_rejected_in_legacy_update(
         self,
-        service: LeadService,
-        mock_lead_repo: AsyncMock,
     ) -> None:
-        """Transitioning to 'converted' auto-sets converted_at."""
-        lead = _make_lead_mock(status=LeadStatus.QUALIFIED.value)
-        mock_lead_repo.get_by_id.return_value = lead
-        updated_lead = _make_lead_mock(status=LeadStatus.CONVERTED.value)
-        mock_lead_repo.update.return_value = updated_lead
-
-        data = LeadUpdate(status=LeadStatus.CONVERTED)
-        await service.update_lead(lead.id, data)
-
-        update_data = mock_lead_repo.update.call_args[0][1]
-        assert "converted_at" in update_data
-        assert isinstance(update_data["converted_at"], datetime)
+        """LeadUpdate now refuses legacy CONVERTED status — that path is
+        handled by ``convert_lead``. The validator returns
+        ``lead_status_deprecated`` to signal the contract change.
+        """
+        with pytest.raises(ValueError, match="lead_status_deprecated"):
+            LeadUpdate(status=LeadStatus.CONVERTED)
 
 
 # =============================================================================
@@ -852,12 +844,14 @@ class TestConvertLead:
         job_mock.id = uuid4()
         mock_job_service.create_job.return_value = job_mock
 
-        data = LeadConversionRequest(create_job=True)
+        data = LeadConversionRequest(create_job=True, force=True)
         await service.convert_lead(lead.id, data)
 
         job_create_call = mock_job_service.create_job.call_args
         job_data = job_create_call[0][0]
-        assert job_data.job_type == "ready_to_schedule"
+        # SITUATION_JOB_MAP[REPAIR] = ("ready_to_schedule", "small_repair", ...).
+        # First element is category (status), second is the JobCreate.job_type.
+        assert job_data.job_type == "small_repair"
         assert job_data.description == "Repair Request"
 
     @pytest.mark.asyncio

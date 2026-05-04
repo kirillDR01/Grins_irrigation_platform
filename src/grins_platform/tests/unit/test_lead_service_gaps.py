@@ -360,7 +360,7 @@ class TestLeadConversionUpdates:
 
         await svc.convert_lead(
             lead.id,
-            LeadConversionRequest(create_job=False),
+            LeadConversionRequest(create_job=False, force=True),
         )
 
         update_data = customer_svc.repository.update.call_args[0][1]
@@ -407,7 +407,7 @@ class TestLeadConversionUpdates:
 
         await svc.convert_lead(
             lead.id,
-            LeadConversionRequest(create_job=False),
+            LeadConversionRequest(create_job=False, force=True),
         )
 
         assert consent_record.customer_id == customer.id
@@ -455,7 +455,7 @@ class TestLeadConversionUpdates:
 
         await svc.convert_lead(
             lead.id,
-            LeadConversionRequest(create_job=False),
+            LeadConversionRequest(create_job=False, force=True),
         )
 
         # The existing record's customer_id should be updated

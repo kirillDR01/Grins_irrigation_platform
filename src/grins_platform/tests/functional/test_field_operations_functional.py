@@ -588,25 +588,53 @@ class TestJobServiceFunctional:
         assert result.status == JobStatus.IN_PROGRESS.value
         mock_job_repo.add_status_history.assert_called_once()
 
-    async def test_invalid_status_transition_rejected(
+    async def test_to_be_scheduled_can_skip_to_completed(
         self,
         service: JobService,
         mock_job_repo: AsyncMock,
     ) -> None:
-        """Test invalid status transition is rejected.
+        """TO_BE_SCHEDULED → COMPLETED is a valid skip-to-complete.
 
-        Validates: Requirement 4.10
+        ``JobService.VALID_TRANSITIONS[TO_BE_SCHEDULED]`` includes COMPLETED
+        intentionally — admins can mark a job done without traversing every
+        intermediate state.
+
+        Validates: Requirement 4.10 (state-machine looseness)
         """
-
         job_id = uuid.uuid4()
-
         mock_job = MagicMock()
         mock_job.id = job_id
         mock_job.status = JobStatus.TO_BE_SCHEDULED.value
         mock_job_repo.get_by_id.return_value = mock_job
+        updated = MagicMock()
+        updated.id = job_id
+        updated.status = JobStatus.COMPLETED.value
+        mock_job_repo.update.return_value = updated
 
-        # Try to skip to COMPLETED (invalid)
         data = JobStatusUpdate(status=JobStatus.COMPLETED)
+        result = await service.update_status(job_id, data)
+
+        assert result.status == JobStatus.COMPLETED.value
+
+    async def test_terminal_state_rejects_further_transitions(
+        self,
+        service: JobService,
+        mock_job_repo: AsyncMock,
+    ) -> None:
+        """COMPLETED is terminal — no transitions out are valid.
+
+        Keeps a real "invalid transition rejected" smoke test on the books
+        after the TO_BE_SCHEDULED → COMPLETED loosening.
+
+        Validates: Requirement 4.10
+        """
+        job_id = uuid.uuid4()
+        mock_job = MagicMock()
+        mock_job.id = job_id
+        mock_job.status = JobStatus.COMPLETED.value
+        mock_job_repo.get_by_id.return_value = mock_job
+
+        data = JobStatusUpdate(status=JobStatus.TO_BE_SCHEDULED)
 
         with pytest.raises(InvalidStatusTransitionError):
             await service.update_status(job_id, data)

@@ -736,6 +736,7 @@ class TestLeadServiceRegressionLeadToEstimate:
         conversion = LeadConversionRequest(
             create_job=True,
             job_description="New irrigation system estimate",
+            force=True,
         )
         result = await service.convert_lead(lead_id, conversion)
 
@@ -784,7 +785,7 @@ class TestLeadServiceRegressionLeadToEstimate:
             staff_repository=mock_staff_repo,
         )
 
-        conversion = LeadConversionRequest(create_job=False)
+        conversion = LeadConversionRequest(create_job=False, force=True)
         result = await service.convert_lead(lead_id, conversion)
 
         assert result.success is True
@@ -802,10 +803,16 @@ class TestLeadServiceRegressionSMSDeferred:
 
     @pytest.mark.asyncio
     async def test_sms_confirmation_still_sent_for_consenting_leads(self) -> None:
-        """SMS confirmation is still sent when lead has sms_consent=True.
+        """SMS confirmation is scheduled post-commit when lead has sms_consent=True.
+
+        After BUG-001 fix (2026-04-14), confirmations are deferred to a
+        post-commit BackgroundTasks job rather than being sent inline.
+        This regression locks in that the deferred path is still scheduled.
 
         Validates: Requirement 9.5
         """
+        from fastapi import BackgroundTasks
+
         mock_lead_repo = AsyncMock()
         mock_customer_service = AsyncMock()
         mock_job_service = AsyncMock()
@@ -816,7 +823,6 @@ class TestLeadServiceRegressionSMSDeferred:
         mock_lead_repo.create = AsyncMock(return_value=new_lead)
         mock_lead_repo.get_by_phone_and_active_status = AsyncMock(return_value=None)
         mock_lead_repo.get_recent_by_phone_or_email = AsyncMock(return_value=None)
-        mock_sms_service.send_automated_message = AsyncMock(return_value=True)
 
         service = LeadService(
             lead_repository=mock_lead_repo,
@@ -835,10 +841,15 @@ class TestLeadServiceRegressionSMSDeferred:
             sms_consent=True,
             address="789 Pine St, Minneapolis, MN 55424",
         )
-        result = await service.submit_lead(submission)
+
+        background_tasks = BackgroundTasks()
+        result = await service.submit_lead(
+            submission, background_tasks=background_tasks,
+        )
 
         assert result.success is True
-        mock_sms_service.send_automated_message.assert_called_once()
+        assert len(background_tasks.tasks) == 1
+        assert background_tasks.tasks[0].args == (new_lead.id,)
 
     @pytest.mark.asyncio
     async def test_sms_not_sent_without_consent(self) -> None:

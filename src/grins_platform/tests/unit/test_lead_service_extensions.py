@@ -712,7 +712,9 @@ class TestConsentCarryOver:
             compliance_service=compliance,
         )
 
-        await svc.convert_lead(lead.id, LeadConversionRequest(create_job=False))
+        await svc.convert_lead(
+            lead.id, LeadConversionRequest(create_job=False, force=True),
+        )
 
         # Verify sms_consent_record created
         compliance.create_sms_consent.assert_awaited_once()
@@ -747,7 +749,9 @@ class TestConsentCarryOver:
 
         svc = _build_service(lead_repo=repo, customer_service=customer_svc)
 
-        await svc.convert_lead(lead.id, LeadConversionRequest(create_job=False))
+        await svc.convert_lead(
+            lead.id, LeadConversionRequest(create_job=False, force=True),
+        )
 
         update_data = customer_svc.repository.update.call_args[0][1]
         assert update_data["terms_accepted"] is True
@@ -773,7 +777,9 @@ class TestConsentCarryOver:
 
         svc = _build_service(lead_repo=repo, customer_service=customer_svc)
 
-        await svc.convert_lead(lead.id, LeadConversionRequest(create_job=False))
+        await svc.convert_lead(
+            lead.id, LeadConversionRequest(create_job=False, force=True),
+        )
 
         update_data = customer_svc.repository.update.call_args[0][1]
         assert "email_opt_in_at" in update_data
@@ -799,7 +805,9 @@ class TestConsentCarryOver:
 
         svc = _build_service(lead_repo=repo, customer_service=customer_svc)
 
-        await svc.convert_lead(lead.id, LeadConversionRequest(create_job=False))
+        await svc.convert_lead(
+            lead.id, LeadConversionRequest(create_job=False, force=True),
+        )
 
         # No consent updates → repository.update not called for consent
         customer_svc.repository.update.assert_not_awaited()
@@ -829,7 +837,9 @@ class TestConsentCarryOver:
             compliance_service=compliance,
         )
 
-        await svc.convert_lead(lead.id, LeadConversionRequest(create_job=False))
+        await svc.convert_lead(
+            lead.id, LeadConversionRequest(create_job=False, force=True),
+        )
 
         update_data = customer_svc.repository.update.call_args[0][1]
         assert "sms_opt_in_at" in update_data

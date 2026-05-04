@@ -446,7 +446,7 @@ class TestCustomerPhotoWorkflow:
         magic_mod.from_buffer = mock_from_buffer  # type: ignore[assignment]
 
         try:
-            with pytest.raises(ValueError, match="not allowed"):
+            with pytest.raises(TypeError, match="not allowed"):
                 photo_svc.upload_file(
                     data=pdf_data,
                     file_name="document.pdf",

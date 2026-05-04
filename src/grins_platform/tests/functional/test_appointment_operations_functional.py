@@ -19,7 +19,6 @@ import pytest
 
 from grins_platform.exceptions import (
     AppointmentNotFoundError,
-    InvalidStatusTransitionError,
     PaymentRequiredError,
     StaffConflictError,
 )
@@ -343,14 +342,15 @@ class TestPaymentCollectionWorkflow:
         assert result.amount_paid == Decimal("150.00")
         assert result.payment_method == PaymentMethod.CHECK.value
 
-        # Verify invoice was updated with new paid_amount
-        inv_repo.update.assert_called_once()
-        update_args = inv_repo.update.call_args
-        update_data = update_args[0][1]
-        assert update_data["paid_amount"] == Decimal("250.00")  # 100 + 150
-        assert update_data["payment_method"] == PaymentMethod.CHECK.value
-        assert update_data["payment_reference"] == "CHK-4567"
-        assert update_data["status"] == InvoiceStatus.PAID.value
+        # Verify invoice was updated with new paid_amount. The repo is now
+        # called with kwargs (id, **fields) and may be called more than once
+        # as the payment workflow writes audit + paid fields separately.
+        assert inv_repo.update.await_count >= 1
+        update_kwargs = inv_repo.update.call_args.kwargs
+        assert update_kwargs["paid_amount"] == Decimal("250.00")  # 100 + 150
+        assert update_kwargs["payment_method"] == PaymentMethod.CHECK.value
+        assert update_kwargs["payment_reference"] == "CHK-4567"
+        assert update_kwargs["status"] == InvoiceStatus.PAID.value
 
     async def test_collect_payment_nonexistent_appointment_raises_error(
         self,
@@ -388,6 +388,7 @@ class TestInvoiceFromAppointmentWorkflow:
     ) -> None:
         """Creating invoice from appointment pre-populates from job data."""
         svc, appt_repo, job_repo, inv_repo = _build_appointment_service()
+        svc._find_invoice_for_job = AsyncMock(return_value=None)  # type: ignore[method-assign]
 
         customer_id = uuid4()
         job = _make_job(
@@ -435,6 +436,7 @@ class TestInvoiceFromAppointmentWorkflow:
     ) -> None:
         """Invoice uses final_amount when available instead of quoted_amount."""
         svc, appt_repo, job_repo, inv_repo = _build_appointment_service()
+        svc._find_invoice_for_job = AsyncMock(return_value=None)  # type: ignore[method-assign]
 
         customer_id = uuid4()
         job = _make_job(
@@ -767,21 +769,28 @@ class TestStatusTransitionChainWorkflow:
         assert update_data_3["status"] == AppointmentStatus.COMPLETED.value
         assert "completed_at" in update_data_3
 
-    async def test_invalid_transition_skipping_en_route_raises_error(
+    async def test_skipping_en_route_from_confirmed_is_permitted(
         self,
     ) -> None:
-        """Skipping en_route (confirmed → in_progress) is rejected."""
+        """CONFIRMED → IN_PROGRESS is allowed by the state machine.
+
+        gap-04.B and the skip-to-complete UX path explicitly authorise
+        admins/techs to advance straight to IN_PROGRESS without going through
+        EN_ROUTE; ``models/appointment.py:VALID_APPOINTMENT_TRANSITIONS``
+        keeps IN_PROGRESS in the CONFIRMED allowed targets.
+        """
         svc, appt_repo, _, _ = _build_appointment_service()
 
         apt = _make_appointment(status=AppointmentStatus.CONFIRMED.value)
         appt_repo.get_by_id.return_value = apt
+        appt_repo.update.return_value = apt
 
-        with pytest.raises(InvalidStatusTransitionError):
-            await svc.transition_status(
-                appointment_id=apt.id,
-                new_status=AppointmentStatus.IN_PROGRESS,
-                actor_id=uuid4(),
-            )
+        result = await svc.transition_status(
+            appointment_id=apt.id,
+            new_status=AppointmentStatus.IN_PROGRESS,
+            actor_id=uuid4(),
+        )
+        assert result is not None
 
     async def test_completion_blocked_without_payment_raises_error(
         self,

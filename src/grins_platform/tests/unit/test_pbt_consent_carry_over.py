@@ -109,7 +109,9 @@ class TestConsentCarryOverProperty:
         repo, customer_svc, compliance = _setup_mocks(lead)
         svc = _build_service(repo, customer_svc, compliance)
 
-        await svc.convert_lead(lead.id, LeadConversionRequest(create_job=False))
+        await svc.convert_lead(
+            lead.id, LeadConversionRequest(create_job=False, force=True),
+        )
 
         # sms_consent_record must be created
         compliance.create_sms_consent.assert_awaited_once()
@@ -137,7 +139,9 @@ class TestConsentCarryOverProperty:
         repo, customer_svc, compliance = _setup_mocks(lead)
         svc = _build_service(repo, customer_svc, compliance)
 
-        await svc.convert_lead(lead.id, LeadConversionRequest(create_job=False))
+        await svc.convert_lead(
+            lead.id, LeadConversionRequest(create_job=False, force=True),
+        )
 
         update_data = customer_svc.repository.update.call_args[0][1]
         assert update_data["terms_accepted"] is True
@@ -160,7 +164,9 @@ class TestConsentCarryOverProperty:
         repo, customer_svc, compliance = _setup_mocks(lead)
         svc = _build_service(repo, customer_svc, compliance)
 
-        await svc.convert_lead(lead.id, LeadConversionRequest(create_job=False))
+        await svc.convert_lead(
+            lead.id, LeadConversionRequest(create_job=False, force=True),
+        )
 
         compliance.create_sms_consent.assert_not_awaited()
         customer_svc.repository.update.assert_not_awaited()
@@ -188,7 +194,9 @@ class TestConsentCarryOverProperty:
         repo, customer_svc, compliance = _setup_mocks(lead)
         svc = _build_service(repo, customer_svc, compliance)
 
-        await svc.convert_lead(lead.id, LeadConversionRequest(create_job=False))
+        await svc.convert_lead(
+            lead.id, LeadConversionRequest(create_job=False, force=True),
+        )
 
         has_any = sms_consent or terms_accepted or has_email
 

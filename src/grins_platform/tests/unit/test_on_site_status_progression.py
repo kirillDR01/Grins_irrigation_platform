@@ -82,6 +82,8 @@ def _make_job(
     job.service_agreement = None
     job.service_agreement_name = None
     job.service_agreement_active = None
+    job.customer_address = None
+    job.property_tags = None
     job.is_deleted = False
     job.created_at = datetime.now(tz=timezone.utc)
     job.updated_at = datetime.now(tz=timezone.utc)

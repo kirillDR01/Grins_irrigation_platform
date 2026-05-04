@@ -77,6 +77,10 @@ def mock_job():
     job.property_is_subscription = None
     job.time_tracking_metadata = None
     job.service_preference_notes = None
+    job.service_agreement_name = None
+    job.service_agreement_active = None
+    job.customer_address = None
+    job.property_tags = None
     job.created_at = datetime.now()
     job.updated_at = datetime.now()
     return job

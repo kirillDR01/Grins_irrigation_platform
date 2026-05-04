@@ -570,7 +570,7 @@ class TestConsentCarryOver:
 
         result = await svc.convert_lead(
             lead.id,
-            LeadConversionRequest(create_job=False),
+            LeadConversionRequest(create_job=False, force=True),
         )
 
         assert result.success is True
@@ -610,7 +610,7 @@ class TestConsentCarryOver:
 
         await svc.convert_lead(
             lead.id,
-            LeadConversionRequest(create_job=False),
+            LeadConversionRequest(create_job=False, force=True),
         )
 
         update_data = cust_svc.repository.update.call_args[0][1]
@@ -639,7 +639,7 @@ class TestConsentCarryOver:
 
         await svc.convert_lead(
             lead.id,
-            LeadConversionRequest(create_job=False),
+            LeadConversionRequest(create_job=False, force=True),
         )
 
         update_data = cust_svc.repository.update.call_args[0][1]
@@ -670,7 +670,7 @@ class TestConsentCarryOver:
 
         await svc.convert_lead(
             lead.id,
-            LeadConversionRequest(create_job=False),
+            LeadConversionRequest(create_job=False, force=True),
         )
 
         # No consent updates should be made
@@ -711,7 +711,7 @@ class TestConsentCarryOver:
 
         result = await svc.convert_lead(
             lead.id,
-            LeadConversionRequest(create_job=True),
+            LeadConversionRequest(create_job=True, force=True),
         )
 
         assert result.success is True

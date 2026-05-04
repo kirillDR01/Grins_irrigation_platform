@@ -81,6 +81,10 @@ def _make_job(
     job.property_is_subscription = None
     job.time_tracking_metadata = None
     job.service_preference_notes = None
+    job.service_agreement_name = None
+    job.service_agreement_active = None
+    job.customer_address = None
+    job.property_tags = None
     job.is_deleted = False
     job.created_at = datetime.now(tz=timezone.utc)
     job.updated_at = datetime.now(tz=timezone.utc)
@@ -197,7 +201,14 @@ class TestOnMyWay:
         client: TestClient,
         mock_session: AsyncMock,
     ) -> None:
+        # bughunt L-2: when SMS dispatch fails, the route rolls back
+        # on_my_way_at to its prior value so a later retry doesn't look
+        # like a duplicate "already en-route". The endpoint itself still
+        # returns 200 so the FE doesn't surface a transient SMS error.
         job = _make_job()
+        # Pre-existing on_my_way_at so we can verify rollback restored it.
+        prev = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        job.on_my_way_at = prev
         customer = _make_customer()
 
         job_result = Mock()
@@ -219,7 +230,7 @@ class TestOnMyWay:
             response = client.post(f"/api/v1/jobs/{job.id}/on-my-way")
 
         assert response.status_code == status.HTTP_200_OK
-        assert job.on_my_way_at is not None
+        assert job.on_my_way_at == prev
 
 
 # ---------------------------------------------------------------------------

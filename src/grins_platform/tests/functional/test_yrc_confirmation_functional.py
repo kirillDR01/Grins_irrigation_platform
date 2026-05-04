@@ -100,8 +100,18 @@ def _build_mock_db(
         except (AttributeError, IndexError, KeyError):
             entity_name = ""
 
+        # ``select(func.count()).select_from(Invoice)`` and similar aggregate
+        # queries used by ``clear_on_site_data`` reach scalar_one(); default
+        # to 0 so callers can do ``> 0`` arithmetic without TypeError.
+        result.scalar_one.return_value = 0
+
         if entity_name == "Appointment":
             result.scalar_one_or_none.return_value = appointment
+        elif entity_name == "RescheduleRequest":
+            # No existing open RescheduleRequest — let _handle_reschedule
+            # insert a fresh one rather than short-circuit on the seeded
+            # sent_message row.
+            result.scalar_one_or_none.return_value = None
         else:
             result.scalar_one_or_none.return_value = sent_message
         return result
@@ -117,6 +127,13 @@ def _build_mock_db(
 
     db.get = AsyncMock(side_effect=_get_side_effect)
     db.flush = AsyncMock()
+
+    # ``async with db.begin_nested():`` is used by _handle_reschedule for
+    # the dedup-and-insert window.
+    nested_cm = AsyncMock()
+    nested_cm.__aenter__ = AsyncMock(return_value=nested_cm)
+    nested_cm.__aexit__ = AsyncMock(return_value=False)
+    db.begin_nested = MagicMock(return_value=nested_cm)
 
     return db
 

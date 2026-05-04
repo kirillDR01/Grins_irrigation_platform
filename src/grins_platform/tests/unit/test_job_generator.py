@@ -124,14 +124,17 @@ class TestDateRanges:
         agreement = _make_agreement(tier_name="Essential")
 
         jobs = await gen.generate_jobs(agreement)
-        year = datetime.now(timezone.utc).year
+        now = datetime.now(timezone.utc)
+        year = now.year
+        spring_year = year + 1 if now.month > 4 else year
+        fall_year = year + 1 if now.month > 10 else year
 
         # Spring Startup: April
-        assert jobs[0].target_start_date == date(year, 4, 1)
-        assert jobs[0].target_end_date == date(year, 4, 30)
+        assert jobs[0].target_start_date == date(spring_year, 4, 1)
+        assert jobs[0].target_end_date == date(spring_year, 4, 30)
         # Fall Winterization: October
-        assert jobs[1].target_start_date == date(year, 10, 1)
-        assert jobs[1].target_end_date == date(year, 10, 31)
+        assert jobs[1].target_start_date == date(fall_year, 10, 1)
+        assert jobs[1].target_end_date == date(fall_year, 10, 31)
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -141,16 +144,20 @@ class TestDateRanges:
         agreement = _make_agreement(tier_name="Professional")
 
         jobs = await gen.generate_jobs(agreement)
-        year = datetime.now(timezone.utc).year
+        now = datetime.now(timezone.utc)
+        year = now.year
+        spring_year = year + 1 if now.month > 4 else year
+        midseason_year = year + 1 if now.month > 7 else year
+        fall_year = year + 1 if now.month > 10 else year
 
-        assert jobs[0].target_start_date == date(year, 4, 1)
-        assert jobs[0].target_end_date == date(year, 4, 30)
+        assert jobs[0].target_start_date == date(spring_year, 4, 1)
+        assert jobs[0].target_end_date == date(spring_year, 4, 30)
         # Mid-Season: July
-        assert jobs[1].target_start_date == date(year, 7, 1)
-        assert jobs[1].target_end_date == date(year, 7, 31)
+        assert jobs[1].target_start_date == date(midseason_year, 7, 1)
+        assert jobs[1].target_end_date == date(midseason_year, 7, 31)
         # Fall: October
-        assert jobs[2].target_start_date == date(year, 10, 1)
-        assert jobs[2].target_end_date == date(year, 10, 31)
+        assert jobs[2].target_start_date == date(fall_year, 10, 1)
+        assert jobs[2].target_end_date == date(fall_year, 10, 31)
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -160,13 +167,15 @@ class TestDateRanges:
         agreement = _make_agreement(tier_name="Premium")
 
         jobs = await gen.generate_jobs(agreement)
-        year = datetime.now(timezone.utc).year
+        now = datetime.now(timezone.utc)
+        year = now.year
 
         expected_months = [4, 5, 6, 7, 8, 9, 10]
         for i, month in enumerate(expected_months):
-            last_day = calendar.monthrange(year, month)[1]
-            assert jobs[i].target_start_date == date(year, month, 1)
-            assert jobs[i].target_end_date == date(year, month, last_day)
+            effective_year = year + 1 if month < now.month else year
+            last_day = calendar.monthrange(effective_year, month)[1]
+            assert jobs[i].target_start_date == date(effective_year, month, 1)
+            assert jobs[i].target_end_date == date(effective_year, month, last_day)
 
     @pytest.mark.unit
     @pytest.mark.asyncio

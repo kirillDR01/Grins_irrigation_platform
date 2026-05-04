@@ -489,13 +489,24 @@ class TestEnumValidation:
             "lien_warning",
             "lien_filed",
             "cancelled",
+            "refunded",
+            "disputed",
         }
         actual = {s.value for s in InvoiceStatus}
         assert actual == expected
 
     def test_payment_method_enum_values(self) -> None:
         """Test all PaymentMethod enum values are valid."""
-        expected = {"cash", "check", "venmo", "zelle", "stripe"}
+        expected = {
+            "cash",
+            "check",
+            "venmo",
+            "zelle",
+            "stripe",
+            "credit_card",
+            "ach",
+            "other",
+        }
         actual = {m.value for m in PaymentMethod}
         assert actual == expected
 
