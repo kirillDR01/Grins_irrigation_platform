@@ -34,6 +34,10 @@ from grins_platform.api.v1.auth_dependencies import (
     CurrentActiveUser,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
 from grins_platform.api.v1.dependencies import get_db_session
+from grins_platform.exceptions import (
+    LeadHasReferencesError,
+    LeadNotFoundError,
+)
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import LeadSituation, LeadStatus
 from grins_platform.models.lead import Lead
@@ -564,7 +568,20 @@ async def delete_lead(
     """
     _endpoints.log_started("delete_lead", lead_id=str(lead_id))
 
-    await service.delete_lead(lead_id)
+    try:
+        await service.delete_lead(lead_id)
+    except LeadNotFoundError as e:
+        _endpoints.log_rejected("delete_lead", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Lead not found: {e.lead_id}",
+        ) from e
+    except LeadHasReferencesError as e:
+        _endpoints.log_rejected("delete_lead", reason="fk_violation")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        ) from e
 
     _endpoints.log_completed("delete_lead", lead_id=str(lead_id))
 
@@ -657,7 +674,7 @@ async def mark_lead_contacted(
     Validates: CRM2 Req 11.1, 11.2
     """
     _endpoints.log_started("mark_lead_contacted", lead_id=str(lead_id))
-    result = await service.mark_contacted(lead_id)
+    result = await service.mark_contacted(lead_id, actor_staff_id=_current_user.id)
     _endpoints.log_completed("mark_lead_contacted", lead_id=str(lead_id))
     return result
 

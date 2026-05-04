@@ -1209,6 +1209,23 @@ class AppointmentService(LoggerMixin):
             self.log_rejected("reschedule", reason="not_found")
             raise AppointmentNotFoundError(appointment_id)
 
+        allowed_reschedule_statuses = frozenset({
+            AppointmentStatus.PENDING.value,
+            AppointmentStatus.DRAFT.value,
+            AppointmentStatus.SCHEDULED.value,
+            AppointmentStatus.CONFIRMED.value,
+        })
+        if appointment.status not in allowed_reschedule_statuses:
+            self.log_rejected(
+                "reschedule",
+                reason="invalid_status",
+                current=appointment.status,
+            )
+            raise InvalidStatusTransitionError(
+                current_status=AppointmentStatus(appointment.status),
+                requested_status=AppointmentStatus.SCHEDULED,
+            )
+
         # Check for staff conflicts on the new date/time
         conflict = await self._check_staff_conflict(
             staff_id=appointment.staff_id,
@@ -2079,7 +2096,9 @@ class AppointmentService(LoggerMixin):
                 line_items=[
                     {
                         "description": f"{job.job_type} service",
-                        "amount": str(payment.amount),
+                        "quantity": "1",
+                        "unit_price": str(payment.amount),
+                        "total": str(payment.amount),
                     },
                 ],
             )

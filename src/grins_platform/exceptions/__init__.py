@@ -421,6 +421,20 @@ class InvalidInvoiceOperationError(FieldOperationsError):
         super().__init__(message)
 
 
+class LeadHasReferencesError(FieldOperationsError):
+    """Raised when a lead cannot be deleted due to FK references.
+
+    Validates: bughunt 2026-05-04 B-6.
+    """
+
+    def __init__(self, lead_id: UUID) -> None:
+        self.lead_id = lead_id
+        super().__init__(
+            f"Cannot delete lead {lead_id}: associated SMS consent or "
+            f"campaign records prevent deletion (FK).",
+        )
+
+
 class NoContactMethodError(FieldOperationsError):
     """Raised when an invoice has no deliverable contact method.
 
@@ -934,6 +948,7 @@ __all__ = [
     "JobNotFoundError",
     "LeadAlreadyConvertedError",
     "LeadError",
+    "LeadHasReferencesError",
     "LeadNotFoundError",
     "LeadOnlyInvoiceError",
     "MergeBlockerError",

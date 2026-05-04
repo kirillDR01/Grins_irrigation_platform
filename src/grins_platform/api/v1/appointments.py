@@ -96,6 +96,11 @@ from grins_platform.services.appointment_timeline_service import (
     AppointmentTimelineService,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
 from grins_platform.services.photo_service import PhotoService, UploadContext
+from grins_platform.services.sms_service import (
+    SMSConsentDeniedError,
+    SMSError,
+    SMSRateLimitDeniedError,
+)
 
 router = APIRouter()
 
@@ -1206,6 +1211,36 @@ async def send_confirmation(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Appointment must be in DRAFT status to send confirmation. "
             f"Current status: {e.current_status.value}",
+        ) from e
+    except SMSConsentDeniedError as e:
+        _endpoints.log_rejected("send_confirmation", reason="sms_consent")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "message": "SMS confirmation could not be delivered.",
+                "attempted_channels": ["sms"],
+                "sms_failure_reason": "consent",
+            },
+        ) from e
+    except SMSRateLimitDeniedError as e:
+        _endpoints.log_rejected("send_confirmation", reason="sms_rate_limit")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "message": "SMS confirmation could not be delivered.",
+                "attempted_channels": ["sms"],
+                "sms_failure_reason": "rate_limit",
+            },
+        ) from e
+    except SMSError as e:
+        _endpoints.log_rejected("send_confirmation", reason="sms_provider_error")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "message": "SMS confirmation could not be delivered.",
+                "attempted_channels": ["sms"],
+                "sms_failure_reason": "provider_error",
+            },
         ) from e
 
     _endpoints.log_completed("send_confirmation", appointment_id=str(appointment_id))

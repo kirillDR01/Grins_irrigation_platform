@@ -16,11 +16,13 @@ from math import ceil
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from grins_platform.exceptions import (
     DuplicateLeadError,
     InvalidLeadStatusTransitionError,
     LeadAlreadyConvertedError,
+    LeadHasReferencesError,
     LeadNotFoundError,
     StaffNotFoundError,
 )
@@ -1111,14 +1113,21 @@ class LeadService(LoggerMixin):
 
         Raises:
             LeadNotFoundError: If lead not found
+            LeadHasReferencesError: If FK references prevent deletion
 
-        Validates: Requirement 5.9, CRM2 Req 9.1
+        Validates: Requirement 5.9, CRM2 Req 9.1, bughunt 2026-05-04 B-6
         """
         lead = await self.lead_repository.get_by_id(lead_id)
         if not lead:
             raise LeadNotFoundError(lead_id)
 
-        await self.lead_repository.delete(lead_id)
+        try:
+            await self.lead_repository.delete(lead_id)
+            await self.lead_repository.session.flush()
+        except IntegrityError as e:
+            await self.lead_repository.session.rollback()
+            self.log_failed("delete_lead", error=str(e), lead_id=str(lead_id))
+            raise LeadHasReferencesError(lead_id) from e
 
     async def _carry_forward_lead_notes(
         self,
@@ -1287,6 +1296,12 @@ class LeadService(LoggerMixin):
                 situation=situation_key,
                 reason="admin_confirmed_move_to_jobs",
             )
+            await self._audit_log_lead_routing(
+                action="lead.move_to_jobs.estimate_override",
+                lead_id=lead_id,
+                actor_staff_id=actor_staff_id,
+                details={"situation": situation_key},
+            )
 
         customer_id, merged_info = await self._ensure_customer_for_lead(lead)
         description = lead.job_requested or default_description
@@ -1326,6 +1341,16 @@ class LeadService(LoggerMixin):
             await self.lead_repository.session.flush()
 
         self.log_completed("move_to_jobs", lead_id=str(lead_id), job_id=str(job.id))
+        await self._audit_log_lead_routing(
+            action="lead.move_to_jobs",
+            lead_id=lead_id,
+            actor_staff_id=actor_staff_id,
+            details={
+                "job_id": str(job.id),
+                "customer_id": str(customer_id),
+                "forced": force,
+            },
+        )
         message = (
             f"Merged into existing customer: {merged_info.name}"
             if merged_info
@@ -1405,6 +1430,15 @@ class LeadService(LoggerMixin):
             "move_to_sales",
             lead_id=str(lead_id),
             sales_entry_id=str(sales_entry.id),
+        )
+        await self._audit_log_lead_routing(
+            action="lead.move_to_sales",
+            lead_id=lead_id,
+            actor_staff_id=actor_staff_id,
+            details={
+                "sales_entry_id": str(sales_entry.id),
+                "customer_id": str(customer_id),
+            },
         )
         message = (
             f"Merged into existing customer: {merged_info.name}"
@@ -1584,7 +1618,12 @@ class LeadService(LoggerMixin):
         updated_lead = await self.lead_repository.get_by_id(lead_id)
         return LeadResponse.model_validate(updated_lead)
 
-    async def mark_contacted(self, lead_id: UUID) -> LeadResponse:
+    async def mark_contacted(
+        self,
+        lead_id: UUID,
+        *,
+        actor_staff_id: UUID | None = None,
+    ) -> LeadResponse:
         """Mark a lead as Contacted (Awaiting Response).
 
         Also removes NEEDS_CONTACT tag and sets last_contacted_at.
@@ -1613,6 +1652,11 @@ class LeadService(LoggerMixin):
         )
 
         self.log_completed("mark_contacted", lead_id=str(lead_id))
+        await self._audit_log_lead_routing(
+            action="lead.contacted",
+            lead_id=lead_id,
+            actor_staff_id=actor_staff_id,
+        )
         updated_lead = await self.lead_repository.get_by_id(lead_id)
         return LeadResponse.model_validate(updated_lead)
 
@@ -2057,6 +2101,32 @@ class LeadService(LoggerMixin):
         if sub.landscape_hardscape:
             parts.append(f"Landscape: {sub.landscape_hardscape}")
         return "; ".join(parts) if parts else None
+
+    async def _audit_log_lead_routing(
+        self,
+        *,
+        action: str,
+        lead_id: UUID,
+        actor_staff_id: UUID | None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        """Record a lead-routing AuditLog entry; never blocks the operation."""
+        from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+            AuditLogRepository,
+        )
+
+        try:
+            session = self.lead_repository.session
+            repo = AuditLogRepository(session)
+            await repo.create(
+                action=action,
+                resource_type="lead",
+                resource_id=lead_id,
+                actor_id=actor_staff_id,
+                details={"lead_id": str(lead_id), **(details or {})},
+            )
+        except Exception:
+            self.log_failed(action, lead_id=str(lead_id))
 
     async def _audit_log_convert_override(
         self,

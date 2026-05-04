@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, ClassVar, Literal, cast
 from uuid import UUID
 
 from grins_platform.exceptions import (
+    InvalidInvoiceOperationError,
+    InvoiceNotFoundError,
     LeadOnlyInvoiceError,
     NoContactMethodError,
 )
@@ -70,21 +72,6 @@ LIEN_ELIGIBLE_TYPES: set[str] = {
     "new_system",
     "system_upgrade",
 }
-
-
-class InvoiceNotFoundError(Exception):
-    """Raised when an invoice is not found."""
-
-    def __init__(self, invoice_id: UUID) -> None:
-        self.invoice_id = invoice_id
-        super().__init__(f"Invoice not found: {invoice_id}")
-
-
-class InvalidInvoiceOperationError(Exception):
-    """Raised when an invalid invoice operation is attempted."""
-
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
 
 
 class LienMassNotifyDeprecatedError(Exception):
