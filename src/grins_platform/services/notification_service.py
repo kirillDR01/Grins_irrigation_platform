@@ -1143,6 +1143,7 @@ class NotificationService(LoggerMixin):
                     phone=lead.phone,
                     message=sms_body,
                     message_type="automated",
+                    lead_id=lead.id,
                 )
             except Exception as exc:
                 self.log_failed(

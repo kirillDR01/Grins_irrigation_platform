@@ -76,6 +76,29 @@ class PortalEstimateResponse(BaseModel):
         default=False,
         description="Whether estimate is read-only (already approved)",
     )
+    customer_first_name: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Customer first name (for portal greeting)",
+    )
+    customer_last_name: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Customer last name (for portal greeting)",
+    )
+    customer_email: str | None = Field(
+        default=None,
+        max_length=320,
+        description="Customer email (display only)",
+    )
+    created_at: datetime | None = Field(
+        default=None,
+        description="When the estimate was created",
+    )
+    sent_at: datetime | None = Field(
+        default=None,
+        description="When the estimate was sent to the customer",
+    )
 
 
 class PortalApproveRequest(BaseModel):

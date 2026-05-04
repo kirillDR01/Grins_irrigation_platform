@@ -323,6 +323,7 @@ class EstimateService(LoggerMixin):
                         phone=phone,
                         message=message,
                         message_type="estimate_sent",
+                        customer_id=estimate.customer.id,
                     )
                     sent_via.append("sms")
                 except Exception as e:
@@ -364,6 +365,7 @@ class EstimateService(LoggerMixin):
                         phone=lead.phone,
                         message=message,
                         message_type="estimate_sent",
+                        lead_id=lead.id,
                     )
                     sent_via.append("sms")
                 except Exception as e:
@@ -630,6 +632,7 @@ class EstimateService(LoggerMixin):
                     phone=recipient_phone,
                     message=sms_text,
                     message_type="internal_estimate_decision",
+                    is_internal=True,
                 )
             except Exception as e:
                 self.log_failed(
@@ -1076,7 +1079,9 @@ class EstimateService(LoggerMixin):
 
             # Attempt to send
             success = False
-            phone = self._get_contact_phone(estimate)
+            phone, contact_customer_id, contact_lead_id = (
+                self._get_contact_phone_with_keys(estimate)
+            )
 
             if self.sms_service and phone:
                 try:
@@ -1084,6 +1089,8 @@ class EstimateService(LoggerMixin):
                         phone=phone,
                         message=message,
                         message_type="estimate_sent",
+                        customer_id=contact_customer_id,
+                        lead_id=contact_lead_id,
                     )
                     success = True
                 except Exception as e:
@@ -1300,25 +1307,32 @@ class EstimateService(LoggerMixin):
         return total
 
     @staticmethod
-    def _get_contact_phone(estimate: Estimate) -> str | None:
-        """Get the best contact phone for an estimate.
+    def _get_contact_phone_with_keys(
+        estimate: Estimate,
+    ) -> tuple[str | None, UUID | None, UUID | None]:
+        """Return ``(phone, customer_id, lead_id)`` for the best contact.
 
-        Checks customer first, then lead.
+        Customer takes precedence over lead. Returns ``(None, None,
+        None)`` if neither has a phone.
 
-        Args:
-            estimate: The estimate instance.
-
-        Returns:
-            Phone number string or None.
+        Bug #1 (master-plan-run-findings 2026-05-04): callers thread the
+        FK to ``send_automated_message`` so the ``SentMessage`` audit
+        row satisfies ``ck_sent_messages_recipient`` without poisoning
+        the transaction.
         """
         if estimate.customer:
             phone = getattr(estimate.customer, "phone", None)
             if phone:
-                return str(phone)
+                return str(phone), estimate.customer.id, None
 
         if estimate.lead:
             phone = getattr(estimate.lead, "phone", None)
             if phone:
-                return str(phone)
+                return str(phone), None, estimate.lead.id
 
-        return None
+        return None, None, None
+
+    @classmethod
+    def _get_contact_phone(cls, estimate: Estimate) -> str | None:
+        """Get the best contact phone for an estimate (phone-only shim)."""
+        return cls._get_contact_phone_with_keys(estimate)[0]

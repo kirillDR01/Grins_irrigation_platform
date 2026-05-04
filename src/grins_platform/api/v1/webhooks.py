@@ -10,6 +10,7 @@ Validates: Requirements 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 7.2, 7.3,
 
 from __future__ import annotations
 
+import hashlib
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
@@ -82,6 +83,23 @@ HANDLED_EVENT_TYPES = frozenset(
 # Using a non-empty placeholder lets CustomerCreate (min_length=1) succeed
 # without rolling back the entire agreement transaction.
 _MISSING_LAST_NAME_PLACEHOLDER = "-"
+
+
+def _synthetic_phone_for_event(event_id: str) -> str:
+    """Deterministic 10-digit synthetic phone derived from a Stripe event ID.
+
+    Bug #6 (master-plan-run-findings 2026-05-04): the prior fallback
+    ``f"000{event['id'][-7:]}"`` produced strings like ``"000SoDqVvS"``
+    when Stripe event IDs end in alphanumerics, which fail
+    ``CustomerCreate.normalize_phone`` (10-digit requirement).
+
+    Uses SHA-256 + modulo so the same event id always maps to the same
+    synthetic — webhook retries for the same event find the same
+    customer instead of creating duplicates.
+    """
+    digest = hashlib.sha256(event_id.encode("utf-8")).digest()
+    n = int.from_bytes(digest[:8], "big") % 10**10
+    return f"{n:010d}"
 
 
 class StripeWebhookHandler(LoggerMixin):
@@ -263,6 +281,23 @@ class StripeWebhookHandler(LoggerMixin):
         subscription_id: str = session_obj.get("subscription", "") or ""
         metadata: dict[str, str] = session_obj.get("metadata", {}) or {}
 
+        # Bug #5 (master-plan-run-findings 2026-05-04): defensive
+        # invoice-payment correlator. Architecture-C Payment Links pay
+        # through ``payment_intent.succeeded``, but in-flight links
+        # created before ``payment_intent_data.metadata`` shipped will
+        # arrive here with ``session.metadata.invoice_id`` set. Stripe
+        # populates session.metadata from the PaymentLink, so this is
+        # the deterministic backfill path. Keep BEFORE agreement-signup
+        # logic — invoice payments never carry ``package_type``.
+        invoice_id_raw = metadata.get("invoice_id")
+        if invoice_id_raw:
+            await self._handle_checkout_completed_invoice_payment(
+                event,
+                session_obj,
+                invoice_id_raw,
+            )
+            return
+
         consent_token_str = metadata.get("consent_token", "")
         tier_slug = metadata.get("package_tier", "")
         package_type = metadata.get("package_type", "residential")
@@ -337,7 +372,11 @@ class StripeWebhookHandler(LoggerMixin):
                 create_data = CustomerCreate(
                     first_name=first_name,
                     last_name=last_name,
-                    phone=normalized_phone or phone_raw or f"000{event['id'][-7:]}",
+                    phone=(
+                        normalized_phone
+                        or phone_raw
+                        or _synthetic_phone_for_event(event["id"])
+                    ),
                     email=customer_email or None,
                 )
                 try:
@@ -979,6 +1018,133 @@ class StripeWebhookHandler(LoggerMixin):
     # Architecture C — Stripe Payment Links handlers
     # Validates: Stripe Payment Links plan §Phase 2.10-2.13.
     # ------------------------------------------------------------------
+
+    async def _handle_checkout_completed_invoice_payment(
+        self,
+        event: stripe.Event,
+        session_obj: dict[str, Any],
+        invoice_id_raw: str,
+    ) -> None:
+        """Reconcile an Architecture-C invoice when checkout.session.completed
+        carries ``metadata.invoice_id``.
+
+        Mirrors :meth:`_handle_payment_intent_succeeded` but reads the
+        invoice id from ``session.metadata`` (always populated by Stripe
+        from the PaymentLink) and uses ``session.payment_intent`` (or
+        the session id) for the payment reference. Idempotent on replay
+        via the ``invoice.status == PAID`` short-circuit.
+
+        Bug #5 (master-plan-run-findings 2026-05-04): defensive backfill
+        for in-flight Payment Links created before
+        ``payment_intent_data.metadata`` shipped.
+        """
+        from grins_platform.models.enums import (  # noqa: PLC0415
+            InvoiceStatus,
+            PaymentMethod,
+        )
+        from grins_platform.models.job import Job  # noqa: PLC0415
+        from grins_platform.repositories.invoice_repository import (  # noqa: PLC0415
+            InvoiceRepository,
+        )
+        from grins_platform.repositories.job_repository import (  # noqa: PLC0415
+            JobRepository,
+        )
+        from grins_platform.schemas.invoice import (  # noqa: PLC0415
+            PaymentRecord,
+        )
+        from grins_platform.services.invoice_service import (  # noqa: PLC0415
+            InvoiceService,
+        )
+
+        session_id: str = str(session_obj.get("id", ""))
+        payment_intent_id_raw = session_obj.get("payment_intent") or ""
+        payment_intent_id: str = (
+            str(payment_intent_id_raw)
+            if isinstance(payment_intent_id_raw, str)
+            else ""
+        )
+        masked = self._mask_pi(payment_intent_id or session_id)
+        self.log_started(
+            "webhook_checkout_invoice_payment",
+            stripe_event_id=event["id"],
+            payment_intent=masked,
+        )
+
+        try:
+            invoice_id = UUID(str(invoice_id_raw))
+        except (ValueError, AttributeError):
+            self.logger.warning(
+                "stripe.webhook.checkout_invoice_payment.invalid_metadata_uuid",
+                payment_intent=masked,
+                invoice_id_raw=str(invoice_id_raw)[:50],
+            )
+            return
+
+        invoice_repo = InvoiceRepository(session=self.session)
+        invoice = await invoice_repo.get_by_id(invoice_id)
+        if invoice is None:
+            self.logger.warning(
+                "stripe.webhook.checkout_invoice_payment.invoice_not_found",
+                payment_intent=masked,
+                invoice_id=str(invoice_id),
+            )
+            return
+
+        if invoice.status == InvoiceStatus.CANCELLED.value:
+            self.logger.warning(
+                "stripe.webhook.checkout_invoice_payment.cancelled_invoice_charged",
+                payment_intent=masked,
+                invoice_id=str(invoice_id),
+            )
+            return
+
+        # Idempotency: if PI handler already reconciled, no-op.
+        if invoice.status == InvoiceStatus.PAID.value:
+            self.log_completed(
+                "webhook_checkout_invoice_payment",
+                payment_intent=masked,
+                invoice_id=str(invoice_id),
+                outcome="invoice_already_paid",
+            )
+            return
+
+        amount_total_cents = session_obj.get("amount_total") or session_obj.get(
+            "amount_subtotal",
+            0,
+        )
+        amount = Decimal(str(amount_total_cents)) / Decimal(100)
+
+        invoice_service = InvoiceService(
+            invoice_repository=invoice_repo,
+            job_repository=JobRepository(session=self.session),
+        )
+        reference_id = payment_intent_id or session_id
+        payment_record = PaymentRecord(
+            amount=amount,
+            payment_method=PaymentMethod.CREDIT_CARD,
+            payment_reference=f"stripe:{reference_id}",
+        )
+        await invoice_service.record_payment(invoice_id, payment_record)
+
+        await invoice_repo.update(
+            invoice_id,
+            stripe_payment_link_active=False,
+        )
+
+        job_stmt = select(Job).where(Job.id == invoice.job_id)
+        job_result = await self.session.execute(job_stmt)
+        job = job_result.scalar_one_or_none()
+        if job is not None:
+            job.payment_collected_on_site = True
+
+        await self.session.flush()
+
+        self.log_completed(
+            "webhook_checkout_invoice_payment",
+            payment_intent=masked,
+            invoice_id=str(invoice_id),
+            amount=str(amount),
+        )
 
     @staticmethod
     def _mask_pi(pi_id: str) -> str:

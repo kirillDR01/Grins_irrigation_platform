@@ -663,3 +663,15 @@ class SendLinkResponse(BaseModel):
             "None when SMS succeeded or was not attempted."
         ),
     )
+    sms_failure_detail: str | None = Field(
+        default=None,
+        max_length=200,
+        description=(
+            "Raw upstream reject reason (e.g. "
+            "``duplicate_message_within_24_hours``, ``rate_limit_exceeded``, "
+            "``opted_out``); paired with the categorical "
+            "``sms_failure_reason`` so dashboards can drill in. None when "
+            "SMS succeeded or was not attempted. "
+            "Bug #2b (master-plan-run-findings 2026-05-04)."
+        ),
+    )

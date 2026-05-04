@@ -103,6 +103,15 @@ class StripePaymentLinkService(LoggerMixin):
                 "invoice_id": str(invoice.id),
                 "customer_id": str(invoice.customer_id),
             },
+            # Stripe does NOT auto-propagate PaymentLink.metadata onto the
+            # PaymentIntent it creates. Mirror the keys here so the
+            # ``payment_intent.succeeded`` handler reads them deterministically.
+            "payment_intent_data": {
+                "metadata": {
+                    "invoice_id": str(invoice.id),
+                    "customer_id": str(invoice.customer_id),
+                },
+            },
             "restrictions": {"completed_sessions": {"limit": 1}},
             "after_completion": {"type": "hosted_confirmation"},
             "allow_promotion_codes": False,

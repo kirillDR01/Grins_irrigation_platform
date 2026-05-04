@@ -168,7 +168,11 @@ export function EstimateReview() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div>
               <span className="text-slate-500">Prepared for:</span>
-              <p className="font-medium text-slate-800">{estimate.customer_name}</p>
+              <p className="font-medium text-slate-800">
+                {[estimate.customer_first_name, estimate.customer_last_name]
+                  .filter(Boolean)
+                  .join(' ') || estimate.customer_name || '—'}
+              </p>
             </div>
             <div>
               <span className="text-slate-500">Date:</span>

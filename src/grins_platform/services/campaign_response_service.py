@@ -263,6 +263,14 @@ class CampaignResponseService(LoggerMixin):
                 phone_masked=_mask_phone(inbound.from_phone),
                 thread_id=inbound.thread_id,
             )
+            # Bug #4 (master-plan-run-findings 2026-05-04): coerce empty
+            # ``provider_sid`` to ``None``. The partial unique index
+            # ``ix_campaign_responses_provider_message_id`` excludes
+            # ``NULL`` but treats ``''`` as a non-null value, so a second
+            # orphan with ``provider_sid=""`` collides on insert and
+            # poisons the session — preventing the appointment-confirmation
+            # handler from running for any subsequent reply in the same
+            # request.
             row = await self.repo.add(
                 CampaignResponse(
                     campaign_id=None,
@@ -271,7 +279,7 @@ class CampaignResponseService(LoggerMixin):
                     ),
                     phone=inbound.from_phone,
                     raw_reply_body=inbound.body,
-                    provider_message_id=inbound.provider_sid,
+                    provider_message_id=inbound.provider_sid or None,
                     status=CampaignResponseStatus.ORPHAN,
                     received_at=now,
                 ),

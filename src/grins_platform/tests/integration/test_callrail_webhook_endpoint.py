@@ -62,19 +62,41 @@ def _payload(
     *,
     resource_id: str | None = None,
     created_at: str | None = None,
+    timestamp_mode: str = "created_at",
 ) -> dict[str, Any]:
-    """Build a CallRail-shaped inbound SMS payload for tests."""
+    """Build a CallRail-shaped inbound SMS payload for tests.
+
+    ``timestamp_mode`` selects which top-level fields the payload
+    carries:
+
+    * ``"created_at"`` (default): the simulator-style payload — both
+      ``created_at`` is set explicitly. ``created_at`` arg overrides.
+    * ``"sent_at_only"``: drops ``created_at``, keeps ``sent_at`` —
+      probes the Bug #3 secondary fallback.
+    * ``"neither"``: drops both timestamp fields — mirrors the verified
+      real CallRail inbound payload (see Bug #3); the endpoint must
+      fall back to receipt time.
+    """
     rid = resource_id or f"res_{uuid.uuid4().hex[:12]}"
     ts = created_at or datetime.now(tz=timezone.utc).isoformat()
-    return {
+    payload: dict[str, Any] = {
         "resource_id": rid,
         "conversation_id": f"conv_{uuid.uuid4().hex[:6]}",
-        "created_at": ts,
         "source_number": "+19527373312",
         "destination_number": "+19525293750",
         "content": "Y",
         "thread_resource_id": f"thread_{uuid.uuid4().hex[:6]}",
     }
+    if timestamp_mode == "created_at":
+        payload["created_at"] = ts
+    elif timestamp_mode == "sent_at_only":
+        payload["sent_at"] = ts
+    elif timestamp_mode == "neither":
+        pass
+    else:  # pragma: no cover - defensive
+        msg = f"Unknown timestamp_mode: {timestamp_mode}"
+        raise ValueError(msg)
+    return payload
 
 
 def _encode_and_sign(payload: dict[str, Any]) -> tuple[bytes, str]:
@@ -268,6 +290,47 @@ class TestCallrailWebhookFreshness:
             headers={"signature": sig, "content-type": "application/json"},
         )
         assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_webhook_with_only_sent_at_succeeds(
+        self,
+        async_client: AsyncClient,
+    ) -> None:
+        """Bug #3 — payloads that carry only ``sent_at`` must succeed.
+
+        CallRail-style payloads where top-level ``created_at`` is absent
+        previously 400ed; the freshness extractor now falls back to
+        ``sent_at`` and resource-id dedup remains the primary replay
+        barrier.
+        """
+        payload = _payload(timestamp_mode="sent_at_only")
+        body, sig = _encode_and_sign(payload)
+        response = await async_client.post(
+            WEBHOOK_PATH,
+            content=body,
+            headers={"signature": sig, "content-type": "application/json"},
+        )
+        assert response.status_code == 200
+        await _cleanup_log_rows([str(payload["resource_id"])])
+
+    @pytest.mark.asyncio
+    async def test_webhook_with_no_timestamp_falls_back_to_receipt_time(
+        self,
+        async_client: AsyncClient,
+    ) -> None:
+        """Bug #3 — verified-real CallRail payload has no timestamp field.
+
+        Endpoint must fall back to receipt time and return 200.
+        """
+        payload = _payload(timestamp_mode="neither")
+        body, sig = _encode_and_sign(payload)
+        response = await async_client.post(
+            WEBHOOK_PATH,
+            content=body,
+            headers={"signature": sig, "content-type": "application/json"},
+        )
+        assert response.status_code == 200
+        await _cleanup_log_rows([str(payload["resource_id"])])
 
 
 # ---------------------------------------------------------------------------

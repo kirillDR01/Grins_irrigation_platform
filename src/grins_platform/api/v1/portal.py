@@ -8,6 +8,7 @@ Validates: CRM Gap Closure Req 16.1, 16.2, 16.3, 16.4, 78.3, 78.5, 78.6
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING, Annotated, Any
 from uuid import UUID
 
@@ -178,6 +179,35 @@ def _to_portal_response(
 
     branding = branding or {}
 
+    # Bug #2: portal previously rendered "Prepared for:" empty and
+    # "Date: Invalid Date" because customer name and created_at were
+    # never put on the wire. Pull them from the customer (preferred)
+    # or fall back to the lead's single-string ``name`` (split on first
+    # whitespace, mirroring ``Recipient.from_lead``).
+    def _str_or_none(value: Any) -> str | None:
+        return value if isinstance(value, str) else None
+
+    customer = getattr(estimate, "customer", None)
+    lead = getattr(estimate, "lead", None)
+    first_name: str | None = None
+    last_name: str | None = None
+    customer_email: str | None = None
+    if customer is not None:
+        first_name = _str_or_none(getattr(customer, "first_name", None))
+        last_name = _str_or_none(getattr(customer, "last_name", None))
+        customer_email = _str_or_none(getattr(customer, "email", None))
+    elif lead is not None:
+        full_name = (_str_or_none(getattr(lead, "name", None)) or "").strip()
+        parts = full_name.split(None, 1)
+        first_name = parts[0] if parts else None
+        last_name = parts[1] if len(parts) > 1 else None
+        customer_email = _str_or_none(getattr(lead, "email", None))
+
+    raw_created_at = getattr(estimate, "created_at", None)
+    raw_sent_at = getattr(estimate, "sent_at", None)
+    created_at = raw_created_at if isinstance(raw_created_at, datetime) else None
+    sent_at = raw_sent_at if isinstance(raw_sent_at, datetime) else None
+
     return PortalEstimateResponse(
         estimate_number=number,
         status=status_str,
@@ -195,6 +225,11 @@ def _to_portal_response(
         company_phone=branding.get("company_phone"),
         company_logo_url=branding.get("company_logo_url"),
         readonly=readonly,
+        customer_first_name=first_name,
+        customer_last_name=last_name,
+        customer_email=customer_email,
+        created_at=created_at,
+        sent_at=sent_at,
     )
 
 

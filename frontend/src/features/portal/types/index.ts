@@ -33,6 +33,14 @@ export interface PortalEstimate {
   company_address?: string | null;
   company_phone?: string | null;
   company_logo_url?: string | null;
+  // Bug #2 (master-plan-run-findings 2026-05-04): API now exposes
+  // first/last name and email split — render preferentially when
+  // present; otherwise fall back to ``customer_name`` for legacy
+  // payloads.
+  customer_first_name?: string | null;
+  customer_last_name?: string | null;
+  customer_email?: string | null;
+  sent_at?: string | null;
 }
 
 export interface PortalApproveRequest {

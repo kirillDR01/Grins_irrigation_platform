@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -69,6 +70,38 @@ _REDIS_SIG_FAIL_TTL_SECONDS = 3600
 _SIG_FAIL_ALERT_THRESHOLD = 50
 
 _PROVIDER = "callrail"
+
+
+def _extract_created_at(payload: dict[str, Any]) -> tuple[str, str]:
+    """Resolve the freshness-window timestamp from a CallRail inbound payload.
+
+    Returns ``(created_at_iso, source)`` where ``source`` is one of
+    ``"payload_created_at"``, ``"payload_sent_at"``, ``"receipt_time"``.
+
+    Bug #3 (master-plan-run-findings 2026-05-04): CallRail's verified
+    inbound text-message webhook does NOT include ``created_at`` or
+    ``sent_at`` at the top level (see
+    ``services/sms/callrail_provider.py:258-286`` — the canonical
+    field-list parser only reads ``resource_id``, ``source_number``,
+    ``content``, ``destination_number``, ``thread_resource_id``,
+    ``conversation_id``). Without a fallback, every real inbound
+    webhook 400s with ``replay_or_stale_timestamp`` and the
+    appointment-confirmation handler never runs.
+
+    Replay protection is preserved by ``resource_id`` dedup against
+    Redis primary + ``webhook_processed_logs`` table (Gap 07.B), so
+    receipt-time fallback is safe — ``check_freshness`` is defense-in-
+    depth, not the primary replay barrier.
+    """
+    raw = payload.get("created_at") or payload.get("sent_at") or ""
+    if raw:
+        source = (
+            "payload_created_at"
+            if payload.get("created_at")
+            else "payload_sent_at"
+        )
+        return str(raw), source
+    return datetime.now(timezone.utc).isoformat(), "receipt_time"
 
 
 async def _get_redis() -> Redis | None:
@@ -293,7 +326,17 @@ async def callrail_inbound(
             )
 
         # 3. Freshness / replay check (Gap 07.A).
-        created_at = str(payload.get("created_at", ""))
+        # Bug #3: CallRail inbound payloads do not reliably include
+        # ``created_at``. Fall back to ``sent_at`` then receipt time.
+        # Resource-id dedup is the primary replay barrier; the freshness
+        # window is defense-in-depth.
+        created_at, timestamp_source = _extract_created_at(payload)
+        logger.info(
+            "sms.webhook.timestamp_source",
+            provider=_PROVIDER,
+            request_id=request_id,
+            timestamp_source=timestamp_source,
+        )
         fresh, skew_seconds = check_freshness(created_at)
         if not fresh:
             logger.warning(

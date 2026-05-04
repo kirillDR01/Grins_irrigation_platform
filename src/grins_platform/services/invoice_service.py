@@ -949,6 +949,11 @@ class InvoiceService(LoggerMixin):
         sms_failure_reason: (
             Literal["consent", "rate_limit", "provider_error", "no_phone"] | None
         ) = None
+        # Bug #2b (master-plan-run-findings 2026-05-04): keep the raw
+        # upstream reason alongside the categorical bucket so dashboards
+        # can show ``duplicate_message_within_24_hours`` instead of a
+        # generic ``provider_error``.
+        sms_failure_detail: str | None = None
 
         # SMS path — transactional, bypasses sms_opt_in per F12.
         if customer.phone and self.sms_service is not None:
@@ -975,6 +980,10 @@ class InvoiceService(LoggerMixin):
                         sms_failure_reason=None,
                     )
                 sms_failure_reason = "provider_error"
+                raw_reason = (
+                    result.get("reason") or result.get("status") or ""
+                )
+                sms_failure_detail = str(raw_reason)[:200] or None
                 self.logger.warning(
                     "payment.send_link.sms_failed_soft",
                     invoice_id=str(invoice.id),
@@ -982,6 +991,7 @@ class InvoiceService(LoggerMixin):
                 )
             except SMSConsentDeniedError:
                 sms_failure_reason = "consent"
+                sms_failure_detail = "opted_out"
                 # Customer hard-STOP'd — fall through to email.
                 self.logger.info(
                     "payment.send_link.sms_blocked_by_consent",
@@ -989,6 +999,7 @@ class InvoiceService(LoggerMixin):
                 )
             except SMSRateLimitDeniedError as exc:
                 sms_failure_reason = "rate_limit"
+                sms_failure_detail = str(exc)[:200] or "rate_limit_exceeded"
                 self.logger.warning(
                     "payment.send_link.sms_failed_hard",
                     invoice_id=str(invoice.id),
@@ -996,6 +1007,7 @@ class InvoiceService(LoggerMixin):
                 )
             except SMSError as exc:
                 sms_failure_reason = "provider_error"
+                sms_failure_detail = str(exc)[:200] or None
                 self.logger.warning(
                     "payment.send_link.sms_failed_hard",
                     invoice_id=str(invoice.id),
@@ -1035,6 +1047,7 @@ class InvoiceService(LoggerMixin):
                     channel="email",
                     attempted_channels=attempted_channels,
                     sms_failure_reason=sms_failure_reason,
+                    sms_failure_detail=sms_failure_detail,
                 )
 
         self.log_rejected(
@@ -1129,6 +1142,7 @@ class InvoiceService(LoggerMixin):
         sms_failure_reason: (
             Literal["consent", "rate_limit", "provider_error", "no_phone"] | None
         ) = None,
+        sms_failure_detail: str | None = None,
     ) -> SendLinkResponse:
         """Increment send count + persist sent_at; return SendLinkResponse."""
         now = datetime.now(timezone.utc)
@@ -1151,6 +1165,7 @@ class InvoiceService(LoggerMixin):
             sent_count=new_count,
             attempted_channels=attempted_channels,
             sms_failure_reason=sms_failure_reason,
+            sms_failure_detail=sms_failure_detail,
         )
 
     # =========================================================================

@@ -534,25 +534,52 @@ class SMSService(LoggerMixin):
         phone: str,
         message: str,
         message_type: str = "automated",
+        *,
+        customer_id: UUID | None = None,
+        lead_id: UUID | None = None,
+        is_internal: bool = False,
     ) -> dict[str, Any]:
         """Send an automated SMS via the canonical ``send_message`` path.
 
-        Backwards-compat shim preserved for callers that only have a
-        phone string and no Lead/Customer reference. Routes the send
-        through ``send_message`` so it picks up SentMessage audit rows,
-        per-type dedup, consent check, and phone-based lead-touch —
-        instead of bypassing all of them (bughunt CR-8).
+        Dispatches based on which keyword args are passed:
+
+        * ``is_internal=True`` — staff/operator notification. Bypasses
+          the ``SentMessage`` audit row (no customer/lead FK in scope)
+          and the consent check; still respects the 8AM-9PM time
+          window. Used for resend bounce alerts and internal-decision
+          notifications.
+        * ``customer_id=<UUID>`` — customer-keyed send. Audit row
+          carries ``customer_id`` so it satisfies
+          ``ck_sent_messages_recipient`` without poisoning the
+          transaction.
+        * ``lead_id=<UUID>`` — lead-keyed send. Same as above but with
+          ``lead_id``.
+        * Neither — true ad-hoc send. Emits a WARNING so the call site
+          can be audited and threaded later (Bug #1 cleanup).
+
+        Bug #1 (master-plan-run-findings 2026-05-04): the previous
+        ad-hoc-only path wrote ``SentMessage`` rows with both FKs null,
+        which violated ``ck_sent_messages_recipient`` and rolled back
+        the entire ``/estimates/{id}/send`` and portal ``/approve``
+        transactions.
 
         Args:
-            phone: Phone number
-            message: Message content
+            phone: Phone number.
+            message: Message content.
             message_type: Legacy string type; mapped to ``MessageType``
                 with fallback to ``AUTOMATED_NOTIFICATION``.
+            customer_id: Recipient customer FK. Mutually exclusive with
+                ``lead_id`` and ``is_internal``.
+            lead_id: Recipient lead FK. Mutually exclusive with
+                ``customer_id`` and ``is_internal``.
+            is_internal: Mark this send as an internal staff notification
+                that should NOT write a ``SentMessage`` audit row.
 
         Returns:
             Result dict with ``success``, ``reason`` or ``deferred`` keys.
 
-        Validates: Requirements 8.6, 9.4, 9.5; bughunt 2026-04-14 CR-8.
+        Validates: Requirements 8.6, 9.4, 9.5; bughunt 2026-04-14 CR-8;
+            master-plan-run-findings 2026-05-04 Bug #1.
         """
         from grins_platform.services.sms.recipient import (  # noqa: PLC0415
             Recipient,
@@ -580,7 +607,53 @@ class SMSService(LoggerMixin):
             message_type,
             MessageType.AUTOMATED_NOTIFICATION,
         )
-        recipient = Recipient.from_adhoc(phone=phone)
+
+        # Internal staff notification: bypass SentMessage audit (no
+        # customer/lead FK in scope; staff opt-in is implicit). Time
+        # window already enforced. Sends via provider directly.
+        if is_internal:
+            try:
+                provider_result = await self._send_via_provider(
+                    phone=phone,
+                    message=message,
+                )
+            except SMSError as exc:
+                self.log_failed("send_automated_message", error=exc)
+                return {"success": False, "reason": str(exc)}
+            self.log_completed(
+                "send_automated_message",
+                phone=_mask_phone(phone),
+                internal=True,
+            )
+            return {
+                "success": True,
+                "internal": True,
+                "message_id": provider_result.message_id,
+            }
+
+        if customer_id is not None:
+            recipient = Recipient(
+                phone=phone,
+                source_type="customer",
+                customer_id=customer_id,
+            )
+        elif lead_id is not None:
+            recipient = Recipient(
+                phone=phone,
+                source_type="lead",
+                lead_id=lead_id,
+            )
+        else:
+            # True ad-hoc: no FK available. Will hit
+            # ck_sent_messages_recipient if the caller forgot to thread
+            # the FK they had in scope. Emit a WARNING so we can audit
+            # remaining sites in production telemetry.
+            logger.warning(
+                "sms.send_automated_message.adhoc_without_fk",
+                phone_masked=_mask_phone(phone),
+                message_type=message_type,
+            )
+            recipient = Recipient.from_adhoc(phone=phone)
 
         try:
             result = await self.send_message(
@@ -601,10 +674,12 @@ class SMSService(LoggerMixin):
             self.log_failed("send_automated_message", error=exc)
             return {"success": False, "reason": str(exc)}
 
-        # Ad-hoc recipients have no lead_id, so send_message's built-in
-        # lead-touch was a no-op. Try the phone-based lookup here so
-        # Last Contacted still updates for legacy phone-only callers.
-        await self._touch_lead_last_contacted(phone=phone)
+        # Phone-based last-contacted update is only meaningful when no
+        # explicit customer_id/lead_id was passed (ad-hoc back-compat
+        # path). Customer/lead-keyed sends already touched the lead
+        # inside send_message.
+        if customer_id is None and lead_id is None:
+            await self._touch_lead_last_contacted(phone=phone)
 
         self.log_completed("send_automated_message", phone=_mask_phone(phone))
         return result

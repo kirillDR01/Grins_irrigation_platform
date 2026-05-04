@@ -127,6 +127,7 @@ async def send_lead_confirmations_post_commit(lead_id: UUID) -> None:
                         phone=lead.phone,
                         message=confirmation_msg,
                         message_type="lead_confirmation",
+                        lead_id=lead.id,
                     )
                     if result.get("success"):
                         if result.get("deferred"):
@@ -360,6 +361,7 @@ class LeadService(LoggerMixin):
                 phone=lead.phone,
                 message=confirmation_msg,
                 message_type="lead_confirmation",
+                lead_id=lead.id,
             )
             if result.get("success"):
                 if result.get("deferred"):
@@ -1734,6 +1736,7 @@ class LeadService(LoggerMixin):
                                 phone=lead.phone,
                                 message=template,
                                 message_type="campaign",
+                                lead_id=lead.id,
                             )
                         self.logger.info(
                             "lead.outreach.sent",

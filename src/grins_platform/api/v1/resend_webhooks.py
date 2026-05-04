@@ -154,6 +154,7 @@ async def resend_webhook(
                 phone=recipient_phone,
                 message=sms_text,
                 message_type="internal_estimate_bounce",
+                is_internal=True,
             )
         except Exception as e:
             logger.warning("resend.webhook.bounce_sms_failed", error=str(e))
