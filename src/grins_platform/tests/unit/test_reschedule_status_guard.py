@@ -14,7 +14,11 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 
+from grins_platform.api.v1.appointments import router as appointments_router
+from grins_platform.api.v1.dependencies import get_appointment_service
 from grins_platform.exceptions import InvalidStatusTransitionError
 from grins_platform.models.enums import AppointmentStatus
 from grins_platform.services.appointment_service import AppointmentService
@@ -102,3 +106,58 @@ class TestRescheduleStatusGuard:
             time(15, 0),
         )
         assert result is appointment
+
+
+@pytest.fixture
+def reschedule_app() -> FastAPI:
+    test_app = FastAPI()
+    test_app.include_router(appointments_router, prefix="/api/v1/appointments")
+    return test_app
+
+
+def _route_user() -> MagicMock:
+    user = MagicMock()
+    user.id = uuid4()
+    user.is_active = True
+    return user
+
+
+@pytest.mark.unit
+class TestRescheduleRouteStatus422:
+    """B-4 route layer — InvalidStatusTransitionError → HTTP 422.
+
+    Locks in the regression discovered during the 2026-05-04 dev
+    verification: the service-layer guard fired correctly but the route
+    only caught AppointmentNotFoundError + StaffConflictError, so the
+    status-machine error bubbled to the global FieldOperationsError
+    handler (HTTP 400). The route now catches it explicitly.
+    """
+
+    @pytest.mark.asyncio
+    async def test_invalid_status_returns_422(self, reschedule_app: FastAPI) -> None:
+        appt_id = uuid4()
+        mock_service = AsyncMock()
+        mock_service.reschedule.side_effect = InvalidStatusTransitionError(
+            current_status=AppointmentStatus.EN_ROUTE,
+            requested_status=AppointmentStatus.SCHEDULED,
+        )
+
+        reschedule_app.dependency_overrides[get_appointment_service] = (
+            lambda: mock_service
+        )
+        from grins_platform.api.v1.auth_dependencies import get_current_active_user
+
+        reschedule_app.dependency_overrides[get_current_active_user] = _route_user
+
+        transport = ASGITransport(app=reschedule_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.patch(
+                f"/api/v1/appointments/{appt_id}/reschedule",
+                json={
+                    "new_date": "2026-06-01",
+                    "new_start": "09:00",
+                    "new_end": "10:00",
+                },
+            )
+        assert resp.status_code == 422
+        assert "en_route" in resp.json()["detail"]
