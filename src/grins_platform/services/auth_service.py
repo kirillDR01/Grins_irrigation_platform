@@ -370,6 +370,12 @@ class AuthService(LoggerMixin):
             InvalidCredentialsError: If username or password is invalid
             AccountLockedError: If account is locked due to failed attempts
 
+        Note:
+            Route layer is responsible for committing the failed-login
+            increment before propagating InvalidCredentialsError so the
+            lockout counter persists across the request session boundary
+            (Bug A, e2e-signoff 2026-05-04).
+
         Validates: Requirements 14.1-14.2, 16.5-16.7
         """
         self.log_started("authenticate", username=username)

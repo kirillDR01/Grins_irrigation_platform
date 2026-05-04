@@ -513,15 +513,36 @@ class TestCookieBasedAuthWorkflow:
             return_value=UserRole.ADMIN,
         )
 
-        request = LoginRequest(
+        body = LoginRequest(
             username="admin",
             password="testpass123",
+        )
+        # slowapi 0.1.9 requires a Starlette Request named `request` on the
+        # decorated route. Build a minimal ASGI scope so the call is valid.
+        from starlette.requests import Request as StarletteRequest
+
+        request = StarletteRequest(
+            scope={
+                "type": "http",
+                "method": "POST",
+                "path": "/api/v1/auth/login",
+                "headers": [],
+                "query_string": b"",
+                "client": ("127.0.0.1", 0),
+            },
         )
         response = MagicMock()
         response.set_cookie = MagicMock()
 
+        # Attach repository.session.commit for the InvalidCredentialsError
+        # branch (Bug A fix); harmless on the success path.
+        mock_auth_service.repository = MagicMock()
+        mock_auth_service.repository.session = MagicMock()
+        mock_auth_service.repository.session.commit = AsyncMock()
+
         result = await login(
             request=request,
+            body=body,
             response=response,
             auth_service=mock_auth_service,
         )

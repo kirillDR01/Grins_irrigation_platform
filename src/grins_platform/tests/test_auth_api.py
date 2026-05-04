@@ -116,6 +116,9 @@ def mock_auth_service() -> MagicMock:
     service.refresh_access_token = AsyncMock()
     service.change_password = AsyncMock()
     # get_user_role is sync, so it stays as MagicMock
+    service.repository = MagicMock()
+    service.repository.session = MagicMock()
+    service.repository.session.commit = AsyncMock()
     return service
 
 

@@ -131,6 +131,9 @@ def mock_auth_service() -> MagicMock:
     service.change_password = AsyncMock()
     service.get_current_user = AsyncMock()
     service.get_user_role = MagicMock(return_value=UserRole.ADMIN)
+    service.repository = MagicMock()
+    service.repository.session = MagicMock()
+    service.repository.session.commit = AsyncMock()
     return service
 
 

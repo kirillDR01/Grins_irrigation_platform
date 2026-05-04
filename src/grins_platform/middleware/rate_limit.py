@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 from starlette.responses import JSONResponse
 
@@ -93,6 +94,7 @@ def setup_rate_limiting(app: FastAPI) -> None:
         RateLimitExceeded,
         rate_limit_exceeded_handler,  # type: ignore[arg-type]
     )
+    app.add_middleware(SlowAPIMiddleware)
     logger.info(
         "security.rate_limit.configured",
         storage=_storage_uri.split("://")[0],

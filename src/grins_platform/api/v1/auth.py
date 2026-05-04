@@ -14,6 +14,7 @@ from typing import (
 )
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from starlette.requests import Request
 
 from grins_platform.api.v1.auth_dependencies import (
     CurrentActiveUser,
@@ -26,6 +27,7 @@ from grins_platform.exceptions.auth import (
     TokenExpiredError,
     UserNotFoundError,
 )
+from grins_platform.middleware.rate_limit import AUTH_LIMIT, limiter
 from grins_platform.models.staff import Staff
 from grins_platform.schemas.auth import (
     ChangePasswordRequest,
@@ -81,8 +83,10 @@ def _create_user_response(staff: Staff, auth_service: AuthService) -> UserRespon
     summary="Authenticate user",
     description="Authenticate with username/password. Returns access token.",
 )
+@limiter.limit(AUTH_LIMIT)  # pyright: ignore[reportUntypedFunctionDecorator]
 async def login(
-    request: LoginRequest,
+    request: Request,  # noqa: ARG001 — required by slowapi 0.1.9 (extension.py:709)
+    body: LoginRequest,
     response: Response,
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> LoginResponse:
@@ -95,11 +99,13 @@ async def login(
     """
     try:
         result = await auth_service.authenticate(
-            request.username,
-            request.password,
+            body.username,
+            body.password,
         )
         staff, access_token, refresh_token, csrf_token = result
     except InvalidCredentialsError as e:
+        # Persist failed-login increment before session rollback (Bug A).
+        await auth_service.repository.session.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",

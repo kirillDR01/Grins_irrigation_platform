@@ -90,6 +90,20 @@ def _install_auth_overrides(application: object) -> object:
 
 
 @pytest.fixture(autouse=True)
+def _reset_rate_limiter() -> None:
+    """Reset the slowapi limiter's in-memory storage between tests.
+
+    The ``limiter`` is a module-level singleton (``middleware/rate_limit.py``).
+    Without this reset, requests across tests share the same per-IP bucket and
+    earlier tests can push the bucket over the limit, causing later tests to
+    receive 429 instead of the expected status.
+    """
+    from grins_platform.middleware.rate_limit import limiter  # noqa: PLC0415
+
+    limiter.reset()
+
+
+@pytest.fixture(autouse=True)
 def _patch_create_app_auth(monkeypatch: pytest.MonkeyPatch) -> None:
     """Wrap ``grins_platform.app.create_app`` so every returned app has
     auth overridden. Monkeypatches the attribute on the ``app`` module
