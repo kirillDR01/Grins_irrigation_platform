@@ -28,16 +28,31 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     conn = op.get_bind()
+    # Repair runs in two narrowing CTEs (both MATERIALIZED so the optimizer
+    # can't push predicates across them). The outer WHERE uses nested CASE
+    # WHEN — SQL guarantees CASE evaluates the WHEN clauses strictly in
+    # order, so jsonb_array_elements / -> 0 / ? operators never run on
+    # rows whose line_items isn't a JSONB array. Plain WHERE … AND … is
+    # NOT enough: Postgres reorders AND predicates by cost and tried to
+    # call jsonb_array_length on a scalar before the typeof check fired.
     conn.execute(
         text(
             """
-            WITH bad AS (
+            WITH array_invoices AS MATERIALIZED (
                 SELECT id, line_items, total_amount
                 FROM invoices
                 WHERE line_items IS NOT NULL
                   AND jsonb_typeof(line_items) = 'array'
-                  AND jsonb_array_length(line_items) > 0
-                  AND NOT (line_items->0 ? 'quantity')
+            ),
+            bad AS MATERIALIZED (
+                SELECT id, line_items, total_amount
+                FROM array_invoices
+                WHERE
+                    CASE
+                        WHEN jsonb_array_length(line_items) > 0
+                            THEN NOT (line_items->0 ? 'quantity')
+                        ELSE FALSE
+                    END
             ),
             fixed AS (
                 SELECT
