@@ -31,11 +31,17 @@ def upgrade() -> None:
     conn.execute(
         text(
             """
-            UPDATE invoices i
-            SET line_items = sub.fixed
-            FROM (
+            WITH bad AS (
+                SELECT id, line_items, total_amount
+                FROM invoices
+                WHERE line_items IS NOT NULL
+                  AND jsonb_typeof(line_items) = 'array'
+                  AND jsonb_array_length(line_items) > 0
+                  AND NOT (line_items->0 ? 'quantity')
+            ),
+            fixed AS (
                 SELECT
-                    id,
+                    bad.id,
                     jsonb_agg(
                         CASE
                             WHEN item ? 'quantity'
@@ -43,21 +49,21 @@ def upgrade() -> None:
                             ELSE jsonb_build_object(
                                 'description', COALESCE(item->>'description', 'Service'),
                                 'quantity',    '1',
-                                'unit_price',  COALESCE(item->>'amount', total_amount::text),
-                                'total',       COALESCE(item->>'amount', total_amount::text)
+                                'unit_price',  COALESCE(item->>'amount', bad.total_amount::text),
+                                'total',       COALESCE(item->>'amount', bad.total_amount::text)
                             )
                         END
                         ORDER BY ord
-                    ) AS fixed
-                FROM invoices,
-                     LATERAL jsonb_array_elements(invoices.line_items)
+                    ) AS fixed_items
+                FROM bad,
+                     LATERAL jsonb_array_elements(bad.line_items)
                          WITH ORDINALITY AS t(item, ord)
-                WHERE invoices.line_items IS NOT NULL
-                  AND jsonb_array_length(invoices.line_items) > 0
-                  AND NOT (invoices.line_items->0 ? 'quantity')
-                GROUP BY invoices.id, invoices.total_amount
-            ) AS sub
-            WHERE i.id = sub.id
+                GROUP BY bad.id
+            )
+            UPDATE invoices i
+            SET line_items = fixed.fixed_items
+            FROM fixed
+            WHERE i.id = fixed.id
             """
         )
     )
