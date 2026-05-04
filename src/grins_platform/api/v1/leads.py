@@ -596,7 +596,9 @@ async def move_lead_to_jobs(
     Validates: CRM2 Req 9.2, 12.1, Smoothing Req 6.1, 6.2
     """
     _endpoints.log_started("move_lead_to_jobs", lead_id=str(lead_id), force=force)
-    result = await service.move_to_jobs(lead_id, force=force)
+    result = await service.move_to_jobs(
+        lead_id, force=force, actor_staff_id=_current_user.id
+    )
     _endpoints.log_completed("move_lead_to_jobs", lead_id=str(lead_id))
     return result
 
@@ -626,7 +628,7 @@ async def move_lead_to_sales(
     Validates: CRM2 Req 9.2, 12.2
     """
     _endpoints.log_started("move_lead_to_sales", lead_id=str(lead_id))
-    result = await service.move_to_sales(lead_id)
+    result = await service.move_to_sales(lead_id, actor_staff_id=_current_user.id)
     _endpoints.log_completed("move_lead_to_sales", lead_id=str(lead_id))
     return result
 

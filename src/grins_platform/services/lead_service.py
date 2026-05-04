@@ -1124,6 +1124,8 @@ class LeadService(LoggerMixin):
         self,
         lead: Lead,
         customer: Any,
+        *,
+        actor_staff_id: UUID | None = None,
     ) -> None:
         """Fold leads.notes into customers.internal_notes per Requirement 5.
 
@@ -1134,7 +1136,9 @@ class LeadService(LoggerMixin):
              separated by "\\n\\n--- From lead (<date>) ---\\n"
 
         Writes one audit entry via AuditService capturing actor, lead_id,
-        customer_id, and old/new value lengths.
+        customer_id, and old/new value lengths. ``actor_staff_id`` must be a
+        valid staff.id (or None) — never a Lead.id, since audit_log.actor_id
+        is a FK to staff.id with ondelete=SET NULL.
 
         Validates: internal-notes-simplification Requirement 5
         """
@@ -1155,7 +1159,7 @@ class LeadService(LoggerMixin):
 
             audit = AuditService()
             session = self.lead_repository.session
-            actor_id = lead.assigned_to or lead.id
+            actor_id = actor_staff_id or lead.assigned_to
             await audit.log_action(
                 session,
                 actor_id=actor_id,
@@ -1229,7 +1233,11 @@ class LeadService(LoggerMixin):
         return customer.id, None
 
     async def move_to_jobs(
-        self, lead_id: UUID, *, force: bool = False
+        self,
+        lead_id: UUID,
+        *,
+        force: bool = False,
+        actor_staff_id: UUID | None = None,
     ) -> LeadMoveResponse:
         """Move a lead to the Jobs tab.
 
@@ -1312,7 +1320,9 @@ class LeadService(LoggerMixin):
         # Carry forward lead notes to customer (internal-notes-simplification Req 5)
         customer_obj = await self.customer_service.repository.get_by_id(customer_id)
         if customer_obj:
-            await self._carry_forward_lead_notes(lead, customer_obj)
+            await self._carry_forward_lead_notes(
+                lead, customer_obj, actor_staff_id=actor_staff_id
+            )
             await self.lead_repository.session.flush()
 
         self.log_completed("move_to_jobs", lead_id=str(lead_id), job_id=str(job.id))
@@ -1329,7 +1339,12 @@ class LeadService(LoggerMixin):
             merged_into_customer=merged_info,
         )
 
-    async def move_to_sales(self, lead_id: UUID) -> LeadMoveResponse:
+    async def move_to_sales(
+        self,
+        lead_id: UUID,
+        *,
+        actor_staff_id: UUID | None = None,
+    ) -> LeadMoveResponse:
         """Move a lead to the Sales tab.
 
         Auto-generates a customer if needed, creates a SalesEntry with
@@ -1381,7 +1396,9 @@ class LeadService(LoggerMixin):
         # Carry forward lead notes to customer (internal-notes-simplification Req 5)
         customer_obj = await self.customer_service.repository.get_by_id(customer_id)
         if customer_obj:
-            await self._carry_forward_lead_notes(lead, customer_obj)
+            await self._carry_forward_lead_notes(
+                lead, customer_obj, actor_staff_id=actor_staff_id
+            )
             await session.flush()
 
         self.log_completed(

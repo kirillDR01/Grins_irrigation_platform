@@ -274,10 +274,15 @@ class TestCarryForwardLeadNotes:
         assert details["new_value_len"] == len("lead notes")
 
     @pytest.mark.asyncio
-    async def test_audit_entry_uses_lead_id_when_no_assigned_to(self) -> None:
-        """When lead.assigned_to is None, actor_id falls back to lead.id.
+    async def test_audit_actor_is_none_when_no_actor_or_assigned_to(self) -> None:
+        """Bug D guard: with no actor_staff_id and no lead.assigned_to, actor_id=None.
 
-        **Validates: Requirement 5.6**
+        Previously fell back to ``lead.id`` (a Lead UUID), which violated the
+        ``audit_log.actor_id → staff.id`` FK and poisoned the session. The fix
+        passes ``None`` in this case — valid since ``actor_id`` is nullable
+        with ``ondelete=SET NULL``.
+
+        **Validates: Requirement 5.6, e2e-signoff Bug D regression**
         """
         service = _make_service()
         lead = _make_lead(notes="some notes", assigned_to=None)
@@ -291,7 +296,8 @@ class TestCarryForwardLeadNotes:
             await service._carry_forward_lead_notes(lead, customer)
 
         call_kwargs = mock_audit.log_action.call_args.kwargs
-        assert call_kwargs["actor_id"] == lead.id
+        assert call_kwargs["actor_id"] is None
+        assert call_kwargs["actor_id"] != lead.id
 
     @pytest.mark.asyncio
     async def test_audit_failure_does_not_raise(self) -> None:
