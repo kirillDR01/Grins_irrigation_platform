@@ -1298,6 +1298,19 @@ async def reschedule_appointment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Appointment not found: {e.appointment_id}",
         ) from e
+    except InvalidStatusTransitionError as e:
+        _endpoints.log_rejected(
+            "reschedule_appointment",
+            reason="invalid_status",
+            current=e.current_status.value,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Cannot reschedule appointment in {e.current_status.value} "
+                "status. Allowed: pending, draft, scheduled, confirmed."
+            ),
+        ) from e
     except StaffConflictError as e:
         _endpoints.log_rejected("reschedule_appointment", reason="staff_conflict")
         raise HTTPException(
