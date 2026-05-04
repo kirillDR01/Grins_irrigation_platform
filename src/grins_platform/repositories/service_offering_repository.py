@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import ServiceCategory  # noqa: TC001
@@ -277,6 +277,7 @@ class ServiceOfferingRepository(LoggerMixin):
         category: ServiceCategory | None = None,
         is_active: bool | None = None,
         customer_type: str | None = None,
+        search: str | None = None,
         sort_by: str = "name",
         sort_order: str = "asc",
     ) -> tuple[list[ServiceOffering], int]:
@@ -289,6 +290,8 @@ class ServiceOfferingRepository(LoggerMixin):
             is_active: Filter by active status
             customer_type: Filter by ``residential`` / ``commercial``
                 (umbrella plan Phase 1).
+            search: Substring (case-insensitive) matched against ``name``,
+                ``slug``, or ``subcategory``.
             sort_by: Field to sort by
             sort_order: Sort order (asc/desc)
 
@@ -310,6 +313,16 @@ class ServiceOfferingRepository(LoggerMixin):
         if customer_type is not None:
             base_query = base_query.where(
                 ServiceOffering.customer_type == customer_type
+            )
+
+        if search:
+            pattern = f"%{search}%"
+            base_query = base_query.where(
+                or_(
+                    ServiceOffering.name.ilike(pattern),
+                    ServiceOffering.slug.ilike(pattern),
+                    ServiceOffering.subcategory.ilike(pattern),
+                )
             )
 
         # Get total count

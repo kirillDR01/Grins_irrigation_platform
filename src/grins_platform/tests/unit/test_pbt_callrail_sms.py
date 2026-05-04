@@ -1315,17 +1315,25 @@ def _mock_consent_session(
     """Build a mock session for consent queries.
 
     The consent module issues up to 4 sequential execute() calls:
-      1. hard-STOP check
+      1. hard-STOP check (F3: returns the latest SmsConsentRecord row, not just .id)
       2. marketing consent record check
       3. Customer.sms_opt_in fallback
       4. Lead.sms_consent fallback
     """
+    from types import SimpleNamespace as _NS
+
     session = AsyncMock()
     call_idx = {"n": 0}
 
+    hard_stop_row = (
+        _NS(consent_method="text_stop", consent_given=False)
+        if has_hard_stop
+        else None
+    )
+
     # Map call index → scalar_one_or_none return value
-    responses: list[object] = [
-        uuid4() if has_hard_stop else None,  # 1: hard-STOP
+    responses: list[object | None] = [
+        hard_stop_row,  # 1: hard-STOP — full row (latest-wins) since F3
         uuid4() if has_marketing_record else None,  # 2: marketing record
         True if has_customer_opt_in else None,  # 3: customer fallback
         True if has_lead_consent else None,  # 4: lead fallback
@@ -1942,10 +1950,17 @@ def _make_sms_session(
         # For simplicity: hard-stop query returns None (no hard stop) if consent_allowed
         # Marketing opt-in returns a value if consent_allowed
         if idx == 0:
-            # hard-STOP check
-            result.scalar_one_or_none = MagicMock(
-                return_value=uuid4() if not consent_allowed else None,
+            # F3: hard-STOP check now selects the latest SmsConsentRecord row
+            # (not just .id), so the mock returns a row-like SimpleNamespace
+            # whose ``consent_method`` / ``consent_given`` reflect denial.
+            from types import SimpleNamespace as _NS  # noqa: PLC0415
+
+            hard_stop_row = (
+                _NS(consent_method="text_stop", consent_given=False)
+                if not consent_allowed
+                else None
             )
+            result.scalar_one_or_none = MagicMock(return_value=hard_stop_row)
         elif idx == 1:
             # marketing consent record (only reached if no hard-stop)
             result.scalar_one_or_none = MagicMock(

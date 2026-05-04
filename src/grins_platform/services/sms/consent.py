@@ -5,10 +5,14 @@ Three consent types:
   - transactional: allowed under EBR exemption, respects hard-STOP
   - operational: always allowed (STOP confirmations, legal notices)
 
-Hard-STOP precedence: if any SmsConsentRecord row for a phone has
-consent_method='text_stop' and consent_given=false, deny ALL except operational.
+Hard-STOP precedence (latest-record-wins, F3 refactor): the SmsConsentRecord
+table is INSERT-ONLY, so the *current* state for a phone is whichever row
+has the newest ``created_at``. If that latest row is
+``consent_method='text_stop'`` AND ``consent_given=False`` then sending is
+blocked for all non-operational types. A subsequent ``text_start`` opt-in
+row supersedes any earlier hard-STOP and restores send eligibility.
 
-Validates: Requirements 25, 26
+Validates: Requirements 25, 26 + F3 sign-off (run-20260504-185844-full)
 """
 
 from __future__ import annotations
@@ -160,20 +164,31 @@ async def _has_open_informal_opt_out_alert(
 
 
 async def _has_hard_stop(session: AsyncSession, e164: str) -> bool:
-    """Check if phone has a text_stop revocation record."""
+    """Check if the *latest* consent record for the phone is a hard STOP.
+
+    SmsConsentRecord is INSERT-ONLY, so the current state for a phone is
+    whichever row has the newest ``created_at`` across all phone variants
+    we accept. A later ``text_start`` opt-in row supersedes any earlier
+    ``text_stop`` row, restoring sending eligibility (F3).
+
+    ``created_at`` (server-set, monotonic) is used rather than
+    ``consent_timestamp`` because the latter is provided by the inserter
+    and could collide for rapid back-to-back STOP/START in tests.
+    """
     stmt = (
-        select(SmsConsentRecord.id)
-        .where(
-            and_(
-                SmsConsentRecord.phone_number.in_(_phone_variants(e164)),
-                SmsConsentRecord.consent_method == "text_stop",
-                SmsConsentRecord.consent_given.is_(False),
-            ),
-        )
+        select(SmsConsentRecord)
+        .where(SmsConsentRecord.phone_number.in_(_phone_variants(e164)))
+        .order_by(SmsConsentRecord.created_at.desc())
         .limit(1)
     )
     result = await session.execute(stmt)
-    return result.scalar_one_or_none() is not None
+    latest = result.scalar_one_or_none()
+    if latest is None:
+        return False
+    return (
+        latest.consent_method == "text_stop"
+        and latest.consent_given is False
+    )
 
 
 async def _has_marketing_opt_in(session: AsyncSession, e164: str) -> bool:

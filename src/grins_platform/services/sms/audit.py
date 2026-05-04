@@ -137,6 +137,21 @@ async def log_consent_hard_stop(
     )
 
 
+async def log_consent_opt_in_sms(
+    db: AsyncSession,
+    *,
+    phone_masked: str,
+    method: str = "text_start",
+) -> None:
+    """Emit ``sms.consent.opt_in_sms_received`` audit event (F3)."""
+    _ = await _audit.log_action(
+        db,
+        action="sms.consent.opt_in_sms_received",
+        resource_type="sms_consent",
+        details={"phone": phone_masked, "method": method},
+    )
+
+
 async def log_informal_opt_out_flagged(
     db: AsyncSession,
     *,

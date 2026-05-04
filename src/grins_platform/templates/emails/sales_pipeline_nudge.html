@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Just checking in on your estimate</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
+<h1 style="color: #0f766e;">Just checking in</h1>
+<p>Hi {{ customer_first_name|default("there") }},</p>
+<p>
+  We wanted to circle back on the estimate we sent recently. If you have any
+  questions or need a moment to think it over, that's perfectly fine —
+  we're here whenever you're ready.
+</p>
+
+{% if estimate_total %}
+<p>
+  Your estimate total is <strong>${{ "%.2f"|format(estimate_total) }}</strong>.
+</p>
+{% endif %}
+
+{% if portal_url %}
+<p style="margin: 24px 0;">
+  <a href="{{ portal_url }}"
+     style="background: #0f766e; color: #ffffff; padding: 12px 20px;
+            text-decoration: none; border-radius: 6px; display: inline-block;
+            font-weight: 600;">
+    Review your estimate
+  </a>
+</p>
+<p style="font-size: 14px; color: #4b5563;">
+  Or paste this link into your browser:<br>
+  {{ portal_url }}
+</p>
+{% endif %}
+
+<p>
+  Reply to this email or call {{ business_phone }} if you'd like to chat —
+  no pressure, no obligation.
+</p>
+
+<hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+<p style="font-size: 13px; color: #6b7280;">
+  {{ company_name|default(business_name) }}<br>
+  {{ business_phone }} &middot; {{ business_email }}
+</p>
+</body>
+</html>

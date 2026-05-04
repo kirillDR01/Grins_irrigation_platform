@@ -105,7 +105,27 @@ describe('PriceListEditor', () => {
     });
   });
 
-  it('search filters in-memory by display name', async () => {
+  it('passes ?search= to the API after debounce', async () => {
+    const user = userEvent.setup();
+    render(<PriceListEditor />, { wrapper: wrapper() });
+    await waitFor(() =>
+      expect(screen.getByText('Spring Start-Up')).toBeInTheDocument(),
+    );
+
+    vi.mocked(serviceApi.list).mockClear();
+    await user.type(screen.getByTestId('price-list-search'), 'Spring');
+
+    await waitFor(
+      () => {
+        expect(serviceApi.list).toHaveBeenCalledWith(
+          expect.objectContaining({ search: 'Spring' }),
+        );
+      },
+      { timeout: 1500 },
+    );
+  });
+
+  it('clears the search param when input is emptied', async () => {
     const user = userEvent.setup();
     render(<PriceListEditor />, { wrapper: wrapper() });
     await waitFor(() =>
@@ -113,11 +133,23 @@ describe('PriceListEditor', () => {
     );
 
     await user.type(screen.getByTestId('price-list-search'), 'drip');
+    await waitFor(
+      () =>
+        expect(serviceApi.list).toHaveBeenCalledWith(
+          expect.objectContaining({ search: 'drip' }),
+        ),
+      { timeout: 1500 },
+    );
 
-    await waitFor(() => {
-      expect(screen.queryByText('Spring Start-Up')).not.toBeInTheDocument();
-      expect(screen.getByText('Drip Install')).toBeInTheDocument();
-    });
+    vi.mocked(serviceApi.list).mockClear();
+    await user.clear(screen.getByTestId('price-list-search'));
+    await waitFor(
+      () =>
+        expect(serviceApi.list).toHaveBeenCalledWith(
+          expect.objectContaining({ search: undefined }),
+        ),
+      { timeout: 1500 },
+    );
   });
 
   it('opens drawer for new offering', async () => {
@@ -134,12 +166,20 @@ describe('PriceListEditor', () => {
     expect(within(drawer).getByText('Cancel')).toBeInTheDocument();
   });
 
-  it('shows empty state when filtered to zero rows', async () => {
+  it('shows empty state when API returns zero rows', async () => {
     const user = userEvent.setup();
     render(<PriceListEditor />, { wrapper: wrapper() });
     await waitFor(() =>
       expect(screen.getByText('Spring Start-Up')).toBeInTheDocument(),
     );
+
+    vi.mocked(serviceApi.list).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 20,
+      total_pages: 0,
+    });
     await user.type(screen.getByTestId('price-list-search'), 'zzznomatch');
     expect(await screen.findByTestId('price-list-empty')).toBeInTheDocument();
   });

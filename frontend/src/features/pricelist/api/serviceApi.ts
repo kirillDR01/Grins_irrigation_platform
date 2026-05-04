@@ -14,12 +14,9 @@ export const serviceApi = {
   list: async (
     params?: ServiceOfferingListParams,
   ): Promise<PaginatedResponse<ServiceOffering>> => {
-    // ``search`` is client-side only — strip before request.
-    const { search, ...query } = params ?? {};
-    void search;
     const response = await apiClient.get<PaginatedResponse<ServiceOffering>>(
       BASE_PATH,
-      { params: query },
+      { params },
     );
     return response.data;
   },

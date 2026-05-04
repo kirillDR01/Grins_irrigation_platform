@@ -203,6 +203,7 @@ class EmailService(LoggerMixin):
             "internal_estimate_bounce",
             "payment_link",
             "payment_receipt",
+            "sales_pipeline_nudge",
         }
         if email_type in transactional_types:
             return EmailType.TRANSACTIONAL
@@ -1007,6 +1008,50 @@ class EmailService(LoggerMixin):
             "recipient_email": email,
             "content": html_body,
             "disclosure_type": None,
+        }
+
+    def send_sales_pipeline_nudge(
+        self,
+        *,
+        recipient_email: str,
+        customer_first_name: str | None,
+        portal_url: str | None,
+        estimate_total: float | None,
+        company_name: str = "Grins Irrigation",
+    ) -> dict[str, Any]:
+        """Send a sales-pipeline auto-nudge email.
+
+        Validates: F6 sign-off (run-20260504-185844-full).
+        """
+        self.log_started(
+            "send_sales_pipeline_nudge",
+            recipient=_mask_email(recipient_email),
+        )
+
+        classification = self._classify_email("sales_pipeline_nudge")
+        html_body = self._render_template(
+            "sales_pipeline_nudge.html",
+            {
+                "customer_first_name": customer_first_name or "there",
+                "estimate_total": estimate_total,
+                "portal_url": portal_url,
+                "company_name": company_name,
+            },
+        )
+        sent = self._send_email(
+            to_email=recipient_email,
+            subject="Just checking in on your estimate",
+            html_body=html_body,
+            email_type="sales_pipeline_nudge",
+            classification=classification,
+        )
+
+        self.log_completed("send_sales_pipeline_nudge", sent=sent)
+        return {
+            "sent": sent,
+            "sent_via": "resend" if sent else "pending",
+            "recipient_email": recipient_email,
+            "content": html_body,
         }
 
     def send_subscription_management_email(

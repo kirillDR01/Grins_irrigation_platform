@@ -36,6 +36,7 @@ from grins_platform.repositories.sent_message_repository import SentMessageRepos
 from grins_platform.schemas.ai import DeliveryStatus, MessageType
 from grins_platform.services.sms.audit import (
     log_consent_hard_stop,
+    log_consent_opt_in_sms,
     log_informal_opt_out_auto_acknowledged,
     log_informal_opt_out_confirmed,
     log_informal_opt_out_dismissed,
@@ -67,6 +68,13 @@ EXACT_OPT_OUT_KEYWORDS: frozenset[str] = frozenset(
     {"stop", "quit", "cancel", "unsubscribe", "end", "revoke"},
 )
 
+# Exact opt-in keywords (F3 — START re-subscribe).
+# T-Mobile / Verizon best-practice docs include UNSTOP and SUBSCRIBE as
+# common synonyms; carriers expect at minimum START to be honored.
+EXACT_OPT_IN_KEYWORDS: frozenset[str] = frozenset(
+    {"start", "unstop", "subscribe"},
+)
+
 # Informal opt-out phrases (Req 8.5)
 INFORMAL_OPT_OUT_PHRASES: tuple[str, ...] = (
     "stop texting me",
@@ -82,6 +90,12 @@ CT_TZ = ZoneInfo("America/Chicago")
 # Opt-out confirmation message
 OPT_OUT_CONFIRMATION_MSG = (
     "You've been unsubscribed from Grins Irrigation texts. Reply START to re-subscribe."
+)
+
+# Opt-in confirmation message (F3 — must include the unsubscribe footer to
+# meet 10DLC carrier expectations).
+OPT_IN_CONFIRMATION_MSG = (
+    "You're re-subscribed to Grins Irrigation texts. Reply STOP to unsubscribe."
 )
 
 # Poll reply auto-confirmation messages
@@ -616,6 +630,8 @@ class SMSService(LoggerMixin):
                 provider_result = await self._send_via_provider(
                     phone=phone,
                     message=message,
+                    bypass_consent=True,
+                    bypass_reason="internal_staff_notification",
                 )
             except SMSError as exc:
                 self.log_failed("send_automated_message", error=exc)
@@ -688,16 +704,55 @@ class SMSService(LoggerMixin):
         self,
         phone: str,
         message: str,
+        *,
+        bypass_consent: bool = False,
+        bypass_reason: str | None = None,
     ) -> ProviderSendResult:
         """Send message via the configured provider.
+
+        Defense-in-depth consent guard (F3): callers that bypass the
+        ``send_message`` flow MUST pass ``bypass_consent=True`` with a
+        ``bypass_reason`` documenting why. The legitimate bypasses today
+        are (a) STOP confirmation, (b) informal-opt-out admin
+        confirmation, (c) START opt-in confirmation, and (d) internal
+        staff notifications (no customer consent record exists). Any
+        other path should call ``send_message`` so the consent gate runs.
 
         Args:
             phone: Formatted phone number.
             message: Message content.
+            bypass_consent: If True, skip the defensive consent check.
+                Required for the carrier-mandated STOP/START confirmation
+                replies and internal staff notifications.
+            bypass_reason: Short string identifying the bypass site for
+                telemetry. Required when ``bypass_consent=True``.
 
         Returns:
             ProviderSendResult from the provider.
+
+        Raises:
+            SMSConsentDeniedError: If ``bypass_consent`` is False and the
+                phone has a hard-STOP record.
         """
+        if not bypass_consent:
+            has_consent = await check_sms_consent(
+                self.session,
+                phone,
+                consent_type="transactional",
+            )
+            if not has_consent:
+                masked = _mask_phone(phone)
+                logger.warning(
+                    "sms.provider.send_blocked_by_defensive_gate",
+                    phone=masked,
+                    bypass_reason=bypass_reason,
+                )
+                msg = (
+                    f"Defensive consent gate blocked send to {masked}. "
+                    "Caller did not pass bypass_consent and the phone "
+                    "has hard-STOP."
+                )
+                raise SMSConsentDeniedError(msg)
         return await self.provider.send_text(phone, message)
 
     def _format_phone(self, phone: str) -> str:
@@ -794,6 +849,14 @@ class SMSService(LoggerMixin):
         # that case. Each correlation branch below does a second pass with
         # the resolved real E.164 (bughunt L-7 / L-11).
         await self._touch_lead_last_contacted(phone=from_phone)
+
+        # 10.0: Exact opt-IN keyword match (F3 — START re-subscribe).
+        # Must run BEFORE the STOP branch below so a phone that previously
+        # STOPped can re-subscribe without being denied by the consent gate.
+        if body_lower in EXACT_OPT_IN_KEYWORDS:
+            return await self._process_exact_opt_in(
+                from_phone, body_lower, thread_id=thread_id,
+            )
 
         # 10.1: Exact opt-out keyword match (Req 8.1, 8.2, 8.3, 8.4)
         if body_lower in EXACT_OPT_OUT_KEYWORDS:
@@ -954,9 +1017,22 @@ class SMSService(LoggerMixin):
                     else:
                         confirmation_msg = POLL_REPLY_UNCLEAR_MSG
 
-                    await self.provider.send_text(row.phone, confirmation_msg)
+                    # F3.7 — gate on consent. Post-STOP customers may still
+                    # receive polls in flight, then text back, and trigger
+                    # this path. The defensive gate raises if hard-STOP.
+                    await self._send_via_provider(
+                        row.phone,
+                        confirmation_msg,
+                        bypass_consent=False,
+                    )
                     logger.info(
                         "sms.poll_reply.auto_reply_sent",
+                        status=row.status,
+                        phone=_mask_phone(row.phone),
+                    )
+                except SMSConsentDeniedError:
+                    logger.info(
+                        "sms.poll_reply.auto_reply_blocked_by_consent",
                         status=row.status,
                         phone=_mask_phone(row.phone),
                     )
@@ -1223,8 +1299,13 @@ class SMSService(LoggerMixin):
         if resolved_customer_id is not None:
             await self._auto_ack_pending_informal_alerts(resolved_customer_id)
 
-        # Send confirmation SMS (Req 8.3)
-        _ = await self.provider.send_text(formatted_phone, OPT_OUT_CONFIRMATION_MSG)
+        # Send confirmation SMS (Req 8.3) — carrier-required bypass.
+        _ = await self._send_via_provider(
+            formatted_phone,
+            OPT_OUT_CONFIRMATION_MSG,
+            bypass_consent=True,
+            bypass_reason="stop_confirmation",
+        )
 
         # Update lead Last Contacted using the resolved real E.164 now that
         # correlation has run (bughunt L-7 / L-11).
@@ -1241,6 +1322,103 @@ class SMSService(LoggerMixin):
             "phone": phone,
             "keyword": keyword,
             "message": OPT_OUT_CONFIRMATION_MSG,
+        }
+
+    async def _process_exact_opt_in(
+        self,
+        phone: str,
+        keyword: str,
+        *,
+        thread_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Process exact opt-IN keyword (F3): create consent record + reply.
+
+        Mirrors :meth:`_process_exact_opt_out`. Writes a fresh
+        ``SmsConsentRecord(consent_method='text_start', consent_given=True)``,
+        emits the audit twin, sends the carrier-required confirmation SMS,
+        and bumps lead last_contacted.
+
+        Validates: F3 sign-off (run-20260504-185844-full).
+        """
+        now = datetime.now(timezone.utc)
+
+        # Resolve real phone from thread_id when provider masks the sender.
+        real_phone = phone
+        if thread_id:
+            try:
+                from grins_platform.services.campaign_response_service import (  # noqa: PLC0415
+                    CampaignResponseService,
+                )
+
+                svc = CampaignResponseService(self.session)
+                corr = await svc.correlate_reply(thread_id)
+                if corr.sent_message and corr.sent_message.recipient_phone:
+                    real_phone = corr.sent_message.recipient_phone
+            except Exception:
+                logger.warning(
+                    "sms.opt_in.phone_resolution_failed",
+                    phone_masked=_mask_phone(phone),
+                    thread_id=thread_id,
+                    exc_info=True,
+                )
+
+        from grins_platform.services.sms.phone_normalizer import (  # noqa: PLC0415
+            PhoneNormalizationError,
+            normalize_to_e164,
+        )
+
+        try:
+            formatted_phone = normalize_to_e164(real_phone)
+        except PhoneNormalizationError:
+            formatted_phone = self._format_phone(real_phone)
+
+        record = SmsConsentRecord(
+            phone_number=formatted_phone,
+            consent_type="marketing",
+            consent_given=True,
+            consent_timestamp=now,
+            consent_method="text_start",
+            consent_language_shown=f"Keyword: {keyword}",
+        )
+        self.session.add(record)
+        await self.session.flush()
+
+        # Audit: opt-in received (sub-domain twin)
+        await log_consent_opt_in_sms(
+            self.session,
+            phone_masked=_mask_phone(formatted_phone),
+        )
+
+        # gap-05: persistent audit row alongside the structured-log audit.
+        await self._record_customer_sms_opt_in_audit(
+            action="consent.opt_in_sms",
+            phone_e164=formatted_phone,
+            consent_record_id=record.id,
+            raw_body=keyword,
+        )
+
+        # Send opt-in confirmation SMS (carrier-required bypass).
+        _ = await self._send_via_provider(
+            formatted_phone,
+            OPT_IN_CONFIRMATION_MSG,
+            bypass_consent=True,
+            bypass_reason="opt_in_confirmation",
+        )
+
+        # Update lead Last Contacted using the resolved real E.164.
+        await self._touch_lead_last_contacted(phone=formatted_phone)
+
+        self.log_completed(
+            "handle_inbound",
+            webhook_action="exact_opt_in",
+            keyword=keyword,
+            phone=_mask_phone(phone),
+        )
+        return {
+            "action": "opt_in",
+            "phone": phone,
+            "keyword": keyword,
+            "message": OPT_IN_CONFIRMATION_MSG,
         }
 
     @staticmethod
@@ -1447,6 +1625,55 @@ class SMSService(LoggerMixin):
                 exc_info=True,
             )
 
+    async def _record_customer_sms_opt_in_audit(
+        self,
+        *,
+        action: str,
+        phone_e164: str,
+        consent_record_id: UUID | None,
+        raw_body: str,
+        customer_id: UUID | None = None,
+    ) -> None:
+        """Audit a customer opt-IN event (F3 — gap-05 sister of opt-out).
+
+        ``action`` is ``consent.opt_in_sms``. Failures are logged and
+        swallowed so the inbound webhook never fails on an audit hiccup.
+        """
+        from grins_platform.repositories.audit_log_repository import (  # noqa: PLC0415
+            AuditLogRepository,
+        )
+
+        try:
+            repo = AuditLogRepository(self.session)
+            resource_id: UUID | str | None = (
+                customer_id if customer_id is not None else phone_e164
+            )
+            resource_type = "customer" if customer_id is not None else "phone"
+            _ = await repo.create(
+                action=action,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                actor_id=None,
+                details={
+                    "actor_type": "customer",
+                    "source": "customer_sms",
+                    "phone_e164": phone_e164,
+                    "consent_record_id": (
+                        str(consent_record_id)
+                        if consent_record_id is not None
+                        else None
+                    ),
+                    "raw_body": raw_body,
+                },
+            )
+        except Exception:
+            logger.warning(
+                "sms.opt_in.audit_write_failed",
+                action=action,
+                phone=_mask_phone(phone_e164),
+                exc_info=True,
+            )
+
     async def _auto_ack_pending_informal_alerts(
         self,
         customer_id: UUID,
@@ -1605,9 +1832,11 @@ class SMSService(LoggerMixin):
 
         # Best-effort confirmation SMS — never block on provider failure.
         try:
-            _ = await self.provider.send_text(
+            _ = await self._send_via_provider(
                 formatted_phone,
                 OPT_OUT_CONFIRMATION_MSG,
+                bypass_consent=True,
+                bypass_reason="informal_opt_out_confirmation",
             )
         except Exception:
             logger.warning(
@@ -1743,6 +1972,11 @@ class SMSService(LoggerMixin):
         self.log_started("handle_webhook", from_phone=_mask_phone(from_phone))
 
         body_lower = body.strip().lower()
+
+        # F3: opt-IN must run first so a phone that previously STOPped can
+        # re-subscribe even via the legacy webhook path.
+        if body_lower in EXACT_OPT_IN_KEYWORDS:
+            return await self._process_exact_opt_in(from_phone, body_lower)
 
         # Handle opt-out keywords (bughunt H-10: route through the canonical
         # _process_exact_opt_out so an SmsConsentRecord is actually written;

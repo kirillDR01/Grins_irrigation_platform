@@ -192,6 +192,7 @@ class ServiceOfferingService(LoggerMixin):
         category: ServiceCategory | None = None,
         is_active: bool | None = None,
         customer_type: str | None = None,
+        search: str | None = None,
         sort_by: str = "name",
         sort_order: str = "asc",
     ) -> tuple[list[ServiceOffering], int]:
@@ -203,6 +204,8 @@ class ServiceOfferingService(LoggerMixin):
             category: Filter by category
             is_active: Filter by active status
             customer_type: Filter by ``residential`` / ``commercial``.
+            search: Substring (case-insensitive) matched against name,
+                slug, or subcategory.
             sort_by: Field to sort by
             sort_order: Sort order (asc/desc)
 
@@ -219,6 +222,7 @@ class ServiceOfferingService(LoggerMixin):
             category=category,
             is_active=is_active,
             customer_type=customer_type,
+            search=search,
             sort_by=sort_by,
             sort_order=sort_order,
         )

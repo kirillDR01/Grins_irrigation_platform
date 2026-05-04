@@ -107,6 +107,11 @@ const SubscriptionManagementPage = lazy(() =>
     default: m.SubscriptionManagementPage,
   }))
 );
+const ApprovalConfirmationPage = lazy(() =>
+  import('@/pages/portal/ApprovalConfirmation').then((m) => ({
+    default: m.ApprovalConfirmationPage,
+  }))
+);
 
 // Layout wrapper component with Suspense for lazy loaded pages
 function LayoutWrapper() {
@@ -162,8 +167,16 @@ export const router = createBrowserRouter([
         element: <EstimateReviewPage />,
       },
       {
+        path: 'estimates/:token/confirmed',
+        element: <ApprovalConfirmationPage />,
+      },
+      {
         path: 'contracts/:token',
         element: <ContractSigningPage />,
+      },
+      {
+        path: 'contracts/:token/confirmed',
+        element: <ApprovalConfirmationPage />,
       },
       {
         path: 'invoices/:token',

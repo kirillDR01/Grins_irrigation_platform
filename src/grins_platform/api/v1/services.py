@@ -85,6 +85,15 @@ async def list_services(
         pattern="^(residential|commercial)$",
         description=("Filter by customer-type bucket (umbrella plan Phase 1)"),
     ),
+    search: Annotated[
+        str | None,
+        Query(
+            description=(
+                "Substring match against name, slug, or subcategory "
+                "(case-insensitive)"
+            ),
+        ),
+    ] = None,
     sort_by: str = Query(
         default="name",
         description="Field to sort by",
@@ -127,6 +136,7 @@ async def list_services(
         category=category,
         is_active=is_active,
         customer_type=customer_type,
+        search=search if search else None,
         sort_by=sort_by,
         sort_order=sort_order,
     )

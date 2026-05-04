@@ -1,8 +1,15 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import type { AxiosError } from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertTriangle, PenLine, Eraser } from 'lucide-react';
 import { usePortalContract, useSignContract } from '../hooks';
+
+function extractErrorMessage(err: unknown): string | undefined {
+  const axErr = err as AxiosError<{ detail?: string }> | undefined;
+  return axErr?.response?.data?.detail ?? (err as Error | undefined)?.message;
+}
 
 export function ContractSigning() {
   const { token = '' } = useParams<{ token: string }>();
@@ -93,7 +100,7 @@ export function ContractSigning() {
       await sign.mutateAsync({ signature_data: signatureData });
       navigate(`/portal/contracts/${token}/confirmed`, { state: { action: 'signed' } });
     } catch {
-      // Error handled by mutation
+      // surfaced via sign.error below
     }
   };
 
@@ -190,6 +197,14 @@ export function ContractSigning() {
         {/* Signature pad */}
         {!contract.is_signed ? (
           <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4" data-testid="signature-section">
+            {sign.isError && (
+              <Alert variant="destructive" data-testid="contract-sign-error">
+                <AlertDescription>
+                  {extractErrorMessage(sign.error) ??
+                    "We couldn't save your signature. Please try again or call us at the number above."}
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <PenLine className="h-5 w-5 text-teal-500" />

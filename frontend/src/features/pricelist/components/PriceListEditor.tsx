@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useDebounce } from '@/shared/hooks/useDebounce';
 import {
   Select,
   SelectContent,
@@ -62,6 +63,8 @@ export function PriceListEditor() {
     null,
   );
 
+  const debouncedSearch = useDebounce(search, 300);
+
   const params = useMemo(
     () => ({
       page,
@@ -69,26 +72,20 @@ export function PriceListEditor() {
       customer_type: customerType === 'both' ? undefined : customerType,
       category: category === 'all' ? undefined : category,
       is_active: showInactive ? undefined : true,
+      search: debouncedSearch.trim() ? debouncedSearch.trim() : undefined,
       sort_by: 'name',
       sort_order: 'asc' as const,
     }),
-    [page, pageSize, customerType, category, showInactive],
+    [page, pageSize, customerType, category, showInactive, debouncedSearch],
   );
 
   const { data, isLoading, isError, error, refetch } = useServiceOfferings(params);
   const deactivate = useDeactivateServiceOffering();
 
-  const filtered = useMemo(() => {
-    if (!data?.items) return [] as ServiceOffering[];
-    if (!search.trim()) return data.items;
-    const q = search.toLowerCase();
-    return data.items.filter((o) => {
-      const label = offeringDisplayLabel(o).toLowerCase();
-      const slug = (o.slug ?? '').toLowerCase();
-      const sub = (o.subcategory ?? '').toLowerCase();
-      return label.includes(q) || slug.includes(q) || sub.includes(q);
-    });
-  }, [data?.items, search]);
+  const filtered = useMemo(
+    () => (data?.items ?? []) as ServiceOffering[],
+    [data?.items],
+  );
 
   function handleNew() {
     setEditTarget(null);

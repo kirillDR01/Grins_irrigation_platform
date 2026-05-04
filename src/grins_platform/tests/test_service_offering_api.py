@@ -569,6 +569,42 @@ class TestListServices:
         call_kwargs = mock_service.list_services.call_args.kwargs
         assert call_kwargs["is_active"] is True
 
+    def test_list_services_search_param_propagated(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+        sample_service_response: ServiceOfferingResponse,
+    ) -> None:
+        """F2: ?search= must reach the service layer."""
+        mock_service.list_services.return_value = ([sample_service_response], 1)
+
+        response = client.get(
+            "/api/v1/services",
+            params={"search": "Spring"},
+        )
+
+        assert response.status_code == 200
+        call_kwargs = mock_service.list_services.call_args.kwargs
+        assert call_kwargs["search"] == "Spring"
+
+    def test_list_services_empty_search_treated_as_none(
+        self,
+        client: TestClient,
+        mock_service: AsyncMock,
+        sample_service_response: ServiceOfferingResponse,
+    ) -> None:
+        """F2: ?search= (empty string) should NOT be sent as a filter."""
+        mock_service.list_services.return_value = ([sample_service_response], 1)
+
+        response = client.get(
+            "/api/v1/services",
+            params={"search": ""},
+        )
+
+        assert response.status_code == 200
+        call_kwargs = mock_service.list_services.call_args.kwargs
+        assert call_kwargs["search"] is None
+
     def test_list_services_empty_result(
         self,
         client: TestClient,

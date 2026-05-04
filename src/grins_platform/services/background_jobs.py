@@ -53,6 +53,9 @@ from grins_platform.services.duplicate_detection_service import (
 )
 from grins_platform.services.email_service import EmailService
 from grins_platform.services.onboarding_reminder_job import OnboardingReminderJob
+from grins_platform.services.sales_pipeline_nudge_job import (
+    nudge_stale_sales_entries_job,
+)
 from grins_platform.services.sms.consent import check_sms_consent  # noqa: F401
 from grins_platform.services.sms.factory import get_sms_provider
 from grins_platform.services.sms.recipient import Recipient
@@ -1486,6 +1489,17 @@ def register_scheduled_jobs(scheduler: BackgroundScheduler) -> None:
         replace_existing=True,
     )
 
+    # F6 — daily sales pipeline auto-nudge for stale entries.
+    # 8:15 UTC ≈ 3:15 AM Central — nudges land in inbox by morning.
+    scheduler.add_job(
+        nudge_stale_sales_entries_job,
+        "cron",
+        hour=8,
+        minute=15,
+        id="nudge_stale_sales_entries",
+        replace_existing=True,
+    )
+
     logger.info(
         "scheduler.jobs.registered",
         jobs=[
@@ -1499,5 +1513,6 @@ def register_scheduled_jobs(scheduler: BackgroundScheduler) -> None:
             "flag_no_reply_confirmations",
             "prune_webhook_processed_logs",
             "send_day_2_reminders",
+            "nudge_stale_sales_entries",
         ],
     )

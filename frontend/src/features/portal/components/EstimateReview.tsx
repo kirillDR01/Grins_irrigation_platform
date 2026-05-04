@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import type { AxiosError } from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Table,
   TableBody,
@@ -15,6 +17,11 @@ import { cn } from '@/lib/utils';
 import { CheckCircle2, XCircle, FileText, Loader2, AlertTriangle } from 'lucide-react';
 import { usePortalEstimate, useApproveEstimate, useRejectEstimate } from '../hooks';
 import type { PortalEstimateTier, PortalEstimateLineItem } from '../types';
+
+function extractErrorMessage(err: unknown): string | undefined {
+  const axErr = err as AxiosError<{ detail?: string }> | undefined;
+  return axErr?.response?.data?.detail ?? (err as Error | undefined)?.message;
+}
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
@@ -106,7 +113,7 @@ export function EstimateReview() {
       await approve.mutateAsync(selectedTier ? { selected_tier: selectedTier } : undefined);
       navigate(`/portal/estimates/${token}/confirmed`, { state: { action: 'approved' } });
     } catch {
-      // Error handled by mutation
+      // surfaced via approve.error below
     }
   };
 
@@ -115,7 +122,7 @@ export function EstimateReview() {
       await reject.mutateAsync({ reason: rejectReason || undefined });
       navigate(`/portal/estimates/${token}/confirmed`, { state: { action: 'rejected' } });
     } catch {
-      // Error handled by mutation
+      // surfaced via reject.error below
     }
   };
 
@@ -271,6 +278,14 @@ export function EstimateReview() {
         {/* Actions */}
         {!estimate.is_readonly && (
           <div className="space-y-4" data-testid="estimate-actions">
+            {(approve.isError || reject.isError) && (
+              <Alert variant="destructive" data-testid="estimate-action-error">
+                <AlertDescription>
+                  {extractErrorMessage(approve.error ?? reject.error) ??
+                    "We couldn't save that action. Please try again or call us at the number above."}
+                </AlertDescription>
+              </Alert>
+            )}
             {!showRejectForm ? (
               <div className="flex flex-col md:flex-row gap-3">
                 <Button

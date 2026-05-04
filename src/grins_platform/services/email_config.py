@@ -9,6 +9,13 @@ from grins_platform.log_config import get_logger
 
 logger = get_logger(__name__)
 
+# F4: Vercel preview aliases that have been retired. Keep this list small
+# and surgical — a stale alias here means estimate/portal links will 404
+# in customer email inboxes.
+_DEPRECATED_PORTAL_HOSTS: tuple[str, ...] = (
+    "frontend-git-dev-kirilldr01s-projects.vercel.app",
+)
+
 
 class EmailSettings(BaseSettings):
     """Configuration for email service integration.
@@ -56,5 +63,17 @@ class EmailSettings(BaseSettings):
                 key="COMPANY_PHYSICAL_ADDRESS",
                 message=(
                     "Physical address not configured — commercial emails disabled"
+                ),
+            )
+        if any(host in self.portal_base_url for host in _DEPRECATED_PORTAL_HOSTS):
+            logger.error(
+                "email.config.deprecated_portal_base_url",
+                portal_base_url=self.portal_base_url,
+                message=(
+                    "PORTAL_BASE_URL points to a deprecated Vercel preview "
+                    "alias. Estimate/portal links will 404. Update the env "
+                    "var to https://grins-irrigation-platform-git-dev-"
+                    "kirilldr01s-projects.vercel.app (dev) or the equivalent "
+                    "canonical prod alias."
                 ),
             )

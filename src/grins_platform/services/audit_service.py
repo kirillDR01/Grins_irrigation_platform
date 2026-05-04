@@ -31,8 +31,10 @@ when adding a new flow):
 - ``consent.opt_out_sms``                        — STOP keyword opt-out
 - ``consent.opt_out_informal_flag``              — informal STOP phrase flagged
 - ``consent.opt_out_admin_confirmed``            — admin confirms informal opt-out
+- ``consent.opt_in_sms``                         — START keyword opt-in (F3)
 - ``estimate.auto_job_created``                  — portal-approval auto-created a job
 - ``estimate.auto_job_skipped``                  — auto-job branch skipped
+- ``sales_pipeline.nudge.sent``                  — nightly job nudged a stale entry (F6)
 
 Validates: CRM Gap Closure Req 74.1, 74.2, 74.3;
            april-16th-fixes-enhancements Req 2.7, 5.5, 5.9;

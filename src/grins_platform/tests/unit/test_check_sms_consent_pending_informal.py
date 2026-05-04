@@ -22,8 +22,10 @@ def _fake_session(*, has_hard_stop: bool, has_pending_alert: bool, customer_id=N
     even when bound params are elided; the table name reliably differentiates
     the consent module's internal queries:
 
-    - ``FROM sms_consent_records``: either _has_hard_stop (first) or
-      _has_marketing_opt_in (last). Call ordering disambiguates.
+    - ``FROM sms_consent_records``: either _has_hard_stop (first, latest-row)
+      or _has_marketing_opt_in (last). Call ordering disambiguates.
+      F3: ``_has_hard_stop`` now selects the full ``SmsConsentRecord`` row
+      (latest by ``created_at``) rather than just ``.id``.
     - ``FROM customers``: _resolve_customer_id_by_phone OR marketing
       opt-in fallback (Customer.sms_opt_in check).
     - ``FROM alerts``: _has_open_informal_opt_out_alert.
@@ -32,6 +34,12 @@ def _fake_session(*, has_hard_stop: bool, has_pending_alert: bool, customer_id=N
     session = AsyncMock()
 
     state = {"sms_consent_calls": 0, "customer_calls": 0}
+
+    def _hard_stop_record():
+        return SimpleNamespace(
+            consent_method="text_stop",
+            consent_given=False,
+        )
 
     async def _execute(stmt):
         text = str(stmt).lower()
@@ -44,7 +52,9 @@ def _fake_session(*, has_hard_stop: bool, has_pending_alert: bool, customer_id=N
             # First sms_consent_records call is always _has_hard_stop.
             if state["sms_consent_calls"] == 1:
                 return SimpleNamespace(
-                    scalar_one_or_none=(lambda: uuid4() if has_hard_stop else None),
+                    scalar_one_or_none=(
+                        lambda: _hard_stop_record() if has_hard_stop else None
+                    ),
                 )
             # Subsequent calls are marketing opt-in look-ups → default no.
             return SimpleNamespace(scalar_one_or_none=lambda: None)

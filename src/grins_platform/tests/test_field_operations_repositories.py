@@ -210,6 +210,53 @@ class TestServiceOfferingRepository:
         assert len(services) == 1
         assert total == 1
 
+    @pytest.mark.asyncio
+    async def test_list_with_filters_search_param_accepted(
+        self,
+        repository: ServiceOfferingRepository,
+        mock_session: AsyncMock,
+    ) -> None:
+        """F2: ``search`` keyword adds an ILIKE filter without breaking listing."""
+        mock_services = [MagicMock()]
+        mock_count_result = MagicMock()
+        mock_count_result.scalar.return_value = 1
+        mock_list_result = MagicMock()
+        mock_list_result.scalars.return_value.all.return_value = mock_services
+        mock_session.execute.side_effect = [mock_count_result, mock_list_result]
+
+        services, total = await repository.list_with_filters(
+            page=1,
+            page_size=20,
+            search="Spring",
+        )
+
+        assert len(services) == 1
+        assert total == 1
+        # Two execute() calls — count query + list query.
+        assert mock_session.execute.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_list_with_filters_search_empty_means_no_filter(
+        self,
+        repository: ServiceOfferingRepository,
+        mock_session: AsyncMock,
+    ) -> None:
+        """F2: empty/None ``search`` should not constrain the query."""
+        mock_count_result = MagicMock()
+        mock_count_result.scalar.return_value = 0
+        mock_list_result = MagicMock()
+        mock_list_result.scalars.return_value.all.return_value = []
+        mock_session.execute.side_effect = [mock_count_result, mock_list_result]
+
+        services, total = await repository.list_with_filters(
+            page=1,
+            page_size=20,
+            search="",
+        )
+
+        assert services == []
+        assert total == 0
+
 
 # ============================================================================
 # JobRepository Tests
