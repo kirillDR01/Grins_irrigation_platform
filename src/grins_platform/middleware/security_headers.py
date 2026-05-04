@@ -4,14 +4,14 @@ Security headers middleware.
 Adds standard security headers to all responses:
 X-Content-Type-Options, X-Frame-Options, X-XSS-Protection,
 Referrer-Policy, Permissions-Policy, Content-Security-Policy,
-and HSTS (production only).
+and HSTS. Browsers ignore HSTS on plain http://, so emitting
+unconditionally is safe in every environment.
 
 Validates: Requirements 70.1, 70.2, 70.3
 """
 
 from __future__ import annotations
 
-import os
 from typing import TYPE_CHECKING
 
 from starlette.middleware.base import (
@@ -27,8 +27,6 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-_IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
-
 # CSP built as a single string to avoid long lines
 _CSP_DIRECTIVES = [
     "default-src 'self'",
@@ -43,6 +41,8 @@ _CSP_DIRECTIVES = [
     "frame-src https://js.stripe.com https://maps.google.com https://app.signwell.com",
 ]
 _CSP = "; ".join(_CSP_DIRECTIVES)
+
+_HSTS = "max-age=63072000; includeSubDomains; preload"
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -64,10 +64,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "camera=(), microphone=(), geolocation=(self), payment=()"
         )
         response.headers["Content-Security-Policy"] = _CSP
-
-        if _IS_PRODUCTION:
-            response.headers["Strict-Transport-Security"] = (
-                "max-age=63072000; includeSubDomains; preload"
-            )
+        response.headers["Strict-Transport-Security"] = _HSTS
 
         return response

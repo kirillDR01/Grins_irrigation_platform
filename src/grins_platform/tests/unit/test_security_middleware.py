@@ -206,13 +206,27 @@ class TestSecurityHeadersMiddleware:
         assert "Content-Security-Policy" in resp.headers
         assert "default-src 'self'" in resp.headers["Content-Security-Policy"]
 
-    def test_hsts_not_in_development(self) -> None:
-        """HSTS should NOT be set in development."""
+    def test_hsts_present_in_development(self) -> None:
+        """HSTS is emitted unconditionally — browsers ignore it on plain http://."""
         resp = self.client.get("/test")
-        assert "Strict-Transport-Security" not in resp.headers
+        assert (
+            resp.headers["Strict-Transport-Security"]
+            == "max-age=63072000; includeSubDomains; preload"
+        )
+
+    def test_hsts_present_in_production(self) -> None:
+        """HSTS is also emitted under ENVIRONMENT=production (unchanged behavior)."""
+        with patch.dict(os.environ, {"ENVIRONMENT": "production"}):
+            app = _build_app([SecurityHeadersMiddleware])
+            client = TestClient(app)
+            resp = client.get("/test")
+            assert (
+                resp.headers["Strict-Transport-Security"]
+                == "max-age=63072000; includeSubDomains; preload"
+            )
 
     def test_all_required_headers_present(self) -> None:
-        """All six required security headers are present."""
+        """All seven required security headers are present."""
         resp = self.client.get("/test")
         required = [
             "X-Content-Type-Options",
@@ -221,6 +235,7 @@ class TestSecurityHeadersMiddleware:
             "Referrer-Policy",
             "Permissions-Policy",
             "Content-Security-Policy",
+            "Strict-Transport-Security",
         ]
         for header in required:
             assert header in resp.headers, f"Missing header: {header}"

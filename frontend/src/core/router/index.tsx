@@ -312,6 +312,10 @@ export const router = createBrowserRouter([
         path: 'settings',
         element: <SettingsPage />,
       },
+      {
+        path: 'pricebook',
+        element: <Navigate to="/invoices?tab=pricelist" replace />,
+      },
     ],
   },
 ]);
