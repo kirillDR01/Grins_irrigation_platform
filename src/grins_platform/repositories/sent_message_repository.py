@@ -210,16 +210,22 @@ class SentMessageRepository(LoggerMixin):
         message_type: MessageType,
         hours_back: int = 24,
         appointment_id: UUID | None = None,
+        *,
+        include_superseded: bool = False,
     ) -> list[SentMessage]:
         """Get recent messages for a customer of a specific type.
 
-        Used for duplicate detection.
+        Used for duplicate detection. By default excludes rows whose
+        ``superseded_at`` is set so a tombstoned send no longer blocks a
+        fresh re-send (matches :meth:`list_by_appointment`'s contract).
 
         Args:
             customer_id: The customer ID
             message_type: Type of message
             hours_back: How many hours back to search
             appointment_id: Optional appointment ID for per-appointment dedupe
+            include_superseded: When True, include superseded rows
+                (debugging only — production callers leave the default).
 
         Returns:
             List of matching messages
@@ -240,6 +246,8 @@ class SentMessageRepository(LoggerMixin):
         ]
         if appointment_id is not None:
             conditions.append(SentMessage.appointment_id == appointment_id)
+        if not include_superseded:
+            conditions.append(SentMessage.superseded_at.is_(None))
 
         result = await self.session.execute(
             select(SentMessage)

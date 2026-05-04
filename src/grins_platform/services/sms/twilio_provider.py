@@ -14,6 +14,7 @@ from typing import Any
 from grins_platform.services.sms.base import (
     InboundSMS,
     ProviderSendResult,
+    apply_test_redirect,
     enforce_recipient_allowlist,
 )
 
@@ -31,8 +32,9 @@ class TwilioProvider:
         Mirrors the original ``SMSService._send_via_twilio()`` behaviour:
         returns a synthetic SID without making a real API call.
         """
-        # Parity with CallRailProvider — same allow-list guard applies
-        # regardless of which provider is active.
+        # Parity with CallRailProvider — dev redirect + same allow-list
+        # guard apply regardless of which provider is active.
+        to, _original = apply_test_redirect(to)
         enforce_recipient_allowlist(to, provider=self.provider_name)
 
         sid = f"SM{datetime.now().strftime('%Y%m%d%H%M%S')}"

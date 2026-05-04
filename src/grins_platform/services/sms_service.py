@@ -11,6 +11,7 @@ Validates: Requirements 1.5, 1.6, 4.5, 4.6, 8.1-8.6, 9.1-9.5, 11.2, 11.3,
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import os
 import re
 import time as _time_mod
@@ -40,6 +41,7 @@ from grins_platform.services.sms.audit import (
     log_informal_opt_out_dismissed,
     log_informal_opt_out_flagged,
 )
+from grins_platform.services.sms.base import apply_test_redirect
 from grins_platform.services.sms.consent import ConsentType, check_sms_consent
 from grins_platform.services.sms.templating import render_template
 from grins_platform.services.sms.webhook_security import (
@@ -241,6 +243,25 @@ class SMSService(LoggerMixin):
             SMSRateLimitDeniedError: If rate limit denies the send.
             SMSError: If sending fails.
         """
+        # Dev/staging redirect — applied BEFORE normalization, consent,
+        # and dedupe. When ``SMS_TEST_REDIRECT_TO`` is set every send is
+        # rewritten to a single test inbox, regardless of the original
+        # recipient's role (customer / technician / admin). Production
+        # leaves the env unset and this block is a no-op. Kept at the
+        # service layer (not just the provider) so the FCC test-number
+        # rejection inside ``phone_normalizer`` cannot pre-empt the
+        # redirect for staff phones in the 555-01XX test range.
+        redirected_phone, original_phone = apply_test_redirect(recipient.phone)
+        if original_phone is not None:
+            logger.warning(
+                "sms.test_redirect.applied",
+                provider=self.provider.provider_name,
+                original=_mask_phone(original_phone),
+                redirected_to=_mask_phone(redirected_phone),
+                message_type=message_type.value,
+            )
+            recipient = dataclasses.replace(recipient, phone=redirected_phone)
+
         masked = _mask_phone(recipient.phone)
         _send_t0 = _time_mod.monotonic()
 

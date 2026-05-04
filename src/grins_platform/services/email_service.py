@@ -86,6 +86,35 @@ def _load_email_allowlist() -> list[str] | None:
     return parts or None
 
 
+def _load_email_test_redirect() -> str | None:
+    """Parse the ``EMAIL_TEST_REDIRECT_TO`` env var.
+
+    Returns the configured redirect target when set+non-empty, else ``None``.
+    Production leaves the var unset so the redirect is a no-op there.
+    """
+    raw = os.environ.get("EMAIL_TEST_REDIRECT_TO", "").strip()
+    return raw or None
+
+
+def apply_email_test_redirect(to: str) -> tuple[str, str | None]:
+    """Return ``(final_to, original_to_or_None)``.
+
+    When ``EMAIL_TEST_REDIRECT_TO`` is set, every send is rewritten to
+    that address so dev/staging testing can target a single inbox
+    without changing customer/staff seed data. Production leaves the
+    env unset and the function is a no-op.
+
+    Mirrors :func:`grins_platform.services.sms.base.apply_test_redirect`
+    on the SMS side. Runs **before**
+    :func:`enforce_email_recipient_allowlist`, so the redirect target
+    must also be in ``EMAIL_TEST_ADDRESS_ALLOWLIST`` (defense in depth).
+    """
+    redirect = _load_email_test_redirect()
+    if not redirect:
+        return to, None
+    return redirect, to
+
+
 def enforce_email_recipient_allowlist(to: str, *, provider: str) -> None:
     """Raise :class:`EmailRecipientNotAllowedError` when guard refuses.
 
@@ -258,6 +287,20 @@ class EmailService(LoggerMixin):
                 message="Email API not configured",
             )
             return False
+
+        # Dev/staging redirect: rewrites every send to EMAIL_TEST_REDIRECT_TO
+        # when set. Production leaves the var unset so this is a no-op.
+        # Runs BEFORE the allowlist so the redirected target still has to
+        # pass the hard guard (defense in depth against a misconfig).
+        to_email, original_email = apply_email_test_redirect(to_email)
+        if original_email is not None:
+            self.logger.warning(
+                "email.test_redirect.applied",
+                provider="resend",
+                original=masked,
+                redirected_to=_mask_email(to_email),
+            )
+            masked = _mask_email(to_email)
 
         # Hard guard — raises if recipient is not in allowlist (dev/staging)
         enforce_email_recipient_allowlist(to_email, provider="resend")

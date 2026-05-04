@@ -111,6 +111,10 @@ def _disable_sms_allowlist_for_pbt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("SMS_TEST_PHONE_ALLOWLIST", raising=False)
+    # ``SMS_TEST_REDIRECT_TO`` rewrites outbound phones in dev/staging.
+    # The property tests assert payload[customer_phone_number] equals the
+    # randomly-generated phone, so the redirect must be off here too.
+    monkeypatch.delenv("SMS_TEST_REDIRECT_TO", raising=False)
 
 
 # ---------------------------------------------------------------------------

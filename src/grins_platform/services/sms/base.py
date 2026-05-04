@@ -62,6 +62,42 @@ def _load_allowlist() -> list[str] | None:
     return [p for p in normalized if p] or None
 
 
+def _load_test_redirect() -> str | None:
+    """Parse the ``SMS_TEST_REDIRECT_TO`` env var.
+
+    Returns the configured redirect target when set+non-empty, else ``None``.
+    Production leaves the var unset so the redirect is a no-op there.
+    """
+    raw = os.environ.get("SMS_TEST_REDIRECT_TO", "").strip()
+    return raw or None
+
+
+def apply_test_redirect(to: str) -> tuple[str, str | None]:
+    """Return ``(final_to, original_to_or_None)``.
+
+    When ``SMS_TEST_REDIRECT_TO`` is set, every send is rewritten to that
+    phone so dev/staging testing can target a single inbox without
+    changing customer/staff seed data. Production leaves the env unset
+    and the function is a no-op (returns the original ``to`` and
+    ``None`` for the original).
+
+    The redirect runs **before** :func:`enforce_recipient_allowlist`, so
+    the configured target must also be present in
+    ``SMS_TEST_PHONE_ALLOWLIST`` (defense in depth — a misconfigured
+    redirect target is still allowlist-blocked).
+
+    Why not store the redirect at the service layer? The DB row in
+    ``sent_messages.recipient_phone`` keeps the original recipient for
+    audit clarity ("we wanted to text the technician but in dev sent
+    it to the test inbox instead"). Provider-level redirect is the
+    smallest cut that preserves the audit trail.
+    """
+    redirect = _load_test_redirect()
+    if not redirect:
+        return to, None
+    return redirect, to
+
+
 def enforce_recipient_allowlist(to: str, *, provider: str) -> None:
     """Raise :class:`RecipientNotAllowedError` if ``to`` is not allow-listed.
 

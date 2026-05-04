@@ -19,6 +19,7 @@ from grins_platform.log_config import LoggerMixin
 from grins_platform.services.sms.base import (
     InboundSMS,
     ProviderSendResult,
+    apply_test_redirect,
     enforce_recipient_allowlist,
 )
 
@@ -108,6 +109,17 @@ class CallRailProvider(LoggerMixin):
 
     async def send_text(self, to: str, body: str) -> ProviderSendResult:
         """Send SMS via POST /v3/a/{account_id}/text-messages.json."""
+        # Dev/staging redirect: rewrites every send to SMS_TEST_REDIRECT_TO
+        # when set. Production leaves the var unset so this is a no-op.
+        to, original = apply_test_redirect(to)
+        if original is not None:
+            self.logger.warning(
+                "sms.test_redirect.applied",
+                provider=self.provider_name,
+                original=_mask_phone(original),
+                redirected_to=_mask_phone(to),
+            )
+
         # Hard allow-list guard — no-op in production (env var unset),
         # enforced in dev/staging. Runs BEFORE any logging or network
         # I/O so a blocked send leaves no trail beyond the refusal log.
