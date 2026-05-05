@@ -193,6 +193,49 @@ class TestMatchesFilter:
             is False
         )
 
+    # F8: standalone STOP/START rows arrive on source_table=consent.
+    def test_consent_stop_appears_in_opt_outs_filter(self) -> None:
+        assert (
+            _matches_filter(
+                triage="opt_outs",
+                item=_make_item(source_table="consent", status="opt_out"),
+            )
+            is True
+        )
+
+    def test_consent_start_appears_in_opt_ins_filter(self) -> None:
+        assert (
+            _matches_filter(
+                triage="opt_ins",
+                item=_make_item(source_table="consent", status="opt_in"),
+            )
+            is True
+        )
+        # Other sources never match opt_ins.
+        assert (
+            _matches_filter(
+                triage="opt_ins",
+                item=_make_item(source_table="campaign_responses", status="opt_in"),
+            )
+            is False
+        )
+
+    def test_consent_pending_classification_for_stop(self) -> None:
+        result = _classify_triage(
+            source_table="consent",
+            status="opt_out",
+            customer_id=uuid4(),
+        )
+        assert result == "pending"
+
+    def test_consent_handled_classification_for_start(self) -> None:
+        result = _classify_triage(
+            source_table="consent",
+            status="opt_in",
+            customer_id=uuid4(),
+        )
+        assert result == "handled"
+
 
 @pytest.mark.unit
 class TestComputeCounts:

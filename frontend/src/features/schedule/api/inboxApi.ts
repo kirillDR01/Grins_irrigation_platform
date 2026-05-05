@@ -13,7 +13,8 @@ export type InboxSourceTable =
   | 'job_confirmation_responses'
   | 'reschedule_requests'
   | 'campaign_responses'
-  | 'communications';
+  | 'communications'
+  | 'consent';
 
 export type InboxFilterToken =
   | 'all'
@@ -21,6 +22,7 @@ export type InboxFilterToken =
   | 'orphans'
   | 'unrecognized'
   | 'opt_outs'
+  | 'opt_ins'
   | 'archived';
 
 export interface InboxItem {
@@ -43,6 +45,7 @@ export interface InboxFilterCounts {
   orphans: number;
   unrecognized: number;
   opt_outs: number;
+  opt_ins: number;
   archived: number;
 }
 

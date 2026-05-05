@@ -27,6 +27,7 @@ InboxSourceTable = Literal[
     "reschedule_requests",
     "campaign_responses",
     "communications",
+    "consent",
 ]
 InboxFilterToken = Literal[
     "all",
@@ -34,6 +35,7 @@ InboxFilterToken = Literal[
     "orphans",
     "unrecognized",
     "opt_outs",
+    "opt_ins",
     "archived",
 ]
 
@@ -91,6 +93,7 @@ class InboxFilterCounts(BaseModel):
     orphans: int = Field(..., ge=0)
     unrecognized: int = Field(..., ge=0)
     opt_outs: int = Field(..., ge=0)
+    opt_ins: int = Field(default=0, ge=0)
     archived: int = Field(..., ge=0)
 
 

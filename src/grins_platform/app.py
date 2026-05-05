@@ -60,6 +60,7 @@ from grins_platform.middleware.security_headers import (
 from grins_platform.scheduler import get_scheduler
 from grins_platform.services.auth_service import validate_jwt_config
 from grins_platform.services.background_jobs import register_scheduled_jobs
+from grins_platform.services.email_config import EmailSettings
 from grins_platform.services.google_sheets_config import GoogleSheetsSettings
 from grins_platform.services.google_sheets_poller import GoogleSheetsPoller
 from grins_platform.services.google_sheets_service import GoogleSheetsService
@@ -98,6 +99,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Stripe configuration check
     stripe_settings = StripeSettings()
     stripe_settings.log_configuration_status()
+
+    # F4-REOPENED: refuse to boot when PORTAL_BASE_URL points at a
+    # deprecated Vercel preview alias in dev/staging/prod. Customer
+    # estimate links would otherwise 200 with the wrong (marketing-site)
+    # bundle and silently break Approve/pay flows.
+    email_settings = EmailSettings()
+    email_settings.log_configuration_status()
+    email_settings.validate_portal_base_url()
 
     # Google Sheets poller
     poller: GoogleSheetsPoller | None = None

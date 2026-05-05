@@ -3,6 +3,8 @@
 Validates: Requirements 39B.1, 39B.2, 67.3, 67.10
 """
 
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from grins_platform.log_config import get_logger
@@ -15,6 +17,13 @@ logger = get_logger(__name__)
 _DEPRECATED_PORTAL_HOSTS: tuple[str, ...] = (
     "frontend-git-dev-kirilldr01s-projects.vercel.app",
 )
+
+# F4-REOPENED: environments where a deprecated host MUST hard-fail boot.
+# Project has only two real environments — ``dev`` and ``production``.
+# Anything else (``local``, ``test``, ``pytest``, unset) keeps the
+# existing log-only behavior so tests and developer machines aren't
+# blocked when a stale .env lingers.
+_BOOT_FAIL_ENVIRONMENTS: frozenset[str] = frozenset({"dev", "production"})
 
 
 class EmailSettings(BaseSettings):
@@ -77,3 +86,42 @@ class EmailSettings(BaseSettings):
                     "canonical prod alias."
                 ),
             )
+
+    def validate_portal_base_url(self) -> None:
+        """Hard-fail boot when PORTAL_BASE_URL is a deprecated alias.
+
+        F4-REOPENED: the prior fix logged ``error`` but boot continued, so
+        Railway dev silently shipped customer emails containing portal
+        links pointing at a stale Vercel marketing-site bundle. This
+        method raises ``RuntimeError`` in ``dev`` and ``production`` so
+        the deploy fails loudly. In ``local`` / test / unset environments
+        it logs the same event the existing ``log_configuration_status``
+        already emits and returns — preserving unit-test behavior for
+        code that imports ``EmailSettings`` without configuring
+        ``ENVIRONMENT``.
+        """
+        if not any(host in self.portal_base_url for host in _DEPRECATED_PORTAL_HOSTS):
+            return
+        environment = os.getenv("ENVIRONMENT", "local").lower()
+        if environment in _BOOT_FAIL_ENVIRONMENTS:
+            logger.error(
+                "email.config.deprecated_portal_base_url",
+                portal_base_url=self.portal_base_url,
+                environment=environment,
+                action="boot_fail",
+            )
+            msg = (
+                f"PORTAL_BASE_URL='{self.portal_base_url}' is a deprecated "
+                f"Vercel alias and ENVIRONMENT='{environment}' requires a "
+                "canonical alias. Refusing to boot — fix the Railway env "
+                "var to the canonical project alias "
+                "(https://grins-irrigation-platform-git-dev-"
+                "kirilldr01s-projects.vercel.app for dev) before retrying."
+            )
+            raise RuntimeError(msg)
+        logger.error(
+            "email.config.deprecated_portal_base_url",
+            portal_base_url=self.portal_base_url,
+            environment=environment,
+            action="warn_only",
+        )

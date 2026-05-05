@@ -26,6 +26,7 @@ import {
   Inbox,
   Mail,
   MessageSquare,
+  Phone,
   PhoneCall,
   User,
 } from 'lucide-react';
@@ -51,12 +52,14 @@ const FILTER_OPTIONS: { key: InboxFilterToken; label: string }[] = [
   { key: 'orphans', label: 'Orphans' },
   { key: 'unrecognized', label: 'Unrecognized' },
   { key: 'opt_outs', label: 'Opt-outs' },
+  { key: 'opt_ins', label: 'Opt-ins' },
   { key: 'archived', label: 'Archived' },
 ];
 
 const SNIPPET_LENGTH = 80;
 
 const sourceIcons: Record<InboxSourceTable, React.ReactNode> = {
+  consent: <Phone className="h-3 w-3 text-rose-500" />,
   job_confirmation_responses: (
     <MessageSquare className="h-3 w-3 text-teal-500" />
   ),
@@ -66,6 +69,7 @@ const sourceIcons: Record<InboxSourceTable, React.ReactNode> = {
 };
 
 const sourceLabels: Record<InboxSourceTable, string> = {
+  consent: 'Consent',
   job_confirmation_responses: 'Confirmation',
   reschedule_requests: 'Reschedule',
   campaign_responses: 'Campaign',

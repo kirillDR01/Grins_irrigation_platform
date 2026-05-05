@@ -52,6 +52,9 @@ from grins_platform.services.duplicate_detection_service import (
     DuplicateDetectionService,
 )
 from grins_platform.services.email_service import EmailService
+from grins_platform.services.estimate_follow_up_job import (
+    process_estimate_follow_ups_job,
+)
 from grins_platform.services.onboarding_reminder_job import OnboardingReminderJob
 from grins_platform.services.sales_pipeline_nudge_job import (
     nudge_stale_sales_entries_job,
@@ -1500,6 +1503,17 @@ def register_scheduled_jobs(scheduler: BackgroundScheduler) -> None:
         replace_existing=True,
     )
 
+    # F7 — estimate follow-up SMS cadence (Day 3/7/14/21).
+    # 15-minute interval is plenty: the cadence has hours of slack and the
+    # job is idempotent (process_follow_ups skips already-SENT/SKIPPED rows).
+    scheduler.add_job(
+        process_estimate_follow_ups_job,
+        "interval",
+        minutes=15,
+        id="process_estimate_follow_ups",
+        replace_existing=True,
+    )
+
     logger.info(
         "scheduler.jobs.registered",
         jobs=[
@@ -1514,5 +1528,6 @@ def register_scheduled_jobs(scheduler: BackgroundScheduler) -> None:
             "prune_webhook_processed_logs",
             "send_day_2_reminders",
             "nudge_stale_sales_entries",
+            "process_estimate_follow_ups",
         ],
     )

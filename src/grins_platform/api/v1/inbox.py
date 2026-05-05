@@ -2,10 +2,12 @@
 
 Read-only endpoint backing the fourth queue card on ``/schedule``. Accepts
 optional ``triage`` filter (``all`` | ``needs_triage`` | ``orphans`` |
-``unrecognized`` | ``opt_outs`` | ``archived``) and cursor-based
-pagination.
+``unrecognized`` | ``opt_outs`` | ``opt_ins`` | ``archived``) and
+cursor-based pagination. F8 added the ``opt_ins`` bucket and a fifth
+``source_table=consent`` source for standalone STOP/START SMS replies
+(gated behind ``INBOX_SHOW_CONSENT_FLIPS``).
 
-Validates: scheduling-gaps gap-16.
+Validates: scheduling-gaps gap-16; F8 sign-off (run-20260504-184355-portal-cron).
 """
 
 from __future__ import annotations
@@ -43,8 +45,9 @@ _endpoints = _InboxEndpoints()
     summary="List unified inbox events",
     description=(
         "Return inbound replies merged across job_confirmation_responses, "
-        "reschedule_requests, campaign_responses, and communications. "
-        "Filterable by triage bucket and cursor-paginated."
+        "reschedule_requests, campaign_responses, communications, and "
+        "(when INBOX_SHOW_CONSENT_FLIPS=true) standalone STOP/START "
+        "consent flips. Filterable by triage bucket and cursor-paginated."
     ),
 )
 async def list_inbox(
@@ -54,7 +57,9 @@ async def list_inbox(
         default=None,
         description=(
             "Triage filter: all | needs_triage | orphans | unrecognized "
-            "| opt_outs | archived. Default: all."
+            "| opt_outs | opt_ins | archived. Default: all. The opt_ins "
+            "bucket and source_table=consent rows require "
+            "INBOX_SHOW_CONSENT_FLIPS=true."
         ),
     ),
     cursor: str | None = Query(

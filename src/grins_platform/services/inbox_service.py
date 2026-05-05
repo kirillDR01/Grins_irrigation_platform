@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -41,6 +42,7 @@ from grins_platform.models.job_confirmation import (
     JobConfirmationResponse,
     RescheduleRequest,
 )
+from grins_platform.models.sms_consent_record import SmsConsentRecord
 from grins_platform.schemas.inbox import (
     InboxFilterCounts,
     InboxItem,
@@ -61,7 +63,25 @@ _FILTER_NEEDS_TRIAGE = "needs_triage"
 _FILTER_ORPHANS = "orphans"
 _FILTER_UNRECOGNIZED = "unrecognized"
 _FILTER_OPT_OUTS = "opt_outs"
+_FILTER_OPT_INS = "opt_ins"
 _FILTER_ARCHIVED = "archived"
+
+# F8: status labels for ``source_table=consent`` rows so the triage
+# classifier and filter matcher can reason symbolically about STOP/START
+# replies. STOP rows surface as ``opt_out`` (always pending — operator
+# should see consent flips); START rows surface as ``opt_in`` (handled —
+# informational).
+_CONSENT_STATUS_OPT_OUT = "opt_out"
+_CONSENT_STATUS_OPT_IN = "opt_in"
+
+# F8 feature gate. When unset / "false", the consent-source UNION is
+# skipped — keeps schema rollout risk-free until browser verification
+# confirms the SQL plan + chip UX.
+_INBOX_SHOW_CONSENT_FLIPS_ENV = "INBOX_SHOW_CONSENT_FLIPS"
+
+
+def _consent_flips_enabled() -> bool:
+    return os.getenv(_INBOX_SHOW_CONSENT_FLIPS_ENV, "false").lower() == "true"
 
 
 @dataclass
@@ -107,6 +127,10 @@ _HANDLED_STATUSES: dict[InboxSourceTable, frozenset[str]] = {
     "reschedule_requests": frozenset({"resolved", "rejected"}),
     "campaign_responses": frozenset({"parsed"}),
     "communications": frozenset({"addressed"}),
+    # F8: standalone START re-opt-ins are informational and land as
+    # "handled". Standalone STOP rows are always "pending" — handled in
+    # _classify_triage rather than via this set.
+    "consent": frozenset({_CONSENT_STATUS_OPT_IN}),
 }
 
 
@@ -120,13 +144,19 @@ def _classify_triage(
 
     - ``pending``: row needs admin attention (needs_review / orphan /
       open RescheduleRequest / unaddressed Communication / unknown
-      status).
-    - ``handled``: row has been resolved or addressed.
+      status / standalone STOP).
+    - ``handled``: row has been resolved or addressed (incl. standalone
+      START re-opt-ins).
     - ``dismissed``: reserved for v1 (manual archive).
     """
     # Communications without a linked customer are always pending —
     # they're orphan inbound that nobody owns yet.
     if source_table == "communications" and customer_id is None:
+        return "pending"
+    # F8: standalone STOP must always surface for the operator even when
+    # the customer record is linked — it represents an active consent
+    # withdrawal that someone should acknowledge.
+    if source_table == "consent" and (status or "").lower() == _CONSENT_STATUS_OPT_OUT:
         return "pending"
     s = (status or "").lower()
     if s in _HANDLED_STATUSES[source_table]:
@@ -139,19 +169,20 @@ def _matches_filter(
     triage: str,
     item: InboxItem,
 ) -> bool:
-    if triage in {"", _FILTER_ALL}:
-        return True
-    if triage == _FILTER_NEEDS_TRIAGE:
-        return item.triage_status == "pending"
-    if triage == _FILTER_ARCHIVED:
-        return item.triage_status == "dismissed"
-    if triage == _FILTER_ORPHANS:
-        return item.customer_id is None or (item.status or "").lower() == "orphan"
-    if triage == _FILTER_UNRECOGNIZED:
-        return (item.status or "").lower() == "needs_review"
-    if triage == _FILTER_OPT_OUTS:
-        return (item.status or "").lower() == "opted_out"
-    return True
+    status = (item.status or "").lower()
+    is_consent = item.source_table == "consent"
+    matchers: dict[str, bool] = {
+        "": True,
+        _FILTER_ALL: True,
+        _FILTER_NEEDS_TRIAGE: item.triage_status == "pending",
+        _FILTER_ARCHIVED: item.triage_status == "dismissed",
+        _FILTER_ORPHANS: item.customer_id is None or status == "orphan",
+        _FILTER_UNRECOGNIZED: status == "needs_review",
+        _FILTER_OPT_OUTS: status == "opted_out"
+        or (is_consent and status == _CONSENT_STATUS_OPT_OUT),
+        _FILTER_OPT_INS: is_consent and status == _CONSENT_STATUS_OPT_IN,
+    }
+    return matchers.get(triage, True)
 
 
 class InboxService(LoggerMixin):
@@ -185,15 +216,35 @@ class InboxService(LoggerMixin):
         # discards a prefix. ``per_source_limit`` * 4 sources is a soft
         # upper bound on Python-side work.
         per_source_limit = max(clamped_limit * 2, 100)
-        confirmations, reschedules, campaigns, comms = await asyncio.gather(
-            self._fetch_confirmation_responses(per_source_limit),
-            self._fetch_reschedule_requests(per_source_limit),
-            self._fetch_campaign_responses(per_source_limit),
-            self._fetch_communications(per_source_limit),
-        )
+        # F8: opt-in/out consent flips are gated behind the
+        # INBOX_SHOW_CONSENT_FLIPS env flag so the schema change ships
+        # without immediately changing the operator surface.
+        if _consent_flips_enabled():
+            (
+                confirmations,
+                reschedules,
+                campaigns,
+                comms,
+                consents,
+            ) = await asyncio.gather(
+                self._fetch_confirmation_responses(per_source_limit),
+                self._fetch_reschedule_requests(per_source_limit),
+                self._fetch_campaign_responses(per_source_limit),
+                self._fetch_communications(per_source_limit),
+                self._fetch_consent_records(per_source_limit),
+            )
+            batches = (confirmations, reschedules, campaigns, comms, consents)
+        else:
+            confirmations, reschedules, campaigns, comms = await asyncio.gather(
+                self._fetch_confirmation_responses(per_source_limit),
+                self._fetch_reschedule_requests(per_source_limit),
+                self._fetch_campaign_responses(per_source_limit),
+                self._fetch_communications(per_source_limit),
+            )
+            batches = (confirmations, reschedules, campaigns, comms)
 
         all_items: list[InboxItem] = []
-        for batch in (confirmations, reschedules, campaigns, comms):
+        for batch in batches:
             all_items.extend(batch)
         all_items.sort(key=_sort_key)
 
@@ -253,6 +304,7 @@ class InboxService(LoggerMixin):
             _FILTER_ORPHANS: 0,
             _FILTER_UNRECOGNIZED: 0,
             _FILTER_OPT_OUTS: 0,
+            _FILTER_OPT_INS: 0,
             _FILTER_ARCHIVED: 0,
         }
         for item in items:
@@ -268,12 +320,18 @@ class InboxService(LoggerMixin):
                 counts[_FILTER_UNRECOGNIZED] += 1
             if status == "opted_out":
                 counts[_FILTER_OPT_OUTS] += 1
+            if item.source_table == "consent":
+                if status == _CONSENT_STATUS_OPT_OUT:
+                    counts[_FILTER_OPT_OUTS] += 1
+                elif status == _CONSENT_STATUS_OPT_IN:
+                    counts[_FILTER_OPT_INS] += 1
         return InboxFilterCounts(
             all=counts[_FILTER_ALL],
             needs_triage=counts[_FILTER_NEEDS_TRIAGE],
             orphans=counts[_FILTER_ORPHANS],
             unrecognized=counts[_FILTER_UNRECOGNIZED],
             opt_outs=counts[_FILTER_OPT_OUTS],
+            opt_ins=counts[_FILTER_OPT_INS],
             archived=counts[_FILTER_ARCHIVED],
         )
 
@@ -436,6 +494,65 @@ class InboxService(LoggerMixin):
                     received_at=row.created_at,
                     body=row.content,
                     from_phone=None,
+                    customer_id=row.customer_id,
+                    customer_name=(
+                        customer.full_name if customer is not None else None
+                    ),
+                    appointment_id=None,
+                    parsed_keyword=None,
+                    status=status_label,
+                )
+            )
+        return items
+
+    async def _fetch_consent_records(
+        self,
+        limit: int,
+    ) -> list[InboxItem]:
+        """F8: surface standalone STOP/START SMS replies in the inbox.
+
+        Selects rows whose ``consent_method`` is ``text_stop`` or
+        ``text_start`` — these are the auto-acknowledged consent flips
+        that arrive outside any active campaign or confirmation context
+        and are therefore invisible in the other four UNIONed source
+        tables. STOP rows render as ``status=opt_out``; START rows as
+        ``status=opt_in`` so the triage classifier and filter matcher can
+        reason symbolically.
+        """
+        stmt = (
+            select(SmsConsentRecord, Customer)
+            .join(
+                Customer,
+                Customer.id == SmsConsentRecord.customer_id,
+                isouter=True,
+            )
+            .where(SmsConsentRecord.consent_method.in_(("text_stop", "text_start")))
+            .order_by(SmsConsentRecord.created_at.desc())
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        items: list[InboxItem] = []
+        for row, customer in result.all():
+            method = (row.consent_method or "").lower()
+            if method == "text_stop":
+                status_label = _CONSENT_STATUS_OPT_OUT
+                body = "Customer replied STOP — SMS consent withdrawn."
+            else:
+                status_label = _CONSENT_STATUS_OPT_IN
+                body = "Customer replied START — SMS consent re-established."
+            triage_status = _classify_triage(
+                source_table="consent",
+                status=status_label,
+                customer_id=row.customer_id,
+            )
+            items.append(
+                InboxItem(
+                    id=row.id,
+                    source_table="consent",
+                    triage_status=triage_status,
+                    received_at=row.created_at,
+                    body=body,
+                    from_phone=row.phone_number,
                     customer_id=row.customer_id,
                     customer_name=(
                         customer.full_name if customer is not None else None
