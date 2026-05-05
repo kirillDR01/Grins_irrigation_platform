@@ -71,13 +71,31 @@ def test_log_configuration_status_silent_on_localhost_default() -> None:
     mock_logger.error.assert_not_called()
 
 
-@pytest.mark.parametrize("environment", ["dev", "production"])
+@pytest.mark.parametrize("environment", ["dev", "development", "production", "prod"])
 def test_validate_portal_base_url_raises_in_dev_with_deprecated_host(
     environment: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """F4-REOPENED: dev/production must hard-fail boot on deprecated host."""
+    """F4-REOPENED: deployed-environment names must hard-fail boot."""
     monkeypatch.setenv("ENVIRONMENT", environment)
+    monkeypatch.delenv("RAILWAY_ENVIRONMENT", raising=False)
+    settings = EmailSettings(
+        resend_api_key="fake",
+        company_physical_address="123 Test St",
+        portal_base_url=_DEPRECATED_URL,
+    )
+
+    with pytest.raises(RuntimeError, match="deprecated Vercel alias"):
+        settings.validate_portal_base_url()
+
+
+def test_validate_portal_base_url_raises_when_railway_env_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F4-REOPENED: any Railway deployment hard-fails, even when
+    ENVIRONMENT is the default 'development' or 'local'."""
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "dev")
+    monkeypatch.setenv("ENVIRONMENT", "local")
     settings = EmailSettings(
         resend_api_key="fake",
         company_physical_address="123 Test St",
@@ -93,6 +111,7 @@ def test_validate_portal_base_url_warns_only_in_local(
 ) -> None:
     """F4-REOPENED: local/test envs keep the warn-only behavior (no raise)."""
     monkeypatch.setenv("ENVIRONMENT", "local")
+    monkeypatch.delenv("RAILWAY_ENVIRONMENT", raising=False)
     settings = EmailSettings(
         resend_api_key="fake",
         company_physical_address="123 Test St",
@@ -111,6 +130,7 @@ def test_validate_portal_base_url_passes_with_canonical_alias(
 ) -> None:
     """F4-REOPENED: canonical alias is silent in every environment."""
     monkeypatch.setenv("ENVIRONMENT", "dev")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "dev")
     settings = EmailSettings(
         resend_api_key="fake",
         company_physical_address="123 Test St",

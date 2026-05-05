@@ -18,12 +18,30 @@ _DEPRECATED_PORTAL_HOSTS: tuple[str, ...] = (
     "frontend-git-dev-kirilldr01s-projects.vercel.app",
 )
 
-# F4-REOPENED: environments where a deprecated host MUST hard-fail boot.
-# Project has only two real environments — ``dev`` and ``production``.
-# Anything else (``local``, ``test``, ``pytest``, unset) keeps the
-# existing log-only behavior so tests and developer machines aren't
-# blocked when a stale .env lingers.
-_BOOT_FAIL_ENVIRONMENTS: frozenset[str] = frozenset({"dev", "production"})
+# F4-REOPENED: ``ENVIRONMENT`` values that MUST hard-fail boot when
+# ``PORTAL_BASE_URL`` is a deprecated alias. The codebase historically
+# stores ``development`` (the .env.example default) on the deployed dev
+# Railway service rather than ``dev``; the ``dev`` and ``production``
+# tokens are accepted for forward-compat with the canonical naming the
+# project is moving toward. Local boots use ``local`` / unset and stay
+# warn-only.
+_BOOT_FAIL_ENVIRONMENTS: frozenset[str] = frozenset(
+    {"dev", "development", "production", "prod"}
+)
+
+
+def _is_deployed_environment() -> bool:
+    """True when the process is running on a Railway service.
+
+    F4-REOPENED hard-fails when running on *any* Railway deployment —
+    using ``RAILWAY_ENVIRONMENT`` is the most reliable signal because it
+    is unset locally regardless of what ``ENVIRONMENT`` is configured
+    to. ``ENVIRONMENT in _BOOT_FAIL_ENVIRONMENTS`` is the secondary
+    trigger so manually-set env vars (CI, staging hosts) still fail.
+    """
+    if os.getenv("RAILWAY_ENVIRONMENT"):
+        return True
+    return os.getenv("ENVIRONMENT", "local").lower() in _BOOT_FAIL_ENVIRONMENTS
 
 
 class EmailSettings(BaseSettings):
@@ -93,28 +111,30 @@ class EmailSettings(BaseSettings):
         F4-REOPENED: the prior fix logged ``error`` but boot continued, so
         Railway dev silently shipped customer emails containing portal
         links pointing at a stale Vercel marketing-site bundle. This
-        method raises ``RuntimeError`` in ``dev`` and ``production`` so
-        the deploy fails loudly. In ``local`` / test / unset environments
-        it logs the same event the existing ``log_configuration_status``
-        already emits and returns — preserving unit-test behavior for
-        code that imports ``EmailSettings`` without configuring
-        ``ENVIRONMENT``.
+        method raises ``RuntimeError`` whenever the process is running on
+        Railway (``RAILWAY_ENVIRONMENT`` is set) or ``ENVIRONMENT`` is
+        explicitly one of ``{dev, development, prod, production}``.
+        Locally / in tests / unset, it logs and returns so unit tests and
+        developer machines aren't blocked when a stale .env lingers.
         """
         if not any(host in self.portal_base_url for host in _DEPRECATED_PORTAL_HOSTS):
             return
         environment = os.getenv("ENVIRONMENT", "local").lower()
-        if environment in _BOOT_FAIL_ENVIRONMENTS:
+        railway_env = os.getenv("RAILWAY_ENVIRONMENT", "")
+        if _is_deployed_environment():
             logger.error(
                 "email.config.deprecated_portal_base_url",
                 portal_base_url=self.portal_base_url,
                 environment=environment,
+                railway_environment=railway_env,
                 action="boot_fail",
             )
             msg = (
                 f"PORTAL_BASE_URL='{self.portal_base_url}' is a deprecated "
-                f"Vercel alias and ENVIRONMENT='{environment}' requires a "
-                "canonical alias. Refusing to boot — fix the Railway env "
-                "var to the canonical project alias "
+                f"Vercel alias and the process is deployed "
+                f"(ENVIRONMENT='{environment}', "
+                f"RAILWAY_ENVIRONMENT='{railway_env}'). Refusing to boot — "
+                "fix the Railway env var to the canonical project alias "
                 "(https://grins-irrigation-platform-git-dev-"
                 "kirilldr01s-projects.vercel.app for dev) before retrying."
             )
