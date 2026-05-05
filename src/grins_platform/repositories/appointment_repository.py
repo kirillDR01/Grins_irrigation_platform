@@ -273,6 +273,7 @@ class AppointmentRepository(LoggerMixin):
         page_size: int = 20,
         status: AppointmentStatus | None = None,
         staff_id: UUID | None = None,
+        customer_id: UUID | None = None,
         job_id: UUID | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
@@ -287,6 +288,7 @@ class AppointmentRepository(LoggerMixin):
             page_size: Number of items per page
             status: Filter by status
             staff_id: Filter by staff member
+            customer_id: Filter by customer (joins via job.customer_id)
             job_id: Filter by job
             date_from: Filter by scheduled_date >= date_from
             date_to: Filter by scheduled_date <= date_to
@@ -313,6 +315,11 @@ class AppointmentRepository(LoggerMixin):
 
         if job_id is not None:
             base_query = base_query.where(Appointment.job_id == job_id)
+
+        if customer_id is not None:
+            base_query = base_query.join(Job, Appointment.job_id == Job.id).where(
+                Job.customer_id == customer_id,
+            )
 
         if date_from is not None:
             base_query = base_query.where(Appointment.scheduled_date >= date_from)

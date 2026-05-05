@@ -301,6 +301,74 @@ class TestAppointmentJobIntegration:
         assert result_2.job_id == job_id
         assert result_1.staff_id != result_2.staff_id
 
+    async def test_list_appointments_customer_id_filter_narrows_results(
+        self,
+        appointment_service: AppointmentService,
+        mock_appointment_repo: AsyncMock,
+    ) -> None:
+        """F9: ``customer_id`` filter only returns matching customer's rows.
+
+        The endpoint and service must thread ``customer_id`` through to
+        ``AppointmentRepository.list_with_filters``, which JOINs ``Job``
+        and applies ``Job.customer_id == customer_id``. Pre-fix, the
+        param was silently dropped and callers received the global list.
+        """
+        customer_id_a = uuid.uuid4()
+        customer_id_b = uuid.uuid4()
+        job_a_id = uuid.uuid4()
+        job_b_id = uuid.uuid4()
+        apt_a = create_mock_appointment(job_id=job_a_id)
+        apt_b = create_mock_appointment(job_id=job_b_id)
+        # Repo behavior: when customer_id is provided, return only the
+        # one matching appointment; otherwise return both.
+        all_apts = [apt_a, apt_b]
+
+        async def list_side_effect(
+            **kwargs: object,
+        ) -> tuple[list[MagicMock], int]:
+            cid = kwargs.get("customer_id")
+            if cid == customer_id_a:
+                return [apt_a], 1
+            if cid == customer_id_b:
+                return [apt_b], 1
+            return all_apts, len(all_apts)
+
+        mock_appointment_repo.list_with_filters.side_effect = list_side_effect
+
+        # Customer A
+        result_a, total_a = await appointment_service.list_appointments(
+            customer_id=customer_id_a,
+        )
+        assert total_a == 1
+        assert len(result_a) == 1
+        assert result_a[0].job_id == job_a_id
+        mock_appointment_repo.list_with_filters.assert_awaited_with(
+            page=1,
+            page_size=20,
+            status=None,
+            staff_id=None,
+            customer_id=customer_id_a,
+            job_id=None,
+            date_from=None,
+            date_to=None,
+            sort_by="scheduled_date",
+            sort_order="asc",
+            include_relationships=True,
+        )
+
+        # Customer B
+        result_b, total_b = await appointment_service.list_appointments(
+            customer_id=customer_id_b,
+        )
+        assert total_b == 1
+        assert len(result_b) == 1
+        assert result_b[0].job_id == job_b_id
+
+        # No filter: both
+        result_all, total_all = await appointment_service.list_appointments()
+        assert total_all == 2
+        assert len(result_all) == 2
+
 
 # =============================================================================
 # Appointment-Staff Integration Tests

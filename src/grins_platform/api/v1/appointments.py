@@ -187,6 +187,10 @@ async def list_appointments(
         default=None,
         description="Filter by staff member ID",
     ),
+    customer_id: UUID | None = Query(
+        default=None,
+        description="Filter by customer ID (joins via job.customer_id)",
+    ),
     job_id: UUID | None = Query(
         default=None,
         description="Filter by job ID",
@@ -220,6 +224,7 @@ async def list_appointments(
         filters={
             "status": status_filter.value if status_filter else None,
             "staff_id": str(staff_id) if staff_id else None,
+            "customer_id": str(customer_id) if customer_id else None,
             "job_id": str(job_id) if job_id else None,
         },
     )
@@ -229,6 +234,7 @@ async def list_appointments(
         page_size=page_size,
         status=status_filter,
         staff_id=staff_id,
+        customer_id=customer_id,
         job_id=job_id,
         date_from=date_from,
         date_to=date_to,

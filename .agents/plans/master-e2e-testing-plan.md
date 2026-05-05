@@ -11,6 +11,38 @@ The following plan is the **single source of truth** for end-to-end testing of t
 
 ---
 
+## TEST RECIPIENTS (HARD RULE — added 2026-05-04 by user directive)
+
+**Every** real SMS sent during ANY E2E run from this plan MUST go to **`+19527373312`**.
+**Every** real email sent during ANY E2E run from this plan MUST go to **`kirillrakitinsecond@gmail.com`**.
+
+There are **no other allowed recipients**. This is not a soft preference — it is a hard rule that overrides any other directive in this plan, in `Testing Procedure/`, in any bughunt doc, or in any feature plan. If a step would otherwise route SMS or email to a different number/address (e.g., a synthetic `@example.com`, a generic test phone, the seed customer's pre-existing email if it differs), **rewrite the step inline** to retarget the allowlisted recipient before executing.
+
+### Required scope for the "real email" rule
+
+The real-email requirement is not just for the initial estimate send. **Every email in every sequence triggered by an E2E run must actually be delivered to `kirillrakitinsecond@gmail.com`** so the operator can visually inspect the rendered template, the subject line, the option presentation, and the call-to-action. This includes (non-exhaustive):
+
+- **Estimate pipeline sequence** (P4 / P4d / P4e / P4f / P5):
+  - Initial estimate-sent email (`message_type=estimate_sent`)
+  - Estimate option variants — if an estimate has multiple option presentations (line-item bundles, tiers, alternatives), each variant must produce its own email so the operator can confirm each rendering
+  - Estimate nudge / followup emails (P4f, sales-pipeline auto-nudge cron)
+  - Signed-PDF email after customer approves (`Your signed estimate ...`)
+  - Approval / rejection notification emails (admin-side internal notification)
+  - Bounce-event notification (P5 step 8)
+- **Subscription / onboarding sequence** (P15): welcome email, receipt, week-of-confirmation
+- **Invoice sequence** (P13, P14): invoice-sent, payment-link, payment-receipt, past-due reminders, lien-warning
+- **Job / appointment lifecycle** (P8, P11, P12): cancellation notifications when channel=email, receipt-after-payment
+
+**No simulator short-cuts for email path.** `sim/resend_email_check.sh poll` is a *verification* tool (it polls `/api/v1/sent-messages` to confirm Resend recorded the send). It does not eliminate the user's real-inbox check; it complements it. Every step that fires an email must be paused at a HUMAN checkpoint asking the operator to confirm the email landed and looks correct.
+
+### Why this rule is hardened at the top
+
+If the operator (or an agent executing this plan) routes a single SMS/email to a non-allowlisted recipient, that's an immediate violation: real customers don't expect test traffic, and the dev allowlist is the only thing that prevents accidental contact with production-shaped data. The 2026-05-04 user directive that produced this section: *"send all texts to 9527373312 for that email and the phone number I just added, you should specify in the plan that when you do end-to-end testing, you should only be sending to those, which includes this plan. ... I also want you to send all the real emails so I can confirm the different options for estimates. ... we should have all the sequences sent to the email when we're doing end-to-end testing."*
+
+Operationally that means: when in doubt, retarget — don't send. When a step is silent on recipient, default to the allowlist. When a code path picks recipients dynamically (e.g., a customer's stored email), **before** firing the path, verify the customer record's email is `kirillrakitinsecond@gmail.com` and the phone is `+19527373312`; if not, update the customer record first.
+
+---
+
 ## ENVIRONMENT SAFETY (MANDATORY)
 
 This is a hard policy, not a guideline. Every E2E run authored against this plan **must obey all four rules below**. Violations are operator errors, not bugs in the plan, and a violating run's findings are not promotable to a sign-off report.
@@ -176,7 +208,7 @@ These are bugs / gaps from older bughunts and plans whose fix has landed in sour
 | ScheduleVisit conflict detection + drag boundary | `.agents/plans/schedule-estimate-visit-handoff.md` | **Phase 4 steps 14–15** |
 | AppointmentDetail secondary actions (notes / tags / photos / reschedule / mark-contacted) | `.agents/plans/appointment-modal-secondary-actions.md` | **Phase 11 step 16** |
 | Repeat-Y idempotency + reassurance SMS | `.agents/plans/repeat-confirmation-idempotency.md` | **Phase 9 E2-bis** |
-| Post-cancel "R" → `stale_thread_reply` (no reactivation) | `.agents/plans/thread-correlation-hardening.md` | **Phase 9 E11** |
+| Post-cancel "R" → `appointment.reschedule_rejected` (Gap 1.B; no reactivation) | `.agents/plans/thread-correlation-hardening.md` | **Phase 9 E11** |
 | Late-reschedule rejection (EN_ROUTE / IN_PROGRESS) | `feature-developments/scheduling gaps/gap-01-reschedule-request-lifecycle.md` | **Phase 10 step 7** |
 | Invalid appointment-status transition rejection | `.agents/plans/enforce-appointment-state-machine.md`, `gap-04-state-machine-not-enforced.md` | **Phase 10 step 10** |
 | Mobile modal CTA visibility (sticky-bar overlap) | `bughunt/2026-03-26-e2e-battle-test.md` | **Phase 22 step 6** |
@@ -1170,6 +1202,197 @@ Re-run after any change to `EstimateService.approve_via_portal`, `EstimatePDFSer
 
 ---
 
+### Phase 4e — Real Estimate-Email → Portal-Approve End-to-End (added 2026-05-04)
+
+**Goal**: Verify the full real-customer flow: admin creates an estimate, system fires Resend email to customer inbox, customer opens link from email, sees estimate in portal, clicks Approve, auto-job is created, admin sees the approved state. This is the *acceptance test* for the email portal — Phase 5 only does endpoint smoke; this exercises the full email round-trip with real human click.
+
+**Prerequisites**: P0 (seed customer with allowlisted email + opt-in), P4 (sales pipeline scaffolding).
+
+**Variant lane**: Admin (creates) → Email inbox (`kirillrakitinsecond@gmail.com`) → Public portal → Admin (verifies result).
+
+#### VERIFY (source check)
+```bash
+grep -n "PORTAL_BASE_URL\|portal_base_url" src/grins_platform/services/estimate_service.py src/grins_platform/services/email_service.py
+grep -n "send_estimate\|send_estimate_email" src/grins_platform/api/v1/estimates.py
+grep -n "approve_portal_estimate\|approve.*estimate" src/grins_platform/api/v1/portal.py
+railway variables --service Grins-dev --environment dev --kv | grep PORTAL_BASE_URL
+```
+
+⚠️ **Verify PORTAL_BASE_URL points to the CURRENT live frontend deployment, not a stale Vercel preview alias.** A 9-day-old preview that 200s but doesn't have the current React routes will silently serve a 404 page to the customer. Compare against:
+```bash
+# What the dev frontend alias actually resolves to:
+curl -sI https://grins-irrigation-platform-git-dev-kirilldr01s-projects.vercel.app/portal/estimates/00000000-0000-0000-0000-000000000000 | head -3
+# Should match PORTAL_BASE_URL on Railway. If not, this is a BLOCKER.
+```
+
+#### Steps
+
+1. **Login admin** + obtain `$TOKEN`.
+
+2. **Create estimate** for the seed customer:
+   ```bash
+   curl -s -X POST $API/api/v1/estimates -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{
+     "customer_id":"<seed customer>",
+     "line_items":[
+       {"description":"Spring Start-Up — 8 zones","quantity":1,"unit_price":175.00,"amount":175.00},
+       {"description":"Backflow Preventer Test","quantity":1,"unit_price":75.00,"amount":75.00}
+     ],
+     "subtotal":250.00,"tax_amount":0,"discount_amount":0,"total":250.00
+   }'
+   ```
+   Capture `estimate_id`.
+
+3. **Trigger send** (this is the email send + portal-token mint):
+   ```bash
+   curl -s -X POST $API/api/v1/estimates/$ESTIMATE_ID/send -H "Authorization: Bearer $TOKEN"
+   ```
+   Response includes `{estimate_id, portal_url, sent_via:["sms","email"]}`. **Inspect `portal_url`** — it should resolve at the current live frontend host.
+
+4. **Verify the email landed**:
+   ```bash
+   curl -s "$API/api/v1/sent-messages?customer_id=<seed>&channel=email&limit=3" \
+     -H "Authorization: Bearer $TOKEN" \
+     | jq '.items[0] | {sent_at, message_type, content: (.content[0:120]), delivery_status}'
+   ```
+   Expect `message_type=estimate_sent`, `delivery_status=sent`.
+
+5. **CRITICAL**: 🟡 **HUMAN** open `kirillrakitinsecond@gmail.com`, find the "Your estimate from Grins Irrigation is ready!" email, click the portal link.
+   - **If 404** → BLOCKER: PORTAL_BASE_URL is wrong on Railway (verified via the 2026-05-04 run, candidate finding F4). Fix the env var and re-send.
+   - **If portal loads** but Approve button doesn't work → MAJOR: FE post-approve handling broken (verified via the 2026-05-04 run, candidate finding F5).
+
+6. **Click Approve in the portal**.
+
+7. **Verify backend acted on the click**:
+   ```bash
+   curl -s "$API/api/v1/estimates/$ESTIMATE_ID" -H "Authorization: Bearer $TOKEN" \
+     | jq '. | {status, approved_at, customer_id}'
+   # Expect: status=approved, approved_at populated
+   
+   curl -s "$API/api/v1/audit-log?entity_type=estimate&entity_id=$ESTIMATE_ID&limit=10" \
+     -H "Authorization: Bearer $TOKEN" \
+     | jq '. | (.items // .) | .[] | {action, details}' | head -20
+   # Expect: estimate.auto_job_created with details.source="customer_portal"
+   #         AND sales_entry.estimate_decision_received with details.decision="approved"
+   ```
+
+8. **Verify auto-job was created** (Phase 4d intersection):
+   ```bash
+   # Find the new job from the audit log details.job_id
+   curl -s "$API/api/v1/jobs/$AUTO_JOB_ID" -H "Authorization: Bearer $TOKEN" \
+     | jq '. | {id, status, customer_id, created_at}'
+   # Expect: status=to_be_scheduled, customer matches estimate.customer_id
+   ```
+
+9. **Verify FE post-approve state**: 🟡 HUMAN — what does the customer see after clicking Approve? Should be a confirmation/thank-you page, NOT an "unexpected application error" page (F5 regression).
+
+#### Acceptance
+- [ ] Resend email lands in test inbox.
+- [ ] Email's portal link opens the working portal page (NOT a 404 — F4 regression).
+- [ ] Customer can click Approve without seeing an error (F5 regression).
+- [ ] Backend records: estimate.status=approved, audit `estimate.auto_job_created` (source=customer_portal), audit `sales_entry.estimate_decision_received` (decision=approved).
+- [ ] New job created in `to_be_scheduled` linked to the estimate.
+
+#### Stale-reference watchlist
+- `PORTAL_BASE_URL` env var on Railway dev/prod must always point to the current live Vercel domain — NOT to a `frontend-git-*` preview alias. Verify on every deploy that creates a new Vercel project.
+
+---
+
+### Phase 4f — Sales-Pipeline Auto-Nudge / Stale-Entry Followup (added 2026-05-04)
+
+**Goal**: Verify that a sales pipeline entry which has been sitting in `send_estimate` / `pending_approval` / `send_contract` for N days fires a customer-facing nudge email (and/or SMS), bumps `last_contact_date`, and respects the admin `pause_nudges` toggle.
+
+**Prerequisites**: P4 (a sales pipeline entry exists with `last_contact_date` < threshold).
+
+**Variant lane**: Operator (cron simulation) + Customer email.
+
+#### VERIFY (source check)
+```bash
+# Confirm the data layer + admin API exists:
+grep -n "nudges_paused_until\|last_contact_date\|pause_nudges\|unpause_nudges" \
+  src/grins_platform/services/sales_pipeline_service.py \
+  src/grins_platform/models/sales_pipeline.py
+
+# CRITICAL: confirm the SCHEDULED JOB that fires nudges is registered:
+grep -n "sales_pipeline\|nudge\|stale.*pipeline" src/grins_platform/services/background_jobs.py
+
+# If the second grep returns 0 matches in register_scheduled_jobs(),
+# the nudge cron is MISSING from source — this is candidate finding F6
+# (verified on the 2026-05-04 run). The data model + admin API exist as
+# scaffolding, but no scheduled job actually fires the nudges.
+```
+
+#### Steps
+
+1. **Confirm registered scheduled jobs**:
+   ```bash
+   grep -n "scheduler.add_job" src/grins_platform/services/background_jobs.py
+   # Should include a job whose entry-point function references sales_pipeline.
+   # Expected job ids include something like:
+   #   "send_pipeline_nudges" or "stale_estimate_followup"
+   # If absent → BLOCKER (F6).
+   ```
+
+2. **Force-fire the job manually** (skips the cron schedule):
+   ```bash
+   # Once the job exists, locate its entry-point function in background_jobs.py
+   # and invoke it via railway_python:
+   PYSRC='import asyncio
+   from grins_platform.services.background_jobs import send_pipeline_nudges_job
+   asyncio.run(send_pipeline_nudges_job())'
+   railway_python "$PYSRC"
+   ```
+
+3. **Verify a nudge email landed**:
+   ```bash
+   curl -s "$API/api/v1/sent-messages?customer_id=<seed>&channel=email&limit=5" \
+     -H "Authorization: Bearer $TOKEN" \
+     | jq '.items[] | select(.message_type | contains("nudge") or contains("followup")) | {sent_at, content: (.content[0:100])}'
+   ```
+   Expect at least one nudge email row with `delivery_status=sent`.
+
+4. **Verify `last_contact_date` bumped**:
+   ```bash
+   curl -s "$API/api/v1/sales/pipeline/$ENTRY_ID" -H "Authorization: Bearer $TOKEN" \
+     | jq '.last_contact_date'
+   # Should be within the last 5 minutes.
+   ```
+
+5. **Test pause_nudges**:
+   ```bash
+   # Set paused-until to 7 days from now
+   curl -s -X POST "$API/api/v1/sales/pipeline/$ENTRY_ID/pause-nudges" \
+     -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+     -d '{"paused_until": "<+7d ISO>"}'
+   # Re-fire the cron
+   railway_python "..."
+   # Verify NO new nudge email landed for this customer
+   ```
+
+6. **Test unpause**:
+   ```bash
+   curl -s -X POST "$API/api/v1/sales/pipeline/$ENTRY_ID/unpause-nudges" \
+     -H "Authorization: Bearer $TOKEN"
+   # Re-fire the cron
+   # Verify a nudge email DOES land
+   ```
+
+7. **Threshold verification**: read the configured idle-window from BusinessSettings or wherever it lives (verify in source first), confirm:
+   - Entries newer than threshold get NO nudge.
+   - Entries older than threshold get a nudge.
+   - Entries with `nudges_paused_until > now()` get NO nudge regardless of age.
+
+#### Acceptance
+- [ ] **Source check**: a scheduled job exists in `background_jobs.register_scheduled_jobs()` that operates on `sales_pipeline_entry`. (FAIL → F6 BLOCKER.)
+- [ ] Nudge email lands at allowlisted inbox after force-fire.
+- [ ] `last_contact_date` bumps after each nudge.
+- [ ] `pause_nudges` suppresses subsequent nudges.
+- [ ] `unpause_nudges` resumes nudges.
+
+#### Stale-reference watchlist
+- The `pause_nudges` / `unpause_nudges` admin API exists in `services/sales_pipeline_service.py:443-498` regardless of whether the cron is wired. Don't conclude "nudges work" just because the pause API responds 200 — verify the cron actually fires.
+
+---
+
 ### Phase 5 — Customer Email Portal — Estimate Review & Approve/Reject
 
 **Goal**: From the customer's email, click the portal link, review the estimate at `/portal/estimates/{token}`, approve or reject, verify state propagates back into Sales tab.
@@ -1499,11 +1722,11 @@ VERIFY: `grep -n "reassurance\|already.*confirmed\|repeat" src/grins_platform/se
 VERIFY: `grep -n "provider_thread_id" src/grins_platform/models/sent_message.py src/grins_platform/services/sms_service.py`. Steps: send a confirmation in P8 then capture the most recent outbound row: `api_q "/api/v1/customers/$KIRILL_CUSTOMER_ID/sent-messages?limit=1" '.items[0].provider_thread_id'` — assert non-null and matches the thread on which inbound replies will be routed (used by `_handle_confirm` to correlate). The earlier dev-env blocker noted this column was empty; current source persists it on outbound.
 
 ##### E11 — Post-cancel "R" handling (per `.agents/plans/thread-correlation-hardening.md`)
-VERIFY: `grep -n "stale_thread_reply\|post_cancel" src/grins_platform/services/sms_service.py src/grins_platform/services/job_confirmation_service.py`. Steps: starting from an appointment already CANCELLED in E6/E7, capture its old `THREAD_ID` and:
+VERIFY: `grep -n "appointment.reschedule_rejected\|late_reschedule_attempt\|post_cancel" src/grins_platform/services/job_confirmation_service.py src/grins_platform/services/sms_service.py`. Steps: starting from an appointment already CANCELLED in E6/E7, capture its old `THREAD_ID` and:
 1. **EITHER** 🟡 HUMAN: **REPLY: R** to that old thread
    **OR** 🤖 SIMULATOR: `sim/callrail_inbound.sh "$THREAD_ID" "R"`
 2. Assert appointment status stays `cancelled` (no reactivation).
-3. Assert a row is created marking the reply as `stale_thread_reply` (or equivalent enum) and a courtesy SMS is dispatched.
+3. Assert a row is created marking the reply as `appointment.reschedule_rejected` and emitting a `late_reschedule_attempt` alert.
 
 #### Acceptance
 - [ ] Y → CONFIRMED, recipient E.164.
@@ -1515,7 +1738,7 @@ VERIFY: `grep -n "stale_thread_reply\|post_cancel" src/grins_platform/services/s
 - [ ] Anything-else logged as needs_review.
 - [ ] Repeat Y on a CONFIRMED appointment short-circuits (no duplicate transition) and produces a reassurance SMS, OR (if not implemented) is documented as out-of-scope.
 - [ ] `provider_thread_id` is non-null on the outbound confirmation row.
-- [ ] Post-cancel "R" reply does NOT reactivate the appointment; logged as `stale_thread_reply`.
+- [ ] Post-cancel "R" reply does NOT reactivate the appointment; logged as `appointment.reschedule_rejected` (Gap 1.B state guard at `services/job_confirmation_service.py:461-490`). Plan was previously phrased as `stale_thread_reply`; the code-side audit discriminator is the authoritative behavior.
 - [ ] Hard STOP emits an audit-log entry `sms.consent.hard_stop_received` with masked phone in details.
 - [ ] Informal opt-out phrase fires an `INFORMAL_OPT_OUT` alert, audit chain `sms.informal_opt_out.{flagged,confirmed}` written, follow-up suppressed-`MessageType` sends are blocked.
 

@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from grins_platform.models.enums import EstimateStatus, FollowUpStatus
 
@@ -267,7 +267,7 @@ class EstimateResponse(BaseModel):
     Validates: CRM Gap Closure Req 48.1, 83.2
     """
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: UUID = Field(..., description="Estimate UUID")
     lead_id: UUID | None = Field(default=None, description="Lead UUID")
@@ -319,6 +319,7 @@ class EstimateResponse(BaseModel):
     rejection_reason: str | None = Field(
         default=None,
         description="Rejection reason",
+        validation_alias=AliasChoices("rejection_reason", "rejected_reason"),
     )
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Record update timestamp")

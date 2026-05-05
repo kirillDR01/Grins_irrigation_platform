@@ -834,6 +834,7 @@ class AppointmentService(LoggerMixin):
         page_size: int = 20,
         status: AppointmentStatus | None = None,
         staff_id: UUID | None = None,
+        customer_id: UUID | None = None,
         job_id: UUID | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
@@ -852,6 +853,7 @@ class AppointmentService(LoggerMixin):
             page_size=page_size,
             status=status,
             staff_id=staff_id,
+            customer_id=customer_id,
             job_id=job_id,
             date_from=date_from,
             date_to=date_to,
@@ -2128,6 +2130,17 @@ class AppointmentService(LoggerMixin):
         # Stripe-class methods: the webhook handler fires receipts after
         # the customer actually pays.
         if not defer_to_webhook:
+            # Mirror the Stripe webhook path: cash/check/Venmo/Zelle
+            # collected on-site must set ``Job.payment_collected_on_site``
+            # so the duplicate-invoice guard at
+            # ``InvoiceService.generate_from_job`` blocks a second
+            # invoice for the same job. Set BEFORE the receipt try
+            # block so a transient SMS/email failure cannot leave the
+            # flag unset.
+            await self.job_repository.update(
+                job_id=job.id,
+                data={"payment_collected_on_site": True},
+            )
             try:
                 await self._send_payment_receipts(
                     job, result_invoice, payment.amount,

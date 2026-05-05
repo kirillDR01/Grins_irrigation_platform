@@ -483,6 +483,67 @@ class TestProperty21EstimateApprovalUpdatesLeadTag:
         assert call_kwargs[1]["token_readonly"] is True
         assert call_kwargs[1]["status"] == EstimateStatus.REJECTED.value
 
+    @pytest.mark.asyncio
+    async def test_reject_via_portal_response_surfaces_rejection_reason(
+        self,
+    ) -> None:
+        """F2: response surfaces the customer's rejection reason.
+
+        ORM column is ``rejected_reason``; schema field is
+        ``rejection_reason``. The alias bridge on
+        :class:`EstimateResponse` must translate the ORM attribute back
+        into the response so admins can see the customer-supplied
+        reason.
+        """
+        from types import SimpleNamespace  # noqa: PLC0415
+
+        token = uuid4()
+        estimate = _make_estimate_mock(
+            customer_token=token,
+            status=EstimateStatus.SENT.value,
+        )
+
+        now = datetime.now(tz=timezone.utc)
+        # SimpleNamespace mirrors a real ORM Estimate row: the column
+        # is ``rejected_reason``, not ``rejection_reason``. Pre-fix
+        # ``EstimateResponse.model_validate`` returned ``None`` here.
+        updated = SimpleNamespace(
+            id=estimate.id,
+            lead_id=None,
+            customer_id=None,
+            job_id=None,
+            template_id=None,
+            status=EstimateStatus.REJECTED.value,
+            line_items=[],
+            options=None,
+            subtotal=Decimal("500.00"),
+            tax_amount=Decimal("40.00"),
+            discount_amount=Decimal("0.00"),
+            total=Decimal("540.00"),
+            promotion_code=None,
+            valid_until=None,
+            notes=None,
+            customer_token=token,
+            token_expires_at=now + timedelta(days=TOKEN_VALIDITY_DAYS),
+            token_readonly=True,
+            approved_at=None,
+            rejected_at=now,
+            rejected_reason="Too expensive",
+            created_at=now,
+            updated_at=now,
+        )
+
+        repo = AsyncMock()
+        repo.get_by_token = AsyncMock(return_value=estimate)
+        repo.update = AsyncMock(return_value=updated)
+        repo.cancel_follow_ups_for_estimate = AsyncMock(return_value=0)
+
+        svc = _build_service(repo=repo)
+        result = await svc.reject_via_portal(token, reason="Too expensive")
+
+        assert isinstance(result, EstimateResponse)
+        assert result.rejection_reason == "Too expensive"
+
 
 # =============================================================================
 # Property 22: Estimate template round-trip

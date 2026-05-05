@@ -298,6 +298,133 @@ class TestPaymentIntentSucceeded:
 
 
 # =============================================================================
+# checkout.session.completed (Architecture C — Payment Link reconciliation)
+# =============================================================================
+
+
+class TestCheckoutSessionCompletedReceipt:
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_checkout_session_completed_fires_customer_receipt(
+        self,
+    ) -> None:
+        """F8: checkout handler dispatches the customer receipt after pay.
+
+        Stripe Payment Links arrive as ``checkout.session.completed`` with
+        ``metadata.invoice_id``. The PI handler short-circuits on already
+        PAID invoices, so the receipt SMS+email must fire from this
+        handler to keep parity with cash/check/Venmo/Zelle.
+        """
+        invoice_id = uuid4()
+        job_id = uuid4()
+        invoice_unpaid = SimpleNamespace(
+            id=invoice_id,
+            job_id=job_id,
+            status=InvoiceStatus.SENT.value,
+        )
+        invoice_paid = SimpleNamespace(
+            id=invoice_id,
+            job_id=job_id,
+            status=InvoiceStatus.PAID.value,
+        )
+        session_obj: dict[str, Any] = {
+            "id": "cs_test_checkout_receipt",
+            "payment_intent": "pi_test_checkout_receipt",
+            "amount_total": 25000,
+            "metadata": {"invoice_id": str(invoice_id)},
+        }
+        event = _make_event("checkout.session.completed", session_obj)
+        handler = _build_handler()
+        send_receipts_mock = AsyncMock()
+        job_obj = SimpleNamespace(
+            id=job_id,
+            payment_collected_on_site=False,
+        )
+        scalar_result = MagicMock()
+        scalar_result.scalar_one_or_none = MagicMock(return_value=job_obj)
+        handler.session.execute = AsyncMock(return_value=scalar_result)
+        with (
+            patch(
+                "grins_platform.repositories.invoice_repository.InvoiceRepository",
+            ) as mock_repo_cls,
+            patch(
+                "grins_platform.services.invoice_service.InvoiceService",
+            ) as mock_svc_cls,
+            patch(
+                "grins_platform.services.appointment_service.AppointmentService",
+            ) as mock_appt_svc_cls,
+        ):
+            # First get_by_id: pre-payment unpaid row.
+            # Second get_by_id (after the receipt re-fetch): paid row.
+            mock_repo_cls.return_value.get_by_id = AsyncMock(
+                side_effect=[invoice_unpaid, invoice_paid],
+            )
+            mock_repo_cls.return_value.update = AsyncMock()
+            mock_svc_cls.return_value.record_payment = AsyncMock()
+            mock_appt_svc_cls.return_value._send_payment_receipts = send_receipts_mock
+
+            await handler._handle_checkout_completed_invoice_payment(
+                event,
+                session_obj,
+                str(invoice_id),
+            )
+
+        send_receipts_mock.assert_awaited_once()
+        args = send_receipts_mock.await_args
+        assert args.args[0] is job_obj
+        assert args.args[1] is invoice_paid  # the post-payment re-fetch result
+        assert args.args[2] == Decimal("250.00")
+        # Job flag was set by the existing in-handler logic.
+        assert job_obj.payment_collected_on_site is True
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_checkout_session_completed_does_not_fire_receipt_when_already_paid(
+        self,
+    ) -> None:
+        """F8 idempotency: replay on a PAID invoice short-circuits early.
+
+        The PAID short-circuit at the top of the handler returns BEFORE
+        the receipt-dispatch block, so a replay does not double-fire.
+        """
+        invoice_id = uuid4()
+        invoice_paid = SimpleNamespace(
+            id=invoice_id,
+            job_id=uuid4(),
+            status=InvoiceStatus.PAID.value,
+        )
+        session_obj: dict[str, Any] = {
+            "id": "cs_test_replay",
+            "payment_intent": "pi_test_replay",
+            "amount_total": 25000,
+            "metadata": {"invoice_id": str(invoice_id)},
+        }
+        event = _make_event("checkout.session.completed", session_obj)
+        handler = _build_handler()
+        send_receipts_mock = AsyncMock()
+        with (
+            patch(
+                "grins_platform.repositories.invoice_repository.InvoiceRepository",
+            ) as mock_repo_cls,
+            patch(
+                "grins_platform.services.appointment_service.AppointmentService",
+            ) as mock_appt_svc_cls,
+        ):
+            mock_repo_cls.return_value.get_by_id = AsyncMock(
+                return_value=invoice_paid,
+            )
+            mock_appt_svc_cls.return_value._send_payment_receipts = send_receipts_mock
+
+            await handler._handle_checkout_completed_invoice_payment(
+                event,
+                session_obj,
+                str(invoice_id),
+            )
+
+        send_receipts_mock.assert_not_awaited()
+
+
+# =============================================================================
 # payment_intent.payment_failed / canceled — log only
 # =============================================================================
 

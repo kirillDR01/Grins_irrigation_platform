@@ -766,6 +766,155 @@ class TestProperty33PaymentCollection:
         invoice_repo.create.assert_awaited_once()
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "method",
+        [
+            PaymentMethod.CASH,
+            PaymentMethod.CHECK,
+            PaymentMethod.VENMO,
+            PaymentMethod.ZELLE,
+        ],
+    )
+    async def test_collect_payment_sets_payment_collected_on_site_for_non_stripe(
+        self,
+        method: PaymentMethod,
+    ) -> None:
+        """F10: cash/check/Venmo/Zelle set ``Job.payment_collected_on_site``.
+
+        The duplicate-invoice guard at
+        ``InvoiceService.generate_from_job`` reads this flag to refuse a
+        second invoice for the same job. Without it set, an admin can
+        accidentally generate a phantom duplicate invoice for a job
+        already paid on-site.
+        """
+        apt_id = uuid4()
+        job_id = uuid4()
+        customer_id = uuid4()
+
+        customer = _make_customer_mock(customer_id=customer_id)
+        job = _make_job_mock(
+            job_id=job_id,
+            customer_id=customer_id,
+            customer=customer,
+        )
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            job_id=job_id,
+        )
+        new_invoice = _make_invoice_mock(
+            job_id=job_id,
+            customer_id=customer_id,
+            total_amount=Decimal("75.00"),
+            status=InvoiceStatus.PAID.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+        job_repo.update = AsyncMock(return_value=job)
+
+        invoice_repo = AsyncMock()
+        invoice_repo.get_next_sequence = AsyncMock(return_value=1)
+        invoice_repo.create = AsyncMock(return_value=new_invoice)
+        invoice_repo.update = AsyncMock(return_value=new_invoice)
+        invoice_repo.session = AsyncMock()
+
+        svc = _build_service(
+            appt_repo=appt_repo,
+            job_repo=job_repo,
+            invoice_repo=invoice_repo,
+        )
+        svc._find_invoice_for_job = AsyncMock(return_value=None)
+        svc._send_payment_receipts = AsyncMock()
+
+        payment = PaymentCollectionRequest(
+            payment_method=method,
+            amount=Decimal("75.00"),
+        )
+        await svc.collect_payment(apt_id, payment)
+
+        job_repo.update.assert_awaited_with(
+            job_id=job_id,
+            data={"payment_collected_on_site": True},
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "method",
+        [PaymentMethod.STRIPE, PaymentMethod.CREDIT_CARD],
+    )
+    async def test_collect_payment_does_not_set_flag_for_stripe_deferred_methods(
+        self,
+        method: PaymentMethod,
+    ) -> None:
+        """F10 negative: Stripe-deferred methods do NOT set the flag here.
+
+        The Stripe webhook handler owns ``payment_collected_on_site`` for
+        card/Stripe payments. ``collect_payment`` must NOT set it for
+        these methods or it would race the webhook (and bypass the
+        ``defer_to_webhook`` short-circuit on subsequent invoice work).
+        """
+        apt_id = uuid4()
+        job_id = uuid4()
+        customer_id = uuid4()
+
+        customer = _make_customer_mock(customer_id=customer_id)
+        job = _make_job_mock(
+            job_id=job_id,
+            customer_id=customer_id,
+            customer=customer,
+        )
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            job_id=job_id,
+        )
+        new_invoice = _make_invoice_mock(
+            job_id=job_id,
+            customer_id=customer_id,
+            total_amount=Decimal("75.00"),
+            status=InvoiceStatus.SENT.value,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+        job_repo.update = AsyncMock(return_value=job)
+
+        invoice_repo = AsyncMock()
+        invoice_repo.get_next_sequence = AsyncMock(return_value=1)
+        invoice_repo.create = AsyncMock(return_value=new_invoice)
+        invoice_repo.update = AsyncMock(return_value=new_invoice)
+        invoice_repo.session = AsyncMock()
+
+        svc = _build_service(
+            appt_repo=appt_repo,
+            job_repo=job_repo,
+            invoice_repo=invoice_repo,
+        )
+        svc._find_invoice_for_job = AsyncMock(return_value=None)
+
+        payment = PaymentCollectionRequest(
+            payment_method=method,
+            amount=Decimal("75.00"),
+        )
+        await svc.collect_payment(apt_id, payment)
+
+        # job_repository.update must NOT be called with the flag for
+        # Stripe-deferred methods. The webhook owns this path.
+        for call in job_repo.update.await_args_list:
+            data = call.kwargs.get("data") or (
+                call.args[1] if len(call.args) > 1 else {}
+            )
+            assert "payment_collected_on_site" not in (data or {}), (
+                f"Flag was unexpectedly set for Stripe-deferred method "
+                f"{method.value}: {call!r}"
+            )
+
+    @pytest.mark.asyncio
     async def test_collect_payment_with_existing_invoice_updates_it(
         self,
     ) -> None:
