@@ -280,6 +280,7 @@ class TestPaymentIntentSucceeded:
             ) as mock_svc_cls,
             patch(
                 "grins_platform.services.appointment_service.AppointmentService",
+                autospec=True,
             ) as mock_appt_svc_cls,
         ):
             mock_repo_cls.return_value.get_by_id = AsyncMock(return_value=invoice)
@@ -289,12 +290,21 @@ class TestPaymentIntentSucceeded:
 
             await handler._handle_payment_intent_succeeded(event)
 
+        # Regression assertion: the receipt-dispatch try/except used to
+        # silently swallow `AppointmentService.__init__()` TypeError when
+        # ``staff_repository`` was missing. ``autospec=True`` enforces the
+        # real signature, so a missing kwarg now surfaces as a failed
+        # ``assert_awaited_once()`` rather than a green test that masks
+        # the bug.
         send_receipts_mock.assert_awaited_once()
         args = send_receipts_mock.await_args
         # Positional: (job, invoice, amount)
         assert args.args[0] is job_obj
         assert args.args[1] is invoice
         assert args.args[2] == Decimal("250.00")
+        # Confirm staff_repository was included in the construction.
+        ctor_kwargs = mock_appt_svc_cls.call_args.kwargs
+        assert "staff_repository" in ctor_kwargs
 
 
 # =============================================================================
@@ -352,6 +362,7 @@ class TestCheckoutSessionCompletedReceipt:
             ) as mock_svc_cls,
             patch(
                 "grins_platform.services.appointment_service.AppointmentService",
+                autospec=True,
             ) as mock_appt_svc_cls,
         ):
             # First get_by_id: pre-payment unpaid row.
@@ -369,6 +380,9 @@ class TestCheckoutSessionCompletedReceipt:
                 str(invoice_id),
             )
 
+        # ``autospec=True`` enforces the real constructor signature, so a
+        # missing ``staff_repository=`` kwarg surfaces as the dispatch
+        # never running rather than a green test.
         send_receipts_mock.assert_awaited_once()
         args = send_receipts_mock.await_args
         assert args.args[0] is job_obj
@@ -376,6 +390,10 @@ class TestCheckoutSessionCompletedReceipt:
         assert args.args[2] == Decimal("250.00")
         # Job flag was set by the existing in-handler logic.
         assert job_obj.payment_collected_on_site is True
+        # Regression: receipt-dispatch path must construct AppointmentService
+        # with all four required dependencies.
+        ctor_kwargs = mock_appt_svc_cls.call_args.kwargs
+        assert "staff_repository" in ctor_kwargs
 
     @pytest.mark.unit
     @pytest.mark.asyncio

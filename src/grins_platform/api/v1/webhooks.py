@@ -1149,6 +1149,9 @@ class StripeWebhookHandler(LoggerMixin):
             from grins_platform.repositories.appointment_repository import (  # noqa: PLC0415
                 AppointmentRepository,
             )
+            from grins_platform.repositories.staff_repository import (  # noqa: PLC0415
+                StaffRepository,
+            )
             from grins_platform.services.appointment_service import (  # noqa: PLC0415
                 AppointmentService,
             )
@@ -1158,6 +1161,7 @@ class StripeWebhookHandler(LoggerMixin):
                 appt_service = AppointmentService(
                     appointment_repository=AppointmentRepository(session=self.session),
                     job_repository=JobRepository(session=self.session),
+                    staff_repository=StaffRepository(session=self.session),
                     invoice_repository=invoice_repo,
                 )
                 await appt_service._send_payment_receipts(  # noqa: SLF001
@@ -1338,6 +1342,9 @@ class StripeWebhookHandler(LoggerMixin):
             from grins_platform.repositories.appointment_repository import (  # noqa: PLC0415
                 AppointmentRepository,
             )
+            from grins_platform.repositories.staff_repository import (  # noqa: PLC0415
+                StaffRepository,
+            )
             from grins_platform.services.appointment_service import (  # noqa: PLC0415
                 AppointmentService,
             )
@@ -1347,6 +1354,7 @@ class StripeWebhookHandler(LoggerMixin):
                 appt_service = AppointmentService(
                     appointment_repository=AppointmentRepository(session=self.session),
                     job_repository=JobRepository(session=self.session),
+                    staff_repository=StaffRepository(session=self.session),
                     invoice_repository=invoice_repo,
                 )
                 await appt_service._send_payment_receipts(  # noqa: SLF001
