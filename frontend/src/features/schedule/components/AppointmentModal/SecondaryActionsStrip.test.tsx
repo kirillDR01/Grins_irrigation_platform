@@ -6,7 +6,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toast } from 'sonner';
 import { SecondaryActionsStrip } from './SecondaryActionsStrip';
+
+vi.mock('sonner', () => ({
+  toast: {
+    info: vi.fn(),
+  },
+}));
 
 // ── Default props ────────────────────────────────────────────────────────────
 
@@ -133,7 +140,7 @@ describe('SecondaryActionsStrip — Review gating', () => {
     expect(screen.getByLabelText('Send Review Request')).not.toBeDisabled();
   });
 
-  it('disables the Review button when reviewEnabled=false and exposes the reason via title + aria-label', () => {
+  it('exposes the reason via title + aria-label when reviewEnabled=false', () => {
     render(
       <SecondaryActionsStrip
         {...defaultProps({
@@ -145,14 +152,13 @@ describe('SecondaryActionsStrip — Review gating', () => {
     const btn = screen.getByLabelText(
       /Send Review Request — Available after appointment is marked completed/
     );
-    expect(btn).toBeDisabled();
     expect(btn).toHaveAttribute(
       'title',
       'Available after appointment is marked completed'
     );
   });
 
-  it('does not call onReview when disabled and clicked', async () => {
+  it('does not call onReview when ineligible and clicked', async () => {
     const user = userEvent.setup();
     const props = defaultProps({
       reviewEnabled: false,
@@ -165,5 +171,67 @@ describe('SecondaryActionsStrip — Review gating', () => {
     );
     await user.click(btn);
     expect(props.onReview).not.toHaveBeenCalled();
+  });
+});
+
+// ── Review button gating UX (inactive mode + toast) ──────────────────────────
+
+describe('SecondaryActionsStrip — Review button gating UX', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('renders aria-disabled (not HTML disabled) when reviewEnabled=false', () => {
+    render(
+      <SecondaryActionsStrip
+        {...defaultProps({
+          onReview: vi.fn(),
+          // @ts-expect-error — extending the runtime props with new flag the
+          // production component now accepts. If/when the component types are
+          // updated, remove this directive.
+          reviewEnabled: false,
+          reviewDisabledReason: 'Available after appointment is marked completed',
+        })}
+      />,
+    );
+    const btn = screen.getByLabelText(
+      'Send Review Request — Available after appointment is marked completed',
+    );
+    expect(btn).toHaveAttribute('aria-disabled', 'true');
+    expect(btn).not.toBeDisabled();
+  });
+
+  it('toasts the reviewDisabledReason and does NOT call onReview when ineligible', async () => {
+    const user = userEvent.setup();
+    const onReview = vi.fn();
+    render(
+      <SecondaryActionsStrip
+        {...defaultProps({
+          onReview,
+          // @ts-expect-error — see above
+          reviewEnabled: false,
+          reviewDisabledReason: 'Customer phone not on file',
+        })}
+      />,
+    );
+    await user.click(
+      screen.getByLabelText('Send Review Request — Customer phone not on file'),
+    );
+    expect(toast.info).toHaveBeenCalledWith(
+      'Send Review Request unavailable',
+      expect.objectContaining({ description: 'Customer phone not on file' }),
+    );
+    expect(onReview).not.toHaveBeenCalled();
+  });
+
+  it('calls onReview and does NOT toast when reviewEnabled=true', async () => {
+    const user = userEvent.setup();
+    const onReview = vi.fn();
+    render(
+      <SecondaryActionsStrip
+        {...defaultProps({ onReview, reviewEnabled: true })}
+      />,
+    );
+    await user.click(screen.getByLabelText('Send Review Request'));
+    expect(onReview).toHaveBeenCalledTimes(1);
+    expect(toast.info).not.toHaveBeenCalled();
   });
 });

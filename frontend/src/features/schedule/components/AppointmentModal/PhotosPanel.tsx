@@ -8,6 +8,7 @@
 import { useRef, useState } from 'react';
 import { Image, Upload, Camera, Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import axios from 'axios';
 import {
   useCustomerPhotos,
   useUploadCustomerPhotos,
@@ -16,6 +17,9 @@ import { PhotoCard } from './PhotoCard';
 
 const MONO_FONT =
   "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
+
+const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/heic', 'image/heif'] as const;
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB — must match photo_service.py:_RULES[CUSTOMER_PHOTO]
 
 interface PhotosPanelProps {
   customerId: string;
@@ -28,6 +32,25 @@ interface OptimisticPhoto {
   file: File;
   previewUrl: string;
   uploading: boolean;
+}
+
+function toastUploadError(error: unknown): void {
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status;
+    if (status === 413) {
+      toast.error('File too large', { description: 'Photos must be 10 MB or smaller.' });
+      return;
+    }
+    if (status === 415) {
+      toast.error('Unsupported file type', { description: 'Use JPEG, PNG, or HEIC.' });
+      return;
+    }
+    if (status === 422) {
+      toast.error('Photo upload failed', { description: 'The server rejected the request. Please try a different file.' });
+      return;
+    }
+  }
+  toast.error('Photo upload failed', { description: 'Network or server error. Please try again.' });
 }
 
 export function PhotosPanel({ customerId, appointmentId }: PhotosPanelProps) {
@@ -47,8 +70,23 @@ export function PhotosPanel({ customerId, appointmentId }: PhotosPanelProps) {
 
     const fileArray = Array.from(files);
 
-    // Create optimistic placeholders
-    const placeholders: OptimisticPhoto[] = fileArray.map((file) => ({
+    // Pre-validate (mirror PhotoGallery.tsx:34-48)
+    const accepted: File[] = [];
+    for (const file of fileArray) {
+      if (!ACCEPTED_TYPES.includes(file.type as (typeof ACCEPTED_TYPES)[number])) {
+        toast.error(`${file.name}: unsupported file type. Use JPEG, PNG, or HEIC.`);
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error(`${file.name}: exceeds 10MB limit.`);
+        continue;
+      }
+      accepted.push(file);
+    }
+    if (accepted.length === 0) return;
+
+    // Optimistic placeholders for accepted files only
+    const placeholders: OptimisticPhoto[] = accepted.map((file) => ({
       id: `optimistic-${Date.now()}-${Math.random()}`,
       file,
       previewUrl: URL.createObjectURL(file),
@@ -58,20 +96,17 @@ export function PhotosPanel({ customerId, appointmentId }: PhotosPanelProps) {
     setOptimisticPhotos((prev) => [...placeholders, ...prev]);
 
     try {
-      await uploadMutation.mutateAsync({ files: fileArray });
-      // On success, remove placeholders (real data will come from query refetch)
-      setOptimisticPhotos((prev) =>
-        prev.filter((p) => !placeholders.some((pl) => pl.id === p.id))
-      );
-      // Revoke object URLs
-      placeholders.forEach((p) => URL.revokeObjectURL(p.previewUrl));
-    } catch {
-      // On error, remove placeholders and show toast
+      await uploadMutation.mutateAsync({ files: accepted });
       setOptimisticPhotos((prev) =>
         prev.filter((p) => !placeholders.some((pl) => pl.id === p.id))
       );
       placeholders.forEach((p) => URL.revokeObjectURL(p.previewUrl));
-      toast.error('Photo upload failed');
+    } catch (error: unknown) {
+      setOptimisticPhotos((prev) =>
+        prev.filter((p) => !placeholders.some((pl) => pl.id === p.id))
+      );
+      placeholders.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+      toastUploadError(error);
     }
   };
 

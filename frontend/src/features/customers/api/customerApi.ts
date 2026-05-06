@@ -83,13 +83,50 @@ export const customerApi = {
   },
 
   uploadPhotos: async (id: string, files: File[], caption?: string): Promise<CustomerPhoto[]> => {
-    const formData = new FormData();
-    files.forEach((file) => formData.append('files', file));
-    if (caption) formData.append('caption', caption);
-    const response = await apiClient.post<CustomerPhoto[]>(`${BASE_PATH}/${id}/photos`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    const params = caption ? { caption } : undefined;
+
+    const settle = await Promise.allSettled(
+      files.map((file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return apiClient.post<CustomerPhoto>(
+          `${BASE_PATH}/${id}/photos`,
+          formData,
+          {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            params,
+          },
+        );
+      }),
+    );
+
+    const successes: CustomerPhoto[] = [];
+    const failures: Array<{ file: File; error: unknown }> = [];
+    settle.forEach((result, idx) => {
+      if (result.status === 'fulfilled') {
+        successes.push(result.value.data);
+      } else {
+        failures.push({ file: files[idx], error: result.reason });
+      }
     });
-    return response.data;
+
+    if (failures.length > 0 && successes.length === 0) {
+      // Re-throw the first error so the mutation rejects and consumers can toast.
+      throw failures[0].error;
+    }
+
+    if (failures.length > 0) {
+      // Mixed result — attach failures so consumers can surface per-file detail.
+      const partial = new Error('Some photo uploads failed') as Error & {
+        failures?: Array<{ file: File; error: unknown }>;
+        successes?: CustomerPhoto[];
+      };
+      partial.failures = failures;
+      partial.successes = successes;
+      throw partial;
+    }
+
+    return successes;
   },
 
   updatePhotoCaption: async (customerId: string, photoId: string, caption: string): Promise<CustomerPhoto> => {

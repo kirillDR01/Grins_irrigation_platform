@@ -9,6 +9,14 @@ interface LinkButtonProps {
   icon?: ReactNode;
   variant?: LinkButtonVariant;
   disabled?: boolean;
+  /**
+   * Visually disabled but still receives clicks.
+   * Use when the consumer wants to surface a reason for unavailability
+   * on tap (e.g. via a toast) instead of swallowing the event.
+   * Sets aria-disabled="true" without the HTML `disabled` attribute.
+   * Ignored when `disabled` is true.
+   */
+  inactive?: boolean;
   type?: 'button' | 'submit' | 'reset';
   'aria-label'?: string;
   title?: string;
@@ -28,16 +36,19 @@ export function LinkButton({
   icon,
   variant = 'default',
   disabled,
+  inactive,
   type = 'button',
   'aria-label': ariaLabel,
   title,
   className,
 }: LinkButtonProps) {
+  const visuallyMuted = disabled || inactive;
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
+      aria-disabled={inactive && !disabled ? true : undefined}
       aria-label={ariaLabel}
       title={title}
       className={cn(
@@ -45,8 +56,8 @@ export function LinkButton({
         'rounded-[12px] border-[1.5px] text-[14px] font-bold',
         'transition-colors duration-150',
         variantStyles[variant],
-        disabled && 'opacity-50 cursor-not-allowed',
-        className
+        visuallyMuted && 'opacity-50 cursor-not-allowed',
+        className,
       )}
     >
       {icon && (

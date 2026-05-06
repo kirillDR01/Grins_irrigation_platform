@@ -234,4 +234,88 @@ describe('customerApi', () => {
       );
     });
   });
+
+  describe('uploadPhotos — backend contract', () => {
+    const photoResponse = {
+      id: 'photo-1',
+      file_key: 'k1',
+      file_name: 'a.jpg',
+      file_size: 1,
+      content_type: 'image/jpeg',
+      caption: null,
+      download_url: 'https://example.com',
+      created_at: '2026-05-05T00:00:00Z',
+    };
+
+    it('issues one POST per file with form field name "file" (singular)', async () => {
+      const f1 = new File(['a'], 'a.jpg', { type: 'image/jpeg' });
+      const f2 = new File(['b'], 'b.jpg', { type: 'image/jpeg' });
+
+      vi.mocked(apiClient.post).mockResolvedValue({ data: photoResponse });
+
+      const res = await customerApi.uploadPhotos('cust-1', [f1, f2]);
+
+      expect(res).toHaveLength(2);
+      expect(apiClient.post).toHaveBeenCalledTimes(2);
+      const calls = vi.mocked(apiClient.post).mock.calls;
+      calls.forEach((call) => {
+        expect(call[0]).toBe('/customers/cust-1/photos');
+        const formData = call[1] as FormData;
+        // FormData.has returns true for the singular "file" key.
+        expect(formData.has('file')).toBe(true);
+        // No "files" plural — that was the original bug.
+        expect(formData.has('files')).toBe(false);
+      });
+    });
+
+    it('sends caption as a URL query parameter (not a form field)', async () => {
+      const f = new File(['a'], 'a.jpg', { type: 'image/jpeg' });
+      vi.mocked(apiClient.post).mockResolvedValue({
+        data: { ...photoResponse, caption: 'front yard' },
+      });
+
+      await customerApi.uploadPhotos('cust-1', [f], 'front yard');
+
+      const [, form, config] = vi.mocked(apiClient.post).mock.calls[0];
+      expect((config as { params?: Record<string, unknown> }).params).toEqual({
+        caption: 'front yard',
+      });
+      expect((form as FormData).has('caption')).toBe(false);
+    });
+
+    it('omits caption param when caption is undefined', async () => {
+      const f = new File(['a'], 'a.jpg', { type: 'image/jpeg' });
+      vi.mocked(apiClient.post).mockResolvedValue({ data: photoResponse });
+
+      await customerApi.uploadPhotos('cust-1', [f]);
+
+      const [, , config] = vi.mocked(apiClient.post).mock.calls[0];
+      expect((config as { params?: unknown }).params).toBeUndefined();
+    });
+
+    it('throws when all uploads fail', async () => {
+      const f = new File(['a'], 'a.jpg', { type: 'image/jpeg' });
+      const err = Object.assign(new Error('413'), {
+        isAxiosError: true,
+        response: { status: 413, data: { detail: 'too big' } },
+      });
+      vi.mocked(apiClient.post).mockRejectedValue(err);
+
+      await expect(customerApi.uploadPhotos('cust-1', [f])).rejects.toBeDefined();
+    });
+
+    it('throws aggregate error with successes + failures on partial failure', async () => {
+      const f1 = new File(['a'], 'a.jpg', { type: 'image/jpeg' });
+      const f2 = new File(['b'], 'b.jpg', { type: 'image/jpeg' });
+      vi.mocked(apiClient.post)
+        .mockResolvedValueOnce({ data: photoResponse })
+        .mockRejectedValueOnce(new Error('boom'));
+
+      await expect(customerApi.uploadPhotos('cust-1', [f1, f2])).rejects.toMatchObject({
+        message: 'Some photo uploads failed',
+        successes: expect.any(Array),
+        failures: expect.any(Array),
+      });
+    });
+  });
 });

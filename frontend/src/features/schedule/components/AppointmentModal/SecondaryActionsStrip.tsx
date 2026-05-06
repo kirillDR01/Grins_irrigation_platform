@@ -6,6 +6,7 @@
  */
 
 import { Image, FileText, Star, Tag } from 'lucide-react';
+import { toast } from 'sonner';
 import { LinkButton } from './LinkButton';
 import { V2LinkBtn } from './V2LinkBtn';
 
@@ -61,8 +62,18 @@ export function SecondaryActionsStrip({
       </V2LinkBtn>
       <LinkButton
         icon={<Star />}
-        onClick={onReview}
-        disabled={!reviewEnabled}
+        onClick={() => {
+          if (reviewEnabled) {
+            onReview?.();
+            return;
+          }
+          if (reviewDisabledReason) {
+            toast.info('Send Review Request unavailable', {
+              description: reviewDisabledReason,
+            });
+          }
+        }}
+        inactive={!reviewEnabled}
         aria-label={
           reviewEnabled
             ? 'Send Review Request'

@@ -222,3 +222,69 @@ describe('PhotosPanel — File input triggers', () => {
     expect(clickSpy).toHaveBeenCalled();
   });
 });
+
+// ── Upload validation and error handling ────────────────────────────────────
+
+describe('PhotosPanel — upload validation and error handling', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('rejects unsupported MIME types before calling the upload mutation', async () => {
+    const { toast } = await import('sonner');
+    renderPhotosPanel();
+    const input = screen.getByTestId('upload-photo-input') as HTMLInputElement;
+    const gif = new File(['x'], 'evil.gif', { type: 'image/gif' });
+    await userEvent.upload(input, gif);
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringContaining('evil.gif'),
+    );
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('rejects files larger than 10 MB before calling the upload mutation', async () => {
+    const { toast } = await import('sonner');
+    renderPhotosPanel();
+    const input = screen.getByTestId('upload-photo-input') as HTMLInputElement;
+    const big = new File([new Uint8Array(11 * 1024 * 1024)], 'huge.jpg', {
+      type: 'image/jpeg',
+    });
+    await userEvent.upload(input, big);
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringContaining('huge.jpg'),
+    );
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('emits "File too large" toast on 413 response from the upload mutation', async () => {
+    const { toast } = await import('sonner');
+    const err = Object.assign(new Error('413'), {
+      isAxiosError: true,
+      response: { status: 413, data: { detail: 'too big' } },
+    });
+    mockMutateAsync.mockRejectedValueOnce(err);
+    renderPhotosPanel();
+    const input = screen.getByTestId('upload-photo-input') as HTMLInputElement;
+    const ok = new File(['x'], 'ok.jpg', { type: 'image/jpeg' });
+    await userEvent.upload(input, ok);
+    expect(toast.error).toHaveBeenCalledWith(
+      'File too large',
+      expect.objectContaining({ description: expect.stringContaining('10 MB') }),
+    );
+  });
+
+  it('emits "Unsupported file type" toast on 415 response from the upload mutation', async () => {
+    const { toast } = await import('sonner');
+    const err = Object.assign(new Error('415'), {
+      isAxiosError: true,
+      response: { status: 415, data: { detail: 'bad mime' } },
+    });
+    mockMutateAsync.mockRejectedValueOnce(err);
+    renderPhotosPanel();
+    const input = screen.getByTestId('upload-photo-input') as HTMLInputElement;
+    const ok = new File(['x'], 'ok.jpg', { type: 'image/jpeg' });
+    await userEvent.upload(input, ok);
+    expect(toast.error).toHaveBeenCalledWith(
+      'Unsupported file type',
+      expect.any(Object),
+    );
+  });
+});
