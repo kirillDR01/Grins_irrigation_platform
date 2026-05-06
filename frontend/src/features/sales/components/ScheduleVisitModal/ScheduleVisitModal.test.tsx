@@ -192,7 +192,10 @@ describe('ScheduleVisitModal', () => {
       { wrapper },
     );
     const btn = screen.getByTestId('schedule-visit-confirm-btn');
-    expect(btn).toHaveTextContent('Confirm & advance to Send Estimate');
+    // sales-pipeline-estimate-visit-confirmation-lifecycle Task 14:
+    // submit button now reads "Send confirmation text message" — clicking
+    // both books the slot and triggers the Y/R/C SMS atomically.
+    expect(btn).toHaveTextContent('Send confirmation text message');
     expect(btn.querySelector('svg')).not.toBeNull();
     // Calendar-emoji prefix from v1 must be gone.
     expect(btn.textContent ?? '').not.toContain('📅');
@@ -222,10 +225,13 @@ describe('ScheduleVisitModal', () => {
       { wrapper },
     );
     const btn = screen.getByTestId('schedule-visit-confirm-btn');
-    expect(btn).toHaveTextContent('Update appointment');
+    // Reschedule path: button reads "Update & resend confirmation text"
+    // because the new slot triggers a fresh Y/R/C SMS so the customer
+    // sees the new time. See
+    // sales-pipeline-estimate-visit-confirmation-lifecycle Task 14.
+    expect(btn).toHaveTextContent('Update & resend confirmation text');
     expect(btn.textContent ?? '').not.toContain('📅');
-    // No advance-arrow on reschedule.
-    expect(btn.querySelector('svg')).toBeNull();
+    expect(btn.querySelector('svg')).not.toBeNull();
   });
 
   it('renders the stage pill with the entry status label', () => {

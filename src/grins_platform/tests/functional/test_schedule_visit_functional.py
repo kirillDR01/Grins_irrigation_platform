@@ -4,9 +4,10 @@ This codebase's "functional" tier is mocked-service-layer (mirrors
 ``test_sales_pipeline_functional.py``). Real-DB tests live under
 ``tests/integration/``.
 
-Validates: Auto-advance from schedule_estimate → estimate_scheduled on
-event creation; reschedule (PUT) does not re-advance; assignee survives
-the create round-trip.
+Validates: bare event creation (no ``send_confirmation``) does NOT auto-
+advance the sales entry — only the combined ``?send_confirmation=true``
+path advances on first successful SMS dispatch. Reschedule (PUT) never
+re-advances. Assignee survives the create round-trip.
 """
 
 from __future__ import annotations
@@ -69,6 +70,11 @@ def _make_session(
             obj.created_at = datetime.now(timezone.utc)
         if not getattr(obj, "updated_at", None):
             obj.updated_at = datetime.now(timezone.utc)
+        # server_default="pending" only fires on real flush; tests must
+        # populate the column explicitly so SalesCalendarEventResponse
+        # validation accepts the in-memory row.
+        if getattr(obj, "confirmation_status", None) is None:
+            obj.confirmation_status = "pending"
 
     session.refresh = AsyncMock(side_effect=_refresh)
     return session
@@ -76,12 +82,19 @@ def _make_session(
 
 @pytest.mark.functional
 @pytest.mark.asyncio
-async def test_workflow_create_event_advances_status() -> None:
+async def test_workflow_create_event_no_send_does_not_advance() -> None:
+    """Bare event creation (default ``send_confirmation=false``) must
+    never auto-advance the sales entry. Advance only happens via the
+    combined endpoint when SMS dispatch succeeds.
+    """
     sales_entry = _make_sales_entry(
         status=SalesEntryStatus.SCHEDULE_ESTIMATE.value,
     )
     session = _make_session(sales_entry)
     user = MagicMock()
+    user.id = uuid4()
+    pipeline_service = MagicMock()
+    pipeline_service.send_estimate_visit_confirmation = AsyncMock()
 
     body = SalesCalendarEventCreate(
         sales_entry_id=sales_entry.id,
@@ -92,10 +105,17 @@ async def test_workflow_create_event_advances_status() -> None:
         end_time=time(14, 0),
     )
 
-    await create_calendar_event(body=body, _user=user, session=session)
+    await create_calendar_event(
+        body=body,
+        user=user,
+        session=session,
+        pipeline_service=pipeline_service,
+    )
 
-    # Status advanced.
-    assert sales_entry.status == SalesEntryStatus.ESTIMATE_SCHEDULED.value
+    # Status unchanged — auto-advance was removed.
+    assert sales_entry.status == SalesEntryStatus.SCHEDULE_ESTIMATE.value
+    # No SMS dispatched on the bare path.
+    pipeline_service.send_estimate_visit_confirmation.assert_not_called()
     # Event row was added to the session.
     assert session.add.call_count == 1
     # Commit awaited.
@@ -116,6 +136,8 @@ async def test_workflow_reschedule_does_not_re_advance() -> None:
     existing.end_time = time(15, 0)
     existing.notes = None
     existing.assigned_to_user_id = None
+    existing.confirmation_status = "pending"
+    existing.confirmation_status_at = None
     existing.created_at = datetime.now(timezone.utc)
     existing.updated_at = datetime.now(timezone.utc)
 
@@ -151,6 +173,9 @@ async def test_workflow_create_event_with_assignee_round_trips() -> None:
     sales_entry = _make_sales_entry()
     session = _make_session(sales_entry)
     user = MagicMock()
+    user.id = uuid4()
+    pipeline_service = MagicMock()
+    pipeline_service.send_estimate_visit_confirmation = AsyncMock()
     assignee_id = uuid4()
 
     body = SalesCalendarEventCreate(
@@ -163,7 +188,12 @@ async def test_workflow_create_event_with_assignee_round_trips() -> None:
         assigned_to_user_id=assignee_id,
     )
 
-    await create_calendar_event(body=body, _user=user, session=session)
+    await create_calendar_event(
+        body=body,
+        user=user,
+        session=session,
+        pipeline_service=pipeline_service,
+    )
 
     added = session.add.call_args.args[0]
     assert added.assigned_to_user_id == assignee_id

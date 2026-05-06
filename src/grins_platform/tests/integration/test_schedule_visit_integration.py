@@ -5,9 +5,12 @@ through FastAPI TestClient with auth + DB dependency overrides
 (matches the existing integration tier pattern in
 ``test_appointment_notes_integration.py``).
 
-Validates: assigned_to_user_id round-trips through HTTP; auto-advance
-from schedule_estimate → estimate_scheduled triggers on POST; PUT
-update mutates the row but does not re-advance the entry.
+Validates: assigned_to_user_id round-trips through HTTP; bare POST
+(default ``send_confirmation=false``) does NOT auto-advance the entry —
+only the combined ``?send_confirmation=true`` path advances on first
+successful SMS dispatch, per
+``sales-pipeline-estimate-visit-confirmation-lifecycle`` Task 12. PUT
+update mutates the row but never re-advances the entry.
 """
 
 from __future__ import annotations
@@ -67,6 +70,11 @@ def _make_db(
             obj.created_at = datetime.now(timezone.utc)
         if not getattr(obj, "updated_at", None):
             obj.updated_at = datetime.now(timezone.utc)
+        # server_default="pending" only fires on real flush; tests must
+        # populate the column explicitly so SalesCalendarEventResponse
+        # validation accepts the in-memory row.
+        if getattr(obj, "confirmation_status", None) is None:
+            obj.confirmation_status = "pending"
 
     db.refresh = AsyncMock(side_effect=_refresh)
 
@@ -99,9 +107,14 @@ def _build_app(
 
 
 @pytest.mark.integration
-def test_schedule_visit_post_advances_status_and_round_trips_assignee(
+def test_schedule_visit_post_no_send_round_trips_assignee_without_advance(
     fake_user: MagicMock,
 ) -> None:
+    """Bare POST (default ``send_confirmation=false``) round-trips the
+    assignee + notes but must NOT auto-advance the sales entry. The
+    auto-advance moved into the combined SMS-dispatch path so importers
+    can't fake the customer ack.
+    """
     sales_entry = _make_sales_entry()
     db = _make_db(sales_entry=sales_entry)
     app = _build_app(fake_user, db)
@@ -124,9 +137,11 @@ def test_schedule_visit_post_advances_status_and_round_trips_assignee(
     data = resp.json()
     assert data["assigned_to_user_id"] == str(assignee_id)
     assert data["notes"] == "Gate code 1234"
+    # confirmation_status defaults to "pending" on the new event row.
+    assert data["confirmation_status"] == "pending"
 
-    # Auto-advance fired.
-    assert sales_entry.status == SalesEntryStatus.ESTIMATE_SCHEDULED.value
+    # Status unchanged — auto-advance moved into the SMS-dispatch path.
+    assert sales_entry.status == SalesEntryStatus.SCHEDULE_ESTIMATE.value
 
 
 @pytest.mark.integration
@@ -143,6 +158,8 @@ def test_schedule_visit_put_updates_event_without_re_advance(
     existing.end_time = datetime(2026, 5, 1, 15, 0).time()
     existing.notes = None
     existing.assigned_to_user_id = None
+    existing.confirmation_status = "pending"
+    existing.confirmation_status_at = None
     existing.created_at = datetime.now(timezone.utc)
     existing.updated_at = datetime.now(timezone.utc)
 
