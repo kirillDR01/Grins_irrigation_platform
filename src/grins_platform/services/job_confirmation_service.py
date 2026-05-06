@@ -68,8 +68,13 @@ _KEYWORD_MAP: dict[str, ConfirmationKeyword] = {
 # Auto-reply templates. CONFIRM is built dynamically per appointment
 # (bughunt M-4) — see :func:`_build_confirm_message`.
 _AUTO_REPLIES: dict[ConfirmationKeyword, str] = {
+    # User directive 2026-05-05: replace the receipt-only wording with the
+    # actionable "please reply with 2-3 dates" prompt so the customer
+    # knows what to do next. Combined with the follow-up suppression
+    # below, this collapses two redundant SMS into one clear ask.
     ConfirmationKeyword.RESCHEDULE: (
-        "We've received your reschedule request. We'll be in touch with a new time."
+        "We'd be happy to reschedule. Please reply with 2-3 dates "
+        "and times that work for you and we'll get you set up."
     ),
     ConfirmationKeyword.CANCEL: (
         "Your appointment has been cancelled. "
@@ -557,18 +562,17 @@ class JobConfirmationService(LoggerMixin):
             reschedule_request_id=reschedule.id,
         )
 
-        # Follow-up SMS asking for alternative times (Req 14.1, 14.2)
-        follow_up_text = (
-            "We'd be happy to reschedule. Please reply with 2-3 dates "
-            "and times that work for you and we'll get you set up."
-        )
-
+        # User directive 2026-05-05: the follow-up SMS asking for 2-3
+        # dates is now the auto_reply itself (above) so the customer
+        # gets ONE message instead of receipt + nudge. The legacy
+        # ``follow_up_sms`` slot is intentionally omitted — keep the
+        # field absent rather than empty so the dispatch site at
+        # ``sms_service.py:1230`` short-circuits cleanly.
         return {
             "action": "reschedule_requested",
             "appointment_id": str(appointment_id),
             "reschedule_request_id": str(reschedule.id),
             "auto_reply": _AUTO_REPLIES[ConfirmationKeyword.RESCHEDULE],
-            "follow_up_sms": follow_up_text,
         }
 
     async def _record_customer_sms_reschedule_audit(
@@ -1372,17 +1376,16 @@ class JobConfirmationService(LoggerMixin):
         response.processed_at = datetime.now(tz=timezone.utc)
         await self.db.flush()
 
-        follow_up_text = (
-            "We'd be happy to reschedule. Please reply with 2-3 dates "
-            "and times that work for you and we'll get you set up."
-        )
-
+        # User directive 2026-05-05: collapse receipt + nudge into one
+        # actionable ask so the customer knows exactly what to send next.
         return {
             "action": "post_cancel_reschedule_requested",
             "appointment_id": str(appointment_id),
             "reschedule_request_id": str(reschedule.id),
-            "auto_reply": ("Thanks — we'll be in touch with new time options."),
-            "follow_up_sms": follow_up_text,
+            "auto_reply": (
+                "We'd be happy to reschedule. Please reply with 2-3 dates "
+                "and times that work for you and we'll get you set up."
+            ),
         }
 
     async def _handle_post_cancel_reconsider(

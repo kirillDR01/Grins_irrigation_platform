@@ -408,11 +408,18 @@ class TestRescheduleFollowUp:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_reschedule_reply_sends_acknowledgment_and_follow_up(
+    async def test_reschedule_reply_sends_actionable_auto_reply(
         self,
         mock_db: AsyncMock,
     ) -> None:
-        """Req 14.1: 'R' reply → acknowledgment sent + follow-up SMS (two SMS total)."""
+        """User directive 2026-05-05: 'R' reply produces ONE actionable
+        auto_reply asking for 2-3 dates (no separate follow-up SMS).
+
+        Replaces the prior receipt-style ack + follow-up nudge two-SMS
+        flow per the user's explicit instruction during 2026-05-05-full
+        E2E run: customer should know what to send next from the first
+        ack alone.
+        """
         sent_msg = _make_sent_message()
 
         # Order: find_confirmation_message → sent_msg, open-request dedup → None.
@@ -435,16 +442,13 @@ class TestRescheduleFollowUp:
         )
 
         assert result["action"] == "reschedule_requested"
-        # Verify both auto_reply (acknowledgment) and follow_up_sms are present
         assert "auto_reply" in result
-        assert "follow_up_sms" in result
-        # bughunt M-5: spec-exact wording (§4 lines 251-254)
-        assert (
-            result["auto_reply"] == "We've received your reschedule request. "
-            "We'll be in touch with a new time."
-        )
-        assert "2-3 dates" in result["follow_up_sms"]
-        assert "we'd be happy to reschedule" in result["follow_up_sms"].lower()
+        # The receipt-only "We've received..." wording is gone; the new
+        # auto_reply itself prompts for 2-3 dates.
+        assert "2-3 dates" in result["auto_reply"]
+        assert "we'd be happy to reschedule" in result["auto_reply"].lower()
+        # Follow-up SMS field is intentionally absent — single-message flow.
+        assert "follow_up_sms" not in result
 
     @pytest.mark.unit
     @pytest.mark.asyncio
