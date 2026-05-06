@@ -1621,6 +1621,8 @@ Confirmed in source: `POST /api/v1/appointments/{id}/send-confirmation` (line 11
 
 ### Phase 9 — SMS Confirmation Flow Y / R / C / STOP / START 🟡 HUMAN OR 🤖 SIMULATOR
 
+**Sub-case E2-Y-then-R (added 2026-05-05 by user directive)**: Customer first confirms with Y, then changes mind and sends R on the SAME appointment in the same conversation. Expected behavior: (1) Y flips status `scheduled` → `confirmed`, audit `appointment.confirm`. (2) Subsequent R (within seconds, same provider thread) creates a `reschedule_request` for the same appointment, status remains `confirmed` OR transitions to a "reschedule pending" state (verify against current `appointment_service.handle_reschedule_request` to know which). Verify: (a) reschedule_request row created with `appointment_id` linking to the just-confirmed appointment, (b) audit chain has both `appointment.confirm` AND `appointment.reschedule_request_received` in correct timestamp order, (c) the customer-facing R acknowledgment SMS may be 24h-deduped if it shares MessageType with the Y acknowledgment (per F5 from 2026-05-04-full-real-emails run) — informational, decide whether to widen dedup key.
+
 **Goal**: Verify the customer-reply flow for appointment confirmation.
 
 **Prerequisites**: P0, P8 (a SCHEDULED appointment with a sent confirmation SMS, capturing its `provider_thread_id`).

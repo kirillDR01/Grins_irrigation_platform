@@ -28,7 +28,11 @@ from sqlalchemy import (
 
 from grins_platform.log_config import LoggerMixin, get_logger
 from grins_platform.models.alert import Alert
-from grins_platform.models.enums import AlertSeverity, AlertType
+from grins_platform.models.enums import (
+    AlertSeverity,
+    AlertType,
+    ConfirmationKeyword,
+)
 from grins_platform.models.sent_message import SentMessage
 from grins_platform.models.sms_consent_record import SmsConsentRecord
 from grins_platform.repositories.alert_repository import AlertRepository
@@ -334,10 +338,21 @@ class SMSService(LoggerMixin):
                     "recent_message_sent_at": dupes[0].created_at.isoformat(),
                 }
         elif recipient.customer_id is not None:
-            # Bug #4 fix: scope appointment_confirmation dedupe per appointment_id
+            # Bug #4 fix: scope appointment_confirmation dedupe per appointment_id.
+            # F5 fix (2026-05-05): same scoping for the per-keyword reply
+            # sub-types so a Y-ack does not silence a subsequent R-ack
+            # within the same 24h window. The legacy combined REPLY value
+            # is left customer-scoped so older callers that have not yet
+            # migrated to sub-typed values keep the prior behavior.
+            _per_appt_types = {
+                MessageType.APPOINTMENT_CONFIRMATION,
+                MessageType.APPOINTMENT_CONFIRMATION_REPLY_Y,
+                MessageType.APPOINTMENT_CONFIRMATION_REPLY_R,
+                MessageType.APPOINTMENT_CONFIRMATION_REPLY_C,
+            }
             dedupe_appointment_id = (
                 appointment_id
-                if message_type == MessageType.APPOINTMENT_CONFIRMATION
+                if message_type in _per_appt_types
                 and appointment_id is not None
                 else None
             )
@@ -1157,11 +1172,31 @@ class SMSService(LoggerMixin):
                     reason=suppressed,
                 )
             else:
+                # F5 fix (2026-05-05): pick the keyword-specific sub-type
+                # so the 24h customer dedup applies per (Y / R / C) rather
+                # than across all reply acknowledgments. Falls back to the
+                # legacy combined value when the keyword cannot be resolved
+                # (e.g. free-text fallback path).
+                _ack_subtype_by_keyword = {
+                    ConfirmationKeyword.CONFIRM: (
+                        MessageType.APPOINTMENT_CONFIRMATION_REPLY_Y
+                    ),
+                    ConfirmationKeyword.RESCHEDULE: (
+                        MessageType.APPOINTMENT_CONFIRMATION_REPLY_R
+                    ),
+                    ConfirmationKeyword.CANCEL: (
+                        MessageType.APPOINTMENT_CONFIRMATION_REPLY_C
+                    ),
+                }
+                ack_message_type = _ack_subtype_by_keyword.get(
+                    keyword,
+                    MessageType.APPOINTMENT_CONFIRMATION_REPLY,
+                )
                 try:
                     _ = await self.send_message(
                         recipient=reply_recipient,
                         message=auto_reply,
-                        message_type=MessageType.APPOINTMENT_CONFIRMATION_REPLY,
+                        message_type=ack_message_type,
                         consent_type="transactional",
                         job_id=job_id,
                         appointment_id=appointment_id,

@@ -406,11 +406,14 @@ class TestConfirmationReplyUsesRealPhone:
         assert out is not None
         # bughunt M-9: the auto-reply must now route through send_message
         # (so a SentMessage row is created), not directly through send_text.
+        # F5 fix (2026-05-05): Y replies now produce
+        # ``APPOINTMENT_CONFIRMATION_REPLY_Y`` so 24h customer dedup applies
+        # per Y / R / C and per appointment, not across all reply acks.
         send_message_mock.assert_awaited_once()
         kwargs = send_message_mock.await_args.kwargs
         assert kwargs["recipient"].phone == "+19527373312"
         assert kwargs["recipient"].customer_id == cust_id
-        assert kwargs["message_type"] == MessageType.APPOINTMENT_CONFIRMATION_REPLY
+        assert kwargs["message_type"] == MessageType.APPOINTMENT_CONFIRMATION_REPLY_Y
         assert kwargs["appointment_id"] == appt_id
         assert kwargs["job_id"] == job_id
 
@@ -467,11 +470,15 @@ class TestConfirmationReplyUsesRealPhone:
 
         # Two send_message calls: auto_reply + follow_up_sms. Both target
         # the unmasked phone and use distinct message_types.
+        # F5 fix (2026-05-05): an R reply now uses the dedicated
+        # ``APPOINTMENT_CONFIRMATION_REPLY_R`` sub-type so it cannot be
+        # silenced by an earlier Y-ack on the same customer in the 24h
+        # window.
         assert send_message_mock.await_count == 2
         message_types = [
             c.kwargs["message_type"] for c in send_message_mock.await_args_list
         ]
-        assert MessageType.APPOINTMENT_CONFIRMATION_REPLY in message_types
+        assert MessageType.APPOINTMENT_CONFIRMATION_REPLY_R in message_types
         assert MessageType.RESCHEDULE_FOLLOWUP in message_types
         for call in send_message_mock.await_args_list:
             assert call.kwargs["recipient"].phone == "+19527373312"
@@ -869,11 +876,12 @@ class TestTryConfirmationReplyPostCancelFallback:
         # keyword replies (here "R"), followup is skipped.
         reschedule_mock.assert_not_awaited()
         # Auto-reply and follow-up both dispatched via send_message.
+        # F5 fix (2026-05-05): post-cancel R reply uses the R sub-type.
         assert send_message_mock.await_count == 2
         message_types = [
             c.kwargs["message_type"] for c in send_message_mock.await_args_list
         ]
-        assert MessageType.APPOINTMENT_CONFIRMATION_REPLY in message_types
+        assert MessageType.APPOINTMENT_CONFIRMATION_REPLY_R in message_types
         assert MessageType.RESCHEDULE_FOLLOWUP in message_types
 
     @pytest.mark.asyncio
@@ -957,3 +965,137 @@ class TestTryConfirmationReplyPostCancelFallback:
 
         assert out is not None
         cancel_mock.assert_not_awaited()
+
+
+@pytest.mark.unit
+class TestF5ReplyAckPerKeywordDedup:
+    """F5 fix (2026-05-05): the auto-reply ack must use keyword-specific
+    sub-types (``APPOINTMENT_CONFIRMATION_REPLY_Y / _R / _C``) so the
+    24h customer dedup at ``sms_service.py:344-360`` cannot let a Y-ack
+    silence a subsequent R-ack on the same customer in the same window.
+
+    Promoted from F5 informational candidate in run-2026-05-04-full-real-emails.
+    """
+
+    @pytest.mark.asyncio
+    async def test_y_reply_uses_y_subtype(self) -> None:
+        from uuid import uuid4
+
+        from grins_platform.schemas.ai import MessageType
+
+        service = _make_service()
+        service.provider = AsyncMock()
+        cust_id, appt_id, job_id = uuid4(), uuid4(), uuid4()
+        original = SimpleNamespace(
+            recipient_phone="+19527373312",
+            customer_id=cust_id,
+            appointment_id=appt_id,
+            job_id=job_id,
+        )
+        handle_result = {
+            "action": "confirmed",
+            "appointment_id": str(appt_id),
+            "auto_reply": "Confirmed.",
+            "recipient_phone": "+19527373312",
+        }
+        send_message_mock = AsyncMock(return_value={"success": True})
+
+        with (
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.find_confirmation_message",
+                new=AsyncMock(return_value=original),
+            ),
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.handle_confirmation",
+                new=AsyncMock(return_value=handle_result),
+            ),
+            patch.object(service, "send_message", send_message_mock),
+        ):
+            await service._try_confirmation_reply(
+                from_phone="***3312",
+                body="Y",
+                provider_sid="SM-in",
+                thread_id="THR-1",
+            )
+
+        assert (
+            send_message_mock.await_args.kwargs["message_type"]
+            == MessageType.APPOINTMENT_CONFIRMATION_REPLY_Y
+        )
+
+    @pytest.mark.asyncio
+    async def test_c_reply_uses_c_subtype(self) -> None:
+        from uuid import uuid4
+
+        from grins_platform.schemas.ai import MessageType
+
+        service = _make_service()
+        service.provider = AsyncMock()
+        cust_id, appt_id, job_id = uuid4(), uuid4(), uuid4()
+        original = SimpleNamespace(
+            recipient_phone="+19527373312",
+            customer_id=cust_id,
+            appointment_id=appt_id,
+            job_id=job_id,
+        )
+        handle_result = {
+            "action": "cancelled",
+            "appointment_id": str(appt_id),
+            "auto_reply": "Cancelled.",
+            "recipient_phone": "+19527373312",
+        }
+        send_message_mock = AsyncMock(return_value={"success": True})
+
+        with (
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.find_confirmation_message",
+                new=AsyncMock(return_value=original),
+            ),
+            patch(
+                "grins_platform.services.job_confirmation_service.JobConfirmationService.handle_confirmation",
+                new=AsyncMock(return_value=handle_result),
+            ),
+            patch.object(service, "send_message", send_message_mock),
+        ):
+            await service._try_confirmation_reply(
+                from_phone="***3312",
+                body="C",
+                provider_sid="SM-in",
+                thread_id="THR-1",
+            )
+
+        assert (
+            send_message_mock.await_args.kwargs["message_type"]
+            == MessageType.APPOINTMENT_CONFIRMATION_REPLY_C
+        )
+
+    def test_dedup_set_covers_reply_subtypes(self) -> None:
+        """Source-level guard: the F5 fix's ``_per_appt_types`` set in
+        ``sms_service.send_message`` must include all three reply
+        sub-types so a Y-ack on appointment A cannot block an R-ack on
+        appointment B in the same 24h window. The set is constructed
+        in-line; this test reads the source to verify it.
+        """
+        import re
+        from pathlib import Path
+
+        sms_service_src = Path(
+            "src/grins_platform/services/sms_service.py",
+        ).read_text(encoding="utf-8")
+
+        # Locate the dedup block.
+        match = re.search(
+            r"_per_appt_types\s*=\s*\{([^}]+)\}",
+            sms_service_src,
+        )
+        assert match is not None, "F5: _per_appt_types set not found"
+        body = match.group(1)
+        for required in (
+            "APPOINTMENT_CONFIRMATION",
+            "APPOINTMENT_CONFIRMATION_REPLY_Y",
+            "APPOINTMENT_CONFIRMATION_REPLY_R",
+            "APPOINTMENT_CONFIRMATION_REPLY_C",
+        ):
+            assert required in body, (
+                f"F5: _per_appt_types must include MessageType.{required}"
+            )

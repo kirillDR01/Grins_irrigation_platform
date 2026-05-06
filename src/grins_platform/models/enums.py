@@ -784,6 +784,12 @@ class MessageType(str, Enum):
     # follow-up SMS now route through send_message and need their own
     # message_type so per-type dedup and audit reporting stay meaningful.
     APPOINTMENT_CONFIRMATION_REPLY = "appointment_confirmation_reply"
+    # F5 fix (2026-05-05): per-keyword sub-types so a Y-ack does not silence
+    # a subsequent R-ack on the same customer (24h dedup widens
+    # to (customer, appointment, sub-type) for these).
+    APPOINTMENT_CONFIRMATION_REPLY_Y = "appointment_confirmation_reply_y"
+    APPOINTMENT_CONFIRMATION_REPLY_R = "appointment_confirmation_reply_r"
+    APPOINTMENT_CONFIRMATION_REPLY_C = "appointment_confirmation_reply_c"
     RESCHEDULE_FOLLOWUP = "reschedule_followup"
 
 
