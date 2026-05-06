@@ -502,6 +502,21 @@ export interface ScheduleRestoreResponse {
 // Reschedule Request Types (Req 25)
 // =============================================================================
 
+/**
+ * Append-only entry written by the backend each time a customer sends a
+ * follow-up free-text reply on an open reschedule request. Most recent
+ * entry is the bottom of the array per
+ * ``services/job_confirmation_service.py:_append_duplicate_open_request``.
+ */
+export interface RescheduleAlternativeEntry {
+  text: string;
+  at: string;
+}
+
+export interface RequestedAlternatives {
+  entries?: RescheduleAlternativeEntry[];
+}
+
 export interface RescheduleRequestDetail {
   id: string;
   job_id: string;
@@ -510,7 +525,7 @@ export interface RescheduleRequestDetail {
   customer_name: string;
   original_appointment_date: string | null;
   original_appointment_staff: string | null;
-  requested_alternatives: Record<string, unknown> | null;
+  requested_alternatives: RequestedAlternatives | null;
   raw_alternatives_text: string | null;
   status: string;
   created_at: string;

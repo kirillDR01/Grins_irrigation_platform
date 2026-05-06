@@ -241,6 +241,15 @@ function RescheduleRequestItem({
     addSuffix: true,
   });
 
+  // 2026-05-05 UX upgrade: surface the most-recent customer-supplied
+  // free-text alternatives inline on the queue card so an admin does
+  // not have to bounce to the Inbound Triage card to see "Tue 2pm or
+  // Wed 3pm" after the original keyword "R". The backend appends each
+  // follow-up reply to ``requested_alternatives.entries[]`` per
+  // services/job_confirmation_service.py:_append_duplicate_open_request.
+  const alternativeEntries = request.requested_alternatives?.entries ?? [];
+  const latestAlternative = alternativeEntries[alternativeEntries.length - 1];
+
   return (
     <div
       className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-100"
@@ -272,6 +281,26 @@ function RescheduleRequestItem({
         {request.raw_alternatives_text && (
           <p className="text-xs text-amber-600 mt-0.5 truncate">
             &quot;{request.raw_alternatives_text}&quot;
+          </p>
+        )}
+        {latestAlternative && (
+          <p
+            className="text-xs text-teal-700 mt-0.5 truncate"
+            data-testid="reschedule-latest-alternative"
+            title={
+              alternativeEntries.length > 1
+                ? `${alternativeEntries.length} customer messages received`
+                : undefined
+            }
+          >
+            <span className="font-medium">Customer suggested:</span>{' '}
+            &ldquo;{latestAlternative.text}&rdquo;
+            {alternativeEntries.length > 1 && (
+              <span className="text-slate-400">
+                {' '}
+                (+{alternativeEntries.length - 1} earlier)
+              </span>
+            )}
           </p>
         )}
       </div>

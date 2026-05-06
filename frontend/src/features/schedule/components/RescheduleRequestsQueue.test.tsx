@@ -243,4 +243,51 @@ describe('RescheduleRequestsQueue (bughunt H-6)', () => {
       expect(rescheduleApi.list).toHaveBeenCalledTimes(2);
     });
   });
+
+  // 2026-05-05 UX upgrade — surface customer-supplied date alternatives
+  // inline on the queue card so admins do not have to bounce to Inbound
+  // Triage to read "Tue 2pm or Wed 3pm" after the original "R".
+  it('renders the latest customer-supplied alternative text on the card', async () => {
+    (rescheduleApi.list as ReturnType<typeof vi.fn>).mockResolvedValue([
+      makeRequest({
+        requested_alternatives: {
+          entries: [
+            { text: 'Monday 9am', at: '2026-04-16T10:05:00Z' },
+            { text: 'Tuesday 2pm or Wednesday 3:00pm', at: '2026-04-16T11:00:00Z' },
+          ],
+        },
+      }),
+    ]);
+
+    const Wrapper = createWrapper();
+    render(
+      <Wrapper>
+        <RescheduleRequestsQueue />
+      </Wrapper>
+    );
+
+    const altLine = await screen.findByTestId('reschedule-latest-alternative');
+    // Most recent entry wins.
+    expect(altLine.textContent).toContain('Tuesday 2pm or Wednesday 3:00pm');
+    // Older entries are surfaced via a "(+N earlier)" tail counter.
+    expect(altLine.textContent).toContain('+1 earlier');
+  });
+
+  it('omits the alternative line when no entries[] are present', async () => {
+    (rescheduleApi.list as ReturnType<typeof vi.fn>).mockResolvedValue([
+      makeRequest({ requested_alternatives: null }),
+    ]);
+
+    const Wrapper = createWrapper();
+    render(
+      <Wrapper>
+        <RescheduleRequestsQueue />
+      </Wrapper>
+    );
+
+    await screen.findByTestId('reschedule-customer-name');
+    expect(
+      screen.queryByTestId('reschedule-latest-alternative')
+    ).not.toBeInTheDocument();
+  });
 });
