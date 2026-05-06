@@ -268,7 +268,10 @@ class TestPostCancellationHandler:
         )
 
         assert result["action"] == "post_cancel_reschedule_requested"
-        assert "follow_up_sms" in result
+        # User directive 2026-05-05: post-cancel reschedule path now
+        # also collapses receipt + nudge into one actionable auto_reply.
+        assert "2-3 dates" in result["auto_reply"]
+        assert "follow_up_sms" not in result
         assert "reschedule_request_id" in result
         # A RescheduleRequest was added.
         added_types = {type(c.args[0]).__name__ for c in mock_db.add.call_args_list}

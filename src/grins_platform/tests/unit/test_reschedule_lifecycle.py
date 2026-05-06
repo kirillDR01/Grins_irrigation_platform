@@ -191,7 +191,12 @@ class TestRescheduleIdempotency:
         )
 
         assert result["action"] == "reschedule_requested"
-        assert "follow_up_sms" in result
+        # User directive 2026-05-05: collapsed receipt + follow-up nudge
+        # into one actionable auto_reply. The legacy ``follow_up_sms``
+        # slot is intentionally absent now.
+        assert "auto_reply" in result
+        assert "2-3 dates" in result["auto_reply"]
+        assert "follow_up_sms" not in result
         assert result.get("duplicate") is not True
 
     @pytest.mark.unit
@@ -403,7 +408,10 @@ class TestRescheduleStateGuard:
         )
 
         assert result["action"] == "reschedule_requested"
-        assert "follow_up_sms" in result
+        # User directive 2026-05-05: single actionable auto_reply
+        # replaces the prior receipt + follow-up two-SMS flow.
+        assert "2-3 dates" in result["auto_reply"]
+        assert "follow_up_sms" not in result
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -426,7 +434,10 @@ class TestRescheduleStateGuard:
         )
 
         assert result["action"] == "reschedule_requested"
-        assert "follow_up_sms" in result
+        # User directive 2026-05-05: single actionable auto_reply
+        # replaces the prior receipt + follow-up two-SMS flow.
+        assert "2-3 dates" in result["auto_reply"]
+        assert "follow_up_sms" not in result
 
 
 # ---------------------------------------------------------------------------
