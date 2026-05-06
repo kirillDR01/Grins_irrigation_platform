@@ -98,6 +98,12 @@ def _make_lead_mock(
     lead.moved_at = None
     lead.last_contacted_at = None
     lead.job_requested = None
+    lead.consent_timestamp = None
+    lead.utm_source = None
+    lead.utm_medium = None
+    lead.utm_campaign = None
+    lead.utm_term = None
+    lead.utm_content = None
     return lead
 
 
@@ -1002,3 +1008,98 @@ class TestConvertLeadTier1Duplicates:
             phone="+19527373312",
             email="alice@test.example",
         )
+
+
+# =============================================================================
+# submit_lead consent_timestamp + UTM persistence tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestSubmitLeadConsentAndUtm:
+    """Tests confirming the new consent_timestamp + UTM fields flow through.
+
+    The customer site sends these fields on every lead form payload; the
+    service must persist them and forward consent_timestamp into the
+    SmsConsentRecord.
+    """
+
+    @pytest.mark.asyncio
+    async def test_submit_lead_persists_utm_and_consent_timestamp(self) -> None:
+        """All six new fields are passed to lead_repository.create."""
+        ts = datetime(2026, 5, 5, 17, 0, 0, tzinfo=timezone.utc)
+        repo = AsyncMock()
+        repo.get_recent_by_phone_or_email.return_value = None
+        repo.get_by_phone_and_active_status.return_value = None
+        repo.create.return_value = _make_lead_mock(phone="6125559911")
+
+        compliance = AsyncMock()
+        service = LeadService(
+            lead_repository=repo,
+            customer_service=AsyncMock(),
+            job_service=AsyncMock(),
+            staff_repository=AsyncMock(),
+            compliance_service=compliance,
+        )
+
+        data = LeadSubmission(
+            name="UTM User",
+            phone="6125559911",
+            address="123 Main St, Denver, CO 80209",
+            zip_code="55424",
+            situation=LeadSituation.NEW_SYSTEM,
+            consent_timestamp=ts,
+            utm_source="google",
+            utm_medium="cpc",
+            utm_campaign="spring2026",
+            utm_term="irrigation",
+            utm_content="ad-a",
+        )
+
+        await service.submit_lead(data, background_tasks=None)
+
+        repo.create.assert_awaited_once()
+        kwargs = repo.create.call_args.kwargs
+        assert kwargs["consent_timestamp"] == ts
+        assert kwargs["utm_source"] == "google"
+        assert kwargs["utm_medium"] == "cpc"
+        assert kwargs["utm_campaign"] == "spring2026"
+        assert kwargs["utm_term"] == "irrigation"
+        assert kwargs["utm_content"] == "ad-a"
+
+    @pytest.mark.asyncio
+    async def test_submit_lead_forwards_consent_timestamp_override_to_compliance(
+        self,
+    ) -> None:
+        """consent_timestamp reaches compliance_service.create_sms_consent."""
+        ts = datetime(2026, 5, 5, 17, 0, 0, tzinfo=timezone.utc)
+        repo = AsyncMock()
+        repo.get_recent_by_phone_or_email.return_value = None
+        repo.get_by_phone_and_active_status.return_value = None
+        lead_mock = _make_lead_mock(phone="6125559922", sms_consent=True)
+        repo.create.return_value = lead_mock
+
+        compliance = AsyncMock()
+        service = LeadService(
+            lead_repository=repo,
+            customer_service=AsyncMock(),
+            job_service=AsyncMock(),
+            staff_repository=AsyncMock(),
+            compliance_service=compliance,
+        )
+
+        data = LeadSubmission(
+            name="Consent User",
+            phone="6125559922",
+            address="123 Main St, Denver, CO 80209",
+            zip_code="55424",
+            situation=LeadSituation.NEW_SYSTEM,
+            sms_consent=True,
+            consent_timestamp=ts,
+        )
+
+        await service.submit_lead(data, background_tasks=None)
+
+        compliance.create_sms_consent.assert_awaited_once()
+        call_kwargs = compliance.create_sms_consent.call_args.kwargs
+        assert call_kwargs["consent_timestamp_override"] == ts

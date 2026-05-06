@@ -578,6 +578,12 @@ class LeadService(LoggerMixin):
             address=data.address,
             customer_type=data.customer_type,
             property_type=data.property_type,
+            consent_timestamp=data.consent_timestamp,
+            utm_source=data.utm_source,
+            utm_medium=data.utm_medium,
+            utm_campaign=data.utm_campaign,
+            utm_term=data.utm_term,
+            utm_content=data.utm_content,
             action_tags=[ActionTag.NEEDS_CONTACT.value],
         )
 
@@ -639,6 +645,7 @@ class LeadService(LoggerMixin):
                 lead_id=lead.id,
                 ip_address=data.consent_ip,
                 user_agent=data.consent_user_agent,
+                consent_timestamp_override=data.consent_timestamp,
             )
             # Store consent_form_version if provided
             if data.consent_language_version:

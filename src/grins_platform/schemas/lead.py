@@ -152,6 +152,35 @@ class LeadSubmission(BaseModel):
         default=None,
         description="Consent language version identifier",
     )
+    consent_timestamp: datetime | None = Field(
+        default=None,
+        description="ISO-8601 timestamp captured client-side at consent toggle",
+    )
+    utm_source: str | None = Field(
+        default=None,
+        max_length=100,
+        description="UTM source parameter (from query string)",
+    )
+    utm_medium: str | None = Field(
+        default=None,
+        max_length=100,
+        description="UTM medium parameter (from query string)",
+    )
+    utm_campaign: str | None = Field(
+        default=None,
+        max_length=100,
+        description="UTM campaign parameter (from query string)",
+    )
+    utm_term: str | None = Field(
+        default=None,
+        max_length=100,
+        description="UTM term parameter (from query string)",
+    )
+    utm_content: str | None = Field(
+        default=None,
+        max_length=100,
+        description="UTM content parameter (from query string)",
+    )
 
     @field_validator("phone")  # type: ignore[misc,untyped-decorator]
     @classmethod
@@ -161,6 +190,18 @@ class LeadSubmission(BaseModel):
         Validates: Requirement 1.2, 1.3
         """
         return normalize_phone(v)
+
+    @field_validator("consent_timestamp")  # type: ignore[misc,untyped-decorator]
+    @classmethod
+    def normalize_consent_timestamp(
+        cls, v: datetime | None
+    ) -> datetime | None:
+        """Coerce naive datetimes to UTC; pass through tz-aware as-is."""
+        if v is None:
+            return None
+        if v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v
 
     @field_validator("zip_code")  # type: ignore[misc,untyped-decorator]
     @classmethod
@@ -437,6 +478,12 @@ class LeadResponse(BaseModel):
     moved_at: datetime | None = None
     last_contacted_at: datetime | None = None
     job_requested: str | None = None
+    consent_timestamp: datetime | None = None
+    utm_source: str | None = None
+    utm_medium: str | None = None
+    utm_campaign: str | None = None
+    utm_term: str | None = None
+    utm_content: str | None = None
 
     @field_validator("status", mode="before")  # type: ignore[misc,untyped-decorator]
     @classmethod

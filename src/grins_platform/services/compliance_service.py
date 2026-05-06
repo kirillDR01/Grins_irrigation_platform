@@ -29,6 +29,20 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
+def _resolve_consent_timestamp(value: datetime | None) -> datetime:
+    """Resolve a (possibly naive) consent timestamp to a tz-aware UTC datetime.
+
+    Returns ``datetime.now(timezone.utc)`` when no value is provided.
+    Defensive — the schema validator already coerces naive→UTC, but a
+    future internal caller might bypass the schema layer.
+    """
+    if value is None:
+        return datetime.now(timezone.utc)
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
 class ComplianceStatus:
     """Status of compliance disclosures for an agreement."""
 
@@ -120,6 +134,7 @@ class ComplianceService(LoggerMixin):
         consent_type: str = "marketing",
         ip_address: str | None = None,
         user_agent: str | None = None,
+        consent_timestamp_override: datetime | None = None,
     ) -> SmsConsentRecord:
         """Create an immutable SMS consent record.
 
@@ -137,7 +152,7 @@ class ComplianceService(LoggerMixin):
             phone_number=phone,
             consent_type=consent_type,
             consent_given=consent_given,
-            consent_timestamp=datetime.now(timezone.utc),
+            consent_timestamp=_resolve_consent_timestamp(consent_timestamp_override),
             consent_method=method,
             consent_language_shown=language_shown,
             consent_token=token,

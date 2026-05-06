@@ -88,6 +88,12 @@ def _make_lead_mock(
     lead.moved_at = None
     lead.last_contacted_at = None
     lead.job_requested = None
+    lead.consent_timestamp = None
+    lead.utm_source = None
+    lead.utm_medium = None
+    lead.utm_campaign = None
+    lead.utm_term = None
+    lead.utm_content = None
     return lead
 
 

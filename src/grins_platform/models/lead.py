@@ -111,6 +111,12 @@ class Lead(Base):
         server_default="false",
     )
 
+    # Consent timestamp (compliance audit trail)
+    consent_timestamp: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
     # Customer classification fields
     customer_type: Mapped[Optional[str]] = mapped_column(
         String(20),
@@ -126,6 +132,13 @@ class Lead(Base):
         String(2048),
         nullable=True,
     )
+
+    # UTM attribution (write-once at intake)
+    utm_source: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    utm_medium: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    utm_campaign: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    utm_term: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    utm_content: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Address fields (CRM Gap Closure Req 12.1)
     city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -309,4 +322,14 @@ class Lead(Base):
             ),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "consent_timestamp": (
+                self.consent_timestamp.isoformat()
+                if self.consent_timestamp
+                else None
+            ),
+            "utm_source": self.utm_source,
+            "utm_medium": self.utm_medium,
+            "utm_campaign": self.utm_campaign,
+            "utm_term": self.utm_term,
+            "utm_content": self.utm_content,
         }

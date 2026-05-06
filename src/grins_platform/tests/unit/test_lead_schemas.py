@@ -9,7 +9,7 @@ Validates: Requirement 1.2-1.7, 1.11
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
@@ -1196,3 +1196,82 @@ class TestFromCallSubmission:
             notes="<p>Called about <b>repair</b></p>",
         )
         assert sub.notes == "Called about repair"
+
+
+# =============================================================================
+# LeadSubmission consent_timestamp + UTM persistence tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestLeadSubmissionConsentAndUtm:
+    """Tests for the consent_timestamp + UTM fields on LeadSubmission.
+
+    These fields are sent by the public lead form and must be declared on
+    the schema (Pydantic v2 default ``extra='ignore'`` would otherwise
+    drop them silently).
+    """
+
+    def _required_kwargs(self) -> dict[str, object]:
+        return {
+            "name": "Test User",
+            "phone": "+19527373312",
+            "situation": LeadSituation.NEW_SYSTEM,
+            "address": "123 Main St, Denver, CO 80209",
+        }
+
+    def test_accepts_consent_timestamp_and_utm_fields(self) -> None:
+        """LeadSubmission accepts all six new fields and round-trips them."""
+        m = LeadSubmission(
+            **self._required_kwargs(),
+            consent_timestamp="2026-05-05T17:00:00Z",
+            utm_source="google",
+            utm_medium="cpc",
+            utm_campaign="spring2026",
+            utm_term="irrigation",
+            utm_content="ad-a",
+        )
+        assert m.consent_timestamp == datetime(
+            2026, 5, 5, 17, 0, 0, tzinfo=timezone.utc
+        )
+        assert m.utm_source == "google"
+        assert m.utm_medium == "cpc"
+        assert m.utm_campaign == "spring2026"
+        assert m.utm_term == "irrigation"
+        assert m.utm_content == "ad-a"
+
+    def test_normalizes_naive_consent_timestamp_to_utc(self) -> None:
+        """Naive datetimes get coerced to UTC by the field validator."""
+        m = LeadSubmission(
+            **self._required_kwargs(),
+            consent_timestamp=datetime(2026, 5, 5, 17, 0, 0),
+        )
+        assert m.consent_timestamp is not None
+        assert m.consent_timestamp.tzinfo is timezone.utc
+
+    def test_passes_through_tz_aware_consent_timestamp(self) -> None:
+        """Tz-aware datetimes are preserved without modification."""
+        ts = datetime(2026, 5, 5, 17, 0, 0, tzinfo=timezone.utc)
+        m = LeadSubmission(
+            **self._required_kwargs(),
+            consent_timestamp=ts,
+        )
+        assert m.consent_timestamp == ts
+
+    def test_rejects_utm_source_over_100_chars(self) -> None:
+        """UTM fields are bounded at 100 chars (Google's documented limit)."""
+        with pytest.raises(ValidationError):
+            LeadSubmission(
+                **self._required_kwargs(),
+                utm_source="a" * 101,
+            )
+
+    def test_consent_and_utm_fields_default_to_none(self) -> None:
+        """Omitting the new fields leaves them as None (no breaking change)."""
+        m = LeadSubmission(**self._required_kwargs())
+        assert m.consent_timestamp is None
+        assert m.utm_source is None
+        assert m.utm_medium is None
+        assert m.utm_campaign is None
+        assert m.utm_term is None
+        assert m.utm_content is None
