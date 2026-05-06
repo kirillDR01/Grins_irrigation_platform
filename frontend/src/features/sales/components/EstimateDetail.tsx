@@ -146,13 +146,17 @@ function TierSection({ tiers }: { tiers: EstimateTier[] }) {
   );
 }
 
-function ActivityTimeline({ events }: { events: ActivityEvent[] }) {
+function ActivityTimeline({ events }: { events: ActivityEvent[] | undefined }) {
+  // Same guard as the Linked Documents section: API response may omit
+  // ``activity_timeline`` for portal-only / older estimates, so default
+  // to an empty array rather than crashing on ``.length``.
+  const safeEvents = events ?? [];
   return (
     <div data-testid="activity-timeline" className="space-y-3">
-      {events.length === 0 ? (
+      {safeEvents.length === 0 ? (
         <p className="text-sm text-slate-400 py-4 text-center">No activity recorded yet.</p>
       ) : (
-        events.map((event, idx) => (
+        safeEvents.map((event, idx) => (
           <div
             key={idx}
             className="flex items-start gap-3 relative"
@@ -160,7 +164,7 @@ function ActivityTimeline({ events }: { events: ActivityEvent[] }) {
           >
             <div className="flex flex-col items-center">
               <div className="w-2.5 h-2.5 rounded-full bg-blue-400 mt-1.5 shrink-0" />
-              {idx < events.length - 1 && (
+              {idx < safeEvents.length - 1 && (
                 <div className="w-px h-full bg-slate-200 min-h-[24px]" />
               )}
             </div>
@@ -461,8 +465,12 @@ export function EstimateDetail({ estimateId: propId }: EstimateDetailProps) {
             </CardContent>
           </Card>
 
-          {/* Linked Documents */}
-          {estimate.linked_documents.length > 0 && (
+          {/* Linked Documents — guard against undefined response field
+              (older / portal-only estimates omit ``linked_documents``;
+              accessing ``.length`` directly crashed EstimateDetail with
+              "Cannot read properties of undefined". Discovered during
+              2026-05-05-full E2E run while opening V1 approved estimate.) */}
+          {estimate.linked_documents && estimate.linked_documents.length > 0 && (
             <Card data-testid="linked-documents-card">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
