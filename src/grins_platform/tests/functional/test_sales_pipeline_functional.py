@@ -141,7 +141,14 @@ class TestFullSalesPipelineFlow:
     ) -> None:
         """Advancing moves exactly one step forward each time.
 
-        Validates: Requirements 14.3, 14.4, 14.5
+        The estimate-scheduled → send_estimate transition (migration
+        20260509_120000) requires the latest ``SalesCalendarEvent`` to
+        be ``confirmation_status='confirmed'`` — this test feeds a
+        confirmed event to the gate so the legacy progression still
+        completes end-to-end.
+
+        Validates: Requirements 14.3, 14.4, 14.5;
+        sales-pipeline-estimate-visit-confirmation-lifecycle (OQ-6).
         """
         svc, _, _ = _build_service()
 
@@ -160,12 +167,25 @@ class TestFullSalesPipelineFlow:
             status=SalesEntryStatus.SCHEDULE_ESTIMATE.value,
         )
 
+        confirmed_event = MagicMock()
+        confirmed_event.confirmation_status = "confirmed"
+
         for i in range(len(expected_progression) - 1):
             current = expected_progression[i]
             expected_next = expected_progression[i + 1]
 
             entry.status = current.value
-            db = _mock_db_returning(entry)
+            db = AsyncMock()
+            entry_result = MagicMock()
+            entry_result.scalar_one_or_none.return_value = entry
+            event_result = MagicMock()
+            event_result.scalar_one_or_none.return_value = confirmed_event
+            # Each advance executes once for the entry; when the gate
+            # fires (target=SEND_ESTIMATE) it executes again to fetch
+            # the latest calendar event. side_effect supplies both.
+            db.execute = AsyncMock(side_effect=[entry_result, event_result])
+            db.flush = AsyncMock()
+            db.refresh = AsyncMock()
 
             result = await svc.advance_status(db, entry_id)
 

@@ -56,6 +56,9 @@ from grins_platform.api.v1.reschedule_requests import (
 from grins_platform.api.v1.resend_webhooks import router as resend_webhooks_router
 from grins_platform.api.v1.sales import router as sales_router
 from grins_platform.api.v1.sales_pipeline import router as sales_pipeline_router
+from grins_platform.api.v1.sales_reschedule_requests import (
+    router as sales_reschedule_requests_router,
+)
 from grins_platform.api.v1.schedule import router as schedule_router
 from grins_platform.api.v1.schedule_clear import router as schedule_clear_router
 from grins_platform.api.v1.scheduling_alerts import (
@@ -314,6 +317,13 @@ api_router.include_router(
     sales_pipeline_router,
     prefix="/sales",
     tags=["sales-pipeline"],
+)
+
+# Sales-side reschedule queue (sales-pipeline-estimate-visit-confirmation-lifecycle).
+# Mirror of the schedule-tab queue scoped to sales_calendar_event_id.
+api_router.include_router(
+    sales_reschedule_requests_router,
+    tags=["sales-reschedule-requests"],
 )
 
 # Include Accounting endpoints (Req 52, 59, 61, 62)

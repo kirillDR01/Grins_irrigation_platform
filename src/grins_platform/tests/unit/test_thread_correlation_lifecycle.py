@@ -178,7 +178,14 @@ class TestFindConfirmationMessage:
     async def test_widened_filter_includes_three_confirmation_like_types(
         self,
     ) -> None:
-        """The module-level constant matches the three confirmation-like types."""
+        """The module-level constant covers the confirmation-like types.
+
+        Migration 20260509_120000 widened the set to include the
+        sales-pipeline ``estimate_visit_confirmation`` so a Y/R/C reply
+        on the sales-side thread routes through the same correlator.
+        Cancellation stays excluded — it's owned by
+        ``find_cancellation_thread`` / ``handle_post_cancellation_reply``.
+        """
         from grins_platform.services.job_confirmation_service import (
             _CONFIRMATION_LIKE_TYPES,
         )
@@ -189,6 +196,7 @@ class TestFindConfirmationMessage:
                     MessageType.APPOINTMENT_CONFIRMATION.value,
                     MessageType.APPOINTMENT_RESCHEDULE.value,
                     MessageType.APPOINTMENT_REMINDER.value,
+                    MessageType.ESTIMATE_VISIT_CONFIRMATION.value,
                 },
             )
             == _CONFIRMATION_LIKE_TYPES

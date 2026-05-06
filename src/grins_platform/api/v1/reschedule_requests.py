@@ -60,6 +60,7 @@ def _to_detail(
         id=req.id,
         job_id=req.job_id,
         appointment_id=req.appointment_id,
+        sales_calendar_event_id=req.sales_calendar_event_id,
         customer_id=req.customer_id,
         customer_name=customer_name,
         original_appointment_date=appt_date,
@@ -101,10 +102,17 @@ async def list_reschedule_requests(
         status_filter=status_filter,
     )
 
-    query = select(RescheduleRequest).options(
-        selectinload(RescheduleRequest.appointment).selectinload(  # type: ignore[arg-type]
-            Appointment.staff,
-        ),
+    # Polymorphic FK guard (migration 20260509_120000): the schedule-tab
+    # queue is appointment-scoped — sales-side rows live at
+    # /api/v1/sales/calendar/events/reschedule-requests.
+    query = (
+        select(RescheduleRequest)
+        .where(RescheduleRequest.appointment_id.is_not(None))
+        .options(
+            selectinload(RescheduleRequest.appointment).selectinload(  # type: ignore[arg-type]
+                Appointment.staff,
+            ),
+        )
     )
     if status_filter:
         query = query.where(

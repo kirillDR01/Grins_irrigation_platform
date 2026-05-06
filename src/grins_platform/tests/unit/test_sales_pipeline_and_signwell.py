@@ -119,7 +119,13 @@ class TestSalesPipelineAdvanceStatus:
         pipeline_service: SalesPipelineService,
         mock_db: AsyncMock,
     ) -> None:
-        """Advance step-by-step through the entire non-terminal pipeline."""
+        """Advance step-by-step through the entire non-terminal pipeline.
+
+        The estimate-scheduled → send_estimate transition (migration
+        20260509_120000) gates on the latest ``SalesCalendarEvent``
+        having ``confirmation_status='confirmed'``. Each iteration mocks
+        the entry lookup *and* a confirmed event so the gate passes.
+        """
         expected_order = [
             SalesEntryStatus.ESTIMATE_SCHEDULED.value,
             SalesEntryStatus.SEND_ESTIMATE.value,
@@ -128,10 +134,18 @@ class TestSalesPipelineAdvanceStatus:
             SalesEntryStatus.CLOSED_WON.value,
         ]
         entry = _make_entry(SalesEntryStatus.SCHEDULE_ESTIMATE.value)
+        confirmed_event = Mock()
+        confirmed_event.confirmation_status = "confirmed"
 
         for expected in expected_order:
+            # First execute: entry lookup. Second execute (only when
+            # gating to SEND_ESTIMATE): confirmed calendar event.
             mock_db.execute = AsyncMock(
-                return_value=Mock(scalar_one_or_none=Mock(return_value=entry)),
+                side_effect=[
+                    Mock(scalar_one_or_none=Mock(return_value=entry)),
+                    Mock(scalar_one_or_none=Mock(return_value=confirmed_event)),
+                    Mock(scalar_one_or_none=Mock(return_value=entry)),
+                ],
             )
             await pipeline_service.advance_status(mock_db, entry.id)
             assert entry.status == expected
@@ -720,7 +734,14 @@ class TestPauseUnpauseNudges:
 
 @pytest.mark.unit()
 class TestSendTextConfirmation:
-    """``send_text_confirmation`` delegates to ``SMSService.send_message``."""
+    """``send_text_confirmation`` is now a shim that resolves the entry's
+    latest ``SalesCalendarEvent`` and delegates to
+    :meth:`send_estimate_visit_confirmation`. The compat tests below
+    exercise the shim's lookup path; the dispatch path is covered via
+    direct calls to ``send_estimate_visit_confirmation``.
+
+    Validates: sales-pipeline-estimate-visit-confirmation-lifecycle (OQ-4).
+    """
 
     @pytest.mark.asyncio()
     async def test_delegates_to_sms_service(
@@ -728,6 +749,8 @@ class TestSendTextConfirmation:
         pipeline_service: SalesPipelineService,
         mock_db: AsyncMock,
     ) -> None:
+        from datetime import date
+
         entry = _make_entry()
         customer = Mock()
         customer.id = entry.customer_id
@@ -735,11 +758,23 @@ class TestSendTextConfirmation:
         customer.last_name = "Doe"
         customer.phone = "+15551234567"
         customer.email = "jane@example.com"
-        # Two execute calls: first returns entry, second returns customer.
+
+        latest_event = Mock()
+        latest_event.id = "event-1"
+        latest_event.sales_entry_id = entry.id
+        latest_event.customer_id = entry.customer_id
+        latest_event.scheduled_date = date(2026, 5, 6)
+        latest_event.start_time = None
+        latest_event.confirmation_status = "pending"
+
+        # Shim execute order: latest event → event lookup → customer →
+        # entry lookup for auto-advance check.
         mock_db.execute = AsyncMock(
             side_effect=[
-                Mock(scalar_one_or_none=Mock(return_value=entry)),
+                Mock(scalar_one_or_none=Mock(return_value=latest_event)),
+                Mock(scalar_one_or_none=Mock(return_value=latest_event)),
                 Mock(scalar_one_or_none=Mock(return_value=customer)),
+                Mock(scalar_one_or_none=Mock(return_value=entry)),
             ],
         )
         sms_service = AsyncMock()
@@ -757,6 +792,9 @@ class TestSendTextConfirmation:
         recipient_arg = sms_service.send_message.call_args.args[0]
         assert recipient_arg.phone == customer.phone
         assert recipient_arg.customer_id == customer.id
+        assert sms_service.send_message.call_args.kwargs[
+            "sales_calendar_event_id"
+        ] == latest_event.id
         assert result == {"message_id": "m-123", "status": "sent"}
 
     @pytest.mark.asyncio()
@@ -765,6 +803,8 @@ class TestSendTextConfirmation:
         pipeline_service: SalesPipelineService,
         mock_db: AsyncMock,
     ) -> None:
+        from datetime import date
+
         from grins_platform.exceptions import CustomerHasNoPhoneError
 
         entry = _make_entry()
@@ -773,15 +813,45 @@ class TestSendTextConfirmation:
         customer.first_name = "Jane"
         customer.last_name = "Doe"
         customer.phone = None
+        latest_event = Mock()
+        latest_event.id = "event-1"
+        latest_event.customer_id = entry.customer_id
+        latest_event.sales_entry_id = entry.id
+        latest_event.scheduled_date = date(2026, 5, 6)
+        latest_event.start_time = None
         mock_db.execute = AsyncMock(
             side_effect=[
-                Mock(scalar_one_or_none=Mock(return_value=entry)),
+                Mock(scalar_one_or_none=Mock(return_value=latest_event)),
+                Mock(scalar_one_or_none=Mock(return_value=latest_event)),
                 Mock(scalar_one_or_none=Mock(return_value=customer)),
             ],
         )
         sms_service = AsyncMock()
 
         with pytest.raises(CustomerHasNoPhoneError):
+            await pipeline_service.send_text_confirmation(
+                mock_db,
+                entry.id,
+                sms_service=sms_service,
+            )
+        sms_service.send_message.assert_not_called()
+
+    @pytest.mark.asyncio()
+    async def test_no_calendar_event_raises(
+        self,
+        pipeline_service: SalesPipelineService,
+        mock_db: AsyncMock,
+    ) -> None:
+        """The shim refuses when the entry has no scheduled visit yet."""
+        from grins_platform.exceptions import SalesCalendarEventNotFoundError
+
+        entry = _make_entry()
+        mock_db.execute = AsyncMock(
+            return_value=Mock(scalar_one_or_none=Mock(return_value=None)),
+        )
+        sms_service = AsyncMock()
+
+        with pytest.raises(SalesCalendarEventNotFoundError):
             await pipeline_service.send_text_confirmation(
                 mock_db,
                 entry.id,

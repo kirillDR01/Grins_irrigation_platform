@@ -24,10 +24,11 @@ export function nowContent(
         title: `Call ${firstName} — agree on a date, then drop them on the schedule.`,
         copyHtml:
           `"Schedule visit" opens the calendar with ${firstName}'s info pre-filled from the lead record. ` +
-          `Once booked, "Text appointment confirmation" sends a confirm with an <em>R-to-reschedule</em> reply option.`,
+          `On submit it books the visit and texts ${firstName} a Y/R/C confirmation. ` +
+          `"Resend confirmation text" re-sends the most recent visit's Y/R/C SMS if needed.`,
         actions: [
           act('primary', 'Schedule visit', 'now-action-schedule', 'schedule_visit', 'Calendar'),
-          act('outline', 'Text appointment confirmation', 'now-action-text-confirm', 'text_confirmation', 'MessageSquare'),
+          act('outline', 'Resend confirmation text', 'now-action-text-confirm', 'text_confirmation', 'MessageSquare'),
         ],
       };
 

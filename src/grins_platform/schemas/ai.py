@@ -87,6 +87,11 @@ class MessageType(str, Enum):
     APPOINTMENT_CONFIRMATION_REPLY_R = "appointment_confirmation_reply_r"
     APPOINTMENT_CONFIRMATION_REPLY_C = "appointment_confirmation_reply_c"
     RESCHEDULE_FOLLOWUP = "reschedule_followup"
+    # Sales-pipeline estimate-visit Y/R/C lifecycle (migration 20260509_120000).
+    ESTIMATE_VISIT_CONFIRMATION = "estimate_visit_confirmation"
+    ESTIMATE_VISIT_CONFIRMATION_REPLY_Y = "estimate_visit_confirmation_reply_y"
+    ESTIMATE_VISIT_CONFIRMATION_REPLY_R = "estimate_visit_confirmation_reply_r"
+    ESTIMATE_VISIT_CONFIRMATION_REPLY_C = "estimate_visit_confirmation_reply_c"
 
 
 class DeliveryStatus(str, Enum):

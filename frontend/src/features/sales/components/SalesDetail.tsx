@@ -667,6 +667,40 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
         </div>
       ) : (
         <>
+          {/* Per-entry pending-reschedule banner (per OQ-2). Surfaces the
+              customer's R reply inline so staff doesn't have to scroll up
+              to the queue at the top of /sales. */}
+          {currentEvent?.confirmation_status === 'reschedule_requested' && (
+            <div
+              className="rounded-lg bg-orange-50 border border-orange-200 px-4 py-3 text-sm text-orange-900"
+              data-testid="pending-reschedule-banner"
+            >
+              <p className="font-semibold">
+                Customer asked to reschedule this estimate visit.
+              </p>
+              <p className="mt-1 text-orange-800">
+                Pick a new slot in &quot;Schedule visit&quot; — submitting will
+                update the visit and send a fresh Y/R/C confirmation. Their
+                suggested times appear on the queue at the top of
+                /sales.
+              </p>
+            </div>
+          )}
+          {currentEvent?.confirmation_status === 'cancelled' && (
+            <div
+              className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-900"
+              data-testid="cancelled-visit-banner"
+            >
+              <p className="font-semibold">
+                Customer cancelled this estimate visit.
+              </p>
+              <p className="mt-1 text-red-800">
+                Use the manual stage override to mark the entry as Closed
+                Lost, or schedule a new visit.
+              </p>
+            </div>
+          )}
+
           {/* StageStepper */}
           {stageKey && (
             <StageStepper
@@ -682,6 +716,7 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
                 )
               }
               visitScheduled={entry.status === 'estimate_scheduled'}
+              visitConfirmationStatus={currentEvent?.confirmation_status}
             />
           )}
 

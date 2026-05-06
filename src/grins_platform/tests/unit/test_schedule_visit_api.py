@@ -52,6 +52,11 @@ def _make_session_with_entry(entry_status: str | None) -> AsyncMock:
             obj.updated_at = datetime.now(timezone.utc)
         if not getattr(obj, "id", None):
             obj.id = uuid4()
+        # Polymorphic FK confirmation lifecycle (migration
+        # 20260509_120000): a real DB applies the server_default; the
+        # mock fakes that here so the response schema validates.
+        if not getattr(obj, "confirmation_status", None):
+            obj.confirmation_status = "pending"
 
     session.refresh = AsyncMock(side_effect=_refresh)
     return session
@@ -92,8 +97,9 @@ async def test_create_calendar_event_with_assignee_returns_201() -> None:
 
     response = await create_calendar_event(
         body=body,
-        _user=user,
+        user=user,
         session=session,
+        pipeline_service=MagicMock(),
     )
 
     # The SalesCalendarEvent passed to session.add carries the new field.
@@ -122,8 +128,9 @@ async def test_create_calendar_event_without_assignee_defaults_none() -> None:
 
     response = await create_calendar_event(
         body=body,
-        _user=user,
+        user=user,
         session=session,
+        pipeline_service=MagicMock(),
     )
 
     added_event = session.add.call_args.args[0]
@@ -147,6 +154,10 @@ async def test_update_calendar_event_changes_assignee() -> None:
     existing_event.end_time = time(15, 0)
     existing_event.notes = None
     existing_event.assigned_to_user_id = None
+    # Polymorphic FK confirmation lifecycle (migration 20260509_120000):
+    # the response schema now requires these to be string-shaped.
+    existing_event.confirmation_status = "pending"
+    existing_event.confirmation_status_at = None
     existing_event.created_at = datetime.now(timezone.utc)
     existing_event.updated_at = datetime.now(timezone.utc)
 
@@ -185,7 +196,12 @@ async def test_create_calendar_event_logs_assignee_in_completed_event(
     user = MagicMock()
 
     with caplog.at_level(logging.INFO):
-        await create_calendar_event(body=body, _user=user, session=session)
+        await create_calendar_event(
+            body=body,
+            user=user,
+            session=session,
+            pipeline_service=MagicMock(),
+        )
 
     # Find the create_calendar_event_completed log record.
     matching = [

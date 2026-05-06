@@ -117,6 +117,12 @@ _SUPERSEDABLE_MESSAGE_TYPES: frozenset[str] = frozenset(
         MessageType.APPOINTMENT_RESCHEDULE.value,
         MessageType.APPOINTMENT_CANCELLATION.value,
         MessageType.APPOINTMENT_REMINDER.value,
+        # Sales-side parallel: a fresh estimate-visit confirmation
+        # tombstones the prior one for the same SalesCalendarEvent so a
+        # stale-thread reply on the old SMS routes through the
+        # superseded-thread audit branch instead of confirming the moved
+        # event the customer never saw.
+        MessageType.ESTIMATE_VISIT_CONFIRMATION.value,
     }
 )
 
@@ -238,6 +244,7 @@ class SMSService(LoggerMixin):
         campaign_id: UUID | None = None,
         job_id: UUID | None = None,
         appointment_id: UUID | None = None,
+        sales_calendar_event_id: UUID | None = None,
         *,
         skip_formatting: bool = False,
     ) -> dict[str, Any]:
@@ -251,6 +258,11 @@ class SMSService(LoggerMixin):
             campaign_id: Optional campaign ID for B4 dedupe scoping.
             job_id: Optional job ID.
             appointment_id: Optional appointment ID.
+            sales_calendar_event_id: Optional estimate-visit anchor — when
+                set, the SentMessage row is correlated to a
+                ``SalesCalendarEvent`` instead of an ``Appointment`` so
+                inbound Y/R/C replies route through the sales-side
+                lifecycle (mirror of ``appointment_id``).
             skip_formatting: If True, skip prefix/footer/template rendering.
 
         Returns:
@@ -350,10 +362,27 @@ class SMSService(LoggerMixin):
                 MessageType.APPOINTMENT_CONFIRMATION_REPLY_R,
                 MessageType.APPOINTMENT_CONFIRMATION_REPLY_C,
             }
+            # Mirror of ``_per_appt_types`` for the polymorphic estimate-visit
+            # lifecycle (migration 20260509_120000). Y-ack vs R-ack on the
+            # same SalesCalendarEvent must each get their own 24h dedup
+            # window so a confirm followed by a reschedule doesn't silently
+            # collapse into one ack.
+            _per_sales_event_types = {
+                MessageType.ESTIMATE_VISIT_CONFIRMATION,
+                MessageType.ESTIMATE_VISIT_CONFIRMATION_REPLY_Y,
+                MessageType.ESTIMATE_VISIT_CONFIRMATION_REPLY_R,
+                MessageType.ESTIMATE_VISIT_CONFIRMATION_REPLY_C,
+            }
             dedupe_appointment_id = (
                 appointment_id
                 if message_type in _per_appt_types
                 and appointment_id is not None
+                else None
+            )
+            dedupe_sales_calendar_event_id = (
+                sales_calendar_event_id
+                if message_type in _per_sales_event_types
+                and sales_calendar_event_id is not None
                 else None
             )
             legacy_dupes = await self.message_repo.get_by_customer_and_type(
@@ -361,6 +390,7 @@ class SMSService(LoggerMixin):
                 message_type=message_type,
                 hours_back=24,
                 appointment_id=dedupe_appointment_id,
+                sales_calendar_event_id=dedupe_sales_calendar_event_id,
             )
             if legacy_dupes:
                 self.log_rejected(
@@ -393,6 +423,7 @@ class SMSService(LoggerMixin):
                     lead_id=recipient.lead_id,
                     job_id=job_id,
                     appointment_id=appointment_id,
+                    sales_calendar_event_id=sales_calendar_event_id,
                     campaign_id=campaign_id,
                     message_type=message_type.value,
                     message_content=message,
@@ -430,6 +461,7 @@ class SMSService(LoggerMixin):
             lead_id=recipient.lead_id,
             job_id=job_id,
             appointment_id=appointment_id,
+            sales_calendar_event_id=sales_calendar_event_id,
             campaign_id=campaign_id,
             message_type=message_type.value,
             message_content=formatted,
@@ -503,6 +535,38 @@ class SMSService(LoggerMixin):
                     logger.exception(
                         "sms.supersede.failed",
                         appointment_id=str(sent_message.appointment_id),
+                        new_message_id=str(sent_message.id),
+                        error=str(supersede_exc),
+                    )
+
+            # Sales-side parallel: tombstone prior estimate-visit
+            # confirmations for the same SalesCalendarEvent so a
+            # stale-thread reply to the old SMS routes through the
+            # superseded-thread audit branch instead of mutating the
+            # rescheduled event's confirmation state.
+            if (
+                sent_message.sales_calendar_event_id is not None
+                and sent_message.message_type in _SUPERSEDABLE_MESSAGE_TYPES
+            ):
+                try:
+                    await self.session.execute(
+                        sa_update(SentMessage)
+                        .where(
+                            SentMessage.sales_calendar_event_id
+                            == sent_message.sales_calendar_event_id,
+                            SentMessage.id != sent_message.id,
+                            SentMessage.message_type.in_(_SUPERSEDABLE_MESSAGE_TYPES),
+                            SentMessage.superseded_at.is_(None),
+                        )
+                        .values(superseded_at=datetime.now(tz=timezone.utc)),
+                    )
+                    await self.session.flush()
+                except Exception as supersede_exc:
+                    logger.exception(
+                        "sms.supersede.failed",
+                        sales_calendar_event_id=str(
+                            sent_message.sales_calendar_event_id,
+                        ),
                         new_message_id=str(sent_message.id),
                         error=str(supersede_exc),
                     )
@@ -1171,7 +1235,15 @@ class SMSService(LoggerMixin):
             customer_id=original.customer_id,
         )
         appointment_id = original.appointment_id
+        # ``getattr`` falls back gracefully when fixtures use lightweight
+        # SimpleNamespace mocks that pre-date the polymorphic FK column
+        # (migration 20260509_120000). Production rows always have the
+        # attribute.
+        sales_calendar_event_id = getattr(original, "sales_calendar_event_id", None)
         job_id = original.job_id
+        # Discriminator drives ack message_type, throttle bucket prefix,
+        # and which polymorphic FK we thread through send_message.
+        is_estimate_visit = sales_calendar_event_id is not None
 
         auto_reply = result.get("auto_reply")
         if auto_reply:
@@ -1181,23 +1253,52 @@ class SMSService(LoggerMixin):
             # their own 60s throttle window AND their own 24h dedup
             # bucket. Falls back to the legacy combined value when the
             # keyword cannot be resolved (e.g. free-text fallback path).
-            _ack_subtype_by_keyword = {
-                ConfirmationKeyword.CONFIRM: (
-                    MessageType.APPOINTMENT_CONFIRMATION_REPLY_Y,
-                    "reply_y",
-                ),
-                ConfirmationKeyword.RESCHEDULE: (
-                    MessageType.APPOINTMENT_CONFIRMATION_REPLY_R,
-                    "reply_r",
-                ),
-                ConfirmationKeyword.CANCEL: (
-                    MessageType.APPOINTMENT_CONFIRMATION_REPLY_C,
-                    "reply_c",
-                ),
-            }
+            #
+            # Sales-side replies use ESTIMATE_VISIT_CONFIRMATION_REPLY_*
+            # types and ``est_*`` throttle bucket prefixes so estimate
+            # acks don't share the 24h dedup or 60s throttle window with
+            # appointment-side acks for the same customer.
+            if is_estimate_visit:
+                _ack_subtype_by_keyword: dict[
+                    ConfirmationKeyword,
+                    tuple[MessageType, str | None],
+                ] = {
+                    ConfirmationKeyword.CONFIRM: (
+                        MessageType.ESTIMATE_VISIT_CONFIRMATION_REPLY_Y,
+                        "est_reply_y",
+                    ),
+                    ConfirmationKeyword.RESCHEDULE: (
+                        MessageType.ESTIMATE_VISIT_CONFIRMATION_REPLY_R,
+                        "est_reply_r",
+                    ),
+                    ConfirmationKeyword.CANCEL: (
+                        MessageType.ESTIMATE_VISIT_CONFIRMATION_REPLY_C,
+                        "est_reply_c",
+                    ),
+                }
+                fallback = (
+                    MessageType.ESTIMATE_VISIT_CONFIRMATION_REPLY_Y,
+                    None,
+                )
+            else:
+                _ack_subtype_by_keyword = {
+                    ConfirmationKeyword.CONFIRM: (
+                        MessageType.APPOINTMENT_CONFIRMATION_REPLY_Y,
+                        "reply_y",
+                    ),
+                    ConfirmationKeyword.RESCHEDULE: (
+                        MessageType.APPOINTMENT_CONFIRMATION_REPLY_R,
+                        "reply_r",
+                    ),
+                    ConfirmationKeyword.CANCEL: (
+                        MessageType.APPOINTMENT_CONFIRMATION_REPLY_C,
+                        "reply_c",
+                    ),
+                }
+                fallback = (MessageType.APPOINTMENT_CONFIRMATION_REPLY, None)
             ack_message_type, throttle_bucket = _ack_subtype_by_keyword.get(
                 keyword,
-                (MessageType.APPOINTMENT_CONFIRMATION_REPLY, None),
+                fallback,
             )
             suppressed = await self._autoreply_suppressed(
                 reply_phone,
@@ -1218,6 +1319,7 @@ class SMSService(LoggerMixin):
                         consent_type="transactional",
                         job_id=job_id,
                         appointment_id=appointment_id,
+                        sales_calendar_event_id=sales_calendar_event_id,
                     )
                 except Exception:
                     logger.warning(
@@ -1237,6 +1339,7 @@ class SMSService(LoggerMixin):
                     consent_type="transactional",
                     job_id=job_id,
                     appointment_id=appointment_id,
+                    sales_calendar_event_id=sales_calendar_event_id,
                 )
             except Exception:
                 logger.warning(

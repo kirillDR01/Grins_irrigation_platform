@@ -55,6 +55,9 @@ def _make_inbound(**overrides: Any) -> MagicMock:
     row.id = overrides.get("id", uuid4())
     row.job_id = overrides.get("job_id", uuid4())
     row.appointment_id = overrides.get("appointment_id", uuid4())
+    # Polymorphic FK (migration 20260509_120000): default to None on the
+    # appointment-side fixture so the schema validation passes.
+    row.sales_calendar_event_id = overrides.get("sales_calendar_event_id")
     row.sent_message_id = overrides.get("sent_message_id")
     row.customer_id = overrides.get("customer_id", uuid4())
     row.from_phone = overrides.get("from_phone", "+15125550000")
@@ -72,6 +75,7 @@ def _make_reschedule(**overrides: Any) -> MagicMock:
     row.id = overrides.get("id", uuid4())
     row.job_id = overrides.get("job_id", uuid4())
     row.appointment_id = overrides.get("appointment_id", uuid4())
+    row.sales_calendar_event_id = overrides.get("sales_calendar_event_id")
     row.customer_id = overrides.get("customer_id", uuid4())
     row.original_reply_id = overrides.get("original_reply_id")
     row.requested_alternatives = overrides.get("requested_alternatives")

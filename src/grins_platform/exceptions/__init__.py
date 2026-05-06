@@ -843,6 +843,43 @@ class MissingSigningDocumentError(Exception):
         )
 
 
+class SalesCalendarEventNotFoundError(Exception):
+    """Raised when a sales calendar event (estimate visit) is not found.
+
+    Validates: sales-pipeline-estimate-visit-confirmation-lifecycle.
+    """
+
+    def __init__(self, event_id: UUID) -> None:
+        """Initialize with event ID."""
+        self.event_id = event_id
+        super().__init__(f"Sales calendar event not found: {event_id}")
+
+
+class EstimateNotConfirmedError(Exception):
+    """Raised when programmatic ``advance_status`` is blocked because the
+    latest sales calendar event has not yet been confirmed by the customer.
+
+    The manual override path bypasses this guard so an admin can still
+    push the entry forward when needed.
+
+    Validates: sales-pipeline-estimate-visit-confirmation-lifecycle (OQ-6).
+    """
+
+    def __init__(self, entry_id: UUID, current_status: str | None = None) -> None:
+        """Initialize with entry ID and the latest event status."""
+        self.entry_id = entry_id
+        self.current_status = current_status
+        suffix = (
+            f" (latest event status: {current_status})"
+            if current_status is not None
+            else ""
+        )
+        super().__init__(
+            f"Sales entry {entry_id}: cannot advance to send_estimate "
+            f"until the customer confirms the estimate visit{suffix}.",
+        )
+
+
 # =========================================================================
 # CRM Changes Update 2 — Domain-Specific Exceptions (Task 18.1)
 # =========================================================================
@@ -931,6 +968,7 @@ __all__ = [
     "DuplicateLeadError",
     "EstimateAlreadyApprovedError",
     "EstimateError",
+    "EstimateNotConfirmedError",
     "EstimateNotFoundError",
     "EstimateTemplateNotFoundError",
     "EstimateTokenExpiredError",
@@ -960,6 +998,7 @@ __all__ = [
     "PropertyNotFoundError",
     "RenewalProposalNotFoundError",
     "ReviewAlreadyRequestedError",
+    "SalesCalendarEventNotFoundError",
     "SalesEntryNotFoundError",
     "ScheduleClearAuditNotFoundError",
     "ServiceOfferingInactiveError",

@@ -2,7 +2,12 @@
 // Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 16.2, 16.8
 
 import { MoreHorizontal, X, Calendar } from 'lucide-react';
-import { STAGES, STAGE_INDEX, type StageKey } from '../types/pipeline';
+import {
+  STAGES,
+  STAGE_INDEX,
+  type SalesCalendarEventConfirmationStatus,
+  type StageKey,
+} from '../types/pipeline';
 import { StageOverrideMenu } from './StageOverrideMenu';
 
 interface StageStepperProps {
@@ -13,6 +18,12 @@ interface StageStepperProps {
   onMarkLost: () => void;
   visitScheduled?: boolean;
   visitLabel?: string;
+  /**
+   * Y/R/C lifecycle status for the latest sales calendar event. Drives
+   * the sub-pill on the Schedule step so staff can see whether the
+   * customer has replied. Undefined when no event exists yet.
+   */
+  visitConfirmationStatus?: SalesCalendarEventConfirmationStatus;
 }
 
 type StepState = 'done' | 'active' | 'waiting' | 'future';
@@ -23,6 +34,7 @@ export function StageStepper({
   onMarkLost,
   visitScheduled,
   visitLabel,
+  visitConfirmationStatus,
 }: StageStepperProps) {
   const currentIdx = STAGE_INDEX[currentStage];
 
@@ -57,6 +69,11 @@ export function StageStepper({
                 badge={
                   s.key === 'schedule_estimate' && visitScheduled
                     ? `📅 ${visitLabel ?? 'Scheduled'}`
+                    : undefined
+                }
+                confirmationStatus={
+                  s.key === 'schedule_estimate' && visitScheduled
+                    ? visitConfirmationStatus
                     : undefined
                 }
               />
@@ -98,12 +115,14 @@ function Step({
   label,
   stageKey,
   badge,
+  confirmationStatus,
 }: {
   state: StepState;
   index: number;
   label: string;
   stageKey: string;
   badge?: string;
+  confirmationStatus?: SalesCalendarEventConfirmationStatus;
 }) {
   const dotClass = {
     done: 'bg-emerald-500 text-white',
@@ -138,7 +157,55 @@ function Step({
           {badge.replace(/^📅\s*/, '')}
         </span>
       )}
+      {confirmationStatus && (
+        <ConfirmationSubPill status={confirmationStatus} />
+      )}
     </div>
+  );
+}
+
+function ConfirmationSubPill({
+  status,
+}: {
+  status: SalesCalendarEventConfirmationStatus;
+}) {
+  // Maps the Y/R/C lifecycle on the latest SalesCalendarEvent into a
+  // sub-pill rendered under the Schedule step's date badge so staff can
+  // see at a glance whether the customer has approved, asked to
+  // reschedule, or cancelled.
+  const styles: Record<
+    SalesCalendarEventConfirmationStatus,
+    { className: string; label: string; testId: string }
+  > = {
+    pending: {
+      className: 'bg-amber-50 text-amber-700 border border-amber-200',
+      label: 'Pending',
+      testId: 'stage-stepper-confirmation-pending',
+    },
+    confirmed: {
+      className: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+      label: '✓ Confirmed',
+      testId: 'stage-stepper-confirmation-confirmed',
+    },
+    reschedule_requested: {
+      className: 'bg-orange-50 text-orange-700 border border-orange-200',
+      label: 'Reschedule requested',
+      testId: 'stage-stepper-confirmation-reschedule',
+    },
+    cancelled: {
+      className: 'bg-red-50 text-red-700 border border-red-200',
+      label: 'Cancelled',
+      testId: 'stage-stepper-confirmation-cancelled',
+    },
+  };
+  const s = styles[status];
+  return (
+    <span
+      data-testid={s.testId}
+      className={`mt-0.5 text-[10px] rounded-full px-1.5 py-0.5 inline-flex items-center ${s.className}`}
+    >
+      {s.label}
+    </span>
   );
 }
 

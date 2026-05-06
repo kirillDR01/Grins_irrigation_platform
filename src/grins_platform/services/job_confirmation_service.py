@@ -91,6 +91,10 @@ _CONFIRMATION_LIKE_TYPES: frozenset[str] = frozenset(
         MessageType.APPOINTMENT_CONFIRMATION.value,
         MessageType.APPOINTMENT_RESCHEDULE.value,
         MessageType.APPOINTMENT_REMINDER.value,
+        # Sales-pipeline lifecycle (migration 20260509_120000): a Y/R/C
+        # reply on an estimate-visit thread routes through the same
+        # correlator. Dispatcher branches on ConfirmationTarget.kind.
+        MessageType.ESTIMATE_VISIT_CONFIRMATION.value,
     }
 )
 
@@ -201,18 +205,21 @@ class JobConfirmationService(LoggerMixin):
             return {"action": "no_match", "thread_id": thread_id}
 
         if target.kind == "estimate_visit":
-            # PR B will dispatch sales-side replies through a dedicated
-            # handler that updates SalesCalendarEvent.confirmation_status
-            # and surfaces R replies on the EstimateRescheduleQueue.
-            # Until then, fall through to no_match so a stray reply
-            # doesn't crash the dispatcher or mutate appointment state.
-            self.log_rejected(
+            estimate_result = await self._handle_estimate_visit_reply(
+                target=target,
+                original=original,
+                keyword=keyword,
+                raw_body=raw_body,
+                from_phone=from_phone,
+                provider_sid=provider_sid,
+            )
+            estimate_result["recipient_phone"] = original.recipient_phone
+            self.log_completed(
                 "handle_confirmation",
-                reason="estimate_visit_dispatch_pending",
-                thread_id=thread_id,
+                result_action=estimate_result.get("action"),
                 sales_calendar_event_id=str(target.sales_calendar_event_id),
             )
-            return {"action": "no_match", "thread_id": thread_id}
+            return estimate_result
 
         appointment_id: UUID = target.appointment_id  # type: ignore[assignment]
         job_id: UUID = target.job_id  # type: ignore[assignment]
@@ -1771,3 +1778,459 @@ class JobConfirmationService(LoggerMixin):
             count=len(rows),
         )
         return rows
+
+    async def list_responses_by_sales_event(
+        self,
+        sales_calendar_event_id: UUID,
+    ) -> list[JobConfirmationResponse]:
+        """List inbound Y/R/C replies for an estimate visit, newest first."""
+        self.log_started(
+            "list_responses_by_sales_event",
+            sales_calendar_event_id=str(sales_calendar_event_id),
+        )
+        result = await self.db.execute(
+            select(JobConfirmationResponse)
+            .where(
+                JobConfirmationResponse.sales_calendar_event_id
+                == sales_calendar_event_id,
+            )
+            .order_by(JobConfirmationResponse.received_at.desc()),
+        )
+        rows = list(result.scalars().all())
+        self.log_completed("list_responses_by_sales_event", count=len(rows))
+        return rows
+
+    async def list_reschedule_requests_by_sales_event(
+        self,
+        sales_calendar_event_id: UUID,
+    ) -> list[RescheduleRequest]:
+        """List reschedule requests for an estimate visit, newest first."""
+        self.log_started(
+            "list_reschedule_requests_by_sales_event",
+            sales_calendar_event_id=str(sales_calendar_event_id),
+        )
+        result = await self.db.execute(
+            select(RescheduleRequest)
+            .where(
+                RescheduleRequest.sales_calendar_event_id == sales_calendar_event_id,
+            )
+            .order_by(RescheduleRequest.created_at.desc()),
+        )
+        rows = list(result.scalars().all())
+        self.log_completed(
+            "list_reschedule_requests_by_sales_event",
+            count=len(rows),
+        )
+        return rows
+
+    # ------------------------------------------------------------------
+    # Estimate-visit (sales-pipeline) Y/R/C handlers
+    # ------------------------------------------------------------------
+
+    async def _handle_estimate_visit_reply(
+        self,
+        *,
+        target: ConfirmationTarget,
+        original: SentMessage,
+        keyword: ConfirmationKeyword | None,
+        raw_body: str,
+        from_phone: str,
+        provider_sid: str | None,
+    ) -> dict[str, Any]:
+        """Dispatch a Y/R/C reply on an estimate-visit confirmation thread.
+
+        Mirror of the appointment-side ``handle_confirmation`` body —
+        records the inbound reply on ``JobConfirmationResponse`` keyed by
+        ``sales_calendar_event_id`` (XOR with ``appointment_id`` per
+        migration ``20260509_120000``), then branches on keyword.
+        """
+        sales_calendar_event_id: UUID = target.sales_calendar_event_id  # type: ignore[assignment]
+        customer_id: UUID = target.customer_id
+
+        response = JobConfirmationResponse(
+            job_id=None,
+            appointment_id=None,
+            sales_calendar_event_id=sales_calendar_event_id,
+            sent_message_id=original.id,
+            customer_id=customer_id,
+            from_phone=from_phone,
+            reply_keyword=keyword.value if keyword else None,
+            raw_reply_body=raw_body,
+            provider_sid=provider_sid,
+            status="pending",
+        )
+        self.db.add(response)
+        await self.db.flush()
+
+        if keyword == ConfirmationKeyword.CONFIRM:
+            return await self._handle_estimate_visit_confirm(
+                response=response,
+                sales_calendar_event_id=sales_calendar_event_id,
+            )
+        if keyword == ConfirmationKeyword.RESCHEDULE:
+            return await self._handle_estimate_visit_reschedule(
+                response=response,
+                sales_calendar_event_id=sales_calendar_event_id,
+                customer_id=customer_id,
+                raw_body=raw_body,
+            )
+        if keyword == ConfirmationKeyword.CANCEL:
+            return await self._handle_estimate_visit_cancel(
+                response=response,
+                sales_calendar_event_id=sales_calendar_event_id,
+                customer_id=customer_id,
+            )
+        return await self._handle_estimate_visit_needs_review(response)
+
+    async def _handle_estimate_visit_confirm(
+        self,
+        *,
+        response: JobConfirmationResponse,
+        sales_calendar_event_id: UUID,
+    ) -> dict[str, Any]:
+        """CONFIRM: pending → confirmed on ``SalesCalendarEvent``."""
+        from grins_platform.models.sales import SalesCalendarEvent  # noqa: PLC0415
+
+        stmt = (
+            select(SalesCalendarEvent)
+            .where(SalesCalendarEvent.id == sales_calendar_event_id)
+            .with_for_update()
+        )
+        event = (await self.db.execute(stmt)).scalar_one_or_none()
+
+        if event is not None and event.confirmation_status == "confirmed":
+            response.status = "confirmed_repeat"
+            response.processed_at = datetime.now(tz=timezone.utc)
+            await self.db.flush()
+            self.log_rejected(
+                "handle_estimate_visit_confirm",
+                reason="already_confirmed",
+                sales_calendar_event_id=str(sales_calendar_event_id),
+            )
+            return {
+                "action": "confirmed",
+                "sales_calendar_event_id": str(sales_calendar_event_id),
+                "auto_reply": self._build_estimate_confirm_reassurance(event),
+                "dedup": True,
+            }
+
+        transitioned = False
+        if event is not None and event.confirmation_status in (
+            "pending",
+            "reschedule_requested",
+        ):
+            event.confirmation_status = "confirmed"
+            event.confirmation_status_at = datetime.now(tz=timezone.utc)
+            transitioned = True
+            await self.db.flush()
+
+        response.status = "confirmed"
+        response.processed_at = datetime.now(tz=timezone.utc)
+        await self.db.flush()
+
+        logger.info(
+            "sales.calendar_event.confirmed",
+            sales_calendar_event_id=str(sales_calendar_event_id),
+            transitioned=transitioned,
+        )
+
+        return {
+            "action": "confirmed",
+            "sales_calendar_event_id": str(sales_calendar_event_id),
+            "auto_reply": self._build_estimate_confirm_message(event),
+        }
+
+    async def _handle_estimate_visit_reschedule(
+        self,
+        *,
+        response: JobConfirmationResponse,
+        sales_calendar_event_id: UUID,
+        customer_id: UUID,
+        raw_body: str,
+    ) -> dict[str, Any]:
+        """RESCHEDULE: open RescheduleRequest + ack with 2-3 dates prompt."""
+        from grins_platform.models.sales import SalesCalendarEvent  # noqa: PLC0415
+
+        open_stmt = (
+            select(RescheduleRequest)
+            .where(
+                RescheduleRequest.sales_calendar_event_id == sales_calendar_event_id,
+                RescheduleRequest.status == "open",
+            )
+            .order_by(RescheduleRequest.created_at.asc())
+            .limit(1)
+        )
+        existing = (await self.db.execute(open_stmt)).scalar_one_or_none()
+        if existing is not None:
+            existing.raw_alternatives_text = (
+                f"{existing.raw_alternatives_text or ''}\n---\n{raw_body}".strip()
+            )
+            response.status = "reschedule_requested"
+            response.processed_at = datetime.now(tz=timezone.utc)
+            await self.db.flush()
+            self.log_rejected(
+                "handle_estimate_visit_reschedule",
+                reason="duplicate_open_request",
+                sales_calendar_event_id=str(sales_calendar_event_id),
+                existing_request_id=str(existing.id),
+            )
+            return {
+                "action": "reschedule_requested",
+                "sales_calendar_event_id": str(sales_calendar_event_id),
+                "reschedule_request_id": str(existing.id),
+                "auto_reply": _AUTO_REPLIES[ConfirmationKeyword.RESCHEDULE],
+                "duplicate": True,
+            }
+
+        reschedule = RescheduleRequest(
+            job_id=None,
+            appointment_id=None,
+            sales_calendar_event_id=sales_calendar_event_id,
+            customer_id=customer_id,
+            original_reply_id=response.id,
+            raw_alternatives_text=raw_body,
+            status="open",
+        )
+        try:
+            async with self.db.begin_nested():
+                self.db.add(reschedule)
+                await self.db.flush()
+        except IntegrityError:
+            existing = (await self.db.execute(open_stmt)).scalar_one_or_none()
+            if existing is None:
+                raise
+            existing.raw_alternatives_text = (
+                f"{existing.raw_alternatives_text or ''}\n---\n{raw_body}".strip()
+            )
+            response.status = "reschedule_requested"
+            response.processed_at = datetime.now(tz=timezone.utc)
+            await self.db.flush()
+            return {
+                "action": "reschedule_requested",
+                "sales_calendar_event_id": str(sales_calendar_event_id),
+                "reschedule_request_id": str(existing.id),
+                "auto_reply": _AUTO_REPLIES[ConfirmationKeyword.RESCHEDULE],
+                "duplicate": True,
+            }
+
+        event = await self.db.get(SalesCalendarEvent, sales_calendar_event_id)
+        if event is not None and event.confirmation_status != "cancelled":
+            event.confirmation_status = "reschedule_requested"
+            event.confirmation_status_at = datetime.now(tz=timezone.utc)
+
+        response.status = "reschedule_requested"
+        response.processed_at = datetime.now(tz=timezone.utc)
+        await self.db.flush()
+
+        logger.info(
+            "sales.calendar_event.reschedule_requested",
+            sales_calendar_event_id=str(sales_calendar_event_id),
+            reschedule_request_id=str(reschedule.id),
+        )
+
+        return {
+            "action": "reschedule_requested",
+            "sales_calendar_event_id": str(sales_calendar_event_id),
+            "reschedule_request_id": str(reschedule.id),
+            "auto_reply": _AUTO_REPLIES[ConfirmationKeyword.RESCHEDULE],
+        }
+
+    async def _handle_estimate_visit_cancel(
+        self,
+        *,
+        response: JobConfirmationResponse,
+        sales_calendar_event_id: UUID,
+        customer_id: UUID,
+    ) -> dict[str, Any]:
+        """CANCEL: flip event to ``cancelled`` + raise admin alert."""
+        from grins_platform.models.sales import SalesCalendarEvent  # noqa: PLC0415
+
+        event = await self.db.get(SalesCalendarEvent, sales_calendar_event_id)
+
+        if event is not None and event.confirmation_status == "cancelled":
+            response.status = "cancelled"
+            response.processed_at = datetime.now(tz=timezone.utc)
+            await self.db.flush()
+            self.log_rejected(
+                "handle_estimate_visit_cancel",
+                reason="already_cancelled",
+                sales_calendar_event_id=str(sales_calendar_event_id),
+            )
+            return {
+                "action": "cancelled",
+                "sales_calendar_event_id": str(sales_calendar_event_id),
+                "auto_reply": "",
+            }
+
+        transitioned = False
+        if event is not None:
+            event.confirmation_status = "cancelled"
+            event.confirmation_status_at = datetime.now(tz=timezone.utc)
+            transitioned = True
+
+        response.status = "cancelled"
+        response.processed_at = datetime.now(tz=timezone.utc)
+        await self.db.flush()
+
+        if transitioned:
+            await self._dispatch_estimate_visit_cancellation_alert(
+                sales_calendar_event_id=sales_calendar_event_id,
+                customer_id=customer_id,
+                event=event,
+            )
+
+        logger.info(
+            "sales.calendar_event.cancelled",
+            sales_calendar_event_id=str(sales_calendar_event_id),
+            transitioned=transitioned,
+        )
+
+        business_phone = os.environ.get("BUSINESS_PHONE_NUMBER", "")
+        contact_clause = (
+            f" Please call us at {business_phone} if you'd like to reschedule."
+            if business_phone
+            else " Please contact us if you'd like to reschedule."
+        )
+        auto_reply = "Your estimate visit has been cancelled." + contact_clause
+        return {
+            "action": "cancelled",
+            "sales_calendar_event_id": str(sales_calendar_event_id),
+            "auto_reply": auto_reply,
+        }
+
+    async def _handle_estimate_visit_needs_review(
+        self,
+        response: JobConfirmationResponse,
+    ) -> dict[str, Any]:
+        """Free-text or unknown reply on an estimate-visit thread."""
+        sales_calendar_event_id = response.sales_calendar_event_id
+        if sales_calendar_event_id is None:
+            response.status = "needs_review"
+            response.processed_at = datetime.now(tz=timezone.utc)
+            await self.db.flush()
+            return {"action": "needs_review", "response_id": str(response.id)}
+
+        stmt = (
+            select(RescheduleRequest)
+            .where(
+                RescheduleRequest.sales_calendar_event_id == sales_calendar_event_id,
+                RescheduleRequest.status == "open",
+            )
+            .order_by(RescheduleRequest.created_at.desc())
+            .limit(1)
+        )
+        reschedule_req = (await self.db.execute(stmt)).scalar_one_or_none()
+
+        if reschedule_req is not None:
+            now_iso = datetime.now(tz=timezone.utc).isoformat()
+            new_entry = {"text": response.raw_reply_body, "at": now_iso}
+            existing_alts = reschedule_req.requested_alternatives
+            entries: list[dict[str, Any]]
+            if isinstance(existing_alts, dict) and isinstance(
+                existing_alts.get("entries"),
+                list,
+            ):
+                entries = list(existing_alts["entries"])
+            else:
+                entries = []
+            entries.append(new_entry)
+            reschedule_req.requested_alternatives = {"entries": entries}
+            reschedule_req.raw_alternatives_text = (
+                f"{reschedule_req.raw_alternatives_text or ''}"
+                f"\n---\n{response.raw_reply_body}"
+            ).strip()
+            response.status = "reschedule_alternatives_received"
+            response.processed_at = datetime.now(tz=timezone.utc)
+            await self.db.flush()
+            return {
+                "action": "reschedule_alternatives_received",
+                "sales_calendar_event_id": str(sales_calendar_event_id),
+                "reschedule_request_id": str(reschedule_req.id),
+                "alternatives_text": response.raw_reply_body,
+                "alternatives_count": len(entries),
+            }
+
+        response.status = "needs_review"
+        response.processed_at = datetime.now(tz=timezone.utc)
+        await self.db.flush()
+        logger.warning(
+            "estimate_visit.needs_review",
+            response_id=str(response.id),
+            raw_body=response.raw_reply_body,
+        )
+        return {"action": "needs_review", "response_id": str(response.id)}
+
+    @staticmethod
+    def _format_estimate_visit_window(event: Any | None) -> str:  # noqa: ANN401
+        """Format an estimate visit's date + time window for SMS copy."""
+        from grins_platform.services.sms.formatters import (  # noqa: PLC0415
+            format_sms_time_12h,
+        )
+
+        if event is None:
+            return ""
+        scheduled_date = getattr(event, "scheduled_date", None)
+        start_time = getattr(event, "start_time", None)
+        if scheduled_date is None:
+            return ""
+        date_str: str = scheduled_date.strftime("%B %d, %Y")
+        time_str = format_sms_time_12h(start_time) if start_time else None
+        if time_str:
+            return f"{date_str} at {time_str}"
+        return date_str
+
+    @classmethod
+    def _build_estimate_confirm_message(cls, event: Any | None) -> str:  # noqa: ANN401
+        """CONFIRM ack copy for the estimate-visit lifecycle."""
+        when = cls._format_estimate_visit_window(event)
+        if when:
+            return f"Your estimate visit is confirmed. See you on {when}!"
+        return "Your estimate visit is confirmed. See you then!"
+
+    @classmethod
+    def _build_estimate_confirm_reassurance(
+        cls,
+        event: Any | None,  # noqa: ANN401
+    ) -> str:
+        """Reassurance copy for a repeat ``Y`` on an already-confirmed visit."""
+        when = cls._format_estimate_visit_window(event)
+        if when:
+            return f"You're already confirmed for {when}. See you then!"
+        return "You're already confirmed. See you then!"
+
+    async def _dispatch_estimate_visit_cancellation_alert(
+        self,
+        *,
+        sales_calendar_event_id: UUID,
+        customer_id: UUID,
+        event: Any | None,  # noqa: ANN401
+    ) -> None:
+        """Raise an admin alert that the customer cancelled an estimate visit."""
+        from grins_platform.models.alert import Alert  # noqa: PLC0415
+        from grins_platform.models.customer import Customer  # noqa: PLC0415
+        from grins_platform.models.enums import (  # noqa: PLC0415
+            AlertSeverity,
+            AlertType,
+        )
+        from grins_platform.repositories.alert_repository import (  # noqa: PLC0415
+            AlertRepository,
+        )
+
+        try:
+            customer = await self.db.get(Customer, customer_id)
+            customer_name = customer.full_name if customer is not None else "customer"
+            when = self._format_estimate_visit_window(event)
+            tail = f" scheduled for {when}" if when else ""
+            alert = Alert(
+                type=AlertType.CUSTOMER_CANCELLED_APPOINTMENT.value,
+                severity=AlertSeverity.WARNING.value,
+                entity_type="sales_calendar_event",
+                entity_id=sales_calendar_event_id,
+                message=f"Estimate visit cancelled by {customer_name}{tail}.",
+            )
+            await AlertRepository(self.db).create(alert)
+        except Exception:
+            self.log_failed(
+                "estimate_visit.admin_cancellation_alert",
+                sales_calendar_event_id=str(sales_calendar_event_id),
+            )

@@ -32,6 +32,7 @@ class SentMessageRepository(LoggerMixin):
         recipient_phone: str,
         job_id: UUID | None = None,
         appointment_id: UUID | None = None,
+        sales_calendar_event_id: UUID | None = None,
         scheduled_for: datetime | None = None,
         created_by: UUID | None = None,
     ) -> SentMessage:
@@ -44,6 +45,7 @@ class SentMessageRepository(LoggerMixin):
             recipient_phone: Phone number to send to
             job_id: Optional job ID
             appointment_id: Optional appointment ID
+            sales_calendar_event_id: Optional estimate-visit anchor
             scheduled_for: Optional scheduled send time
             created_by: Optional user ID who created the message
 
@@ -62,6 +64,7 @@ class SentMessageRepository(LoggerMixin):
             customer_id=customer_id,
             job_id=job_id,
             appointment_id=appointment_id,
+            sales_calendar_event_id=sales_calendar_event_id,
             message_type=message_type.value,
             message_content=message_content,
             recipient_phone=recipient_phone,
@@ -210,6 +213,7 @@ class SentMessageRepository(LoggerMixin):
         message_type: MessageType,
         hours_back: int = 24,
         appointment_id: UUID | None = None,
+        sales_calendar_event_id: UUID | None = None,
         *,
         include_superseded: bool = False,
     ) -> list[SentMessage]:
@@ -224,6 +228,7 @@ class SentMessageRepository(LoggerMixin):
             message_type: Type of message
             hours_back: How many hours back to search
             appointment_id: Optional appointment ID for per-appointment dedupe
+            sales_calendar_event_id: Optional sales-event ID for per-event dedupe
             include_superseded: When True, include superseded rows
                 (debugging only — production callers leave the default).
 
@@ -246,6 +251,10 @@ class SentMessageRepository(LoggerMixin):
         ]
         if appointment_id is not None:
             conditions.append(SentMessage.appointment_id == appointment_id)
+        if sales_calendar_event_id is not None:
+            conditions.append(
+                SentMessage.sales_calendar_event_id == sales_calendar_event_id,
+            )
         if not include_superseded:
             conditions.append(SentMessage.superseded_at.is_(None))
 
@@ -307,6 +316,36 @@ class SentMessageRepository(LoggerMixin):
         )
         messages = list(result.scalars().all())
         self.log_completed("list_by_appointment", count=len(messages))
+        return messages
+
+    async def list_by_sales_calendar_event(
+        self,
+        sales_calendar_event_id: UUID,
+        include_superseded: bool = False,
+    ) -> list[SentMessage]:
+        """List outbound messages for a sales calendar event, newest first.
+
+        Mirror of :meth:`list_by_appointment` for the estimate-visit lifecycle.
+        """
+        self.log_started(
+            "list_by_sales_calendar_event",
+            sales_calendar_event_id=str(sales_calendar_event_id),
+        )
+        conditions = [
+            SentMessage.sales_calendar_event_id == sales_calendar_event_id,
+        ]
+        if not include_superseded:
+            conditions.append(SentMessage.superseded_at.is_(None))
+        result = await self.session.execute(
+            select(SentMessage)
+            .where(and_(*conditions))
+            .order_by(
+                SentMessage.sent_at.desc().nulls_last(),
+                SentMessage.created_at.desc(),
+            ),
+        )
+        messages = list(result.scalars().all())
+        self.log_completed("list_by_sales_calendar_event", count=len(messages))
         return messages
 
     async def delete(self, message_id: UUID) -> bool:

@@ -204,10 +204,13 @@ export function ScheduleVisitModal({
             className="bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-100 disabled:bg-slate-300 disabled:text-white shadow-[0_1px_0_rgba(0,0,0,0.1),0_4px_8px_rgba(15,23,42,0.16)]"
           >
             {s.isReschedule ? (
-              'Update appointment'
+              <>
+                Update &amp; resend confirmation text
+                <ArrowRight className="size-3.5" strokeWidth={2.5} aria-hidden="true" />
+              </>
             ) : (
               <>
-                Confirm &amp; advance to Send Estimate
+                Send confirmation text message
                 <ArrowRight className="size-3.5" strokeWidth={2.5} aria-hidden="true" />
               </>
             )}

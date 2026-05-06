@@ -267,11 +267,41 @@ export function useSalesCalendarEvents(params?: {
 export function useCreateCalendarEvent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: SalesCalendarEventCreate) =>
-      salesPipelineApi.createCalendarEvent(body),
-    onSuccess: (_data, body) => {
+    mutationFn: (args: {
+      body: SalesCalendarEventCreate;
+      sendConfirmation?: boolean;
+    }) =>
+      salesPipelineApi.createCalendarEvent(args.body, {
+        sendConfirmation: args.sendConfirmation,
+      }),
+    onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: pipelineKeys.calendarEvents() });
-      qc.invalidateQueries({ queryKey: pipelineKeys.detail(body.sales_entry_id) });
+      qc.invalidateQueries({
+        queryKey: pipelineKeys.detail(args.body.sales_entry_id),
+      });
+      qc.invalidateQueries({ queryKey: pipelineKeys.lists() });
+    },
+  });
+}
+
+/**
+ * Send or resend the estimate-visit Y/R/C SMS for a SalesCalendarEvent.
+ * Used by the modal's primary submit (combined create+send) fallback path
+ * and by the NowCard "Resend confirmation text" button.
+ */
+export function useSendCalendarEventConfirmation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      eventId,
+      resend,
+    }: {
+      eventId: string;
+      resend?: boolean;
+    }) =>
+      salesPipelineApi.sendCalendarEventConfirmation(eventId, { resend }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: pipelineKeys.calendarEvents() });
       qc.invalidateQueries({ queryKey: pipelineKeys.lists() });
     },
   });

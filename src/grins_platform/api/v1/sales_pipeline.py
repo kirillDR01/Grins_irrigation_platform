@@ -19,13 +19,14 @@ from grins_platform.api.v1.dependencies import get_db_session, get_job_service
 from grins_platform.exceptions import (
     CustomerHasNoPhoneError,
     CustomerNotFoundError,
+    EstimateNotConfirmedError,
     InvalidSalesTransitionError,
+    SalesCalendarEventNotFoundError,
     SalesEntryNotFoundError,
     SignatureRequiredError,
 )
 from grins_platform.log_config import LoggerMixin, get_logger
 from grins_platform.models.customer_document import CustomerDocument
-from grins_platform.models.enums import SalesEntryStatus
 from grins_platform.models.sales import SalesCalendarEvent, SalesEntry
 from grins_platform.schemas.sales_pipeline import (
     SalesCalendarEventCreate,
@@ -275,6 +276,8 @@ async def advance_sales_entry(
             status_code=404,
             detail="Sales entry not found",
         ) from exc
+    except EstimateNotConfirmedError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except InvalidSalesTransitionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     else:
@@ -583,6 +586,14 @@ async def send_text_confirmation_endpoint(
             status_code=404,
             detail="Sales entry not found",
         ) from exc
+    except SalesCalendarEventNotFoundError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "No estimate visit on this entry yet — book one before "
+                "sending a confirmation text."
+            ),
+        ) from exc
     except CustomerNotFoundError as exc:
         raise HTTPException(
             status_code=404,
@@ -706,11 +717,32 @@ async def list_calendar_events(
 )
 async def create_calendar_event(
     body: SalesCalendarEventCreate,
-    _user: CurrentActiveUser,
+    user: CurrentActiveUser,
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    pipeline_service: Annotated[
+        SalesPipelineService,
+        Depends(_get_pipeline_service),
+    ],
+    send_confirmation: Annotated[
+        bool,
+        Query(
+            description=(
+                "When true, atomically send a Y/R/C confirmation SMS to "
+                "the customer and advance the sales entry to "
+                "estimate_scheduled. Failure rolls back the event "
+                "creation (502)."
+            ),
+        ),
+    ] = False,
 ) -> SalesCalendarEventResponse:
-    """Validates: Req 15.2"""
-    _ep.log_started("create_calendar_event", sales_entry_id=str(body.sales_entry_id))
+    """Validates: Req 15.2;
+    sales-pipeline-estimate-visit-confirmation-lifecycle (OQ-3).
+    """
+    _ep.log_started(
+        "create_calendar_event",
+        sales_entry_id=str(body.sales_entry_id),
+        send_confirmation=send_confirmation,
+    )
     event = SalesCalendarEvent(
         sales_entry_id=body.sales_entry_id,
         customer_id=body.customer_id,
@@ -723,29 +755,59 @@ async def create_calendar_event(
     )
     session.add(event)
 
-    # Auto-advance sales entry from schedule_estimate → estimate_scheduled
-    # Validates: Req 10.1, 10.4
-    result = await session.execute(
-        select(SalesEntry).where(SalesEntry.id == body.sales_entry_id),
-    )
-    sales_entry = result.scalar_one_or_none()
-    if (
-        sales_entry is not None
-        and sales_entry.status == SalesEntryStatus.SCHEDULE_ESTIMATE.value
-    ):
-        sales_entry.status = SalesEntryStatus.ESTIMATE_SCHEDULED.value
-        logger.info(
-            "sales.calendar_event.auto_advance",
-            sales_entry_id=str(body.sales_entry_id),
-            from_status=SalesEntryStatus.SCHEDULE_ESTIMATE.value,
-            to_status=SalesEntryStatus.ESTIMATE_SCHEDULED.value,
+    # send_confirmation=true (combined endpoint per OQ-3): atomically book
+    # the event AND send the Y/R/C SMS so the modal's primary submit
+    # button can do both halves with a single click. Failure on the SMS
+    # branch rolls back the event creation (502 to caller).
+    #
+    # Default remains the legacy "create event only" behavior — no
+    # auto-advance, no SMS — so importers and other callers don't
+    # accidentally advance the entry without telling the customer.
+    # The auto-advance previously fired here on bare event creation now
+    # lives inside ``send_estimate_visit_confirmation`` (only on first
+    # successful SMS dispatch).
+    if send_confirmation:
+        try:
+            await session.flush()
+            sms_service = SMSService(session=session, provider=get_sms_provider())
+            sms_result = await pipeline_service.send_estimate_visit_confirmation(
+                session,
+                event_id=event.id,
+                sms_service=sms_service,
+                resend=False,
+                actor_id=user.id,
+            )
+            await session.commit()
+            await session.refresh(event)
+        except (CustomerNotFoundError, CustomerHasNoPhoneError) as exc:
+            await session.rollback()
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except SMSConsentDeniedError as exc:
+            await session.rollback()
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except SMSError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Calendar event not saved — SMS dispatch failed: "
+                    f"{exc}. Try again."
+                ),
+            ) from exc
+        _ep.log_completed(
+            "create_calendar_event",
+            event_id=str(event.id),
+            send_confirmation=True,
+            sms_message_id=str(sms_result.get("message_id") or ""),
         )
+        return SalesCalendarEventResponse.model_validate(event)  # type: ignore[no-any-return]
 
     await session.commit()
     await session.refresh(event)
     _ep.log_completed(
         "create_calendar_event",
         event_id=str(event.id),
+        send_confirmation=False,
         assigned_to_user_id=str(body.assigned_to_user_id)
         if body.assigned_to_user_id
         else None,
@@ -801,3 +863,95 @@ async def delete_calendar_event(
     await session.delete(event)
     await session.commit()
     _ep.log_completed("delete_calendar_event", event_id=str(event_id))
+
+
+@router.post(
+    "/calendar/events/{event_id}/send-confirmation",
+    summary="Send (or resend) the Y/R/C confirmation SMS for an estimate visit",
+)
+async def send_calendar_event_confirmation(
+    event_id: UUID,
+    user: CurrentActiveUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    pipeline_service: Annotated[
+        SalesPipelineService,
+        Depends(_get_pipeline_service),
+    ],
+    resend: Annotated[
+        bool,
+        Query(
+            description=(
+                "When true, allow sending another confirmation even if "
+                "the event is already in a non-pending state. "
+                "Per-keyword throttle still applies."
+            ),
+        ),
+    ] = False,
+) -> dict[str, Any]:
+    """Send or resend the estimate-visit confirmation SMS.
+
+    Mirror of ``POST /appointments/{id}/send-confirmation`` for the
+    sales-pipeline lifecycle. Returns 409 when the event is already
+    ``confirmed`` and ``resend=False``.
+
+    Validates: sales-pipeline-estimate-visit-confirmation-lifecycle (OQ-3, OQ-4).
+    """
+    _ep.log_started(
+        "send_calendar_event_confirmation",
+        event_id=str(event_id),
+        resend=resend,
+    )
+    event_result = await session.execute(
+        select(SalesCalendarEvent).where(SalesCalendarEvent.id == event_id),
+    )
+    event = event_result.scalar_one_or_none()
+    if event is None:
+        raise HTTPException(status_code=404, detail="Calendar event not found")
+    if event.confirmation_status == "confirmed" and not resend:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Estimate visit already confirmed by customer. Pass "
+                "resend=true to send another confirmation anyway."
+            ),
+        )
+
+    sms_service = SMSService(session=session, provider=get_sms_provider())
+    try:
+        result = await pipeline_service.send_estimate_visit_confirmation(
+            session,
+            event_id=event_id,
+            sms_service=sms_service,
+            resend=resend,
+            actor_id=user.id,
+        )
+        await session.commit()
+        await session.refresh(event)
+    except SalesCalendarEventNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Calendar event not found",
+        ) from exc
+    except CustomerNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Customer not found for calendar event",
+        ) from exc
+    except CustomerHasNoPhoneError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SMSConsentDeniedError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SMSError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    _ep.log_completed(
+        "send_calendar_event_confirmation",
+        event_id=str(event_id),
+        message_id=str(result.get("message_id") or ""),
+    )
+    return {
+        "event_id": str(event.id),
+        "confirmation_status": event.confirmation_status,
+        "message_id": str(result.get("message_id") or ""),
+        "status": str(result.get("status") or ""),
+    }

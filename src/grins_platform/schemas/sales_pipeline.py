@@ -86,7 +86,12 @@ class SalesCalendarEventUpdate(BaseModel):
 
 
 class SalesCalendarEventResponse(BaseModel):
-    """Sales calendar event response."""
+    """Sales calendar event response.
+
+    ``confirmation_status`` + ``confirmation_status_at`` (migration
+    20260509_120000) drive the StageStepper sub-pill on the frontend
+    so staff can see whether the customer has replied Y/R/C.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -99,5 +104,7 @@ class SalesCalendarEventResponse(BaseModel):
     end_time: Optional[time] = None
     notes: Optional[str] = None
     assigned_to_user_id: Optional[UUID] = None
+    confirmation_status: str = "pending"
+    confirmation_status_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime

@@ -20,6 +20,7 @@ import { useSalesPipeline, useDismissSalesEntry } from '../hooks/useSalesPipelin
 import { useSalesMetrics } from '../hooks';
 import { useStageAge, countStuck } from '../hooks/useStageAge';
 import { AgeChip } from './AgeChip';
+import { EstimateRescheduleQueue } from './EstimateRescheduleQueue';
 import {
   AGE_THRESHOLDS,
   SALES_STATUS_CONFIG,
@@ -143,6 +144,11 @@ export function SalesPipeline() {
 
   return (
     <div data-testid="pipeline-list-page" className="space-y-6">
+      {/* Estimate-visit reschedule queue (sales-pipeline-estimate-visit-confirmation-lifecycle).
+          Mirrors the schedule-tab queue but scoped to sales_calendar_event rows.
+          Renders nothing when empty. */}
+      <EstimateRescheduleQueue />
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {summary.map((c) => (

@@ -164,6 +164,7 @@ class SalesCalendarEvent(Base):
         String(32),
         nullable=False,
         server_default="pending",
+        default="pending",
     )
     confirmation_status_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),

@@ -78,17 +78,21 @@ export function StatusActionButton({ entry }: StatusActionButtonProps) {
       return;
     }
     try {
+      // Inline schedule form: book the slot WITHOUT auto-sending the
+      // Y/R/C SMS — the modal-based ScheduleVisitModal owns the
+      // book+send combined flow. This call site is the legacy fallback
+      // and intentionally leaves confirmation dispatch to staff.
       await createCalendarEvent.mutateAsync({
-        sales_entry_id: entry.id,
-        customer_id: entry.customer_id,
-        title: calendarForm.title,
-        scheduled_date: calendarForm.scheduledDate,
-        start_time: calendarForm.startTime || null,
-        end_time: calendarForm.endTime || null,
-        notes: calendarForm.notes || null,
+        body: {
+          sales_entry_id: entry.id,
+          customer_id: entry.customer_id,
+          title: calendarForm.title,
+          scheduled_date: calendarForm.scheduledDate,
+          start_time: calendarForm.startTime || null,
+          end_time: calendarForm.endTime || null,
+          notes: calendarForm.notes || null,
+        },
       });
-      // Backend auto-advances schedule_estimate → estimate_scheduled
-      // Invalidate pipeline list so the status change is reflected
       queryClient.invalidateQueries({ queryKey: pipelineKeys.lists() });
       toast.success('Estimate appointment scheduled');
       setShowCalendarForm(false);

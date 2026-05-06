@@ -1,16 +1,21 @@
-"""Unit tests for estimate calendar → sales pipeline status sync.
+"""Unit tests for estimate calendar event creation.
 
-Tests that creating a calendar event auto-advances a sales entry from
-schedule_estimate to estimate_scheduled, and does NOT double-advance
-entries already at estimate_scheduled or later.
+Auto-advance from ``schedule_estimate`` → ``estimate_scheduled`` moved
+out of bare event creation and into
+:meth:`SalesPipelineService.send_estimate_visit_confirmation` (per
+sales-pipeline-estimate-visit-confirmation-lifecycle OQ-6). Bare
+``POST /sales/calendar/events`` (without ``send_confirmation=true``)
+**no longer** advances the entry — staff must intentionally send the
+Y/R/C SMS to claim the customer has been told. These tests lock in
+the new contract.
 
-Validates: Requirements 10.1, 10.4
+Validates: sales-pipeline-estimate-visit-confirmation-lifecycle (OQ-6).
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime, time, timezone
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, MagicMock, Mock
 from uuid import uuid4
 
 import pytest
@@ -64,6 +69,9 @@ def _populate_event_fields(event: object) -> None:
         event.created_at = now  # type: ignore[attr-defined]
     if getattr(event, "updated_at", None) is None:
         event.updated_at = now  # type: ignore[attr-defined]
+    # Polymorphic FK confirmation lifecycle (migration 20260509_120000).
+    if not getattr(event, "confirmation_status", None):
+        event.confirmation_status = "pending"  # type: ignore[attr-defined]
 
 
 def _build_mock_session(sales_entry: Mock | None) -> AsyncMock:
@@ -92,81 +100,80 @@ def _build_mock_session(sales_entry: Mock | None) -> AsyncMock:
 
 @pytest.mark.unit()
 class TestCalendarEventAutoAdvance:
-    """Test auto-advance of sales entry on calendar event creation.
+    """Bare ``POST /sales/calendar/events`` no longer auto-advances.
 
-    Validates: Requirements 10.1, 10.4
+    Per OQ-6, the auto-advance lives inside
+    :meth:`SalesPipelineService.send_estimate_visit_confirmation` so an
+    event without an SMS dispatch (e.g. a 3rd-party calendar import)
+    doesn't claim the customer has been told. These tests lock in the
+    new contract.
     """
 
     @pytest.mark.asyncio()
-    async def test_create_event_advances_schedule_estimate_to_estimate_scheduled(
-        self,
-    ) -> None:
-        """Creating a calendar event for a schedule_estimate entry auto-advances it.
-
-        Validates: Requirement 10.1
-        """
+    async def test_create_event_does_not_auto_advance(self) -> None:
+        """Bare event creation leaves the entry at ``schedule_estimate``."""
         entry = _make_sales_entry(SalesEntryStatus.SCHEDULE_ESTIMATE.value)
         body = _make_body(sales_entry_id=entry.id)
         session = _build_mock_session(entry)
 
         await create_calendar_event(
             body=body,
-            _user=_mock_user(),
+            user=_mock_user(),
             session=session,
+            pipeline_service=MagicMock(),
         )
 
-        assert entry.status == SalesEntryStatus.ESTIMATE_SCHEDULED.value
+        # The auto-advance is now gated on send_confirmation=True.
+        assert entry.status == SalesEntryStatus.SCHEDULE_ESTIMATE.value
 
     @pytest.mark.asyncio()
     async def test_create_event_does_not_advance_estimate_scheduled(self) -> None:
-        """Creating a calendar event for an already-advanced entry does NOT change status.
-
-        Validates: Requirement 10.4
-        """
+        """Already-advanced entries stay put."""
         entry = _make_sales_entry(SalesEntryStatus.ESTIMATE_SCHEDULED.value)
         body = _make_body(sales_entry_id=entry.id)
         session = _build_mock_session(entry)
 
         await create_calendar_event(
             body=body,
-            _user=_mock_user(),
+            user=_mock_user(),
             session=session,
+            pipeline_service=MagicMock(),
         )
 
         assert entry.status == SalesEntryStatus.ESTIMATE_SCHEDULED.value
 
     @pytest.mark.asyncio()
     async def test_create_event_does_not_advance_later_statuses(self) -> None:
-        """Creating a calendar event for a send_estimate entry does NOT change status.
-
-        Validates: Requirement 10.4
-        """
+        """Entries past ``estimate_scheduled`` are untouched."""
         entry = _make_sales_entry(SalesEntryStatus.SEND_ESTIMATE.value)
         body = _make_body(sales_entry_id=entry.id)
         session = _build_mock_session(entry)
 
         await create_calendar_event(
             body=body,
-            _user=_mock_user(),
+            user=_mock_user(),
             session=session,
+            pipeline_service=MagicMock(),
         )
 
         assert entry.status == SalesEntryStatus.SEND_ESTIMATE.value
 
     @pytest.mark.asyncio()
     async def test_create_event_handles_missing_sales_entry(self) -> None:
-        """Creating a calendar event when sales entry is not found still creates the event.
+        """Missing sales entry no longer gets queried at create time.
 
-        Edge case: the sales_entry_id might reference a deleted entry.
+        The legacy auto-advance block looked up the entry and did
+        nothing if missing. Now no lookup happens in the create path —
+        the only execute call is from the (mocked) request lifecycle.
         """
         body = _make_body()
-        session = _build_mock_session(None)  # No entry found
+        session = _build_mock_session(None)
 
-        # Should not raise — event is still created
         await create_calendar_event(
             body=body,
-            _user=_mock_user(),
+            user=_mock_user(),
             session=session,
+            pipeline_service=MagicMock(),
         )
 
         session.add.assert_called_once()

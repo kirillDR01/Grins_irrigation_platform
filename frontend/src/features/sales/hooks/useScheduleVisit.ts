@@ -6,6 +6,7 @@ import {
   useSalesCalendarEvents,
   useCreateCalendarEvent,
   useUpdateCalendarEvent,
+  useSendCalendarEventConfirmation,
   pipelineKeys,
 } from './useSalesPipeline';
 import {
@@ -156,6 +157,7 @@ export function useScheduleVisit({
   // ── submit ──
   const create = useCreateCalendarEvent();
   const update = useUpdateCalendarEvent();
+  const sendConfirmation = useSendCalendarEventConfirmation();
   const [error, setError] = useState<string | null>(null);
   const [isConflictError, setIsConflictError] = useState(false);
 
@@ -179,17 +181,45 @@ export function useScheduleVisit({
     };
     try {
       if (currentEvent) {
+        // Reschedule path: PUT updates the slot in place, then trigger
+        // a fresh Y/R/C SMS so confirmation_status resets to pending and
+        // the customer sees the new time. Per OQ-10.
         await update.mutateAsync({ eventId: currentEvent.id, body: payload });
+        try {
+          await sendConfirmation.mutateAsync({
+            eventId: currentEvent.id,
+            resend: true,
+          });
+        } catch (smsErr) {
+          // Booking succeeded but resend failed — surface a soft warning so
+          // staff knows to retry the resend rather than thinking the whole
+          // submit failed.
+          setError(
+            smsErr instanceof Error
+              ? `Visit updated but resend failed: ${smsErr.message}`
+              : 'Visit updated but resend failed. Use the resend button.',
+          );
+          return { ok: true };
+        }
       } else {
-        await create.mutateAsync(payload);
+        // Combined endpoint per OQ-3: book + send Y/R/C SMS atomically.
+        await create.mutateAsync({ body: payload, sendConfirmation: true });
       }
       return { ok: true };
     } catch (err) {
-      if (axios.isAxiosError(err) && err.response?.status === 409) {
-        setIsConflictError(true);
-        setError('Slot was just taken — pick another time.');
-        qc.invalidateQueries({ queryKey: pipelineKeys.calendarEvents() });
-        return { ok: false, conflict: true };
+      if (axios.isAxiosError(err)) {
+        if (err.response?.status === 409) {
+          setIsConflictError(true);
+          setError('Slot was just taken — pick another time.');
+          qc.invalidateQueries({ queryKey: pipelineKeys.calendarEvents() });
+          return { ok: false, conflict: true };
+        }
+        if (err.response?.status === 502) {
+          setError(
+            'Visit not saved — SMS dispatch failed. Try again.',
+          );
+          return { ok: false };
+        }
       }
       setError(err instanceof Error ? err.message : 'Could not schedule.');
       return { ok: false };
@@ -204,6 +234,7 @@ export function useScheduleVisit({
     currentEvent,
     create,
     update,
+    sendConfirmation,
     qc,
   ]);
 

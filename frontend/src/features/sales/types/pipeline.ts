@@ -104,6 +104,20 @@ export const ALL_STATUSES: SalesEntryStatus[] = [
 ];
 
 // Sales calendar event types — Req 15.1, 15.2, 15.3
+/**
+ * Y/R/C confirmation lifecycle status (migration 20260509_120000).
+ *
+ * - `pending`: confirmation SMS dispatched, awaiting customer reply
+ * - `confirmed`: customer replied Y
+ * - `reschedule_requested`: customer replied R, RescheduleRequest opened
+ * - `cancelled`: customer replied C
+ */
+export type SalesCalendarEventConfirmationStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'reschedule_requested'
+  | 'cancelled';
+
 export interface SalesCalendarEvent {
   id: string;
   sales_entry_id: string;
@@ -114,6 +128,8 @@ export interface SalesCalendarEvent {
   end_time: string | null;
   notes: string | null;
   assigned_to_user_id: string | null;
+  confirmation_status: SalesCalendarEventConfirmationStatus;
+  confirmation_status_at: string | null;
   created_at: string;
   updated_at: string;
 }

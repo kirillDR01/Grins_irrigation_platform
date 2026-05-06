@@ -201,10 +201,16 @@ export const salesPipelineApi = {
 
   createCalendarEvent: async (
     body: SalesCalendarEventCreate,
+    options?: { sendConfirmation?: boolean },
   ): Promise<SalesCalendarEvent> => {
     const response = await apiClient.post<SalesCalendarEvent>(
       '/sales/calendar/events',
       body,
+      {
+        params: options?.sendConfirmation
+          ? { send_confirmation: true }
+          : undefined,
+      },
     );
     return response.data;
   },
@@ -222,5 +228,34 @@ export const salesPipelineApi = {
 
   deleteCalendarEvent: async (eventId: string): Promise<void> => {
     await apiClient.delete(`/sales/calendar/events/${eventId}`);
+  },
+
+  /**
+   * Send (or resend) the Y/R/C confirmation SMS for a sales calendar event.
+   * Mirror of the appointment-side send-confirmation endpoint. Pass
+   * `resend=true` to bypass the "already confirmed" 409.
+   */
+  sendCalendarEventConfirmation: async (
+    eventId: string,
+    options?: { resend?: boolean },
+  ): Promise<{
+    event_id: string;
+    confirmation_status: string;
+    message_id: string;
+    status: string;
+  }> => {
+    const response = await apiClient.post<{
+      event_id: string;
+      confirmation_status: string;
+      message_id: string;
+      status: string;
+    }>(
+      `/sales/calendar/events/${eventId}/send-confirmation`,
+      undefined,
+      {
+        params: options?.resend ? { resend: true } : undefined,
+      },
+    );
+    return response.data;
   },
 };

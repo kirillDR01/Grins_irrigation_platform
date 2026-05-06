@@ -14,7 +14,9 @@ from sqlalchemy import select
 from grins_platform.exceptions import (
     CustomerHasNoPhoneError,
     CustomerNotFoundError,
+    EstimateNotConfirmedError,
     InvalidSalesTransitionError,
+    SalesCalendarEventNotFoundError,
     SalesEntryNotFoundError,
     SignatureRequiredError,
 )
@@ -26,7 +28,7 @@ from grins_platform.models.enums import (
     VALID_SALES_TRANSITIONS,
     SalesEntryStatus,
 )
-from grins_platform.models.sales import SalesEntry
+from grins_platform.models.sales import SalesCalendarEvent, SalesEntry
 from grins_platform.schemas.ai import MessageType
 from grins_platform.schemas.job import JobCreate
 from grins_platform.services.sms.recipient import Recipient
@@ -244,7 +246,13 @@ class SalesPipelineService(LoggerMixin):
     ) -> SalesEntry:
         """Advance a sales entry one step forward in the pipeline.
 
-        Validates: Req 14.3, 14.4, 14.5, 33.1, 33.3
+        Programmatic advance to ``SEND_ESTIMATE`` is gated on the
+        customer having confirmed the latest estimate visit (Y reply →
+        ``SalesCalendarEvent.confirmation_status='confirmed'``). The
+        manual-override path bypasses this guard.
+
+        Validates: Req 14.3, 14.4, 14.5, 33.1, 33.3;
+        sales-pipeline-estimate-visit-confirmation-lifecycle (OQ-6).
         """
         self.log_started("advance_status", entry_id=str(entry_id))
 
@@ -259,6 +267,25 @@ class SalesPipelineService(LoggerMixin):
         if target not in VALID_SALES_TRANSITIONS.get(current, set()):
             raise InvalidSalesTransitionError(current.value, target.value)
 
+        if target == SalesEntryStatus.SEND_ESTIMATE:
+            latest_event = await self._get_latest_calendar_event(db, entry_id)
+            event_status = (
+                latest_event.confirmation_status
+                if latest_event is not None
+                else None
+            )
+            if event_status != "confirmed":
+                self.log_rejected(
+                    "advance_status",
+                    reason="estimate_not_confirmed",
+                    entry_id=str(entry_id),
+                    confirmation_status=event_status,
+                )
+                raise EstimateNotConfirmedError(
+                    entry_id,
+                    current_status=event_status,
+                )
+
         entry.status = target.value
         entry.updated_at = datetime.now(tz=timezone.utc)
         await db.flush()
@@ -271,6 +298,21 @@ class SalesPipelineService(LoggerMixin):
             to_status=target.value,
         )
         return entry
+
+    async def _get_latest_calendar_event(
+        self,
+        db: AsyncSession,
+        entry_id: UUID,
+    ) -> SalesCalendarEvent | None:
+        """Return the most recently created calendar event for ``entry_id``."""
+        result = await db.execute(
+            select(SalesCalendarEvent)
+            .where(SalesCalendarEvent.sales_entry_id == entry_id)
+            .order_by(SalesCalendarEvent.created_at.desc())
+            .limit(1),
+        )
+        event: SalesCalendarEvent | None = result.scalar_one_or_none()
+        return event
 
     async def manual_override_status(
         self,
@@ -507,59 +549,163 @@ class SalesPipelineService(LoggerMixin):
         sms_service: SMSService,
         actor_id: UUID | None = None,
     ) -> dict[str, Any]:
-        """Send an appointment-confirmation SMS to the entry's customer.
+        """Compat shim — resend the latest estimate-visit confirmation.
 
-        Delegates to :meth:`SMSService.send_message` so consent / rate-limit
-        / dedupe checks all flow through the established pipeline. The
-        ``sms_service`` arg is dep-injected so unit tests can substitute
-        a mock without monkey-patching module globals.
+        Looks up the most recent ``SalesCalendarEvent`` for ``entry_id``
+        and delegates to :meth:`send_estimate_visit_confirmation` so the
+        outbound SMS asks for Y/R/C and is correlated to the visit
+        (which the prior implementation did not — replies fell through).
+        Keeps the legacy ``POST .../send-text-confirmation`` endpoint
+        working without changing its contract.
 
-        Validates: NEW-D text-confirmation.
+        Validates: sales-pipeline-estimate-visit-confirmation-lifecycle
+        (OQ-4).
         """
         self.log_started("send_text_confirmation", entry_id=str(entry_id))
 
-        entry = await self._get_entry(db, entry_id)
-
-        customer_result = await db.execute(
-            select(Customer).where(Customer.id == entry.customer_id),
-        )
-        customer = customer_result.scalar_one_or_none()
-        if customer is None:
+        latest_event = await self._get_latest_calendar_event(db, entry_id)
+        if latest_event is None:
             self.log_rejected(
                 "send_text_confirmation",
-                reason="customer_not_found",
+                reason="no_calendar_event",
                 entry_id=str(entry_id),
             )
-            raise CustomerNotFoundError(entry.customer_id)
-        if not customer.phone:
-            self.log_rejected(
-                "send_text_confirmation",
-                reason="no_phone",
-                entry_id=str(entry_id),
-            )
-            raise CustomerHasNoPhoneError(customer.id)
+            raise SalesCalendarEventNotFoundError(entry_id)
 
-        first_name = customer.first_name or "there"
-        body = (
-            f"Hi {first_name}, this confirms your appointment with "
-            "Grin's Irrigation. Reply YES to confirm or call us if you "
-            "need to reschedule."
+        result = await self.send_estimate_visit_confirmation(
+            db,
+            event_id=latest_event.id,
+            sms_service=sms_service,
+            resend=True,
+            actor_id=actor_id,
         )
-        recipient = Recipient.from_customer(customer)
-        result = await sms_service.send_message(
-            recipient,
-            body,
-            MessageType.APPOINTMENT_CONFIRMATION,
-            consent_type="transactional",
-        )
-
         self.log_completed(
             "send_text_confirmation",
             entry_id=str(entry_id),
             message_id=str(result.get("message_id")),
         )
+        return result
+
+    async def send_estimate_visit_confirmation(
+        self,
+        db: AsyncSession,
+        event_id: UUID,
+        *,
+        sms_service: SMSService,
+        resend: bool = False,
+        actor_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        """Send the Y/R/C SMS for an estimate visit and prime the lifecycle.
+
+        Composes an estimate-tailored confirmation body, dispatches via
+        :meth:`SMSService.send_message` with
+        ``message_type=ESTIMATE_VISIT_CONFIRMATION`` and
+        ``sales_calendar_event_id=event.id`` so inbound replies correlate
+        back. On first send the entry advances ``schedule_estimate`` →
+        ``estimate_scheduled``.
+
+        Validates: sales-pipeline-estimate-visit-confirmation-lifecycle.
+        """
+        self.log_started(
+            "send_estimate_visit_confirmation",
+            event_id=str(event_id),
+            resend=resend,
+        )
+
+        event_result = await db.execute(
+            select(SalesCalendarEvent).where(SalesCalendarEvent.id == event_id),
+        )
+        event: SalesCalendarEvent | None = event_result.scalar_one_or_none()
+        if event is None:
+            self.log_rejected(
+                "send_estimate_visit_confirmation",
+                reason="event_not_found",
+                event_id=str(event_id),
+            )
+            raise SalesCalendarEventNotFoundError(event_id)
+
+        customer_result = await db.execute(
+            select(Customer).where(Customer.id == event.customer_id),
+        )
+        customer = customer_result.scalar_one_or_none()
+        if customer is None:
+            self.log_rejected(
+                "send_estimate_visit_confirmation",
+                reason="customer_not_found",
+                event_id=str(event_id),
+            )
+            raise CustomerNotFoundError(event.customer_id)
+        if not customer.phone:
+            self.log_rejected(
+                "send_estimate_visit_confirmation",
+                reason="no_phone",
+                event_id=str(event_id),
+            )
+            raise CustomerHasNoPhoneError(customer.id)
+
+        body = self._build_estimate_visit_confirmation_body(
+            customer=customer,
+            event=event,
+        )
+        recipient = Recipient.from_customer(customer)
+        result = await sms_service.send_message(
+            recipient,
+            body,
+            MessageType.ESTIMATE_VISIT_CONFIRMATION,
+            consent_type="transactional",
+            sales_calendar_event_id=event.id,
+        )
+
+        if event.confirmation_status != "pending" or resend:
+            event.confirmation_status = "pending"
+            event.confirmation_status_at = datetime.now(tz=timezone.utc)
+
+        # Per OQ-6: auto-advance to ESTIMATE_SCHEDULED only on first
+        # successful SMS dispatch. The auto-advance previously fired on
+        # bare event creation (api/v1/sales_pipeline.py:726-742) is gone —
+        # an event without a confirmation SMS no longer claims the
+        # customer has been told.
+        entry = await self._get_entry(db, event.sales_entry_id)
+        if entry.status == SalesEntryStatus.SCHEDULE_ESTIMATE.value:
+            entry.status = SalesEntryStatus.ESTIMATE_SCHEDULED.value
+            entry.updated_at = datetime.now(tz=timezone.utc)
+            self.logger.info(
+                "sales.calendar_event.confirmation_sent.advance",
+                sales_entry_id=str(entry.id),
+                from_status=SalesEntryStatus.SCHEDULE_ESTIMATE.value,
+                to_status=SalesEntryStatus.ESTIMATE_SCHEDULED.value,
+            )
+
+        await db.flush()
+
+        self.log_completed(
+            "send_estimate_visit_confirmation",
+            event_id=str(event_id),
+            message_id=str(result.get("message_id")),
+        )
         _ = actor_id
         return result
+
+    @staticmethod
+    def _build_estimate_visit_confirmation_body(
+        *,
+        customer: Customer,
+        event: SalesCalendarEvent,
+    ) -> str:
+        """Compose the estimate-tailored Y/R/C SMS body."""
+        from grins_platform.services.sms.formatters import (  # noqa: PLC0415
+            format_sms_time_12h,
+        )
+
+        first_name = customer.first_name or "there"
+        date_str = event.scheduled_date.strftime("%B %d, %Y")
+        time_str = format_sms_time_12h(event.start_time) if event.start_time else None
+        when = f"{date_str} at {time_str}" if time_str else date_str
+        return (
+            f"Hi {first_name}, your estimate visit with Grin's Irrigation "
+            f"is scheduled for {when}. Reply Y to confirm, R to "
+            "reschedule, or C to cancel."
+        )
 
     async def dismiss_entry(
         self,
