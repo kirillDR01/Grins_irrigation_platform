@@ -24,7 +24,7 @@ import { AutoNudgeSchedule } from './AutoNudgeSchedule';
 
 const ICON_MAP: Record<LucideIconName, React.ComponentType<{ className?: string }>> = {
   Calendar, Mail, MessageSquare, Upload, CheckCircle2, XCircle,
-  RotateCw, PauseCircle, ArrowRight, User, Edit3, Lock,
+  RotateCw, PauseCircle, ArrowRight, User, Edit3, Lock, FileText,
 };
 
 interface NowCardProps {

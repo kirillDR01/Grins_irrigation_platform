@@ -33,37 +33,19 @@ export function nowContent(
       };
 
     case 'send_estimate':
-      if (!hasEstimateDoc) {
-        return {
-          pill: { tone: 'you', label: 'Your move' },
-          title: 'Drop the estimate PDF below, then send.',
-          copyHtml:
-            `Build the estimate in Google Sheets, save as PDF, drag it into the box below. ` +
-            `"Upload & send" emails ${firstName} the PDF with an Approve button and auto-advances this entry to <em>Pending Approval</em>.`,
-          dropzone: { kind: 'estimate', filled: false },
-          actions: [
-            lock('Upload & send estimate', 'now-action-send-estimate', 'upload a PDF above'),
-            act('ghost', 'Skip — advance manually', 'now-action-skip-advance', 'skip_advance'),
-          ],
-          lockBanner: {
-            textHtml: `<b>No estimate PDF yet.</b> Drag-and-drop a PDF into the box above, or click to browse.`,
-          },
-        };
-      }
       return {
         pill: { tone: 'you', label: 'Your move' },
-        title: `${docName ?? 'The estimate PDF'} is ready — send it.`,
+        title: 'Build the estimate and send it.',
         copyHtml:
-          `Click the PDF below to review it. Hit "Upload & send" to email ${firstName} the estimate with an Approve button; ` +
-          `they'll also get an SMS with the PDF link.`,
-        dropzone: { kind: 'estimate', filled: true },
+          `Tap "Build & send estimate" to add line items and send ${firstName} a portal link for review and approval. ` +
+          `Once they approve, this entry auto-advances to <em>Pending Approval</em>.`,
         actions: hasCustomerEmail
           ? [
-              act('primary', 'Upload & send estimate', 'now-action-send-estimate', 'send_estimate_email', 'Mail'),
+              act('primary', 'Build & send estimate', 'now-action-build-send-estimate', 'build_and_send_estimate', 'FileText'),
               act('ghost', 'Skip — advance manually', 'now-action-skip-advance', 'skip_advance'),
             ]
           : [
-              lock('Upload & send estimate', 'now-action-send-estimate', 'no email on file — add one to send'),
+              lock('Build & send estimate', 'now-action-build-send-estimate', 'no email on file — add one to send'),
               act('primary', 'Add customer email', 'now-action-add-email', 'add_customer_email', 'Edit3'),
             ],
       };

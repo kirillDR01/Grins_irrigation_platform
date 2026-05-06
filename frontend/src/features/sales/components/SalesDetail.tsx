@@ -40,11 +40,13 @@ import {
   usePauseNudges,
   useUnpauseNudges,
   useSendTextConfirmation,
+  useResendEstimateForSalesEntry,
 } from '../hooks/useSalesPipeline';
 import { ScheduleVisitModal } from './ScheduleVisitModal';
 import { MarkDeclinedDialog } from './MarkDeclinedDialog';
 import { ForceConvertDialog } from './ForceConvertDialog';
 import { AddCustomerEmailDialog } from './AddCustomerEmailDialog';
+import { SalesEstimateSheetWrapper } from './SalesEstimateSheetWrapper';
 import { SALES_STATUS_CONFIG, TERMINAL_STATUSES, ALL_STATUSES, statusToStageKey } from '../types/pipeline';
 import type { SalesEntryStatus, NowActionId, ActivityEvent, StageKey } from '../types/pipeline';
 import { DocumentsSection } from './DocumentsSection';
@@ -77,6 +79,7 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
   const pauseNudges = usePauseNudges();
   const unpauseNudges = useUnpauseNudges();
   const sendTextConfirm = useSendTextConfirmation();
+  const resendEstimate = useResendEstimateForSalesEntry();
   const { data: staffData } = useStaff({ is_active: true });
 
   // Fetch customer for internal_notes display
@@ -135,13 +138,17 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
   // the now-action-add-email button when the customer row has no email.
   const [addEmailOpen, setAddEmailOpen] = useState(false);
 
+  // Structured-estimate sheet (replaces the legacy PDF dropzone on the
+  // ``send_estimate`` stage). Submitting the sheet calls the
+  // /send-estimate orchestrator and advances the entry.
+  const [estimateSheetOpen, setEstimateSheetOpen] = useState(false);
+
   // Fetch documents to determine signing button state
   const { data: documents } = useSalesDocuments(entry?.customer_id ?? '');
+  // Contracts only — estimate approval no longer flows through SignWell;
+  // it goes through the customer portal at ``/portal/estimates/<token>``.
   const signingDocs = useMemo<SalesDocument[]>(
-    () =>
-      (documents ?? []).filter(
-        (d) => d.document_type === 'estimate' || d.document_type === 'contract',
-      ),
+    () => (documents ?? []).filter((d) => d.document_type === 'contract'),
     [documents],
   );
   const hasSigningDoc = signingDocs.length > 0;
@@ -154,9 +161,9 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
   const presignReady = !!presign.data?.download_url;
   const presignFailed = presign.isError;
   const signingDisabledReason = !hasSigningDoc
-    ? 'Upload an estimate document first'
+    ? 'Upload a contract document first'
     : presignFailed
-      ? 'Document file is missing or expired — re-upload required.'
+      ? 'Contract file is missing or expired — re-upload required.'
       : presign.isLoading
         ? 'Resolving document…'
         : undefined;
@@ -182,10 +189,8 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
           setScheduleModalOpen(true);
           break;
 
-        case 'send_estimate_email':
-          emailSign.mutateAsync(entryId)
-            .then(() => { toast.success('Estimate sent'); refetch(); })
-            .catch(() => toast.error('Failed to send estimate'));
+        case 'build_and_send_estimate':
+          setEstimateSheetOpen(true);
           break;
 
         case 'convert_to_job':
@@ -256,10 +261,12 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
           break;
 
         case 'resend_estimate':
-          // db7befa wired the email-signature endpoint; this gets the
-          // resend_estimate action wired without backend changes.
-          emailSign.mutateAsync(entryId)
-            .then(() => { toast.success('Estimate resent'); refetch(); })
+          resendEstimate
+            .mutateAsync(entryId)
+            .then(() => {
+              toast.success('Portal link resent');
+              refetch();
+            })
             .catch((err) =>
               toast.error('Failed to resend estimate', {
                 description: getErrorMessage(err),
@@ -295,13 +302,13 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
       entry,
       navigate,
       advance,
-      emailSign,
       convertToJob,
       overrideStatus,
       refetch,
       pauseNudges,
       unpauseNudges,
       sendTextConfirm,
+      resendEstimate,
     ],
   );
 
@@ -809,6 +816,18 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
         customerId={entry.customer_id ?? ''}
         onSaved={() => refetch()}
       />
+
+      {estimateSheetOpen && entry && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:p-4 sm:items-center">
+          <SalesEstimateSheetWrapper
+            entryId={entryId}
+            onClose={() => setEstimateSheetOpen(false)}
+            onSuccess={() => {
+              refetch();
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

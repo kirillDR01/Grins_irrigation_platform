@@ -29,30 +29,30 @@ describe('nowContent', () => {
     expect(result!.actions[0]).toMatchObject({ kind: 'primary', onClickId: 'schedule_visit' });
   });
 
-  it('send_estimate — no doc (empty)', () => {
-    const result = nowContent(baseInputs('send_estimate', { hasEstimateDoc: false }));
+  it('send_estimate — has email (Build & send CTA)', () => {
+    // Structured-estimate landing: no PDF dropzone, no lockBanner —
+    // primary action is "Build & send estimate", which opens the
+    // line-item sheet.
+    const result = nowContent(baseInputs('send_estimate', { hasCustomerEmail: true }));
     expect(result).not.toBeNull();
-    expect(result!.dropzone).toEqual({ kind: 'estimate', filled: false });
-    expect(result!.lockBanner).toBeDefined();
-    const sendAction = result!.actions.find(a => a.testId === 'now-action-send-estimate');
-    expect(sendAction?.kind).toBe('locked');
-  });
-
-  it('send_estimate — doc ready with email', () => {
-    const result = nowContent(baseInputs('send_estimate', { hasEstimateDoc: true, hasCustomerEmail: true }));
-    expect(result).not.toBeNull();
-    expect(result!.dropzone).toEqual({ kind: 'estimate', filled: true });
+    expect(result!.dropzone).toBeUndefined();
     expect(result!.lockBanner).toBeUndefined();
-    const sendAction = result!.actions.find(a => a.testId === 'now-action-send-estimate');
+    const sendAction = result!.actions.find(
+      a => a.testId === 'now-action-build-send-estimate',
+    );
     expect(sendAction?.kind).toBe('primary');
   });
 
-  it('send_estimate — doc ready without email', () => {
-    const result = nowContent(baseInputs('send_estimate', { hasEstimateDoc: true, hasCustomerEmail: false }));
+  it('send_estimate — no email locks build action', () => {
+    const result = nowContent(baseInputs('send_estimate', { hasCustomerEmail: false }));
     expect(result).not.toBeNull();
-    const sendAction = result!.actions.find(a => a.testId === 'now-action-send-estimate');
+    const sendAction = result!.actions.find(
+      a => a.testId === 'now-action-build-send-estimate',
+    );
     expect(sendAction?.kind).toBe('locked');
-    const addEmailAction = result!.actions.find(a => a.testId === 'now-action-add-email');
+    const addEmailAction = result!.actions.find(
+      a => a.testId === 'now-action-add-email',
+    );
     expect(addEmailAction?.kind).toBe('primary');
   });
 
@@ -208,21 +208,23 @@ describe('Property 7: nowContent Output Structure', () => {
           };
           if (result.pill.tone !== expectedTone[stage]) return false;
 
-          // title contains firstName for stages that use it
-          // send_estimate with doc uses docName; closed_won uses jobId; send_estimate without doc has generic title
+          // title contains firstName for stages that use it.
+          // closed_won uses jobId; send_estimate's title is now generic
+          // ("Build the estimate and send it.") and no longer references
+          // the customer name.
           const titleNeedsFirstName =
-            stage !== 'closed_won' &&
-            !(stage === 'send_estimate' && hasEstimateDoc) &&
-            !(stage === 'send_estimate' && !hasEstimateDoc);
+            stage !== 'closed_won' && stage !== 'send_estimate';
           if (titleNeedsFirstName && !result.title.includes(firstName)) return false;
 
           // actions is non-empty
           if (result.actions.length === 0) return false;
 
-          // send_estimate without doc has lockBanner and unfilled dropzone
-          if (stage === 'send_estimate' && !hasEstimateDoc) {
-            if (!result.lockBanner) return false;
-            if (!result.dropzone || result.dropzone.filled) return false;
+          // send_estimate has no PDF dropzone or lockBanner after the
+          // structured-estimate landing — both must be absent regardless
+          // of hasEstimateDoc.
+          if (stage === 'send_estimate') {
+            if (result.lockBanner) return false;
+            if (result.dropzone) return false;
           }
 
           // send_contract without agreement has locked convert action

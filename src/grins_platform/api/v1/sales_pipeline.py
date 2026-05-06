@@ -11,11 +11,15 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from grins_platform.api.v1.auth_dependencies import CurrentActiveUser
-from grins_platform.api.v1.dependencies import get_db_session, get_job_service
+from grins_platform.api.v1.dependencies import (
+    get_db_session,
+    get_estimate_service,
+    get_job_service,
+)
 from grins_platform.exceptions import (
     CustomerHasNoPhoneError,
     CustomerNotFoundError,
@@ -27,15 +31,21 @@ from grins_platform.exceptions import (
 )
 from grins_platform.log_config import LoggerMixin, get_logger
 from grins_platform.models.customer_document import CustomerDocument
+from grins_platform.models.enums import EstimateStatus, SalesEntryStatus
+from grins_platform.models.estimate import Estimate
 from grins_platform.models.sales import SalesCalendarEvent, SalesEntry
+from grins_platform.schemas.estimate import EstimateCreate, EstimateSendResponse
 from grins_platform.schemas.sales_pipeline import (
     SalesCalendarEventCreate,
     SalesCalendarEventResponse,
     SalesCalendarEventUpdate,
     SalesEntryResponse,
     SalesEntryStatusUpdate,
+    SendEstimateFromPipelineRequest,
+    SendEstimateFromPipelineResponse,
 )
 from grins_platform.services.audit_service import AuditService
+from grins_platform.services.estimate_service import EstimateService
 from grins_platform.services.job_service import JobService
 from grins_platform.services.photo_service import PhotoService
 from grins_platform.services.sales_pipeline_service import SalesPipelineService
@@ -790,8 +800,7 @@ async def create_calendar_event(
             raise HTTPException(
                 status_code=502,
                 detail=(
-                    "Calendar event not saved — SMS dispatch failed: "
-                    f"{exc}. Try again."
+                    f"Calendar event not saved — SMS dispatch failed: {exc}. Try again."
                 ),
             ) from exc
         _ep.log_completed(
@@ -955,3 +964,152 @@ async def send_calendar_event_confirmation(
         "message_id": str(result.get("message_id") or ""),
         "status": str(result.get("status") or ""),
     }
+
+
+@router.post(
+    "/pipeline/{entry_id}/send-estimate",
+    response_model=SendEstimateFromPipelineResponse,
+    summary="Build and send a structured estimate via portal link",
+)
+async def send_estimate_from_pipeline(
+    entry_id: UUID,
+    body: SendEstimateFromPipelineRequest,
+    current_user: CurrentActiveUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    estimate_service: Annotated[EstimateService, Depends(get_estimate_service)],
+    sales_pipeline_service: Annotated[
+        SalesPipelineService, Depends(_get_pipeline_service)
+    ],
+) -> SendEstimateFromPipelineResponse:
+    """Create + send + advance + audit, atomically.
+
+    Bypasses ``SalesPipelineService.advance_status`` (and its
+    calendar-confirmation gate) deliberately — sending the estimate
+    is itself an implicit confirmation that the visit happened.
+    """
+    result = await session.execute(
+        select(SalesEntry).where(SalesEntry.id == entry_id),
+    )
+    entry = result.scalar_one_or_none()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Sales entry not found")
+
+    customer = entry.customer
+    if not customer or not customer.email:
+        raise HTTPException(
+            status_code=422,
+            detail="Customer has no email address on file",
+        )
+
+    estimate_create = EstimateCreate(
+        customer_id=entry.customer_id,
+        lead_id=entry.lead_id,
+        template_id=body.template_id,
+        line_items=body.line_items,
+        options=body.options,
+        subtotal=body.subtotal,
+        tax_amount=body.tax_amount,
+        discount_amount=body.discount_amount,
+        total=body.total,
+        promotion_code=body.promotion_code,
+        valid_until=body.valid_until,
+        notes=body.notes,
+    )
+    estimate = await estimate_service.create_estimate(
+        estimate_create,
+        current_user.id,
+    )
+
+    send_result = await estimate_service.send_estimate(estimate.id)
+
+    await session.execute(
+        update(SalesEntry)
+        .where(SalesEntry.id == entry_id)
+        .values(
+            status=SalesEntryStatus.PENDING_APPROVAL.value,
+            updated_at=func.now(),
+        ),
+    )
+
+    await sales_pipeline_service.audit_service.log_action(
+        session,
+        actor_id=current_user.id,
+        action="sales_entry.estimate_sent",
+        resource_type="sales_entry",
+        resource_id=entry.id,
+        details={
+            "estimate_id": str(estimate.id),
+            "customer_id": str(entry.customer_id),
+            "portal_url": send_result.portal_url,
+            "sent_via": send_result.sent_via,
+        },
+    )
+
+    await session.commit()
+
+    logger.info(
+        "pipeline.estimate.sent",
+        entry_id=str(entry.id),
+        estimate_id=str(estimate.id),
+        customer_id=str(entry.customer_id),
+        sent_via=send_result.sent_via,
+    )
+
+    return SendEstimateFromPipelineResponse(
+        entry_id=entry.id,
+        entry_status=SalesEntryStatus.PENDING_APPROVAL.value,
+        estimate_id=estimate.id,
+        portal_url=send_result.portal_url,
+        sent_via=send_result.sent_via,
+    )
+
+
+@router.post(
+    "/pipeline/{entry_id}/resend-estimate",
+    response_model=EstimateSendResponse,
+    summary="Resend the latest portal link for the entry's customer",
+)
+async def resend_estimate_from_pipeline(
+    entry_id: UUID,
+    _current_user: CurrentActiveUser,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    estimate_service: Annotated[EstimateService, Depends(get_estimate_service)],
+) -> EstimateSendResponse:
+    """Re-fire SMS + Resend email for the latest open estimate
+    tied to this entry's customer (status SENT or VIEWED).
+
+    404 if no eligible estimate exists.
+    """
+    result = await session.execute(
+        select(SalesEntry).where(SalesEntry.id == entry_id),
+    )
+    entry = result.scalar_one_or_none()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Sales entry not found")
+    if not entry.customer_id:
+        raise HTTPException(
+            status_code=422,
+            detail="Sales entry has no customer",
+        )
+
+    stmt = (
+        select(Estimate)
+        .where(
+            Estimate.customer_id == entry.customer_id,
+            Estimate.status.in_(
+                [EstimateStatus.SENT.value, EstimateStatus.VIEWED.value],
+            ),
+        )
+        .order_by(Estimate.updated_at.desc())
+        .limit(1)
+    )
+    latest = (await session.execute(stmt)).scalar_one_or_none()
+    if not latest:
+        raise HTTPException(
+            status_code=404,
+            detail="No open estimate found to resend",
+        )
+
+    send_result = await estimate_service.send_estimate(latest.id)
+    await session.commit()
+    return send_result

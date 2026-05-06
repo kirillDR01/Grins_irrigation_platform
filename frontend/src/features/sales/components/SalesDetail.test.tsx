@@ -42,9 +42,11 @@ const mockDocument = {
   id: 'doc-001',
   customer_id: 'cust-001',
   sales_entry_id: 'entry-001',
-  file_key: 'docs/estimate.pdf',
-  file_name: 'estimate.pdf',
-  document_type: 'estimate',
+  file_key: 'docs/contract.pdf',
+  file_name: 'contract.pdf',
+  // After the structured-estimate landing the ribbon is contract-only —
+  // the M-17 tests below need a signing-eligible doc, hence ``contract``.
+  document_type: 'contract',
   mime_type: 'application/pdf',
   size_bytes: 1024,
   uploaded_at: '2026-04-16T00:00:00Z',
@@ -100,6 +102,34 @@ vi.mock('../hooks/useSalesPipeline', () => ({
   useUnpauseNudges: () => ({ mutate: vi.fn(), isPending: false }),
   useSendTextConfirmation: () => ({ mutate: vi.fn(), isPending: false }),
   useDismissSalesEntry: () => ({ mutate: vi.fn(), isPending: false }),
+  useSendEstimateFromSalesEntry: () => ({
+    mutateAsync: vi.fn().mockResolvedValue({
+      entry_id: 'entry-001',
+      entry_status: 'pending_approval',
+      estimate_id: 'est-001',
+      portal_url: 'https://example.com/portal/estimates/abc',
+      sent_via: ['sms', 'email'],
+    }),
+    isPending: false,
+  }),
+  useResendEstimateForSalesEntry: () => ({
+    mutateAsync: vi.fn().mockResolvedValue({
+      estimate_id: 'est-001',
+      portal_url: 'https://example.com/portal/estimates/abc',
+      sent_via: ['sms', 'email'],
+    }),
+    isPending: false,
+  }),
+}));
+
+vi.mock('./SalesEstimateSheetWrapper', () => ({
+  SalesEstimateSheetWrapper: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="sales-estimate-sheet">
+      <button onClick={onClose} data-testid="sales-estimate-sheet-close">
+        close
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock('./DocumentsSection', () => ({
@@ -207,7 +237,7 @@ describe('SalesDetail signing gate (bughunt M-17)', () => {
     expect(screen.getByTestId('embedded-sign-btn')).toBeDisabled();
     expect(screen.getByTestId('embedded-sign-btn')).toHaveAttribute(
       'title',
-      'Document file is missing or expired — re-upload required.',
+      'Contract file is missing or expired — re-upload required.',
     );
   });
 
@@ -366,14 +396,33 @@ describe('SalesDetail walkthrough layout', () => {
     expect(screen.queryByTestId(`advance-btn-${mockEntry.id}`)).not.toBeInTheDocument();
   });
 
-  it('NowCard renders correct variation for send_estimate with doc', async () => {
-    // mockDocument is an estimate doc, so hasEstimateDoc = true
+  it('NowCard renders Build & send estimate CTA for send_estimate', async () => {
     render(<SalesDetail entryId="entry-001" />, { wrapper });
     await waitFor(() => {
       expect(screen.getByTestId('now-card')).toBeInTheDocument();
     });
-    // send_estimate with doc shows filled dropzone
-    expect(screen.getByTestId('now-card-dropzone-filled')).toBeInTheDocument();
+    // After the structured-estimate landing the send_estimate stage no
+    // longer shows a PDF dropzone. The primary action opens the
+    // line-item sheet instead.
+    expect(
+      screen.getByTestId('now-action-build-send-estimate'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId('now-card-dropzone-filled'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('clicking build_and_send_estimate opens the sales estimate sheet', async () => {
+    Object.assign(mockEntry, { status: 'send_estimate' });
+    const user = userEvent.setup();
+    render(<SalesDetail entryId="entry-001" />, { wrapper });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('now-action-build-send-estimate'),
+      ).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId('now-action-build-send-estimate'));
+    expect(screen.getByTestId('sales-estimate-sheet')).toBeInTheDocument();
   });
 
   it('NowCard renders correct variation for schedule_estimate', async () => {

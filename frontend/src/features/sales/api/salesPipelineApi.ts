@@ -24,6 +24,33 @@ export interface SalesDocument {
   uploaded_by: string | null;
 }
 
+export interface SendEstimateFromPipelineRequest {
+  template_id?: string;
+  line_items?: Array<Record<string, unknown>>;
+  options?: Array<Record<string, unknown>>;
+  subtotal?: number;
+  tax_amount?: number;
+  discount_amount?: number;
+  total?: number;
+  promotion_code?: string;
+  valid_until?: string;
+  notes?: string;
+}
+
+export interface SendEstimateFromPipelineResponse {
+  entry_id: string;
+  entry_status: string;
+  estimate_id: string;
+  portal_url: string;
+  sent_via: string[];
+}
+
+export interface EstimateSendResponse {
+  estimate_id: string;
+  portal_url: string;
+  sent_via: string[];
+}
+
 export const salesPipelineApi = {
   list: async (params?: {
     skip?: number;
@@ -123,7 +150,28 @@ export const salesPipelineApi = {
     return response.data;
   },
 
-  // Signing — Req 18.1, 18.2, 18.3
+  // Structured estimate via portal link (replaces SignWell PDF flow on
+  // the ``send_estimate`` stage).
+  sendEstimate: async (
+    entryId: string,
+    body: SendEstimateFromPipelineRequest,
+  ): Promise<SendEstimateFromPipelineResponse> => {
+    const response = await apiClient.post<SendEstimateFromPipelineResponse>(
+      `/sales/pipeline/${entryId}/send-estimate`,
+      body,
+    );
+    return response.data;
+  },
+
+  resendEstimate: async (entryId: string): Promise<EstimateSendResponse> => {
+    const response = await apiClient.post<EstimateSendResponse>(
+      `/sales/pipeline/${entryId}/resend-estimate`,
+    );
+    return response.data;
+  },
+
+  // Signing — Req 18.1, 18.2, 18.3 (contract stage only after the
+  // structured-estimate landing).
   triggerEmailSigning: async (
     id: string,
   ): Promise<{ document_id: string; status: string }> => {

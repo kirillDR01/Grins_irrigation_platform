@@ -4,7 +4,8 @@ Validates: CRM Changes Update 2 Req 14.2, 15.1
 """
 
 from datetime import date, datetime, time
-from typing import Optional
+from decimal import Decimal
+from typing import Any, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -108,3 +109,32 @@ class SalesCalendarEventResponse(BaseModel):
     confirmation_status_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+
+
+class SendEstimateFromPipelineRequest(BaseModel):
+    """Request body for ``POST /api/v1/sales/pipeline/{entry_id}/send-estimate``.
+
+    ``customer_id`` / ``lead_id`` / ``job_id`` are intentionally omitted —
+    the orchestrator resolves them from the SalesEntry server-side.
+    """
+
+    template_id: Optional[UUID] = None
+    line_items: Optional[list[dict[str, Any]]] = None
+    options: Optional[list[dict[str, Any]]] = None
+    subtotal: Decimal = Decimal(0)
+    tax_amount: Decimal = Decimal(0)
+    discount_amount: Decimal = Decimal(0)
+    total: Decimal = Decimal(0)
+    promotion_code: Optional[str] = Field(default=None, max_length=50)
+    valid_until: Optional[datetime] = None
+    notes: Optional[str] = Field(default=None, max_length=5000)
+
+
+class SendEstimateFromPipelineResponse(BaseModel):
+    """Response from the orchestrator: entry advanced + estimate sent."""
+
+    entry_id: UUID
+    entry_status: str
+    estimate_id: UUID
+    portal_url: str = Field(..., max_length=2048)
+    sent_via: list[str]

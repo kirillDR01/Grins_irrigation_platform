@@ -1225,6 +1225,17 @@ curl -sI https://grins-irrigation-platform-git-dev-kirilldr01s-projects.vercel.a
 # Should match PORTAL_BASE_URL on Railway. If not, this is a BLOCKER.
 ```
 
+### Phase 4e — UI variant (canonical after structured-estimate landing)
+
+Path A (in-app, canonical): from Sales Detail, click "Build & send estimate"
+on the Estimate stage card → fill line items in the sheet → submit. The
+backend orchestrator (`POST /api/v1/sales/pipeline/{entry_id}/send-estimate`)
+handles create + send + advance + audit + commit atomically. Verify the
+same acceptance bullets below.
+
+Path B (curl, API smoke fallback): keep the existing curl steps below for
+scripted runs.
+
 #### Steps
 
 1. **Login admin** + obtain `$TOKEN`.

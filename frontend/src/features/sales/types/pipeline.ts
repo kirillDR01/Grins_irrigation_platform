@@ -268,12 +268,13 @@ export type LucideIconName =
   | 'ArrowRight'
   | 'User'
   | 'Edit3'
-  | 'Lock';
+  | 'Lock'
+  | 'FileText';
 
 export type NowActionId =
   | 'schedule_visit'
   | 'text_confirmation'
-  | 'send_estimate_email'
+  | 'build_and_send_estimate'
   | 'add_customer_email'
   | 'skip_advance'
   | 'mark_approved_manual'

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { salesPipelineApi } from '../api/salesPipelineApi';
+import type { SendEstimateFromPipelineRequest } from '../api/salesPipelineApi';
 import type { SalesEntryStatusUpdate } from '../types/pipeline';
 import type {
   SalesCalendarEventCreate,
@@ -152,6 +153,33 @@ export function useTriggerEmailSigning() {
     mutationFn: (id: string) => salesPipelineApi.triggerEmailSigning(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: pipelineKeys.lists() });
+    },
+  });
+}
+
+export function useSendEstimateFromSalesEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      entryId,
+      data,
+    }: {
+      entryId: string;
+      data: SendEstimateFromPipelineRequest;
+    }) => salesPipelineApi.sendEstimate(entryId, data),
+    onSuccess: (_data, { entryId }) => {
+      qc.invalidateQueries({ queryKey: pipelineKeys.detail(entryId) });
+      qc.invalidateQueries({ queryKey: pipelineKeys.lists() });
+    },
+  });
+}
+
+export function useResendEstimateForSalesEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (entryId: string) => salesPipelineApi.resendEstimate(entryId),
+    onSuccess: (_data, entryId) => {
+      qc.invalidateQueries({ queryKey: pipelineKeys.detail(entryId) });
     },
   });
 }
