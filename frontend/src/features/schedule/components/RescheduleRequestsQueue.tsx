@@ -11,12 +11,7 @@ import { toast } from 'sonner';
 import { CalendarClock, Check, RefreshCw } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getErrorMessage } from '@/core/api/client';
 import { AppointmentForm } from './AppointmentForm';
@@ -51,9 +46,7 @@ export function RescheduleRequestsQueue({
     useState<RescheduleRequestDetail | null>(null);
 
   // Fetch the appointment for the reschedule dialog
-  const { data: targetAppointment } = useAppointment(
-    rescheduleTarget?.appointment_id
-  );
+  const { data: targetAppointment } = useAppointment(rescheduleTarget?.appointment_id);
 
   const handleResolve = async (id: string) => {
     try {
@@ -69,9 +62,7 @@ export function RescheduleRequestsQueue({
       resolveMutation.mutate({ id: rescheduleTarget.id });
     }
     setRescheduleTarget(null);
-    toast.success(
-      'Reschedule sent — customer will receive a new confirmation request.'
-    );
+    toast.success('Reschedule sent — customer will receive a new confirmation request.');
   };
 
   /**
@@ -113,9 +104,7 @@ export function RescheduleRequestsQueue({
       >
         <div className="flex items-center gap-2 mb-3">
           <CalendarClock className="h-4 w-4 text-amber-500" />
-          <h3 className="text-sm font-semibold text-slate-700">
-            Reschedule Requests
-          </h3>
+          <h3 className="text-sm font-semibold text-slate-700">Reschedule Requests</h3>
         </div>
         <div className="space-y-2">
           <Skeleton className="h-16 w-full" />
@@ -133,9 +122,7 @@ export function RescheduleRequestsQueue({
       >
         <div className="flex items-center gap-2 mb-3">
           <CalendarClock className="h-4 w-4 text-amber-500" />
-          <h3 className="text-sm font-semibold text-slate-700">
-            Reschedule Requests
-          </h3>
+          <h3 className="text-sm font-semibold text-slate-700">Reschedule Requests</h3>
         </div>
         <p className="text-sm text-slate-400">Failed to load requests</p>
       </div>
@@ -164,10 +151,7 @@ export function RescheduleRequestsQueue({
         />
 
         {!hasRequests ? (
-          <p
-            className="text-sm text-slate-400"
-            data-testid="reschedule-queue-empty"
-          >
+          <p className="text-sm text-slate-400" data-testid="reschedule-queue-empty">
             No open reschedule requests
           </p>
         ) : (
@@ -193,7 +177,10 @@ export function RescheduleRequestsQueue({
           if (!open) setRescheduleTarget(null);
         }}
       >
-        <DialogContent className="max-w-lg" aria-describedby="reschedule-dialog-desc">
+        <DialogContent
+          className="max-w-lg max-h-[90vh] max-sm:max-h-[92vh] flex flex-col"
+          aria-describedby="reschedule-dialog-desc"
+        >
           <DialogHeader>
             <DialogTitle>Reschedule Appointment</DialogTitle>
             <p id="reschedule-dialog-desc" className="text-sm text-muted-foreground">
@@ -207,15 +194,20 @@ export function RescheduleRequestsQueue({
               )}
             </p>
           </DialogHeader>
-          {rescheduleTarget && targetAppointment && (
-            <AppointmentForm
-              appointment={targetAppointment}
-              onSuccess={handleRescheduleSuccess}
-              onCancel={() => setRescheduleTarget(null)}
-              submitOverride={handleRescheduleSubmit}
-              submitLabel="Send Reschedule"
-            />
-          )}
+          <div
+            className="overflow-y-auto flex-1 min-h-0"
+            data-testid="reschedule-dialog-scroll-body"
+          >
+            {rescheduleTarget && targetAppointment && (
+              <AppointmentForm
+                appointment={targetAppointment}
+                onSuccess={handleRescheduleSuccess}
+                onCancel={() => setRescheduleTarget(null)}
+                submitOverride={handleRescheduleSubmit}
+                submitLabel="Send Reschedule"
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </>
@@ -293,8 +285,8 @@ function RescheduleRequestItem({
                 : undefined
             }
           >
-            <span className="font-medium">Customer suggested:</span>{' '}
-            &ldquo;{latestAlternative.text}&rdquo;
+            <span className="font-medium">Customer suggested:</span> &ldquo;
+            {latestAlternative.text}&rdquo;
             {alternativeEntries.length > 1 && (
               <span className="text-slate-400">
                 {' '}

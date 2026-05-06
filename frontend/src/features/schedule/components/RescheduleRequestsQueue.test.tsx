@@ -104,9 +104,7 @@ function createWrapper() {
   });
 
   return function Wrapper({ children }: { children: React.ReactNode }) {
-    return (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
+    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   };
 }
 
@@ -156,24 +154,20 @@ function makeAppointment(overrides: Partial<Record<string, unknown>> = {}) {
 describe('RescheduleRequestsQueue (bughunt H-6)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (rescheduleApi.list as ReturnType<typeof vi.fn>).mockResolvedValue([
-      makeRequest(),
-    ]);
+    (rescheduleApi.list as ReturnType<typeof vi.fn>).mockResolvedValue([makeRequest()]);
     (rescheduleApi.resolve as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: 'req-1',
       status: 'resolved',
     });
     (appointmentApi.getById as ReturnType<typeof vi.fn>).mockResolvedValue(
-      makeAppointment(),
+      makeAppointment()
     );
-    (
-      appointmentApi.rescheduleFromRequest as ReturnType<typeof vi.fn>
-    ).mockResolvedValue(
+    (appointmentApi.rescheduleFromRequest as ReturnType<typeof vi.fn>).mockResolvedValue(
       makeAppointment({
         scheduled_date: '2026-04-23',
         time_window_start: '14:00:00',
         time_window_end: '16:00:00',
-      }),
+      })
     );
   });
 
@@ -221,7 +215,7 @@ describe('RescheduleRequestsQueue (bughunt H-6)', () => {
 
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith(
-        expect.stringContaining('customer will receive a new confirmation request'),
+        expect.stringContaining('customer will receive a new confirmation request')
       );
     });
   });
@@ -286,8 +280,31 @@ describe('RescheduleRequestsQueue (bughunt H-6)', () => {
     );
 
     await screen.findByTestId('reschedule-customer-name');
-    expect(
-      screen.queryByTestId('reschedule-latest-alternative')
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('reschedule-latest-alternative')).not.toBeInTheDocument();
+  });
+
+  // Regression guard for the scrollable-body fix:
+  // RescheduleRequestsQueue's reschedule dialog must wrap the form in a
+  // flex-1, min-h-0, overflow-y-auto div so the modal scrolls when its
+  // content exceeds viewport height. min-h-0 is required for flex children
+  // to permit inner scrolling — easy to forget, silently breaks scroll.
+  it('wraps the reschedule form in a scrollable body with min-h-0 and overflow-y-auto', async () => {
+    const user = userEvent.setup();
+    render(<RescheduleRequestsQueue />, { wrapper: createWrapper() });
+
+    const resBtn = await screen.findByTestId('reschedule-to-alternative-btn');
+    await user.click(resBtn);
+
+    // Wait for the (mocked) AppointmentForm to mount, which proves the
+    // dialog and its body have rendered.
+    await screen.findByTestId('mock-appointment-form');
+
+    const scrollBody = screen.getByTestId('reschedule-dialog-scroll-body');
+    expect(scrollBody.className).toContain('overflow-y-auto');
+    expect(scrollBody.className).toContain('flex-1');
+    expect(scrollBody.className).toContain('min-h-0');
+
+    // The form must be a descendant of the scroll body (not a sibling).
+    expect(scrollBody).toContainElement(screen.getByTestId('mock-appointment-form'));
   });
 });
