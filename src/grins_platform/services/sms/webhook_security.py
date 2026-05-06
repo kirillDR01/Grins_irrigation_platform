@@ -158,11 +158,22 @@ def webhook_client_key(request: Request) -> str:
 async def autoreply_phone_throttled(
     redis: Redis | None,
     e164_phone: str,
+    *,
+    bucket: str | None = None,
 ) -> bool:
     """Return True if another auto-reply to ``e164_phone`` should be skipped.
 
     Sets a short-lived Redis key on the first call; subsequent calls
     within :data:`AUTOREPLY_PHONE_TTL_S` seconds see it and return True.
+
+    F5 fix (2026-05-05): the optional ``bucket`` arg scopes the throttle
+    per-action. Without it, every auto-reply to the same phone shares one
+    60s window — which silenced a legitimate R-ack arriving 9 seconds
+    after a Y-ack on the same conversation. Passing
+    e.g. ``bucket="reply_r"`` lets each Y/R/C state-transition ack run
+    in its own bucket so the customer hears back about each distinct
+    state change while still capping repeated identical acks (a second Y
+    in the same window IS still throttled).
 
     Fails open on a missing or broken Redis: the DB-fallback dedup layer
     from Gap 07.B already protects against duplicate *processing*, so
@@ -171,13 +182,16 @@ async def autoreply_phone_throttled(
     Args:
         redis: Async Redis client (or None).
         e164_phone: Recipient phone in E.164 format.
+        bucket: Optional sub-bucket label so distinct action types
+            (e.g. Y vs R vs C ack) get independent throttle windows.
 
     Returns:
-        True if a recent auto-reply is recorded for this phone.
+        True if a recent auto-reply is recorded for this phone+bucket.
     """
     if redis is None:
         return False
-    key = f"{_REDIS_PHONE_THROTTLE_PREFIX}:{e164_phone}"
+    suffix = f":{bucket}" if bucket else ""
+    key = f"{_REDIS_PHONE_THROTTLE_PREFIX}:{e164_phone}{suffix}"
     try:
         existing = await redis.get(key)
         if existing is not None:

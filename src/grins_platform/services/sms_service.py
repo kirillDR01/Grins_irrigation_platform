@@ -918,13 +918,24 @@ class SMSService(LoggerMixin):
         # Delegate to existing webhook handler for other messages
         return await self.handle_webhook(from_phone, body, provider_sid)
 
-    async def _autoreply_suppressed(self, reply_phone: str) -> str | None:
+    async def _autoreply_suppressed(
+        self,
+        reply_phone: str,
+        *,
+        bucket: str | None = None,
+    ) -> str | None:
         """Return a short suppression reason, or ``None`` to send normally.
 
         Gates the outbound auto-reply acknowledgement with:
 
         * a global sliding-window circuit breaker (Gap 07.C), and
         * a per-phone throttle (one auto-reply per 60s by default).
+
+        F5 fix (2026-05-05): callers pass a ``bucket`` label (e.g.
+        ``"reply_r"``) so distinct state-transition acks (Y / R / C)
+        run in independent 60s throttle windows. Without it, a Y-ack
+        followed by an R-ack 9 seconds later was silenced because both
+        acks shared one phone-level window.
 
         Fails open on Redis errors so a Redis outage never drops legitimate
         auto-replies — dedup correctness is covered by the DB-fallback layer
@@ -936,7 +947,7 @@ class SMSService(LoggerMixin):
                 with contextlib.suppress(Exception):
                     await emit_circuit_open_alert(self.session, redis, 0)
                 return "circuit_open"
-            if await autoreply_phone_throttled(redis, reply_phone):
+            if await autoreply_phone_throttled(redis, reply_phone, bucket=bucket):
                 return "phone_throttled"
         finally:
             if redis is not None:
@@ -1164,7 +1175,34 @@ class SMSService(LoggerMixin):
 
         auto_reply = result.get("auto_reply")
         if auto_reply:
-            suppressed = await self._autoreply_suppressed(reply_phone)
+            # F5 fix (2026-05-05): pick the keyword-specific sub-type AND
+            # the matching phone-throttle bucket so distinct state
+            # transitions (Y / R / C) on the same conversation each get
+            # their own 60s throttle window AND their own 24h dedup
+            # bucket. Falls back to the legacy combined value when the
+            # keyword cannot be resolved (e.g. free-text fallback path).
+            _ack_subtype_by_keyword = {
+                ConfirmationKeyword.CONFIRM: (
+                    MessageType.APPOINTMENT_CONFIRMATION_REPLY_Y,
+                    "reply_y",
+                ),
+                ConfirmationKeyword.RESCHEDULE: (
+                    MessageType.APPOINTMENT_CONFIRMATION_REPLY_R,
+                    "reply_r",
+                ),
+                ConfirmationKeyword.CANCEL: (
+                    MessageType.APPOINTMENT_CONFIRMATION_REPLY_C,
+                    "reply_c",
+                ),
+            }
+            ack_message_type, throttle_bucket = _ack_subtype_by_keyword.get(
+                keyword,
+                (MessageType.APPOINTMENT_CONFIRMATION_REPLY, None),
+            )
+            suppressed = await self._autoreply_suppressed(
+                reply_phone,
+                bucket=throttle_bucket,
+            )
             if suppressed:
                 logger.info(
                     "sms.confirmation.auto_reply_suppressed",
@@ -1172,26 +1210,6 @@ class SMSService(LoggerMixin):
                     reason=suppressed,
                 )
             else:
-                # F5 fix (2026-05-05): pick the keyword-specific sub-type
-                # so the 24h customer dedup applies per (Y / R / C) rather
-                # than across all reply acknowledgments. Falls back to the
-                # legacy combined value when the keyword cannot be resolved
-                # (e.g. free-text fallback path).
-                _ack_subtype_by_keyword = {
-                    ConfirmationKeyword.CONFIRM: (
-                        MessageType.APPOINTMENT_CONFIRMATION_REPLY_Y
-                    ),
-                    ConfirmationKeyword.RESCHEDULE: (
-                        MessageType.APPOINTMENT_CONFIRMATION_REPLY_R
-                    ),
-                    ConfirmationKeyword.CANCEL: (
-                        MessageType.APPOINTMENT_CONFIRMATION_REPLY_C
-                    ),
-                }
-                ack_message_type = _ack_subtype_by_keyword.get(
-                    keyword,
-                    MessageType.APPOINTMENT_CONFIRMATION_REPLY,
-                )
                 try:
                     _ = await self.send_message(
                         recipient=reply_recipient,
