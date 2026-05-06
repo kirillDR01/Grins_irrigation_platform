@@ -9,6 +9,7 @@ from uuid import UUID
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
@@ -153,6 +154,21 @@ class SalesCalendarEvent(Base):
         ForeignKey("staff.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Y/R/C confirmation lifecycle (migration 20260509_120000). One of:
+    # 'pending' (default on insert), 'confirmed' (customer replied Y),
+    # 'reschedule_requested' (customer replied R), 'cancelled' (customer
+    # replied C). Mirrors AppointmentStatus's confirmation slice but kept
+    # on the calendar event itself because SalesCalendarEvent has no
+    # AppointmentStatus column.
+    confirmation_status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        server_default="pending",
+    )
+    confirmation_status_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -175,6 +191,11 @@ class SalesCalendarEvent(Base):
     __table_args__ = (
         Index("idx_sales_calendar_date", "scheduled_date"),
         Index("ix_sales_calendar_assigned_to", "assigned_to_user_id"),
+        CheckConstraint(
+            "confirmation_status IN ("
+            "'pending','confirmed','reschedule_requested','cancelled')",
+            name="ck_sales_calendar_events_confirmation_status",
+        ),
     )
 
     def __repr__(self) -> str:

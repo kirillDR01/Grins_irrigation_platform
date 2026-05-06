@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import (
     JSON,
     UUID as PGUUID,
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from grins_platform.models.appointment import Appointment
     from grins_platform.models.customer import Customer
     from grins_platform.models.job import Job
+    from grins_platform.models.sales import SalesCalendarEvent
     from grins_platform.models.sent_message import SentMessage
 
 
@@ -37,15 +38,20 @@ class JobConfirmationResponse(Base):
         primary_key=True,
         server_default=func.gen_random_uuid(),
     )
-    job_id: Mapped[UUID] = mapped_column(
+    job_id: Mapped[Optional[UUID]] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("jobs.id"),
-        nullable=False,
+        nullable=True,
     )
-    appointment_id: Mapped[UUID] = mapped_column(
+    appointment_id: Mapped[Optional[UUID]] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("appointments.id"),
-        nullable=False,
+        nullable=True,
+    )
+    sales_calendar_event_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("sales_calendar_events.id", ondelete="CASCADE"),
+        nullable=True,
     )
     sent_message_id: Mapped[Optional[UUID]] = mapped_column(
         PGUUID(as_uuid=True),
@@ -80,8 +86,15 @@ class JobConfirmationResponse(Base):
     )
 
     # Relationships
-    job: Mapped["Job"] = relationship("Job", lazy="selectin")
-    appointment: Mapped["Appointment"] = relationship("Appointment", lazy="selectin")
+    job: Mapped[Optional["Job"]] = relationship("Job", lazy="selectin")
+    appointment: Mapped[Optional["Appointment"]] = relationship(
+        "Appointment",
+        lazy="selectin",
+    )
+    sales_calendar_event: Mapped[Optional["SalesCalendarEvent"]] = relationship(
+        "SalesCalendarEvent",
+        lazy="selectin",
+    )
     sent_message: Mapped[Optional["SentMessage"]] = relationship(
         "SentMessage",
         lazy="selectin",
@@ -90,7 +103,15 @@ class JobConfirmationResponse(Base):
 
     __table_args__ = (
         Index("idx_confirmation_responses_appointment", "appointment_id"),
+        Index(
+            "ix_job_confirmation_responses_sales_calendar_event_id",
+            "sales_calendar_event_id",
+        ),
         Index("idx_confirmation_responses_status", "status"),
+        CheckConstraint(
+            "(appointment_id IS NOT NULL) <> (sales_calendar_event_id IS NOT NULL)",
+            name="ck_job_confirmation_responses_target_xor",
+        ),
     )
 
     def __repr__(self) -> str:
@@ -113,15 +134,20 @@ class RescheduleRequest(Base):
         primary_key=True,
         server_default=func.gen_random_uuid(),
     )
-    job_id: Mapped[UUID] = mapped_column(
+    job_id: Mapped[Optional[UUID]] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("jobs.id"),
-        nullable=False,
+        nullable=True,
     )
-    appointment_id: Mapped[UUID] = mapped_column(
+    appointment_id: Mapped[Optional[UUID]] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("appointments.id"),
-        nullable=False,
+        nullable=True,
+    )
+    sales_calendar_event_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("sales_calendar_events.id", ondelete="CASCADE"),
+        nullable=True,
     )
     customer_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
@@ -154,8 +180,15 @@ class RescheduleRequest(Base):
     )
 
     # Relationships
-    job: Mapped["Job"] = relationship("Job", lazy="selectin")
-    appointment: Mapped["Appointment"] = relationship("Appointment", lazy="selectin")
+    job: Mapped[Optional["Job"]] = relationship("Job", lazy="selectin")
+    appointment: Mapped[Optional["Appointment"]] = relationship(
+        "Appointment",
+        lazy="selectin",
+    )
+    sales_calendar_event: Mapped[Optional["SalesCalendarEvent"]] = relationship(
+        "SalesCalendarEvent",
+        lazy="selectin",
+    )
     customer: Mapped["Customer"] = relationship("Customer", lazy="selectin")
     original_reply: Mapped[Optional["JobConfirmationResponse"]] = relationship(
         "JobConfirmationResponse",
@@ -164,7 +197,15 @@ class RescheduleRequest(Base):
 
     __table_args__ = (
         Index("idx_reschedule_requests_appointment", "appointment_id"),
+        Index(
+            "ix_reschedule_requests_sales_calendar_event_id",
+            "sales_calendar_event_id",
+        ),
         Index("idx_reschedule_requests_status", "status"),
+        CheckConstraint(
+            "(appointment_id IS NOT NULL) <> (sales_calendar_event_id IS NOT NULL)",
+            name="ck_reschedule_requests_target_xor",
+        ),
     )
 
     def __repr__(self) -> str:

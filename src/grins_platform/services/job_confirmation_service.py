@@ -26,6 +26,7 @@ from grins_platform.models.job_confirmation import (
     RescheduleRequest,
 )
 from grins_platform.models.sent_message import SentMessage
+from grins_platform.services.confirmation_target import ConfirmationTarget
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -183,9 +184,39 @@ class JobConfirmationService(LoggerMixin):
                 )
                 return {"action": "no_match", "thread_id": thread_id}
 
-        appointment_id: UUID = original.appointment_id  # type: ignore[assignment]
-        job_id: UUID = original.job_id  # type: ignore[assignment]
-        customer_id: UUID = original.customer_id  # type: ignore[assignment]
+        # 1.5. Build a polymorphic dispatch target from the correlated
+        # SentMessage. PR A only wires the appointment branch; PR B will
+        # add an estimate-visit branch that routes to dedicated handlers
+        # for SalesCalendarEvent. An orphaned SentMessage (neither FK
+        # set, e.g. a stray campaign row that somehow matched the
+        # thread) cannot anchor a Y/R/C lifecycle — return no_match.
+        try:
+            target = ConfirmationTarget.from_sent_message(original)
+        except ValueError:
+            self.log_rejected(
+                "handle_confirmation",
+                reason="orphan_sent_message",
+                thread_id=thread_id,
+            )
+            return {"action": "no_match", "thread_id": thread_id}
+
+        if target.kind == "estimate_visit":
+            # PR B will dispatch sales-side replies through a dedicated
+            # handler that updates SalesCalendarEvent.confirmation_status
+            # and surfaces R replies on the EstimateRescheduleQueue.
+            # Until then, fall through to no_match so a stray reply
+            # doesn't crash the dispatcher or mutate appointment state.
+            self.log_rejected(
+                "handle_confirmation",
+                reason="estimate_visit_dispatch_pending",
+                thread_id=thread_id,
+                sales_calendar_event_id=str(target.sales_calendar_event_id),
+            )
+            return {"action": "no_match", "thread_id": thread_id}
+
+        appointment_id: UUID = target.appointment_id  # type: ignore[assignment]
+        job_id: UUID = target.job_id  # type: ignore[assignment]
+        customer_id: UUID = target.customer_id
 
         # 2. Record the confirmation response
         response = JobConfirmationResponse(

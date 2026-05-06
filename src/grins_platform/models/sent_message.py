@@ -48,6 +48,16 @@ class SentMessage(Base):
         ForeignKey("appointments.id", name="fk_sent_messages_appointment_id"),
         nullable=True,
     )
+    sales_calendar_event_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey(
+            "sales_calendar_events.id",
+            name="fk_sent_messages_sales_calendar_event_id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
     message_type: Mapped[str] = mapped_column(String(50), nullable=False)
     message_content: Mapped[str] = mapped_column(Text(), nullable=False)
     recipient_phone: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -118,6 +128,10 @@ class SentMessage(Base):
         back_populates="sent_messages",
         lazy="selectin",
     )
+    sales_calendar_event: Mapped["SalesCalendarEvent | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "SalesCalendarEvent",
+        lazy="selectin",
+    )
     campaign: Mapped["Campaign | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "Campaign",
         lazy="selectin",
@@ -137,6 +151,10 @@ class SentMessage(Base):
             "'automated_notification', 'appointment_confirmation_reply', "
             "'appointment_confirmation_reply_y', 'appointment_confirmation_reply_r', "
             "'appointment_confirmation_reply_c', "
+            "'estimate_visit_confirmation', "
+            "'estimate_visit_confirmation_reply_y', "
+            "'estimate_visit_confirmation_reply_r', "
+            "'estimate_visit_confirmation_reply_c', "
             "'reschedule_followup', 'payment_link', 'payment_receipt')",
             name="ck_sent_messages_message_type",
         ),
@@ -156,6 +174,12 @@ class SentMessage(Base):
         Index(
             "ix_sent_messages_active_confirmation_by_appointment",
             "appointment_id",
+            "message_type",
+            postgresql_where=text("superseded_at IS NULL"),
+        ),
+        Index(
+            "ix_sent_messages_active_confirmation_by_sales_event",
+            "sales_calendar_event_id",
             "message_type",
             postgresql_where=text("superseded_at IS NULL"),
         ),

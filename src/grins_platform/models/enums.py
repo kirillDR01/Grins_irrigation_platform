@@ -790,6 +790,14 @@ class MessageType(str, Enum):
     APPOINTMENT_CONFIRMATION_REPLY_Y = "appointment_confirmation_reply_y"
     APPOINTMENT_CONFIRMATION_REPLY_R = "appointment_confirmation_reply_r"
     APPOINTMENT_CONFIRMATION_REPLY_C = "appointment_confirmation_reply_c"
+    # Sales-pipeline estimate-visit Y/R/C lifecycle (migration 20260509_120000).
+    # Mirrors the appointment-side sub-typed reply pattern so dedup and audit
+    # can distinguish Y/R/C acks for an estimate visit from those for an
+    # appointment, even when they share the same (customer_id, 24h window).
+    ESTIMATE_VISIT_CONFIRMATION = "estimate_visit_confirmation"
+    ESTIMATE_VISIT_CONFIRMATION_REPLY_Y = "estimate_visit_confirmation_reply_y"
+    ESTIMATE_VISIT_CONFIRMATION_REPLY_R = "estimate_visit_confirmation_reply_r"
+    ESTIMATE_VISIT_CONFIRMATION_REPLY_C = "estimate_visit_confirmation_reply_c"
     RESCHEDULE_FOLLOWUP = "reschedule_followup"
 
 
