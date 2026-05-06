@@ -108,17 +108,27 @@ function LineItemsTable({ items }: { items: EstimateLineItem[] }) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {items.map((item, idx) => (
-          <TableRow key={idx} data-testid={`line-item-row-${idx}`}>
-            <TableCell className="font-medium">{item.item}</TableCell>
-            <TableCell className="text-slate-500">{item.description}</TableCell>
-            <TableCell className="text-right">{item.quantity}</TableCell>
-            <TableCell className="text-right">{formatCurrency(item.unit_price)}</TableCell>
-            <TableCell className="text-right font-medium">
-              {formatCurrency(item.unit_price * item.quantity)}
-            </TableCell>
-          </TableRow>
-        ))}
+        {items.map((item, idx) => {
+          // Field-name reconciliation — see EstimateLineItem JSDoc.
+          // Backend ships ``qty`` and ``total``; older callers used
+          // ``quantity`` and recomputed total locally. Prefer the
+          // server-computed total when available so we never render
+          // ``$NaN`` from missing/undefined fields.
+          const qty = item.qty ?? item.quantity ?? 0;
+          const unitPrice = item.unit_price ?? 0;
+          const total = item.total ?? unitPrice * qty;
+          return (
+            <TableRow key={idx} data-testid={`line-item-row-${idx}`}>
+              <TableCell className="font-medium">{item.item ?? ''}</TableCell>
+              <TableCell className="text-slate-500">{item.description}</TableCell>
+              <TableCell className="text-right">{qty}</TableCell>
+              <TableCell className="text-right">{formatCurrency(unitPrice)}</TableCell>
+              <TableCell className="text-right font-medium">
+                {formatCurrency(total)}
+              </TableCell>
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );

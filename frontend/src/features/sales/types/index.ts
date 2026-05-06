@@ -22,13 +22,33 @@ export interface EstimateListItem {
 }
 
 // Estimate line item with material + labor costs
+/**
+ * Estimate line item shape returned by ``GET /api/v1/estimates/{id}``.
+ *
+ * Field-name reality (verified 2026-05-05 against dev API):
+ * - ``qty`` (the backend writes this; older code expected ``quantity``)
+ * - ``total`` (server-computed; older code recomputed from
+ *   ``unit_price * quantity`` and produced ``$NaN`` when ``quantity``
+ *   was missing)
+ * - ``description`` is the human-readable name; ``item`` is optional
+ *   on responses today.
+ *
+ * All numeric fields are optional because the backend may omit them
+ * for sparse "service-only" estimates. UI code MUST default-coalesce
+ * before arithmetic.
+ */
 export interface EstimateLineItem {
-  item: string;
+  item?: string;
   description: string;
-  unit_price: number;
-  quantity: number;
-  material_cost: number;
-  labor_cost: number;
+  unit_price?: number;
+  /** Canonical wire field — backend ships ``qty``. */
+  qty?: number;
+  /** Legacy alias — older frontends used this; kept for backward compat. */
+  quantity?: number;
+  /** Server-computed total ($) — prefer this over recomputing on FE. */
+  total?: number;
+  material_cost?: number;
+  labor_cost?: number;
 }
 
 // Estimate tier (Good/Better/Best)
