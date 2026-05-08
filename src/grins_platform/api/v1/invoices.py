@@ -50,6 +50,7 @@ from grins_platform.schemas.invoice import (
     PaymentRecord,
     SendLinkResponse,
 )
+from grins_platform.services.audit_service import AuditService
 from grins_platform.services.customer_service import CustomerService
 from grins_platform.services.email_service import EmailService
 from grins_platform.services.invoice_service import (
@@ -90,6 +91,7 @@ async def get_invoice_service(
     payment_link_service = StripePaymentLinkService(stripe_settings=stripe_settings)
     sms_service = SMSService(session=session)
     email_service = EmailService()
+    audit_service = AuditService()
     return InvoiceService(
         invoice_repository=invoice_repository,
         job_repository=job_repository,
@@ -98,6 +100,7 @@ async def get_invoice_service(
         payment_link_service=payment_link_service,
         sms_service=sms_service,
         email_service=email_service,
+        audit_service=audit_service,
     )
 
 
@@ -178,7 +181,11 @@ async def create_invoice(
     Validates: Requirements 7.1-7.10, 17.7, 22.1
     """
     try:
-        return await service.create_invoice(data)
+        return await service.create_invoice(
+            data,
+            actor_id=_current_user.id,
+            actor_role=_current_user.role,
+        )
     except InvalidInvoiceOperationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

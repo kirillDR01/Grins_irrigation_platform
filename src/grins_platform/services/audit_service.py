@@ -34,6 +34,7 @@ when adding a new flow):
 - ``consent.opt_in_sms``                         — START keyword opt-in (F3)
 - ``estimate.auto_job_created``                  — portal-approval auto-created a job
 - ``estimate.auto_job_skipped``                  — auto-job branch skipped
+- ``stripe.payment_link.auto_created``           — Payment Link inlined on invoice POST
 - ``sales_pipeline.nudge.sent``                  — nightly job nudged a stale entry (F6)
 
 Validates: CRM Gap Closure Req 74.1, 74.2, 74.3;

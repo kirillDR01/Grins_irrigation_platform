@@ -25,6 +25,7 @@ const ACTION_COLORS: Record<string, string> = {
   'staff.update': 'bg-teal-100 text-teal-700',
   'campaign.send': 'bg-purple-100 text-purple-700',
   'payment.collect': 'bg-green-100 text-green-700',
+  'stripe.payment_link.auto_created': 'bg-blue-100 text-blue-700',
   'estimate.approve': 'bg-cyan-100 text-cyan-700',
   'estimate.reject': 'bg-orange-100 text-orange-700',
   'schedule.modify': 'bg-indigo-100 text-indigo-700',

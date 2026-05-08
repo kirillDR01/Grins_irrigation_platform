@@ -54,6 +54,7 @@ if TYPE_CHECKING:
     from grins_platform.repositories.customer_repository import CustomerRepository
     from grins_platform.repositories.invoice_repository import InvoiceRepository
     from grins_platform.repositories.job_repository import JobRepository
+    from grins_platform.services.audit_service import AuditService
     from grins_platform.services.business_setting_service import (
         BusinessSettingService,
     )
@@ -199,6 +200,7 @@ class InvoiceService(LoggerMixin):
         payment_link_service: StripePaymentLinkService | None = None,
         sms_service: SMSService | None = None,
         email_service: EmailService | None = None,
+        audit_service: AuditService | None = None,
     ) -> None:
         """Initialize service with repositories.
 
@@ -224,6 +226,9 @@ class InvoiceService(LoggerMixin):
                 send-link flow falls straight to email.
             email_service: Optional :class:`EmailService` used by the
                 Payment Link email-fallback path (plan §Phase 2.7).
+            audit_service: Optional :class:`AuditService` used to record
+                Payment Link auto-creation breadcrumbs (canonical action
+                ``stripe.payment_link.auto_created``).
         """
         super().__init__()
         self.invoice_repository = invoice_repository
@@ -234,6 +239,7 @@ class InvoiceService(LoggerMixin):
         self.payment_link_service = payment_link_service
         self.sms_service = sms_service
         self.email_service = email_service
+        self.audit_service = audit_service
 
     def _get_settings_service(self) -> BusinessSettingService:
         """Return (and cache) a :class:`BusinessSettingService`.
@@ -292,11 +298,20 @@ class InvoiceService(LoggerMixin):
         seq = await self.invoice_repository.get_next_sequence()
         return f"INV-{year}-{seq:06d}"
 
-    async def create_invoice(self, data: InvoiceCreate) -> InvoiceResponse:
+    async def create_invoice(
+        self,
+        data: InvoiceCreate,
+        *,
+        actor_id: UUID | None = None,
+        actor_role: str | None = None,
+    ) -> InvoiceResponse:
         """Create a new invoice.
 
         Args:
             data: Invoice creation data
+            actor_id: Staff UUID who created the invoice. Threaded through
+                to the Payment Link audit row (14.A).
+            actor_role: Role of the staff member ("admin"/"manager").
 
         Returns:
             Created invoice response
@@ -343,7 +358,11 @@ class InvoiceService(LoggerMixin):
         # Phase 2.5: best-effort Payment Link auto-creation. The hook
         # mirrors the new link fields onto ``invoice`` directly so the
         # response below reflects them without a separate refetch.
-        await self._attach_payment_link(invoice)
+        await self._attach_payment_link(
+            invoice,
+            actor_id=actor_id,
+            actor_role=actor_role,
+        )
 
         self.log_completed(
             "create_invoice",
@@ -758,6 +777,9 @@ class InvoiceService(LoggerMixin):
     async def _attach_payment_link(
         self,
         invoice: Invoice,
+        *,
+        actor_id: UUID | None = None,
+        actor_role: str | None = None,
     ) -> None:
         """Best-effort Payment Link creation hook.
 
@@ -835,6 +857,49 @@ class InvoiceService(LoggerMixin):
         invoice.stripe_payment_link_id = link_id
         invoice.stripe_payment_link_url = link_url
         invoice.stripe_payment_link_active = True
+
+        await self._audit_payment_link_auto_created(
+            invoice,
+            link_id=link_id,
+            actor_id=actor_id,
+            actor_role=actor_role,
+        )
+
+    async def _audit_payment_link_auto_created(
+        self,
+        invoice: Invoice,
+        *,
+        link_id: str,
+        actor_id: UUID | None,
+        actor_role: str | None,
+    ) -> None:
+        """Best-effort audit row for inline Payment Link auto-creation.
+
+        Validates: e2e-signoff 2026-05-06 finding 14.A.
+        """
+        if self.audit_service is None:
+            return
+        try:
+            await self.audit_service.log_action(
+                self.invoice_repository.session,
+                actor_id=actor_id,
+                actor_role=actor_role,
+                action="stripe.payment_link.auto_created",
+                resource_type="invoice",
+                resource_id=invoice.id,
+                details={
+                    "stripe_payment_link_id": link_id,
+                    "invoice_number": invoice.invoice_number,
+                    "actor_type": "staff",
+                    "source": "admin_ui",
+                },
+            )
+        except Exception as e:
+            self.log_failed(
+                "audit_payment_link_auto_created",
+                error=e,
+                invoice_id=str(invoice.id),
+            )
 
     async def _regenerate_payment_link(
         self,
@@ -980,9 +1045,7 @@ class InvoiceService(LoggerMixin):
                         sms_failure_reason=None,
                     )
                 sms_failure_reason = "provider_error"
-                raw_reason = (
-                    result.get("reason") or result.get("status") or ""
-                )
+                raw_reason = result.get("reason") or result.get("status") or ""
                 sms_failure_detail = str(raw_reason)[:200] or None
                 self.logger.warning(
                     "payment.send_link.sms_failed_soft",

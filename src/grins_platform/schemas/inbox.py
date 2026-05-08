@@ -61,7 +61,10 @@ class InboxItem(BaseModel):
     body: str = Field(..., description="Raw / parsed body text")
     from_phone: str | None = Field(
         default=None,
-        description="Sender phone (E.164 or provider canonical form)",
+        description=(
+            "Sender phone normalized to E.164 (+1NXXXXXXX) when derivable, "
+            "else None"
+        ),
     )
     customer_id: UUID | None = Field(
         default=None,

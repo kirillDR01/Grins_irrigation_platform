@@ -50,6 +50,10 @@ from grins_platform.schemas.inbox import (
     InboxSourceTable,
     InboxTriageStatus,
 )
+from grins_platform.services.sms.phone_normalizer import (
+    PhoneNormalizationError,
+    normalize_to_e164,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -183,6 +187,25 @@ def _matches_filter(
         _FILTER_OPT_INS: is_consent and status == _CONSENT_STATUS_OPT_IN,
     }
     return matchers.get(triage, True)
+
+
+def _safe_normalize_phone(raw: str | None) -> str | None:
+    """Best-effort E.164 normalization for inbox source-table phones.
+
+    Source tables store phones in mixed formats (E.164 from SMS providers,
+    dashed/legacy from older campaign ingestion). This wrapper normalizes
+    at the inbox-aggregation seam without forcing a backfill, returning
+    ``None`` when the raw input is missing or unparseable so the inbox
+    stream keeps flowing on malformed legacy rows.
+
+    Validates: e2e-signoff 2026-05-06 finding 20.A.
+    """
+    if not raw:
+        return None
+    try:
+        return normalize_to_e164(raw)
+    except PhoneNormalizationError:
+        return None
 
 
 class InboxService(LoggerMixin):
@@ -364,7 +387,7 @@ class InboxService(LoggerMixin):
                     triage_status=triage_status,
                     received_at=row.received_at,
                     body=row.raw_reply_body,
-                    from_phone=row.from_phone,
+                    from_phone=_safe_normalize_phone(row.from_phone),
                     customer_id=row.customer_id,
                     customer_name=(
                         customer.full_name if customer is not None else None
@@ -452,7 +475,7 @@ class InboxService(LoggerMixin):
                     triage_status=triage_status,
                     received_at=row.received_at,
                     body=row.raw_reply_body,
-                    from_phone=row.phone,
+                    from_phone=_safe_normalize_phone(row.phone),
                     customer_id=row.customer_id,
                     customer_name=customer_name,
                     appointment_id=None,
@@ -552,7 +575,7 @@ class InboxService(LoggerMixin):
                     triage_status=triage_status,
                     received_at=row.created_at,
                     body=body,
-                    from_phone=row.phone_number,
+                    from_phone=_safe_normalize_phone(row.phone_number),
                     customer_id=row.customer_id,
                     customer_name=(
                         customer.full_name if customer is not None else None

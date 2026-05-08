@@ -297,3 +297,33 @@ class TestSortKey:
         # Newer comes first because we negate the epoch.
         assert ordered[0] is newer
         assert ordered[1] is older
+
+
+@pytest.mark.unit
+class TestSafeNormalizePhone:
+    """Inbox aggregator must normalize source-table phones to E.164 or None."""
+
+    def test_dashed_normalizes_to_e164(self) -> None:
+        from grins_platform.services.inbox_service import _safe_normalize_phone
+        assert _safe_normalize_phone("952-737-3312") == "+19527373312"
+
+    def test_already_e164_passthrough(self) -> None:
+        from grins_platform.services.inbox_service import _safe_normalize_phone
+        assert _safe_normalize_phone("+19527373312") == "+19527373312"
+
+    def test_paren_format_normalizes(self) -> None:
+        from grins_platform.services.inbox_service import _safe_normalize_phone
+        assert _safe_normalize_phone("(952) 737-3312") == "+19527373312"
+
+    def test_none_returns_none(self) -> None:
+        from grins_platform.services.inbox_service import _safe_normalize_phone
+        assert _safe_normalize_phone(None) is None
+
+    def test_empty_string_returns_none(self) -> None:
+        from grins_platform.services.inbox_service import _safe_normalize_phone
+        assert _safe_normalize_phone("") is None
+
+    def test_garbage_returns_none_no_raise(self) -> None:
+        from grins_platform.services.inbox_service import _safe_normalize_phone
+        assert _safe_normalize_phone("not-a-phone") is None
+        assert _safe_normalize_phone("555-0100") is None  # FCC test number

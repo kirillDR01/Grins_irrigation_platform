@@ -3591,3 +3591,137 @@ class TestInvoiceServiceH12ReadsBusinessSettings:
 
         mock_settings.get_int.assert_not_called()
         mock_invoice_repo.find_due_soon.assert_awaited_once_with(3)
+
+
+@pytest.mark.unit
+class TestAuditPaymentLinkAutoCreated(TestInvoiceServiceCreateInvoice):
+    """14.A: invoice POST must write a stripe.payment_link.auto_created audit row."""
+
+    @pytest.fixture
+    def mock_audit_service(self) -> AsyncMock:
+        return AsyncMock()
+
+    @pytest.fixture
+    def service_with_audit(
+        self,
+        mock_invoice_repo: AsyncMock,
+        mock_job_repo: AsyncMock,
+        mock_audit_service: AsyncMock,
+    ) -> InvoiceService:
+        mock_invoice_repo.session = AsyncMock()
+        return InvoiceService(
+            invoice_repository=mock_invoice_repo,
+            job_repository=mock_job_repo,
+            audit_service=mock_audit_service,
+        )
+
+    @pytest.mark.asyncio
+    async def test_no_op_when_audit_service_missing(
+        self,
+        mock_invoice_repo: AsyncMock,
+        mock_job_repo: AsyncMock,
+    ) -> None:
+        service = InvoiceService(
+            invoice_repository=mock_invoice_repo,
+            job_repository=mock_job_repo,
+        )
+        invoice = self._create_mock_invoice()
+        await service._audit_payment_link_auto_created(  # noqa: SLF001
+            invoice,
+            link_id="plink_test123",
+            actor_id=None,
+            actor_role=None,
+        )
+        # No assertion needed — must not raise.
+
+    @pytest.mark.asyncio
+    async def test_writes_audit_row_with_correct_kwargs(
+        self,
+        service_with_audit: InvoiceService,
+        mock_audit_service: AsyncMock,
+    ) -> None:
+        invoice = self._create_mock_invoice()
+        actor_id = uuid4()
+        await service_with_audit._audit_payment_link_auto_created(  # noqa: SLF001
+            invoice,
+            link_id="plink_test123",
+            actor_id=actor_id,
+            actor_role="admin",
+        )
+        mock_audit_service.log_action.assert_awaited_once()
+        kwargs = mock_audit_service.log_action.call_args.kwargs
+        assert kwargs["action"] == "stripe.payment_link.auto_created"
+        assert kwargs["resource_type"] == "invoice"
+        assert kwargs["resource_id"] == invoice.id
+        assert kwargs["actor_id"] == actor_id
+        assert kwargs["actor_role"] == "admin"
+        assert kwargs["details"]["stripe_payment_link_id"] == "plink_test123"
+        assert kwargs["details"]["actor_type"] == "staff"
+        assert kwargs["details"]["source"] == "admin_ui"
+
+    @pytest.mark.asyncio
+    async def test_swallows_audit_exception(
+        self,
+        service_with_audit: InvoiceService,
+        mock_audit_service: AsyncMock,
+    ) -> None:
+        mock_audit_service.log_action.side_effect = RuntimeError("audit broken")
+        invoice = self._create_mock_invoice()
+        # Must NOT raise — best-effort.
+        await service_with_audit._audit_payment_link_auto_created(  # noqa: SLF001
+            invoice,
+            link_id="plink_test123",
+            actor_id=None,
+            actor_role=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_attach_payment_link_writes_audit_on_success(
+        self,
+        service_with_audit: InvoiceService,
+        mock_audit_service: AsyncMock,
+        mock_invoice_repo: AsyncMock,
+    ) -> None:
+        invoice = self._create_mock_invoice()
+        invoice.stripe_payment_link_id = None
+        invoice.stripe_payment_link_active = False
+        mock_customer = MagicMock(id=uuid4())
+        service_with_audit.customer_repository = AsyncMock()
+        service_with_audit.customer_repository.get_by_id.return_value = mock_customer
+        service_with_audit.payment_link_service = MagicMock()
+        service_with_audit.payment_link_service.create_for_invoice.return_value = (
+            "plink_test123",
+            "https://stripe.test/plink_test123",
+        )
+        mock_invoice_repo.update.return_value = invoice
+
+        await service_with_audit._attach_payment_link(  # noqa: SLF001
+            invoice,
+            actor_id=uuid4(),
+            actor_role="admin",
+        )
+
+        mock_audit_service.log_action.assert_awaited_once()
+        assert (
+            mock_audit_service.log_action.call_args.kwargs["action"]
+            == "stripe.payment_link.auto_created"
+        )
+
+    @pytest.mark.asyncio
+    async def test_attach_payment_link_no_audit_on_idempotent_skip(
+        self,
+        service_with_audit: InvoiceService,
+        mock_audit_service: AsyncMock,
+    ) -> None:
+        invoice = self._create_mock_invoice()
+        # Already has live link — _attach_payment_link must early-return without auditing.
+        invoice.stripe_payment_link_id = "plink_existing"
+        invoice.stripe_payment_link_active = True
+
+        await service_with_audit._attach_payment_link(  # noqa: SLF001
+            invoice,
+            actor_id=uuid4(),
+            actor_role="admin",
+        )
+
+        mock_audit_service.log_action.assert_not_called()
