@@ -62,12 +62,12 @@ def _is_dev_environment() -> tuple[bool, str]:
 # DELETE of every row can still fail on a parent_X_id pointer to a
 # sibling row. NULL-out is idempotent and cheap.
 _NULL_SELF_FK_STATEMENTS: list[tuple[str, str]] = [
-    ("appointments.parent_appointment_id",
-     "UPDATE appointments SET parent_appointment_id = NULL "
-     "WHERE parent_appointment_id IS NOT NULL"),
-    ("jobs.parent_job_id",
-     "UPDATE jobs SET parent_job_id = NULL "
-     "WHERE parent_job_id IS NOT NULL"),
+    ("appointments.rescheduled_from_id",
+     "UPDATE appointments SET rescheduled_from_id = NULL "
+     "WHERE rescheduled_from_id IS NOT NULL"),
+    ("jobs.depends_on_job_id",
+     "UPDATE jobs SET depends_on_job_id = NULL "
+     "WHERE depends_on_job_id IS NOT NULL"),
     ("customers.merged_into_customer_id",
      "UPDATE customers SET merged_into_customer_id = NULL "
      "WHERE merged_into_customer_id IS NOT NULL"),
