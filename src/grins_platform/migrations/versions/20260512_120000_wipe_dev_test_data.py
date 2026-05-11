@@ -24,7 +24,7 @@ Gated by two env vars. Both must hold or the migration is a no-op:
 Downgrade is a no-op (deleted rows aren't reconstructable).
 
 Revision ID: 20260512_120000
-Revises: 20260511_120000
+Revises: 20260510_120000
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ from alembic import op
 from sqlalchemy import text
 
 revision: str = "20260512_120000"
-down_revision: Union[str, None] = "20260511_120000"
+down_revision: Union[str, None] = "20260510_120000"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
