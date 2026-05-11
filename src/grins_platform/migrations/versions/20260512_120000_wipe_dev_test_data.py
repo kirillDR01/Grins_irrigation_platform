@@ -143,12 +143,12 @@ _DELETE_STATEMENTS: list[tuple[str, str]] = [
     # (username='admin', seeded by 20250625_100000) is preserved.
     (
         "webauthn_credentials (non-admin)",
-        "DELETE FROM webauthn_credentials WHERE user_id IN "
+        "DELETE FROM webauthn_credentials WHERE staff_id IN "
         "(SELECT id FROM staff WHERE username <> 'admin')",
     ),
     (
         "webauthn_user_handles (non-admin)",
-        "DELETE FROM webauthn_user_handles WHERE user_id IN "
+        "DELETE FROM webauthn_user_handles WHERE staff_id IN "
         "(SELECT id FROM staff WHERE username <> 'admin')",
     ),
     (
