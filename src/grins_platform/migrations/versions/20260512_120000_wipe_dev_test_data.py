@@ -57,11 +57,33 @@ def _is_dev_environment() -> tuple[bool, str]:
     return True, f"ENVIRONMENT='{environment}', RAILWAY_ENVIRONMENT='{railway_env}'"
 
 
+# Self-referencing FK columns need to be nulled before we DELETE,
+# because PostgreSQL checks non-deferrable FKs per-row and a single
+# DELETE of every row can still fail on a parent_X_id pointer to a
+# sibling row. NULL-out is idempotent and cheap.
+_NULL_SELF_FK_STATEMENTS: list[tuple[str, str]] = [
+    ("appointments.parent_appointment_id",
+     "UPDATE appointments SET parent_appointment_id = NULL "
+     "WHERE parent_appointment_id IS NOT NULL"),
+    ("jobs.parent_job_id",
+     "UPDATE jobs SET parent_job_id = NULL "
+     "WHERE parent_job_id IS NOT NULL"),
+    ("customers.merged_into_customer_id",
+     "UPDATE customers SET merged_into_customer_id = NULL "
+     "WHERE merged_into_customer_id IS NOT NULL"),
+]
+
+
 # Ordered FK-safe deletion plan. Each entry is a single SQL statement
 # the migration will execute against op.get_bind(). Order is critical:
 # children before parents, and ``invoices`` strictly before ``jobs``
 # because of the RESTRICT FK on jobs.id.
 _DELETE_STATEMENTS: list[tuple[str, str]] = [
+    # Phase 0 — Tables that block sent_messages / appointments deletion
+    # because they hold non-cascading FKs into them. reschedule_requests
+    # also points at job_confirmation_responses, so it goes first.
+    ("reschedule_requests", "DELETE FROM reschedule_requests"),
+    ("job_confirmation_responses", "DELETE FROM job_confirmation_responses"),
     # Phase A — Communications & audit (leaf-ish, no test-data FKs into them)
     ("sent_messages", "DELETE FROM sent_messages"),
     ("sms_consent_records", "DELETE FROM sms_consent_records"),
@@ -81,9 +103,8 @@ _DELETE_STATEMENTS: list[tuple[str, str]] = [
     ("change_requests", "DELETE FROM change_requests"),
     ("alerts", "DELETE FROM alerts"),
     ("google_sheet_submissions", "DELETE FROM google_sheet_submissions"),
-    # Phase B — Appointment children, then appointments themselves
-    ("reschedule_requests", "DELETE FROM reschedule_requests"),
-    ("job_confirmation_responses", "DELETE FROM job_confirmation_responses"),
+    # Phase B — Remaining appointment children, then appointments themselves
+    # (reschedule_requests + job_confirmation_responses are in Phase 0 above.)
     ("appointment_attachments", "DELETE FROM appointment_attachments"),
     ("appointment_notes", "DELETE FROM appointment_notes"),
     ("appointment_reminder_log", "DELETE FROM appointment_reminder_log"),
@@ -164,6 +185,14 @@ def upgrade() -> None:
     print(f"[wipe_dev_test_data] Proceeding with wipe ({env_desc}).")
 
     bind = op.get_bind()
+
+    # Pre-step: null out self-FK columns so per-row constraint checks
+    # during the DELETE don't trip on parent/child rows in the same set.
+    for label, sql in _NULL_SELF_FK_STATEMENTS:
+        result = bind.execute(text(sql))
+        rowcount = result.rowcount if result.rowcount is not None else 0
+        print(f"[wipe_dev_test_data]   nulled {label}: {rowcount} row(s)")
+
     total = 0
     for label, sql in _DELETE_STATEMENTS:
         result = bind.execute(text(sql))
