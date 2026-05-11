@@ -5,6 +5,48 @@ Grin's Irrigation Platform — field service automation for residential/commerci
 
 ## Recent Activity
 
+## [2026-05-11] - CHORE: Dev test-data clean-slate reset
+
+### What Was Accomplished
+- **Wiped the dev environment back to seed/reference data only** so we can re-run the master E2E plan from a verifiably clean state. Total: **3956 rows deleted across 55 tables** inside a single transaction.
+- **Shipped a new data-only Alembic migration** `20260512_120000_wipe_dev_test_data.py`. Double-gated (`WIPE_DEV_TEST_DATA=1` env var + non-prod `ENVIRONMENT`/`RAILWAY_ENVIRONMENT`), so the file is a no-op anywhere it isn't deliberately enabled. Schema, indexes, FKs, identity sequences, and the `alembic_version` chain are untouched — only `UPDATE`s and `DELETE`s execute.
+- **Preserved seed/reference data** end-to-end: admin staff (`username='admin'`, id `04c8d034-4601-4daf-933b-f900d6a9f37d`), `service_offerings`, `service_agreement_tiers`, `business_settings`, `estimate_templates`, `contract_templates`, `consent_language_versions`, `scheduling_criteria_config`, `service_zones`.
+- **Re-seeded the canonical payment-link E2E fixture** post-wipe via `scripts/seed_e2e_payment_links.py`. New customer `b3a129c9-...`, invoice `adffc883-...` with Stripe Payment Link auto-created (`plink_1TW3CIQDNzCTp6j5S3tr08Fg`), and a $0 invoice `1cbc970b-...` for the F11 hide test. Stripe Payment Link auto-create hook fired on invoice POST as expected.
+- **High-water deletion counts**: jobs 686, properties 501, customers 432, disclosure_records 373, stripe_webhook_events 257, audit_log 255, sms_consent_records 230, agreement_status_logs 228, leads 161, service_agreements 118, appointments 97, google_sheet_submissions 90, job_status_history 89, sent_messages 77, invoices 55, estimate_follow_ups 52, campaign_responses 38, sales_entries 35, webhook_processed_logs 35, customer_merge_candidates 29, job_confirmation_responses 31, alerts 21, estimates 17, staff_availability (non-admin) 15, staff (non-admin) 4.
+
+### Technical Details
+- Migration revision `20260512_120000`, parent `20260510_120000` (the latest committed migration on dev at the time — `20260511_120000_clear_estimate_followup_promotion_codes.py` exists locally but is uncommitted, so when the user later commits it they will need to re-chain its `down_revision` to `20260512_120000` to avoid a fork).
+- Execution path was 4 commits (`c278aa1`, `12261f6`, `28216b8`, `9097422`, then `566900d` which landed): the original commit pointed at an uncommitted parent revision; once rebased onto the actual head, the deploy progressively surfaced an FK-ordering bug (`job_confirmation_responses → sent_messages`), then two column-name bugs (`parent_appointment_id` → `rescheduled_from_id`, `parent_job_id` → `depends_on_job_id`, and `user_id` → `staff_id` on the webauthn tables). Each failure rolled back atomically thanks to alembic's per-migration transaction wrapper, so the dev DB was unchanged until the final successful deploy `83ce5992`.
+- Deletion order is a 7-phase plan plus a 3-statement preamble that NULLs the self-referencing FK columns (`appointments.rescheduled_from_id`, `jobs.depends_on_job_id`, `customers.merged_into_customer_id`) so per-row FK checks during single-statement DELETEs of parent/child sets can't trip. Phase 0 deletes `reschedule_requests` and `job_confirmation_responses` ahead of `sent_messages` because those tables hold non-cascading FKs into it. Subsequent phases run leaf-children before parents and `invoices` strictly before `jobs` because of the RESTRICT FK on `jobs.id`.
+- Env guard reuses the same `ENVIRONMENT` / `RAILWAY_ENVIRONMENT` discrimination pattern used by `src/grins_platform/services/email_config.py:21` and `src/grins_platform/api/v1/auth.py:51`. After the wipe deploy landed, `WIPE_DEV_TEST_DATA` was set back to `0` (skip-deploys) so any later redeploy is an explicit no-op.
+
+### Decision Rationale
+- **Data migration over one-off script.** Per the saved feedback memory "no remote alembic from local", the migration must run inside Railway's deploy hook rather than be invoked against `*.railway.{app,internal}` from a developer machine. Bundling the wipe as an Alembic revision is the path Railway already runs at container start; nothing else needed plumbing.
+- **No DDL, no TRUNCATE.** Schema stays exactly as it was so a fresh test run exercises the same constraints as production. Sequences are preserved so newly-created IDs follow on naturally, which keeps PG monitoring noise low.
+- **Full wipe over E2E-marked subset.** User-confirmed scope: a clean slate, not "delete rows matching `E2E-*`". The latter would leave manual-test residue (any row created by hand during ad-hoc smoke testing).
+- **Local DB only — Stripe / CallRail / S3 are out of scope.** Stripe test-mode artifacts and CallRail SMS history live on those vendors' dashboards but don't pollute our queries; S3 orphans will be addressed separately if they become a problem.
+- **Skip-deploys when toggling the gating env var.** Setting `WIPE_DEV_TEST_DATA` shouldn't itself trigger a redeploy — we want the migration to run on the deploy that ships the migration file, not on a no-code env-var change.
+
+### Challenges and Solutions
+- **Untracked local migration broke the parent chain on first deploy.** The first push pointed `down_revision` at `20260511_120000`, which exists only as an uncommitted local file. Alembic on Railway crashed at startup with "Revision 20260511_120000 ... is not present". Fixed by rebasing the new migration's `down_revision` onto `20260510_120000`. **Action item flagged for the user**: the uncommitted `20260511_120000_clear_estimate_followup_promotion_codes.py` will fork the chain when later committed unless its `down_revision` is changed to `20260512_120000` first.
+- **FK ordering bug surfaced on first wipe attempt.** `DELETE FROM sent_messages` failed with `ForeignKeyViolationError` because `job_confirmation_responses.sent_message_id` is a blocking FK (no `ON DELETE CASCADE`). Moved `reschedule_requests` + `job_confirmation_responses` into a new Phase 0 ahead of Phase A.
+- **Wrong column names in the self-FK preamble.** `appointments.parent_appointment_id` and `jobs.parent_job_id` were guesses based on the `ForeignKey("appointments.id")` / `ForeignKey("jobs.id")` greps; the real column names are `rescheduled_from_id` and `depends_on_job_id`. Read the actual `mapped_column` definitions in `src/grins_platform/models/appointment.py:170` and `src/grins_platform/models/job.py:259` and corrected. Lesson: trust the column declaration, not the FK target.
+- **WebAuthn tables use `staff_id`, not `user_id`.** The non-admin staff cleanup phase tried to delete from `webauthn_credentials` / `webauthn_user_handles` keyed on `user_id`. Both tables actually key off `staff_id` with `ON DELETE CASCADE` back to `staff.id`. Fixed; cascade would have caught it but explicit DELETE makes the row count visible in the deploy log.
+- **Stale logs confused the poll.** `railway logs --lines N` returns the most recent N lines across the service, not per-deployment by default. A poll that grep'd for `UndefinedColumnError` matched old logs from a still-resident CRASHED deploy and exited prematurely. Mitigation: scope the log fetch via `--deployment <id>` for the newest deploy only, and prefer `[wipe_dev_test_data] Done\.` (a literal-bracket marker) as the success terminus.
+
+### Next Steps
+- **Run the master E2E plan** (`.agents/plans/master-e2e-testing-plan.md`) against the now-clean dev environment and capture a fresh sign-off baseline. The seed fixture is staged and ready.
+- **User to handle the uncommitted `20260511_120000` migration**: when committing `clear_estimate_followup_promotion_codes`, update its `down_revision` to `20260512_120000` (not `20260510_120000`) so the chain doesn't fork.
+- **If a future clean-slate reset becomes routine**, consider promoting the wipe to a Railway-shell-callable management command rather than accreting `wipe_dev_test_data_N.py` migrations over time.
+
+### Validation
+- Deploy `83ce5992-c863-4e72-81bc-918b3a151858` → **SUCCESS**. Deploy log shows `[wipe_dev_test_data] Done. 3956 row(s) deleted across 55 tables.`
+- Admin login post-wipe: `POST /api/v1/auth/login` with `admin / admin123` → 200, returned user id `04c8d034-...`. Confirms `staff` row and password hash preserved.
+- Re-seed via `python3 scripts/seed_e2e_payment_links.py` → exited 0; created 1 customer + 2 jobs + 1 appointment + 2 invoices; Stripe Payment Link `plink_1TW3CIQDNzCTp6j5S3tr08Fg` auto-attached on the $50 invoice.
+- Env var hygiene: `WIPE_DEV_TEST_DATA` set back to `0` on the dev `Grins-dev` service with `skipDeploys=true` so the migration is dormant on any subsequent redeploy. The migration is also a no-op against the dev DB now because `alembic_version` is at `20260512_120000`.
+
+---
+
 ## [2026-05-04] - BUGFIX: E2E sign-off six-bug umbrella (B-1…B-6)
 
 ### What Was Accomplished
