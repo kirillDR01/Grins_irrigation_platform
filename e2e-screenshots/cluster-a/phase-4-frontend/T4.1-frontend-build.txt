@@ -1,0 +1,13 @@
+
+> frontend@0.0.0 build
+> tsc -p tsconfig.app.json --noEmit && vite build
+
+src/features/sales/components/EstimateBuilder.tsx(47,6): error TS18048: 'item.material_cost' is possibly 'undefined'.
+src/features/sales/components/EstimateBuilder.tsx(47,27): error TS18048: 'item.labor_cost' is possibly 'undefined'.
+src/features/sales/components/EstimateBuilder.tsx(47,46): error TS18048: 'item.quantity' is possibly 'undefined'.
+src/features/sales/components/EstimateBuilder.tsx(116,51): error TS18048: 'li.item' is possibly 'undefined'.
+src/features/sales/components/SalesEstimateCreator.tsx(43,11): error TS2322: Type 'EstimateFormLineItem[]' is not assignable to type 'Record<string, unknown>[]'.
+  Type 'EstimateFormLineItem' is not assignable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'EstimateFormLineItem'.
+src/features/sales/lib/nowContent.ts(16,12): error TS6133: 'hasEstimateDoc' is declared but its value is never read.
+src/features/sales/lib/nowContent.ts(17,33): error TS6133: 'docName' is declared but its value is never read.
