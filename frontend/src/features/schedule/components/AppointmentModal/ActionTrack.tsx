@@ -4,19 +4,26 @@
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8
  */
 
-import { Navigation, MapPin, CheckCircle } from 'lucide-react';
+import { Navigation, MapPin, CheckCircle, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { ActionCard } from './ActionCard';
 import {
-  useMarkAppointmentEnRoute,
   useMarkAppointmentArrived,
   useMarkAppointmentCompleted,
 } from '../../hooks/useAppointmentMutations';
+import { useOnMyWay } from '@/features/jobs/hooks';
 import type { AppointmentStatus } from '../../types';
 import { deriveStep } from '../../hooks/useModalState';
+import {
+  Alert,
+  AlertIcon,
+  AlertTitle,
+  AlertDescription,
+} from '@/shared/components/ui/alert';
 
 interface ActionTrackProps {
   appointmentId: string;
+  jobId: string;
   status: AppointmentStatus;
   arrivedAt?: string | null;
   enRouteAt?: string | null;
@@ -27,15 +34,43 @@ const TERMINAL_STATUSES: AppointmentStatus[] = ['pending', 'draft', 'cancelled',
 
 export function ActionTrack({
   appointmentId,
+  jobId,
   status,
   arrivedAt,
   enRouteAt,
   completedAt,
 }: ActionTrackProps) {
   const step = deriveStep(status);
-  const enRouteMutation = useMarkAppointmentEnRoute();
+  // Cluster D Item 5: canonical on-the-way path is job-side so the audited
+  // `job.on_my_way_at` write + SMS dispatch + appointment auto-transition
+  // happen in one server-side flow (api/v1/jobs.py).
+  const onMyWayMutation = useOnMyWay();
   const arrivedMutation = useMarkAppointmentArrived();
   const completedMutation = useMarkAppointmentCompleted();
+
+  // Cluster D Item 3: when the customer hasn't yet replied Y, render an
+  // explanatory banner instead of disabled cards — workflow actions
+  // unlock only after CONFIRMED.
+  if (status === 'scheduled') {
+    return (
+      <div className="px-3 sm:px-5 pb-4">
+        <Alert variant="info" data-testid="awaiting-confirmation-banner">
+          <div className="flex items-start gap-3">
+            <AlertIcon variant="info">
+              <Info className="h-4 w-4" />
+            </AlertIcon>
+            <div>
+              <AlertTitle>Waiting for customer confirmation</AlertTitle>
+              <AlertDescription>
+                On My Way, Job Started, and Job Complete unlock once the
+                customer replies <strong>Y</strong> to the confirmation text.
+              </AlertDescription>
+            </div>
+          </div>
+        </Alert>
+      </div>
+    );
+  }
 
   if (TERMINAL_STATUSES.includes(status)) return null;
 
@@ -47,7 +82,7 @@ export function ActionTrack({
   };
 
   const handleEnRoute = () => {
-    enRouteMutation.mutate(appointmentId, {
+    onMyWayMutation.mutate(jobId, {
       onError: () => toast.error("Couldn't update status — try again"),
     });
   };

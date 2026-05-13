@@ -8,30 +8,34 @@ import { Navigation, Play, CheckCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
-  useMarkAppointmentEnRoute,
   useMarkAppointmentArrived,
   useMarkAppointmentCompleted,
 } from '../hooks/useAppointmentMutations';
+import { useOnMyWay } from '@/features/jobs/hooks';
 import type { AppointmentStatus } from '../types';
 
 interface StaffWorkflowButtonsProps {
   appointmentId: string;
+  jobId: string;
   status: AppointmentStatus;
   hasPaymentOrInvoice?: boolean;
 }
 
 export function StaffWorkflowButtons({
   appointmentId,
+  jobId,
   status,
   hasPaymentOrInvoice = false,
 }: StaffWorkflowButtonsProps) {
-  const enRouteMutation = useMarkAppointmentEnRoute();
+  // Cluster D Item 5: canonical on-the-way is the job-side hook
+  // (audited; rolls back `on_my_way_at` on SMS failure per bughunt L-2).
+  const onMyWayMutation = useOnMyWay();
   const arrivedMutation = useMarkAppointmentArrived();
   const completedMutation = useMarkAppointmentCompleted();
 
   const handleOnMyWay = async () => {
     try {
-      await enRouteMutation.mutateAsync(appointmentId);
+      await onMyWayMutation.mutateAsync(jobId);
       toast.success('Status Updated', { description: 'You are now en route.' });
     } catch {
       toast.error('Error', { description: 'Failed to update status.' });
@@ -63,12 +67,12 @@ export function StaffWorkflowButtons({
       {status === 'confirmed' && (
         <Button
           onClick={handleOnMyWay}
-          disabled={enRouteMutation.isPending}
+          disabled={onMyWayMutation.isPending}
           size="sm"
           className="bg-blue-500 hover:bg-blue-600 text-white w-full min-h-[48px] text-sm md:w-auto md:min-h-0 md:h-8 md:text-xs"
           data-testid="on-my-way-btn"
         >
-          {enRouteMutation.isPending ? (
+          {onMyWayMutation.isPending ? (
             <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
           ) : (
             <Navigation className="mr-1.5 h-3.5 w-3.5" />

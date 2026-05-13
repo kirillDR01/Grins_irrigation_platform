@@ -5,22 +5,27 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { StaffWorkflowButtons } from './StaffWorkflowButtons';
 
-// Mock the mutation hooks
-const mockEnRouteMutate = vi.fn();
+// Mock the mutation hooks. Cluster D Item 5 routes the On-My-Way action
+// through the job-side canonical hook; the other two stay on the
+// appointment-side mutations.
+const mockOnMyWayMutate = vi.fn();
 const mockArrivedMutate = vi.fn();
 const mockCompletedMutate = vi.fn();
 
 vi.mock('../hooks/useAppointmentMutations', () => ({
-  useMarkAppointmentEnRoute: () => ({
-    mutateAsync: mockEnRouteMutate,
-    isPending: false,
-  }),
   useMarkAppointmentArrived: () => ({
     mutateAsync: mockArrivedMutate,
     isPending: false,
   }),
   useMarkAppointmentCompleted: () => ({
     mutateAsync: mockCompletedMutate,
+    isPending: false,
+  }),
+}));
+
+vi.mock('@/features/jobs/hooks', () => ({
+  useOnMyWay: () => ({
+    mutateAsync: mockOnMyWayMutate,
     isPending: false,
   }),
 }));
@@ -37,7 +42,7 @@ const createWrapper = () => {
 describe('StaffWorkflowButtons', () => {
   it('shows "On My Way" button when status is confirmed', () => {
     render(
-      <StaffWorkflowButtons appointmentId="apt-1" status="confirmed" />,
+      <StaffWorkflowButtons appointmentId="apt-1" jobId="job-1" status="confirmed" />,
       { wrapper: createWrapper() }
     );
     expect(screen.getByTestId('on-my-way-btn')).toBeInTheDocument();
@@ -48,7 +53,7 @@ describe('StaffWorkflowButtons', () => {
 
   it('shows "Job Started" button when status is en_route', () => {
     render(
-      <StaffWorkflowButtons appointmentId="apt-1" status="en_route" />,
+      <StaffWorkflowButtons appointmentId="apt-1" jobId="job-1" status="en_route" />,
       { wrapper: createWrapper() }
     );
     expect(screen.getByTestId('job-started-btn')).toBeInTheDocument();
@@ -60,6 +65,7 @@ describe('StaffWorkflowButtons', () => {
     render(
       <StaffWorkflowButtons
         appointmentId="apt-1"
+        jobId="job-1"
         status="in_progress"
         hasPaymentOrInvoice={true}
       />,
@@ -73,6 +79,7 @@ describe('StaffWorkflowButtons', () => {
     render(
       <StaffWorkflowButtons
         appointmentId="apt-1"
+        jobId="job-1"
         status="in_progress"
         hasPaymentOrInvoice={false}
       />,
@@ -90,6 +97,7 @@ describe('StaffWorkflowButtons', () => {
     render(
       <StaffWorkflowButtons
         appointmentId="apt-1"
+        jobId="job-1"
         status="in_progress"
         hasPaymentOrInvoice={true}
       />,
@@ -100,22 +108,22 @@ describe('StaffWorkflowButtons', () => {
     expect(screen.queryByTestId('complete-tooltip')).not.toBeInTheDocument();
   });
 
-  it('calls enRoute mutation when "On My Way" is clicked', async () => {
+  it('calls useOnMyWay mutation with jobId when "On My Way" is clicked', async () => {
     const user = userEvent.setup();
-    mockEnRouteMutate.mockResolvedValue({});
+    mockOnMyWayMutate.mockResolvedValue({});
     render(
-      <StaffWorkflowButtons appointmentId="apt-1" status="confirmed" />,
+      <StaffWorkflowButtons appointmentId="apt-1" jobId="job-1" status="confirmed" />,
       { wrapper: createWrapper() }
     );
     await user.click(screen.getByTestId('on-my-way-btn'));
-    expect(mockEnRouteMutate).toHaveBeenCalledWith('apt-1');
+    expect(mockOnMyWayMutate).toHaveBeenCalledWith('job-1');
   });
 
   it('calls arrived mutation when "Job Started" is clicked', async () => {
     const user = userEvent.setup();
     mockArrivedMutate.mockResolvedValue({});
     render(
-      <StaffWorkflowButtons appointmentId="apt-1" status="en_route" />,
+      <StaffWorkflowButtons appointmentId="apt-1" jobId="job-1" status="en_route" />,
       { wrapper: createWrapper() }
     );
     await user.click(screen.getByTestId('job-started-btn'));
@@ -128,6 +136,7 @@ describe('StaffWorkflowButtons', () => {
     render(
       <StaffWorkflowButtons
         appointmentId="apt-1"
+        jobId="job-1"
         status="in_progress"
         hasPaymentOrInvoice={true}
       />,
@@ -139,7 +148,7 @@ describe('StaffWorkflowButtons', () => {
 
   it('shows nothing for terminal statuses', () => {
     const { container } = render(
-      <StaffWorkflowButtons appointmentId="apt-1" status="completed" />,
+      <StaffWorkflowButtons appointmentId="apt-1" jobId="job-1" status="completed" />,
       { wrapper: createWrapper() }
     );
     expect(screen.queryByTestId('on-my-way-btn')).not.toBeInTheDocument();

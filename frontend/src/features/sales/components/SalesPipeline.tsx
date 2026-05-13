@@ -24,6 +24,7 @@ import { EstimateRescheduleQueue } from './EstimateRescheduleQueue';
 import {
   AGE_THRESHOLDS,
   SALES_STATUS_CONFIG,
+  getSalesStatusLabel,
   type SalesEntry,
   type SalesEntryStatus,
 } from '../types/pipeline';
@@ -312,7 +313,7 @@ function PipelineRow({
         <span
           className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusConfig?.className ?? 'bg-slate-100 text-slate-700'}`}
         >
-          {statusConfig?.label ?? entry.status}
+          {getSalesStatusLabel(entry, entry.latest_event_confirmation_status)}
         </span>
         {entry.override_flag && (
           <span className="ml-1 text-xs text-amber-600" title="Manually overridden">⚠</span>

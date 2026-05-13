@@ -88,6 +88,11 @@ interface AppointmentFormProps {
   initialDate?: Date;
   initialJobId?: string;
   initialStaffId?: string;
+  /** Cluster D Item 4: HH:MM default for the start-time field
+   *  (pre-filled when the admin slot-picks a range in DayMode). */
+  initialStartTime?: string;
+  /** Cluster D Item 4: HH:MM default for the end-time field. */
+  initialEndTime?: string;
   onSuccess?: () => void;
   onCancel?: () => void;
   /**
@@ -109,6 +114,8 @@ export function AppointmentForm({
   initialDate,
   initialJobId,
   initialStaffId,
+  initialStartTime,
+  initialEndTime,
   onSuccess,
   onCancel,
   submitOverride,
@@ -132,8 +139,10 @@ export function AppointmentForm({
       staff_id: appointment?.staff_id ?? initialStaffId ?? '',
       scheduled_date: appointment?.scheduled_date ?? 
         (initialDate ? format(initialDate, 'yyyy-MM-dd') : ''),
-      time_window_start: appointment?.time_window_start?.slice(0, 5) ?? '08:00',
-      time_window_end: appointment?.time_window_end?.slice(0, 5) ?? '10:00',
+      time_window_start:
+        appointment?.time_window_start?.slice(0, 5) ?? initialStartTime ?? '08:00',
+      time_window_end:
+        appointment?.time_window_end?.slice(0, 5) ?? initialEndTime ?? '10:00',
       notes: appointment?.notes ?? '',
     },
   });

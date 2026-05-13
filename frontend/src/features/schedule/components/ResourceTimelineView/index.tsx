@@ -36,6 +36,17 @@ export interface ResourceTimelineViewProps {
    *  resource-timeline view routes the appointment-card click through
    *  `onEventClick` instead, so this prop is currently unused. */
   onCustomerClick?: (appointmentId: string) => void;
+  /**
+   * Cluster D Item 4: invoked by DayMode when the admin picks a time
+   * range (click-to-pick or drag-across-slots) on an empty section of a
+   * tech row. `startMin` / `endMin` are minutes from midnight.
+   */
+  onSlotRangePick?: (
+    staffId: string,
+    date: Date,
+    startMin: number,
+    endMin: number,
+  ) => void;
 }
 
 export function ResourceTimelineView({
@@ -43,6 +54,7 @@ export function ResourceTimelineView({
   onEventClick,
   onWeekChange,
   selectedDate,
+  onSlotRangePick,
 }: ResourceTimelineViewProps) {
   const [mode, setMode] = useState<ViewMode>('week');
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
@@ -169,6 +181,7 @@ export function ResourceTimelineView({
           selectedDate={selectedDate ?? null}
           onAppointmentClick={handleAppointmentClick}
           onEmptyCellClick={handleEmptyCellClick}
+          onSlotRangePick={onSlotRangePick}
         />
       )}
       {mode === 'month' && (

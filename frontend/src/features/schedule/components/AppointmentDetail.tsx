@@ -689,6 +689,7 @@ export function AppointmentDetail({
         <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/30">
           <StaffWorkflowButtons
             appointmentId={appointmentId}
+            jobId={appointment.job_id}
             status={appointment.status}
             hasPaymentOrInvoice={hasPaymentOrInvoice}
           />

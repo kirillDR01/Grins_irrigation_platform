@@ -47,7 +47,6 @@ export {
   useMarkAppointmentArrived,
   useMarkAppointmentCompleted,
   useMarkAppointmentNoShow,
-  useMarkAppointmentEnRoute,
   useCollectPayment,
   useCreateInvoiceFromAppointment,
   useCreateEstimateFromAppointment,

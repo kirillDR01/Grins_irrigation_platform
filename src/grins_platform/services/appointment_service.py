@@ -432,7 +432,9 @@ class AppointmentService(LoggerMixin):
             self.log_rejected("update_appointment", reason="not_found")
             raise AppointmentNotFoundError(appointment_id)
 
-        update_data = data.model_dump(exclude_unset=True)
+        update_data = data.model_dump(
+            exclude_unset=True, exclude={"suppress_notifications"}
+        )
 
         # bughunt M-7: snapshot the pre-update field values for the audit
         # log. Captures every field the API allows to mutate so admins can

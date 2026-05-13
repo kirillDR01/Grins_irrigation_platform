@@ -176,6 +176,15 @@ vi.mock('@/features/jobs/api/jobApi', () => ({
   },
 }));
 
+// Cluster D Item 5: ActionTrack consumes the job-side useOnMyWay hook for
+// the canonical on-the-way path.
+vi.mock('@/features/jobs/hooks', () => ({
+  useOnMyWay: () => ({
+    mutate: mockEnRouteMutate,
+    isPending: false,
+  }),
+}));
+
 vi.mock('@/features/customers/api/customerApi', () => ({
   customerApi: {
     get: vi.fn().mockResolvedValue({

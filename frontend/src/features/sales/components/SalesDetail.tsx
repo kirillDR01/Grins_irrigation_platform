@@ -45,7 +45,7 @@ import { MarkDeclinedDialog } from './MarkDeclinedDialog';
 import { AddCustomerEmailDialog } from './AddCustomerEmailDialog';
 import { SalesEstimateSheetWrapper } from './SalesEstimateSheetWrapper';
 import { CreateJobModal } from '@/features/jobs/components/CreateJobModal';
-import { SALES_STATUS_CONFIG, TERMINAL_STATUSES, ALL_STATUSES, statusToStageKey } from '../types/pipeline';
+import { SALES_STATUS_CONFIG, TERMINAL_STATUSES, ALL_STATUSES, statusToStageKey, getSalesStatusLabel } from '../types/pipeline';
 import type { SalesEntryStatus, NowActionId, ActivityEvent, StageKey } from '../types/pipeline';
 import { DocumentsSection } from './DocumentsSection';
 import { StageStepper } from './StageStepper';
@@ -522,7 +522,7 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
             <span
               className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusConfig?.className ?? 'bg-slate-100 text-slate-700'}`}
             >
-              {statusConfig?.label ?? entry.status}
+              {getSalesStatusLabel(entry, currentEvent?.confirmation_status)}
               {entry.override_flag && (
                 <span className="ml-1" title="Manually overridden">⚠</span>
               )}

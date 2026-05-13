@@ -33,6 +33,11 @@ export interface SalesEntry {
   customer_phone: string | null;
   customer_email: string | null;
   property_address: string | null;
+  // Cluster D Item 2: latest SalesCalendarEvent.confirmation_status,
+  // denormalized server-side so the pipeline list view can label
+  // `estimate_scheduled` rows "Awaiting confirmation" vs "Scheduled"
+  // without a second fetch.
+  latest_event_confirmation_status: string | null;
 }
 
 export interface SalesPipelineListResponse {
@@ -89,6 +94,31 @@ export const SALES_STATUS_CONFIG: Record<
     action: null,
   },
 };
+
+/**
+ * Cluster D Item 2: Resolve the display label for a sales entry, branching
+ * on the latest calendar event's confirmation status when the entry is at
+ * `estimate_scheduled`. Lifts the appointment-side
+ * "Awaiting confirmation" / "Scheduled" semantics onto the sales pipeline.
+ *
+ * Accepts a plain string so the same helper works for the list view (using
+ * the denormalized `entry.latest_event_confirmation_status`) and for the
+ * detail view (using `currentEvent.confirmation_status`).
+ */
+export function getSalesStatusLabel(
+  entry: { status: SalesEntryStatus },
+  latestEventConfirmationStatus?:
+    | SalesCalendarEventConfirmationStatus
+    | string
+    | null,
+): string {
+  if (entry.status === 'estimate_scheduled') {
+    return latestEventConfirmationStatus === 'confirmed'
+      ? 'Scheduled'
+      : 'Awaiting confirmation';
+  }
+  return SALES_STATUS_CONFIG[entry.status]?.label ?? entry.status;
+}
 
 // Terminal statuses have no further actions
 export const TERMINAL_STATUSES: SalesEntryStatus[] = ['closed_won', 'closed_lost'];

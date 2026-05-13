@@ -114,6 +114,10 @@ export interface AppointmentUpdate {
   status?: AppointmentStatus;
   route_order?: number;
   estimated_arrival?: string;
+  // Cluster D Item 1: drag-drop on the schedule board sets this true so
+  // the backend skips the reschedule SMS while still demoting
+  // CONFIRMED → SCHEDULED. Admin must then click Send explicitly.
+  suppress_notifications?: boolean;
 }
 
 export interface AppointmentListParams {
@@ -190,12 +194,12 @@ export const appointmentStatusConfig: Record<
     bgColor: 'bg-slate-100',
   },
   scheduled: {
-    label: 'Scheduled',
+    label: 'Awaiting confirmation',
     color: 'text-purple-800',
     bgColor: 'bg-purple-100',
   },
   confirmed: {
-    label: 'Confirmed',
+    label: 'Scheduled',
     color: 'text-blue-800',
     bgColor: 'bg-blue-100',
   },

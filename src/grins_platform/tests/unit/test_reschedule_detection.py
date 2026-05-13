@@ -176,3 +176,73 @@ class TestRescheduleDetection:
         ) as mock_sms:
             await service.update_appointment(original.id, update_data)
             mock_sms.assert_not_called()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_suppress_notifications_skips_sms_but_still_demotes(
+        self,
+    ) -> None:
+        """Drag-drop path: suppress_notifications=True → no SMS, status still demotes.
+
+        Cluster D Item 1: dragging a CONFIRMED appointment to a new slot
+        must revert to SCHEDULED without spamming the customer.
+        """
+        service, mock_appt_repo = _build_service()
+
+        original = _make_mock_appointment(status=AppointmentStatus.CONFIRMED.value)
+        updated = _make_mock_appointment(
+            status=AppointmentStatus.CONFIRMED.value,
+            scheduled_date=date(2025, 6, 20),
+        )
+
+        mock_appt_repo.get_by_id.return_value = original
+        mock_appt_repo.update.return_value = updated
+
+        update_data = AppointmentUpdate(
+            scheduled_date=date(2025, 6, 20),
+            suppress_notifications=True,
+        )
+
+        with patch.object(
+            service, "_send_reschedule_sms", new_callable=AsyncMock
+        ) as mock_sms:
+            await service.update_appointment(
+                original.id,
+                update_data,
+                notify_customer=False,
+            )
+            mock_sms.assert_not_called()
+
+        # Status was still reset to SCHEDULED (demote happens regardless of SMS gating)
+        calls = mock_appt_repo.update.call_args_list
+        assert len(calls) == 2
+        reset_call = calls[1]
+        assert reset_call.args[1] == {"status": AppointmentStatus.SCHEDULED.value}
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_default_suppress_notifications_still_sends_sms(self) -> None:
+        """Default suppress_notifications=False still fires the reschedule SMS.
+
+        Regression guard: the new flag is additive and must not change the
+        default behavior for callers that omit it.
+        """
+        service, mock_appt_repo = _build_service()
+
+        original = _make_mock_appointment(status=AppointmentStatus.CONFIRMED.value)
+        updated = _make_mock_appointment(
+            status=AppointmentStatus.CONFIRMED.value,
+            scheduled_date=date(2025, 6, 22),
+        )
+
+        mock_appt_repo.get_by_id.return_value = original
+        mock_appt_repo.update.return_value = updated
+
+        update_data = AppointmentUpdate(scheduled_date=date(2025, 6, 22))
+        assert update_data.suppress_notifications is False
+
+        with patch.object(
+            service, "_send_reschedule_sms", new_callable=AsyncMock
+        ) as mock_sms:
+            await service.update_appointment(original.id, update_data)
+            mock_sms.assert_called_once_with(mock_appt_repo.session, updated)

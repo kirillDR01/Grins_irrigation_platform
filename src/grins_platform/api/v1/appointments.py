@@ -1107,6 +1107,7 @@ async def update_appointment(
             appointment_id,
             data,
             actor_id=current_user.id,
+            notify_customer=not data.suppress_notifications,
         )
     except AppointmentNotFoundError as e:
         _endpoints.log_rejected("update_appointment", reason="not_found")

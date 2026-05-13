@@ -88,6 +88,10 @@ def _make_entry(
     entry.updated_at = datetime.now(tz=timezone.utc)
     # Cluster A: denormalized field must be a plain value for from_attributes.
     entry.customer_tags = None
+    # Cluster D Item 2: latest_event_confirmation_status defaults to None
+    # when the entry has no calendar events yet.
+    entry.latest_event_confirmation_status = None
+    entry.calendar_events = []
     return entry
 
 
@@ -600,6 +604,10 @@ def _make_response_entry_mock(
     entry.customer_tags = None
     entry.property_address = None
     entry.job_type_display = None
+    # Cluster D Item 2: surface the latest calendar event's confirmation
+    # status; default None when no events.
+    entry.latest_event_confirmation_status = None
+    entry.calendar_events = []
     return entry
 
 

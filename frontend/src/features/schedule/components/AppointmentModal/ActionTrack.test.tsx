@@ -1,6 +1,7 @@
 /**
  * Tests for ActionTrack — card states for each step, tap handlers call
- * correct mutations, disabled states, hidden for terminal statuses.
+ * correct mutations, disabled states, hidden for terminal statuses,
+ * Cluster D Item 3 banner for `scheduled` (awaiting confirmation).
  * Validates: Requirements 4.1, 4.2, 4.3, 4.4, 4.5, 4.7
  */
 
@@ -12,22 +13,26 @@ import { ActionTrack } from './ActionTrack';
 import type { AppointmentStatus } from '../../types';
 
 // ── Mock mutation hooks ──────────────────────────────────────────────────────
+// Cluster D Item 5: on-the-way is now the job-side canonical hook.
 
-const mockEnRouteMutate = vi.fn();
+const mockOnMyWayMutate = vi.fn();
 const mockArrivedMutate = vi.fn();
 const mockCompletedMutate = vi.fn();
 
 vi.mock('../../hooks/useAppointmentMutations', () => ({
-  useMarkAppointmentEnRoute: () => ({
-    mutate: mockEnRouteMutate,
-    isPending: false,
-  }),
   useMarkAppointmentArrived: () => ({
     mutate: mockArrivedMutate,
     isPending: false,
   }),
   useMarkAppointmentCompleted: () => ({
     mutate: mockCompletedMutate,
+    isPending: false,
+  }),
+}));
+
+vi.mock('@/features/jobs/hooks', () => ({
+  useOnMyWay: () => ({
+    mutate: mockOnMyWayMutate,
     isPending: false,
   }),
 }));
@@ -61,6 +66,7 @@ function renderActionTrack({
   return render(
     <ActionTrack
       appointmentId="appt-001"
+      jobId="job-001"
       status={status}
       enRouteAt={enRouteAt}
       arrivedAt={arrivedAt}
@@ -69,6 +75,27 @@ function renderActionTrack({
     { wrapper: createWrapper() },
   );
 }
+
+// ── Awaiting-confirmation banner (Cluster D Item 3) ──────────────────────────
+
+describe('ActionTrack — Awaiting-confirmation banner (Cluster D Item 3)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('renders banner and no action cards when status is scheduled', () => {
+    renderActionTrack({ status: 'scheduled' });
+
+    expect(screen.getByTestId('awaiting-confirmation-banner')).toBeInTheDocument();
+    expect(screen.getByText(/Waiting for customer confirmation/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /mark as on my way/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /mark job as started/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /mark job as complete/i })).not.toBeInTheDocument();
+  });
+
+  it('does not render the banner once status is confirmed', () => {
+    renderActionTrack({ status: 'confirmed' });
+    expect(screen.queryByTestId('awaiting-confirmation-banner')).not.toBeInTheDocument();
+  });
+});
 
 // ── Hidden for terminal statuses (Req 4.8) ───────────────────────────────────
 
@@ -85,7 +112,6 @@ describe('ActionTrack — Hidden for terminal statuses (Req 4.8)', () => {
 
   it.each([
     'confirmed',
-    'scheduled',
     'en_route',
     'in_progress',
     'completed',
@@ -319,7 +345,7 @@ describe('ActionTrack — Step 3 (Completed)', () => {
 describe('ActionTrack — Tap handlers call correct mutations (Req 4.5)', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('calls useMarkAppointmentEnRoute when tapping active "En route" card at step 1', async () => {
+  it('calls useOnMyWay with jobId when tapping active "En route" card at step 1', async () => {
     const user = userEvent.setup();
     renderActionTrack({
       status: 'en_route',
@@ -328,8 +354,8 @@ describe('ActionTrack — Tap handlers call correct mutations (Req 4.5)', () => 
 
     await user.click(screen.getByRole('button', { name: /mark as on my way/i }));
 
-    expect(mockEnRouteMutate).toHaveBeenCalledTimes(1);
-    expect(mockEnRouteMutate).toHaveBeenCalledWith('appt-001', expect.any(Object));
+    expect(mockOnMyWayMutate).toHaveBeenCalledTimes(1);
+    expect(mockOnMyWayMutate).toHaveBeenCalledWith('job-001', expect.any(Object));
   });
 
   it('calls useMarkAppointmentArrived when tapping active "On site" card at step 2', async () => {
@@ -376,7 +402,7 @@ describe('ActionTrack — Disabled cards cannot be clicked (Req 4.3)', () => {
     await user.click(screen.getByRole('button', { name: /mark job as started/i }));
     await user.click(screen.getByRole('button', { name: /mark job as complete/i }));
 
-    expect(mockEnRouteMutate).not.toHaveBeenCalled();
+    expect(mockOnMyWayMutate).not.toHaveBeenCalled();
     expect(mockArrivedMutate).not.toHaveBeenCalled();
     expect(mockCompletedMutate).not.toHaveBeenCalled();
   });
@@ -427,7 +453,7 @@ describe('ActionTrack — Done cards do not re-trigger mutations', () => {
     const enRouteBtn = screen.getByRole('button', { name: /mark as on my way/i });
     await user.click(enRouteBtn);
 
-    expect(mockEnRouteMutate).not.toHaveBeenCalled();
+    expect(mockOnMyWayMutate).not.toHaveBeenCalled();
   });
 });
 

@@ -201,6 +201,10 @@ export const appointmentApi = {
 
   /**
    * Transition appointment to en_route status (Req 35).
+   *
+   * @deprecated Cluster D Item 5 — call `jobApi.onMyWay(jobId)` instead.
+   * The job-side endpoint audits `job.on_my_way_at` and dispatches the
+   * customer SMS. Scheduled for removal after one release.
    */
   async markEnRoute(id: string): Promise<Appointment> {
     return this.update(id, { status: 'en_route' as Appointment['status'] });

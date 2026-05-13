@@ -511,6 +511,7 @@ export function AppointmentModal({
           {/* Action track */}
           <ActionTrack
             appointmentId={appointmentId}
+            jobId={appointment.job_id}
             status={appointment.status}
             arrivedAt={appointment.arrived_at}
             enRouteAt={appointment.en_route_at}

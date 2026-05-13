@@ -190,6 +190,16 @@ def _entry_to_response(entry: SalesEntry) -> SalesEntryResponse:
         )
     resp.property_address = property_address
     resp.job_type_display = job_type_display(entry.job_type) or None
+    # Cluster D Item 2: surface the latest calendar event's confirmation
+    # status so the pipeline list view can label estimate_scheduled rows
+    # "Awaiting confirmation" vs "Scheduled" without a second fetch.
+    events = getattr(entry, "calendar_events", None) or []
+    if events:
+        latest = max(
+            events,
+            key=lambda e: (e.scheduled_date, e.created_at),
+        )
+        resp.latest_event_confirmation_status = latest.confirmation_status
     return resp  # type: ignore[no-any-return]
 
 

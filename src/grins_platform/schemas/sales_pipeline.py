@@ -63,6 +63,11 @@ class SalesEntryResponse(BaseModel):
     # bughunt L-8: curated display name so the Pipeline list shows
     # "System Installation" instead of the raw "new_system" slug.
     job_type_display: Optional[str] = None
+    # Cluster D Item 2: latest SalesCalendarEvent.confirmation_status
+    # ('pending' | 'confirmed' | 'reschedule_requested' | 'cancelled')
+    # so the pipeline list can label estimate_scheduled rows
+    # "Awaiting confirmation" vs "Scheduled" without a second fetch.
+    latest_event_confirmation_status: Optional[str] = None
 
 
 class SalesCalendarEventCreate(BaseModel):

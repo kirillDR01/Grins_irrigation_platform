@@ -64,6 +64,9 @@ export function SchedulePage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [createDialogDate, setCreateDialogDate] = useState<Date | null>(null);
   const [createDialogStaffId, setCreateDialogStaffId] = useState<string | null>(null);
+  // Cluster D Item 4: HH:MM defaults from a DayMode slot-pick interaction.
+  const [createDialogStartTime, setCreateDialogStartTime] = useState<string | null>(null);
+  const [createDialogEndTime, setCreateDialogEndTime] = useState<string | null>(null);
   const [showClearDayDialog, setShowClearDayDialog] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
@@ -265,6 +268,30 @@ export function SchedulePage() {
   const handleDateClick = (staffId: string | null, date: Date) => {
     setCreateDialogDate(date);
     setCreateDialogStaffId(staffId);
+    setCreateDialogStartTime(null);
+    setCreateDialogEndTime(null);
+    setShowCreateDialog(true);
+  };
+
+  // Cluster D Item 4: open the create-appointment dialog with the picked
+  // (staffId, date, startMin, endMin) pre-filled. Converts minutes-from-
+  // midnight into the HH:MM strings the form expects.
+  const handleSlotRangePick = (
+    staffId: string,
+    date: Date,
+    startMin: number,
+    endMin: number,
+  ) => {
+    const toHHMM = (m: number) => {
+      const h = Math.floor(m / 60);
+      const mm = m % 60;
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      return `${pad(h)}:${pad(mm)}`;
+    };
+    setCreateDialogDate(date);
+    setCreateDialogStaffId(staffId);
+    setCreateDialogStartTime(toHHMM(startMin));
+    setCreateDialogEndTime(toHHMM(endMin));
     setShowCreateDialog(true);
   };
 
@@ -276,6 +303,8 @@ export function SchedulePage() {
     setShowCreateDialog(false);
     setCreateDialogDate(null);
     setCreateDialogStaffId(null);
+    setCreateDialogStartTime(null);
+    setCreateDialogEndTime(null);
     setPreSelectedJobId(null);
   };
 
@@ -495,6 +524,7 @@ export function SchedulePage() {
         {viewMode === 'calendar' ? (
           <ResourceTimelineView
             onDateClick={handleDateClick}
+            onSlotRangePick={handleSlotRangePick}
             onEventClick={handleEventClick}
             onWeekChange={handleWeekChange}
             selectedDate={selectedDate}
@@ -542,11 +572,15 @@ export function SchedulePage() {
             initialDate={createDialogDate ?? undefined}
             initialJobId={preSelectedJobId ?? undefined}
             initialStaffId={createDialogStaffId ?? undefined}
+            initialStartTime={createDialogStartTime ?? undefined}
+            initialEndTime={createDialogEndTime ?? undefined}
             onSuccess={handleCreateSuccess}
             onCancel={() => {
               setShowCreateDialog(false);
               setCreateDialogDate(null);
               setCreateDialogStaffId(null);
+              setCreateDialogStartTime(null);
+              setCreateDialogEndTime(null);
               setPreSelectedJobId(null);
             }}
           />

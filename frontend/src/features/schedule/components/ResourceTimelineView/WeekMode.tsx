@@ -186,6 +186,10 @@ export function WeekMode({
         data: {
           staff_id: cellStaffId,
           scheduled_date: cellDate,
+          // Cluster D Item 1: drag-drop must not silently text the customer.
+          // The backend still demotes CONFIRMED → SCHEDULED; admin must
+          // explicitly click Send afterwards.
+          suppress_notifications: true,
         },
       });
       toast.success('Appointment updated');

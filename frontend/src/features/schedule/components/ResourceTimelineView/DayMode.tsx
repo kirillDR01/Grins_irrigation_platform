@@ -20,7 +20,7 @@
  * 6am-8pm visible window.
  */
 
-import { useMemo, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { format, isSameDay } from 'date-fns';
 import { toast } from 'sonner';
 import { useStaff } from '@/features/staff/hooks/useStaff';
@@ -42,12 +42,41 @@ import {
 import type { Appointment } from '../../types';
 import type { DragPayload } from './types';
 
+/**
+ * Mouse-state for the slot-pick interaction (Cluster D Item 4). Ports the
+ * click-to-pick + drag-across-slots behavior from
+ * `features/sales/.../WeekCalendar.tsx` onto the daily admin schedule.
+ *
+ * `dragRef.current` is the stale-closure mirror used inside the global
+ * mousemove/mouseup listeners (those handlers capture the initial state
+ * snapshot at attach time, so we read through the ref).
+ */
+interface EmptyDragState {
+  staffId: string;
+  startMin: number;
+  curMin: number;
+  moved: boolean;
+}
+
 export interface DayModeProps {
   date: Date;
   selectedDate: Date | null;
   onAppointmentClick: (id: string) => void;
   onEmptyCellClick: (staffId: string, date: string) => void;
+  /**
+   * Cluster D Item 4: invoked when the admin picks a time range on an
+   * empty section of a tech row. `startMin` / `endMin` are minutes from
+   * midnight (15-min-snapped). A bare click resolves to a 60-min range.
+   */
+  onSlotRangePick?: (
+    staffId: string,
+    date: Date,
+    startMin: number,
+    endMin: number,
+  ) => void;
 }
+
+const DEFAULT_PICK_DURATION_MIN = 60;
 
 /** Hour-axis ticks: every hour from 6am through 8pm inclusive (15 ticks). */
 const HOUR_TICKS = Array.from(
@@ -83,6 +112,7 @@ export function DayMode({
   selectedDate,
   onAppointmentClick,
   onEmptyCellClick,
+  onSlotRangePick,
 }: DayModeProps) {
   const dateStr = useMemo(() => format(date, 'yyyy-MM-dd'), [date]);
 
@@ -133,6 +163,111 @@ export function DayMode({
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   };
+
+  // Cluster D Item 4: slot-pick state. dragRef mirrors dragState for the
+  // global mousemove/mouseup listeners (which would otherwise capture a
+  // stale closure of dragState).
+  const [dragState, setDragState] = useState<EmptyDragState | null>(null);
+  const dragRef = useRef<EmptyDragState | null>(null);
+  const stripRectsRef = useRef<Record<string, DOMRect | null>>({});
+
+  const snapMinutesFromClientX = (
+    clientX: number,
+    rect: DOMRect | null,
+  ): number => {
+    if (!rect || rect.width <= 0) return DAY_START_MIN;
+    const xPct = (clientX - rect.left) / rect.width;
+    const clamped = Math.min(Math.max(xPct, 0), 1);
+    const rawMin = DAY_START_MIN + clamped * DAY_SPAN_MIN;
+    return Math.round(rawMin / SNAP_MINUTES) * SNAP_MINUTES;
+  };
+
+  const handleStripMouseDown = (
+    e: React.MouseEvent<HTMLDivElement>,
+    staffId: string,
+  ) => {
+    // Only left-click; ignore if interaction started on an existing card.
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-appointment-card]')) return;
+    if (!onSlotRangePick) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    stripRectsRef.current[staffId] = rect;
+    const startMin = snapMinutesFromClientX(e.clientX, rect);
+    const next: EmptyDragState = {
+      staffId,
+      startMin,
+      curMin: startMin,
+      moved: false,
+    };
+    dragRef.current = next;
+    setDragState(next);
+    e.preventDefault();
+  };
+
+  useEffect(() => {
+    if (dragState === null) return;
+
+    const onMouseMove = (e: MouseEvent) => {
+      const current = dragRef.current;
+      if (!current) return;
+      const rect = stripRectsRef.current[current.staffId] ?? null;
+      const curMin = snapMinutesFromClientX(e.clientX, rect);
+      // `moved` flips to true once the drag crosses a snap boundary so a
+      // bare click without movement still resolves to the 60-min default.
+      const moved = current.moved || curMin !== current.startMin;
+      if (curMin === current.curMin && moved === current.moved) return;
+      const next: EmptyDragState = { ...current, curMin, moved };
+      dragRef.current = next;
+      setDragState(next);
+    };
+
+    const onMouseUp = () => {
+      const current = dragRef.current;
+      dragRef.current = null;
+      setDragState(null);
+      if (!current || !onSlotRangePick) return;
+
+      let pickStart = current.startMin;
+      let pickEnd: number;
+      if (!current.moved) {
+        pickEnd = current.startMin + DEFAULT_PICK_DURATION_MIN;
+      } else {
+        const lo = Math.min(current.startMin, current.curMin);
+        const hi = Math.max(current.startMin, current.curMin);
+        pickStart = lo;
+        // End is exclusive; mirror WeekCalendar's `+SNAP` semantic.
+        pickEnd = hi + SNAP_MINUTES;
+      }
+
+      if (pickStart < DAY_START_MIN || pickEnd > DAY_END_MIN) {
+        toast.error('Pick a slot between 6am and 8pm');
+        return;
+      }
+
+      // Reject picks whose start is already in the past on today's date.
+      if (isToday) {
+        const now = new Date();
+        const nowMin = now.getHours() * 60 + now.getMinutes();
+        if (pickStart < nowMin) {
+          toast.error("Can't schedule in the past");
+          return;
+        }
+      }
+
+      onSlotRangePick(current.staffId, date, pickStart, pickEnd);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+    // Effect intentionally depends only on whether a drag is active.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragState === null, date, onSlotRangePick, isToday]);
 
   const handleRowDrop = async (
     e: React.DragEvent<HTMLDivElement>,
@@ -190,6 +325,10 @@ export function DayMode({
           scheduled_date: dateStr,
           time_window_start: newStartTime,
           time_window_end: newEndTime,
+          // Cluster D Item 1: drag-drop must not silently text the customer.
+          // The backend still demotes CONFIRMED → SCHEDULED; admin must
+          // explicitly click Send afterwards.
+          suppress_notifications: true,
         },
       });
       toast.success(
@@ -316,7 +455,12 @@ export function DayMode({
               style={{ height: `${stripHeight}px` }}
               onDragOver={handleDragOver}
               onDrop={(e) => handleRowDrop(e, staff.id)}
+              onMouseDown={(e) => handleStripMouseDown(e, staff.id)}
               onClick={(e) => {
+                // Suppress the legacy single-cell-click handler when the
+                // slot-pick state machine is wired up — the mouseup branch
+                // resolves both clicks and drags through onSlotRangePick.
+                if (onSlotRangePick) return;
                 if (e.target === e.currentTarget) {
                   onEmptyCellClick(staff.id, dateStr);
                 }
@@ -354,7 +498,7 @@ export function DayMode({
                   />
                 );
               })}
-              {techAppts.length === 0 && (
+              {techAppts.length === 0 && !onSlotRangePick && (
                 <button
                   type="button"
                   onClick={() => onEmptyCellClick(staff.id, dateStr)}
@@ -363,6 +507,24 @@ export function DayMode({
                 >
                   +
                 </button>
+              )}
+              {/* Cluster D Item 4: drag preview rectangle */}
+              {dragState && dragState.staffId === staff.id && dragState.moved && (
+                <div
+                  data-testid={`slot-pick-preview-${staff.id}`}
+                  className="pointer-events-none absolute rounded-md border border-dashed border-blue-500 bg-blue-200/60"
+                  style={{
+                    left: `${minutesToPercent(Math.min(dragState.startMin, dragState.curMin))}%`,
+                    width: `${minutesToPercent(
+                      Math.min(dragState.startMin, dragState.curMin) +
+                        Math.abs(dragState.curMin - dragState.startMin) +
+                        SNAP_MINUTES,
+                    ) -
+                      minutesToPercent(Math.min(dragState.startMin, dragState.curMin))}%`,
+                    top: 2,
+                    height: CARD_HEIGHT_PX,
+                  }}
+                />
               )}
               {isToday && <NowLine />}
             </div>

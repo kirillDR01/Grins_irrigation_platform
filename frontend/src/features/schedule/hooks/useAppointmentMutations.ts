@@ -176,6 +176,11 @@ export function useMarkAppointmentNoShow() {
 
 /**
  * Hook to mark appointment as en_route (Req 35).
+ *
+ * @deprecated Cluster D Item 5 — use {@link import('@/features/jobs/hooks').useOnMyWay}
+ * instead. The job-side path audits `job.on_my_way_at`, dispatches the
+ * customer SMS, and auto-transitions the linked appointment to EN_ROUTE.
+ * Scheduled for removal after one release.
  */
 export function useMarkAppointmentEnRoute() {
   const queryClient = useQueryClient();

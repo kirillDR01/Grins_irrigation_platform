@@ -76,6 +76,8 @@ const getStatusLabel = (status: AppointmentStatus): string => {
       return 'Pending';
     case 'draft':
       return 'Draft';
+    case 'scheduled':
+      return 'Awaiting confirmation';
     case 'confirmed':
       return 'Scheduled';
     case 'in_progress':

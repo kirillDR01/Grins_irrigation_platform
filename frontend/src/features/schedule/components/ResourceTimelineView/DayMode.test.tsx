@@ -339,6 +339,7 @@ describe('DayMode', () => {
         scheduled_date: string;
         time_window_start: string;
         time_window_end: string;
+        suppress_notifications?: boolean;
       };
     };
     expect(call.id).toBe('appt-1');
@@ -347,6 +348,8 @@ describe('DayMode', () => {
     // ~10am snapped to 15min: 10:00:00 (rawMin=600) — duration preserved (90min) → 11:30:00
     expect(call.data.time_window_start).toBe('10:00:00');
     expect(call.data.time_window_end).toBe('11:30:00');
+    // Cluster D Item 1: drag-drop must NOT silently text the customer.
+    expect(call.data.suppress_notifications).toBe(true);
     expect(mockToastSuccess).toHaveBeenCalledWith('Rescheduled');
   });
 
@@ -376,9 +379,10 @@ describe('DayMode', () => {
     await Promise.resolve();
     expect(mockMutateAsync).toHaveBeenCalledTimes(1);
     const call = mockMutateAsync.mock.calls[0]?.[0] as {
-      data: { staff_id: string };
+      data: { staff_id: string; suppress_notifications?: boolean };
     };
     expect(call.data.staff_id).toBe('staff-2');
+    expect(call.data.suppress_notifications).toBe(true);
     expect(mockToastSuccess).toHaveBeenCalledWith('Reassigned and rescheduled');
   });
 
@@ -483,5 +487,154 @@ describe('DayMode', () => {
     expect(plusBtn).not.toBeNull();
     fireEvent.click(plusBtn!);
     expect(onEmpty).toHaveBeenCalledWith('staff-2', TARGET_DATE_STR);
+  });
+});
+
+// Cluster D Item 4: slot-pick UX (click + drag across empty tech rows)
+describe('DayMode — slot-pick UX (Cluster D Item 4)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseDailySchedule.mockReturnValue({
+      data: buildDaily([]),
+      isLoading: false,
+      isError: false,
+    });
+    mockUseStaff.mockReturnValue({
+      data: { items: mockStaff, total: 2, page: 1, page_size: 100, total_pages: 1 },
+      isLoading: false,
+      isError: false,
+    });
+    mockUseUtilizationReport.mockReturnValue({
+      data: { date: TARGET_DATE_STR, resources: [], generated_at: '2025-06-15T00:00:00Z' },
+      isLoading: false,
+      isError: false,
+    });
+  });
+
+  function stubRect(cell: HTMLElement, width = 1000) {
+    cell.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        width,
+        height: 80,
+        right: width,
+        bottom: 80,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect);
+  }
+
+  it('fires onSlotRangePick with a 60-min default range when clicking without drag', () => {
+    const onPick = vi.fn();
+    render(
+      <DayMode
+        date={TARGET_DATE}
+        selectedDate={null}
+        onAppointmentClick={vi.fn()}
+        onEmptyCellClick={vi.fn()}
+        onSlotRangePick={onPick}
+      />,
+      { wrapper }
+    );
+    const cell = screen.getByTestId(`cell-staff-1-${TARGET_DATE_STR}`);
+    stubRect(cell);
+    // 10am = 600min; clientX = ((600-360)/840) * 1000 ≈ 285.7
+    fireEvent.mouseDown(cell, { button: 0, clientX: 286 });
+    // No mousemove — release immediately.
+    fireEvent.mouseUp(window);
+    expect(onPick).toHaveBeenCalledTimes(1);
+    const [staffId, , startMin, endMin] = onPick.mock.calls[0]!;
+    expect(staffId).toBe('staff-1');
+    expect(startMin).toBe(600);
+    expect(endMin).toBe(660);
+  });
+
+  it('fires onSlotRangePick with a forward-dragged range', () => {
+    const onPick = vi.fn();
+    render(
+      <DayMode
+        date={TARGET_DATE}
+        selectedDate={null}
+        onAppointmentClick={vi.fn()}
+        onEmptyCellClick={vi.fn()}
+        onSlotRangePick={onPick}
+      />,
+      { wrapper }
+    );
+    const cell = screen.getByTestId(`cell-staff-1-${TARGET_DATE_STR}`);
+    stubRect(cell);
+    // Start at 10am (clientX=286), drag to 12pm (clientX = ((720-360)/840)*1000 = 428.6)
+    fireEvent.mouseDown(cell, { button: 0, clientX: 286 });
+    fireEvent.mouseMove(window, { clientX: 429 });
+    fireEvent.mouseUp(window);
+    expect(onPick).toHaveBeenCalledTimes(1);
+    const [, , startMin, endMin] = onPick.mock.calls[0]!;
+    expect(startMin).toBe(600);
+    // end = cur (720) + SNAP (15)
+    expect(endMin).toBe(735);
+  });
+
+  it('fires onSlotRangePick with a backward-dragged range (start > cur)', () => {
+    const onPick = vi.fn();
+    render(
+      <DayMode
+        date={TARGET_DATE}
+        selectedDate={null}
+        onAppointmentClick={vi.fn()}
+        onEmptyCellClick={vi.fn()}
+        onSlotRangePick={onPick}
+      />,
+      { wrapper }
+    );
+    const cell = screen.getByTestId(`cell-staff-1-${TARGET_DATE_STR}`);
+    stubRect(cell);
+    // Start at 12pm (clientX=429), drag back to 10am (clientX=286)
+    fireEvent.mouseDown(cell, { button: 0, clientX: 429 });
+    fireEvent.mouseMove(window, { clientX: 286 });
+    fireEvent.mouseUp(window);
+    expect(onPick).toHaveBeenCalledTimes(1);
+    const [, , startMin, endMin] = onPick.mock.calls[0]!;
+    // Range collapses to (min, max+SNAP) — so start = cur (600), end = original-start (720) + SNAP (15)
+    expect(startMin).toBe(600);
+    expect(endMin).toBe(735);
+  });
+
+  it('does not call onSlotRangePick when the mousedown originates on an existing appointment card', () => {
+    const onPick = vi.fn();
+    const appts: Appointment[] = [
+      {
+        ...baseAppt,
+        id: 'apt-1',
+        time_window_start: '09:00:00',
+        time_window_end: '10:00:00',
+      } as Appointment,
+    ];
+    mockUseDailySchedule.mockReturnValueOnce({
+      data: buildDaily(appts),
+      isLoading: false,
+      isError: false,
+    });
+    render(
+      <DayMode
+        date={TARGET_DATE}
+        selectedDate={null}
+        onAppointmentClick={vi.fn()}
+        onEmptyCellClick={vi.fn()}
+        onSlotRangePick={onPick}
+      />,
+      { wrapper }
+    );
+    // Simulate the bubble-up path: a child with data-appointment-card hits
+    // the strip's onMouseDown. We synthesize the event so target is the card.
+    const cell = screen.getByTestId(`cell-staff-1-${TARGET_DATE_STR}`);
+    stubRect(cell);
+    const cardEl = document.createElement('div');
+    cardEl.setAttribute('data-appointment-card', '');
+    cell.appendChild(cardEl);
+    fireEvent.mouseDown(cardEl, { button: 0, clientX: 286 });
+    fireEvent.mouseUp(window);
+    expect(onPick).not.toHaveBeenCalled();
   });
 });

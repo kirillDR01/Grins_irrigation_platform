@@ -398,6 +398,8 @@ describe('WeekMode', () => {
       data: {
         staff_id: 'staff-2',
         scheduled_date: '2026-04-28',
+        // Cluster D Item 1: drag-drop must NOT silently text the customer.
+        suppress_notifications: true,
       },
     });
   });

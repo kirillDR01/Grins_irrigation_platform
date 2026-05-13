@@ -62,6 +62,15 @@ class AppointmentUpdate(BaseModel):
     status: Optional[AppointmentStatus] = Field(None, description="Appointment status")
     route_order: Optional[int] = Field(None, ge=0, description="Route order")
     estimated_arrival: Optional[time] = Field(None, description="Estimated arrival")
+    suppress_notifications: bool = Field(
+        default=False,
+        description=(
+            "When True, skip the reschedule SMS that would otherwise fire on "
+            "a date/time change. Used by the schedule-board drag-drop path "
+            "where the admin will explicitly click Send afterwards. The "
+            "existing CONFIRMED→SCHEDULED demote still happens."
+        ),
+    )
 
 
 class ReplyState(BaseModel):
