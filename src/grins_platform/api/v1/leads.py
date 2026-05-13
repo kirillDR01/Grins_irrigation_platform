@@ -775,7 +775,7 @@ async def upload_lead_attachment(
         file_name=upload_result.file_name,
         file_size=upload_result.file_size,
         content_type=upload_result.content_type,
-        attachment_type=attachment_type.upper(),
+        attachment_type=attachment_type.lower(),
     )
     session.add(attachment)
     await session.commit()
@@ -805,7 +805,7 @@ async def upload_lead_attachment(
         file_name=attachment.file_name,
         file_size=attachment.file_size,
         content_type=attachment.content_type,
-        attachment_type=attachment.attachment_type,
+        attachment_type=attachment.attachment_type.upper(),
         download_url=download_url,
         created_at=attachment.created_at,
     )
@@ -867,7 +867,7 @@ async def list_lead_attachments(
                 file_name=att.file_name,
                 file_size=att.file_size,
                 content_type=att.content_type,
-                attachment_type=att.attachment_type,
+                attachment_type=att.attachment_type.upper(),
                 download_url=download_url,
                 created_at=att.created_at,
             ),
