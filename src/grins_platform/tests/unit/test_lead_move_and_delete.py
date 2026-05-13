@@ -60,6 +60,25 @@ def _make_lead(
     return lead
 
 
+def _neutralize_cascade_session(repo: AsyncMock) -> AsyncMock:
+    """Wire ``repo.session.execute(...)`` so cascade helpers run as no-ops.
+
+    The Cluster A cascade (``_carry_forward_lead_attachments``,
+    ``_cascade_lead_intake_tag``, ``_cascade_lead_action_tags``) hits
+    ``await session.execute(...)`` and chains sync ``.scalars().all()``
+    / ``.scalar_one_or_none()``. Default AsyncMock chains return coroutines
+    where sync calls are expected, breaking the tests. Setting a result
+    object with `.scalars().all() == []` (and similar) lets the cascade
+    treat the lead as having no attachments/tags to copy.
+    """
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = []
+    result.all.return_value = []
+    result.scalar_one_or_none.return_value = None
+    repo.session.execute = AsyncMock(return_value=result)
+    return repo
+
+
 def _build_service(
     *,
     lead_repo=None,
@@ -68,8 +87,10 @@ def _build_service(
     staff_repo=None,
 ) -> LeadService:
     """Build LeadService with mocked deps."""
+    repo = lead_repo or AsyncMock()
+    _neutralize_cascade_session(repo)
     return LeadService(
-        lead_repository=lead_repo or AsyncMock(),
+        lead_repository=repo,
         customer_service=customer_service or AsyncMock(),
         job_service=job_service or AsyncMock(),
         staff_repository=staff_repo or AsyncMock(),

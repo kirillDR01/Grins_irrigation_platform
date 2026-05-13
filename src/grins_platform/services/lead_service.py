@@ -67,6 +67,7 @@ if TYPE_CHECKING:
 
     from fastapi import BackgroundTasks
 
+    from grins_platform.models.customer import Customer
     from grins_platform.models.google_sheet_submission import (
         GoogleSheetSubmission,
     )
@@ -1096,6 +1097,16 @@ class LeadService(LoggerMixin):
             },
         )
 
+        # Step 7b — Cluster A cascade: notes + attachments + intake_tag + action_tags.
+        # convert_lead previously left lead.notes/attachments/tags stranded; the
+        # umbrella matches the spec ("every conversion entry point cascades").
+        customer_obj = await self.customer_service.repository.get_by_id(customer.id)
+        if customer_obj:
+            await self._carry_forward_lead_data(
+                lead, customer_obj, actor_staff_id=None
+            )
+            await self.lead_repository.session.flush()
+
         # Step 8: Log conversion (no PII)
         self.logger.info(
             "lead.converted",
@@ -1144,7 +1155,7 @@ class LeadService(LoggerMixin):
         customer: Any,
         *,
         actor_staff_id: UUID | None = None,
-    ) -> None:
+    ) -> bool:
         """Fold leads.notes into customers.internal_notes per Requirement 5.
 
         Rules (in order):
@@ -1158,10 +1169,12 @@ class LeadService(LoggerMixin):
         valid staff.id (or None) — never a Lead.id, since audit_log.actor_id
         is a FK to staff.id with ondelete=SET NULL.
 
+        Returns True if notes were appended/overwritten, False if skipped.
+
         Validates: internal-notes-simplification Requirement 5
         """
         if not lead.notes or not lead.notes.strip():
-            return
+            return False
 
         existing = (customer.internal_notes or "").strip()
         if not existing:
@@ -1197,6 +1210,248 @@ class LeadService(LoggerMixin):
                 customer_id=str(customer.id),
                 error=str(e),
             )
+        return True
+
+    @staticmethod
+    def _humanize_tag(raw: str) -> str:
+        """Convert snake_case → Title Case, truncate to 32 chars."""
+        return " ".join(part.capitalize() for part in raw.split("_"))[:32]
+
+    TERMINAL_ACTION_TAGS: ClassVar[frozenset[str]] = frozenset(
+        {
+            ActionTag.ESTIMATE_APPROVED.value,
+            ActionTag.ESTIMATE_REJECTED.value,
+        }
+    )
+
+    async def _carry_forward_lead_attachments(
+        self,
+        lead: Lead,
+        customer: Customer,
+        *,
+        actor_staff_id: UUID | None = None,
+    ) -> int:
+        """Copy LeadAttachment rows to CustomerPhoto rows on conversion.
+
+        Lead row + LeadAttachment rows stay in place for audit; new
+        CustomerPhoto rows reuse the same S3 keys (no S3 copy needed).
+        Idempotent: skip if a CustomerPhoto with the same file_key already
+        exists for the customer.
+
+        Returns: count of new CustomerPhoto rows inserted.
+
+        Validates: Cluster A photo cascade.
+        """
+        from grins_platform.models.customer_photo import (  # noqa: PLC0415
+            CustomerPhoto,
+        )
+        from grins_platform.models.lead_attachment import (  # noqa: PLC0415
+            LeadAttachment,
+        )
+
+        session = self.lead_repository.session
+        result = await session.execute(
+            select(LeadAttachment).where(LeadAttachment.lead_id == lead.id)
+        )
+        attachments = result.scalars().all()
+        if not attachments:
+            return 0
+
+        existing_keys_result = await session.execute(
+            select(CustomerPhoto.file_key).where(
+                CustomerPhoto.customer_id == customer.id
+            )
+        )
+        existing_keys = {row[0] for row in existing_keys_result.all()}
+
+        inserted = 0
+        for att in attachments:
+            if att.file_key in existing_keys:
+                continue
+            session.add(
+                CustomerPhoto(
+                    customer_id=customer.id,
+                    file_key=att.file_key,
+                    file_name=att.file_name,
+                    file_size=att.file_size,
+                    content_type=att.content_type,
+                    uploaded_by=actor_staff_id,
+                    appointment_id=None,
+                    job_id=None,
+                )
+            )
+            inserted += 1
+
+        await session.flush()
+
+        self.logger.info(
+            "lead.cascade.attachments_moved",
+            lead_id=str(lead.id),
+            customer_id=str(customer.id),
+            attachments_total=len(attachments),
+            attachments_inserted=inserted,
+        )
+
+        if inserted:
+            try:
+                from grins_platform.services.audit_service import (  # noqa: PLC0415
+                    AuditService,
+                )
+
+                audit = AuditService()
+                await audit.log_action(
+                    session,
+                    actor_id=actor_staff_id or lead.assigned_to,
+                    action="lead.cascade.attachments_moved",
+                    resource_type="lead",
+                    resource_id=lead.id,
+                    details={
+                        "customer_id": str(customer.id),
+                        "moved_count": inserted,
+                    },
+                )
+            except Exception as e:
+                self.logger.warning(
+                    "lead.cascade.attachments.audit_failed",
+                    lead_id=str(lead.id),
+                    customer_id=str(customer.id),
+                    error=str(e),
+                )
+
+        return inserted
+
+    async def _cascade_lead_intake_tag(
+        self,
+        lead: Lead,
+        customer: Customer,
+    ) -> bool:
+        """Insert lead.intake_tag (if any) into customer_tags as source='system'.
+
+        Returns True if inserted, False if skipped (no intake_tag or duplicate).
+        Uses a pre-check (get_by_customer_and_label) to avoid IntegrityError
+        rollbacks inside the enclosing transaction.
+
+        Validates: Cluster A tag cascade.
+        """
+        from grins_platform.repositories.customer_tag_repository import (  # noqa: PLC0415
+            CustomerTagRepository,
+        )
+
+        raw = (lead.intake_tag or "").strip()
+        if not raw:
+            return False
+        label = self._humanize_tag(raw)
+        tag_repo = CustomerTagRepository(self.lead_repository.session)
+        existing = await tag_repo.get_by_customer_and_label(customer.id, label)
+        if existing is not None:
+            return False
+        await tag_repo.create(
+            customer_id=customer.id,
+            label=label,
+            tone="neutral",
+            source="system",
+        )
+        self.logger.info(
+            "lead.cascade.intake_tag",
+            lead_id=str(lead.id),
+            customer_id=str(customer.id),
+            label=label,
+        )
+        return True
+
+    async def _cascade_lead_action_tags(
+        self,
+        lead: Lead,
+        customer: Customer,
+    ) -> int:
+        """Cascade non-terminal action_tags into customer_tags as source='system'.
+
+        Filters out ESTIMATE_APPROVED and ESTIMATE_REJECTED (terminal markers).
+
+        Returns: count of new tags inserted (idempotent on duplicate).
+
+        Validates: Cluster A tag cascade.
+        """
+        from grins_platform.repositories.customer_tag_repository import (  # noqa: PLC0415
+            CustomerTagRepository,
+        )
+
+        raw_tags = lead.action_tags or []
+        if not raw_tags:
+            return 0
+
+        tag_repo = CustomerTagRepository(self.lead_repository.session)
+        inserted = 0
+        filtered_terminal = 0
+        for raw in raw_tags:
+            if raw in self.TERMINAL_ACTION_TAGS:
+                filtered_terminal += 1
+                continue
+            label = self._humanize_tag(raw)
+            existing = await tag_repo.get_by_customer_and_label(
+                customer.id, label
+            )
+            if existing is not None:
+                continue
+            await tag_repo.create(
+                customer_id=customer.id,
+                label=label,
+                tone="neutral",
+                source="system",
+            )
+            inserted += 1
+
+        self.logger.info(
+            "lead.cascade.action_tags",
+            lead_id=str(lead.id),
+            customer_id=str(customer.id),
+            total=len(raw_tags),
+            inserted=inserted,
+            filtered_terminal=filtered_terminal,
+        )
+        return inserted
+
+    async def _carry_forward_lead_data(
+        self,
+        lead: Lead,
+        customer: Customer,
+        *,
+        actor_staff_id: UUID | None = None,
+    ) -> dict[str, int | bool]:
+        """Umbrella cascade: notes + attachments + intake_tag + action_tags.
+
+        Replaces the previous bare _carry_forward_lead_notes call sites in
+        convert_lead, move_to_jobs, and move_to_sales. Any failure in a
+        sub-step propagates to roll back the enclosing transaction.
+
+        Returns counts/booleans for audit logging.
+
+        Validates: Cluster A conversion cascade.
+        """
+        notes_carried = await self._carry_forward_lead_notes(
+            lead, customer, actor_staff_id=actor_staff_id
+        )
+        attachments_moved = await self._carry_forward_lead_attachments(
+            lead, customer, actor_staff_id=actor_staff_id
+        )
+        intake_cascaded = await self._cascade_lead_intake_tag(lead, customer)
+        action_tags_cascaded = await self._cascade_lead_action_tags(lead, customer)
+
+        self.logger.info(
+            "lead.cascade.complete",
+            lead_id=str(lead.id),
+            customer_id=str(customer.id),
+            notes_carried=notes_carried,
+            attachments_moved=attachments_moved,
+            intake_cascaded=intake_cascaded,
+            action_tags_cascaded=action_tags_cascaded,
+        )
+        return {
+            "notes_carried": notes_carried,
+            "attachments_moved": attachments_moved,
+            "intake_cascaded": intake_cascaded,
+            "action_tags_cascaded": action_tags_cascaded,
+        }
 
     async def _ensure_customer_for_lead(
         self,
@@ -1341,10 +1596,10 @@ class LeadService(LoggerMixin):
             {"moved_to": "jobs", "moved_at": now},
         )
 
-        # Carry forward lead notes to customer (internal-notes-simplification Req 5)
+        # Cluster A cascade: notes + attachments + intake_tag + action_tags
         customer_obj = await self.customer_service.repository.get_by_id(customer_id)
         if customer_obj:
-            await self._carry_forward_lead_notes(
+            await self._carry_forward_lead_data(
                 lead, customer_obj, actor_staff_id=actor_staff_id
             )
             await self.lead_repository.session.flush()
@@ -1427,10 +1682,10 @@ class LeadService(LoggerMixin):
             {"moved_to": "sales", "moved_at": now},
         )
 
-        # Carry forward lead notes to customer (internal-notes-simplification Req 5)
+        # Cluster A cascade: notes + attachments + intake_tag + action_tags
         customer_obj = await self.customer_service.repository.get_by_id(customer_id)
         if customer_obj:
-            await self._carry_forward_lead_notes(
+            await self._carry_forward_lead_data(
                 lead, customer_obj, actor_staff_id=actor_staff_id
             )
             await session.flush()

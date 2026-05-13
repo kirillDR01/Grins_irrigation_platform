@@ -92,6 +92,14 @@ def _build_service(
     compliance_service: AsyncMock | None = None,
 ) -> tuple[LeadService, AsyncMock, AsyncMock, AsyncMock]:
     repo = lead_repo or AsyncMock()
+    # Cluster A cascade: neutralize session.execute chain so cascade
+    # helpers (attachments, tag pre-checks) are no-ops in tests with mocked
+    # repositories.
+    _cascade_result = MagicMock()
+    _cascade_result.scalars.return_value.all.return_value = []
+    _cascade_result.all.return_value = []
+    _cascade_result.scalar_one_or_none.return_value = None
+    repo.session.execute = AsyncMock(return_value=_cascade_result)
     cust_svc = customer_service or AsyncMock()
     job_svc = job_service or AsyncMock()
     svc = LeadService(

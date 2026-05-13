@@ -616,7 +616,15 @@ class TestConvertLead:
 
     @pytest.fixture
     def mock_lead_repo(self) -> AsyncMock:
-        return AsyncMock()
+        repo = AsyncMock()
+        # Cluster A cascade: neutralize session.execute chain so cascade
+        # helpers (attachments + tag pre-checks) are no-ops in unit tests.
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = []
+        result.all.return_value = []
+        result.scalar_one_or_none.return_value = None
+        repo.session.execute = AsyncMock(return_value=result)
+        return repo
 
     @pytest.fixture
     def mock_customer_service(self) -> AsyncMock:
@@ -981,6 +989,12 @@ class TestConvertLeadTier1Duplicates:
     async def test_convert_lead_calls_check_tier1_duplicates(self) -> None:
         """convert_lead must always call CustomerService.check_tier1_duplicates."""
         lead_repo = AsyncMock()
+        # Cluster A cascade: neutralize session.execute chain (see fixture).
+        _result = MagicMock()
+        _result.scalars.return_value.all.return_value = []
+        _result.all.return_value = []
+        _result.scalar_one_or_none.return_value = None
+        lead_repo.session.execute = AsyncMock(return_value=_result)
         lead = _make_lead_mock(
             phone="+19527373312",
             email="alice@test.example",

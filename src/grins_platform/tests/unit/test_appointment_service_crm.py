@@ -1411,14 +1411,17 @@ class TestProperty36NotesPropagateToCustomer:
     )
     @settings(max_examples=30)
     @pytest.mark.asyncio
-    async def test_add_notes_appends_to_customer_internal_notes(
+    async def test_add_notes_overwrites_customer_internal_notes(
         self,
         notes: str,
     ) -> None:
-        """For any notes text, it is appended to the customer's
-        internal_notes with a timestamp prefix.
+        """For any notes text, customer.internal_notes is overwritten.
 
-        **Validates: Requirements 33.2, 33.3**
+        Cluster A: shared notes blob with no per-entry chrome —
+        the previous timestamp-prefixed append was rolled back. The legacy
+        ``appointment.notes`` column is still dual-written through Phase 5.
+
+        **Validates: Requirements 33.2, 33.3; Cluster A notes unification.**
         """
         apt_id = uuid4()
         job_id = uuid4()
@@ -1454,14 +1457,13 @@ class TestProperty36NotesPropagateToCustomer:
         svc = _build_service(appt_repo=appt_repo, job_repo=job_repo)
         await svc.add_notes_and_photos(apt_id, notes=notes)
 
-        # Verify appointment notes were saved
+        # Legacy column dual-write (DEPRECATED_DUAL_WRITE_PHASE_6).
         appt_repo.update.assert_awaited_once()
         update_data = appt_repo.update.call_args[0][1]
         assert update_data["notes"] == notes
 
-        # Verify customer internal_notes was appended
-        assert notes in customer.internal_notes
-        assert "Appointment note:" in customer.internal_notes
+        # Cluster A: customer.internal_notes is overwritten (no chrome).
+        assert customer.internal_notes == notes
 
     @pytest.mark.asyncio
     async def test_add_notes_with_empty_customer_notes_creates_new(

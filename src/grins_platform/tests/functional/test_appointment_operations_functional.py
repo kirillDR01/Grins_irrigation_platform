@@ -588,7 +588,11 @@ class TestAppointmentPhotoWorkflow:
     async def test_notes_and_photos_propagate_to_customer_as_user_would_experience(
         self,
     ) -> None:
-        """Notes saved on appointment also append to customer internal_notes."""
+        """Notes saved on appointment overwrite customer.internal_notes.
+
+        Cluster A: shared notes blob with no per-entry chrome.
+        ``appointment.notes`` stays dual-written through Phase 5.
+        """
         svc, appt_repo, job_repo, _ = _build_appointment_service()
 
         customer = _make_customer(internal_notes="Existing customer notes.")
@@ -614,15 +618,13 @@ class TestAppointmentPhotoWorkflow:
 
         assert result.notes == "Found broken sprinkler head in zone 3"
 
-        # Verify appointment was updated with notes
+        # Phase 5 dual-write of legacy column (DEPRECATED_DUAL_WRITE_PHASE_6).
         appt_repo.update.assert_called_once()
         update_data = appt_repo.update.call_args[0][1]
         assert update_data["notes"] == "Found broken sprinkler head in zone 3"
 
-        # Verify customer internal_notes was appended
-        assert "Existing customer notes." in customer.internal_notes
-        assert "Found broken sprinkler head in zone 3" in customer.internal_notes
-        assert "Appointment note:" in customer.internal_notes
+        # Cluster A: customer.internal_notes overwritten with the new value.
+        assert customer.internal_notes == "Found broken sprinkler head in zone 3"
 
     async def test_notes_create_customer_notes_when_none_exist(
         self,

@@ -80,8 +80,16 @@ def _build_service(
     lead_repo: AsyncMock | None = None,
     compliance_service: AsyncMock | None = None,
 ) -> LeadService:
+    repo = lead_repo or AsyncMock()
+    # Cluster A cascade: neutralize session.execute chain so cascade
+    # helpers (attachments, tag pre-checks) are no-ops in unit tests.
+    _result = MagicMock()
+    _result.scalars.return_value.all.return_value = []
+    _result.all.return_value = []
+    _result.scalar_one_or_none.return_value = None
+    repo.session.execute = AsyncMock(return_value=_result)
     return LeadService(
-        lead_repository=lead_repo or AsyncMock(),
+        lead_repository=repo,
         customer_service=AsyncMock(),
         job_service=AsyncMock(),
         staff_repository=AsyncMock(),
@@ -308,6 +316,12 @@ class TestProperty4EmailMarketingConsentConversion:
         )
         repo = AsyncMock()
         repo.get_by_id.return_value = lead
+        # Cluster A cascade: neutralize session.execute chain.
+        _cascade_result = MagicMock()
+        _cascade_result.scalars.return_value.all.return_value = []
+        _cascade_result.all.return_value = []
+        _cascade_result.scalar_one_or_none.return_value = None
+        repo.session.execute = AsyncMock(return_value=_cascade_result)
 
         customer = MagicMock()
         customer.id = uuid4()
@@ -369,6 +383,12 @@ class TestProperty11ConsentRecordCustomerIdUpdate:
         )
         repo = AsyncMock()
         repo.get_by_id.return_value = lead
+        # Cluster A cascade: neutralize session.execute chain.
+        _cascade_result = MagicMock()
+        _cascade_result.scalars.return_value.all.return_value = []
+        _cascade_result.all.return_value = []
+        _cascade_result.scalar_one_or_none.return_value = None
+        repo.session.execute = AsyncMock(return_value=_cascade_result)
 
         customer = MagicMock()
         customer.id = uuid4()

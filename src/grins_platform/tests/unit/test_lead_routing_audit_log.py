@@ -51,8 +51,16 @@ def _build_service(
     customer_service=None,
     job_service=None,
 ) -> LeadService:
+    repo = lead_repo or AsyncMock()
+    # Cluster A cascade: neutralize session.execute chain so cascade
+    # helpers (attachments, tag pre-checks) are no-ops in unit tests.
+    _result = MagicMock()
+    _result.scalars.return_value.all.return_value = []
+    _result.all.return_value = []
+    _result.scalar_one_or_none.return_value = None
+    repo.session.execute = AsyncMock(return_value=_result)
     return LeadService(
-        lead_repository=lead_repo or AsyncMock(),
+        lead_repository=repo,
         customer_service=customer_service or AsyncMock(),
         job_service=job_service or AsyncMock(),
         staff_repository=AsyncMock(),

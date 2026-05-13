@@ -55,6 +55,13 @@ def _make_service() -> LeadService:
     """Build a LeadService with mocked dependencies."""
     lead_repo = AsyncMock()
     lead_repo.session = AsyncMock()
+    # Cluster A cascade: neutralize session.execute chain so cascade
+    # helpers (attachments, tag pre-checks) act as no-ops in unit tests.
+    _result = MagicMock()
+    _result.scalars.return_value.all.return_value = []
+    _result.all.return_value = []
+    _result.scalar_one_or_none.return_value = None
+    lead_repo.session.execute = AsyncMock(return_value=_result)
     return LeadService(
         lead_repository=lead_repo,
         customer_service=AsyncMock(),

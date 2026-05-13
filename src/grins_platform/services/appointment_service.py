@@ -2438,9 +2438,17 @@ class AppointmentService(LoggerMixin):
         notes: str | None = None,
         photo_records: list[dict[str, object]] | None = None,
     ) -> Appointment:
-        """Save notes to appointment and append to customer.internal_notes.
+        """Save notes to appointment and overwrite customer.internal_notes.
 
         Upload photos linked to both appointment and customer.
+
+        Cluster A unification: ``customer.internal_notes`` is the canonical
+        notes blob shared across every surface (lead, sales, job, appointment).
+        Appointment-side writes now **overwrite** that blob instead of
+        appending a timestamped fragment — the per-entry timestamp prefix
+        violated the "no chrome" rule established when the April 2026
+        polymorphic-notes timeline UI was rolled back. ``appointment.notes``
+        stays dual-written through Phase 5 for rollback safety.
 
         Args:
             appointment_id: UUID of the appointment
@@ -2453,7 +2461,7 @@ class AppointmentService(LoggerMixin):
         Raises:
             AppointmentNotFoundError: If appointment not found
 
-        Validates: CRM Gap Closure Req 33.2, 33.3
+        Validates: CRM Gap Closure Req 33.2, 33.3; Cluster A notes unification.
         """
         self.log_started(
             "add_notes_and_photos",
@@ -2473,20 +2481,15 @@ class AppointmentService(LoggerMixin):
         update_data: dict[str, object] = {}
 
         if notes is not None:
-            # Save notes to appointment
+            # Phase 5 dual-write: keep legacy column populated for rollback.
             update_data["notes"] = notes
 
-            # Append to customer's internal_notes with timestamp
+            # Cluster A: overwrite customer.internal_notes (no per-entry chrome).
             job = await self.job_repository.get_by_id(appointment.job_id)
             if job:
                 customer = job.customer
                 if customer is not None:
-                    now_str = datetime.now(tz=timezone.utc).strftime(
-                        "%Y-%m-%d %H:%M UTC",
-                    )
-                    prefix = f"\n[{now_str}] Appointment note: "
-                    existing = customer.internal_notes or ""
-                    customer.internal_notes = existing + prefix + notes
+                    customer.internal_notes = notes
 
         if update_data:
             updated = await self.appointment_repository.update(
