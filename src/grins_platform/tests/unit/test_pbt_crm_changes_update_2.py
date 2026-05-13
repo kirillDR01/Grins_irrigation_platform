@@ -165,7 +165,6 @@ def _make_mock_customer(
 def _make_mock_sales_entry(
     status: SalesEntryStatus,
     entry_id: UUID | None = None,
-    signwell_document_id: str | None = None,
 ) -> MagicMock:
     """Create a mock SalesEntry."""
     entry = MagicMock()
@@ -175,7 +174,6 @@ def _make_mock_sales_entry(
     entry.property_id = uuid4()
     entry.job_type = "spring_startup"
     entry.notes = None
-    entry.signwell_document_id = signwell_document_id
     entry.override_flag = False
     entry.updated_at = datetime.now(tz=timezone.utc)
     return entry

@@ -38,6 +38,7 @@ export function MobileJobCard({ appointment, onOpen }: MobileJobCardProps) {
       role="button"
       tabIndex={0}
       data-testid={`mobile-job-card-${state}`}
+      data-appointment-id={appointment.id}
       onClick={() => onOpen(appointment.id)}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') onOpen(appointment.id);

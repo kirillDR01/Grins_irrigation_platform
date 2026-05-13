@@ -771,7 +771,10 @@ class EstimateService(LoggerMixin):
             estimate_id=str(estimate.id),
         )
         try:
-            from grins_platform.models.enums import JobSource  # noqa: PLC0415
+            from grins_platform.models.enums import (  # noqa: PLC0415
+                JobCategory,
+                JobSource,
+            )
             from grins_platform.schemas.job import JobCreate  # noqa: PLC0415
 
             job_data = JobCreate(
@@ -784,7 +787,13 @@ class EstimateService(LoggerMixin):
                     "auto_created_from_estimate_id": str(estimate.id),
                 },
             )
-            job = await self.job_service.create_job(job_data)
+            # Approved estimates always produce ready-to-schedule jobs.
+            # The "Needs Estimate" badge on the resulting job is stale and
+            # confusing without this override.
+            job = await self.job_service.create_job(
+                job_data,
+                category_override=JobCategory.READY_TO_SCHEDULE,
+            )
 
             # Copy line items into Job.scope_items (AJ-4).
             if estimate.line_items:
@@ -1074,9 +1083,6 @@ class EstimateService(LoggerMixin):
                 f"waiting for your review. View it here: {portal_url}"
             )
 
-            if follow_up.promotion_code:
-                message += f" Use code {follow_up.promotion_code} for a discount!"
-
             # Attempt to send
             success = False
             phone, contact_customer_id, contact_lead_id = (
@@ -1260,18 +1266,13 @@ class EstimateService(LoggerMixin):
         for i, days in enumerate(FOLLOW_UP_DAYS, start=1):
             scheduled_at = now + timedelta(days=days)
 
-            # Later follow-ups get a promotion code to incentivize
-            promo = None
-            if i >= 3:  # Day 14+ gets a promo
-                promo = "SAVE10"
-
             _ = await self.repo.create_follow_up(
                 estimate_id=estimate.id,
                 follow_up_number=i,
                 scheduled_at=scheduled_at,
                 channel="sms",
                 message=None,  # Default message used at send time
-                promotion_code=promo,
+                promotion_code=None,
                 status=FollowUpStatus.SCHEDULED.value,
             )
 

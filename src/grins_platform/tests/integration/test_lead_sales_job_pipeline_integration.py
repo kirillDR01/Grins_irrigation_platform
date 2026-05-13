@@ -56,7 +56,6 @@ def _make_sales_entry_mock(
     lead_id: uuid.UUID | None = None,
     status: str = SalesEntryStatus.SCHEDULE_ESTIMATE.value,
     job_type: str | None = "spring_startup",
-    signwell_document_id: str | None = None,
 ) -> MagicMock:
     """Create a mock SalesEntry row with sensible defaults.
 
@@ -74,7 +73,8 @@ def _make_sales_entry_mock(
     entry.notes = None
     entry.override_flag = False
     entry.closed_reason = None
-    entry.signwell_document_id = signwell_document_id
+    # Legacy SignWell column kept on the model; new flows do not populate it.
+    entry.signwell_document_id = None
     entry.created_at = datetime.now(tz=timezone.utc)
     entry.updated_at = datetime.now(tz=timezone.utc)
     # Denormalized fields expected by SalesEntryResponse
@@ -144,25 +144,29 @@ class TestLeadToSalesToJobPipeline:
     """
 
     # -----------------------------------------------------------------
-    # 1. Full pipeline: lead → sales → advance all → force convert
+    # 1. Full pipeline: lead → sales → advance all → convert
     # -----------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_full_pipeline_lead_to_sales_to_job_with_force_convert(
+    async def test_full_pipeline_lead_to_sales_to_job_convert(
         self,
         admin_client: AsyncClient,
         mock_lead_service: AsyncMock,
         mock_pipeline_service: AsyncMock,
     ) -> None:
-        """Full pipeline: create lead → move to sales → advance all → force convert.
+        """Full pipeline: create lead → move to sales → advance all → convert.
 
-        **Validates: Requirements 12.1, 12.2, 14.3, 16.2**
+        Post-Cluster-C: the ``/force-convert`` endpoint has been removed.
+        Conversion goes through ``/convert`` with no signature gate.
+
+        **Validates: Requirements 12.1, 12.2, 14.3, 16.2;
+        cluster-c-job-creation-and-signwell-removal.**
 
         Steps:
         1. Create a manual lead via POST /api/v1/leads/manual.
         2. Move lead to sales via POST /api/v1/leads/{id}/move-to-sales.
         3. Advance the sales entry through all non-terminal statuses.
-        4. Force-convert to job (no signature on file).
+        4. Convert to job via POST /api/v1/sales/pipeline/{id}/convert.
         5. Verify job is created and sales entry is Closed-Won.
         """
         from grins_platform.models.enums import LeadSituation, LeadStatus
@@ -262,24 +266,23 @@ class TestLeadToSalesToJobPipeline:
             assert advance_resp.status_code == 200
             assert advance_resp.json()["status"] == target_status.value
 
-        # --- Step 4: Force-convert to job ---
+        # --- Step 4: Convert to job (no signature gate post-Cluster-C) ---
         mock_job = MagicMock()
         mock_job.id = job_id
         mock_pipeline_service.convert_to_job = AsyncMock(return_value=mock_job)
 
         convert_resp = await admin_client.post(
-            f"/api/v1/sales/pipeline/{sales_entry_id}/force-convert",
+            f"/api/v1/sales/pipeline/{sales_entry_id}/convert",
         )
         assert convert_resp.status_code == 200
         convert_data = convert_resp.json()
         assert convert_data["job_id"] == str(job_id)
         assert convert_data["status"] == "closed_won"
-        assert convert_data["forced"] is True
 
-        # Verify convert_to_job was called with force=True
+        # Verify convert_to_job was called (no ``force`` kwarg anymore).
         mock_pipeline_service.convert_to_job.assert_awaited_once()
         call_kwargs = mock_pipeline_service.convert_to_job.call_args
-        assert call_kwargs.kwargs.get("force") is True
+        assert "force" not in call_kwargs.kwargs
 
     # -----------------------------------------------------------------
     # 2. Lead → Jobs direct path (bypassing sales)
@@ -411,18 +414,22 @@ class TestLeadToSalesToJobPipeline:
             assert resp.json()["status"] == to_status.value
 
     # -----------------------------------------------------------------
-    # 4. Convert to job with signature (non-force path)
+    # 4. Convert to job (no signature gate post-Cluster-C)
     # -----------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_convert_to_job_with_signature(
+    async def test_convert_to_job_succeeds(
         self,
         admin_client: AsyncClient,
         mock_pipeline_service: AsyncMock,
     ) -> None:
-        """Convert to job succeeds when signature is on file (non-force path).
+        """Convert to job succeeds without any signature gate.
 
-        **Validates: Requirements 16.2**
+        Post-Cluster-C: the ``force`` kwarg has been dropped and
+        ``SignatureRequiredError`` is no longer raised by ``convert_to_job``.
+
+        **Validates: Requirements 16.2;
+        cluster-c-job-creation-and-signwell-removal.**
         """
         entry_id = uuid.uuid4()
         job_id = uuid.uuid4()
@@ -439,37 +446,10 @@ class TestLeadToSalesToJobPipeline:
         assert data["job_id"] == str(job_id)
         assert data["status"] == "closed_won"
 
-        # Verify force=False for the normal convert path
+        # The ``force`` kwarg is no longer passed by the route.
         mock_pipeline_service.convert_to_job.assert_awaited_once()
         call_kwargs = mock_pipeline_service.convert_to_job.call_args
-        assert call_kwargs.kwargs.get("force") is False
-
-    # -----------------------------------------------------------------
-    # 5. Convert blocked without signature (non-force)
-    # -----------------------------------------------------------------
-
-    @pytest.mark.asyncio
-    async def test_convert_to_job_blocked_without_signature(
-        self,
-        admin_client: AsyncClient,
-        mock_pipeline_service: AsyncMock,
-    ) -> None:
-        """Convert to job fails with 422 when no signature is on file.
-
-        **Validates: Requirements 16.2**
-        """
-        from grins_platform.exceptions import SignatureRequiredError
-
-        entry_id = uuid.uuid4()
-        mock_pipeline_service.convert_to_job = AsyncMock(
-            side_effect=SignatureRequiredError(entry_id),
-        )
-
-        resp = await admin_client.post(
-            f"/api/v1/sales/pipeline/{entry_id}/convert",
-        )
-        assert resp.status_code == 422
-        assert "signature" in resp.json()["detail"].lower()
+        assert "force" not in call_kwargs.kwargs
 
     # -----------------------------------------------------------------
     # 6. Terminal state blocks further advance

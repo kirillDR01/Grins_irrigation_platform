@@ -18,7 +18,6 @@ from grins_platform.api.v1.sales_pipeline import _entry_to_response
 from grins_platform.exceptions import (
     InvalidSalesTransitionError,
     SalesEntryNotFoundError,
-    SignatureRequiredError,
 )
 from grins_platform.models.enums import SalesEntryStatus
 from grins_platform.services.sales_pipeline_service import SalesPipelineService
@@ -247,7 +246,13 @@ class TestSalesPipelineNotFound:
 
 @pytest.mark.unit()
 class TestSalesPipelineConvertToJob:
-    """Test convert_to_job with and without signature."""
+    """Test convert_to_job (post-Cluster-C — no SignWell gate).
+
+    Per cluster-c-job-creation-and-signwell-removal, convert_to_job no
+    longer requires a SignWell ``signwell_document_id`` on the entry and
+    no longer accepts a ``force`` kwarg. Admins control whether to advance
+    via the Create-Job modal.
+    """
 
     @pytest.mark.asyncio()
     async def test_convert_with_signature_succeeds(
@@ -268,34 +273,26 @@ class TestSalesPipelineConvertToJob:
 
         result = await pipeline_service.convert_to_job(mock_db, entry.id)
 
-        # convert_to_job returns (job, ...) or job depending on impl
         job = result[0] if isinstance(result, tuple) else result
         assert job.id == mock_job.id
         assert entry.status == SalesEntryStatus.CLOSED_WON.value
-        assert entry.override_flag is False
 
     @pytest.mark.asyncio()
-    async def test_convert_without_signature_raises(
-        self,
-        pipeline_service: SalesPipelineService,
-        mock_db: AsyncMock,
-    ) -> None:
-        entry = _make_entry(SalesEntryStatus.SEND_CONTRACT.value)
-        mock_db.execute = AsyncMock(
-            return_value=Mock(scalar_one_or_none=Mock(return_value=entry)),
-        )
-        with pytest.raises(SignatureRequiredError):
-            await pipeline_service.convert_to_job(mock_db, entry.id)
-
-    @pytest.mark.asyncio()
-    async def test_force_convert_without_signature(
+    async def test_convert_to_job_no_signature_required(
         self,
         pipeline_service: SalesPipelineService,
         mock_db: AsyncMock,
         mock_job_service: AsyncMock,
-        mock_audit_service: AsyncMock,
     ) -> None:
-        entry = _make_entry(SalesEntryStatus.SEND_CONTRACT.value)
+        """convert_to_job without a SignWell document still succeeds.
+
+        Pre-Cluster-C this raised ``SignatureRequiredError``. The signature
+        gate has been removed; the conversion is now admin-discretion.
+        """
+        entry = _make_entry(
+            SalesEntryStatus.SEND_CONTRACT.value,
+            signwell_document_id=None,
+        )
         mock_db.execute = AsyncMock(
             return_value=Mock(scalar_one_or_none=Mock(return_value=entry)),
         )
@@ -305,15 +302,12 @@ class TestSalesPipelineConvertToJob:
         result = await pipeline_service.convert_to_job(
             mock_db,
             entry.id,
-            force=True,
             actor_id=uuid4(),
         )
 
         job = result[0] if isinstance(result, tuple) else result
         assert job.id == mock_job.id
         assert entry.status == SalesEntryStatus.CLOSED_WON.value
-        assert entry.override_flag is True
-        mock_audit_service.log_action.assert_called_once()
 
     @pytest.mark.asyncio()
     async def test_convert_terminal_entry_raises(

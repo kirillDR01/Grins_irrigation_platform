@@ -87,23 +87,6 @@ export const salesPipelineApi = {
     return response.data;
   },
 
-  convert: async (id: string): Promise<{ job_id: string }> => {
-    const response = await apiClient.post<{ job_id: string }>(
-      `/sales/pipeline/${id}/convert`,
-    );
-    return response.data;
-  },
-
-  forceConvert: async (
-    id: string,
-  ): Promise<{ job_id: string; forced: boolean }> => {
-    const response = await apiClient.post<{
-      job_id: string;
-      forced: boolean;
-    }>(`/sales/pipeline/${id}/force-convert`);
-    return response.data;
-  },
-
   // NEW-D: pause/unpause auto-nudges, send appointment-confirmation SMS,
   // dismiss a row from the pipeline list. Persistence backed by the
   // ``nudges_paused_until`` and ``dismissed_at`` columns added in the

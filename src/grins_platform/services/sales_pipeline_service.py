@@ -18,7 +18,6 @@ from grins_platform.exceptions import (
     InvalidSalesTransitionError,
     SalesCalendarEventNotFoundError,
     SalesEntryNotFoundError,
-    SignatureRequiredError,
 )
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.customer import Customer
@@ -26,6 +25,7 @@ from grins_platform.models.enums import (
     SALES_PIPELINE_ORDER,
     SALES_TERMINAL_STATUSES,
     VALID_SALES_TRANSITIONS,
+    JobCategory,
     SalesEntryStatus,
 )
 from grins_platform.models.sales import SalesCalendarEvent, SalesEntry
@@ -412,19 +412,22 @@ class SalesPipelineService(LoggerMixin):
         db: AsyncSession,
         entry_id: UUID,
         *,
-        force: bool = False,
         actor_id: UUID | None = None,
     ) -> Job:
         """Convert a sales entry to a Job record.
 
-        Gated on customer signature unless force=True.
+        Admin-discretion: no programmatic signature gate. Per Cluster C,
+        the SignWell signature requirement was removed — admins control
+        whether to advance an entry via the Create-Job modal.
+
+        Job.category is forced to READY_TO_SCHEDULE because by the time
+        a sales entry reaches this method it has already been approved.
 
         Validates: Req 16.1, 16.2, 16.3, 16.4
         """
         self.log_started(
             "convert_to_job",
             entry_id=str(entry_id),
-            force=force,
         )
 
         entry = await self._get_entry(db, entry_id)
@@ -436,11 +439,6 @@ class SalesPipelineService(LoggerMixin):
                 SalesEntryStatus.CLOSED_WON.value,
             )
 
-        # Signature gating: require signwell_document_id unless force
-        has_signature = bool(entry.signwell_document_id)
-        if not has_signature and not force:
-            raise SignatureRequiredError(entry_id)
-
         # Create job from sales entry data
         job_data = JobCreate(
             customer_id=entry.customer_id,
@@ -448,26 +446,23 @@ class SalesPipelineService(LoggerMixin):
             job_type=entry.job_type or "estimate",
             description=entry.notes,
         )
-        job = await self.job_service.create_job(job_data)
+        job = await self.job_service.create_job(
+            job_data,
+            category_override=JobCategory.READY_TO_SCHEDULE,
+        )
 
         # Update sales entry
         entry.status = SalesEntryStatus.CLOSED_WON.value
         entry.updated_at = datetime.now(tz=timezone.utc)
-        if force and not has_signature:
-            entry.override_flag = True
 
-        # Audit log for force override
-        if force and not has_signature:
+        if actor_id is not None:
             _ = await self.audit_service.log_action(
                 db,
                 actor_id=actor_id,
-                action="sales_entry.force_convert",
+                action="sales_entry.convert_to_job",
                 resource_type="sales_entry",
                 resource_id=entry_id,
-                details={
-                    "job_id": str(job.id),
-                    "override_reason": "No signature on file",
-                },
+                details={"job_id": str(job.id)},
             )
 
         await db.flush()
@@ -477,7 +472,6 @@ class SalesPipelineService(LoggerMixin):
             "convert_to_job",
             entry_id=str(entry_id),
             job_id=str(job.id),
-            forced=force and not has_signature,
         )
         return job
 

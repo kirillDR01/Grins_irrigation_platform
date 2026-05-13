@@ -16,7 +16,18 @@ interface SearchResult {
   href: string;
 }
 
-export function GlobalSearch() {
+interface GlobalSearchProps {
+  /**
+   * Optionally restrict the search to a single entity type. When set, the
+   * off-scope API call is skipped, results show up to 10 of the in-scope
+   * type, and the per-row "Customer"/"Job" badge is hidden (single-type
+   * results don't need it). Default (undefined) preserves the top-bar
+   * behavior — both customers and jobs are queried.
+   */
+  scope?: 'customer' | 'job';
+}
+
+export function GlobalSearch({ scope }: GlobalSearchProps = {}) {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,30 +47,37 @@ export function GlobalSearch() {
 
     setIsLoading(true);
     try {
-      // Note: Invoice API doesn't support search, so we only search customers and jobs
+      const wantCustomers = scope !== 'job';
+      const wantJobs = scope !== 'customer';
+      const sliceLimit = scope ? 10 : 5;
+
       const [customersRes, jobsRes] = await Promise.allSettled([
-        customerApi.search(searchQuery),
-        jobApi.search(searchQuery),
+        wantCustomers
+          ? customerApi.search(searchQuery)
+          : Promise.resolve({ items: [] as Customer[] }),
+        wantJobs
+          ? jobApi.search(searchQuery)
+          : Promise.resolve({ items: [] as Job[] }),
       ]);
 
       const searchResults: SearchResult[] = [];
 
-      // Process customers
-      if (customersRes.status === 'fulfilled') {
-        customersRes.value.items.slice(0, 5).forEach((customer: Customer) => {
-          searchResults.push({
-            type: 'customer',
-            id: customer.id,
-            title: `${customer.first_name} ${customer.last_name}`,
-            subtitle: customer.phone,
-            href: `/customers/${customer.id}`,
+      if (wantCustomers && customersRes.status === 'fulfilled') {
+        customersRes.value.items
+          .slice(0, sliceLimit)
+          .forEach((customer: Customer) => {
+            searchResults.push({
+              type: 'customer',
+              id: customer.id,
+              title: `${customer.first_name} ${customer.last_name}`,
+              subtitle: customer.phone,
+              href: `/customers/${customer.id}`,
+            });
           });
-        });
       }
 
-      // Process jobs
-      if (jobsRes.status === 'fulfilled') {
-        jobsRes.value.items.slice(0, 5).forEach((job: Job) => {
+      if (wantJobs && jobsRes.status === 'fulfilled') {
+        jobsRes.value.items.slice(0, sliceLimit).forEach((job: Job) => {
           searchResults.push({
             type: 'job',
             id: job.id,
@@ -78,7 +96,7 @@ export function GlobalSearch() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [scope]);
 
   // Trigger search when debounced query changes
   useEffect(() => {
@@ -229,11 +247,13 @@ export function GlobalSearch() {
                       </div>
                       <div className="text-xs text-slate-500 truncate">{result.subtitle}</div>
                     </div>
-                    <div className="flex-shrink-0">
-                      <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
-                        {getTypeLabel(result.type)}
-                      </span>
-                    </div>
+                    {scope === undefined && (
+                      <div className="flex-shrink-0">
+                        <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                          {getTypeLabel(result.type)}
+                        </span>
+                      </div>
+                    )}
                   </button>
                 </li>
               ))}

@@ -889,8 +889,13 @@ class AppointmentService(LoggerMixin):
         staff_id: UUID,
         schedule_date: date,
         include_relationships: bool = False,
+        confirmed_only: bool = True,
     ) -> tuple[list[Appointment], int, int]:
         """Get all appointments for a specific staff member on a specific date.
+
+        Tech-mobile callers must see CONFIRMED appointments only — that is
+        the default. Admin-side callers that need every status can pass
+        ``confirmed_only=False``.
 
         Validates: Admin Dashboard Requirement 1.5
         """
@@ -898,6 +903,7 @@ class AppointmentService(LoggerMixin):
             "get_staff_daily_schedule",
             staff_id=str(staff_id),
             date=str(schedule_date),
+            confirmed_only=confirmed_only,
         )
 
         staff = await self.staff_repository.get_by_id(staff_id)
@@ -909,6 +915,7 @@ class AppointmentService(LoggerMixin):
             staff_id,
             schedule_date,
             include_relationships=include_relationships,
+            confirmed_only=confirmed_only,
         )
 
         total_minutes = sum(apt.get_duration_minutes() for apt in appointments)

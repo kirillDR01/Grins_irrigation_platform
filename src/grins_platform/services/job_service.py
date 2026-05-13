@@ -220,11 +220,21 @@ class JobService(LoggerMixin):
                     return str(notes)
         return None
 
-    async def create_job(self, data: JobCreate) -> Job:
+    async def create_job(
+        self,
+        data: JobCreate,
+        *,
+        category_override: JobCategory | None = None,
+    ) -> Job:
         """Create a new job request with auto-categorization.
 
         Args:
             data: Job creation data
+            category_override: When provided, bypasses ``_determine_category``
+                and uses the supplied value. Callers that know the resulting
+                job should be ready-to-schedule (e.g. sales-pipeline convert,
+                approved-estimate auto-job) pass this to avoid the stale
+                "Needs Estimate" badge.
 
         Returns:
             Created Job instance
@@ -273,8 +283,8 @@ class JobService(LoggerMixin):
                 self.log_rejected("create_job", reason="service_inactive")
                 raise ServiceOfferingInactiveError(data.service_offering_id)
 
-        # Auto-categorize the job
-        category = self._determine_category(data)
+        # Auto-categorize the job, unless the caller forced an override.
+        category = category_override or self._determine_category(data)
 
         # Auto-populate Week_Of from customer service preference (CRM2 Req 20.5)
         target_start: date | None = None

@@ -27,7 +27,6 @@ from grins_platform.exceptions import (
     InvalidSalesTransitionError,
     SalesCalendarEventNotFoundError,
     SalesEntryNotFoundError,
-    SignatureRequiredError,
 )
 from grins_platform.log_config import LoggerMixin, get_logger
 from grins_platform.models.customer_document import CustomerDocument
@@ -339,6 +338,8 @@ async def override_sales_status(
         return SalesEntryResponse.model_validate(entry)  # type: ignore[no-any-return]
 
 
+# DEPRECATED: SignWell shelved (see project_signwell_not_used memory).
+# Endpoint dormant — kept for a future e-sign vendor swap.
 @router.post(
     "/pipeline/{entry_id}/sign/email",
     summary="Trigger email signing via SignWell",
@@ -396,6 +397,8 @@ async def trigger_email_signing(
     return {"document_id": doc.get("id"), "status": "sent"}
 
 
+# DEPRECATED: SignWell shelved (see project_signwell_not_used memory).
+# Endpoint dormant — kept for a future e-sign vendor swap.
 @router.post(
     "/pipeline/{entry_id}/sign/embedded",
     summary="Get embedded signing URL for on-site signing",
@@ -457,7 +460,7 @@ async def get_embedded_signing(
 
 @router.post(
     "/pipeline/{entry_id}/convert",
-    summary="Convert sales entry to job (signature gated)",
+    summary="Convert sales entry to job",
 )
 async def convert_to_job(
     entry_id: UUID,
@@ -470,7 +473,6 @@ async def convert_to_job(
         job = await service.convert_to_job(
             session,
             entry_id,
-            force=False,
             actor_id=user.id,
         )
         await session.commit()
@@ -478,46 +480,11 @@ async def convert_to_job(
         raise HTTPException(
             status_code=404,
             detail="Sales entry not found",
-        ) from exc
-    except SignatureRequiredError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail="Waiting for customer signature",
         ) from exc
     except InvalidSalesTransitionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     else:
         return {"job_id": str(job.id), "status": "closed_won"}
-
-
-@router.post(
-    "/pipeline/{entry_id}/force-convert",
-    summary="Force convert to job without signature",
-)
-async def force_convert_to_job(
-    entry_id: UUID,
-    user: CurrentActiveUser,
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-    service: Annotated[SalesPipelineService, Depends(_get_pipeline_service)],
-) -> dict[str, Any]:
-    """Validates: Req 16.3, 16.4"""
-    try:
-        job = await service.convert_to_job(
-            session,
-            entry_id,
-            force=True,
-            actor_id=user.id,
-        )
-        await session.commit()
-    except SalesEntryNotFoundError as exc:
-        raise HTTPException(
-            status_code=404,
-            detail="Sales entry not found",
-        ) from exc
-    except InvalidSalesTransitionError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    else:
-        return {"job_id": str(job.id), "status": "closed_won", "forced": True}
 
 
 @router.post(

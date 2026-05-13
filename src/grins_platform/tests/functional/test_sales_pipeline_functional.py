@@ -1,11 +1,12 @@
 """Functional tests for sales pipeline flow.
 
 Tests the full sales pipeline lifecycle: create from lead, advance
-through all statuses, convert to job (with and without signature),
-and force convert override — using mocked DB sessions following
+through all statuses, and convert to job (post-Cluster-C: no SignWell
+signature gate, no force override) — using mocked DB sessions following
 the project's functional test pattern.
 
-Validates: Requirements 14.3, 14.4, 14.5, 14.6, 16.2
+Validates: Requirements 14.3, 14.4, 14.5, 14.6, 16.2;
+cluster-c-job-creation-and-signwell-removal.
 """
 
 from __future__ import annotations
@@ -19,7 +20,6 @@ import pytest
 
 from grins_platform.exceptions import (
     InvalidSalesTransitionError,
-    SignatureRequiredError,
 )
 from grins_platform.models.enums import SalesEntryStatus
 from grins_platform.models.sales import SalesEntry
@@ -46,6 +46,7 @@ def _make_sales_entry(**overrides: Any) -> MagicMock:
     entry.notes = overrides.get("notes")
     entry.override_flag = overrides.get("override_flag", False)
     entry.closed_reason = overrides.get("closed_reason")
+    # Legacy column kept on the model; new flows no longer populate it.
     entry.signwell_document_id = overrides.get("signwell_document_id")
     entry.created_at = overrides.get(
         "created_at",
@@ -235,21 +236,24 @@ class TestConvertToJobFlow:
     Validates: Requirements 14.6, 16.2
     """
 
-    async def test_convert_with_signature_creates_job_and_closes_won(
+    async def test_convert_creates_job_and_closes_won(
         self,
     ) -> None:
-        """Convert to job succeeds when signature is on file.
+        """Convert to job succeeds and transitions entry to CLOSED_WON.
 
-        Validates: Requirement 16.2
+        Post-Cluster-C: no SignWell signature gate. An entry can be
+        converted regardless of whether ``signwell_document_id`` is set.
+
+        Validates: Requirement 16.2;
+        cluster-c-job-creation-and-signwell-removal.
         """
         mock_job = _make_job()
         js = AsyncMock()
         js.create_job = AsyncMock(return_value=mock_job)
-        svc, _, aus = _build_service(job_service=js)
+        svc, _, _ = _build_service(job_service=js)
 
         entry = _make_sales_entry(
             status=SalesEntryStatus.SEND_CONTRACT.value,
-            signwell_document_id="sw_doc_123",
         )
         db = _mock_db_returning(entry)
 
@@ -257,60 +261,29 @@ class TestConvertToJobFlow:
 
         assert job.id == mock_job.id
         assert entry.status == SalesEntryStatus.CLOSED_WON.value
-        assert entry.override_flag is False
         js.create_job.assert_awaited_once()
 
-    async def test_convert_without_signature_raises_signature_required(
+    async def test_convert_to_job_no_signature_required(
         self,
     ) -> None:
-        """Convert to job without signature and without force raises.
+        """convert_to_job no longer raises when the entry has no SignWell doc.
 
-        Validates: Requirement 16.2
-        """
-        svc, _, _ = _build_service()
-        entry = _make_sales_entry(
-            status=SalesEntryStatus.SEND_CONTRACT.value,
-            signwell_document_id=None,
-        )
-        db = _mock_db_returning(entry)
-
-        with pytest.raises(SignatureRequiredError):
-            await svc.convert_to_job(db, entry.id)
-
-    async def test_force_convert_without_signature_creates_job_with_override(
-        self,
-    ) -> None:
-        """Force convert creates job, sets override_flag, writes audit log.
-
-        Validates: Requirement 16.2
+        Validates: cluster-c-job-creation-and-signwell-removal.
         """
         mock_job = _make_job()
         js = AsyncMock()
         js.create_job = AsyncMock(return_value=mock_job)
-        aus = AsyncMock()
-        aus.log_action = AsyncMock(return_value=MagicMock())
-        svc, _, _ = _build_service(job_service=js, audit_service=aus)
+        svc, _, _ = _build_service(job_service=js)
 
         entry = _make_sales_entry(
             status=SalesEntryStatus.SEND_CONTRACT.value,
-            signwell_document_id=None,
         )
         db = _mock_db_returning(entry)
-        actor_id = uuid4()
 
-        job = await svc.convert_to_job(
-            db,
-            entry.id,
-            force=True,
-            actor_id=actor_id,
-        )
-
+        # Must not raise — signature gate removed.
+        job = await svc.convert_to_job(db, entry.id)
         assert job.id == mock_job.id
         assert entry.status == SalesEntryStatus.CLOSED_WON.value
-        assert entry.override_flag is True
-        aus.log_action.assert_awaited_once()
-        audit_call = aus.log_action.call_args
-        assert audit_call.kwargs["action"] == "sales_entry.force_convert"
 
     async def test_convert_from_terminal_status_raises(self) -> None:
         """Cannot convert an already-closed entry.

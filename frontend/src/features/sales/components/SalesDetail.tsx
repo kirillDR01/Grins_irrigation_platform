@@ -1,7 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import axios from 'axios';
 import { ArrowLeft, ChevronDown, FileText, Mail, Phone, Edit, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,8 +32,6 @@ import {
   useDocumentPresign,
   useOverrideSalesStatus,
   useAdvanceSalesEntry,
-  useConvertToJob,
-  useForceConvertToJob,
   useMarkSalesLost,
   useSalesCalendarEvents,
   useUploadSalesDocument,
@@ -45,13 +42,12 @@ import {
 } from '../hooks/useSalesPipeline';
 import { ScheduleVisitModal } from './ScheduleVisitModal';
 import { MarkDeclinedDialog } from './MarkDeclinedDialog';
-import { ForceConvertDialog } from './ForceConvertDialog';
 import { AddCustomerEmailDialog } from './AddCustomerEmailDialog';
 import { SalesEstimateSheetWrapper } from './SalesEstimateSheetWrapper';
+import { CreateJobModal } from '@/features/jobs/components/CreateJobModal';
 import { SALES_STATUS_CONFIG, TERMINAL_STATUSES, ALL_STATUSES, statusToStageKey } from '../types/pipeline';
 import type { SalesEntryStatus, NowActionId, ActivityEvent, StageKey } from '../types/pipeline';
 import { DocumentsSection } from './DocumentsSection';
-import { SignWellEmbeddedSigner } from './SignWellEmbeddedSigner';
 import { StageStepper } from './StageStepper';
 import { NowCard } from './NowCard';
 import { ActivityStrip } from './ActivityStrip';
@@ -73,8 +69,6 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
   const queryClient = useQueryClient();
   const overrideStatus = useOverrideSalesStatus();
   const advance = useAdvanceSalesEntry();
-  const convertToJob = useConvertToJob();
-  const forceConvert = useForceConvertToJob();
   const markLost = useMarkSalesLost();
   const uploadDoc = useUploadSalesDocument();
   const pauseNudges = usePauseNudges();
@@ -131,9 +125,8 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
   // MarkDeclinedDialog open state
   const [markDeclinedOpen, setMarkDeclinedOpen] = useState(false);
 
-  // NEW-C: ForceConvertDialog opens after the convert endpoint returns 422
-  // with "signature" in the detail. Mirrors StatusActionButton handler.
-  const [forceConvertOpen, setForceConvertOpen] = useState(false);
+  // Cluster C: CreateJobModal replaces the SignWell-gated convert flow.
+  const [createJobOpen, setCreateJobOpen] = useState(false);
 
   // NEW-D: AddCustomerEmailDialog drives the inline email-add flow used by
   // the now-action-add-email button when the customer row has no email.
@@ -195,27 +188,9 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
           break;
 
         case 'convert_to_job':
-          // NEW-C: parse the 422 axios response and surface the
-          // ForceConvertDialog when the backend reports a missing
-          // signature. Mirrors StatusActionButton.handleAdvance.
-          convertToJob.mutate(entryId, {
-            onSuccess: () => { toast.success('Converted to job'); refetch(); },
-            onError: (err) => {
-              const detail = axios.isAxiosError(err)
-                ? (err.response?.data?.detail ?? 'Failed to convert')
-                : 'Failed to convert';
-              if (
-                typeof detail === 'string'
-                && (detail.includes('signature') || detail.includes('Signature'))
-              ) {
-                setForceConvertOpen(true);
-              } else {
-                toast.error('Error', {
-                  description: typeof detail === 'string' ? detail : 'Failed to convert',
-                });
-              }
-            },
-          });
+          // Cluster C: open CreateJobModal which owns the create + closed_won
+          // two-call shape. Replaces the SignWell-gated convert endpoint.
+          setCreateJobOpen(true);
           break;
 
         case 'view_job':
@@ -303,7 +278,6 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
       entry,
       navigate,
       advance,
-      convertToJob,
       overrideStatus,
       refetch,
       pauseNudges,
@@ -647,13 +621,6 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
                 </Button>
               </span>
 
-              {/* Embedded on-site signing */}
-              <SignWellEmbeddedSigner
-                entryId={entryId}
-                onComplete={() => refetch()}
-                disabled={!signingReady}
-                disabledReason={signingDisabledReason}
-              />
             </div>
           )}
         </CardContent>
@@ -805,25 +772,11 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
         }}
       />
 
-      <ForceConvertDialog
-        open={forceConvertOpen}
-        onOpenChange={setForceConvertOpen}
-        isPending={forceConvert.isPending}
-        onConfirm={() =>
-          forceConvert.mutate(entryId, {
-            onSuccess: () => {
-              toast.success('Converted to job (forced)');
-              setForceConvertOpen(false);
-              refetch();
-            },
-            onError: (err) => {
-              toast.error('Failed to force convert', {
-                description: getErrorMessage(err),
-              });
-              setForceConvertOpen(false);
-            },
-          })
-        }
+      <CreateJobModal
+        open={createJobOpen}
+        onOpenChange={setCreateJobOpen}
+        salesEntry={entry}
+        onCreated={() => refetch()}
       />
 
       <AddCustomerEmailDialog

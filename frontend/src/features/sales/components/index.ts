@@ -10,7 +10,6 @@ export { EstimateDetail } from './EstimateDetail';
 export { EstimateList } from './EstimateList';
 export { SalesDetail } from './SalesDetail';
 export { DocumentsSection } from './DocumentsSection';
-export { SignWellEmbeddedSigner } from './SignWellEmbeddedSigner';
 export { AgeChip } from './AgeChip';
 export { StageStepper } from './StageStepper';
 export { NowCard } from './NowCard';

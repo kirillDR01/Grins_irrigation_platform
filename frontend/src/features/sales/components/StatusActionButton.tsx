@@ -18,8 +18,6 @@ import {
 } from '@/components/ui/dialog';
 import {
   useAdvanceSalesEntry,
-  useConvertToJob,
-  useForceConvertToJob,
   useMarkSalesLost,
   useCreateCalendarEvent,
   pipelineKeys,
@@ -29,6 +27,7 @@ import {
   TERMINAL_STATUSES,
   type SalesEntry,
 } from '../types/pipeline';
+import { CreateJobModal } from '@/features/jobs/components/CreateJobModal';
 
 interface StatusActionButtonProps {
   entry: SalesEntry;
@@ -37,13 +36,11 @@ interface StatusActionButtonProps {
 export function StatusActionButton({ entry }: StatusActionButtonProps) {
   const queryClient = useQueryClient();
   const advance = useAdvanceSalesEntry();
-  const convertToJob = useConvertToJob();
-  const forceConvert = useForceConvertToJob();
   const markLost = useMarkSalesLost();
   const createCalendarEvent = useCreateCalendarEvent();
-  const [showForceConfirm, setShowForceConfirm] = useState(false);
   const [showLostConfirm, setShowLostConfirm] = useState(false);
   const [showCalendarForm, setShowCalendarForm] = useState(false);
+  const [createJobOpen, setCreateJobOpen] = useState(false);
   const [calendarForm, setCalendarForm] = useState({
     title: '',
     scheduledDate: '',
@@ -109,22 +106,10 @@ export function StatusActionButton({ entry }: StatusActionButtonProps) {
       return;
     }
     if (isSendContract) {
-      // Use convert endpoint with signature gating
-      convertToJob.mutate(entry.id, {
-        onSuccess: () => {
-          toast.success('Converted to job');
-        },
-        onError: (err) => {
-          const msg = axios.isAxiosError(err)
-            ? (err.response?.data?.detail ?? 'Failed to convert')
-            : 'Failed to convert';
-          if (typeof msg === 'string' && (msg.includes('signature') || msg.includes('Signature'))) {
-            setShowForceConfirm(true);
-          } else {
-            toast.error('Error', { description: typeof msg === 'string' ? msg : 'Failed to convert' });
-          }
-        },
-      });
+      // Cluster C: SignWell-gated convert removed. The "Convert to Job"
+      // button now opens CreateJobModal which owns the create + closed_won
+      // two-call shape.
+      setCreateJobOpen(true);
       return;
     }
     advance.mutate(entry.id, {
@@ -135,9 +120,7 @@ export function StatusActionButton({ entry }: StatusActionButtonProps) {
         const msg = axios.isAxiosError(err)
           ? (err.response?.data?.detail ?? 'Failed to advance')
           : 'Failed to advance';
-        if (typeof msg === 'string' && msg.includes('signature')) {
-          setShowForceConfirm(true);
-        } else if (
+        if (
           typeof msg === 'string'
           && /upload an estimate|pending_approval/i.test(msg)
         ) {
@@ -152,19 +135,6 @@ export function StatusActionButton({ entry }: StatusActionButtonProps) {
         } else {
           toast.error('Error', { description: typeof msg === 'string' ? msg : 'Failed to advance' });
         }
-      },
-    });
-  };
-
-  const handleForceConvert = () => {
-    forceConvert.mutate(entry.id, {
-      onSuccess: () => {
-        toast.success('Converted to job (forced)');
-        setShowForceConfirm(false);
-      },
-      onError: () => {
-        toast.error('Failed to force convert');
-        setShowForceConfirm(false);
       },
     });
   };
@@ -197,10 +167,10 @@ export function StatusActionButton({ entry }: StatusActionButtonProps) {
           size="sm"
           variant="outline"
           onClick={handleAdvance}
-          disabled={advance.isPending || convertToJob.isPending}
+          disabled={advance.isPending}
           data-testid={`advance-btn-${entry.id}`}
         >
-          {(advance.isPending || convertToJob.isPending) ? 'Processing...' : config.action}
+          {advance.isPending ? 'Processing...' : config.action}
         </Button>
       )}
       <Button
@@ -213,25 +183,6 @@ export function StatusActionButton({ entry }: StatusActionButtonProps) {
       >
         Mark Lost
       </Button>
-
-      {/* Force convert confirmation */}
-      <Dialog open={showForceConfirm} onOpenChange={setShowForceConfirm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Force Convert to Job?</DialogTitle>
-            <DialogDescription>
-              No customer signature is on file. Converting without a signature
-              will be logged as an override. Continue?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForceConfirm(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleForceConvert}>Force Convert</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Mark lost confirmation */}
       <Dialog open={showLostConfirm} onOpenChange={setShowLostConfirm}>
@@ -373,6 +324,12 @@ export function StatusActionButton({ entry }: StatusActionButtonProps) {
           </div>
         </div>
       )}
+
+      <CreateJobModal
+        open={createJobOpen}
+        onOpenChange={setCreateJobOpen}
+        salesEntry={entry}
+      />
     </div>
   );
 }

@@ -86,8 +86,6 @@ vi.mock('../hooks/useSalesPipeline', () => ({
   },
   // The pipelineKeys doubles as the calendar key — provide a stub.
   useAdvanceSalesEntry: () => ({ mutate: vi.fn(), isPending: false }),
-  useConvertToJob: () => ({ mutate: vi.fn(), isPending: false }),
-  useForceConvertToJob: () => ({ mutate: vi.fn(), isPending: false }),
   useMarkSalesLost: () => ({ mutate: vi.fn(), isPending: false }),
   useCreateCalendarEvent: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateCalendarEvent: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -136,22 +134,8 @@ vi.mock('./DocumentsSection', () => ({
   DocumentsSection: () => <div data-testid="documents-section" />,
 }));
 
-vi.mock('./SignWellEmbeddedSigner', () => ({
-  SignWellEmbeddedSigner: ({
-    disabled,
-    disabledReason,
-  }: {
-    disabled: boolean;
-    disabledReason?: string;
-  }) => (
-    <button
-      data-testid="embedded-sign-btn"
-      disabled={disabled}
-      title={disabledReason}
-    >
-      Sign on site
-    </button>
-  ),
+vi.mock('@/features/jobs/components/CreateJobModal', () => ({
+  CreateJobModal: () => <div data-testid="create-job-modal-stub" />,
 }));
 
 const mockUpdateCustomerMutateAsync = vi.fn().mockResolvedValue(undefined);
@@ -209,7 +193,7 @@ describe('SalesDetail signing gate (bughunt M-17)', () => {
     presignState.isError = false;
   });
 
-  it('disables signing buttons while presign is loading', async () => {
+  it('disables email-sign button while presign is loading', async () => {
     presignState.isLoading = true;
     render(<SalesDetail entryId="entry-001" />, { wrapper });
 
@@ -218,30 +202,20 @@ describe('SalesDetail signing gate (bughunt M-17)', () => {
     });
 
     expect(screen.getByTestId('email-sign-btn')).toBeDisabled();
-    expect(screen.getByTestId('embedded-sign-btn')).toBeDisabled();
-    expect(screen.getByTestId('embedded-sign-btn')).toHaveAttribute(
-      'title',
-      'Resolving document…',
-    );
   });
 
-  it('disables signing buttons when presign returns an error', async () => {
+  it('disables email-sign button when presign returns an error', async () => {
     presignState.isError = true;
     render(<SalesDetail entryId="entry-001" />, { wrapper });
 
     await waitFor(() => {
-      expect(screen.getByTestId('embedded-sign-btn')).toBeInTheDocument();
+      expect(screen.getByTestId('email-sign-btn')).toBeInTheDocument();
     });
 
     expect(screen.getByTestId('email-sign-btn')).toBeDisabled();
-    expect(screen.getByTestId('embedded-sign-btn')).toBeDisabled();
-    expect(screen.getByTestId('embedded-sign-btn')).toHaveAttribute(
-      'title',
-      'Contract file is missing or expired — re-upload required.',
-    );
   });
 
-  it('enables signing buttons once presign resolves to a real URL', async () => {
+  it('enables email-sign button once presign resolves to a real URL', async () => {
     presignState.data = {
       download_url: 'https://s3.example.com/docs/estimate.pdf?signed=abc',
       file_name: 'estimate.pdf',
@@ -249,11 +223,10 @@ describe('SalesDetail signing gate (bughunt M-17)', () => {
     render(<SalesDetail entryId="entry-001" />, { wrapper });
 
     await waitFor(() => {
-      expect(screen.getByTestId('embedded-sign-btn')).toBeInTheDocument();
+      expect(screen.getByTestId('email-sign-btn')).toBeInTheDocument();
     });
 
     expect(screen.getByTestId('email-sign-btn')).not.toBeDisabled();
-    expect(screen.getByTestId('embedded-sign-btn')).not.toBeDisabled();
   });
 });
 

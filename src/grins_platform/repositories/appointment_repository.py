@@ -396,6 +396,7 @@ class AppointmentRepository(LoggerMixin):
         staff_id: UUID,
         schedule_date: date,
         include_relationships: bool = False,
+        confirmed_only: bool = True,
     ) -> list[Appointment]:
         """Get all appointments for a specific staff member on a specific date.
 
@@ -403,6 +404,9 @@ class AppointmentRepository(LoggerMixin):
             staff_id: UUID of the staff member
             schedule_date: Date to get appointments for
             include_relationships: Whether to load related entities
+            confirmed_only: When True (default), only return appointments
+                whose status is CONFIRMED. The tech-mobile schedule view
+                relies on this — techs must not see un-confirmed work.
 
         Returns:
             List of appointments ordered by route_order then time_window_start
@@ -413,16 +417,21 @@ class AppointmentRepository(LoggerMixin):
             "get_staff_daily_schedule",
             staff_id=str(staff_id),
             date=str(schedule_date),
+            confirmed_only=confirmed_only,
         )
 
         stmt = (
             select(Appointment)
             .where(Appointment.staff_id == staff_id)
             .where(Appointment.scheduled_date == schedule_date)
-            .order_by(
-                Appointment.route_order.asc().nullslast(),
-                Appointment.time_window_start.asc(),
+        )
+        if confirmed_only:
+            stmt = stmt.where(
+                Appointment.status == AppointmentStatus.CONFIRMED.value,
             )
+        stmt = stmt.order_by(
+            Appointment.route_order.asc().nullslast(),
+            Appointment.time_window_start.asc(),
         )
 
         if include_relationships:

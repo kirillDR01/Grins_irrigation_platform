@@ -68,26 +68,6 @@ export function useOverrideSalesStatus() {
   });
 }
 
-export function useConvertToJob() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => salesPipelineApi.convert(id),
-    onSuccess: () => {
-      invalidateAfterSalesPipelineTransition(qc, true);
-    },
-  });
-}
-
-export function useForceConvertToJob() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => salesPipelineApi.forceConvert(id),
-    onSuccess: () => {
-      invalidateAfterSalesPipelineTransition(qc, true);
-    },
-  });
-}
-
 // NEW-D: pause/unpause nudges, send text confirmation, dismiss row.
 // Mirror the invalidation strategy used by useOverrideSalesStatus —
 // each mutation invalidates the entry detail and the lists view.

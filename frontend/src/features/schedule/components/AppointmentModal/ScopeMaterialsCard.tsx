@@ -22,10 +22,10 @@ export function ScopeMaterialsCard({
 
   return (
     <div className="rounded-[14px] border border-[#E5E7EB] bg-white px-4 py-3 space-y-3">
-      {/* Scope */}
+      {/* Notes (was: Scope) */}
       <div>
         <p className="text-[10px] font-extrabold tracking-[0.6px] text-[#9CA3AF] uppercase mb-1.5">
-          Scope
+          Notes
         </p>
         <p className="text-[17px] font-extrabold text-[#0B1220] leading-snug">{scope}</p>
       </div>

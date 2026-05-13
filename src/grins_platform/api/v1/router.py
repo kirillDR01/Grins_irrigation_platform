@@ -68,7 +68,6 @@ from grins_platform.api.v1.sent_messages import router as sent_messages_router
 from grins_platform.api.v1.services import router as services_router
 from grins_platform.api.v1.settings import router as settings_router
 from grins_platform.api.v1.sheet_submissions import router as sheet_submissions_router
-from grins_platform.api.v1.signwell_webhooks import router as signwell_webhooks_router
 from grins_platform.api.v1.sms import (
     communications_router,
     router as sms_router,
@@ -237,12 +236,6 @@ api_router.include_router(
 api_router.include_router(
     callrail_webhooks_router,
     tags=["callrail-webhooks"],
-)
-
-# Include SignWell Webhook endpoints (excluded from CSRF)
-api_router.include_router(
-    signwell_webhooks_router,
-    tags=["signwell-webhooks"],
 )
 
 # Include Resend Webhook endpoints (excluded from CSRF)

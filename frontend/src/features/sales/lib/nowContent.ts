@@ -71,9 +71,7 @@ export function nowContent(
         pill: { tone: 'you', label: 'Your move' },
         title: `${firstName} approved — upload the signed agreement, then convert.`,
         copyHtml:
-          `${firstName} already signed via SignWell; drop the <em>counter-signed PDF</em> below for our records. ` +
-          `Pick a <em>rough Week Of</em> target, then "Convert to Job" opens a quick prompt for job type & details — ` +
-          `once confirmed, this lead closes and a real Job + Customer record are created.`,
+          'Upload the signed agreement PDF below for our records, then convert to a Job.',
         dropzone: { kind: 'agreement', filled: hasSignedAgreement },
         showWeekOfPicker: true,
         actions: hasSignedAgreement

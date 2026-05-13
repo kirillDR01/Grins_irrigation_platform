@@ -12,7 +12,6 @@ export { EstimateList } from './components';
 export { SalesDetail } from './components';
 export { ScheduleVisitModal } from './components/ScheduleVisitModal';
 export { DocumentsSection } from './components';
-export { SignWellEmbeddedSigner } from './components';
 
 // Hooks
 export {
@@ -36,8 +35,6 @@ export {
   useSalesEntry,
   useAdvanceSalesEntry,
   useOverrideSalesStatus,
-  useConvertToJob,
-  useForceConvertToJob,
   useMarkSalesLost,
   useTriggerEmailSigning,
   useGetEmbeddedSigningUrl,

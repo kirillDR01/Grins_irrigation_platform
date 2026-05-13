@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useDebounce } from '@/shared/hooks/useDebounce';
 import {
   flexRender,
   getCoreRowModel,
@@ -9,9 +8,9 @@ import {
   type ColumnDef,
   type SortingState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, MoreHorizontal, Search, AlertTriangle, ShieldCheck, CalendarPlus } from 'lucide-react';
+import { ArrowUpDown, MoreHorizontal, AlertTriangle, ShieldCheck, CalendarPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { GlobalSearch } from '@/shared/components/GlobalSearch';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,8 +67,6 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const debouncedSearch = useDebounce(searchQuery, 300);
   const [highlightedJobId, setHighlightedJobId] = useState<string | null>(null);
   const [simplifiedFilter, setSimplifiedFilter] = useState<string>('all');
 
@@ -105,14 +102,10 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Wire debounced search to API params (Bug #1 fix)
-  useEffect(() => {
-    setParams((p) => ({
-      ...p,
-      search: debouncedSearch || undefined,
-      page: 1,
-    }));
-  }, [debouncedSearch]);
+  // Free-text job search is delegated to the shared <GlobalSearch
+  // scope="job" /> toolbar widget which navigates to the job detail page
+  // on result click. The Jobs list itself no longer drives `params.search`
+  // — Cluster C harmonized this with the top-bar search.
 
   // Handle simplified status filter change (Req 21)
   const handleStatusChange = useCallback(
@@ -465,17 +458,9 @@ export function JobList({ onEdit, onDelete, onStatusChange, customerId }: JobLis
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
         {/* Table Toolbar */}
         <div className="p-4 border-b border-slate-100 flex gap-4 items-center flex-wrap">
-          {/* Search Input */}
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              type="text"
-              placeholder="Search jobs..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-slate-50 border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-              data-testid="job-search"
-            />
+          {/* Shared global-search component (job-scoped) */}
+          <div className="flex-1 min-w-[200px] max-w-sm">
+            <GlobalSearch scope="job" />
           </div>
 
           {/* Simplified Status Filter (Req 21) */}
