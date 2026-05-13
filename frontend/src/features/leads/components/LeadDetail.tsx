@@ -62,6 +62,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { LoadingPage, ErrorMessage, PageHeader, InternalNotesCard } from '@/shared/components';
+import { TagPicker } from '@/features/customers/components/TagPicker';
+import { CustomerNotesEditor } from '@/features/customers/components/CustomerNotesEditor';
+import { useCustomer } from '@/features/customers/hooks/useCustomers';
 import { getErrorMessage } from '@/core/api';
 
 import { useLead, useUpdateLead } from '../hooks';
@@ -94,6 +97,7 @@ export function LeadDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: lead, isLoading, error, refetch } = useLead(id!);
+  const { data: leadCustomer } = useCustomer(lead?.customer_id ?? '');
   const updateMutation = useUpdateLead();
   const { data: staffData } = useStaff({ page_size: 100, is_active: true });
 
@@ -839,14 +843,54 @@ export function LeadDetail() {
               )}
             </div>
 
-            {/* Internal Notes Card */}
+            {/* Tags — only available post-conversion (Cluster A) */}
+            {lead.customer_id ? (
+              <>
+                <Separator className="bg-slate-100" />
+                <div data-testid="lead-tags-section">
+                  <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                    Tags
+                  </p>
+                  <TagPicker customerId={lead.customer_id} />
+                </div>
+              </>
+            ) : (
+              <>
+                <Separator className="bg-slate-100" />
+                <div data-testid="lead-tags-placeholder">
+                  <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                    Tags
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Tags will be available once this lead converts to a customer.
+                  </p>
+                </div>
+              </>
+            )}
+
+            {/* Internal Notes — Cluster A: post-conversion uses shared
+                customer.internal_notes; pre-conversion stays on lead.notes
+                (no customer exists yet). */}
             <Separator className="bg-slate-100" />
-            <InternalNotesCard
-              value={lead.notes}
-              onSave={handleSaveLeadNotes}
-              isSaving={updateMutation.isPending}
-              data-testid-prefix="lead-"
-            />
+            {lead.customer_id ? (
+              <div data-testid="lead-customer-notes-section">
+                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                  Internal Notes
+                </p>
+                <CustomerNotesEditor
+                  customerId={lead.customer_id}
+                  initialValue={leadCustomer?.internal_notes ?? lead.notes ?? ''}
+                  data-testid="lead-customer-notes-editor"
+                />
+              </div>
+            ) : (
+              <InternalNotesCard
+                value={lead.notes}
+                onSave={handleSaveLeadNotes}
+                isSaving={updateMutation.isPending}
+                data-testid-prefix="lead-"
+              />
+            )}
 
             {/* Consent Status — Task 6.3 inline edit */}
             <Separator className="bg-slate-100" />

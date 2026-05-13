@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { StatusBadge, LoadingPage, ErrorMessage, PageHeader, InternalNotesCard, OptOutBadge } from '@/shared/components';
+import { TagPicker } from '@/features/customers/components/TagPicker';
 import { ConsentHistoryPanel } from '@/features/customers/components/ConsentHistoryPanel';
 import {
   useCustomer,
@@ -701,6 +702,18 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
           {/* Overview Tab */}
           <TabsContent value="overview" data-testid="tab-content-overview">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Tags */}
+              <Card data-testid="customer-tags-card">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold text-slate-500 uppercase tracking-wider">
+                    Tags
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <TagPicker customerId={customer.id} />
+                </CardContent>
+              </Card>
+
               {/* Internal Notes Card */}
               <InternalNotesCard
                 value={customer.internal_notes}

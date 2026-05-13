@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -11,7 +10,6 @@ import {
   ChevronRight,
   MessageSquare,
   Sparkles,
-  Save,
   TrendingUp,
   Pencil,
   MapPin,
@@ -22,9 +20,11 @@ import {
 import { parseLocalDate } from '@/shared/utils/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingPage, ErrorMessage, PropertyTags } from '@/shared/components';
+import { TagPicker } from '@/features/customers/components/TagPicker';
+import { CustomerNotesEditor } from '@/features/customers/components/CustomerNotesEditor';
+import { useCustomer } from '@/features/customers/hooks/useCustomers';
 import { useJob, useUpdateJob, useJobFinancials } from '../hooks';
 import { JobStatusBadge } from './JobStatusBadge';
 import { OnSiteOperations } from './OnSiteOperations';
@@ -51,31 +51,9 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
   const id = propJobId || paramId || '';
 
   const { data: job, isLoading, error, refetch } = useJob(id);
-  const updateJobMutation = useUpdateJob();
+  useUpdateJob();
   const { data: financials, isLoading: financialsLoading } = useJobFinancials(id);
-
-  // Notes editing state (Req 20)
-  const [notesValue, setNotesValue] = useState<string | null>(null);
-  const [notesSaving, setNotesSaving] = useState(false);
-
-  // Initialize notes from job data
-  const currentNotes = notesValue !== null ? notesValue : (job?.notes ?? '');
-
-  const handleSaveNotes = async () => {
-    if (!job) return;
-    setNotesSaving(true);
-    try {
-      await updateJobMutation.mutateAsync({
-        id: job.id,
-        data: { notes: currentNotes || null },
-      });
-      setNotesValue(null); // Reset to track from server
-    } catch (err) {
-      console.error('Failed to save notes:', err);
-    } finally {
-      setNotesSaving(false);
-    }
-  };
+  const { data: jobCustomer } = useCustomer(job?.customer_id ?? '');
 
   const handleGoBack = () => {
     if (onClose) {
@@ -272,30 +250,32 @@ export function JobDetail({ jobId: propJobId, onEdit, onClose }: JobDetailProps)
 
       <Separator />
 
-      {/* Notes Section (Req 20) */}
-      <div>
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-          <FileText className="h-3.5 w-3.5" />
-          Notes
-        </p>
-        <Textarea
-          value={currentNotes}
-          onChange={(e) => setNotesValue(e.target.value)}
-          placeholder="Add notes about this job..."
-          className="min-h-[100px] bg-slate-50 border-slate-200 text-base md:text-sm"
-          data-testid="job-notes-textarea"
-        />
-        <Button
-          size="sm"
-          className="mt-2 bg-teal-500 hover:bg-teal-600 text-white"
-          onClick={handleSaveNotes}
-          disabled={notesSaving || (notesValue === null)}
-          data-testid="save-notes-btn"
-        >
-          <Save className="mr-1.5 h-3.5 w-3.5" />
-          {notesSaving ? 'Saving...' : 'Save Notes'}
-        </Button>
-      </div>
+      {/* Tags — Cluster A unification */}
+      {job.customer_id && (
+        <div data-testid="job-tags-section">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+            Tags
+          </p>
+          <TagPicker customerId={job.customer_id} />
+        </div>
+      )}
+
+      <Separator />
+
+      {/* Notes Section — Cluster A: shared customer.internal_notes blob */}
+      {job.customer_id && (
+        <div data-testid="job-notes-section">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <FileText className="h-3.5 w-3.5" />
+            Notes
+          </p>
+          <CustomerNotesEditor
+            customerId={job.customer_id}
+            initialValue={jobCustomer?.internal_notes ?? job.notes ?? ''}
+            data-testid="job-customer-notes-editor"
+          />
+        </div>
+      )}
 
       <Separator />
 

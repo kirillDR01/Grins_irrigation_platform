@@ -18,6 +18,7 @@ export interface SalesEntry {
   job_type: string | null;
   status: SalesEntryStatus;
   last_contact_date: string | null;
+  /** @deprecated Cluster A unification — read/write customer.internal_notes instead. */
   notes: string | null;
   override_flag: boolean;
   closed_reason: string | null;

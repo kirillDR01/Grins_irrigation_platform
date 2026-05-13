@@ -32,6 +32,7 @@ export interface Job extends BaseEntity {
   status: JobStatus;
   description: string | null;
   summary: string | null;
+  /** @deprecated Cluster A unification — read/write customer.internal_notes instead. */
   notes: string | null;
   estimated_duration_minutes: number | null;
   priority_level: number;

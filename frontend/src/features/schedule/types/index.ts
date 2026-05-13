@@ -74,6 +74,7 @@ export interface Appointment {
   arrived_at: string | null;
   en_route_at: string | null;
   completed_at: string | null;
+  /** @deprecated Cluster A unification — read/write customer.internal_notes instead. */
   notes: string | null;
   route_order: number | null;
   estimated_arrival: string | null;

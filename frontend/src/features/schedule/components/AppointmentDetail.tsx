@@ -66,6 +66,7 @@ import { AppointmentCommunicationTimeline } from './AppointmentCommunicationTime
 import { AppointmentForm } from './AppointmentForm';
 import { jobApi } from '@/features/jobs/api/jobApi';
 import { customerApi } from '@/features/customers/api/customerApi';
+import { TagPicker } from '@/features/customers/components/TagPicker';
 import { LoadingSpinner } from '@/shared/components/LoadingSpinner';
 import { StaffWorkflowButtons } from './StaffWorkflowButtons';
 import { PaymentCollector } from './PaymentCollector';
@@ -614,6 +615,21 @@ export function AppointmentDetail({
               )}
             </p>
           </details>
+        )}
+
+        {/* Tags — Cluster A unification */}
+        {job?.customer_id && (
+          <div
+            className="p-3 bg-slate-50 rounded-xl"
+            data-testid="appointment-tags-section"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Tags
+              </p>
+            </div>
+            <TagPicker customerId={job.customer_id} />
+          </div>
         )}
 
         {/* Notes Section */}

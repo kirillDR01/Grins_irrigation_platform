@@ -20,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { LoadingPage, ErrorMessage, InternalNotesCard } from '@/shared/components';
+import { TagPicker } from '@/features/customers/components/TagPicker';
 import { getErrorMessage } from '@/core/api';
 import { useUpdateCustomer, useCustomer as useCustomerDetail } from '@/features/customers/hooks';
 import { useQueryClient } from '@tanstack/react-query';
@@ -750,6 +751,20 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
 
       {/* Documents section */}
       <DocumentsSection customerId={entry.customer_id} />
+
+      {/* Tags */}
+      {entry.customer_id && (
+        <Card data-testid="sales-tags-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-slate-500 uppercase tracking-wider">
+              Tags
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TagPicker customerId={entry.customer_id} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Internal Notes Card */}
       <InternalNotesCard

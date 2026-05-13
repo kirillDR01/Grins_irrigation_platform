@@ -5,6 +5,10 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { customerApi } from '@/features/customers/api/customerApi';
+import { customerKeys } from '@/features/customers/hooks/useCustomers';
+import { jobKeys } from '@/features/jobs/hooks/useJobs';
+import { appointmentKeys } from '@/features/schedule/hooks/useAppointments';
+import { pipelineKeys } from '@/features/sales/hooks/useSalesPipeline';
 import type { CustomerTag, TagSaveRequest } from '../types';
 
 export const customerTagKeys = {
@@ -71,9 +75,17 @@ export function useSaveCustomerTags() {
     },
 
     onSettled: (_data, _err, { customerId }) => {
+      // Cluster A: Job/Appointment/Sales responses denormalize customer_tags.
+      // Invalidate every list so the freshly saved tag-set surfaces without
+      // a manual refresh.
       queryClient.invalidateQueries({
         queryKey: customerTagKeys.byCustomer(customerId),
       });
+      queryClient.invalidateQueries({ queryKey: customerKeys.detail(customerId) });
+      queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: jobKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: pipelineKeys.lists() });
     },
   });
 }
