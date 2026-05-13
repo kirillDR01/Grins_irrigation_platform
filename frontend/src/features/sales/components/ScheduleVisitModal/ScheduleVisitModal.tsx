@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -10,6 +11,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { ArrowRight, X } from 'lucide-react';
 import { track } from '@/shared/utils/track';
+import { useUpdateCustomer } from '@/features/customers/hooks';
+import { invalidateAfterCustomerInternalNotesSave } from '@/shared/utils/invalidationHelpers';
 import { useScheduleVisit } from '../../hooks/useScheduleVisit';
 import { PrefilledCustomerCard } from './PrefilledCustomerCard';
 import { ScheduleFields } from './ScheduleFields';
@@ -50,6 +53,22 @@ export function ScheduleVisitModal({
     currentEvent,
     defaultAssigneeId,
   });
+
+  const updateCustomer = useUpdateCustomer();
+  const queryClient = useQueryClient();
+  const handleNotesBlurSave = useCallback(async () => {
+    if (!entry.customer_id || !s.internalNotes) return;
+    try {
+      await updateCustomer.mutateAsync({
+        id: entry.customer_id,
+        data: { internal_notes: s.internalNotes },
+      });
+      invalidateAfterCustomerInternalNotesSave(queryClient, entry.customer_id);
+    } catch {
+      // Silent — main "Send confirmation text" still carries notes via the
+      // form submit. Defense in depth.
+    }
+  }, [entry.customer_id, s.internalNotes, updateCustomer, queryClient]);
 
   useEffect(() => {
     if (open)
@@ -101,7 +120,7 @@ export function ScheduleVisitModal({
       <DialogContent
         data-testid="schedule-visit-modal"
         showCloseButton={false}
-        className="sm:max-w-[1024px] p-0 rounded-[18px] border border-slate-200"
+        className="sm:max-w-[1024px] p-0 rounded-[18px] border border-slate-200 max-h-[90vh] flex flex-col"
       >
         <header className="flex items-start gap-4 px-6 py-5 border-b border-slate-200 bg-white">
           <div className="min-w-0 flex-1">
@@ -145,7 +164,7 @@ export function ScheduleVisitModal({
         </header>
 
         {/* Body — desktop two-col, mobile stack (customer → calendar → fields). */}
-        <div className="grid grid-cols-1 md:grid-cols-[360px_1fr] items-stretch">
+        <div className="grid grid-cols-1 md:grid-cols-[360px_1fr] items-stretch flex-1 min-h-0 overflow-y-auto">
           <div className="order-1 min-w-0 border-slate-200 bg-slate-50 px-6 py-5 md:border-r">
             <PrefilledCustomerCard entry={entry} />
             <ScheduleFields
@@ -158,6 +177,7 @@ export function ScheduleVisitModal({
               onDurationChange={s.setPickDuration}
               onAssigneeChange={s.setAssignedToUserId}
               onNotesChange={s.setInternalNotes}
+              onNotesBlurSave={handleNotesBlurSave}
             />
             <PickSummary
               pick={s.pick}

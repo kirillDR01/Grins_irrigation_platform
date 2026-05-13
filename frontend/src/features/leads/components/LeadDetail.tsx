@@ -62,6 +62,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { LoadingPage, ErrorMessage, PageHeader, InternalNotesCard } from '@/shared/components';
+import { AddressAutocomplete } from '@/shared/components/AddressAutocomplete';
 import { TagPicker } from '@/features/customers/components/TagPicker';
 import { CustomerNotesEditor } from '@/features/customers/components/CustomerNotesEditor';
 import { useCustomer } from '@/features/customers/hooks/useCustomers';
@@ -667,10 +668,10 @@ export function LeadDetail() {
               </div>
               {editingAddress ? (
                 <div className="space-y-3" data-testid="address-form">
-                  <Input
+                  <AddressAutocomplete
                     placeholder="Street Address"
                     value={addressForm.address}
-                    onChange={(e) => setAddressForm((p) => ({ ...p, address: e.target.value }))}
+                    onChange={(v) => setAddressForm((p) => ({ ...p, address: v }))}
                     data-testid="address-input"
                   />
                   <div className="grid grid-cols-3 gap-3">

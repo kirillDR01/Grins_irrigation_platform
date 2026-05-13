@@ -7,7 +7,7 @@
 import { useState, useRef } from 'react';
 import {
   Calendar, Mail, MessageSquare, Upload, CheckCircle2, XCircle,
-  RotateCw, PauseCircle, ArrowRight, User, Edit3, Lock, FileText,
+  RotateCw, PauseCircle, PlayCircle, ArrowRight, User, Edit3, Lock, FileText,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,7 @@ import { AutoNudgeSchedule } from './AutoNudgeSchedule';
 
 const ICON_MAP: Record<LucideIconName, React.ComponentType<{ className?: string }>> = {
   Calendar, Mail, MessageSquare, Upload, CheckCircle2, XCircle,
-  RotateCw, PauseCircle, ArrowRight, User, Edit3, Lock, FileText,
+  RotateCw, PauseCircle, PlayCircle, ArrowRight, User, Edit3, Lock, FileText,
 };
 
 interface NowCardProps {
@@ -221,8 +221,13 @@ function Dropzone({
         role="button"
         tabIndex={0}
         onClick={() => inputRef.current?.click()}
+        onDragEnter={(e) => { e.preventDefault(); setOver(true); }}
         onDragOver={(e) => { e.preventDefault(); setOver(true); }}
-        onDragLeave={() => setOver(false)}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+            setOver(false);
+          }
+        }}
         onDrop={(e) => {
           e.preventDefault();
           setOver(false);

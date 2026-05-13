@@ -272,6 +272,16 @@ class TestCustomerUpdate:
         update = CustomerUpdate(phone=None)
         assert update.phone is None
 
+    def test_accepts_empty_last_name(self) -> None:
+        """Single-word customer names from SalesDetail send last_name=''."""
+        update = CustomerUpdate(first_name="John", last_name="")
+        assert update.last_name == ""
+
+    def test_accepts_none_last_name(self) -> None:
+        """Omitting last_name still works."""
+        update = CustomerUpdate(first_name="John")
+        assert update.last_name is None
+
 
 class TestCustomerFlagsUpdate:
     """Test suite for CustomerFlagsUpdate schema."""

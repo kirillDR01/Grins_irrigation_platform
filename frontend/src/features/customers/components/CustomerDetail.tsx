@@ -28,6 +28,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { AddressAutocomplete } from '@/shared/components/AddressAutocomplete';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -492,7 +493,7 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
               </div>
               {editingAddress ? (
                 <div className="space-y-3" data-testid="address-form">
-                  <Input placeholder="Street Address" value={addressForm.address} onChange={(e) => setAddressForm((p) => ({ ...p, address: e.target.value }))} data-testid="address-input" />
+                  <AddressAutocomplete placeholder="Street Address" value={addressForm.address} onChange={(v) => setAddressForm((p) => ({ ...p, address: v }))} data-testid="address-input" />
                   <div className="grid grid-cols-3 gap-3">
                     <Input placeholder="City" value={addressForm.city} onChange={(e) => setAddressForm((p) => ({ ...p, city: e.target.value }))} data-testid="city-input" />
                     <Input placeholder="State" value={addressForm.state} onChange={(e) => setAddressForm((p) => ({ ...p, state: e.target.value }))} data-testid="state-input" />
@@ -905,7 +906,7 @@ export function CustomerDetail({ onEdit }: CustomerDetailProps) {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="property-address">Street Address *</Label>
-              <Input id="property-address" value={newPropertyForm.address} onChange={(e) => setNewPropertyForm((p) => ({ ...p, address: e.target.value }))} placeholder="123 Main St" data-testid="new-property-address-input" />
+              <AddressAutocomplete id="property-address" value={newPropertyForm.address} onChange={(v) => setNewPropertyForm((p) => ({ ...p, address: v }))} placeholder="123 Main St" data-testid="new-property-address-input" />
             </div>
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">

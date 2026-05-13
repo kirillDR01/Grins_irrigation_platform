@@ -1,7 +1,7 @@
 // NowCard.test.tsx — Requirements: 8.1, 8.2, 8.5, 8.6, 8.7, 10.1, 10.4, 14.1
 // Property 3: AgeChip Rendering Correctness
 // Property 9: generateWeeks Produces Consecutive Monday-Anchored Weeks
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, createEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import * as fc from 'fast-check';
@@ -107,6 +107,40 @@ describe('NowCard', () => {
     Object.defineProperty(input, 'files', { value: [file], configurable: true });
     fireEvent.change(input);
     expect(onFileDrop).toHaveBeenCalledWith(file, 'estimate');
+  });
+
+  it('does not reset over-state when dragLeave fires on a child element', () => {
+    renderCard({
+      content: makeContent({ dropzone: { kind: 'estimate', filled: false } }),
+    });
+    const zone = screen.getByTestId('now-card-dropzone-empty');
+    const child = zone.querySelector('div');
+    expect(child).not.toBeNull();
+
+    // dragOver sets over=true (covers both onDragEnter and onDragOver paths)
+    fireEvent.dragOver(zone);
+    expect(zone.className).toContain('border-sky-500');
+
+    // dragLeave with relatedTarget pointing to a child → over must stay true.
+    // testing-library doesn't carry relatedTarget through the merge in all
+    // browsers/jsdom versions, so build the event explicitly and patch the
+    // property.
+    const leaveToChild = createEvent.dragLeave(zone);
+    Object.defineProperty(leaveToChild, 'relatedTarget', {
+      value: child,
+      enumerable: true,
+    });
+    fireEvent(zone, leaveToChild);
+    expect(zone.className).toContain('border-sky-500');
+
+    // dragLeave with relatedTarget null (pointer left document) → over=false
+    const leaveOut = createEvent.dragLeave(zone);
+    Object.defineProperty(leaveOut, 'relatedTarget', {
+      value: null,
+      enumerable: true,
+    });
+    fireEvent(zone, leaveOut);
+    expect(zone.className).not.toContain('border-sky-500');
   });
 
   it('action button calls onAction with correct id', async () => {

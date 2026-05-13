@@ -20,3 +20,5 @@ export type { QueueFreshnessHeaderProps } from './QueueFreshnessHeader';
 export { TagChip } from './TagChip';
 export type { TagTone } from './TagChip';
 export { SheetContainer } from './SheetContainer';
+export { AddressAutocomplete } from './AddressAutocomplete';
+export type { AddressSelection } from './AddressAutocomplete';

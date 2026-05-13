@@ -25,6 +25,7 @@ type Props = {
   onDurationChange: (m: 30 | 60 | 90 | 120) => void;
   onAssigneeChange: (id: string | null) => void;
   onNotesChange: (s: string) => void;
+  onNotesBlurSave?: () => void;
 };
 
 export function ScheduleFields({
@@ -37,6 +38,7 @@ export function ScheduleFields({
   onDurationChange,
   onAssigneeChange,
   onNotesChange,
+  onNotesBlurSave,
 }: Props) {
   const { data: staffData } = useStaff({ is_active: true });
   const dateValue = pick?.date ?? '';
@@ -162,6 +164,7 @@ export function ScheduleFields({
           value={internalNotes}
           placeholder="Gate code 4412. Large corner lot, sketched zones in intake call…"
           onChange={(e) => onNotesChange(e.target.value)}
+          onBlur={() => onNotesBlurSave?.()}
           rows={3}
         />
       </div>

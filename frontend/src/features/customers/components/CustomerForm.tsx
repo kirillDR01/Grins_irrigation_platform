@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AddressAutocomplete } from '@/shared/components/AddressAutocomplete';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
@@ -394,9 +395,9 @@ export function CustomerForm({ customer, onSuccess, onCancel }: CustomerFormProp
                     <FormItem>
                       <FormLabel className="text-sm font-medium text-slate-700">Address</FormLabel>
                       <FormControl>
-                        <Input
-                          {...field}
+                        <AddressAutocomplete
                           value={field.value ?? ''}
+                          onChange={field.onChange}
                           placeholder="123 Main St"
                           data-testid="address-input"
                           className="border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100"

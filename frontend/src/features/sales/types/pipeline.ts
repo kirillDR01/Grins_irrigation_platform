@@ -266,6 +266,7 @@ export type LucideIconName =
   | 'XCircle'
   | 'RotateCw'
   | 'PauseCircle'
+  | 'PlayCircle'
   | 'ArrowRight'
   | 'User'
   | 'Edit3'
@@ -325,6 +326,7 @@ export interface NowCardInputs {
   hasSignedAgreement: boolean;
   hasCustomerEmail: boolean;
   weekOf?: string | null;
+  nudgesPaused?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

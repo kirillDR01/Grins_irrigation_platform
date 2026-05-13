@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { useCustomer as useCustomerDetail } from '@/features/customers/hooks';
 import {
   useSalesCalendarEvents,
   useCreateCalendarEvent,
@@ -65,14 +66,24 @@ export function useScheduleVisit({
     [currentEvent],
   );
 
+  const { data: customerDetail } = useCustomerDetail(customerId ?? '');
+
   const [pick, setPick] = useState<Pick | null>(initialPick);
   const [durationMin, setDurationMin] = useState<30 | 60 | 90 | 120>(60);
   const [assignedToUserId, setAssignedToUserId] = useState<string | null>(
     currentEvent?.assigned_to_user_id ?? defaultAssigneeId ?? null,
   );
   const [internalNotes, setInternalNotes] = useState<string>(
-    currentEvent?.notes ?? '',
+    currentEvent?.notes ?? customerDetail?.internal_notes ?? '',
   );
+  // Seed from customer.internal_notes when it loads (the initial render
+  // usually sees undefined). Don't clobber an in-progress draft.
+  useEffect(() => {
+    if (!currentEvent && customerDetail?.internal_notes && !internalNotes) {
+      setInternalNotes(customerDetail.internal_notes);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentEvent, customerDetail?.internal_notes]);
   const [openedAt] = useState<Date>(() => new Date());
 
   const [weekStart, setWeekStart] = useState<Date>(() =>

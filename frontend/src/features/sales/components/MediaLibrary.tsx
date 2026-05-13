@@ -123,8 +123,13 @@ export function MediaLibrary() {
           className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
             isDragging ? 'border-teal-400 bg-teal-50' : 'border-slate-200 hover:border-slate-300'
           }`}
+          onDragEnter={(e) => { e.preventDefault(); setIsDragging(true); }}
           onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-          onDragLeave={() => setIsDragging(false)}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+              setIsDragging(false);
+            }
+          }}
           onDrop={handleDrop}
           data-testid="upload-dropzone"
         >

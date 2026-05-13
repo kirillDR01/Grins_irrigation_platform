@@ -14,7 +14,7 @@ export function nowContent(
 ): NowCardContent | null {
   const {
     stage, hasEstimateDoc, hasSignedAgreement, hasCustomerEmail,
-    firstName, jobId, sentDate, docName, weekOf,
+    firstName, jobId, sentDate, docName, weekOf, nudgesPaused,
   } = inputs;
 
   switch (stage) {
@@ -61,7 +61,7 @@ export function nowContent(
         actions: [
           act('primary', 'Client approved (manual)', 'now-action-approved', 'mark_approved_manual', 'CheckCircle2'),
           act('outline', 'Resend estimate', 'now-action-resend', 'resend_estimate', 'RotateCw'),
-          act('outline', 'Pause auto-follow-up', 'now-action-pause', 'pause_nudges', 'PauseCircle'),
+          act('outline', nudgesPaused ? 'Resume auto-follow-up' : 'Pause auto-follow-up', 'now-action-pause', 'pause_nudges', nudgesPaused ? 'PlayCircle' : 'PauseCircle'),
           act('danger', 'Client declined', 'now-action-declined', 'mark_declined', 'XCircle'),
         ],
       };

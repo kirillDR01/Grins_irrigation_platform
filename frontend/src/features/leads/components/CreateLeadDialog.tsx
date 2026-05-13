@@ -40,6 +40,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 
+import { AddressAutocomplete } from '@/shared/components/AddressAutocomplete';
 import { useCreateManualLead } from '../hooks';
 import { LEAD_SITUATION_LABELS } from '../types';
 import type { LeadSituation } from '../types';
@@ -220,8 +221,9 @@ function CreateLeadForm({ onOpenChange }: { onOpenChange: (open: boolean) => voi
               <FormItem>
                 <FormLabel className="text-sm font-medium text-slate-700">Address</FormLabel>
                 <FormControl>
-                  <Input
-                    {...field}
+                  <AddressAutocomplete
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
                     placeholder="Street address"
                     data-testid="create-lead-address"
                     className="bg-slate-50 border-slate-200 rounded-lg"

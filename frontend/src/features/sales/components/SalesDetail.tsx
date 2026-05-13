@@ -475,6 +475,7 @@ export function SalesDetail({ entryId }: SalesDetailProps) {
         hasCustomerEmail: hasEmail,
         firstName,
         weekOf: weekOfValue ?? undefined,
+        nudgesPaused: !!entry.nudges_paused_until,
       })
     : null;
 

@@ -64,6 +64,30 @@ describe('nowContent', () => {
     expect(result!.title).toContain('Alice');
   });
 
+  describe('pending_approval pause label', () => {
+    it('shows "Pause auto-follow-up" when not paused', () => {
+      const content = nowContent(
+        baseInputs('pending_approval', { nudgesPaused: false }),
+      );
+      expect(
+        content?.actions.some(
+          (a) => 'label' in a && a.label === 'Pause auto-follow-up',
+        ),
+      ).toBe(true);
+    });
+
+    it('flips to "Resume auto-follow-up" when paused', () => {
+      const content = nowContent(
+        baseInputs('pending_approval', { nudgesPaused: true }),
+      );
+      expect(
+        content?.actions.some(
+          (a) => 'label' in a && a.label === 'Resume auto-follow-up',
+        ),
+      ).toBe(true);
+    });
+  });
+
   it('send_contract — no agreement (locked)', () => {
     const result = nowContent(baseInputs('send_contract', { hasSignedAgreement: false }));
     expect(result).not.toBeNull();

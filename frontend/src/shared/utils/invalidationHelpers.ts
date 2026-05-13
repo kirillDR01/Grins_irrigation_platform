@@ -29,6 +29,7 @@ export function invalidateAfterLeadRouting(
   queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
   queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });
   queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() });
+  queryClient.invalidateQueries({ queryKey: dashboardKeys.metrics() });
 
   if (target === 'jobs') {
     queryClient.invalidateQueries({ queryKey: jobKeys.lists() });
@@ -48,6 +49,7 @@ export function invalidateAfterCustomerMutation(
 ): void {
   queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
   queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() });
+  queryClient.invalidateQueries({ queryKey: dashboardKeys.metrics() });
   if (customerId) {
     queryClient.invalidateQueries({ queryKey: customerKeys.detail(customerId) });
   }
@@ -62,6 +64,7 @@ export function invalidateAfterMarkContacted(
   queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
   queryClient.invalidateQueries({ queryKey: leadKeys.followUpQueue() });
   queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() });
+  queryClient.invalidateQueries({ queryKey: dashboardKeys.metrics() });
 }
 
 /**
