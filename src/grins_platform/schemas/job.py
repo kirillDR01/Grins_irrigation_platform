@@ -22,6 +22,7 @@ from grins_platform.models.enums import (
     JobStatus,
     PricingModel,
 )
+from grins_platform.schemas.customer_tag import CustomerTagResponse
 
 
 class JobCreate(BaseModel):
@@ -438,6 +439,12 @@ class JobResponse(BaseModel):
     property_tags: list[str] | None = Field(
         default=None,
         description="Property tags (e.g. Residential, HOA, Subscription) for badge display",
+    )
+    # Cluster A: denormalized customer tags so the frontend renders them
+    # without a second fetch per job row.
+    customer_tags: list[CustomerTagResponse] | None = Field(
+        default=None,
+        description="Customer's tags denormalized for display; null if not loaded.",
     )
 
     @field_validator("category", mode="before")  # type: ignore[misc,untyped-decorator]

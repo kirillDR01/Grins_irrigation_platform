@@ -11,6 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from grins_platform.models.enums import SalesEntryStatus
+from grins_platform.schemas.customer_tag import CustomerTagResponse
 
 
 class SalesEntryCreate(BaseModel):
@@ -56,6 +57,8 @@ class SalesEntryResponse(BaseModel):
     customer_phone: Optional[str] = None
     customer_email: Optional[str] = None
     customer_internal_notes: Optional[str] = None
+    # Cluster A: denormalized customer tags for badge display.
+    customer_tags: Optional[list[CustomerTagResponse]] = None
     property_address: Optional[str] = None
     # bughunt L-8: curated display name so the Pipeline list shows
     # "System Installation" instead of the raw "new_system" slug.

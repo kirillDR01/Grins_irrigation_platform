@@ -14,6 +14,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from grins_platform.models.enums import AppointmentStatus
+from grins_platform.schemas.customer_tag import CustomerTagResponse
 
 
 class AppointmentCreate(BaseModel):
@@ -163,6 +164,12 @@ class AppointmentResponse(BaseModel):
     # tech-mobile schedule cards: only the staff-daily endpoint populates
     # this via selectinload(Job.job_property). Other paths leave it None.
     property_summary: Optional[PropertySummary] = None
+    # Cluster A: denormalized customer tags so the frontend renders them
+    # without a second fetch per appointment row.
+    customer_tags: Optional[list[CustomerTagResponse]] = Field(
+        default=None,
+        description="Customer's tags denormalized for display; null if not loaded.",
+    )
 
 
 class AppointmentListParams(BaseModel):

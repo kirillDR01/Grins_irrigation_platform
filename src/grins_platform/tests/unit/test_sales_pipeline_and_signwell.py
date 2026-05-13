@@ -87,6 +87,8 @@ def _make_entry(
     entry.nudges_paused_until = nudges_paused_until
     entry.dismissed_at = dismissed_at
     entry.updated_at = datetime.now(tz=timezone.utc)
+    # Cluster A: denormalized field must be a plain value for from_attributes.
+    entry.customer_tags = None
     return entry
 
 
@@ -601,6 +603,7 @@ def _make_response_entry_mock(
     entry.customer_phone = None
     entry.customer_email = None
     entry.customer_internal_notes = None
+    entry.customer_tags = None
     entry.property_address = None
     entry.job_type_display = None
     return entry
@@ -614,6 +617,7 @@ def _make_customer_mock(*, email: str | None) -> Mock:
     customer.phone = "5551234567"
     customer.email = email
     customer.internal_notes = None
+    customer.tags = []
     return customer
 
 

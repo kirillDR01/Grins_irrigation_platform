@@ -198,6 +198,27 @@ def _populate_agreement_fields(job: object, resp: JobResponse) -> None:
     resp.service_agreement_active = is_active
 
 
+def _populate_customer_tags(job: object, resp: JobResponse) -> None:
+    """Denormalize ``customer.tags`` onto the JobResponse (Cluster A).
+
+    ``Customer.tags`` is declared ``lazy="selectin"`` so it auto-loads
+    whenever ``Customer`` is fetched. Empty tag set yields ``[]`` (not
+    ``None``) so the frontend can distinguish "no tags" from "not loaded".
+    """
+    from grins_platform.schemas.customer_tag import (  # noqa: PLC0415
+        CustomerTagResponse,
+    )
+
+    customer = getattr(job, "customer", None)
+    if customer is None:
+        return
+    tags = getattr(customer, "tags", None)
+    if tags is None:
+        resp.customer_tags = []
+        return
+    resp.customer_tags = [CustomerTagResponse.model_validate(t) for t in tags]
+
+
 # =============================================================================
 # GET /api/v1/jobs/metrics/by-status - Job Status Counts by Category
 # NOTE: Static routes must come BEFORE dynamic routes like /{job_id}
@@ -428,6 +449,7 @@ async def list_jobs(
         _populate_property_fields(j, resp)
         _populate_preference_notes(j, resp)
         _populate_agreement_fields(j, resp)
+        _populate_customer_tags(j, resp)
         items.append(resp)
 
     return PaginatedJobResponse(
@@ -482,6 +504,7 @@ async def get_ready_to_schedule(
         _populate_property_fields(j, resp)
         _populate_preference_notes(j, resp)
         _populate_agreement_fields(j, resp)
+        _populate_customer_tags(j, resp)
         items.append(resp)
 
     return PaginatedJobResponse(
@@ -695,6 +718,7 @@ async def get_job(
         _populate_property_fields(result, resp)
         _populate_preference_notes(result, resp)
         _populate_agreement_fields(result, resp)
+        _populate_customer_tags(result, resp)
         return resp  # type: ignore[no-any-return]
 
 
@@ -1186,6 +1210,7 @@ async def complete_job(
     resp = JobResponse.model_validate(updated)
     _populate_property_fields(job, resp)
     _populate_agreement_fields(job, resp)
+    _populate_customer_tags(job, resp)
     _endpoints.log_completed("complete_job", job_id=str(job_id))
     return JobCompleteResponse(completed=True, warning=None, job=resp)
 

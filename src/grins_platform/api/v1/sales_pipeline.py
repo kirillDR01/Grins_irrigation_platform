@@ -159,8 +159,15 @@ async def _get_signing_document(
 
 
 def _entry_to_response(entry: SalesEntry) -> SalesEntryResponse:
-    """Build response with denormalized customer/property fields."""
+    """Build response with denormalized customer/property fields.
+
+    Cluster A: also denormalizes ``customer.tags`` onto ``customer_tags``
+    so the Pipeline list renders badges without a per-row fetch.
+    """
     from grins_platform.models.enums import job_type_display  # noqa: PLC0415
+    from grins_platform.schemas.customer_tag import (  # noqa: PLC0415
+        CustomerTagResponse,
+    )
 
     customer = entry.customer
     prop = entry.property
@@ -175,6 +182,13 @@ def _entry_to_response(entry: SalesEntry) -> SalesEntryResponse:
     resp.customer_phone = customer_phone
     resp.customer_email = customer.email if customer else None
     resp.customer_internal_notes = customer.internal_notes if customer else None
+    if customer is not None:
+        tags = getattr(customer, "tags", None)
+        resp.customer_tags = (
+            [CustomerTagResponse.model_validate(t) for t in tags]
+            if tags is not None
+            else []
+        )
     resp.property_address = property_address
     resp.job_type_display = job_type_display(entry.job_type) or None
     return resp  # type: ignore[no-any-return]

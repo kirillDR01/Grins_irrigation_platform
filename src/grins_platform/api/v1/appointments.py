@@ -120,9 +120,17 @@ def _populate_appointment_extended_fields(
 ) -> None:
     """Populate extended display fields on an AppointmentResponse.
 
-    Reads job_type, customer_name, staff_name, and service_agreement_id
-    from the appointment's relationships.
+    Reads job_type, customer_name, customer_tags, staff_name, and
+    service_agreement_id from the appointment's relationships.
+
+    Cluster A: ``customer_tags`` is denormalized so the frontend doesn't
+    need a per-row fetch. ``Customer.tags`` is declared ``lazy="selectin"``
+    so it auto-loads with the customer.
     """
+    from grins_platform.schemas.customer_tag import (  # noqa: PLC0415
+        CustomerTagResponse,
+    )
+
     job = getattr(appointment, "job", None)
     if job:
         response.job_type = job.job_type
@@ -132,6 +140,12 @@ def _populate_appointment_extended_fields(
         if customer:
             response.customer_name = f"{customer.first_name} {customer.last_name}"
             response.customer_internal_notes = customer.internal_notes
+            tags = getattr(customer, "tags", None)
+            response.customer_tags = (
+                [CustomerTagResponse.model_validate(t) for t in tags]
+                if tags is not None
+                else []
+            )
         job_property = getattr(job, "job_property", None)
         if job_property:
             response.property_summary = PropertySummary.model_validate(job_property)
