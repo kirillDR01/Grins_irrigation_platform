@@ -124,7 +124,7 @@ class CustomerCreate(BaseModel):
     )
     internal_notes: str | None = Field(
         default=None,
-        max_length=10000,
+        max_length=50_000,
         description="Internal notes captured at customer creation time",
     )
     primary_property: PrimaryPropertyCreate | None = Field(
@@ -215,7 +215,7 @@ class CustomerUpdate(BaseModel):
     )
     internal_notes: str | None = Field(
         default=None,
-        max_length=10000,
+        max_length=50_000,
         description="Internal notes about the customer",
     )
     preferred_service_times: dict[str, Any] | None = Field(

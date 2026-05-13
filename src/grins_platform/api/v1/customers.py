@@ -47,6 +47,7 @@ from grins_platform.exceptions import (
     CustomerNotFoundError,
     DuplicateCustomerError,
     MergeConflictError,
+    S3UploadError,
 )
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import (
@@ -1334,6 +1335,18 @@ async def upload_customer_photo(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail=str(e),
         ) from e
+    except S3UploadError as e:
+        status_code = (
+            status.HTTP_502_BAD_GATEWAY
+            if e.retryable
+            else status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+        _endpoints.log_failed(
+            "upload_customer_photo",
+            error=e,
+            retryable=e.retryable,
+        )
+        raise HTTPException(status_code=status_code, detail=str(e)) from e
 
     # Create DB record
     photo = CustomerPhoto(
@@ -1958,6 +1971,13 @@ async def upload_customer_document(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         ) from e
+    except S3UploadError as e:
+        status_code = (
+            status.HTTP_502_BAD_GATEWAY
+            if e.retryable
+            else status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+        raise HTTPException(status_code=status_code, detail=str(e)) from e
 
     doc = CustomerDocument(
         customer_id=customer_id,

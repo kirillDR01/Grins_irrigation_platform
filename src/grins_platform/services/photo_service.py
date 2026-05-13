@@ -20,8 +20,15 @@ from urllib.parse import quote
 import boto3
 import magic
 from botocore.config import Config as BotoConfig
+from botocore.exceptions import (
+    BotoCoreError,
+    ClientError,
+    EndpointConnectionError,
+    NoCredentialsError,
+)
 from PIL import Image
 
+from grins_platform.exceptions.upload import S3UploadError
 from grins_platform.log_config import LoggerMixin
 
 # ---------------------------------------------------------------------------
@@ -302,6 +309,9 @@ class PhotoService(LoggerMixin):
 
         Raises:
             ValueError: On validation failure.
+            S3UploadError: When the S3 put_object call fails. ``retryable``
+                attribute distinguishes transient failures from
+                misconfiguration (used by API handlers to choose 502 vs 503).
         """
         self.log_started(
             "upload_file",
@@ -327,13 +337,29 @@ class PhotoService(LoggerMixin):
         ext = _extension_for_mime(detected_mime)
         file_key = f"{rules.s3_prefix}/{uuid.uuid4()}{ext}"
 
-        # 4. Upload to S3
-        _ = self._client.put_object(
-            Bucket=self._bucket,
-            Key=file_key,
-            Body=processed,
-            ContentType=detected_mime,
-        )
+        # 4. Upload to S3 (typed errors → 502/503 at the API edge)
+        try:
+            _ = self._client.put_object(
+                Bucket=self._bucket,
+                Key=file_key,
+                Body=processed,
+                ContentType=detected_mime,
+            )
+        except NoCredentialsError as exc:
+            self.logger.exception(
+                "photo.upload.s3_misconfigured",
+                error_class=type(exc).__name__,
+            )
+            msg = "S3 credentials not configured"
+            raise S3UploadError(msg, retryable=False) from exc
+        except (ClientError, EndpointConnectionError, BotoCoreError) as exc:
+            self.logger.exception(
+                "photo.upload.s3_failed",
+                error_class=type(exc).__name__,
+                file_key=file_key,
+            )
+            msg = f"S3 upload failed: {type(exc).__name__}"
+            raise S3UploadError(msg, retryable=True) from exc
 
         result = UploadResult(
             file_key=file_key,

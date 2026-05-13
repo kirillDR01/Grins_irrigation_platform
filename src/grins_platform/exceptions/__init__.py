@@ -25,6 +25,9 @@ from grins_platform.exceptions.auth import (
     WebAuthnVerificationError,
 )
 
+# Import upload exceptions
+from grins_platform.exceptions.upload import S3UploadError
+
 if TYPE_CHECKING:
     from uuid import UUID
 
@@ -998,6 +1001,7 @@ __all__ = [
     "PropertyNotFoundError",
     "RenewalProposalNotFoundError",
     "ReviewAlreadyRequestedError",
+    "S3UploadError",
     "SalesCalendarEventNotFoundError",
     "SalesEntryNotFoundError",
     "ScheduleClearAuditNotFoundError",

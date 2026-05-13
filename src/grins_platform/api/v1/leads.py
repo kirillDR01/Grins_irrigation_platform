@@ -37,6 +37,7 @@ from grins_platform.api.v1.dependencies import get_db_session
 from grins_platform.exceptions import (
     LeadHasReferencesError,
     LeadNotFoundError,
+    S3UploadError,
 )
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import LeadSituation, LeadStatus
@@ -759,6 +760,13 @@ async def upload_lead_attachment(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail=str(e),
         ) from e
+    except S3UploadError as e:
+        status_code = (
+            status.HTTP_502_BAD_GATEWAY
+            if e.retryable
+            else status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+        raise HTTPException(status_code=status_code, detail=str(e)) from e
 
     # Create DB record
     attachment = LeadAttachment(
