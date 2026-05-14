@@ -5,7 +5,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { staffApi } from '../api/staffApi';
 import { staffKeys } from './useStaff';
-import type { StaffCreate, StaffUpdate, StaffAvailabilityUpdate } from '../types';
+import type {
+  StaffCreate,
+  StaffUpdate,
+  StaffAvailabilityUpdate,
+  ResetPasswordPayload,
+} from '../types';
 
 /**
  * Hook to create a new staff member.
@@ -67,6 +72,21 @@ export function useUpdateStaffAvailability() {
       queryClient.invalidateQueries({ queryKey: staffKeys.lists() });
       queryClient.invalidateQueries({ queryKey: staffKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: staffKeys.available() });
+    },
+  });
+}
+
+/**
+ * Hook to admin-reset a staff member's password.
+ */
+export function useResetStaffPassword() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: ResetPasswordPayload }) =>
+      staffApi.resetPassword(id, payload),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: staffKeys.detail(id) });
     },
   });
 }

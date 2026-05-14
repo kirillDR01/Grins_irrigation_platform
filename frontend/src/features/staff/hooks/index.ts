@@ -8,4 +8,5 @@ export {
   useUpdateStaff,
   useDeleteStaff,
   useUpdateStaffAvailability,
+  useResetStaffPassword,
 } from './useStaffMutations';

@@ -13,12 +13,13 @@ import math
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import (
     AsyncSession,  # noqa: TC002 - Required at runtime for FastAPI DI
 )
 
 from grins_platform.api.v1.auth_dependencies import (
+    AdminUser,  # noqa: TC001 - Required at runtime for FastAPI DI
     CurrentActiveUser,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
 from grins_platform.api.v1.dependencies import get_db_session, get_staff_service
@@ -30,6 +31,7 @@ from grins_platform.models.enums import (
 )
 from grins_platform.schemas.staff import (
     PaginatedStaffResponse,
+    ResetPasswordRequest,
     StaffAvailabilityUpdate,
     StaffCreate,
     StaffResponse,
@@ -41,9 +43,15 @@ from grins_platform.schemas.staff_ops import (
     StaffLocationRequest,
     StaffLocationResponse,
 )
+from grins_platform.services.audit_service import AuditService
 from grins_platform.services.staff_service import (
     StaffService,  # noqa: TC001 - Required at runtime for FastAPI DI
 )
+
+# Auth fields that the self-update (`PATCH /staff/me`) endpoint must reject —
+# password rotation goes through `/auth/change-password`; admin reset goes
+# through `POST /staff/{id}/reset-password`.
+_SELF_UPDATE_FORBIDDEN_FIELDS = ("username", "password", "is_login_enabled")
 
 router = APIRouter()
 
@@ -271,6 +279,22 @@ async def update_current_staff(
     """Patch the current staff user (umbrella plan §Phase 5.2)."""
     _endpoints.log_started("update_current_staff", staff_id=str(current_user.id))
 
+    supplied = data.model_dump(exclude_unset=True)
+    forbidden = [f for f in _SELF_UPDATE_FORBIDDEN_FIELDS if f in supplied]
+    if forbidden:
+        _endpoints.log_rejected(
+            "update_current_staff",
+            reason="auth_fields_forbidden",
+            fields=forbidden,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Auth fields cannot be changed via self-update; use "
+                "/auth/change-password (self) or the admin reset endpoint."
+            ),
+        )
+
     try:
         result = await service.update_staff(current_user.id, data)
     except StaffNotFoundError as e:
@@ -298,19 +322,36 @@ async def update_current_staff(
     status_code=status.HTTP_201_CREATED,
     summary="Create a new staff member",
     description="Create a new staff member with the provided information. "
-    "Phone number will be normalized to 10 digits.",
+    "Phone number will be normalized to 10 digits. Admin only.",
 )
 async def create_staff(
     data: StaffCreate,
+    request: Request,
+    current_user: AdminUser,
     service: Annotated[StaffService, Depends(get_staff_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> StaffResponse:
     """Create a new staff member.
 
-    Validates: Requirement 8.1-8.10, 12.1
+    Validates: Requirement 8.1-8.10, 12.1, 15.1-15.8
     """
     _endpoints.log_started("create_staff", name=data.name, role=data.role.value)
 
     result = await service.create_staff(data)
+
+    if data.password:
+        audit_service = AuditService()
+        await audit_service.log_action(
+            db=session,
+            actor_id=current_user.id,
+            actor_role=current_user.role,
+            action="staff.password_set",
+            resource_type="staff",
+            resource_id=result.id,
+            details={"outcome": "success", "source": "admin_ui"},
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
 
     _endpoints.log_completed("create_staff", staff_id=str(result.id))
     return StaffResponse.model_validate(result)  # type: ignore[no-any-return]
@@ -360,18 +401,37 @@ async def get_staff(
     "/{staff_id}",
     response_model=StaffResponse,
     summary="Update staff member",
-    description="Update staff member. Only provided fields will be updated.",
+    description=(
+        "Update staff member. Only provided fields will be updated. Admin only."
+    ),
 )
 async def update_staff(
     staff_id: UUID,
     data: StaffUpdate,
+    request: Request,
+    current_user: AdminUser,
     service: Annotated[StaffService, Depends(get_staff_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> StaffResponse:
     """Update staff member information.
 
-    Validates: Requirement 8.5, 12.1, 12.3
+    Validates: Requirement 8.5, 12.1, 12.3, 15.1-15.8
     """
     _endpoints.log_started("update_staff", staff_id=str(staff_id))
+
+    # Determine whether this update sets a password for the first time or
+    # rotates an existing one — needed to pick the right audit action below.
+    had_password_before: bool | None = None
+    if data.password:
+        try:
+            prior = await service.get_staff(staff_id)
+        except StaffNotFoundError as e:
+            _endpoints.log_rejected("update_staff", reason="not_found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Staff member not found: {e.staff_id}",
+            ) from e
+        had_password_before = prior.password_hash is not None
 
     try:
         result = await service.update_staff(staff_id, data)
@@ -381,9 +441,77 @@ async def update_staff(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Staff member not found: {e.staff_id}",
         ) from e
-    else:
-        _endpoints.log_completed("update_staff", staff_id=str(staff_id))
-        return StaffResponse.model_validate(result)  # type: ignore[no-any-return]
+
+    if data.password:
+        action = "staff.password_reset" if had_password_before else "staff.password_set"
+        audit_service = AuditService()
+        await audit_service.log_action(
+            db=session,
+            actor_id=current_user.id,
+            actor_role=current_user.role,
+            action=action,
+            resource_type="staff",
+            resource_id=staff_id,
+            details={"outcome": "success", "source": "admin_ui"},
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+
+    _endpoints.log_completed("update_staff", staff_id=str(staff_id))
+    return StaffResponse.model_validate(result)  # type: ignore[no-any-return]
+
+
+# =============================================================================
+# POST /api/v1/staff/{id}/reset-password — admin password reset (Cluster F)
+# =============================================================================
+
+
+@router.post(  # type: ignore[untyped-decorator]
+    "/{staff_id}/reset-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Admin reset of a staff member's password",
+    description=(
+        "Replace a staff member's password without requiring the prior "
+        "password. Also clears any lockout state. Admin only."
+    ),
+)
+async def reset_staff_password(
+    staff_id: UUID,
+    body: ResetPasswordRequest,
+    request: Request,
+    current_user: AdminUser,
+    service: Annotated[StaffService, Depends(get_staff_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> None:
+    """Admin reset of a staff password.
+
+    Validates: Cluster F — admin reset endpoint.
+    """
+    _endpoints.log_started("reset_staff_password", staff_id=str(staff_id))
+
+    try:
+        await service.reset_password(staff_id, body.new_password)
+    except StaffNotFoundError as e:
+        _endpoints.log_rejected("reset_staff_password", reason="not_found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Staff member not found: {e.staff_id}",
+        ) from e
+
+    audit_service = AuditService()
+    await audit_service.log_action(
+        db=session,
+        actor_id=current_user.id,
+        actor_role=current_user.role,
+        action="staff.password_reset",
+        resource_type="staff",
+        resource_id=staff_id,
+        details={"outcome": "success", "source": "admin_ui"},
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    _endpoints.log_completed("reset_staff_password", staff_id=str(staff_id))
 
 
 # =============================================================================

@@ -10,6 +10,7 @@ import type {
   StaffAvailabilityUpdate,
   StaffListParams,
   PaginatedStaffResponse,
+  ResetPasswordPayload,
 } from '../types';
 
 const BASE_URL = '/staff';
@@ -78,5 +79,12 @@ export const staffApi = {
       params: { is_available: true, is_active: true },
     });
     return response.data;
+  },
+
+  /**
+   * Admin-only: reset a staff member's password.
+   */
+  async resetPassword(id: string, payload: ResetPasswordPayload): Promise<void> {
+    await apiClient.post(`${BASE_URL}/${id}/reset-password`, payload);
   },
 };

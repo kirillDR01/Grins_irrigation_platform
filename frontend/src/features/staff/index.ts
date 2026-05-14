@@ -12,6 +12,7 @@ export type {
   PaginatedStaffResponse,
   StaffRole,
   SkillLevel,
+  ResetPasswordPayload,
 } from './types';
 export { STAFF_ROLES, SKILL_LEVELS } from './types';
 
@@ -28,7 +29,13 @@ export {
   useUpdateStaff,
   useDeleteStaff,
   useUpdateStaffAvailability,
+  useResetStaffPassword,
 } from './hooks';
 
 // Components
-export { StaffList, StaffDetail } from './components';
+export {
+  StaffList,
+  StaffDetail,
+  StaffForm,
+  ResetPasswordDialog,
+} from './components';

@@ -17,6 +17,11 @@ export interface Staff {
   availability_notes: string | null;
   hourly_rate: number | null;
   is_active: boolean;
+  // Cluster F — admin-set auth surface.
+  username: string | null;
+  is_login_enabled: boolean;
+  last_login: string | null;
+  locked_until: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -31,6 +36,10 @@ export interface StaffCreate {
   hourly_rate?: number | null;
   is_available?: boolean;
   availability_notes?: string | null;
+  // Cluster F — optional credentials on create (admin only).
+  username?: string;
+  password?: string;
+  is_login_enabled?: boolean;
 }
 
 export interface StaffUpdate {
@@ -42,6 +51,14 @@ export interface StaffUpdate {
   certifications?: string[] | null;
   hourly_rate?: number | null;
   is_active?: boolean;
+  // Cluster F — optional credential rotation on update (admin only).
+  username?: string;
+  password?: string;
+  is_login_enabled?: boolean;
+}
+
+export interface ResetPasswordPayload {
+  new_password: string;
 }
 
 export interface StaffAvailabilityUpdate {

@@ -36,6 +36,8 @@ when adding a new flow):
 - ``estimate.auto_job_skipped``                  — auto-job branch skipped
 - ``stripe.payment_link.auto_created``           — Payment Link inlined on invoice POST
 - ``sales_pipeline.nudge.sent``                  — nightly job nudged a stale entry (F6)
+- ``staff.password_set``                         — admin set a password on a staff account for the first time
+- ``staff.password_reset``                       — admin replaced an existing staff password (or admin reset endpoint)
 
 Validates: CRM Gap Closure Req 74.1, 74.2, 74.3;
            april-16th-fixes-enhancements Req 2.7, 5.5, 5.9;

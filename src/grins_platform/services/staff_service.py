@@ -11,9 +11,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from fastapi import HTTPException, status
+
 from grins_platform.exceptions import StaffNotFoundError
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import SkillLevel, StaffRole  # noqa: TC001
+from grins_platform.services.auth_service import hash_password
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -66,12 +69,28 @@ class StaffService(LoggerMixin):
         Returns:
             Created Staff instance
 
-        Validates: Requirement 8.1
+        Raises:
+            HTTPException: 409 if username is already taken.
+
+        Validates: Requirement 8.1, 15.1-15.8
         """
         self.log_started("create_staff", name=data.name, role=data.role.value)
 
         # Normalize phone number
         normalized_phone = self._normalize_phone(data.phone)
+
+        # Auth: enforce username uniqueness up-front (DB also has a UNIQUE
+        # constraint as a safety net).
+        if data.username:
+            existing = await self.repository.find_by_username(data.username)
+            if existing is not None:
+                self.log_rejected("create_staff", reason="username_taken")
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Username already taken",
+                )
+
+        password_hash = hash_password(data.password) if data.password else None
 
         staff = await self.repository.create(
             name=data.name,
@@ -83,6 +102,9 @@ class StaffService(LoggerMixin):
             hourly_rate=float(data.hourly_rate) if data.hourly_rate else None,
             is_available=data.is_available,
             availability_notes=data.availability_notes,
+            username=data.username,
+            password_hash=password_hash,
+            is_login_enabled=bool(data.is_login_enabled),
         )
 
         self.log_completed("create_staff", staff_id=str(staff.id))
@@ -124,8 +146,9 @@ class StaffService(LoggerMixin):
 
         Raises:
             StaffNotFoundError: If staff not found
+            HTTPException: 409 if a new username collides with another staff.
 
-        Validates: Requirement 8.5
+        Validates: Requirement 8.5, 15.1-15.8
         """
         self.log_started("update_staff", staff_id=str(staff_id))
 
@@ -137,6 +160,19 @@ class StaffService(LoggerMixin):
 
         # Build update dict
         update_data = data.model_dump(exclude_unset=True)
+
+        # Auth fields handled separately from generic repo.update.
+        new_password = update_data.pop("password", None)
+        new_username = update_data.get("username")
+
+        if new_username and new_username != staff.username:
+            collision = await self.repository.find_by_username(new_username)
+            if collision is not None and collision.id != staff_id:
+                self.log_rejected("update_staff", reason="username_taken")
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Username already taken",
+                )
 
         # Normalize phone if provided
         if update_data.get("phone"):
@@ -152,8 +188,55 @@ class StaffService(LoggerMixin):
 
         updated = await self.repository.update(staff_id, update_data)
 
+        if new_password:
+            password_hash = hash_password(new_password)
+            updated = await self.repository.update_auth_fields(
+                staff_id,
+                password_hash=password_hash,
+            )
+
         self.log_completed("update_staff", staff_id=str(staff_id))
         return updated  # type: ignore[return-value]
+
+    async def reset_password(self, staff_id: UUID, new_password: str) -> Staff:
+        """Admin reset of a staff member's password.
+
+        Bypasses the current-password check used by self-service flows.
+        Also clears any lockout state so the account can be used immediately.
+
+        Args:
+            staff_id: UUID of the staff to reset.
+            new_password: New plain-text password (already policy-validated
+                by the schema).
+
+        Returns:
+            Updated Staff instance with the new hash applied.
+
+        Raises:
+            StaffNotFoundError: If staff not found.
+
+        Validates: Cluster F — admin reset-password endpoint.
+        """
+        self.log_started("reset_password", staff_id=str(staff_id))
+
+        staff = await self.repository.get_by_id(staff_id, include_inactive=True)
+        if staff is None:
+            self.log_rejected("reset_password", reason="not_found")
+            raise StaffNotFoundError(staff_id)
+
+        password_hash = hash_password(new_password)
+        updated = await self.repository.update_auth_fields(
+            staff_id,
+            password_hash=password_hash,
+            failed_login_attempts=0,
+            locked_until=None,
+        )
+        if updated is None:
+            self.log_rejected("reset_password", reason="not_found")
+            raise StaffNotFoundError(staff_id)
+
+        self.log_completed("reset_password", staff_id=str(staff_id))
+        return updated
 
     async def deactivate_staff(self, staff_id: UUID) -> None:
         """Deactivate a staff member (soft delete).

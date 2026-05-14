@@ -58,6 +58,9 @@ class StaffRepository(LoggerMixin):
         hourly_rate: float | None = None,
         is_available: bool = True,
         availability_notes: str | None = None,
+        username: str | None = None,
+        password_hash: str | None = None,
+        is_login_enabled: bool = False,
     ) -> Staff:
         """Create a new staff record.
 
@@ -71,11 +74,14 @@ class StaffRepository(LoggerMixin):
             hourly_rate: Hourly rate
             is_available: Availability status
             availability_notes: Notes about availability
+            username: Login username (optional, unique)
+            password_hash: Bcrypt password hash (optional)
+            is_login_enabled: Whether login is enabled at creation
 
         Returns:
             Created Staff instance
 
-        Validates: Requirement 8.1
+        Validates: Requirement 8.1, 15.1-15.8
         """
         self.log_started("create", name=name, role=role.value)
 
@@ -89,6 +95,9 @@ class StaffRepository(LoggerMixin):
             hourly_rate=hourly_rate,
             is_available=is_available,
             availability_notes=availability_notes,
+            username=username,
+            password_hash=password_hash,
+            is_login_enabled=is_login_enabled,
         )
 
         self.session.add(staff)

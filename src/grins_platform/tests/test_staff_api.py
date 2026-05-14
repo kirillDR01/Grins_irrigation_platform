@@ -16,7 +16,12 @@ import pytest
 from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
 
-from grins_platform.api.v1.dependencies import get_staff_service
+from grins_platform.api.v1.auth_dependencies import (
+    get_current_active_user,
+    get_current_user,
+    require_admin,
+)
+from grins_platform.api.v1.dependencies import get_db_session, get_staff_service
 from grins_platform.api.v1.staff import router
 from grins_platform.exceptions import StaffNotFoundError
 from grins_platform.models.enums import SkillLevel, StaffRole
@@ -64,17 +69,41 @@ def mock_staff_model() -> Mock:
     staff.is_available = True
     staff.availability_notes = "Available weekdays"
     staff.is_active = True
+    # Auth-surface fields (Cluster F)
+    staff.username = None
+    staff.is_login_enabled = False
+    staff.last_login = None
+    staff.locked_until = None
+    staff.preferred_maps_app = None
     staff.created_at = datetime.now()
     staff.updated_at = datetime.now()
     return staff
 
 
 @pytest.fixture
-def app(mock_staff_service: AsyncMock) -> FastAPI:
+def mock_admin_user() -> Mock:
+    """Mock admin staff user for endpoints gated by AdminUser."""
+    user = Mock()
+    user.id = uuid4()
+    user.name = "Admin"
+    user.role = "admin"
+    user.is_active = True
+    return user
+
+
+@pytest.fixture
+def app(mock_staff_service: AsyncMock, mock_admin_user: Mock) -> FastAPI:
     """Create FastAPI app with mocked dependencies."""
     test_app = FastAPI()
     test_app.include_router(router, prefix="/api/v1/staff")
     test_app.dependency_overrides[get_staff_service] = lambda: mock_staff_service
+    test_app.dependency_overrides[get_current_user] = lambda: mock_admin_user
+    test_app.dependency_overrides[get_current_active_user] = lambda: mock_admin_user
+    test_app.dependency_overrides[require_admin] = lambda: mock_admin_user
+    # Endpoints that take a session for audit logging — give them an AsyncMock
+    # so AuditService can call session methods without exploding. The audit
+    # write itself is exercised in test_staff_auth_management.py.
+    test_app.dependency_overrides[get_db_session] = lambda: AsyncMock()
     return test_app
 
 

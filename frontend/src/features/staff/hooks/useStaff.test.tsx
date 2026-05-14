@@ -30,6 +30,10 @@ const mockStaff = {
   is_available: true,
   availability_notes: null,
   hourly_rate: null,
+  username: null,
+  is_login_enabled: false,
+  last_login: null,
+  locked_until: null,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
 };

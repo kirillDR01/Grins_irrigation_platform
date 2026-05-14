@@ -9,6 +9,7 @@ import {
   type SortingState,
 } from '@tanstack/react-table';
 import { ArrowUpDown, MoreHorizontal, Phone, Mail } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -118,6 +119,72 @@ export function StaffList({ onEdit, onDelete }: StaffListProps) {
           >
             {roleLabels[role]}
           </Badge>
+        );
+      },
+    },
+    {
+      id: 'login',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
+          Login
+        </span>
+      ),
+      cell: ({ row }) => {
+        const staff = row.original;
+        const locked =
+          staff.locked_until !== null &&
+          new Date(staff.locked_until).getTime() > Date.now();
+        return (
+          <div
+            className="flex flex-wrap items-center gap-1.5"
+            data-testid={`staff-login-${staff.id}`}
+          >
+            {staff.is_login_enabled ? (
+              <Badge
+                className="bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full text-xs font-medium"
+                data-testid="login-enabled-badge"
+              >
+                Login enabled
+              </Badge>
+            ) : (
+              <Badge
+                variant="secondary"
+                className="bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full text-xs font-medium"
+                data-testid="login-disabled-badge"
+              >
+                No login
+              </Badge>
+            )}
+            {locked && (
+              <Badge
+                className="bg-red-100 text-red-700 px-2.5 py-0.5 rounded-full text-xs font-medium"
+                data-testid="locked-badge"
+              >
+                Locked
+              </Badge>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      id: 'last_login',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">
+          Last Login
+        </span>
+      ),
+      cell: ({ row }) => {
+        const lastLogin = row.original.last_login;
+        return (
+          <span
+            className="text-xs text-slate-600"
+            data-testid={`staff-last-login-${row.original.id}`}
+          >
+            {lastLogin
+              ? formatDistanceToNow(new Date(lastLogin), { addSuffix: true })
+              : 'Never'}
+          </span>
         );
       },
     },

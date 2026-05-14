@@ -26,6 +26,10 @@ const mockStaff = {
   role: 'tech',
   is_active: true,
   is_available: true,
+  username: null,
+  is_login_enabled: false,
+  last_login: null,
+  locked_until: null,
   created_at: '2025-01-29T00:00:00Z',
 };
 
@@ -133,6 +137,19 @@ describe('staffApi', () => {
         params: { is_available: true, is_active: true },
       });
       expect(result.items[0].is_available).toBe(true);
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('posts the new password to the admin reset endpoint', async () => {
+      vi.mocked(apiClient.post).mockResolvedValue({ data: undefined });
+
+      await staffApi.resetPassword('staff-123', { new_password: 'Newpass1' });
+
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/staff/staff-123/reset-password',
+        { new_password: 'Newpass1' },
+      );
     });
   });
 });

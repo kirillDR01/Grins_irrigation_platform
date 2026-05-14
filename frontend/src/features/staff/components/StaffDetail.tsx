@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -10,6 +11,7 @@ import {
   MapPin,
   Calendar,
   Clock,
+  KeyRound,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +20,10 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { LoadingPage, ErrorMessage } from '@/shared/components';
 import { useStaffMember, useDeleteStaff, useUpdateStaffAvailability } from '../hooks';
+import { ResetPasswordDialog } from './ResetPasswordDialog';
+import { StaffForm } from './StaffForm';
 import type { StaffRole } from '../types';
+import { useAuth } from '@/features/auth/components/AuthProvider';
 import { toast } from 'sonner';
 
 interface StaffDetailProps {
@@ -40,9 +45,13 @@ const roleLabels: Record<StaffRole, string> = {
 export function StaffDetail({ onEdit }: StaffDetailProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const { data: staff, isLoading, error, refetch } = useStaffMember(id);
   const deleteMutation = useDeleteStaff();
   const availabilityMutation = useUpdateStaffAvailability();
+  const [resetOpen, setResetOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const handleDelete = async () => {
     if (!staff) return;
@@ -177,10 +186,27 @@ export function StaffDetail({ onEdit }: StaffDetailProps) {
 
             {/* Action Buttons */}
             <div className="flex flex-col gap-2">
-              {onEdit && (
-                <Button variant="outline" onClick={onEdit} data-testid="edit-staff-btn" className="w-full">
-                  <Edit className="mr-2 h-4 w-4" />
-                  Edit Profile
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (onEdit) onEdit();
+                  else setEditOpen(true);
+                }}
+                data-testid="edit-staff-btn"
+                className="w-full"
+              >
+                <Edit className="mr-2 h-4 w-4" />
+                Edit Profile
+              </Button>
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  onClick={() => setResetOpen(true)}
+                  data-testid="reset-password-btn"
+                  className="w-full"
+                >
+                  <KeyRound className="mr-2 h-4 w-4" />
+                  Reset Password
                 </Button>
               )}
               <Button
@@ -196,6 +222,24 @@ export function StaffDetail({ onEdit }: StaffDetailProps) {
             </div>
           </CardContent>
         </Card>
+
+        {isAdmin && staff && (
+          <ResetPasswordDialog
+            open={resetOpen}
+            onOpenChange={setResetOpen}
+            staffId={staff.id}
+            staffName={staff.name}
+          />
+        )}
+
+        {staff && (
+          <StaffForm
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            mode="edit"
+            staff={staff}
+          />
+        )}
 
         {/* Right Column - 2/3 width */}
         <div className="lg:col-span-2 space-y-8">

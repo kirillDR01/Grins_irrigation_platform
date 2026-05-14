@@ -11,12 +11,60 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from grins_platform.models.enums import SkillLevel, StaffRole
 from grins_platform.schemas.customer import normalize_phone
+
+if TYPE_CHECKING:
+    from pydantic_core.core_schema import ValidationInfo
+
+# Admin-set/reset password policy (looser than self-service ChangePasswordRequest).
+# Per Cluster F decision: 8 chars + letter + digit + blocklist + not equal to username.
+_ADMIN_PASSWORD_MIN_LEN = 8
+_ADMIN_PASSWORD_MAX_LEN = 128
+_ADMIN_PASSWORD_BLOCKLIST = frozenset(
+    {"admin123", "password", "qwerty", "letmein", "12345678"},
+)
+
+_ERR_PASSWORD_TOO_SHORT = (
+    f"Password must be at least {_ADMIN_PASSWORD_MIN_LEN} characters"
+)
+_ERR_PASSWORD_MISSING_LETTER = "Password must include at least one letter"
+_ERR_PASSWORD_MISSING_DIGIT = "Password must include at least one number"
+_ERR_PASSWORD_BLOCKLISTED = "Password is too common; choose a stronger password"
+_ERR_PASSWORD_MATCHES_USERNAME = "Password must not match the username"
+
+
+def _validate_admin_password(password: str, *, username: str | None) -> str:
+    """Validate an admin-set staff password.
+
+    Args:
+        password: New password to validate.
+        username: Username being set (or None) — password must not match.
+
+    Returns:
+        The original password if valid.
+
+    Raises:
+        ValueError: If any policy rule is violated.
+    """
+    if len(password) < _ADMIN_PASSWORD_MIN_LEN:
+        raise ValueError(_ERR_PASSWORD_TOO_SHORT)
+    has_letter = any(c.isalpha() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    if not has_letter:
+        raise ValueError(_ERR_PASSWORD_MISSING_LETTER)
+    if not has_digit:
+        raise ValueError(_ERR_PASSWORD_MISSING_DIGIT)
+    if password.lower() in _ADMIN_PASSWORD_BLOCKLIST:
+        raise ValueError(_ERR_PASSWORD_BLOCKLISTED)
+    if username is not None and password == username:
+        raise ValueError(_ERR_PASSWORD_MATCHES_USERNAME)
+    return password
 
 
 class StaffCreate(BaseModel):
@@ -40,6 +88,28 @@ class StaffCreate(BaseModel):
     email: EmailStr | None = Field(
         default=None,
         description="Email address (optional)",
+    )
+    # Auth fields — username must appear before password so the password
+    # validator can read it via Pydantic v2 ValidationInfo.data.
+    username: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=50,
+        pattern=r"^[a-zA-Z0-9_.]+$",
+        description="Unique login username (letters, digits, underscore, dot)",
+    )
+    password: str | None = Field(
+        default=None,
+        min_length=_ADMIN_PASSWORD_MIN_LEN,
+        max_length=_ADMIN_PASSWORD_MAX_LEN,
+        description=(
+            "Initial password — staff can change after first login. "
+            "Hashed before storage; never echoed back."
+        ),
+    )
+    is_login_enabled: bool | None = Field(
+        default=None,
+        description="Whether the staff member can log in",
     )
     role: StaffRole = Field(
         ...,
@@ -105,6 +175,15 @@ class StaffCreate(BaseModel):
         """Strip leading/trailing whitespace from name."""
         return v.strip()
 
+    @field_validator("password")  # type: ignore[misc,untyped-decorator]
+    @classmethod
+    def validate_password(cls, v: str | None, info: ValidationInfo) -> str | None:
+        """Enforce admin password policy when a password is supplied."""
+        if v is None:
+            return None
+        data: dict[str, Any] = info.data if isinstance(info.data, dict) else {}
+        return _validate_admin_password(v, username=data.get("username"))
+
 
 class StaffUpdate(BaseModel):
     """Schema for updating an existing staff member.
@@ -129,6 +208,25 @@ class StaffUpdate(BaseModel):
     email: EmailStr | None = Field(
         default=None,
         description="Email address",
+    )
+    # Auth fields — username must appear before password so the password
+    # validator can read it via Pydantic v2 ValidationInfo.data.
+    username: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=50,
+        pattern=r"^[a-zA-Z0-9_.]+$",
+        description="Unique login username",
+    )
+    password: str | None = Field(
+        default=None,
+        min_length=_ADMIN_PASSWORD_MIN_LEN,
+        max_length=_ADMIN_PASSWORD_MAX_LEN,
+        description="Replacement password — hashed before storage",
+    )
+    is_login_enabled: bool | None = Field(
+        default=None,
+        description="Whether the staff member can log in",
     )
     role: StaffRole | None = Field(
         default=None,
@@ -198,6 +296,15 @@ class StaffUpdate(BaseModel):
         if v is None:
             return None
         return v.strip()
+
+    @field_validator("password")  # type: ignore[misc,untyped-decorator]
+    @classmethod
+    def validate_password(cls, v: str | None, info: ValidationInfo) -> str | None:
+        """Enforce admin password policy when a password is supplied."""
+        if v is None:
+            return None
+        data: dict[str, Any] = info.data if isinstance(info.data, dict) else {}
+        return _validate_admin_password(v, username=data.get("username"))
 
 
 class StaffAvailabilityUpdate(BaseModel):
@@ -270,6 +377,21 @@ class StaffResponse(BaseModel):
     preferred_maps_app: str | None = Field(
         default=None,
         description="Tech-chosen Maps app ('apple' or 'google')",
+    )
+    # Auth-state surface (write-only fields like password_hash and
+    # failed_login_attempts are intentionally omitted).
+    username: str | None = Field(default=None, description="Login username")
+    is_login_enabled: bool = Field(
+        default=False,
+        description="Whether the staff member can log in",
+    )
+    last_login: datetime | None = Field(
+        default=None,
+        description="Timestamp of last successful login",
+    )
+    locked_until: datetime | None = Field(
+        default=None,
+        description="Account is locked until this timestamp",
     )
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Record last update timestamp")
@@ -371,3 +493,23 @@ class PaginatedStaffResponse(BaseModel):
         ge=0,
         description="Total number of pages",
     )
+
+
+class ResetPasswordRequest(BaseModel):
+    """Admin password-reset request body.
+
+    Validates: Cluster F — admin-only reset bypasses current-password check.
+    """
+
+    new_password: str = Field(
+        ...,
+        min_length=_ADMIN_PASSWORD_MIN_LEN,
+        max_length=_ADMIN_PASSWORD_MAX_LEN,
+        description="New password — hashed before storage",
+    )
+
+    @field_validator("new_password")  # type: ignore[misc,untyped-decorator]
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        """Enforce admin password policy on the reset value."""
+        return _validate_admin_password(v, username=None)

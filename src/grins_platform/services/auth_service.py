@@ -94,6 +94,15 @@ class BcryptContext:
 pwd_context = BcryptContext()
 
 
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt with the project-wide cost factor.
+
+    Module-level shim so callers (e.g. StaffService) can hash without
+    instantiating an AuthService — keeps all hashing on a single code path.
+    """
+    return pwd_context.hash(password)
+
+
 class AuthService(LoggerMixin):
     """Service for authentication operations.
 

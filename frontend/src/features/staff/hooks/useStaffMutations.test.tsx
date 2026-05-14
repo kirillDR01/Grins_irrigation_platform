@@ -10,6 +10,7 @@ import {
   useUpdateStaff,
   useDeleteStaff,
   useUpdateStaffAvailability,
+  useResetStaffPassword,
 } from './useStaffMutations';
 import { staffApi } from '../api/staffApi';
 import type { ReactNode } from 'react';
@@ -21,6 +22,7 @@ vi.mock('../api/staffApi', () => ({
     update: vi.fn(),
     delete: vi.fn(),
     updateAvailability: vi.fn(),
+    resetPassword: vi.fn(),
   },
 }));
 
@@ -36,6 +38,10 @@ const mockStaff = {
   hourly_rate: null,
   is_active: true,
   is_available: true,
+  username: null,
+  is_login_enabled: false,
+  last_login: null,
+  locked_until: null,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
 };
@@ -146,5 +152,30 @@ describe('useUpdateStaffAvailability', () => {
       is_available: false,
     });
     expect(result.current.data?.is_available).toBe(false);
+  });
+});
+
+describe('useResetStaffPassword', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('resets staff password via the admin endpoint', async () => {
+    vi.mocked(staffApi.resetPassword).mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useResetStaffPassword(), {
+      wrapper: createWrapper(),
+    });
+
+    result.current.mutate({
+      id: 'staff-123',
+      payload: { new_password: 'Newpass1' },
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(staffApi.resetPassword).toHaveBeenCalledWith('staff-123', {
+      new_password: 'Newpass1',
+    });
   });
 });
