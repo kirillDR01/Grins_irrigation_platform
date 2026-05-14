@@ -754,13 +754,20 @@ class ReviewAlreadyRequestedError(Exception):
     Validates: CRM Gap Closure Req 34.6
     """
 
-    def __init__(self, customer_id: UUID, last_requested_at: str) -> None:
-        """Initialize with customer ID and last request date."""
+    def __init__(
+        self,
+        customer_id: UUID,
+        job_id: UUID,
+        last_requested_at: str,
+    ) -> None:
+        """Initialize with customer ID, job ID, and last request date."""
         self.customer_id = customer_id
+        self.job_id = job_id
         self.last_requested_at = last_requested_at
         super().__init__(
             f"Review already requested for customer {customer_id} "
-            f"on {last_requested_at}. 30-day dedup applies.",
+            f"on job {job_id} on {last_requested_at}. "
+            "30-day per-job dedup applies.",
         )
 
 

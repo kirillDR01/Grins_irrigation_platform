@@ -6,7 +6,7 @@ import { ContractSigning } from './ContractSigning';
 import type { PortalContract } from '../types';
 
 const mockContractData: PortalContract = {
-  company_name: 'Grins Irrigation',
+  company_name: "Grin's Irrigation",
   company_logo_url: 'https://example.com/logo.png',
   company_address: '123 Main St',
   company_phone: '(555) 123-4567',
@@ -82,7 +82,7 @@ describe('ContractSigning', () => {
 
     expect(screen.getByTestId('contract-signing-page')).toBeInTheDocument();
     expect(screen.getByTestId('company-logo')).toBeInTheDocument();
-    expect(screen.getByText('Grins Irrigation')).toBeInTheDocument();
+    expect(screen.getByText("Grin's Irrigation")).toBeInTheDocument();
     expect(screen.getByText('John Smith')).toBeInTheDocument();
   });
 

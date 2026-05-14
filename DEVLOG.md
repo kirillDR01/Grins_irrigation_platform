@@ -5,6 +5,26 @@ Grin's Irrigation Platform — field service automation for residential/commerci
 
 ## Recent Activity
 
+## [2026-05-14] - FEAT(cluster-g phase D): Coordinated SMS/email copy refresh + apostrophe canonicalization
+
+- Authoritative SMS catalog now lives at `docs/messaging-catalog.md` (added new § 6 "Portal copy" covering all 7 customer-facing portal screens; refreshed every SMS-body entry to match the new wording).
+- 7 user-approved SMS wording changes shipped as one commit so customers never see a half-swept mix in production:
+  - R-reply: `set up` → `booked`.
+  - Day-of reminder, on-the-way, arrival, delay, completion, estimate.sent, estimate.followup, lead.confirmation, payment_link: dropped redundant "Grin's Irrigation" from body where the prefix already identifies the sender.
+  - Review request: apostrophe canonicalization + em-dash→hyphen (forces GSM-7, halves segment cost on high-volume path) + dropped redundant "us".
+- `Thanks for considering` → `Thank you for considering` in `estimate_sent.{html,txt}`.
+- Apostrophe canonicalization (`Grins Irrigation` → `Grin's Irrigation`) applied uniformly across SMS prefix (3 mirrors kept in lockstep: `sms_service.py`, `sms/segment_counter.py`, `frontend/.../segmentCounter.ts`), email subjects/branding, service-layer defaults, frontend portal fallbacks, opt-in/out auto-replies, and onboarding consent strings (also fixed `Grin's Irrigations` plural → singular).
+- Internal AI chat-system prompt at `chat_service.py` intentionally skipped per cluster decision ("display copy only").
+- Per-batch user approvals tracked in `.agents/plans/cluster-g-sweep-manifest.md` (retained for audit history).
+
+## [2026-05-14] - FEAT(cluster-g phase B): Per-job Google-review-request dedup
+
+- Changed the 30-day Google-review-request cooldown key from `customer_id` alone to `(customer_id, job_id)`. A customer with N jobs over a year can now receive N review requests over time; the per-job cap of 1 / 30 days is unchanged.
+- `ReviewAlreadyRequestedError` constructor now takes `job_id` between `customer_id` and `last_requested_at`; `POST /api/v1/appointments/<id>/request-google-review` 409 detail exposes `job_id` for the UI.
+- `appointment_service.request_google_review` now passes `job_id=job.id` to `SMSService.send_message`, so the new `SentMessage` row is correlated to the job — without this, the new dedup query would never find prior requests and the cooldown would silently never fire.
+- One-shot Alembic backfill `20260513_130000` populates `sent_messages.job_id` from `appointments.job_id` for legacy review-request rows (`appointments.job_id` is `NOT NULL`, so the join is total).
+- New unit tests: `test_review_request_per_job_dedup_allows_different_job` and `test_review_request_sets_job_id_on_sent_message`. All 10 tests in the review-request class pass.
+
 ## [2026-05-11] - CHORE: Dev test-data clean-slate reset
 
 ### What Was Accomplished

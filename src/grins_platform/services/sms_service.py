@@ -93,13 +93,14 @@ CT_TZ = ZoneInfo("America/Chicago")
 
 # Opt-out confirmation message
 OPT_OUT_CONFIRMATION_MSG = (
-    "You've been unsubscribed from Grins Irrigation texts. Reply START to re-subscribe."
+    "You've been unsubscribed from Grin's Irrigation texts. "
+    "Reply START to re-subscribe."
 )
 
 # Opt-in confirmation message (F3 — must include the unsubscribe footer to
 # meet 10DLC carrier expectations).
 OPT_IN_CONFIRMATION_MSG = (
-    "You're re-subscribed to Grins Irrigation texts. Reply STOP to unsubscribe."
+    "You're re-subscribed to Grin's Irrigation texts. Reply STOP to unsubscribe."
 )
 
 # Poll reply auto-confirmation messages
@@ -145,7 +146,7 @@ POLL_REPLY_UNCLEAR_MSG = (
 )
 
 # Sender prefix and STOP footer
-_DEFAULT_PREFIX = "Grins Irrigation: "
+_DEFAULT_PREFIX = "Grin's Irrigation: "
 _DEFAULT_FOOTER = " Reply STOP to opt out."
 
 # Legacy ``message_type`` string → enum mapping for ``send_automated_message``

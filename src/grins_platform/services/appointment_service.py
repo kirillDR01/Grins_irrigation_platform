@@ -2594,8 +2594,13 @@ class AppointmentService(LoggerMixin):
                 message="Customer has opted out of SMS. Review request not sent.",
             )
 
-        # 30-day dedup check (Req 34.6)
-        last_review = await self._get_last_review_request_date(customer.id)
+        # 30-day per-job dedup check (Req 34.6) — keyed on
+        # (customer_id, job_id) so a customer with multiple jobs can
+        # receive one review request per job per 30 days.
+        last_review = await self._get_last_review_request_date(
+            customer.id,
+            job.id,
+        )
         if last_review is not None:
             cutoff = datetime.now(tz=timezone.utc) - timedelta(
                 days=_REVIEW_DEDUP_DAYS,
@@ -2603,12 +2608,14 @@ class AppointmentService(LoggerMixin):
             if last_review > cutoff:
                 self.log_rejected(
                     "request_google_review",
-                    reason="dedup_30_day",
+                    reason="dedup_30_day_per_job",
                     customer_id=str(customer.id),
+                    job_id=str(job.id),
                     last_requested=last_review.isoformat(),
                 )
                 raise ReviewAlreadyRequestedError(
                     customer.id,
+                    job.id,
                     last_review.isoformat(),
                 )
 
@@ -2640,8 +2647,8 @@ class AppointmentService(LoggerMixin):
 
         message = (
             f"Hi {customer.first_name or 'there'}! "
-            "Thank you for choosing Grins Irrigation. "
-            "We'd love your feedback — please leave us a Google review: "
+            "Thank you for choosing Grin's Irrigation. "
+            "We'd love your feedback - please leave a Google review: "
             f"{review_url}"
         )
 
@@ -2654,6 +2661,7 @@ class AppointmentService(LoggerMixin):
                 message_type=MessageType.GOOGLE_REVIEW_REQUEST,
                 consent_type="transactional",
                 appointment_id=appointment_id,
+                job_id=job.id,
             )
             provider_sid = send_result.get("message_id", "")
             self.log_completed(
@@ -2968,16 +2976,14 @@ class AppointmentService(LoggerMixin):
     async def _get_last_review_request_date(
         self,
         customer_id: UUID,
+        job_id: UUID,
     ) -> datetime | None:
-        """Get the date of the last Google review request for a customer.
+        """Get the date of the last Google review request for a (customer, job).
 
-        Checks sent_messages for review_request type messages.
+        Checks sent_messages for review_request type messages matching
+        both customer_id AND job_id (per-job dedup, Phase B).
         Returns None if no previous request found.
         """
-        # Query sent_messages for this customer with type review_request
-        # For now, we check via the appointment repository's session
-        # This is a simplified check — in production, would query
-        # sent_messages table directly
         try:
             from sqlalchemy import select  # noqa: PLC0415
 
@@ -2990,6 +2996,7 @@ class AppointmentService(LoggerMixin):
                 select(SentMessage.created_at)
                 .where(
                     SentMessage.customer_id == customer_id,
+                    SentMessage.job_id == job_id,
                     SentMessage.message_type.in_(
                         ["review_request", "google_review_request"],
                     ),

@@ -45,7 +45,7 @@ class EstimatePDFService(LoggerMixin):
     ) -> dict[str, Any]:
         """Load company branding (name / address / phone / logo)."""
         defaults: dict[str, Any] = {
-            "company_name": "Grins Irrigation",
+            "company_name": "Grin's Irrigation",
             "company_address": "",
             "company_phone": "",
             "company_logo_url": "",
@@ -96,7 +96,7 @@ class EstimatePDFService(LoggerMixin):
         IP address, user-agent and the approval timestamp — these
         are baked into the PDF so the signed copy is reproducible.
         """
-        company_name = branding.get("company_name", "Grins Irrigation")
+        company_name = branding.get("company_name", "Grin's Irrigation")
         company_address = branding.get("company_address", "")
         company_phone = branding.get("company_phone", "")
         company_logo_url = branding.get("company_logo_url", "")

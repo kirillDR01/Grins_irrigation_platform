@@ -148,14 +148,14 @@ export function ContractSigning() {
           {contract.company_logo_url && (
             <img
               src={contract.company_logo_url}
-              alt={contract.company_name ?? 'Grins Irrigation'}
+              alt={contract.company_name ?? "Grin's Irrigation"}
               className="h-12 w-auto object-contain"
               data-testid="company-logo"
             />
           )}
           <div>
             <h1 className="text-lg font-bold text-slate-800">
-              {contract.company_name ?? 'Grins Irrigation'}
+              {contract.company_name ?? "Grin's Irrigation"}
             </h1>
             {contract.company_phone && (
               <p className="text-sm text-slate-500">{contract.company_phone}</p>

@@ -1752,6 +1752,147 @@ class TestProperty37GoogleReviewConsentAndDedup:
         assert result.sent is True
 
     @pytest.mark.asyncio
+    async def test_review_request_per_job_dedup_allows_different_job(
+        self,
+    ) -> None:
+        """Same customer, different job, last review within 30 days → allowed.
+
+        Phase B (Cluster G) changed the dedup key from ``customer_id``
+        alone to ``(customer_id, job_id)``. A customer with multiple
+        jobs should receive one review request per job per 30 days.
+
+        **Validates: Cluster G Phase B per-job dedup**
+        """
+        from unittest.mock import patch
+
+        apt_id = uuid4()
+        customer_id = uuid4()
+        new_job_id = uuid4()
+
+        customer = _make_customer_mock(
+            customer_id=customer_id,
+            sms_opt_in=True,
+        )
+        # New job — distinct from any prior reviewed job
+        job = _make_job_mock(
+            job_id=new_job_id,
+            customer_id=customer_id,
+            customer=customer,
+        )
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            job_id=new_job_id,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+        appt_repo.session = AsyncMock()
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+
+        svc = _build_service(
+            appt_repo=appt_repo,
+            job_repo=job_repo,
+            google_review_url="https://g.page/review/grins",
+        )
+        # Per-job query for the NEW job returns None — no prior review
+        # for THIS job, even though the customer may have reviewed
+        # earlier on a different job.
+        svc._get_last_review_request_date = AsyncMock(return_value=None)
+
+        mock_sms_service = AsyncMock()
+        mock_sms_service.send_message = AsyncMock(
+            return_value={"success": True, "message_id": str(uuid4())},
+        )
+        with (
+            patch(
+                "grins_platform.services.sms_service.SMSService",
+                return_value=mock_sms_service,
+            ),
+            patch(
+                "grins_platform.services.sms.consent.check_sms_consent",
+                return_value=True,
+            ),
+        ):
+            result = await svc.request_google_review(apt_id)
+
+        assert result.sent is True
+        # Service must have called the dedup helper with BOTH customer_id
+        # and job_id (signature change is the whole point of Phase B).
+        svc._get_last_review_request_date.assert_awaited_once_with(
+            customer_id,
+            new_job_id,
+        )
+
+    @pytest.mark.asyncio
+    async def test_review_request_sets_job_id_on_sent_message(self) -> None:
+        """``sms_service.send_message`` is called with ``job_id=job.id``.
+
+        Without this, the new ``SentMessage`` row has ``job_id=NULL`` and
+        the per-job dedup query will not find it on the next request —
+        the cooldown would silently not apply. This test guards against
+        that regression.
+
+        **Validates: Cluster G Phase B per-job dedup persistence**
+        """
+        from unittest.mock import patch
+
+        apt_id = uuid4()
+        job_id = uuid4()
+        customer_id = uuid4()
+
+        customer = _make_customer_mock(
+            customer_id=customer_id,
+            sms_opt_in=True,
+        )
+        job = _make_job_mock(
+            job_id=job_id,
+            customer_id=customer_id,
+            customer=customer,
+        )
+        appointment = _make_appointment_mock(
+            appointment_id=apt_id,
+            job_id=job_id,
+        )
+
+        appt_repo = AsyncMock()
+        appt_repo.get_by_id = AsyncMock(return_value=appointment)
+        appt_repo.session = AsyncMock()
+
+        job_repo = AsyncMock()
+        job_repo.get_by_id = AsyncMock(return_value=job)
+
+        svc = _build_service(
+            appt_repo=appt_repo,
+            job_repo=job_repo,
+            google_review_url="https://g.page/review/grins",
+        )
+        svc._get_last_review_request_date = AsyncMock(return_value=None)
+
+        mock_sms_service = AsyncMock()
+        mock_sms_service.send_message = AsyncMock(
+            return_value={"success": True, "message_id": "SM123"},
+        )
+        with (
+            patch(
+                "grins_platform.services.sms_service.SMSService",
+                return_value=mock_sms_service,
+            ),
+            patch(
+                "grins_platform.services.sms.consent.check_sms_consent",
+                return_value=True,
+            ),
+        ):
+            await svc.request_google_review(apt_id)
+
+        call_kwargs = mock_sms_service.send_message.call_args.kwargs
+        assert call_kwargs["job_id"] == job_id, (
+            "send_message must be called with job_id so the resulting "
+            "SentMessage row carries job_id for the next dedup query"
+        )
+
+    @pytest.mark.asyncio
     async def test_review_request_with_not_found_raises_error(self) -> None:
         """Review request for non-existent appointment raises error."""
         appt_repo = AsyncMock()

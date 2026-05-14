@@ -361,7 +361,7 @@ class TestReviewPush:
         mock_session: AsyncMock,
     ) -> None:
         """bughunt M-6: spec §4/§10 wording verbatim — no first-name prefix,
-        ``Grins Irrigation`` (no apostrophe / no plural).
+        ``Grin's Irrigation`` (apostrophe canonicalization applied 2026-05-14).
         """
         job = _make_job()
         customer = _make_customer()
@@ -380,7 +380,7 @@ class TestReviewPush:
             client.post(f"/api/v1/jobs/{job.id}/review-push")
 
         body = mock_sms.call_args.kwargs["message"]
-        assert body.startswith("Thanks for choosing Grins Irrigation!")
+        assert body.startswith("Thanks for choosing Grin's Irrigation!")
         assert "We'd appreciate a quick review:" in body
         # Negative assertions to lock the regression
         assert "Grin's Irrigations" not in body

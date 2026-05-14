@@ -138,14 +138,14 @@ export function EstimateReview() {
           {estimate.company_logo_url && (
             <img
               src={estimate.company_logo_url}
-              alt={estimate.company_name ?? 'Grins Irrigation'}
+              alt={estimate.company_name ?? "Grin's Irrigation"}
               className="h-12 w-auto object-contain"
               data-testid="company-logo"
             />
           )}
           <div>
             <h1 className="text-lg font-bold text-slate-800">
-              {estimate.company_name ?? 'Grins Irrigation'}
+              {estimate.company_name ?? "Grin's Irrigation"}
             </h1>
             {estimate.company_phone && (
               <p className="text-sm text-slate-500">{estimate.company_phone}</p>

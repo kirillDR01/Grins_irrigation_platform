@@ -49,7 +49,7 @@ import type {
 // --- Constants ---
 
 const ATTESTATION_TEXT =
-  'I confirm that all recipients in this CSV have provided prior express written consent to receive SMS marketing messages from Grins Irrigation, and I have records of such consent available for review.';
+  "I confirm that all recipients in this CSV have provided prior express written consent to receive SMS marketing messages from Grin's Irrigation, and I have records of such consent available for review.";
 const ATTESTATION_VERSION = '1.0';
 const CSV_MAX_SIZE_MB = 2;
 const CSV_MAX_ROWS = 5000;

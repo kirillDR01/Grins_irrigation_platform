@@ -8,7 +8,7 @@ import type { PortalEstimate } from '../types';
 
 // Mock the hooks
 const mockEstimateData: PortalEstimate = {
-  company_name: 'Grins Irrigation',
+  company_name: "Grin's Irrigation",
   company_logo_url: 'https://example.com/logo.png',
   company_address: '123 Main St',
   company_phone: '(555) 123-4567',
@@ -101,7 +101,7 @@ describe('EstimateReview', () => {
 
     expect(screen.getByTestId('estimate-review-page')).toBeInTheDocument();
     expect(screen.getByTestId('company-logo')).toBeInTheDocument();
-    expect(screen.getByText('Grins Irrigation')).toBeInTheDocument();
+    expect(screen.getByText("Grin's Irrigation")).toBeInTheDocument();
     expect(screen.getByText('(555) 123-4567')).toBeInTheDocument();
     expect(screen.getByText((_content, element) => element?.tagName === 'H2' && element?.textContent?.includes('EST-001') === true)).toBeInTheDocument();
     expect(screen.getByText('John Smith')).toBeInTheDocument();
@@ -121,7 +121,7 @@ describe('EstimateReview', () => {
     expect(screen.getByTestId('estimate-review-page')).toBeInTheDocument();
     expect(screen.queryByTestId('company-logo')).not.toBeInTheDocument();
     // Falls back to the default company name.
-    expect(screen.getByText('Grins Irrigation')).toBeInTheDocument();
+    expect(screen.getByText("Grin's Irrigation")).toBeInTheDocument();
   });
 
   it('renders line items table', () => {

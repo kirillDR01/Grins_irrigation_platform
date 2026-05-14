@@ -59,13 +59,13 @@ def _check_rate_limit(ip: str) -> bool:
 # ---------------------------------------------------------------------------
 
 _DEFAULT_CONSENT_LANGUAGE = (
-    "I agree to receive SMS messages from Grin's Irrigations regarding "
+    "I agree to receive SMS messages from Grin's Irrigation regarding "
     "my service agreement, appointments, and account updates."
 )
 
 _DEFAULT_DISCLOSURE_CONTENT = (
     "Pre-sale disclosure: By proceeding, you acknowledge the terms of "
-    "service and consent to SMS communications from Grin's Irrigations."
+    "service and consent to SMS communications from Grin's Irrigation."
 )
 
 

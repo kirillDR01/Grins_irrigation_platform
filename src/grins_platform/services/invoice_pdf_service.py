@@ -97,7 +97,7 @@ class InvoicePDFService(LoggerMixin):
         )
 
         defaults: dict[str, Any] = {
-            "company_name": "Grins Irrigation",
+            "company_name": "Grin's Irrigation",
             "company_address": "",
             "company_phone": "",
             "company_logo_url": "",
@@ -128,7 +128,7 @@ class InvoicePDFService(LoggerMixin):
         Returns:
             HTML string.
         """
-        company_name = branding.get("company_name", "Grins Irrigation")
+        company_name = branding.get("company_name", "Grin's Irrigation")
         company_address = branding.get("company_address", "")
         company_phone = branding.get("company_phone", "")
         company_logo_url = branding.get("company_logo_url", "")

@@ -316,7 +316,7 @@ class EstimateService(LoggerMixin):
             if phone:
                 try:
                     message = (
-                        f"Your estimate from Grins Irrigation is ready! "
+                        f"Your estimate is ready! "
                         f"Review it here: {portal_url}"
                     )
                     _ = await self.sms_service.send_automated_message(
@@ -358,7 +358,7 @@ class EstimateService(LoggerMixin):
             if self.sms_service and getattr(lead, "phone", None):
                 try:
                     message = (
-                        f"Your estimate from Grins Irrigation is ready! "
+                        f"Your estimate is ready! "
                         f"Review it here: {portal_url}"
                     )
                     _ = await self.sms_service.send_automated_message(
@@ -1079,7 +1079,7 @@ class EstimateService(LoggerMixin):
             )
 
             message = follow_up.message or (
-                f"Reminder: Your estimate from Grins Irrigation is "
+                f"Reminder: Your estimate is "
                 f"waiting for your review. View it here: {portal_url}"
             )
 

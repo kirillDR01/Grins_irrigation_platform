@@ -2472,7 +2472,7 @@ class TestProperty84BusinessSettingsRoundTrip:
         db.execute = AsyncMock(return_value=mock_result)
 
         result = await svc.get_company_info(db)
-        assert result["company_name"] == "Grins Irrigation"
+        assert result["company_name"] == "Grin's Irrigation"
         assert isinstance(result, dict)
 
     @pytest.mark.asyncio

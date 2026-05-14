@@ -121,7 +121,7 @@ async def send_lead_confirmations_post_commit(lead_id: UUID) -> None:
             if lead.sms_consent and lead.phone:
                 try:
                     confirmation_msg = (
-                        "Thanks for reaching out to Grins Irrigation! "
+                        "Thanks for reaching out! "
                         "We received your request and will be in touch soon."
                     )
                     result = await sms_service.send_automated_message(
@@ -355,7 +355,7 @@ class LeadService(LoggerMixin):
 
         try:
             confirmation_msg = (
-                "Thanks for reaching out to Grins Irrigation! "
+                "Thanks for reaching out! "
                 "We received your request and will be in touch soon."
             )
             result = await self.sms_service.send_automated_message(

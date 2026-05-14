@@ -7,7 +7,7 @@
 
 // --- Constants ---
 
-export const SENDER_PREFIX = 'Grins Irrigation: ';
+export const SENDER_PREFIX = "Grin's Irrigation: ";
 export const STOP_FOOTER = ' Reply STOP to opt out.';
 export const ALLOWED_MERGE_FIELDS = ['first_name', 'last_name', 'next_appointment_date'] as const;
 

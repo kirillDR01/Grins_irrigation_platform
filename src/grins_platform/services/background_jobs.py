@@ -364,7 +364,7 @@ _BATCH_SIZE = 2
 _REDIS_WORKER_KEY = "sms:worker:last_tick"
 
 # Sender prefix / footer defaults
-_DEFAULT_PREFIX = "Grins Irrigation: "
+_DEFAULT_PREFIX = "Grin's Irrigation: "
 _DEFAULT_FOOTER = " Reply STOP to opt out."
 
 

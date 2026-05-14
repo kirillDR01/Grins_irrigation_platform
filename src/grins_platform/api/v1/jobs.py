@@ -1616,7 +1616,7 @@ async def review_push(
     # here intentionally — the spec wording is brand-only, no first-name
     # personalization.
     message = (
-        "Thanks for choosing Grins Irrigation! "
+        "Thanks for choosing Grin's Irrigation! "
         f"We'd appreciate a quick review: {review_url}"
     )
 

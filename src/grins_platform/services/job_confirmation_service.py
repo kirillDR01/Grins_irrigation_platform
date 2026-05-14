@@ -75,7 +75,7 @@ _AUTO_REPLIES: dict[ConfirmationKeyword, str] = {
     # below, this collapses two redundant SMS into one clear ask.
     ConfirmationKeyword.RESCHEDULE: (
         "We'd be happy to reschedule. Please reply with 2-3 dates "
-        "and times that work for you and we'll get you set up."
+        "and times that work for you and we'll get you booked."
     ),
     ConfirmationKeyword.CANCEL: (
         "Your appointment has been cancelled. "

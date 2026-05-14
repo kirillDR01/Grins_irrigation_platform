@@ -2,7 +2,7 @@ Your estimate from {{ business_name }}
 
 Hi {{ customer_name }},
 
-Thanks for considering {{ business_name }}. Your estimate is ready for review.
+Thank you for considering {{ business_name }}. Your estimate is ready for review.
 Total: ${{ total }}
 {% if valid_until %}Valid through: {{ valid_until }}
 {% endif %}

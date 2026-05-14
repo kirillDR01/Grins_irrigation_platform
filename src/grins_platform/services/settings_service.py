@@ -196,7 +196,7 @@ class SettingsService(LoggerMixin):
             return await self.get_setting(db, "company_info")
         except SettingNotFoundError:
             return {
-                "company_name": "Grins Irrigation",
+                "company_name": "Grin's Irrigation",
                 "company_address": "",
                 "company_phone": "",
                 "company_logo_url": "",

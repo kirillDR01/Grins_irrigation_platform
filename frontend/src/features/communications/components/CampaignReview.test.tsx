@@ -9,7 +9,7 @@ vi.mock('../utils/segmentCounter', () => ({
   renderTemplate: vi.fn((text: string, ctx: Record<string, string>) =>
     text.replace(/\{(\w+)\}/g, (_, key: string) => ctx[key] ?? ''),
   ),
-  SENDER_PREFIX: 'Grins Irrigation: ',
+  SENDER_PREFIX: "Grin's Irrigation: ",
   STOP_FOOTER: ' Reply STOP to opt out.',
   ALLOWED_MERGE_FIELDS: ['first_name', 'last_name', 'next_appointment_date'],
 }));

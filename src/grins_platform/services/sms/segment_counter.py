@@ -24,7 +24,7 @@ _GSM7_EXTENSION: frozenset[str] = frozenset("^{}\\[~]|€")
 Encoding = Literal["GSM-7", "UCS-2"]
 
 # Defaults
-_DEFAULT_PREFIX = "Grins Irrigation: "
+_DEFAULT_PREFIX = "Grin's Irrigation: "
 _DEFAULT_FOOTER = " Reply STOP to opt out."
 
 

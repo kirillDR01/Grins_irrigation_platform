@@ -205,7 +205,7 @@ class InvoicePortalService(LoggerMixin):
         )
 
         defaults: dict[str, str] = {
-            "company_name": "Grins Irrigation",
+            "company_name": "Grin's Irrigation",
             "company_address": "",
             "company_phone": "",
             "company_logo_url": "",

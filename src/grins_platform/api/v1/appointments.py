@@ -1743,15 +1743,19 @@ async def request_google_review(
             detail=f"Appointment not found: {e.appointment_id}",
         ) from e
     except ReviewAlreadyRequestedError as e:
-        _endpoints.log_rejected("request_google_review", reason="dedup_30_day")
-        # E-BUG-F: structured detail so the UI can render
-        # "Already sent within last 30 days (sent {date})"
+        _endpoints.log_rejected(
+            "request_google_review",
+            reason="dedup_30_day_per_job",
+        )
+        # Structured detail so the UI can render
+        # "Already sent for this job within last 30 days (sent {date})"
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
                 "code": "REVIEW_ALREADY_SENT",
                 "message": str(e),
                 "last_sent_at": e.last_requested_at,
+                "job_id": str(e.job_id),
             },
         ) from e
 

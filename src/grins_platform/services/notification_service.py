@@ -407,13 +407,13 @@ class NotificationService(LoggerMixin):
             window_end = format_sms_time_12h(appt.time_window_end)
 
             sms_body = (
-                f"Reminder: You have an appointment today with "
-                f"Grins Irrigation between {window_start} and "
-                f"{window_end}. {staff_name} will be your technician."
+                f"Reminder: You have an appointment today between "
+                f"{window_start} and {window_end}. "
+                f"{staff_name} will be your technician."
             )
             email_body = (
                 f"<p>This is a reminder that you have an appointment "
-                f"scheduled today with Grins Irrigation.</p>"
+                f"scheduled today with Grin's Irrigation.</p>"
                 f"<p><strong>Time window:</strong> {window_start} - "
                 f"{window_end}</p>"
                 f"<p><strong>Technician:</strong> {staff_name}</p>"
@@ -424,7 +424,7 @@ class NotificationService(LoggerMixin):
                 customer=customer,
                 notification_type=NotificationType.DAY_OF_REMINDER,
                 message_type=MessageType.APPOINTMENT_REMINDER,
-                subject="Appointment Reminder — Grins Irrigation",
+                subject="Appointment Reminder — Grin's Irrigation",
                 sms_body=sms_body,
                 email_body=email_body,
                 appointment_id=appt.id,
@@ -490,11 +490,11 @@ class NotificationService(LoggerMixin):
             eta_text = f" Estimated arrival in {eta_minutes} minutes."
 
         sms_body = (
-            f"{staff_name} from Grins Irrigation is on the way to "
+            f"{staff_name} is on the way to "
             f"your appointment!{eta_text}"
         )
         email_body = (
-            f"<p><strong>{staff_name}</strong> from Grins Irrigation "
+            f"<p><strong>{staff_name}</strong> from Grin's Irrigation "
             f"is on the way to your appointment.</p>"
             f"<p>{eta_text.strip()}</p>"
         )
@@ -504,7 +504,7 @@ class NotificationService(LoggerMixin):
             customer=customer,
             notification_type=NotificationType.ON_MY_WAY,
             message_type=MessageType.ON_THE_WAY,
-            subject="Your Technician Is On The Way — Grins Irrigation",
+            subject="Your Technician Is On The Way — Grin's Irrigation",
             sms_body=sms_body,
             email_body=email_body,
             appointment_id=appt.id,
@@ -551,10 +551,10 @@ class NotificationService(LoggerMixin):
             staff_name = getattr(appt.staff, "name", "Your technician")
 
         sms_body = (
-            f"{staff_name} from Grins Irrigation has arrived for your appointment."
+            f"{staff_name} has arrived for your appointment."
         )
         email_body = (
-            f"<p><strong>{staff_name}</strong> from Grins Irrigation "
+            f"<p><strong>{staff_name}</strong> from Grin's Irrigation "
             f"has arrived for your scheduled appointment.</p>"
         )
 
@@ -563,7 +563,7 @@ class NotificationService(LoggerMixin):
             customer=customer,
             notification_type=NotificationType.ARRIVAL,
             message_type=MessageType.ARRIVAL,
-            subject="Your Technician Has Arrived — Grins Irrigation",
+            subject="Your Technician Has Arrived — Grin's Irrigation",
             sms_body=sms_body,
             email_body=email_body,
             appointment_id=appt.id,
@@ -616,11 +616,11 @@ class NotificationService(LoggerMixin):
             )
 
         sms_body = (
-            f"Your Grins Irrigation appointment is running a bit "
+            f"Your appointment is running a bit "
             f"longer than expected. We apologize for the delay.{eta_text}"
         )
         email_body = (
-            f"<p>Your Grins Irrigation appointment is running longer "
+            f"<p>Your Grin's Irrigation appointment is running longer "
             f"than expected. We apologize for the inconvenience.</p>"
             f"<p>{eta_text.strip()}</p>"
         )
@@ -630,7 +630,7 @@ class NotificationService(LoggerMixin):
             customer=customer,
             notification_type=NotificationType.DELAY,
             message_type=MessageType.CUSTOM,
-            subject="Appointment Update — Grins Irrigation",
+            subject="Appointment Update — Grin's Irrigation",
             sms_body=sms_body,
             email_body=email_body,
             appointment_id=appt.id,
@@ -679,12 +679,12 @@ class NotificationService(LoggerMixin):
             review_text = f" We'd love your feedback: {self.google_review_url}"
 
         sms_body = (
-            f"Your Grins Irrigation appointment is complete! "
+            f"Your appointment is complete! "
             f"{job_summary}{invoice_text}{review_text}"
         ).strip()
 
         email_parts = [
-            "<p>Your Grins Irrigation appointment has been completed.</p>",
+            "<p>Your Grin's Irrigation appointment has been completed.</p>",
         ]
         if job_summary:
             email_parts.append(f"<p>{job_summary}</p>")
@@ -703,7 +703,7 @@ class NotificationService(LoggerMixin):
             customer=customer,
             notification_type=NotificationType.COMPLETION,
             message_type=MessageType.COMPLETION,
-            subject="Appointment Complete — Grins Irrigation",
+            subject="Appointment Complete — Grin's Irrigation",
             sms_body=sms_body,
             email_body=email_body,
             appointment_id=appt.id,
@@ -1114,7 +1114,7 @@ class NotificationService(LoggerMixin):
                 lead_id=lead.id,
                 message_type=MessageType.LEAD_CONFIRMATION.value,
                 message_content=(
-                    "Thanks for reaching out to Grins Irrigation! "
+                    "Thanks for reaching out! "
                     "We received your request and will be in touch soon."
                 ),
                 recipient_phone=lead.phone,
@@ -1133,7 +1133,7 @@ class NotificationService(LoggerMixin):
 
         # Send immediately
         sms_body = (
-            "Thanks for reaching out to Grins Irrigation! "
+            "Thanks for reaching out! "
             "We received your request and will be in touch soon."
         )
 

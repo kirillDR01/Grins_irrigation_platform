@@ -92,14 +92,14 @@ export function InvoicePortal() {
           {invoice.company_logo_url && (
             <img
               src={invoice.company_logo_url}
-              alt={invoice.company_name ?? 'Grins Irrigation'}
+              alt={invoice.company_name ?? "Grin's Irrigation"}
               className="h-12 w-auto object-contain"
               data-testid="company-logo"
             />
           )}
           <div>
             <h1 className="text-lg font-bold text-slate-800">
-              {invoice.company_name ?? 'Grins Irrigation'}
+              {invoice.company_name ?? "Grin's Irrigation"}
             </h1>
             {invoice.company_address && (
               <p className="text-sm text-slate-500">{invoice.company_address}</p>

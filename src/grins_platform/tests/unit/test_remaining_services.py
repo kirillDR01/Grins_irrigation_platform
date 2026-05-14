@@ -132,7 +132,7 @@ def _mock_business_setting(
     s = MagicMock()
     s.id = uuid4()
     s.setting_key = key
-    s.setting_value = value or {"company_name": "Grins Irrigation"}
+    s.setting_value = value or {"company_name": "Grin's Irrigation"}
     s.updated_by = None
     s.updated_at = datetime.now(tz=timezone.utc)
     return s

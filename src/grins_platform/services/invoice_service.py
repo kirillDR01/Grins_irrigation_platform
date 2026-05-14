@@ -1128,7 +1128,7 @@ class InvoiceService(LoggerMixin):
         """Render the D4 short SMS template for Payment Links."""
         first_name = getattr(customer, "first_name", "") or "there"
         return (
-            f"Hi {first_name}, your invoice from Grin's Irrigation for "
+            f"Hi {first_name}, your invoice for "
             f"${invoice.total_amount} is ready: "
             f"{invoice.stripe_payment_link_url}"
         )

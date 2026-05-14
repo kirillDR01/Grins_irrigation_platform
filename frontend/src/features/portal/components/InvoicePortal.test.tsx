@@ -6,7 +6,7 @@ import { InvoicePortal } from './InvoicePortal';
 import type { PortalInvoice } from '../types';
 
 const mockInvoiceData: PortalInvoice = {
-  company_name: 'Grins Irrigation',
+  company_name: "Grin's Irrigation",
   company_logo_url: 'https://example.com/logo.png',
   company_address: '123 Main St, Austin TX',
   company_phone: '(555) 123-4567',
@@ -85,7 +85,7 @@ describe('InvoicePortal', () => {
 
     expect(screen.getByTestId('invoice-portal-page')).toBeInTheDocument();
     expect(screen.getByTestId('company-logo')).toBeInTheDocument();
-    expect(screen.getByText('Grins Irrigation')).toBeInTheDocument();
+    expect(screen.getByText("Grin's Irrigation")).toBeInTheDocument();
     expect(screen.getByText('123 Main St, Austin TX')).toBeInTheDocument();
     expect(screen.getByText('(555) 123-4567')).toBeInTheDocument();
     expect(screen.getByText((_content, element) => element?.tagName === 'H2' && element?.textContent?.includes('INV-2025-001') === true)).toBeInTheDocument();

@@ -13,7 +13,7 @@ import type { PortalEstimate } from '../types';
 // unregistered URL and the test fails — exactly the bug F5 closes.
 
 const baseEstimate: PortalEstimate = {
-  company_name: 'Grins Irrigation',
+  company_name: "Grin's Irrigation",
   company_logo_url: null,
   company_address: null,
   company_phone: null,

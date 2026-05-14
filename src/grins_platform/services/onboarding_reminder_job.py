@@ -111,7 +111,7 @@ class OnboardingReminderJob(LoggerMixin):
             return
 
         message = (
-            "Hi! Your Grins Irrigation account is almost ready. "
+            "Hi! Your Grin's Irrigation account is almost ready. "
             "Please complete your property setup to get started."
         )
 

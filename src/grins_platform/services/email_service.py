@@ -372,7 +372,7 @@ class EmailService(LoggerMixin):
             )
             return {"sent": False, "reason": "no_email"}
 
-        subject = f"Welcome to Grins Irrigation {tier.name} Plan!"
+        subject = f"Welcome to Grin's Irrigation {tier.name} Plan!"
         start = str(agreement.start_date) if agreement.start_date else ""
         context = {
             "customer_name": customer.full_name,
@@ -784,7 +784,7 @@ class EmailService(LoggerMixin):
         classification = self._classify_email("confirmation")
         sent = self._send_email(
             to_email=email,
-            subject=("Your Grins Irrigation Service Agreement Confirmation"),
+            subject=("Your Grin's Irrigation Service Agreement Confirmation"),
             html_body=html_body,
             email_type="confirmation",
             classification=classification,
@@ -838,7 +838,7 @@ class EmailService(LoggerMixin):
         classification = self._classify_email("renewal_notice")
         sent = self._send_email(
             to_email=email,
-            subject=("Your Grins Irrigation Service Agreement Renewal Notice"),
+            subject=("Your Grin's Irrigation Service Agreement Renewal Notice"),
             html_body=html_body,
             email_type="renewal_notice",
             classification=classification,
@@ -886,7 +886,7 @@ class EmailService(LoggerMixin):
         classification = self._classify_email("annual_notice")
         sent = self._send_email(
             to_email=email,
-            subject=("Annual Notice — Your Grins Irrigation Service Agreement"),
+            subject=("Annual Notice — Your Grin's Irrigation Service Agreement"),
             html_body=html_body,
             email_type="annual_notice",
             classification=classification,
@@ -943,7 +943,7 @@ class EmailService(LoggerMixin):
         classification = self._classify_email("cancellation_conf")
         sent = self._send_email(
             to_email=email,
-            subject=("Grins Irrigation Service Agreement Cancellation Confirmation"),
+            subject=("Grin's Irrigation Service Agreement Cancellation Confirmation"),
             html_body=html_body,
             email_type="cancellation_conf",
             classification=classification,
@@ -1017,7 +1017,7 @@ class EmailService(LoggerMixin):
         customer_first_name: str | None,
         portal_url: str | None,
         estimate_total: float | None,
-        company_name: str = "Grins Irrigation",
+        company_name: str = "Grin's Irrigation",
     ) -> dict[str, Any]:
         """Send a sales-pipeline auto-nudge email.
 

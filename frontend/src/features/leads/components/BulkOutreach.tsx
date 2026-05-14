@@ -25,17 +25,17 @@ const MESSAGE_TEMPLATES = [
   {
     id: 'follow_up',
     label: 'Follow Up',
-    body: 'Hi {name}, this is Grins Irrigation. We wanted to follow up on your inquiry. Are you still interested in our services? Reply YES to schedule a consultation.',
+    body: "Hi {name}, this is Grin's Irrigation. We wanted to follow up on your inquiry. Are you still interested in our services? Reply YES to schedule a consultation.",
   },
   {
     id: 'estimate_ready',
     label: 'Estimate Ready',
-    body: 'Hi {name}, your estimate from Grins Irrigation is ready! Please check your email for details or reply to this message with any questions.',
+    body: "Hi {name}, your estimate from Grin's Irrigation is ready! Please check your email for details or reply to this message with any questions.",
   },
   {
     id: 'seasonal',
     label: 'Seasonal Reminder',
-    body: 'Hi {name}, it\'s time to prepare your irrigation system for the season. Contact Grins Irrigation to schedule your service. Reply YES to get started.',
+    body: "Hi {name}, it's time to prepare your irrigation system for the season. Contact Grin's Irrigation to schedule your service. Reply YES to get started.",
   },
   {
     id: 'custom',
