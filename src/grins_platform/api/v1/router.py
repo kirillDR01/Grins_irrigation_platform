@@ -9,6 +9,9 @@ Validates: Requirement 10.5-10.7
 from fastapi import APIRouter
 
 from grins_platform.api.v1.accounting import router as accounting_router
+from grins_platform.api.v1.admin_notifications import (
+    router as admin_notifications_router,
+)
 from grins_platform.api.v1.agreements import (
     compliance_router,
     dashboard_ext_router,
@@ -421,6 +424,12 @@ api_router.include_router(
 api_router.include_router(
     alerts_router,
     tags=["alerts"],
+)
+
+# Include Admin Notifications endpoints (Cluster H §5 — in-app inbox bell)
+api_router.include_router(
+    admin_notifications_router,
+    tags=["admin-notifications"],
 )
 
 # Include unified Inbox endpoints (scheduling-gaps gap-16 v0)

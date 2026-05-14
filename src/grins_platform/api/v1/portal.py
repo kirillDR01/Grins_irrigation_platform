@@ -387,6 +387,7 @@ async def approve_portal_estimate(
             token=token,
             ip_address=final_ip,
             user_agent=final_ua,
+            db=session,
         )
     except EstimateNotFoundError as exc:
         _endpoints.log_rejected(
@@ -474,6 +475,7 @@ async def reject_portal_estimate(
         result = await service.reject_via_portal(
             token=token,
             reason=reason,
+            db=session,
         )
     except EstimateNotFoundError as exc:
         _endpoints.log_rejected(
@@ -565,6 +567,7 @@ async def sign_portal_contract(
             token=token,
             ip_address=final_ip,
             user_agent=final_ua,
+            db=session,
         )
     except EstimateNotFoundError as exc:
         _endpoints.log_rejected(

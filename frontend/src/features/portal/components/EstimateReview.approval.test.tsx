@@ -32,7 +32,7 @@ const baseEstimate: PortalEstimate = {
   notes: null,
   valid_until: null,
   created_at: '2026-05-04T10:00:00Z',
-  is_readonly: false,
+  readonly: false,
 };
 
 const mockUsePortalEstimate = vi.fn();

@@ -360,7 +360,7 @@ class TestProperty21EstimateApprovalUpdatesLeadTag:
         lead_svc.update_action_tags = AsyncMock()
 
         svc = _build_service(repo=repo, lead_service=lead_svc)
-        await svc.approve_via_portal(token, "1.2.3.4", "TestAgent/1.0")
+        await svc.approve_via_portal(token, "1.2.3.4", "TestAgent/1.0", db=AsyncMock())
 
         # Verify token_readonly was set to True in the update call
         repo.update.assert_awaited_once()
@@ -400,7 +400,7 @@ class TestProperty21EstimateApprovalUpdatesLeadTag:
         lead_svc.update_action_tags = AsyncMock()
 
         svc = _build_service(repo=repo, lead_service=lead_svc)
-        await svc.approve_via_portal(token, "1.2.3.4", "TestAgent/1.0")
+        await svc.approve_via_portal(token, "1.2.3.4", "TestAgent/1.0", db=AsyncMock())
 
         lead_svc.update_action_tags.assert_awaited_once_with(
             lead_id,
@@ -432,7 +432,7 @@ class TestProperty21EstimateApprovalUpdatesLeadTag:
         repo.cancel_follow_ups_for_estimate = AsyncMock(return_value=3)
 
         svc = _build_service(repo=repo)
-        await svc.approve_via_portal(token, "1.2.3.4", "TestAgent/1.0")
+        await svc.approve_via_portal(token, "1.2.3.4", "TestAgent/1.0", db=AsyncMock())
 
         repo.cancel_follow_ups_for_estimate.assert_awaited_once_with(estimate.id)
 
@@ -453,7 +453,7 @@ class TestProperty21EstimateApprovalUpdatesLeadTag:
 
         svc = _build_service(repo=repo)
         with pytest.raises(EstimateAlreadyApprovedError):
-            await svc.approve_via_portal(token, "1.2.3.4", "TestAgent/1.0")
+            await svc.approve_via_portal(token, "1.2.3.4", "TestAgent/1.0", db=AsyncMock())
 
     @pytest.mark.asyncio
     async def test_reject_via_portal_also_sets_token_readonly(self) -> None:
@@ -477,7 +477,7 @@ class TestProperty21EstimateApprovalUpdatesLeadTag:
         repo.cancel_follow_ups_for_estimate = AsyncMock(return_value=0)
 
         svc = _build_service(repo=repo)
-        await svc.reject_via_portal(token, reason="Too expensive")
+        await svc.reject_via_portal(token, reason="Too expensive", db=AsyncMock())
 
         call_kwargs = repo.update.call_args
         assert call_kwargs[1]["token_readonly"] is True
@@ -539,7 +539,7 @@ class TestProperty21EstimateApprovalUpdatesLeadTag:
         repo.cancel_follow_ups_for_estimate = AsyncMock(return_value=0)
 
         svc = _build_service(repo=repo)
-        result = await svc.reject_via_portal(token, reason="Too expensive")
+        result = await svc.reject_via_portal(token, reason="Too expensive", db=AsyncMock())
 
         assert isinstance(result, EstimateResponse)
         assert result.rejection_reason == "Too expensive"
@@ -1151,7 +1151,7 @@ class TestProperty52FollowUpSchedulingAndCancellation:
         repo.cancel_follow_ups_for_estimate = AsyncMock(return_value=4)
 
         svc = _build_service(repo=repo)
-        await svc.approve_via_portal(token, "1.2.3.4", "Agent/1.0")
+        await svc.approve_via_portal(token, "1.2.3.4", "Agent/1.0", db=AsyncMock())
 
         repo.cancel_follow_ups_for_estimate.assert_awaited_once_with(estimate.id)
 
@@ -1177,7 +1177,7 @@ class TestProperty52FollowUpSchedulingAndCancellation:
         repo.cancel_follow_ups_for_estimate = AsyncMock(return_value=3)
 
         svc = _build_service(repo=repo)
-        await svc.reject_via_portal(token, reason="Changed mind")
+        await svc.reject_via_portal(token, reason="Changed mind", db=AsyncMock())
 
         repo.cancel_follow_ups_for_estimate.assert_awaited_once_with(estimate.id)
 

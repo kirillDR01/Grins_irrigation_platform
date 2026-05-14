@@ -281,7 +281,7 @@ class TestEstimatePortalFullFlow:
             token=created_est.customer_token,
             ip_address="192.168.1.1",
             user_agent="Mozilla/5.0",
-        )
+        , db=AsyncMock())
 
         assert approval.status == EstimateStatus.APPROVED
         assert approval.approved_at is not None
@@ -334,7 +334,7 @@ class TestEstimatePortalFullFlow:
         rejection = await svc.reject_via_portal(
             token=est.customer_token,
             reason="Too expensive",
-        )
+        , db=AsyncMock())
 
         assert rejection.status == EstimateStatus.REJECTED
         assert rejection.rejected_at is not None
@@ -366,7 +366,7 @@ class TestEstimatePortalFullFlow:
                 token=expired_est.customer_token,
                 ip_address="10.0.0.1",
                 user_agent="TestAgent",
-            )
+            , db=AsyncMock())
 
     async def test_portal_approval_on_already_decided_estimate_raises_error(
         self,
@@ -384,7 +384,7 @@ class TestEstimatePortalFullFlow:
                 token=already_approved.customer_token,
                 ip_address="10.0.0.1",
                 user_agent="TestAgent",
-            )
+            , db=AsyncMock())
 
     async def test_portal_token_not_found_raises_error(self) -> None:
         """Non-existent portal token raises EstimateNotFoundError."""
@@ -396,7 +396,7 @@ class TestEstimatePortalFullFlow:
                 token=uuid4(),
                 ip_address="10.0.0.1",
                 user_agent="TestAgent",
-            )
+            , db=AsyncMock())
 
 
 # =============================================================================
@@ -617,7 +617,7 @@ class TestEstimateFollowUpLifecycle:
             token=est.customer_token,
             ip_address="10.0.0.1",
             user_agent="Safari/17",
-        )
+        , db=AsyncMock())
 
         assert approval.status == EstimateStatus.APPROVED
         repo.cancel_follow_ups_for_estimate.assert_called_once_with(est_id)
@@ -704,7 +704,7 @@ class TestEstimateFollowUpLifecycle:
         await svc.reject_via_portal(
             token=est.customer_token,
             reason="Found another vendor",
-        )
+        , db=AsyncMock())
 
         repo.cancel_follow_ups_for_estimate.assert_called_once_with(est.id)
 

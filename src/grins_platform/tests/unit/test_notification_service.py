@@ -1188,10 +1188,18 @@ class TestSendAdminCancellationAlert:
         assert "Jane Doe" in email_kwargs["subject"]
         assert "customer_sms" in email_kwargs["html_body"]
 
-        # --- Alert row persisted ---
-        db.add.assert_called_once()
-        added_alert = db.add.call_args[0][0]
-        assert isinstance(added_alert, Alert)
+        # --- Alert row + AdminNotification row both persisted ---
+        # (Cluster H §5 added the admin-notifications row alongside the
+        # legacy Alert row; both must be written.)
+        from grins_platform.models.admin_notification import AdminNotification
+
+        assert db.add.call_count == 2
+        added_models = [c.args[0] for c in db.add.call_args_list]
+        alert_rows = [m for m in added_models if isinstance(m, Alert)]
+        admin_rows = [m for m in added_models if isinstance(m, AdminNotification)]
+        assert len(alert_rows) == 1
+        assert len(admin_rows) == 1
+        added_alert = alert_rows[0]
         assert added_alert.type == "customer_cancelled_appointment"
         assert added_alert.severity == "warning"
         assert added_alert.entity_type == "appointment"
@@ -1199,6 +1207,11 @@ class TestSendAdminCancellationAlert:
         assert "Jane Doe" in added_alert.message
         assert "customer_sms" in added_alert.message
         assert "2026-04-17 09:00" in added_alert.message
+        # AdminNotification mirrors the appointment_cancelled signal.
+        admin = admin_rows[0]
+        assert admin.event_type == "appointment_cancelled"
+        assert admin.subject_resource_type == "appointment"
+        assert admin.subject_resource_id == appointment_id
 
     @pytest.mark.asyncio
     async def test_send_admin_cancellation_alert_swallows_email_failure(
@@ -1241,10 +1254,13 @@ class TestSendAdminCancellationAlert:
             scheduled_at=datetime(2026, 4, 17, 9, 0, tzinfo=timezone.utc),
         )
 
-        # Alert row still created despite email failure.
-        db.add.assert_called_once()
-        added_alert = db.add.call_args[0][0]
-        assert isinstance(added_alert, Alert)
+        # Alert row + AdminNotification row still created despite email failure.
+        from grins_platform.models.admin_notification import AdminNotification
+
+        assert db.add.call_count == 2
+        added_models = [c.args[0] for c in db.add.call_args_list]
+        assert any(isinstance(m, Alert) for m in added_models)
+        assert any(isinstance(m, AdminNotification) for m in added_models)
 
     @pytest.mark.asyncio
     async def test_send_admin_cancellation_alert_skips_email_when_not_configured(
@@ -1283,8 +1299,9 @@ class TestSendAdminCancellationAlert:
         )
 
         email_svc._send_email.assert_not_called()
-        # Alert row still created.
-        db.add.assert_called_once()
+        # Alert row + AdminNotification row still created.
+        # (Cluster H §5: in-app notification persists regardless of email).
+        assert db.add.call_count == 2
 
 
 # =============================================================================

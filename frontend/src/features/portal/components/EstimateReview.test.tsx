@@ -28,7 +28,7 @@ const mockEstimateData: PortalEstimate = {
   notes: 'Work to be completed within 2 weeks.',
   valid_until: '2025-12-31',
   created_at: '2025-06-01T10:00:00Z',
-  is_readonly: false,
+  readonly: false,
 };
 
 const mockUsePortalEstimate = vi.fn();
@@ -157,7 +157,7 @@ describe('EstimateReview', () => {
 
   it('shows readonly notice when estimate is already actioned', () => {
     mockUsePortalEstimate.mockReturnValue({
-      data: { ...mockEstimateData, is_readonly: true, status: 'APPROVED' },
+      data: { ...mockEstimateData, readonly: true, status: 'APPROVED' },
       isLoading: false,
       error: null,
     });
@@ -165,6 +165,27 @@ describe('EstimateReview', () => {
 
     expect(screen.getByTestId('estimate-readonly-notice')).toBeInTheDocument();
     expect(screen.queryByTestId('approve-estimate-btn')).not.toBeInTheDocument();
+  });
+
+  // Cluster H §15.3 — defense-in-depth status gate. Even if the backend
+  // (stale cache, mid-flight payload) returns readonly:false, the
+  // frontend must not re-render the Approve/Reject buttons after a
+  // terminal status was recorded.
+  it.each([
+    ['approved', 'APPROVED'],
+    ['rejected', 'REJECTED'],
+    ['approved-lowercase', 'approved'],
+  ])('hides action buttons when status === %s even with readonly:false', (_label, status) => {
+    mockUsePortalEstimate.mockReturnValue({
+      data: { ...mockEstimateData, readonly: false, status },
+      isLoading: false,
+      error: null,
+    });
+    renderWithProviders();
+
+    expect(screen.queryByTestId('approve-estimate-btn')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('reject-estimate-btn')).not.toBeInTheDocument();
+    expect(screen.getByTestId('estimate-readonly-notice')).toBeInTheDocument();
   });
 
   it('shows reject form with textarea when reject is clicked', async () => {

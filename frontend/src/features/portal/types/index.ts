@@ -28,7 +28,7 @@ export interface PortalEstimate {
   notes: string | null;
   valid_until: string | null;
   created_at: string;
-  is_readonly: boolean;
+  readonly: boolean;
   company_name?: string | null;
   company_address?: string | null;
   company_phone?: string | null;

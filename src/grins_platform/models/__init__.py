@@ -19,6 +19,7 @@ AI Scheduling: SchedulingCriteriaConfig, SchedulingAlert, ChangeRequest,
     SchedulingChatSession, ResourceTruckInventory, ServiceZone
 """
 
+from grins_platform.models.admin_notification import AdminNotification
 from grins_platform.models.agreement_status_log import AgreementStatusLog
 from grins_platform.models.ai_audit_log import AIAuditLog
 from grins_platform.models.ai_usage import AIUsage
@@ -48,6 +49,7 @@ from grins_platform.models.disclosure_record import DisclosureRecord
 from grins_platform.models.email_suppression_list import EmailSuppressionList
 from grins_platform.models.enums import (
     ActionTag,
+    AdminNotificationEventType,
     AgreementPaymentStatus,
     AgreementStatus,
     AlertSeverity,
@@ -139,6 +141,9 @@ __all__ = [
     "AIUsage",
     # CRM Gap Closure
     "ActionTag",
+    # Cluster H §5: Admin in-app notifications inbox
+    "AdminNotification",
+    "AdminNotificationEventType",
     # Service Package Purchases
     "AgreementPaymentStatus",
     "AgreementStatus",

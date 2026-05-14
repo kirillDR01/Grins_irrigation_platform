@@ -14,7 +14,6 @@ import {
   Droplets,
   Zap,
   FileText,
-  Bell,
   Funnel,
   ScrollText,
   TrendingUp,
@@ -26,14 +25,10 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import { UserMenu } from '@/features/auth';
+import { NotificationBell } from '@/features/admin-notifications';
 import { GlobalSearch } from './GlobalSearch';
-import { useJobsByStatus, useDashboardMetrics } from '@/features/dashboard/hooks';
+import { useDashboardMetrics } from '@/features/dashboard/hooks';
 
 interface LayoutProps {
   children: ReactNode;
@@ -147,14 +142,8 @@ const navItems: NavItem[] = [
 
 export function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [notificationsSeen, setNotificationsSeen] = useState(false);
   const location = useLocation();
-  const { data: jobsByStatus } = useJobsByStatus();
   const { data: dashboardMetrics } = useDashboardMetrics();
-  
-  // Notification count = requested jobs (overnight requests)
-  const notificationCount = jobsByStatus?.requested ?? 0;
-  const showBadge = notificationCount > 0 && !notificationsSeen;
 
   // Lead badge count = uncontacted leads
   const uncontactedLeadsCount = dashboardMetrics?.uncontacted_leads ?? 0;
@@ -275,55 +264,9 @@ export function Layout({ children }: LayoutProps) {
 
           {/* Right side actions */}
           <div className="flex items-center gap-2">
-            {/* Notification bell with dropdown */}
-            <Popover onOpenChange={(open) => open && setNotificationsSeen(true)}>
-              <PopoverTrigger asChild>
-                <button
-                  className="relative p-2 rounded-lg hover:bg-slate-100 transition-colors"
-                  data-testid="notification-bell"
-                  aria-label="Notifications"
-                >
-                  <Bell className="h-5 w-5 text-slate-600" />
-                  {showBadge && (
-                    <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-rose-500 border-2 border-white flex items-center justify-center">
-                      <span className="text-[10px] font-medium text-white" data-testid="notification-count">
-                        {notificationCount > 9 ? '9+' : notificationCount}
-                      </span>
-                    </span>
-                  )}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80 p-0" align="end">
-                <div className="p-3 border-b border-slate-100">
-                  <h4 className="font-semibold text-slate-800">Notifications</h4>
-                </div>
-                <div className="max-h-80 overflow-y-auto">
-                  {notificationCount > 0 ? (
-                    <Link
-                      to="/jobs?status=requested"
-                      className="flex items-start gap-3 p-3 hover:bg-slate-50 transition-colors"
-                      data-testid="notification-item"
-                    >
-                      <div className="p-2 rounded-full bg-amber-100 shrink-0">
-                        <Briefcase className="h-4 w-4 text-amber-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-800">
-                          {notificationCount} New Job Request{notificationCount > 1 ? 's' : ''}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          Overnight requests need your attention
-                        </p>
-                      </div>
-                    </Link>
-                  ) : (
-                    <div className="p-4 text-center text-sm text-slate-500">
-                      No new notifications
-                    </div>
-                  )}
-                </div>
-              </PopoverContent>
-            </Popover>
+            {/* Admin in-app notifications bell (Cluster H §5).
+                Renders null for non-admin users. */}
+            <NotificationBell />
 
             {/* Vertical separator */}
             <div className="h-8 w-px bg-slate-200" data-testid="header-separator" />

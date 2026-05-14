@@ -746,7 +746,7 @@ class TestEstimatePortalEndToEnd:
             token=created_est.customer_token,
             ip_address="192.168.1.100",
             user_agent="Mozilla/5.0 (iPhone)",
-        )
+        , db=AsyncMock())
 
         # Verify approval recorded
         assert approval.status == EstimateStatus.APPROVED
@@ -810,7 +810,7 @@ class TestEstimatePortalEndToEnd:
         rejection = await svc.reject_via_portal(
             token=sent_est.customer_token,
             reason="Too expensive",
-        )
+        , db=AsyncMock())
 
         assert rejection.status == EstimateStatus.REJECTED
         assert rejection.rejection_reason == "Too expensive"
@@ -948,7 +948,7 @@ class TestEstimatePortalEndToEnd:
             token=sent_est.customer_token,
             ip_address="10.0.0.1",
             user_agent="TestAgent",
-        )
+        , db=AsyncMock())
 
         # Both services worked: photo in S3, estimate approved
         assert photo_result.file_key in s3_client._storage

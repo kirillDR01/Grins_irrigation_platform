@@ -636,6 +636,21 @@ class AlertType(str, Enum):
     ORPHAN_INBOUND = "orphan_inbound"
 
 
+class AdminNotificationEventType(str, Enum):
+    """Event type for admin in-app notifications inbox (Cluster H §5).
+
+    Distinct from :class:`AlertType` — these are persistent in-app
+    notifications surfaced via the top-nav bell, paralleling the existing
+    email/SMS admin alerts so a deleted text or missed email doesn't lose
+    the signal.
+    """
+
+    ESTIMATE_APPROVED = "estimate_approved"
+    ESTIMATE_REJECTED = "estimate_rejected"
+    APPOINTMENT_CANCELLED = "appointment_cancelled"
+    LATE_RESCHEDULE = "late_reschedule"
+
+
 # =============================================================================
 # CRM Changes Update 2 Enums
 # =============================================================================

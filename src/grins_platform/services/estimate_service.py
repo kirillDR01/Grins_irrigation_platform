@@ -24,6 +24,7 @@ from grins_platform.exceptions import (
 from grins_platform.log_config import LoggerMixin
 from grins_platform.models.enums import (
     ActionTag,
+    AdminNotificationEventType,
     EstimateStatus,
     FollowUpStatus,
 )
@@ -32,9 +33,14 @@ from grins_platform.schemas.estimate import (
     EstimateResponse,
     EstimateSendResponse,
 )
+from grins_platform.services.admin_notification_service import (
+    AdminNotificationService,
+)
 
 if TYPE_CHECKING:
     from uuid import UUID
+
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from grins_platform.models.estimate import Estimate
     from grins_platform.repositories.estimate_repository import EstimateRepository
@@ -414,6 +420,8 @@ class EstimateService(LoggerMixin):
         token: UUID,
         ip_address: str,
         user_agent: str,
+        *,
+        db: AsyncSession,
     ) -> EstimateResponse:
         """Record customer approval via the portal.
 
@@ -489,7 +497,7 @@ class EstimateService(LoggerMixin):
         await self._maybe_auto_create_job(updated, ip_address, user_agent)
         await self._send_signed_pdf_email(updated)
 
-        await self._notify_internal_decision(updated, "approved")
+        await self._notify_internal_decision(updated, "approved", db=db)
         await self._correlate_to_sales_entry(updated, "approved")
 
         self.log_completed(
@@ -503,6 +511,8 @@ class EstimateService(LoggerMixin):
         self,
         token: UUID,
         reason: str | None = None,
+        *,
+        db: AsyncSession,
     ) -> EstimateResponse:
         """Record customer rejection via the portal.
 
@@ -567,7 +577,7 @@ class EstimateService(LoggerMixin):
                     lead_id=str(estimate.lead_id),
                 )
 
-        await self._notify_internal_decision(updated, "rejected")
+        await self._notify_internal_decision(updated, "rejected", db=db)
         await self._correlate_to_sales_entry(updated, "rejected", reason=reason)
 
         self.log_completed(
@@ -586,11 +596,16 @@ class EstimateService(LoggerMixin):
         self,
         estimate: Estimate | None,
         decision: Literal["approved", "rejected"],
+        *,
+        db: AsyncSession,
     ) -> None:
         """Fire-and-log internal staff notification. Never raises.
 
         Failures (vendor outage, no recipients configured) are logged
         but never undo the customer-side decision.
+
+        Also persists an :class:`AdminNotification` row so the office
+        bell surfaces the decision even when SMS/email fails.
         """
         if estimate is None:
             return
@@ -640,6 +655,35 @@ class EstimateService(LoggerMixin):
                     error=e,
                     estimate_id=str(estimate.id),
                 )
+
+        # Cluster H §5: persist an in-app admin notification row so the
+        # top-nav bell surfaces the decision even when SMS/email fail or
+        # the recipient ignores them. The service swallows its own
+        # errors; the outer try/except is defense-in-depth.
+        try:
+            event_type = (
+                AdminNotificationEventType.ESTIMATE_APPROVED
+                if decision == "approved"
+                else AdminNotificationEventType.ESTIMATE_REJECTED
+            )
+            summary = (
+                f"Estimate {decision.upper()} for {customer_name}. "
+                f"Total ${total}."
+            )
+            await AdminNotificationService().record(
+                event_type=event_type,
+                subject_resource_type="estimate",
+                subject_resource_id=estimate.id,
+                summary=summary[:280],
+                actor_user_id=None,
+                db=db,
+            )
+        except Exception as e:
+            self.log_failed(
+                "notify_internal_decision.admin_notification_row",
+                error=e,
+                estimate_id=str(estimate.id),
+            )
 
     async def _correlate_to_sales_entry(
         self,

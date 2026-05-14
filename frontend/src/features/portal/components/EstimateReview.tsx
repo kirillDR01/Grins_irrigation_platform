@@ -130,6 +130,15 @@ export function EstimateReview() {
     ? estimate.tiers?.find((t) => t.name === selectedTier)?.total ?? estimate.total
     : estimate.total;
 
+  // Cluster H §15.3: backend returns `readonly`; defense-in-depth also
+  // gates on `status` so a stale payload (e.g. cached fetch) can't
+  // re-render the Approve/Reject buttons after a decision was recorded.
+  const normalizedStatus = estimate.status?.toLowerCase();
+  const isLocked =
+    estimate.readonly ||
+    normalizedStatus === 'approved' ||
+    normalizedStatus === 'rejected';
+
   return (
     <div className="min-h-screen bg-slate-50" data-testid="estimate-review-page">
       {/* Header with company branding */}
@@ -276,79 +285,86 @@ export function EstimateReview() {
         )}
 
         {/* Actions */}
-        {!estimate.is_readonly && (
-          <div className="space-y-4" data-testid="estimate-actions">
-            {(approve.isError || reject.isError) && (
-              <Alert variant="destructive" data-testid="estimate-action-error">
-                <AlertDescription>
-                  {extractErrorMessage(approve.error ?? reject.error) ??
-                    "We couldn't save that action. Please try again or call us at the number above."}
-                </AlertDescription>
-              </Alert>
-            )}
-            {!showRejectForm ? (
-              <div className="flex flex-col md:flex-row gap-3">
-                <Button
-                  onClick={handleApprove}
-                  disabled={approve.isPending || (!!estimate.tiers?.length && !selectedTier)}
-                  className="flex-1 h-12"
-                  data-testid="approve-estimate-btn"
-                >
-                  {approve.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="h-4 w-4" />
-                  )}
-                  Approve Estimate
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowRejectForm(true)}
-                  className="flex-1 h-12"
-                  data-testid="reject-estimate-btn"
-                >
-                  <XCircle className="h-4 w-4" />
-                  Reject
-                </Button>
-              </div>
-            ) : (
-              <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4" data-testid="reject-form">
-                <h3 className="font-semibold text-slate-800">Reason for Rejection (optional)</h3>
-                <Textarea
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                  placeholder="Let us know why you're declining this estimate..."
-                  rows={3}
-                  data-testid="reject-reason-textarea"
-                />
+        {!isLocked && (
+          <>
+            {/* Spacer so the last content row clears the pinned mobile CTA. */}
+            <div className="md:hidden h-24" aria-hidden />
+            <div
+              className="md:static sticky bottom-0 -mx-4 md:mx-0 px-4 md:px-0 py-3 md:py-0 bg-slate-50/95 md:bg-transparent backdrop-blur md:backdrop-blur-none border-t md:border-t-0 border-slate-200 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] md:pb-0 z-20 space-y-4"
+              data-testid="estimate-actions"
+            >
+              {(approve.isError || reject.isError) && (
+                <Alert variant="destructive" data-testid="estimate-action-error">
+                  <AlertDescription>
+                    {extractErrorMessage(approve.error ?? reject.error) ??
+                      "We couldn't save that action. Please try again or call us at the number above."}
+                  </AlertDescription>
+                </Alert>
+              )}
+              {!showRejectForm ? (
                 <div className="flex flex-col md:flex-row gap-3">
                   <Button
-                    variant="destructive"
-                    onClick={handleReject}
-                    disabled={reject.isPending}
+                    onClick={handleApprove}
+                    disabled={approve.isPending || (!!estimate.tiers?.length && !selectedTier)}
                     className="flex-1 h-12"
-                    data-testid="confirm-reject-btn"
+                    data-testid="approve-estimate-btn"
                   >
-                    {reject.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm Rejection'}
+                    {approve.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4" />
+                    )}
+                    Approve Estimate
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      setShowRejectForm(false);
-                      setRejectReason('');
-                    }}
+                    onClick={() => setShowRejectForm(true)}
                     className="flex-1 h-12"
-                    data-testid="cancel-reject-btn"
+                    data-testid="reject-estimate-btn"
                   >
-                    Cancel
+                    <XCircle className="h-4 w-4" />
+                    Reject
                   </Button>
                 </div>
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4" data-testid="reject-form">
+                  <h3 className="font-semibold text-slate-800">Reason for Rejection (optional)</h3>
+                  <Textarea
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="Let us know why you're declining this estimate..."
+                    rows={3}
+                    data-testid="reject-reason-textarea"
+                  />
+                  <div className="flex flex-col md:flex-row gap-3">
+                    <Button
+                      variant="destructive"
+                      onClick={handleReject}
+                      disabled={reject.isPending}
+                      className="flex-1 h-12"
+                      data-testid="confirm-reject-btn"
+                    >
+                      {reject.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm Rejection'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowRejectForm(false);
+                        setRejectReason('');
+                      }}
+                      className="flex-1 h-12"
+                      data-testid="cancel-reject-btn"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
-        {estimate.is_readonly && (
+        {isLocked && (
           <div className="text-center text-sm text-slate-500 py-4" data-testid="estimate-readonly-notice">
             This estimate has already been {estimate.status.toLowerCase()}.
           </div>

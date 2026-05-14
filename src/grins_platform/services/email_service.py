@@ -181,6 +181,43 @@ class EmailService(LoggerMixin):
             )
         return self._jinja_env
 
+    def _resolve_bcc(self, *, allow_bcc: bool) -> list[str]:
+        """Return BCC recipients for the outgoing email.
+
+        Cluster H §12: every customer-facing send is BCC'd to
+        ``OUTBOUND_BCC_EMAIL`` (typically ``info@grinsirrigation.com``)
+        so the office has a local audit trail without depending on the
+        Resend dashboard.
+
+        Honors ``EMAIL_TEST_ADDRESS_ALLOWLIST`` (the dev/staging guard):
+        when the allowlist is active, BCC is suppressed so we never leak
+        customer-facing copies to the real ``info@`` inbox from a
+        non-prod environment.
+
+        Args:
+            allow_bcc: ``False`` from internal-staff-only helpers
+                (e.g. internal_estimate_decision, internal_estimate_bounce)
+                so those never BCC the audit address.
+
+        Returns:
+            ``[OUTBOUND_BCC_EMAIL]`` only when (a) the caller permits BCC,
+            (b) the env var is set, and (c) the dev/staging allowlist is
+            not active. Empty list otherwise.
+        """
+        if not allow_bcc:
+            return []
+        bcc = os.getenv("OUTBOUND_BCC_EMAIL", "").strip()
+        if not bcc:
+            return []
+        if _load_email_allowlist() is not None:
+            # Dev/staging guard active — refuse to BCC the real audit inbox.
+            self.logger.info(
+                "email.bcc.suppressed_in_test_env",
+                bcc=_mask_email(bcc),
+            )
+            return []
+        return [bcc]
+
     def _classify_email(self, email_type: str) -> EmailType:
         """Classify email as TRANSACTIONAL or COMMERCIAL.
 
@@ -263,6 +300,7 @@ class EmailService(LoggerMixin):
         text_body: str | None = None,
         extra_tags: list[dict[str, str]] | None = None,
         attachments: list[dict[str, Any]] | None = None,
+        allow_bcc: bool = True,
     ) -> bool:
         """Send email via Resend or record as pending.
 
@@ -320,6 +358,9 @@ class EmailService(LoggerMixin):
             "reply_to": COMMERCIAL_SENDER,
             "tags": tags,
         }
+        bcc = self._resolve_bcc(allow_bcc=allow_bcc)
+        if bcc:
+            payload["bcc"] = bcc
         if text_body:
             payload["text"] = text_body
         if attachments:
@@ -711,6 +752,7 @@ class EmailService(LoggerMixin):
             html_body=html_body,
             email_type="internal_estimate_decision",
             classification=EmailType.TRANSACTIONAL,
+            allow_bcc=False,
         )
 
     def send_internal_estimate_bounce_email(
@@ -739,6 +781,7 @@ class EmailService(LoggerMixin):
             html_body=html_body,
             email_type="internal_estimate_bounce",
             classification=EmailType.TRANSACTIONAL,
+            allow_bcc=False,
         )
 
     def send_confirmation_email(

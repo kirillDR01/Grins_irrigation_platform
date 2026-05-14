@@ -29,6 +29,7 @@ from grins_platform.log_config import LoggerMixin
 from grins_platform.models.appointment import Appointment
 from grins_platform.models.customer import Customer
 from grins_platform.models.enums import (
+    AdminNotificationEventType,
     AppointmentStatus,
     InvoiceStatus,
     NotificationType,
@@ -37,6 +38,9 @@ from grins_platform.models.invoice import Invoice
 from grins_platform.models.lead import Lead
 from grins_platform.models.sent_message import SentMessage
 from grins_platform.schemas.ai import MessageType
+from grins_platform.services.admin_notification_service import (
+    AdminNotificationService,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -1297,7 +1301,28 @@ class NotificationService(LoggerMixin):
                 error=exc,
                 appointment_id=str(appointment_id),
             )
-            return
+
+        # Cluster H §5: persist an admin in-app notification row so the
+        # top-nav bell surfaces this cancellation regardless of email/SMS
+        # outcome. Service swallows internally; outer try is defense-in-depth.
+        try:
+            summary = (
+                f"Appointment cancelled by {source} for {customer_name}."
+            )
+            await AdminNotificationService().record(
+                event_type=AdminNotificationEventType.APPOINTMENT_CANCELLED,
+                subject_resource_type="appointment",
+                subject_resource_id=appointment_id,
+                summary=summary[:280],
+                actor_user_id=None,
+                db=db,
+            )
+        except Exception as exc:
+            self.log_failed(
+                "send_admin_cancellation_alert.admin_notification_row",
+                error=exc,
+                appointment_id=str(appointment_id),
+            )
 
         self.log_completed(
             "send_admin_cancellation_alert",
@@ -1412,7 +1437,27 @@ class NotificationService(LoggerMixin):
                 error=exc,
                 appointment_id=str(appointment_id),
             )
-            return
+
+        # Cluster H §5: persist an admin in-app notification row.
+        try:
+            summary = (
+                f"Late reschedule attempt by {customer_name} "
+                f"({current_status})."
+            )
+            await AdminNotificationService().record(
+                event_type=AdminNotificationEventType.LATE_RESCHEDULE,
+                subject_resource_type="appointment",
+                subject_resource_id=appointment_id,
+                summary=summary[:280],
+                actor_user_id=None,
+                db=db,
+            )
+        except Exception as exc:
+            self.log_failed(
+                "send_admin_late_reschedule_alert.admin_notification_row",
+                error=exc,
+                appointment_id=str(appointment_id),
+            )
 
         self.log_completed(
             "send_admin_late_reschedule_alert",
