@@ -17,6 +17,7 @@ import {
   CreditCard,
   FileText,
   DollarSign,
+  Copy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Job } from '../types';
@@ -24,6 +25,27 @@ import { formatAmount } from '../types';
 import { GenerateInvoiceButton, InvoiceStatusBadge, useInvoicesByJob } from '@/features/invoices';
 import type { Invoice } from '@/features/invoices';
 import { parseLocalDate } from '@/shared/utils/dateUtils';
+import { toast } from 'sonner';
+
+function stripPaymentRefPrefix(ref: string): string {
+  if (ref.startsWith('stripe:')) return ref.slice('stripe:'.length);
+  if (ref.startsWith('stripe_link:')) return ref.slice('stripe_link:'.length);
+  return ref;
+}
+
+function truncatePaymentRef(stripped: string): string {
+  return stripped.length > 14 ? `${stripped.slice(0, 12)}…` : stripped;
+}
+
+async function copyPaymentRef(rawRef: string): Promise<void> {
+  const bare = stripPaymentRefPrefix(rawRef);
+  try {
+    await navigator.clipboard.writeText(bare);
+    toast.success('Reference copied');
+  } catch {
+    toast.error('Could not copy reference');
+  }
+}
 
 interface PaymentSectionProps {
   job: Job;
@@ -138,6 +160,26 @@ function InvoiceSent({
               {sentDate && `Sent on ${sentDate}, `}
               {formatAmount(invoice.total_amount)}
             </p>
+            {invoice.status === 'paid' && invoice.paid_at && (
+              <p className="text-xs text-blue-600" data-testid="payment-section-invoice-paid-at">
+                Paid {new Date(invoice.paid_at).toLocaleDateString()}
+              </p>
+            )}
+            {invoice.status === 'paid' && invoice.payment_reference && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void copyPaymentRef(invoice.payment_reference!);
+                }}
+                title={stripPaymentRefPrefix(invoice.payment_reference)}
+                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-mono"
+                data-testid="payment-section-invoice-payment-ref"
+              >
+                Ref {truncatePaymentRef(stripPaymentRefPrefix(invoice.payment_reference))}
+                <Copy className="h-3 w-3" />
+              </button>
+            )}
           </div>
         </div>
         <InvoiceStatusBadge status={invoice.status} />
@@ -172,13 +214,37 @@ function PaidOnSite({ job, invoice }: { job: Job; invoice?: Invoice }) {
         <DollarSign className="h-3.5 w-3.5" />
         Payment
       </p>
-      <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
-        <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
-        <p className="text-sm font-medium text-emerald-700">
-          Payment collected
-          {displayAmount ? ` — ${formatAmount(displayAmount)}` : ''}
-          {` via ${methodLabel}`}
-        </p>
+      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg space-y-1">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+          <p className="text-sm font-medium text-emerald-700">
+            Payment collected
+            {displayAmount ? ` — ${formatAmount(displayAmount)}` : ''}
+            {` via ${methodLabel}`}
+          </p>
+        </div>
+        {invoice?.paid_at && (
+          <p
+            className="text-xs text-emerald-700 pl-7"
+            data-testid="payment-section-paid-on-site-paid-at"
+          >
+            Paid {new Date(invoice.paid_at).toLocaleDateString()}
+          </p>
+        )}
+        {invoice?.payment_reference && (
+          <button
+            type="button"
+            onClick={() => {
+              void copyPaymentRef(invoice.payment_reference!);
+            }}
+            title={stripPaymentRefPrefix(invoice.payment_reference)}
+            className="inline-flex items-center gap-1 pl-7 text-xs text-emerald-700 hover:text-emerald-900 font-mono"
+            data-testid="payment-section-paid-on-site-payment-ref"
+          >
+            Ref {truncatePaymentRef(stripPaymentRefPrefix(invoice.payment_reference))}
+            <Copy className="h-3 w-3" />
+          </button>
+        )}
       </div>
     </div>
   );

@@ -5,6 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { PaymentSection } from './PaymentSection';
@@ -121,6 +122,11 @@ describe('PaymentSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseInvoicesByJob.mockReturnValue({ data: undefined });
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      writable: true,
+      configurable: true,
+    });
   });
 
   /**
@@ -282,5 +288,126 @@ describe('PaymentSection', () => {
     // Inactive agreement should NOT trigger the agreement display
     expect(screen.queryByTestId('payment-section-agreement')).not.toBeInTheDocument();
     expect(screen.getByTestId('payment-section-no-payment')).toBeInTheDocument();
+  });
+
+  /**
+   * Cluster E: InvoiceSent block shows paid_at + ref when invoice.status === 'paid'
+   * and Job.payment_collected_on_site is false (manual record_payment path).
+   */
+  it('shows paid_at and stripped payment_reference in InvoiceSent block for paid invoice', () => {
+    const paidInvoice: Invoice = {
+      ...mockInvoice,
+      status: 'paid',
+      payment_method: 'venmo',
+      payment_reference: 'VNM987654',
+      paid_at: '2025-06-15T11:00:00Z',
+      paid_amount: 150,
+    };
+    mockUseInvoicesByJob.mockReturnValue({ data: [paidInvoice] });
+
+    render(<PaymentSection job={baseJob} />, { wrapper: createWrapper() });
+
+    const paidAt = screen.getByTestId('payment-section-invoice-paid-at');
+    expect(paidAt.textContent).toMatch(/Paid.*2025/);
+
+    const ref = screen.getByTestId('payment-section-invoice-payment-ref');
+    expect(ref.textContent).toContain('VNM987654');
+  });
+
+  it('strips stripe: prefix from InvoiceSent ref display', () => {
+    const stripePaidInvoice: Invoice = {
+      ...mockInvoice,
+      status: 'paid',
+      payment_method: 'credit_card',
+      payment_reference: 'stripe:pi_3OabcXYZ123456789',
+      paid_at: '2025-06-15T11:00:00Z',
+      paid_amount: 150,
+    };
+    mockUseInvoicesByJob.mockReturnValue({ data: [stripePaidInvoice] });
+
+    render(<PaymentSection job={baseJob} />, { wrapper: createWrapper() });
+
+    const ref = screen.getByTestId('payment-section-invoice-payment-ref');
+    expect(ref.textContent).not.toContain('stripe:');
+    expect(ref.textContent).toContain('pi_3Oabc');
+  });
+
+  it('copies bare Stripe charge id from InvoiceSent ref click and stops propagation', async () => {
+    const user = userEvent.setup();
+    // userEvent.setup() v14 installs its own navigator.clipboard, so spy
+    // AFTER setup to observe the call.
+    const writeTextSpy = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue(undefined);
+    const stripePaidInvoice: Invoice = {
+      ...mockInvoice,
+      status: 'paid',
+      payment_method: 'credit_card',
+      payment_reference: 'stripe:pi_3OabcXYZ123456789',
+      paid_at: '2025-06-15T11:00:00Z',
+      paid_amount: 150,
+    };
+    mockUseInvoicesByJob.mockReturnValue({ data: [stripePaidInvoice] });
+
+    render(<PaymentSection job={baseJob} />, { wrapper: createWrapper() });
+
+    const ref = screen.getByTestId('payment-section-invoice-payment-ref');
+    await user.click(ref);
+    expect(writeTextSpy).toHaveBeenCalledWith('pi_3OabcXYZ123456789');
+  });
+
+  /**
+   * Cluster E: PaidOnSite block also shows paid_at + ref for Stripe Payment Link payments
+   * (Job.payment_collected_on_site=true, flipped by webhooks.py:1327).
+   */
+  it('shows paid_at and stripped payment_reference in PaidOnSite block for Stripe-paid job', () => {
+    const paidJob: Job = {
+      ...baseJob,
+      payment_collected_on_site: true,
+      final_amount: 200,
+    };
+    const stripePaidInvoice: Invoice = {
+      ...mockInvoice,
+      status: 'paid',
+      payment_method: 'credit_card',
+      payment_reference: 'stripe:pi_3OabcXYZ123456789',
+      paid_at: '2025-06-15T11:00:00Z',
+      paid_amount: 200,
+    };
+    mockUseInvoicesByJob.mockReturnValue({ data: [stripePaidInvoice] });
+
+    render(<PaymentSection job={paidJob} />, { wrapper: createWrapper() });
+
+    const paidAt = screen.getByTestId('payment-section-paid-on-site-paid-at');
+    expect(paidAt.textContent).toMatch(/Paid.*2025/);
+
+    const ref = screen.getByTestId('payment-section-paid-on-site-payment-ref');
+    expect(ref.textContent).not.toContain('stripe:');
+    expect(ref.textContent).toContain('pi_3Oabc');
+  });
+
+  it('copies bare Stripe charge id from PaidOnSite ref click', async () => {
+    const user = userEvent.setup();
+    const writeTextSpy = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue(undefined);
+    const paidJob: Job = {
+      ...baseJob,
+      payment_collected_on_site: true,
+    };
+    const stripePaidInvoice: Invoice = {
+      ...mockInvoice,
+      status: 'paid',
+      payment_method: 'credit_card',
+      payment_reference: 'stripe:pi_3OabcXYZ123456789',
+      paid_at: '2025-06-15T11:00:00Z',
+    };
+    mockUseInvoicesByJob.mockReturnValue({ data: [stripePaidInvoice] });
+
+    render(<PaymentSection job={paidJob} />, { wrapper: createWrapper() });
+
+    const ref = screen.getByTestId('payment-section-paid-on-site-payment-ref');
+    await user.click(ref);
+    expect(writeTextSpy).toHaveBeenCalledWith('pi_3OabcXYZ123456789');
   });
 });

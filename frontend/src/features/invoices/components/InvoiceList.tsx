@@ -8,7 +8,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, MoreHorizontal } from 'lucide-react';
+import { ArrowUpDown, Copy, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -32,6 +32,7 @@ import { BulkNotify } from './BulkNotify';
 import { MassNotifyPanel } from './MassNotifyPanel';
 import { useInvoices } from '../hooks';
 import type { Invoice, InvoiceListParams, InvoiceStatus, PaymentMethod } from '../types';
+import { toast } from 'sonner';
 
 /* ------------------------------------------------------------------ */
 /*  Filter axes definition (9 axes per Req 28.1)                       */
@@ -136,6 +137,31 @@ function formatCurrency(amount: number): string {
     style: 'currency',
     currency: 'USD',
   }).format(amount);
+}
+
+function formatPaidDate(value: string | null | undefined): string {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString();
+}
+
+function stripPaymentRefPrefix(ref: string): string {
+  if (ref.startsWith('stripe:')) return ref.slice('stripe:'.length);
+  if (ref.startsWith('stripe_link:')) return ref.slice('stripe_link:'.length);
+  return ref;
+}
+
+function truncatePaymentRef(stripped: string): string {
+  return stripped.length > 14 ? `${stripped.slice(0, 12)}…` : stripped;
+}
+
+async function copyPaymentRef(rawRef: string): Promise<void> {
+  const bare = stripPaymentRefPrefix(rawRef);
+  try {
+    await navigator.clipboard.writeText(bare);
+    toast.success('Reference copied');
+  } catch {
+    toast.error('Could not copy reference');
+  }
 }
 
 // bughunt M-12: days_until_due / days_past_due are now computed
@@ -420,6 +446,54 @@ export function InvoiceList({ onView, onEdit, onDelete }: InvoiceListProps) {
         <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">Channel</span>
       ),
       cell: ({ row }) => <ChannelPill invoice={row.original} />,
+    },
+    {
+      id: 'paid_at',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">Paid</span>
+      ),
+      cell: ({ row }) => (
+        <span
+          className={row.original.paid_at ? 'text-sm text-slate-600' : 'text-sm text-slate-400'}
+          data-testid={`paid-at-cell-${row.original.id}`}
+        >
+          {formatPaidDate(row.original.paid_at)}
+        </span>
+      ),
+    },
+    {
+      id: 'payment_reference',
+      header: () => (
+        <span className="text-slate-500 text-xs uppercase tracking-wider font-medium">Reference</span>
+      ),
+      cell: ({ row }) => {
+        const ref = row.original.payment_reference;
+        if (!ref) {
+          return (
+            <span
+              className="text-sm text-slate-400"
+              data-testid={`payment-reference-cell-${row.original.id}`}
+            >
+              —
+            </span>
+          );
+        }
+        const stripped = stripPaymentRefPrefix(ref);
+        return (
+          <button
+            type="button"
+            onClick={() => {
+              void copyPaymentRef(ref);
+            }}
+            title={stripped}
+            className="inline-flex items-center gap-1 font-mono text-xs text-slate-600 hover:text-teal-600"
+            data-testid={`payment-reference-cell-${row.original.id}`}
+          >
+            {truncatePaymentRef(stripped)}
+            <Copy className="h-3 w-3" />
+          </button>
+        );
+      },
     },
     {
       id: 'actions',
